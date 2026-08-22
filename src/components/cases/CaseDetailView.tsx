@@ -22,6 +22,7 @@ import { CaseDetailBase } from '../shared/CaseDetailBase';
 import { CaseDomain, JourneyStage, ProcedureType, LegalArgumentDomain } from '../../types';
 import { LEGAL_ARGUMENTS, AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { exportDefenseToPDF } from '../../lib/pdf-export';
+import { buildDocumentRollItems, normalizeProcedureId } from '../../core/documents/document-roll';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
 
 interface CaseDetailViewProps {
@@ -87,6 +88,10 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
       ]
   );
 
+  // Stage 2 simplified mode: regular users get automatic selection (top 3
+  // recommended grounds); lawyers/dispatchers can opt into manual picking.
+  const [professionalMode, setProfessionalMode] = React.useState(false);
+
   // Sync selectedArgIds with caseData when it changes
   React.useEffect(() => {
     if (caseData) {
@@ -112,9 +117,11 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
   const handleRegenerateDefense = async () => {
     setIsRegenerating(true);
     try {
+      // Timeout de segurança: nunca deixa o usuário preso no spinner "Redigindo com IA..."
       const res = await fetch(`/api/cases/${resolvedCaseId}/generate-defense`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
         body: JSON.stringify({
           procedureType: currentCase?.serviceType,
           selectedArgumentIds: selectedArgIds,
@@ -132,9 +139,12 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
         onUpdateCase(data.case);
         setEditedDraftText(data.defenseDraft.fullDraftText);
         setActiveStage(3);
+      } else {
+        alert('Não foi possível gerar a defesa agora. Tente novamente em instantes.');
       }
     } catch (err) {
       console.error('Error generating defense:', err);
+      alert('Não foi possível gerar a defesa agora. Verifique sua conexão e tente novamente.');
     } finally {
       setIsRegenerating(false);
     }
@@ -403,24 +413,44 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
 
       {/* ========================================================================= */}
       {/* STAGE 2: Estratégia Jurídica & Seleção de Teses */}
+      {/* Simplified by default (auto top-3) — professional manual picking opt-in */}
       {/* ========================================================================= */}
-      {activeStage === 2 && (
+      {activeStage === 2 && (() => {
+        const recommendedArgs = LEGAL_ARGUMENTS.filter((a) => selectedArgIds.includes(a.id)).slice(0, 3);
+        return (
         <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Seleção de Teses Jurídicas (CTB & CONTRAN)
-              </h2>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Selecione as teses de nulidade que serão injetadas na minuta da petição.
-              </p>
+              {professionalMode ? (
+                <>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Seleção de Teses Jurídicas (CTB & CONTRAN)
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Modo profissional — selecione as teses de nulidade que serão injetadas na minuta.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Estratégia Jurídica Pronta para o Seu Caso
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Nossa inteligência jurídica já escolheu as teses mais fortes. É só gerar a minuta — sem juridiquês.
+                  </p>
+                </>
+              )}
             </div>
 
             <button
               id="regenerate-with-selected-button"
               onClick={handleRegenerateDefense}
               disabled={isRegenerating}
-              className="px-4 py-2 bg-orange-500 text-white text-sm font-bold rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs shadow-orange-200 disabled:opacity-50 uppercase tracking-tight"
+              className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 uppercase tracking-tight ${
+                professionalMode
+                  ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
+                  : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-200 px-6 py-2.5'
+              }`}
             >
               {isRegenerating ? (
                 <>
@@ -430,54 +460,108 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Gerar Minuta ({selectedArgIds.length} Teses)</span>
+                  {professionalMode ? (
+                    <span>Gerar Minuta ({selectedArgIds.length} Teses)</span>
+                  ) : (
+                    <span>Gerar Minha Defesa Automática</span>
+                  )}
                 </>
               )}
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {LEGAL_ARGUMENTS.map((arg) => {
-              const isSelected = selectedArgIds.includes(arg.id);
-              return (
-                <div
-                  key={arg.id}
-                  onClick={() => toggleArgument(arg.id)}
-                  className={`p-3.5 rounded-lg border transition-all cursor-pointer text-sm ${
-                    isSelected
-                      ? 'border-orange-500 bg-orange-50/20 shadow-2xs'
-                      : 'border-slate-200 hover:border-slate-400 bg-white'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
-                          isSelected ? 'bg-orange-500 text-white' : 'border border-slate-300'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3" />}
-                      </div>
-                      <span className="font-bold text-slate-900 text-sm">{arg.title}</span>
+          {!professionalMode ? (
+            /* ---------- MODO SIMPLIFICADO: top-3 automático, somente leitura ---------- */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {(recommendedArgs.length > 0 ? recommendedArgs : LEGAL_ARGUMENTS.slice(0, 3)).map((arg, idx) => (
+                  <div key={arg.id} className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 flex flex-col text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-xs uppercase font-mono">
+                        Tese {idx + 1}
+                      </span>
+                      <span className="flex items-center gap-1 text-emerald-700 font-semibold text-xs">
+                        <Check className="w-3.5 h-3.5" /> Automática
+                      </span>
                     </div>
-                    <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-bold text-sm uppercase font-mono">
-                      {arg.category}
-                    </span>
+                    <h4 className="font-bold text-slate-900 leading-snug">{arg.title}</h4>
+                    <p className="text-slate-600 mt-1.5 leading-relaxed flex-1">{arg.summary}</p>
+                    <div className="mt-3 pt-2 border-t border-emerald-100 flex items-center justify-between font-mono text-xs">
+                      <span className="text-slate-500">{arg.legalBase}</span>
+                      <span className="text-emerald-700 font-bold shrink-0 ml-2">{arg.confidenceScore}%</span>
+                    </div>
                   </div>
+                ))}
+              </div>
 
-                  <p className="text-slate-600 mt-1.5 leading-relaxed text-sm">{arg.summary}</p>
-                  <p className="font-mono text-sm text-orange-600 mt-1.5">{arg.legalBase}</p>
+              <label className="flex items-center justify-center gap-2 text-sm text-slate-500 cursor-pointer w-fit mx-auto hover:text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={professionalMode}
+                  onChange={(e) => setProfessionalMode(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-orange-500"
+                />
+                Sou advogado/despachante — quero escolher as teses manualmente
+              </label>
+            </div>
+          ) : (
+            /* ---------- MODO PROFISSIONAL: seleção manual completa (preservada) ---------- */
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {LEGAL_ARGUMENTS.map((arg) => {
+                  const isSelected = selectedArgIds.includes(arg.id);
+                  return (
+                    <div
+                      key={arg.id}
+                      onClick={() => toggleArgument(arg.id)}
+                      className={`p-3.5 rounded-lg border transition-all cursor-pointer text-sm ${
+                        isSelected
+                          ? 'border-orange-500 bg-orange-50/20 shadow-2xs'
+                          : 'border-slate-200 hover:border-slate-400 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-orange-500 text-white' : 'border border-slate-300'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3" />}
+                          </div>
+                          <span className="font-bold text-slate-900 text-sm">{arg.title}</span>
+                        </div>
+                        <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-bold text-sm uppercase font-mono">
+                          {arg.category}
+                        </span>
+                      </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-sm font-mono">
-                    <span className="text-emerald-700 font-semibold">{arg.confidenceScore}% probabilidade</span>
-                    <span className="text-slate-400">{isSelected ? '✔ Selecionada' : '+ Incluir'}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <p className="text-slate-600 mt-1.5 leading-relaxed text-sm">{arg.summary}</p>
+                      <p className="font-mono text-sm text-orange-600 mt-1.5">{arg.legalBase}</p>
+
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-sm font-mono">
+                        <span className="text-emerald-700 font-semibold">{arg.confidenceScore}% probabilidade</span>
+                        <span className="text-slate-400">{isSelected ? '✔ Selecionada' : '+ Incluir'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <label className="flex items-center justify-center gap-2 text-sm text-slate-500 cursor-pointer w-fit mx-auto hover:text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={professionalMode}
+                  onChange={(e) => setProfessionalMode(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-orange-500"
+                />
+                Voltar ao modo automático (recomendado para condutores)
+              </label>
+            </>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* STAGE 3: Minuta da Defesa & Editor Jurídico (Folha A4 Diagramada) */}
@@ -491,7 +575,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                 Petição Pronta (52 Blocos CTB)
               </span>
               <span className="text-sm text-slate-500 hidden sm:inline truncate">
-                {PROCEDURE_TITLES[caseData.serviceType] || 'Defesa Administrativa'}
+                {PROCEDURE_TITLES[normalizeProcedureId(caseData.serviceType) as keyof typeof PROCEDURE_TITLES] || 'Defesa Administrativa'}
               </span>
             </div>
 
@@ -652,94 +736,36 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Checklist of Mandatory Documents — espelha o ROL DE DOCUMENTOS (BLK-068) da minuta gerada */}
+          {/* Checklist of Mandatory Documents — espelha o ROL DE DOCUMENTOS (BLK-068) da minuta gerada.
+              Fonte única de verdade: buildDocumentRollItems(serviceType) — apenas documentos
+              OBRIGATÓRIOS exigidos pelo órgão autuador no ato do protocolo. */}
           <div className="border-t border-slate-200 pt-4">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-2 font-mono">
               <FileText className="w-3.5 h-3.5 text-slate-700" />
               Checklist de Documentos Obrigatórios para Juntada:
             </h3>
             <p className="text-xs text-slate-500 mb-2.5 leading-snug">
-              Estes são os mesmos itens declarados no Rol de Documentos (Seção final da sua petição). Junte todos antes de protocolar.
+              Estes são os mesmos itens declarados no Rol de Documentos (Seção final da sua petição), conforme exigência do {autuadorInfo?.name || 'órgão autuador'} para o procedimento <strong>{PROCEDURE_TITLES[normalizeProcedureId(caseData.serviceType) as keyof typeof PROCEDURE_TITLES] || caseData.serviceType}</strong>. Junte todos antes de protocolar.
             </p>
 
             <div className="space-y-1.5 text-sm">
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checkedDocuments['doc_rg_cpf']}
-                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_rg_cpf: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-slate-900 text-sm">Cópia do RG e CPF do(a) Requerente</span>
-                  <span className="text-slate-500 block text-xs">Documento de identidade oficial com foto</span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checkedDocuments['doc_cnh']}
-                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_cnh: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-slate-900 text-sm">Cópia da CNH válida</span>
-                  <span className="text-slate-500 block text-xs">Digital (app Carteira Digital de Trânsito) ou fotocópia simples</span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checkedDocuments['doc_crlv']}
-                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_crlv: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-slate-900 text-sm">Cópia do CRLV-e (Documento do Veículo)</span>
-                  <span className="text-slate-500 block text-xs">Comprovando propriedade ou posse legítima do veículo</span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checkedDocuments['doc_notificacao']}
-                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_notificacao: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-slate-900 text-sm">
-                    {(() => {
-                      const st = caseData.serviceType;
-                      if (st === 'recurso_jari' || st === 'recurso_cetran')
-                        return 'Cópia da Notificação de Penalidade (NIP)';
-                      if (st === 'defesa_previa' || st === 'conversao_advertencia')
-                        return 'Cópia da Notificação de Autuação (NA)';
-                      return 'Cópia da Notificação de Autuação / Notificação de Penalidade';
-                    })()}
-                  </span>
-                  <span className="text-slate-500 block text-xs">
-                    Do AIT nº {caseData.infraction?.aitNumber || '—'} — demonstrando número do auto e data de postagem/CIEN
-                  </span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checkedDocuments['doc_comprobatorios']}
-                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_comprobatorios: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-slate-900 text-sm">Documentos comprobatórios dos fatos alegados</span>
-                  <span className="text-slate-500 block text-xs">
-                    Opcionais, mas recomendados: fotografias, laudos do INMETRO (aferição do radar), comprovantes de pagamento e certidões que sustentem as teses desta petição
-                  </span>
-                </div>
-              </label>
+              {buildDocumentRollItems(caseData.serviceType).map((item) => (
+                <label
+                  key={item.id}
+                  className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!checkedDocuments[item.id]}
+                    onChange={(e) => setCheckedDocuments({ ...checkedDocuments, [item.id]: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-900 text-sm">{item.label}</span>
+                    {item.hint && <span className="text-slate-500 block text-xs">{item.hint}</span>}
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
         </div>

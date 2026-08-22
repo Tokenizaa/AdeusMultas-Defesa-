@@ -30,6 +30,9 @@ import paymentsRoutes from './src/server/routes/payments';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
+import { LEGAL_ARGUMENTS } from './src/data/knowledge-base';
+import { buildDocumentRollText } from './src/core/documents/document-roll';
+import { aiProviderManager } from './src/server/observability/ai-provider-manager';
 import { metaIntegration } from './src/server/integrations/meta';
 import { marketingOrchestrator } from './src/server/workers/marketing-orchestrator.worker';
 import { marketingMetricsCollector } from './src/server/workers/marketing-metrics.worker';
@@ -607,6 +610,131 @@ async function startServer() {
     casesStore.set(domainCase.id, updatedRow);
 
     res.json(domainCase);
+  });
+
+  // POST Regenerate Defense Draft for an existing case
+  // (Espelha src/server/routes/defense.ts, porém operando no mesmo casesStore
+  // dos handlers inline acima — o router original nunca foi montado no server.ts)
+  app.post('/api/cases/:id/generate-defense', async (req, res) => {
+    try {
+      const row = casesStore.get(req.params.id);
+      if (!row) {
+        return res.status(404).json({ error: 'Caso não encontrado' });
+      }
+
+      const domain = CanonicalMapper.toDomain(row);
+      const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body || {};
+
+      const selectedArgs = LEGAL_ARGUMENTS.filter((a: any) =>
+        selectedArgumentIds?.includes(a.id)
+      );
+
+      let defense = RagPipeline.generateDefenseDraft(
+        domain.id,
+        domain.infraction,
+        domain.vehicle.plate,
+        domain.vehicle.brandModel,
+        applicantData || {
+          name: domain.clientName,
+          cpf: domain.clientCpf || '000.000.000-00',
+          cnh: '05492817492',
+          address: 'Rua das Flores, 450, Apto 82',
+          cityState: 'São Paulo/SP',
+        },
+        selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
+        procedureType || domain.serviceType
+      );
+
+      if (customFacts) {
+        defense.factsNarrative = customFacts;
+      }
+
+      // Enriquecimento via SISTEMA CENTRAL DE IA (aiProviderManager):
+      // NVIDIA NIM (primário) → 9Router (fallback) → minuta determinística do RAG.
+      // Teto de 15s: se a IA não responder a tempo, seguimos com a minuta RAG
+      // (que já é completa e inclui o rol dinâmico de documentos).
+      try {
+        const aiResult = await Promise.race([
+          aiProviderManager.executeLegalReasoning(
+            `Você é um redator jurídico especializado em recursos de trânsito brasileiro.
+Escreva uma petição administrativa formal, elegante e de alto rigor técnico para o caso abaixo.
+
+A petição deve conter:
+1. Endereçamento correto da autoridade
+2. Qualificação formal
+3. Dos Fatos
+4. Das Preliminares (Decadência, vícios formais, inobservância de resoluções do CONTRAN)
+5. Do Mérito e Jurisprudência
+6. Dos Pedidos (Efeito suspensivo, anulação ou conversão em advertência)
+7. Local, data e assinatura.
+
+Escreva a minuta em português formal e impecável.`,
+            {
+              infraction: domain.infraction,
+              applicant: applicantData,
+              arguments: selectedArgs,
+              procedure: procedureType,
+            },
+            { caseId: domain.id, temperature: 0.2 }
+          ),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000)),
+        ]);
+
+        if (typeof aiResult?.data === 'string' && aiResult.data.trim().length > 400) {
+          defense.fullDraftText = aiResult.data;
+        }
+      } catch (aiErr) {
+        console.warn('generate-defense: AI enrichment skipped:', aiErr);
+      }
+
+      // Garantia de conformidade documental (BLK-068): o texto final SEMPRE termina
+      // com o rol de documentos anexos, mesmo quando o enriquecimento por IA substitui
+      // integralmente a minuta montada pelo pipeline RAG. O rol é DINÂMICO: contém
+      // apenas os documentos obrigatórios do procedimento escolhido
+      // (PROCEDURES_CATALOG.requiredDocuments com required=true).
+      if (!defense.fullDraftText.includes('ROL DE DOCUMENTOS')) {
+        const aitNumber = domain.infraction?.aitNumber || '—';
+        const resolvedProcedure = procedureType || domain.serviceType;
+        defense.fullDraftText = `${defense.fullDraftText.trimEnd()}\n\n${buildDocumentRollText(resolvedProcedure, aitNumber)}\n`;
+      }
+
+      domain.defenseDraft = defense;
+      domain.currentStage = 3;
+      domain.status = 'defesa_pronta';
+      domain.updatedAt = new Date().toISOString();
+
+      domain.timeline.push({
+        id: `tl_def_${Date.now()}`,
+        title: 'Petição Administrativa Atualizada',
+        description: `Minuta da ${procedureType || 'defesa'} estruturada com ${selectedArgs.length} teses jurídicas.`,
+        timestamp: new Date().toISOString(),
+        type: 'defense',
+      });
+
+      const updatedRow = CanonicalMapper.toRow(domain);
+      casesStore.set(domain.id, updatedRow);
+
+      auditLogsStore.unshift({
+        id: 'aud_' + Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        acao: 'DEFENSE_GENERATED',
+        entidade: 'case',
+        entidadeId: domain.id,
+        usuario: domain.userEmail || domain.clientEmail || 'anonymous',
+        ipHash: 'ip_' + Math.random().toString(36).substring(2, 8),
+        dadosModificados: { status: domain.status, stageAtual: domain.currentStage },
+        hashIntegridade: 'sha256:' + Math.random().toString(36).substring(2, 15)
+      });
+
+      res.json({
+        success: true,
+        defenseDraft: defense,
+        case: domain,
+      });
+    } catch (error: any) {
+      console.error('Error in /api/cases/:id/generate-defense:', error);
+      res.status(500).json({ error: error.message || 'Erro ao gerar defesa' });
+    }
   });
 
   // POST AI Infraction Analysis (using Gemini API or RAG fallback)

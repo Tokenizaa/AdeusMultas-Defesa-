@@ -17,6 +17,7 @@ import { TEMPLATES_CATALOG } from '../templates/templates-catalog';
 import { DOCUMENT_BLOCKS, DocumentBlockModel } from '../templates/document-blocks';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
+import { buildDocumentRollText } from './document-roll';
 import { DefenseDraft, InfractionData, ProcedureType } from '../../types';
 
 export interface DocumentAssemblyPayload {
@@ -248,6 +249,13 @@ export class DocumentAssemblyEngine {
       // Handle custom fact override if present
       if (block.id.includes('FATOS') && payload.customFacts && payload.customFacts.trim().length > 15) {
         content = `I - DOS FATOS\n\n${payload.customFacts.trim()}`;
+      }
+
+      // ROL DE DOCUMENTOS dinâmico (BLK-068): derivado dos documentos
+      // OBRIGATÓRIOS do procedimento em PROCEDURES_CATALOG.requiredDocuments,
+      // garantindo alinhamento entre petição e checklist de anexos da etapa 4.
+      if (block.id === 'BLK-068') {
+        content = buildDocumentRollText(payload.procedureType, aitNumber);
       }
 
       for (const [placeholder, value] of Object.entries(variableMap)) {
