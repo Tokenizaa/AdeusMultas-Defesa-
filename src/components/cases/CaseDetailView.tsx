@@ -164,9 +164,10 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
   };
 
   // Find organ info
-  const autuadorInfo = AUTUADOR_BODIES.find((b) =>
-    caseData?.infraction.autuadorBody.toLowerCase().includes(b.name.toLowerCase().split(' ')[0])
-  ) || AUTUADOR_BODIES[0];
+  const autuadorInfo =
+    AUTUADOR_BODIES.find((b) =>
+      caseData?.infraction?.autuadorBody?.toLowerCase().includes(b.name.toLowerCase().split(' ')[0])
+    ) || AUTUADOR_BODIES[0];
 
   if (isLoading) {
     return (
@@ -217,7 +218,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
-              Requerente: <span className="font-semibold text-slate-800">{caseData.clientName}</span> • Placa: <span className="font-mono font-bold text-slate-900">{caseData.vehicle.plate}</span> • AIT: <span className="font-mono text-slate-900">{caseData.infraction.aitNumber}</span>
+              Requerente: <span className="font-semibold text-slate-800">{caseData.clientName}</span> • Placa: <span className="font-mono font-bold text-slate-900">{caseData.vehicle?.plate || '—'}</span> • AIT: <span className="font-mono text-slate-900">{caseData.infraction?.aitNumber || '—'}</span>
             </p>
           </div>
         </div>
@@ -344,7 +345,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
         <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="text-base font-bold text-slate-900">
-              Diagnóstico do Auto de Infração nº {caseData.infraction.aitNumber}
+              Diagnóstico do Auto de Infração nº {caseData.infraction?.aitNumber || '—'}
             </h2>
             <button
               onClick={() => setActiveStage(2)}
@@ -358,22 +359,22 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
               <span className="text-sm font-bold text-slate-400 uppercase font-mono">Enquadramento</span>
-              <p className="text-sm font-bold text-slate-900 mt-0.5 font-mono">{caseData.infraction.infractionCode}</p>
-              <p className="text-sm text-slate-600 mt-0.5 leading-snug">{caseData.infraction.description}</p>
+              <p className="text-sm font-bold text-slate-900 mt-0.5 font-mono">{caseData.infraction?.infractionCode || '—'}</p>
+              <p className="text-sm text-slate-600 mt-0.5 leading-snug">{caseData.infraction?.description || '—'}</p>
             </div>
 
             <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
               <span className="text-sm font-bold text-slate-400 uppercase font-mono">Penalidade Prevista</span>
               <p className="text-sm font-bold text-rose-600 mt-0.5 font-mono">
-                {caseData.infraction.points} Pontos • R$ {caseData.infraction.fineAmount.toFixed(2)}
+                {caseData.infraction?.points ?? 0} Pontos • R$ {(caseData.infraction?.fineAmount ?? 0).toFixed(2)}
               </p>
-              <p className="text-sm text-slate-600 mt-0.5">{caseData.infraction.ctbArticle}</p>
+              <p className="text-sm text-slate-600 mt-0.5">{caseData.infraction?.ctbArticle || '—'}</p>
             </div>
 
             <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
               <span className="text-sm font-bold text-slate-400 uppercase font-mono">Órgão Julgador</span>
-              <p className="text-sm font-bold text-slate-900 mt-0.5 truncate">{caseData.infraction.autuadorBody}</p>
-              <p className="text-sm text-slate-600 mt-0.5 font-mono">Prazo: {caseData.infraction.defenseDeadline}</p>
+              <p className="text-sm font-bold text-slate-900 mt-0.5 truncate">{caseData.infraction?.autuadorBody || '—'}</p>
+              <p className="text-sm text-slate-600 mt-0.5 font-mono">Prazo: {caseData.infraction?.defenseDeadline || '—'}</p>
             </div>
           </div>
 
@@ -383,7 +384,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               Vícios Formais Detectados no Auto:
             </h4>
             <ul className="space-y-1 text-slate-700">
-              {caseData.infraction.formalFlawsDetected?.map((flaw, idx) => (
+              {caseData.infraction?.formalFlawsDetected?.map((flaw, idx) => (
                 <li key={idx} className="flex items-start gap-1.5">
                   <span className="text-orange-500 font-bold">•</span>
                   <span>{flaw}</span>
@@ -526,10 +527,10 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
 
               <GoogleDriveButton
                 documentToExport={{
-                  title: `Recurso de Multa - ${caseData.infractionData.infractionCode}`,
+                  title: `Recurso de Multa - ${caseData.infraction?.infractionCode || 'Sem Código'}`,
                   content: caseData.defenseDraft?.fullDraftText || editedDraftText || '',
-                  aitNumber: caseData.infractionData.aitNumber,
-                  plate: caseData.vehicleData.plate,
+                  aitNumber: caseData.infraction?.aitNumber,
+                  plate: caseData.vehicle?.plate,
                 }}
               />
 
