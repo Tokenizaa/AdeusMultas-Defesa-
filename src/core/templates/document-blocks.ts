@@ -705,6 +705,6 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Relação descritiva de documentos probatórios que instruem o processo administrativo.',
     contentTemplate: `ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE PEÇA:\n\n1. Cópia do Documento de Identidade (RG) e CPF do(a) Requerente;\n2. Cópia da Carteira Nacional de Habilitação (CNH) válida;\n3. Cópia do Certificado de Registro e Licenciamento do Veículo (CRLV-e);\n4. Cópia da Notificação de Autuação / Notificação de Penalidade do AIT nº {{numero_ait}};\n5. Documentos comprobatórios dos fatos alegados (fotografias, laudos do INMETRO, comprovantes de pagamento e certidões).`,
     supportedVariables: ['{{numero_ait}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran', 'processo_suspensao', 'processo_cassacao', 'indicacao_condutor', 'conversao_advertencia'],
   },
 ];

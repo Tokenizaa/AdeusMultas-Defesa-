@@ -135,7 +135,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Arguição de prescrição intercorrente trienal ou decadência residual',
       'Requerer o cancelamento em definitivo da multa e pontos no RENACH',
     ],
-    blockIds: ['BLK-003', 'BLK-008', 'BLK-031', 'BLK-030', 'BLK-039', 'BLK-058', 'BLK-066'],
+    blockIds: ['BLK-003', 'BLK-008', 'BLK-031', 'BLK-030', 'BLK-039', 'BLK-058', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-003')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -165,6 +165,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-058')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
@@ -191,7 +192,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Arguição da retroatividade benéfica do limite de 40 pontos (Tema 1.097 STJ)',
       'Demonstrar ausência de trânsito em julgado das multas componentes ou prescrição',
     ],
-    blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066'],
+    blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-004')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-010')!,
@@ -214,6 +215,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-059')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
@@ -240,7 +242,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Comprovar que a autuação na vigência da suspensão ocorreu sem abordagem presencial',
       'Juntar prova de que o veículo estava na posse/condução de terceiro habilitado',
     ],
-    blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066'],
+    blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-005')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-011')!,
@@ -263,6 +265,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-060')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
@@ -289,13 +292,14 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Protocolo dentro do prazo final improrrogável assinalado na Notificação de Autuação',
       'Juntada obrigatória de cópia da CNH do condutor indicado e documento com foto do proprietário',
     ],
-    blockIds: ['BLK-006', 'BLK-012', 'BLK-024', 'BLK-061', 'BLK-067'],
+    blockIds: ['BLK-006', 'BLK-012', 'BLK-024', 'BLK-061', 'BLK-067', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-006')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-012')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-024')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-061')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-067')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 3 ? 'formal_requests' : 'closing_signature'),
@@ -322,7 +326,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Juntar certidão de prontuário de CNH emitida pelo DETRAN ou SENATRAN',
       'Invocar a natureza vinculada e de direito subjetivo da autoridade após a Lei 14.071/20',
     ],
-    blockIds: ['BLK-007', 'BLK-008', 'BLK-025', 'BLK-051', 'BLK-062', 'BLK-066'],
+    blockIds: ['BLK-007', 'BLK-008', 'BLK-025', 'BLK-051', 'BLK-062', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-007')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -337,6 +341,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-062')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 3 ? 'merit_arguments' : idx === 4 ? 'formal_requests' : 'closing_signature'),

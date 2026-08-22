@@ -652,50 +652,92 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Checklist of Mandatory Documents */}
+          {/* Checklist of Mandatory Documents — espelha o ROL DE DOCUMENTOS (BLK-068) da minuta gerada */}
           <div className="border-t border-slate-200 pt-4">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-2 font-mono">
               <FileText className="w-3.5 h-3.5 text-slate-700" />
               Checklist de Documentos Obrigatórios para Juntada:
             </h3>
+            <p className="text-xs text-slate-500 mb-2.5 leading-snug">
+              Estes são os mesmos itens declarados no Rol de Documentos (Seção final da sua petição). Junte todos antes de protocolar.
+            </p>
 
             <div className="space-y-1.5 text-sm">
-              <label className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checkedDocuments['doc_rg_cpf']}
+                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_rg_cpf: e.target.checked })}
+                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
+                />
+                <div>
+                  <span className="font-bold text-slate-900 text-sm">Cópia do RG e CPF do(a) Requerente</span>
+                  <span className="text-slate-500 block text-xs">Documento de identidade oficial com foto</span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={checkedDocuments['doc_cnh']}
                   onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_cnh: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500"
+                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
                 />
                 <div>
-                  <span className="font-bold text-slate-900 text-sm">Cópia da CNH do Requerente</span>
-                  <span className="text-slate-500 block text-sm">Digital (do app Carteira Digital) ou fotocópia simples</span>
+                  <span className="font-bold text-slate-900 text-sm">Cópia da CNH válida</span>
+                  <span className="text-slate-500 block text-xs">Digital (app Carteira Digital de Trânsito) ou fotocópia simples</span>
                 </div>
               </label>
 
-              <label className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={checkedDocuments['doc_crlv']}
                   onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_crlv: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500"
+                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
                 />
                 <div>
                   <span className="font-bold text-slate-900 text-sm">Cópia do CRLV-e (Documento do Veículo)</span>
-                  <span className="text-slate-500 block text-sm">Comprovando propriedade ou posse legítima</span>
+                  <span className="text-slate-500 block text-xs">Comprovando propriedade ou posse legítima do veículo</span>
                 </div>
               </label>
 
-              <label className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={checkedDocuments['doc_notificacao']}
                   onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_notificacao: e.target.checked })}
-                  className="w-3.5 h-3.5 rounded text-orange-500"
+                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
                 />
                 <div>
-                  <span className="font-bold text-slate-900 text-sm">Cópia da Notificação de Autuação (AIT)</span>
-                  <span className="text-slate-500 block text-sm">Demonstrando o número do auto e data de postagem</span>
+                  <span className="font-bold text-slate-900 text-sm">
+                    {(() => {
+                      const st = caseData.serviceType;
+                      if (st === 'recurso_jari' || st === 'recurso_cetran')
+                        return 'Cópia da Notificação de Penalidade (NIP)';
+                      if (st === 'defesa_previa' || st === 'conversao_advertencia')
+                        return 'Cópia da Notificação de Autuação (NA)';
+                      return 'Cópia da Notificação de Autuação / Notificação de Penalidade';
+                    })()}
+                  </span>
+                  <span className="text-slate-500 block text-xs">
+                    Do AIT nº {caseData.infraction?.aitNumber || '—'} — demonstrando número do auto e data de postagem/CIEN
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checkedDocuments['doc_comprobatorios']}
+                  onChange={(e) => setCheckedDocuments({ ...checkedDocuments, doc_comprobatorios: e.target.checked })}
+                  className="w-3.5 h-3.5 rounded text-orange-500 mt-0.5"
+                />
+                <div>
+                  <span className="font-bold text-slate-900 text-sm">Documentos comprobatórios dos fatos alegados</span>
+                  <span className="text-slate-500 block text-xs">
+                    Opcionais, mas recomendados: fotografias, laudos do INMETRO (aferição do radar), comprovantes de pagamento e certidões que sustentem as teses desta petição
+                  </span>
                 </div>
               </label>
             </div>
