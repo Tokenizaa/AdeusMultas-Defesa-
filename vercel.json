@@ -10,10 +10,12 @@
   ],
   "routes": [
     {
-      "src": "/(.*)
-",
-      "methods": ["GET"],
-      "dest": "/"
+      "src": "/(.+\\.(js|css|png|jpg|jpeg|gif|svg|ico|json|txt|map|woff|woff2|ttf|eot))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
