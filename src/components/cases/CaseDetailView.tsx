@@ -25,7 +25,10 @@ import { exportDefenseToPDF } from '../../lib/pdf-export';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
 
 interface CaseDetailViewProps {
-  currentCase: CaseDomain;
+  /** Optional pre-loaded case. When absent, the view fetches it by `caseId`. */
+  currentCase?: CaseDomain;
+  /** Fallback case identifier (e.g. from route params) used to fetch data. */
+  caseId?: string;
   onUpdateCase: (updated: CaseDomain) => void;
   onBackToList: () => void;
   onOpenWhatsAppModal: (caseId: string) => void;
@@ -33,12 +36,15 @@ interface CaseDetailViewProps {
 
 export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
   currentCase,
+  caseId,
   onUpdateCase,
   onBackToList,
   onOpenWhatsAppModal,
 }) => {
+  const resolvedCaseId = currentCase?.id || caseId;
+
   const shared = CaseDetailBase({
-    caseId: currentCase.id,
+    caseId: resolvedCaseId,
     currentCase,
     onUpdateCase,
     onBackToList,
@@ -106,14 +112,14 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
   const handleRegenerateDefense = async () => {
     setIsRegenerating(true);
     try {
-      const res = await fetch(`/api/cases/${currentCase.id}/generate-defense`, {
+      const res = await fetch(`/api/cases/${resolvedCaseId}/generate-defense`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          procedureType: currentCase.serviceType,
+          procedureType: currentCase?.serviceType,
           selectedArgumentIds: selectedArgIds,
           applicantData: {
-            name: currentCase.clientName,
+            name: currentCase?.clientName,
             cpf: currentCase.clientCpf || '000.000.000-00',
             cnh: '05492817492',
             address: 'Rua das Flores, 450, Apto 82',
@@ -173,7 +179,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 font-mono gap-3">
         <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-sm">Carregando registro operacional do caso {currentCase.id}...</p>
+        <p className="text-sm">Carregando registro operacional do caso {resolvedCaseId || '...'}...</p>
       </div>
     );
   }
@@ -214,7 +220,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                 {caseData.title}
               </h1>
               <span className="px-2 py-0.2 text-sm rounded font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase font-mono">
-                {caseData.status.toUpperCase().replace('_', ' ')}
+                {(caseData.status || 'novo').toUpperCase().replace('_', ' ')}
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
