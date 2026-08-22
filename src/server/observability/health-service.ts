@@ -410,20 +410,15 @@ class HealthService {
     }
     const startTime = Date.now();
     try {
-      // Try to make a real Supabase query
-      // Note: This requires the supabase client to be available
-      // For now, we'll do a simple HTTP check to the Supabase project URL
-      // A more robust check would use the actual Supabase JS client
-      const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/`, {
+      // Try to query a known table (cases) to verify connectivity and permissions
+      const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/cases?select=id&limit=1`, {
         method: 'GET',
         headers: {
           'apikey': configService.get('VITE_SUPABASE_ANON_KEY', ''),
         },
       });
       const latency = Date.now() - startTime;
-      // Supabase returns 401 for missing/invalid anon key, but 200/206 for valid requests
-      // Even 401 means the service is reachable
-      if (response.status < 500) { // Not a server error
+      if (response.ok) { // status 200-299
         return {
           id: 'supabase_db',
           name: 'Supabase Postgres Database',
@@ -432,7 +427,7 @@ class HealthService {
           latencyMs: latency,
           lastChecked: new Date().toISOString(),
           isConfigured: true,
-          message: `Supabase conectado (status ${response.status})`,
+          message: `Supabase conectado e respondendo (tabela cases acessível) - TEST`,
           details: {
             pool: 'active',
             region: configService.get('SUPABASE_REGION'),
@@ -440,15 +435,16 @@ class HealthService {
           },
         };
       } else {
+        // Still reachable but returned error (e.g., 401, 403, 404, 5xx)
         return {
           id: 'supabase_db',
           name: 'Supabase Postgres Database',
           category: 'database',
-          status: 'DOWN',
+          status: response.status >= 500 ? 'DOWN' : 'DEGRADED',
           latencyMs: Date.now() - startTime,
           lastChecked: new Date().toISOString(),
           isConfigured: true,
-          message: `Supabase retornou erro de servidor ${response.status}`,
+          message: `Supabase retornou erro ${response.status}`,
           details: {
             region: configService.get('SUPABASE_REGION'),
             statusCode: response.status,
@@ -472,9 +468,6 @@ class HealthService {
       };
     }
   }
-  /**
-   * Check Supabase Auth health (configuration-based since it's typically reliable when DB is up)
-   */
   private checkSupabaseAuthHealth(): ServiceHealthCheck {
     const supabaseUrl = configService.get('VITE_SUPABASE_URL');
     const isConfigured = Boolean(supabaseUrl && supabaseUrl.startsWith('https://'));
@@ -504,9 +497,6 @@ class HealthService {
       details: {},
     };
   }
-  /**
-   * Check Supabase Edge Functions health
-   */
   private async checkEdgeFunctionsHealth(): Promise<ServiceHealthCheck> {
     const supabaseUrl = configService.get('VITE_SUPABASE_URL');
     const isConfigured = Boolean(supabaseUrl && supabaseUrl.startsWith('https://'));

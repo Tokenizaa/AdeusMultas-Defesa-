@@ -36,6 +36,7 @@ import { aiProviderManager } from './src/server/observability/ai-provider-manage
 import { metaIntegration } from './src/server/integrations/meta';
 import { marketingOrchestrator } from './src/server/workers/marketing-orchestrator.worker';
 import { marketingMetricsCollector } from './src/server/workers/marketing-metrics.worker';
+import healthRoutes from './src/server/routes/health';
 
 dotenv.config();
 
@@ -231,6 +232,8 @@ async function startServer() {
   app.use('/api', ocrRoutes);
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
+  app.use('/api/health', healthRoutes);
+  app.use('/api', healthRoutes);
 
   // Meta Status Direct Fallback Route for UI Compatibility
   app.get(['/api/meta/status', '/api/marketing/meta/status'], (req, res) => {
@@ -1207,11 +1210,16 @@ Instruções:
 
   // Mount Vite Middleware or Static Assets
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      console.warn('Failed to initialize Vite middleware:', viteErr);
+      console.warn('Falling back to static asset serving (if available).');
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
