@@ -128,10 +128,19 @@ return (
               </button>
             </div>
           ) : (
-            (cases || []).slice(0, 5).map((c) => (
+            (cases || []).slice(0, 5).map((rawCase) => {
+              // API retorna infração aninhada; aceitar também formato plano
+              const inf = (rawCase as { infraction?: { aitNumber?: string; infractionCode?: string; description?: string } }).infraction || {};
+              const c = {
+                ...rawCase,
+                aitNumber: rawCase.aitNumber || inf.aitNumber,
+                infractionCode: rawCase.infractionCode || inf.infractionCode,
+                infractionDescription: rawCase.infractionDescription || inf.description,
+              };
+              return (
               <div
                 key={c.id}
-                onClick={() => onSelectCase(c)}
+                onClick={() => onSelectCase(rawCase)}
                 className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer"
                 aria-label={`Selecionar caso ${c.aitNumber || c.id}`}
               >
@@ -164,7 +173,8 @@ return (
 
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
