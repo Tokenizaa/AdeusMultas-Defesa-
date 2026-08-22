@@ -1,0 +1,107 @@
+{
+  "1": {
+    "class_type": "LoadDiffusionModel",
+    "inputs": {
+      "unet_name": "wan2.1_t2v_1.3B_bf16.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "professional talking head video, person speaking to camera, clean background, professional lighting, corporate setting, educational content delivery, high quality video, smooth motion",
+      "clip": ["3", 0]
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "models_t5_umt5-xxl-enc-bf16.safetensors",
+      "type": "wan"
+    }
+  },
+  "4": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "reference_avatar.png",
+      "upload": "image"
+    }
+  },
+  "5": {
+    "class_type": "WanImageToVideo",
+    "inputs": {
+      "width": 832,
+      "height": 480,
+      "length": 81,
+      "batch_size": 1
+    }
+  },
+  "6": {
+    "class_type": "IPAdapterUnifiedLoader",
+    "inputs": {
+      "model_name": "PLUS (high strength)",
+      "strength": 0.8
+    }
+  },
+  "7": {
+    "class_type": "IPAdapterAdvanced",
+    "inputs": {
+      "weight": 0.8,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "embeds_scaling": "V only",
+      "model": ["1", 0],
+      "ipadapter": ["6", 1],
+      "clip_vision": ["6", 2],
+      "image": ["4", 0]
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 999999999,
+      "steps": 20,
+      "cfg": 5.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["7", 0],
+      "positive": ["2", 0],
+      "negative": ["9", 0],
+      "latent_image": ["5", 0]
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "low quality, blurry, distorted, ugly, noisy, grainy, watermark, amateur, unprofessional, dark, gloomy, violent, inappropriate content, flickering, face distortion, inconsistent identity",
+      "clip": ["3", 0]
+    }
+  },
+  "10": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["8", 0],
+      "vae": ["11", 0]
+    }
+  },
+  "11": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "12": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "talking_head",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": ["10", 0]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "compatibility_date": "2026-07-27",
+  "main": "index.mjs",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../dist"
+  },
+  "name": "tokenizaa-defesa-f-cil",
+  "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "multa.emprestamais.shop/*",
+      "zone_name": "emprestamais.shop"
+    },
+    {
+      "pattern": "multa.emprestamais.shop/api/webhooks/pagbank",
+      "zone_name": "emprestamais.shop"
+    },
+    {
+      "pattern": "www.multa.emprestamais.shop/api/webhooks/pagbank",
+      "zone_name": "emprestamais.shop"
+    }
+  ]
+}

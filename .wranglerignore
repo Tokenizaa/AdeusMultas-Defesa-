@@ -1,0 +1,15 @@
+node_modules/
+dist/
+src/
+.git/
+.wrangler/
+playwright-report/
+test-results/
+e2e/
+*.png
+*.jpg
+*.svg
+*.woff
+*.woff2
+*.ttf
+*.eot

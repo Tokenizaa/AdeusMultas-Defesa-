@@ -1,0 +1,307 @@
+{
+  "platforms": {
+    "instagram": {
+      "post": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1080
+        },
+        "aspectRatio": "1:1",
+        "maxFileSize": "30MB",
+        "formats": ["jpg", "png"],
+        "workflow": "social-media-post",
+        "latentWidth": 1024,
+        "latentHeight": 1024,
+        "notes": "Imagens quadradas performam melhor no feed"
+      },
+      "story": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1920
+        },
+        "aspectRatio": "9:16",
+        "maxFileSize": "30MB",
+        "formats": ["jpg", "png"],
+        "workflow": "social-media-post",
+        "latentWidth": 614,
+        "latentHeight": 1024,
+        "notes": "Formato vertical para stories e reels"
+      },
+      "reel": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1920
+        },
+        "aspectRatio": "9:16",
+        "maxFileSize": "100MB",
+        "formats": ["mp4"],
+        "maxDuration": "90s",
+        "recommendedDuration": "15s",
+        "workflow": "reel-short",
+        "latentWidth": 480,
+        "latentHeight": 832,
+        "frameRate": 30,
+        "notes": "Vídeos curtos performam melhor"
+      },
+      "carousel": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1080
+        },
+        "aspectRatio": "1:1",
+        "maxSlides": 10,
+        "maxFileSize": "30MB",
+        "formats": ["jpg", "png"],
+        "workflow": "carousel",
+        "latentWidth": 1024,
+        "latentHeight": 1024,
+        "notes": "Até 10 slides, manter consistência visual"
+      }
+    },
+    "facebook": {
+      "post": {
+        "dimensions": {
+          "width": 1200,
+          "height": 630
+        },
+        "aspectRatio": "1.91:1",
+        "maxFileSize": "30MB",
+        "formats": ["jpg", "png"],
+        "workflow": "social-media-post",
+        "latentWidth": 1344,
+        "latentHeight": 704,
+        "notes": "Formato horizontal para melhor visualização no feed"
+      },
+      "video": {
+        "dimensions": {
+          "width": 1280,
+          "height": 720
+        },
+        "aspectRatio": "16:9",
+        "maxFileSize": "4GB",
+        "formats": ["mp4"],
+        "maxDuration": "240min",
+        "recommendedDuration": "60s",
+        "workflow": "explainer",
+        "latentWidth": 832,
+        "latentHeight": 480,
+        "frameRate": 30,
+        "notes": "Vídeos mais longos são bem aceitos"
+      },
+      "story": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1920
+        },
+        "aspectRatio": "9:16",
+        "maxFileSize": "30MB",
+        "formats": ["jpg", "png"],
+        "workflow": "social-media-post",
+        "latentWidth": 614,
+        "latentHeight": 1024,
+        "notes": "Stories seguem mesmo padrão do Instagram"
+      }
+    },
+    "linkedin": {
+      "post": {
+        "dimensions": {
+          "width": 1200,
+          "height": 627
+        },
+        "aspectRatio": "1.91:1",
+        "maxFileSize": "100MB",
+        "formats": ["jpg", "png", "gif"],
+        "workflow": "social-media-post",
+        "latentWidth": 1344,
+        "latentHeight": 704,
+        "notes": "Formato horizontal, conteúdo profissional"
+      },
+      "video": {
+        "dimensions": {
+          "width": 1920,
+          "height": 1080
+        },
+        "aspectRatio": "16:9",
+        "maxFileSize": "5GB",
+        "formats": ["mp4"],
+        "maxDuration": "10min",
+        "recommendedDuration": "60s",
+        "workflow": "explainer",
+        "latentWidth": 832,
+        "latentHeight": 480,
+        "frameRate": 30,
+        "notes": "Conteúdo educativo e profissional"
+      },
+      "article": {
+        "dimensions": {
+          "width": 1200,
+          "height": 627
+        },
+        "aspectRatio": "1.91:1",
+        "maxFileSize": "100MB",
+        "formats": ["jpg", "png"],
+        "workflow": "blog-header",
+        "latentWidth": 1344,
+        "latentHeight": 704,
+        "notes": "Headers para artigos do LinkedIn"
+      }
+    },
+    "tiktok": {
+      "video": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1920
+        },
+        "aspectRatio": "9:16",
+        "maxFileSize": "287.6MB",
+        "formats": ["mp4", "mov"],
+        "maxDuration": "10min",
+        "recommendedDuration": "15s",
+        "workflow": "reel-short",
+        "latentWidth": 480,
+        "latentHeight": 832,
+        "frameRate": 30,
+        "notes": "Vídeos curtos e impactantes"
+      }
+    },
+    "youtube": {
+      "thumbnail": {
+        "dimensions": {
+          "width": 1280,
+          "height": 720
+        },
+        "aspectRatio": "16:9",
+        "maxFileSize": "2MB",
+        "formats": ["jpg", "png", "gif"],
+        "workflow": "blog-header",
+        "latentWidth": 1344,
+        "latentHeight": 768,
+        "notes": "Thumbnails chamativas"
+      },
+      "shorts": {
+        "dimensions": {
+          "width": 1080,
+          "height": 1920
+        },
+        "aspectRatio": "9:16",
+        "maxFileSize": "256MB",
+        "formats": ["mp4"],
+        "maxDuration": "60s",
+        "recommendedDuration": "30s",
+        "workflow": "reel-short",
+        "latentWidth": 480,
+        "latentHeight": 832,
+        "frameRate": 30,
+        "notes": "Formato vertical para Shorts"
+      }
+    },
+    "blog": {
+      "header": {
+        "dimensions": {
+          "width": 1920,
+          "height": 1080
+        },
+        "aspectRatio": "16:9",
+        "maxFileSize": "5MB",
+        "formats": ["jpg", "png", "webp"],
+        "workflow": "blog-header",
+        "latentWidth": 1344,
+        "latentHeight": 768,
+        "notes": "Headers para posts de blog"
+      },
+      "featured": {
+        "dimensions": {
+          "width": 1200,
+          "height": 630
+        },
+        "aspectRatio": "1.91:1",
+        "maxFileSize": "5MB",
+        "formats": ["jpg", "png", "webp"],
+        "workflow": "social-media-post",
+        "latentWidth": 1344,
+        "latentHeight": 704,
+        "notes": "Imagens featured para SEO"
+      },
+      "infographic": {
+        "dimensions": {
+          "width": 1000,
+          "height": 2000
+        },
+        "aspectRatio": "1:2",
+        "maxFileSize": "5MB",
+        "formats": ["png", "webp"],
+        "workflow": "infographic",
+        "latentWidth": 768,
+        "latentHeight": 1024,
+        "notes": "Infográficos longos para blogs"
+      }
+    }
+  },
+  "workflows": {
+    "social-media-post": {
+      "file": "workflows/images/social-media-post.json",
+      "type": "image",
+      "useCases": ["instagram-post", "facebook-post", "linkedin-post"]
+    },
+    "blog-header": {
+      "file": "workflows/images/blog-header.json",
+      "type": "image",
+      "useCases": ["blog-header", "youtube-thumbnail", "linkedin-article"]
+    },
+    "infographic": {
+      "file": "workflows/images/infographic.json",
+      "type": "image",
+      "useCases": ["blog-infographic", "instagram-infographic"]
+    },
+    "quote-card": {
+      "file": "workflows/images/quote-card.json",
+      "type": "image",
+      "useCases": ["instagram-quote", "facebook-quote", "linkedin-quote"]
+    },
+    "carousel": {
+      "file": "workflows/images/carousel.json",
+      "type": "image",
+      "useCases": ["instagram-carousel", "linkedin-carousel"]
+    },
+    "reel-short": {
+      "file": "workflows/videos/reel-short.json",
+      "type": "video",
+      "useCases": ["instagram-reel", "tiktok-video", "youtube-shorts"]
+    },
+    "explainer": {
+      "file": "workflows/videos/explainer.json",
+      "type": "video",
+      "useCases": ["facebook-video", "linkedin-video", "youtube-video"]
+    },
+    "talking-head": {
+      "file": "workflows/videos/talking-head.json",
+      "type": "video",
+      "useCases": ["instagram-reel", "tiktok-video", "youtube-video"]
+    },
+    "animated-infographic": {
+      "file": "workflows/videos/animated-infographic.json",
+      "type": "video",
+      "useCases": ["instagram-reel", "facebook-video", "linkedin-video"]
+    }
+  },
+  "branding": {
+    "colors": {
+      "primary": "#1E3A5F",
+      "secondary": "#2E5A8F",
+      "accent": "#4A90D9",
+      "background": "#FFFFFF",
+      "text": "#333333",
+      "lightGray": "#F5F5F5"
+    },
+    "fonts": {
+      "heading": "Montserrat",
+      "body": "Open Sans",
+      "accent": "Playfair Display"
+    },
+    "style": {
+      "tone": "professional, educational, trustworthy",
+      "imagery": "modern, clean, corporate",
+      "colors": "blue gradient, white, gray accents"
+    }
+  }
+}

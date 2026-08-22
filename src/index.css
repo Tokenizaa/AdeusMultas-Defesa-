@@ -1,0 +1,622 @@
+@import "tailwindcss";
+
+:root {
+  /* ========================================================================
+     DESIGN TOKENS — DefesAi | Padrão Digital GOV.BR + eMAG + WCAG 2.1 AA
+     ======================================================================== */
+
+  /* --- Cores Primárias: Azul Institucional GOV.BR --- */
+  --blue-warm-vivid-70: #071D41;
+  --blue-warm-vivid-60: #155BCB;
+  --blue-warm-vivid-80: #0C326F;
+  --blue-warm-20: #C2D9FF;
+  --blue-warm-10: #E7EFFF;
+
+  /* --- Cores de Apoio --- */
+  --orange-500: #FF6B35;
+  --orange-600: #E85D2E;
+  --orange-50: #FFF3ED;
+  --orange-100: #FFE7D9;
+  --orange-200: #FFD5C2;
+
+  --green-cool-vivid-50: #168821;
+  --green-cool-10: #E3F5E1;
+  --green-cool-50: #ECF7EA;
+
+  --red-vivid-50: #E52207;
+  --red-vivid-10: #FDE8E5;
+  --red-vivid-50-bg: #FDF2F1;
+
+  --yellow-vivid-20: #FFCD07;
+  --yellow-vivid-10: #FFF5C2;
+
+  /* --- Neutros GOV.BR --- */
+  --pure-white: #FFFFFF;
+  --gray-2: #F8F8F8;
+  --gray-5: #F0F0F0;
+  --gray-10: #E6E6E6;
+  --gray-20: #CCCCCC;
+  --gray-50: #888888;
+  --gray-60: #555555;
+  --gray-80: #333333;
+  --gray-90: #1B1B1B;
+
+  /* --- Semânticas (para uso via Tailwind v4 @theme) --- */
+  --color-primary: var(--blue-warm-vivid-60);
+  --color-primary-hover: var(--blue-warm-vivid-80);
+  --color-primary-bg: var(--blue-warm-10);
+  --color-primary-border: var(--blue-warm-20);
+
+  --color-secondary: var(--orange-500);
+  --color-secondary-hover: var(--orange-600);
+  --color-secondary-bg: var(--orange-50);
+  --color-secondary-border: var(--orange-200);
+
+  --color-success: var(--green-cool-vivid-50);
+  --color-success-hover: #13771D;
+  --color-success-bg: var(--green-cool-10);
+  --color-success-border: #B8E5B4;
+
+  --color-error: var(--red-vivid-50);
+  --color-error-hover: #CC1D06;
+  --color-error-bg: var(--red-vivid-10);
+  --color-error-border: #F5C6C0;
+
+  --color-warning: var(--yellow-vivid-20);
+  --color-warning-bg: var(--yellow-vivid-10);
+  --color-warning-border: #FFE58A;
+
+  --color-bg-page: var(--gray-2);
+  --color-bg-card: var(--pure-white);
+  --color-bg-input: var(--gray-5);
+  --color-bg-input-hover: var(--pure-white);
+
+  --color-border: var(--gray-10);
+  --color-border-strong: var(--gray-20);
+  --color-border-focus: var(--blue-warm-vivid-60);
+
+  --color-text-primary: var(--gray-90);
+  --color-text-secondary: var(--gray-60);
+  --color-text-muted: var(--gray-50);
+  --color-text-inverse: var(--pure-white);
+  --color-text-on-primary: var(--pure-white);
+  --color-text-on-secondary: var(--pure-white);
+  --color-text-on-error: var(--pure-white);
+  --color-text-on-success: var(--pure-white);
+
+  --color-focus: var(--blue-warm-vivid-60);
+  --color-focus-offset: var(--pure-white);
+
+  /* --- Tipografia: Rawline (display) + Raleway (UI/body) --- */
+  --font-family-display: 'Rawline', 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-ui: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* --- Escala Tipográfica MÍNIMA 16px (eMAG compliant) --- */
+  /* Display / Headlines */
+  --text-display-xl: clamp(2.5rem, 5vw, 4rem);
+  --text-display-lg: clamp(2rem, 4vw, 3rem);
+  --text-display-md: clamp(1.5rem, 3vw, 2rem);
+
+  /* Headings */
+  --text-heading-lg: 1.5rem;      /* 24px */
+  --text-heading-md: 1.25rem;     /* 20px */
+  --text-heading-sm: 1.125rem;    /* 18px */
+
+  /* Body — OBRIGATÓRIO ≥ 16px */
+  --text-body-lg: 1.125rem;       /* 18px — artigos, descrições longas */
+  --text-body: 1rem;              /* 16px — PADRÃO: parágrafos, labels, inputs */
+  --text-body-sm: 0.9375rem;      /* 15px — meta info, timestamps (mínimo funcional) */
+
+  /* Caption / Micro — apenas badges, chips, metadata técnica */
+  --text-caption: 0.875rem;       /* 14px — badges, chips, footnotes */
+  --text-micro: 0.8125rem;        /* 13px — PISO ABSOLUTO: contadores, badges técnicos */
+
+  /* Line Heights — OBRIGATÓRIO ≥ 1.5 para body */
+  --leading-display: 1.15;
+  --leading-heading: 1.3;
+  --leading-body: 1.6;
+  --leading-body-tight: 1.5;
+  --leading-caption: 1.5;
+  --leading-micro: 1.4;
+
+  /* Letter Spacing — OBRIGATÓRIO ≥ 0.01em para body */
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.01em;
+  --tracking-body: 0.01em;
+  --tracking-caption: 0.02em;
+  --tracking-micro: 0.02em;
+
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* --- Espaçamento (base 4px) --- */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px — BASE */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+
+  /* --- Border Radius --- */
+  --radius-sm: 0.375rem;   /* 6px — inputs, badges */
+  --radius-md: 0.5rem;     /* 8px — buttons, cards sm */
+  --radius-lg: 0.75rem;    /* 12px — CARDS PADRÃO */
+  --radius-xl: 1rem;       /* 16px — cards grandes */
+  --radius-2xl: 1.5rem;    /* 24px — hero cards */
+  --radius-full: 9999px;   /* pills, avatars */
+
+  /* --- Shadows (Elevation) --- */
+  --shadow-2xs: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-sm: 0 4px 6px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 10px 15px rgb(0 0 0 / 0.1), 0 4px 6px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 20px 25px rgb(0 0 0 / 0.15), 0 10px 10px rgb(0 0 0 / 0.04);
+
+  /* --- Transitions --- */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Touch Targets (WCAG) --- */
+  --touch-target-min: 44px;
+
+  /* --- Z-Index Scale --- */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+}
+
+/* ========================================================================
+   BASE STYLES
+   ======================================================================== */
+
+html {
+  font-size: 16px; /* Base 16px — NÃO ALTERAR sem atualizar fontSizeMultiplier */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  font-weight: var(--font-weight-regular);
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings usam font-family-display */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: var(--text-heading-lg); }
+h2 { font-size: var(--text-heading-md); }
+h3 { font-size: var(--text-heading-sm); }
+h4 { font-size: var(--text-body-lg); }
+h5 { font-size: var(--text-body); }
+h6 { font-size: var(--text-body-sm); }
+
+/* Paragraphs */
+p {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+}
+
+/* Links */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--easing-standard);
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ========================================================================
+   FOCUS VISIBLE — OBRIGATÓRIO eMAG/GOV.BR
+   ======================================================================== */
+
+*:focus-visible {
+  outline: 3px solid var(--color-focus) !important;
+  outline-offset: 2px !important;
+}
+
+/* ========================================================================
+   HIGH CONTRAST MODE — eMAG / WCAG 2.1 AA
+   ======================================================================== */
+
+html.high-contrast,
+html.high-contrast body {
+  --color-bg-page: #000000 !important;
+  --color-bg-card: #000000 !important;
+  --color-bg-input: #000000 !important;
+  --color-bg-input-hover: #000000 !important;
+  --color-text-primary: #FFFFFF !important;
+  --color-text-secondary: #FFFFFF !important;
+  --color-text-muted: #FFFFFF !important;
+  --color-border: #FFFF00 !important;
+  --color-border-strong: #FFFF00 !important;
+  --color-border-focus: #FFFF00 !important;
+  --color-primary: #FFFF00 !important;
+  --color-primary-hover: #FFFF00 !important;
+  --color-primary-bg: #000000 !important;
+  --color-secondary: #FFFF00 !important;
+  --color-success: #FFFF00 !important;
+  --color-error: #FFFF00 !important;
+  --color-focus: #FFFF00 !important;
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.high-contrast *:focus-visible {
+  outline: 3px solid #FFFF00 !important;
+  outline-offset: 2px !important;
+}
+
+html.high-contrast div,
+html.high-contrast section,
+html.high-contrast header,
+html.high-contrast nav,
+html.high-contrast footer,
+html.high-contrast aside,
+html.high-contrast main,
+html.high-contrast article,
+html.high-contrast .bg-white,
+html.high-contrast .bg-slate-50,
+html.high-contrast .bg-slate-100,
+html.high-contrast .bg-slate-200,
+html.high-contrast .bg-slate-900,
+html.high-contrast .bg-slate-950,
+html.high-contrast .bg-blue-50,
+html.high-contrast .bg-orange-50,
+html.high-contrast .bg-emerald-50,
+html.high-contrast .bg-rose-50,
+html.high-contrast .bg-amber-50,
+html.high-contrast .bg-purple-50 {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+  border-color: #FFFF00 !important;
+}
+
+html.high-contrast h1,
+html.high-contrast h2,
+html.high-contrast h3,
+html.high-contrast h4,
+html.high-contrast h5,
+html.high-contrast h6,
+html.high-contrast p,
+html.high-contrast span,
+html.high-contrast label,
+html.high-contrast strong,
+html.high-contrast em,
+html.high-contrast td,
+html.high-contrast th,
+html.high-contrast .text-slate-900,
+html.high-contrast .text-slate-800,
+html.high-contrast .text-slate-700,
+html.high-contrast .text-slate-600,
+html.high-contrast .text-slate-500,
+html.high-contrast .text-slate-400,
+html.high-contrast .text-slate-300,
+html.high-contrast .text-gray-900,
+html.high-contrast .text-gray-800,
+html.high-contrast .text-gray-700,
+html.high-contrast .text-gray-600,
+html.high-contrast .text-gray-500 {
+  color: #FFFFFF !important;
+}
+
+html.high-contrast a,
+html.high-contrast .text-blue-600,
+html.high-contrast .text-orange-500,
+html.high-contrast .text-orange-600,
+html.high-contrast .text-emerald-600,
+html.high-contrast .text-rose-600,
+html.high-contrast .text-amber-600 {
+  color: #FFFF00 !important;
+  text-decoration: underline !important;
+}
+
+html.high-contrast button,
+html.high-contrast input,
+html.high-contrast select,
+html.high-contrast textarea {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+  border: 2px solid #FFFF00 !important;
+}
+
+html.high-contrast .bg-blue-600,
+html.high-contrast .bg-orange-500,
+html.high-contrast .bg-emerald-600,
+html.high-contrast .bg-slate-900,
+html.high-contrast .bg-rose-600,
+html.high-contrast .bg-amber-600,
+html.high-contrast .bg-purple-600 {
+  background-color: #000000 !important;
+  color: #FFFF00 !important;
+  border: 2px solid #FFFF00 !important;
+}
+
+html.high-contrast .border-slate-200,
+html.high-contrast .border-slate-300,
+html.high-contrast .border-gray-200,
+html.high-contrast .border-gray-300,
+html.high-contrast .border-blue-200,
+html.high-contrast .border-emerald-200,
+html.high-contrast .border-orange-200,
+html.high-contrast .border-rose-200 {
+  border-color: #FFFF00 !important;
+}
+
+/* ========================================================================
+   SCROLLBAR
+   ======================================================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-page);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ========================================================================
+   ANIMATIONS
+   ======================================================================== */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-fade-in {
+  animation: fade-in var(--duration-normal) var(--easing-standard) forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right var(--duration-normal) var(--easing-standard) forwards;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s var(--easing-standard) infinite;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================================================
+   UTILITY CLASSES — Tipografia (para uso direto quando Tailwind não cobre)
+   ======================================================================== */
+
+.text-display-xl { font-size: var(--text-display-xl); line-height: var(--leading-display); letter-spacing: var(--tracking-display); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+.text-display-lg { font-size: var(--text-display-lg); line-height: var(--leading-display); letter-spacing: var(--tracking-display); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+.text-display-md { font-size: var(--text-display-md); line-height: var(--leading-display); letter-spacing: var(--tracking-display); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+
+.text-heading-lg { font-size: var(--text-heading-lg); line-height: var(--leading-heading); letter-spacing: var(--tracking-heading); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+.text-heading-md { font-size: var(--text-heading-md); line-height: var(--leading-heading); letter-spacing: var(--tracking-heading); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+.text-heading-sm { font-size: var(--text-heading-sm); line-height: var(--leading-heading); letter-spacing: var(--tracking-heading); font-family: var(--font-family-display); font-weight: var(--font-weight-bold); }
+
+.text-body-lg { font-size: var(--text-body-lg); line-height: var(--leading-body); letter-spacing: var(--tracking-body); }
+.text-body { font-size: var(--text-body); line-height: var(--leading-body); letter-spacing: var(--tracking-body); }
+.text-body-sm { font-size: var(--text-body-sm); line-height: var(--leading-body-tight); letter-spacing: var(--tracking-body); }
+
+.text-caption { font-size: var(--text-caption); line-height: var(--leading-caption); letter-spacing: var(--tracking-caption); font-weight: var(--font-weight-semibold); }
+.text-micro { font-size: var(--text-micro); line-height: var(--leading-micro); letter-spacing: var(--tracking-micro); font-weight: var(--font-weight-semibold); }
+
+.font-display { font-family: var(--font-family-display); }
+.font-ui { font-family: var(--font-family-ui); }
+.font-mono { font-family: var(--font-family-mono); }
+
+/* Font weights */
+.font-regular { font-weight: var(--font-weight-regular); }
+.font-medium { font-weight: var(--font-weight-medium); }
+.font-semibold { font-weight: var(--font-weight-semibold); }
+.font-bold { font-weight: var(--font-weight-bold); }
+
+/* Line heights */
+.leading-display { line-height: var(--leading-display); }
+.leading-heading { line-height: var(--leading-heading); }
+.leading-body { line-height: var(--leading-body); }
+.leading-body-tight { line-height: var(--leading-body-tight); }
+.leading-caption { line-height: var(--leading-caption); }
+
+/* Letter spacing */
+.tracking-body { letter-spacing: var(--tracking-body); }
+.tracking-caption { letter-spacing: var(--tracking-caption); }
+.tracking-wide { letter-spacing: 0.02em; }
+.tracking-wider { letter-spacing: 0.04em; }
+.tracking-tight { letter-spacing: -0.01em; }
+.tracking-tighter { letter-spacing: -0.02em; }
+
+/* ========================================================================
+   FORM BASE STYLES — Inputs, Labels, Buttons (@layer base para precedência Tailwind)
+   ======================================================================== */
+
+@layer base {
+  label {
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--leading-body-tight);
+    letter-spacing: var(--tracking-body);
+    color: var(--color-text-primary);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-family: var(--font-family-ui);
+    font-size: var(--text-body);
+    line-height: var(--leading-body-tight);
+    letter-spacing: var(--tracking-body);
+    min-height: var(--touch-target-min);
+    padding: 10px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-bg-input);
+    color: var(--color-text-primary);
+    transition: all var(--duration-fast) var(--easing-standard);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: auto;
+    min-width: auto;
+    cursor: pointer;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    background-color: var(--color-bg-input-hover);
+    box-shadow: 0 0 0 3px var(--blue-warm-10);
+  }
+
+  input::placeholder,
+  select::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    background-color: var(--gray-5);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+
+  /* Error state */
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    border-color: var(--color-error);
+    background-color: var(--color-error-bg);
+  }
+
+  input[aria-invalid="true"]:focus,
+  select[aria-invalid="true"]:focus,
+  textarea[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px var(--color-error-bg);
+  }
+
+  /* ========================================================================
+     BUTTON BASE
+     ======================================================================== */
+
+  button {
+    font-family: var(--font-family-ui);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--easing-standard);
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* ========================================================================
+   SKIP LINKS (eMAG)
+   ======================================================================== */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-bold);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+}
+
+/* ========================================================================
+   CONTAINER UTILITIES
+   ======================================================================== */
+
+.container-narrow { max-width: 48rem; margin: 0 auto; }      /* 768px */
+.container-standard { max-width: 64rem; margin: 0 auto; }    /* 1024px */
+.container-wide { max-width: 80rem; margin: 0 auto; }        /* 1280px */
+.container-full { max-width: 90rem; margin: 0 auto; }        /* 1440px */

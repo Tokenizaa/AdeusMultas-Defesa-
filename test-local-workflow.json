@@ -1,0 +1,56 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "z_image_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "type": "qwen_image"
+      }
+    },
+    "3": {
+      "class_type": "TextEncodeQwenImageEdit",
+      "inputs": {
+        "clip": ["2", 0],
+        "prompt": "A professional Brazilian lawyer in a modern office, traffic law, justice, scales of justice, high quality, detailed"
+      }
+    },
+    "4": {
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 1024,
+        "height": 1024,
+        "layers": 3,
+        "batch_size": 1
+      }
+    },
+    "5": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": ["1", 0],
+        "seed": 42,
+        "steps": 20,
+        "cfg": 7.0,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "positive": ["3", 0],
+        "negative": ["3", 0],
+        "latent_image": ["4", 0],
+        "denoise": 1.0
+      }
+    },
+    "6": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "marketing_local_test",
+        "images": ["5", 0]
+      }
+    }
+  }
+}
