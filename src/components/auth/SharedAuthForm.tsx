@@ -281,20 +281,29 @@ export const SharedAuthForm: React.FC<SharedAuthFormProps> = ({
   // ==========================================================================
   // Password Reset Handler (page variant)
   // ==========================================================================
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail.trim() || !resetEmail.includes('@')) {
-      setResetStatus({ type: 'error', message: 'Por favor, informe um e-mail válido.' });
-      return;
-    }
-    setResetStatus({ type: 'loading' });
+const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!resetEmail.trim() || !resetEmail.includes('@')) {
+    setResetStatus({ type: 'error', message: 'Por favor, informe um e-mail válido.' });
+    return;
+  }
+  setResetStatus({ type: 'loading' });
+  try {
     if (onForgotPassword) {
-      // Parent handles the actual reset
-      setResetStatus({ type: 'success', message: 'Link de recuperação enviado com sucesso!' });
+      const result = await onForgotPassword(resetEmail);
+      if (result.success) {
+        setResetStatus({ type: 'success', message: result.message || 'Link de recuperação enviado com sucesso!' });
+      } else {
+        setResetStatus({ type: 'error', message: result.error || 'Falha ao enviar link de recuperação.' });
+      }
     } else {
+      // Fallback if no callback provided (shouldn't happen in normal flow)
       setResetStatus({ type: 'success', message: 'Link de recuperação enviado com sucesso!' });
     }
-  };
+  } catch (err: any) {
+    setResetStatus({ type: 'error', message: err.message || 'Erro ao enviar link de recuperação.' });
+  }
+};
 
   // ==========================================================================
   // Test Fill Handler
