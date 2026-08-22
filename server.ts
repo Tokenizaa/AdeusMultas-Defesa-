@@ -12,9 +12,9 @@ import {
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_SERVICES,
   KNOWLEDGE_PROCEDURES,
-  KNOWLEDGE_DEFENSE_BLOCKS_52,
-  TRANSIT_DATABASE_REGISTRY 
+  KNOWLEDGE_DEFENSE_BLOCKS_52
 } from './src/core/knowledge/knowledge-base';
+import { TRANSIT_DATABASE_REGISTRY } from './src/data/test-fixtures';
 import { CaseRecord, AuditLogEntry, DefenseBlock } from './src/types';
 import adminRoutes from './src/server/routes/admin';
 import metaRoutes from './src/server/routes/meta';
