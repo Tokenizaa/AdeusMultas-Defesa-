@@ -339,26 +339,26 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
     }
   };
 
-  const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
-        if (error) {
-          return { success: false, message: error.message };
-        }
-        return { success: true, message: 'Link de recuperação enviado para o seu e-mail!' };
-      } catch (err: any) {
-        return { success: false, message: err.message || 'Erro ao solicitar recuperação.' };
+const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+  const cleanEmail = email.trim().toLowerCase();
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+      if (error) {
+        return { success: false, message: error.message };
       }
+      return { success: true, message: 'Link de recuperação enviado para o seu e-mail! Verifique também a pasta de spam ou lixo eletrônico.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Erro ao solicitar recuperação.' };
     }
+  }
 
-    await new Promise((r) => setTimeout(r, 400));
-    return {
-      success: true,
-      message: `Instruções de redefinição de senha foram enviadas para ${cleanEmail}.`,
-    };
+  await new Promise((r) => setTimeout(r, 400));
+  return {
+    success: true,
+    message: `Instruções de redefinição de senha foram enviadas para ${cleanEmail}. Verifique também a pasta de spam ou lixo eletrônico.`,
   };
+};
 
   const role = user?.role || null;
   const isAuthenticated = Boolean(user);
