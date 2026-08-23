@@ -20,11 +20,11 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Database, Json } from '../../types/supabase.ts';
-import { logger } from '../observability/logger.ts';
-import { getSupabaseServerClient } from './supabase-server.ts';
-import { PagBankOrderResult, PagBankWebhookPayload } from '../integrations/pagbank.ts';
-import { GatewayId } from '../integrations/gateway/types.ts';
+import { Database, Json } from '../../types/supabase';
+import { logger } from '../observability/logger';
+import { getSupabaseServerClient } from './supabase-server';
+import { PagBankOrderResult, PagBankWebhookPayload } from '../integrations/pagbank';
+import { GatewayId } from '../integrations/gateway/types';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

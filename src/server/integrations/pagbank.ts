@@ -6,10 +6,10 @@
 
 import * as crypto from 'crypto';
 import QRCode from 'qrcode';
-import { eventBus, EventTopics } from '../../core/events/topics.ts';
-import { paymentRepository } from '../db/payment-repository.ts';
-import { logger, LogOperationStatus } from '../observability/logger.ts';
-import { PRICING } from '../config/pricing.ts';
+import { eventBus, EventTopics } from '../../core/events/topics';
+import { paymentRepository } from '../db/payment-repository';
+import { logger, LogOperationStatus } from '../observability/logger';
+import { PRICING } from '../config/pricing';
 
 export interface PagBankCustomer {
   name: string;

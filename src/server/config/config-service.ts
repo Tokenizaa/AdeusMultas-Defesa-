@@ -7,7 +7,7 @@
  * 2. In-memory and environment-backed configuration with typed validation.
  * 3. Masked serialization for frontend (secrets never leaked in plain text).
  */
-import { PRICING } from './pricing.ts';
+import { PRICING } from './pricing';
 export type SettingCategory =
   | 'ai'
   | 'commercial'

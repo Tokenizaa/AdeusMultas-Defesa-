@@ -1,10 +1,13 @@
 /**
  * Vercel Serverless Function — API entry point.
  *
- * Init preguiçoso + captura de erro: qualquer falha de boot/bundling é
- * devolvida como JSON legível (com stack truncado) em vez do opaco
- * FUNCTION_INVOCATION_FAILED, permitindo diagnóstico via curl em produção.
+ * - Import estático: o builder da Vercel rastreia/empacota todo o grafo
+ *   (import dinâmico nativo NÃO é incluído no lambda).
+ * - createApp() só roda na 1ª invocação: falhas de boot são capturadas e
+ *   devolvidas como JSON legível (stack truncado) em vez do opaco
+ *   FUNCTION_INVOCATION_FAILED, permitindo diagnóstico via curl.
  */
+import { createApp, databaseRows } from '../src/server/app';
 
 type AppFn = (
   req: import('http').IncomingMessage,
@@ -13,20 +16,15 @@ type AppFn = (
 
 let cachedApp: AppFn | null = null;
 
-async function init(): Promise<AppFn> {
-  const { createApp, databaseRows } = await import('../src/server/app');
-  // Warm-up best-effort: hidrata casos do Supabase quando configurado.
-  void databaseRows.loadAllFromSupabase().catch(() => {});
-  return createApp();
-}
-
 export default async function handler(
   req: import('http').IncomingMessage,
   res: import('http').ServerResponse
 ): Promise<void> {
   try {
     if (!cachedApp) {
-      cachedApp = await init();
+      // Warm-up best-effort: hidrata casos do Supabase quando configurado.
+      void databaseRows.loadAllFromSupabase().catch(() => {});
+      cachedApp = createApp();
     }
     cachedApp(req, res);
   } catch (err: any) {

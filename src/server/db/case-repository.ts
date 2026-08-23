@@ -13,7 +13,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { CaseRow } from '../../types/index.ts';
+import { CaseRow } from '../../types/index';
 import { Database } from '../../types/supabase';
 import { EventTopics, eventBus } from '../../core/events/topics';
 import { logger } from '../observability/logger';

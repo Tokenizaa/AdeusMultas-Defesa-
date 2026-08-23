@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
-import { caseRepository } from './db/case-repository.ts';
+import { caseRepository } from './db/case-repository';
 import type { AuditLogEntry } from '../types';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
