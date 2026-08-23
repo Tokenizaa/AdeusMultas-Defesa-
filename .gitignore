@@ -6,7 +6,7 @@ node_modules/
 # Production & Build outputs
 dist/
 build/
-api/index.cjs
+api/index.mjs
 coverage/
 .next/
 out/
