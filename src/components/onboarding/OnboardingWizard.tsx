@@ -91,11 +91,13 @@ import { AccountVerificationGate } from './AccountVerificationGate';
 interface OnboardingWizardProps {
   onCaseReadyForCheckout?: (newCase: CaseDomain) => void;
   onOpenKnowledge?: () => void;
+  isAdmin?: boolean;
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onCaseReadyForCheckout,
   onOpenKnowledge,
+  isAdminFromParent = false,
 }) => {
   const { navigate } = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
@@ -580,7 +582,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(2);
             }
           }}
-          isAdmin={isAdmin}
+          isAdmin={isAdminFromParent}
         />
       )}
 
@@ -605,7 +607,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(3);
             }
           }}
-          isAdmin={isAdmin}
+          isAdmin={isAdminFromParent}
         />
       )}
 
@@ -617,7 +619,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onNext={handleRunAnalysis}
           onBack={() => setStep(4)}
           onChangeCategory={() => setStep(3)}
-          isAdmin={isAdmin}
+          isAdmin={isAdminFromParent}
         />
       )}
 
@@ -650,7 +652,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onUpdateDocumentData={setDocumentData}
           onNext={() => setStep(9)}
           onBack={() => setStep(7)}
-          isAdmin={isAdmin}
+          isAdmin={isAdminFromParent}
         />
       )}
 
@@ -675,7 +677,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           vehicleData={vehicleData}
           analysis={caseAnalysis}
           serviceType={mappedProcedure}
-          isAdmin={isAdmin}
+          isAdmin={isAdminFromParent}
           onPaymentSuccess={handlePaymentSuccess}
           onBack={() => setStep(9)}
         />

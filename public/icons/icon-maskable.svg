@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071D41" />
+      <stop offset="45%" stop-color="#0C326F" />
+      <stop offset="100%" stop-color="#155BCB" />
+    </linearGradient>
+    <linearGradient id="goldGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFCD07" />
+      <stop offset="100%" stop-color="#F5A623" />
+    </linearGradient>
+  </defs>
+
+  <!-- Full bleed for maskable safe zone (80% center) -->
+  <rect width="512" height="512" fill="url(#bgGradMask)" />
+
+  <!-- Shield and Scales contained within safe zone -->
+  <g transform="translate(51.2, 51.2) scale(0.8)">
+    <path d="M256 72 L392 128 C392 272 328 364 256 416 C184 364 120 272 120 128 Z" 
+          fill="none" 
+          stroke="url(#goldGradMask)" 
+          stroke-width="14" 
+          stroke-linejoin="round" />
+
+    <path d="M256 94 L370 140 C370 262 316 342 256 390 C196 342 142 262 142 140 Z" 
+          fill="#071D41" 
+          opacity="0.9" />
+
+    <g transform="translate(256, 246) scale(2.4)">
+      <line x1="0" y1="-32" x2="0" y2="24" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" />
+      <line x1="-34" y1="-18" x2="34" y2="-18" stroke="url(#goldGradMask)" stroke-width="4.5" stroke-linecap="round" />
+      <line x1="-30" y1="-18" x2="-38" y2="-2" stroke="#E2E8F0" stroke-width="2" />
+      <line x1="-30" y1="-18" x2="-22" y2="-2" stroke="#E2E8F0" stroke-width="2" />
+      <path d="M-44 -2 Q-30 14 -16 -2 Z" fill="url(#goldGradMask)" />
+      <line x1="30" y1="-18" x2="22" y2="-2" stroke="#E2E8F0" stroke-width="2" />
+      <line x1="30" y1="-18" x2="38" y2="-2" stroke="#E2E8F0" stroke-width="2" />
+      <path d="M16 -2 Q30 14 44 -2 Z" fill="url(#goldGradMask)" />
+      <rect x="-18" y="24" width="36" height="6" rx="3" fill="url(#goldGradMask)" />
+      <circle cx="0" cy="-34" r="5" fill="#FFCD07" />
+    </g>
+  </g>
+</svg>

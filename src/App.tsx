@@ -329,6 +329,7 @@ function AppContent() {
           <OnboardingWizard
             onCaseReadyForCheckout={handleCaseReadyForCheckout}
             onOpenKnowledge={() => navigate('/admin/knowledge')}
+            isAdmin={isAdmin}
           />
         </div>
       )}
