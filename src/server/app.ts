@@ -178,5 +178,11 @@ export function createApp() {
     res.json(metaIntegration.getStatus());
   });
 
+  // API 404 fallback — garante que nenhum endpoint /api/* responda HTML
+  // (evita "Expected JSON response" no cliente quando a rota não existe).
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint não encontrado' });
+  });
+
   return app;
 }

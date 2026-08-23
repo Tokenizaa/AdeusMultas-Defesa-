@@ -37,6 +37,7 @@ import { metaIntegration } from './src/server/integrations/meta';
 import { marketingOrchestrator } from './src/server/workers/marketing-orchestrator.worker';
 import { marketingMetricsCollector } from './src/server/workers/marketing-metrics.worker';
 import healthRoutes from './src/server/routes/health';
+import { logger } from './src/server/observability/logger';
 
 dotenv.config();
 
@@ -1204,9 +1205,36 @@ Instruções:
     res.json(auditLogsStore.slice(0, 50));
   });
 
-  app.get('/api/audit/logs', (req, res) => {
-    res.json({ logs: auditLogsStore.slice(0, 50) });
-  });
+app.get('/api/audit/logs', (req, res) => {
+     res.json({ logs: auditLogsStore.slice(0, 50) });
+   });
+
+   // Error handling middleware - must come after all route definitions
+   app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+     // If response already sent, delegate to Express' default error handling
+     if (res.headersSent) {
+       return next(error);
+     }
+     
+     logger.error('system', 'error', 'unhandled_exception', `Unhandled exception: ${error.message}`, {
+       error: error.message,
+       stack: error.stack,
+       url: req.originalUrl,
+       method: req.method
+     });
+
+     // If it's a syntax error from JSON parsing, return 400
+     if (error instanceof SyntaxError && (error as any).status === 400 && 'body' in error) {
+       return res.status(400).json({ error: 'Invalid JSON payload' });
+     }
+
+     // Default error response
+     res.status(error.status || 500).json({
+       error: error.message || 'Internal Server Error',
+       // Include stack in non-production environments for debugging
+       ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+     });
+   });
 
   // Mount Vite Middleware or Static Assets
   if (process.env.NODE_ENV !== 'production') {
