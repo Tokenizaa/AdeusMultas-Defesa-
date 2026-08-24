@@ -56,7 +56,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               className="fixed inset-0 bg-black/70 backdrop-blur-xs"
               onClick={() => setMobileDrawerOpen(false)}
             />
-            <div className="relative w-64 max-w-[80vw] bg-slate-950 h-full shadow-2xl flex flex-col z-51 overflow-hidden">
+            <div className="relative w-64 max-w-[80vw] bg-slate-950 h-full shadow-2xl flex flex-col z-[51] overflow-hidden">
 <button
                  onClick={() => setMobileDrawerOpen(false)}
                  className="absolute top-3.5 right-3.5 p-2 rounded-lg bg-slate-900 text-slate-400 hover:text-white z-20"

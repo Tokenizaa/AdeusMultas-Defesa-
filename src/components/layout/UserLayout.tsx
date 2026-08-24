@@ -41,7 +41,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({
               className="fixed inset-0 bg-[#071D41]/60 backdrop-blur-xs"
               onClick={() => setMobileDrawerOpen(false)}
             />
-            <div className="relative w-64 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col z-51">
+            <div className="relative w-64 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col z-[51]">
               <button
                 onClick={() => setMobileDrawerOpen(false)}
                 className="absolute top-4 right-4 p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
