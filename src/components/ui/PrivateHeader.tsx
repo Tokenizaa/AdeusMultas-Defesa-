@@ -146,7 +146,7 @@ export const PrivateHeader: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
-                  className="px-3 py-1.5 bg-[#071D41] hover:bg-[#0C326F] text-white rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer transition-colors"
+                  className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm bg-[#071D41] hover:bg-[#0C326F] text-white rounded-lg font-bold flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors"
                 >
                   <User className="w-3.5 h-3.5 text-orange-400" />
                   <span className="max-w-[120px] truncate">{user.name.split(' ')[0]}</span>
