@@ -135,7 +135,7 @@ export const PrivateHeader: React.FC = () => {
             {/* Ação Primária: Iniciar Análise Gratuita */}
             <button
               onClick={() => navigate('/novo-caso')}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-bold transition-colors cursor-pointer shadow-2xs"
+              className="btn-nova-analise bg-orange-500 hover:bg-orange-600 text-white hidden sm:inline-flex shadow-2xs"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#FFCD07]" />
               <span>Análise Gratuita</span>

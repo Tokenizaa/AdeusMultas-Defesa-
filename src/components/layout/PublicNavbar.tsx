@@ -128,7 +128,7 @@ export const PublicNavbar: React.FC = () => {
             <button
               id="public-cta-analisar-multa"
               onClick={handleStartAnalysis}
-              className="px-4 py-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-lg shadow-xs shadow-orange-200 transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-tight"
+              className="btn-nova-analise bg-orange-500 hover:bg-orange-600 text-white shadow-xs shadow-orange-200 hidden sm:inline-flex"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Analisar Minha Multa</span>
@@ -139,7 +139,7 @@ export const PublicNavbar: React.FC = () => {
           <div className="flex sm:hidden items-center gap-2">
             <button
               onClick={handleStartAnalysis}
-              className="px-3 py-1.5 text-sm font-bold text-white bg-orange-500 rounded-lg flex items-center gap-1"
+              className="btn-nova-analise bg-orange-500 hover:bg-orange-600 text-white"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Analisar</span>

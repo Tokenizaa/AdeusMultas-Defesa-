@@ -45,7 +45,7 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
         <button
           id="user-header-new-case"
           onClick={() => navigate('/novo-caso')}
-          className="px-2.5 py-1 text-xs font-bold text-white bg-[#155BCB] hover:bg-[#0C326F] rounded-lg shadow-xs transition-all flex items-center gap-1 leading-none h-8 max-h-8 whitespace-nowrap cursor-pointer sm:px-3.5 sm:py-1.5 sm:text-sm sm:h-auto sm:max-h-none sm:leading-normal"
+          className="btn-nova-analise bg-[#155BCB] hover:bg-[#0C326F] text-white shadow-xs"
         >
           <PlusCircle className="w-3.5 h-3.5" />
           <span>Nova Análise Gratuita</span>
