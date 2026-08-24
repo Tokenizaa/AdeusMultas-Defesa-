@@ -71,9 +71,9 @@ export const PrivateHeader: React.FC = () => {
 
       {/* 2. Cabeçalho Principal do Sistema (Logo DefesAi + Nome do Serviço + Busca + Login) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
           {/* Lado Esquerdo: Menu Hambúrguer + Logo DefesAi + Título */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2 -ml-2 rounded-lg text-[#071D41] hover:bg-slate-100 focus:ring-2 focus:ring-[#FF6B35] cursor-pointer"
@@ -88,7 +88,7 @@ export const PrivateHeader: React.FC = () => {
               onClick={() => navigate('/')}
               className="flex items-center gap-3 cursor-pointer select-none group"
             >
-              <div className="flex items-center font-extrabold text-2xl tracking-tighter text-[#071D41] font-sans">
+              <div className="flex items-center font-extrabold text-lg sm:text-2xl tracking-tighter text-[#071D41] font-sans">
                 <span>Defe</span>
                 <span className="text-orange-500">s</span>
                 <span className="text-[#168821]">Ai</span>
@@ -96,11 +96,11 @@ export const PrivateHeader: React.FC = () => {
 
               <div className="h-6 w-px bg-slate-300 hidden sm:block" />
 
-              <div>
+              <div className="truncate max-w-[120px] sm:max-w-none">
                 <h1 className="text-sm sm:text-base font-bold text-[#071D41] tracking-tight flex items-center gap-1.5">
                   <span>Adeus</span>
                   <span className="text-orange-500">Multa</span>
-                  <span className="text-sm font-bold font-mono px-1.5 py-0.2 bg-orange-50 text-orange-900 border border-orange-300 rounded">
+                  <span className="text-[10px] sm:text-sm font-bold font-mono px-1 py-0.5 bg-orange-50 text-orange-900 border border-orange-300 rounded">
                     CTB • CONTRAN
                   </span>
                 </h1>
