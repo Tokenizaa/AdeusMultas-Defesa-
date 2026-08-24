@@ -115,7 +115,7 @@ router.get(['/payments', '/admin/payments'], (req, res) => {
       caseId: c.id,
       caseTitle: c.title || `Recurso Auto ${c.infraction?.aitNumber || c.id}`,
       customerName: c.clientName || 'Condutor DefesAi',
-      customerEmail: c.clientEmail || 'contato@defesai.com.br',
+      customerEmail: c.clientEmail || 'contato@www.defesai.shop',
       customerCpf: c.clientCpf || '***.***.***-**',
       amount: c.payment?.amount || PRICING.DEFAULT_PRICE,
       status: isPaid ? 'PAID' : (c.payment?.status === 'pending' ? 'PENDING' : 'WAITING'),
@@ -307,7 +307,7 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
     pagbank: {
       name: 'PagBank (PagSeguro) Orders v2',
       apiVersion: 'v2.0',
-      webhookUrl: 'https://app.defesai.com.br/api/webhooks/pagbank',
+      webhookUrl: 'https://app.www.defesai.shop/api/webhooks/pagbank',
       idempotencyEnabled: true,
       status: 'HEALTHY',
     },

@@ -922,7 +922,7 @@ class CommercialService {
       return {
         id,
         name: id === 'usr_beatriz' ? 'Beatriz Santos' : id === 'usr_andre' ? 'André Oliveira' : id === 'usr_daniela' ? 'Daniela Ferreira' : `Condutor ${id}`,
-        email: `${id}@defesai.com.br`,
+        email: `${id}@www.defesai.shop`,
         joinedAt: new Date(Date.now() - (level === 1 ? 20 : level === 2 ? 12 : 4) * 86400000).toISOString(),
         purchasesCount: comms.length,
         revenueGenerated: Number(rev.toFixed(2)),
@@ -939,13 +939,13 @@ class CommercialService {
     const paidComms = allUserComms.filter((c) => c.status === 'PAID').reduce((acc, c) => acc + c.commissionAmount, 0);
     const availComms = allUserComms.filter((c) => c.status === 'AVAILABLE').reduce((acc, c) => acc + c.commissionAmount, 0);
 
-    return {
-      referrerId: userId,
-      referrerName: userId === 'usr_carlos' ? 'Carlos Eduardo Silveira' : `Indicador (${userId})`,
-      referrerEmail: `${userId}@defesai.com.br`,
-      referralCode: `REF_${userId.toUpperCase()}`,
-      referralLink: `https://app.defesai.com.br/r/REF_${userId.toUpperCase()}`,
-      level1,
+return {
+       referrerId: userId,
+       referrerName: userId === 'usr_carlos' ? 'Carlos Eduardo Silveira' : `Indicador (${userId})`,
+       referrerEmail: `${userId}@www.defesai.shop`,
+       referralCode: `REF_${userId.toUpperCase()}`,
+       referralLink: `https://app.www.defesai.shop/r/${userId.toUpperCase()}`,
+       level1,
       level2,
       level3,
       totalReferralsCount: totalReferrals,

@@ -66,7 +66,7 @@ router.post('/publish', async (req, res) => {
   const result = metaPublisher.enqueue({
     destination: destination || 'both',
     message: `${content.copyText}\n\n${(content.hashtags || []).join(' ')}`,
-    linkUrl: 'https://defesai.com.br',
+    linkUrl: 'https://www.defesai.shop',
   }, contentId);
   eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId }, 'marketing_os');
   res.json(result);

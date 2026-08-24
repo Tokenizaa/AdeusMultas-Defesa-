@@ -62,13 +62,13 @@ router.post('/pagbank/orders', prodAuth, async (req, res) => {
   try {
     const { caseId, customerName, customerEmail, customerCpf, amount = PRICING.DEFAULT_PRICE } = req.body;
     
-    const orderResult = await pagBankIntegration.createPixOrder({
-      caseId: caseId || `case_${Date.now()}`,
-      customer: {
-        name: customerName || 'Condutor DefesAi',
-        email: customerEmail || 'contato@defesai.com.br',
-        taxId: customerCpf || '12345678909',
-      },
+const orderResult = await pagBankIntegration.createPixOrder({
+       caseId: caseId || `case_${Date.now()}`,
+       customer: {
+name: customerName || 'Condutor DefesAi',
+         email: customerEmail || 'contato@www.defesai.shop',
+         taxId: customerCpf || '12345678909',
+       },
       amount: Number(amount),
     });
 
@@ -109,7 +109,7 @@ router.post('/pix/create', prodAuth, async (req, res) => {
 
     // Usar o gateway ativo (PagBank ou GGPIXAPI)
     const gateway = gatewayManager.getActiveGateway();
-    const appUrl = process.env.APP_URL || 'https://defesai.com.br';
+    const appUrl = process.env.APP_URL || 'https://www.defesai.shop/';
 
     const pixResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
@@ -117,9 +117,9 @@ router.post('/pix/create', prodAuth, async (req, res) => {
       description: 'DefesaAi - Minuta Jurídica',
       referenceId: `defesai_case_${caseId || Date.now()}`,
       payer: {
-        name: customerName || 'Condutor DefesAi',
-        email: customerEmail || 'contato@defesai.com.br',
-        document: customerCpf || '12345678909',
+name: customerName || 'Condutor DefesAi',
+         email: customerEmail || 'contato@www.defesai.shop',
+         document: customerCpf || '12345678909',
       },
       webhookUrl: `${appUrl}/api/webhooks/${gateway.id === 'ggpixapi' ? 'ggpix' : 'pagbank'}`,
     });
@@ -219,9 +219,9 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     const orderResult = await pagBankIntegration.createCreditCardOrder({
       caseId: caseId || `case_${Date.now()}`,
       customer: {
-        name: customerName || 'Condutor DefesAi',
-        email: customerEmail || 'contato@defesai.com.br',
-        taxId: customerCpf || '12345678909',
+name: customerName || 'Condutor DefesAi',
+         email: customerEmail || 'contato@www.defesai.shop',
+         taxId: customerCpf || '12345678909',
       },
       amount: Number(amount),
       installments: Number(installments),

@@ -74,11 +74,11 @@ export class PublicacaoAgent {
             
             // Enqueue for publishing (this will happen immediately in the meta publisher,
             // but in a more sophisticated system, we might wait until the exact time)
-            metaPublisher.enqueue({
-              destination: 'both',
-              message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
-              linkUrl: 'https://defesai.com.br',
-            }, content.id);
+metaPublisher.enqueue({
+               destination: 'both',
+               message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
+               linkUrl: 'https://www.defesai.shop',
+             }, content.id);
             
             eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId: content.id }, 'marketing_os');
             logger.info('marketing', 'agents', 'publish', `Conteúdo ${content.id} agendado e enfileirado na Meta`);
@@ -103,11 +103,11 @@ export class PublicacaoAgent {
             logger.info('marketing', 'agents', 'publicacao', `Publishing scheduled content ${content.id} (scheduled for ${scheduledDateStr})`);
             
             // Publish the content
-            const result = metaPublisher.enqueue({
-              destination: 'both',
-              message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
-              linkUrl: 'https://defesai.com.br',
-            }, content.id);
+const result = metaPublisher.enqueue({
+               destination: 'both',
+               message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
+               linkUrl: 'https://www.defesai.shop',
+             }, content.id);
             
             // Update status to published
             await marketingService.updateContent(content.id, { 
@@ -129,11 +129,11 @@ export class PublicacaoAgent {
         else {
           logger.info('marketing', 'agents', 'publicacao', `Publishing content ${content.id} without scheduled date (immediate)`);
           
-          const result = metaPublisher.enqueue({
-            destination: 'both',
-            message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
-            linkUrl: 'https://defesai.com.br',
-          }, content.id);
+const result = metaPublisher.enqueue({
+             destination: 'both',
+             message: `${content.copyText}\n\n${content.hashtags.join(' ')}`,
+             linkUrl: 'https://www.defesai.shop',
+           }, content.id);
           
           await marketingService.updateContent(content.id, { 
             status: 'publicado',

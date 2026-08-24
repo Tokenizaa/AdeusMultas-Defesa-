@@ -21,11 +21,11 @@ export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
 // =========================================================================
 export const DEMO_USERS: Record<string, { user: AuthUser; passwordHash: string }> = (import.meta as any).env?.DEV
   ? {
-      'motorista@defesai.com.br': {
+      'motorista@www.defesai.shop': {
         user: {
           id: 'usr_motorista_carlos',
           name: 'Carlos Eduardo Silveira',
-          email: 'motorista@defesai.com.br',
+          email: 'motorista@www.defesai.shop',
           role: 'citizen',
           cpf: '123.456.789-00',
           phone: '(11) 98765-4321',
@@ -35,11 +35,11 @@ export const DEMO_USERS: Record<string, { user: AuthUser; passwordHash: string }
         },
         passwordHash: '123456',
       },
-      'admin@defesai.com.br': {
+      'admin@www.defesai.shop': {
         user: {
           id: 'usr_admin_defesai',
           name: 'Administrador DefesAi',
-          email: 'admin@defesai.com.br',
+          email: 'admin@www.defesai.shop',
           role: 'admin',
           cpf: '000.111.222-33',
           phone: '(11) 99999-0000',

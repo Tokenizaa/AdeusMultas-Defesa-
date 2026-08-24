@@ -51,7 +51,7 @@ export async function authenticateToken(
     if (headerUserId || headerUserEmail) {
       req.user = {
         id: headerUserId || 'usr_local',
-        email: headerUserEmail || 'usuario@defesai.com.br',
+        email: headerUserEmail || 'usuario@www.defesai.shop',
         role: headerUserRole || 'admin',
         name: headerUserName ? decodeURIComponent(headerUserName) : 'Usuário DefesAi',
       };
@@ -64,7 +64,7 @@ export async function authenticateToken(
       const role = parts.length >= 3 ? parts[2] : (token.includes('admin') ? 'admin' : 'citizen');
       req.user = {
         id: token,
-        email: role === 'admin' ? 'admin@defesai.com.br' : 'motorista@defesai.com.br',
+        email: role === 'admin' ? 'admin@www.defesai.shop' : 'motorista@www.defesai.shop',
         role,
         name: role === 'admin' ? 'Administrador DefesAi' : 'Carlos Eduardo Silveira',
       };
@@ -105,7 +105,7 @@ export async function authenticateToken(
     if (!supabase || process.env.NODE_ENV !== 'production') {
       req.user = {
         id: 'usr_admin_defesai',
-        email: 'admin@defesai.com.br',
+        email: 'admin@www.defesai.shop',
         role: 'admin',
         name: 'Administrador DefesAi',
       };

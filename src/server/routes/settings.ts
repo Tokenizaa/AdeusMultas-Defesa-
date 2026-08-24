@@ -40,7 +40,7 @@ router.put(['/', '/settings'], async (req, res) => {
     const result = await settingsService.updateSetting({
       key,
       value,
-      updatedBy: updatedBy || 'admin@defesai.com.br',
+      updatedBy: updatedBy || 'admin@www.defesai.shop',
     });
 
     if (!result.success) {
@@ -84,7 +84,7 @@ router.post(['/reset-default', '/settings/reset-default'], async (req, res) => {
     return res.status(400).json({ success: false, message: 'Chave obrigatória.' });
   }
 
-  const result = await settingsService.resetToDefault(key, updatedBy || 'admin@defesai.com.br');
+  const result = await settingsService.resetToDefault(key, updatedBy || 'admin@www.defesai.shop');
   res.json({
     ...result,
     settings: await settingsService.getSettings(),
