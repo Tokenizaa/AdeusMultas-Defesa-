@@ -41,4 +41,6 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 
 | ISO (UTC) | Feature | Resultado |
 |-----------|---------|-----------|
-| 2026-08-24T05:37:54Z | G0-gov-baseline | em andamento |
+| 2026-08-24T05:37:54Z | G0-gov-baseline | PASS feats: G0-01/02/03 commits: ecdaa42,149112f,05472be,cfabdb1 |
+| 2026-08-24T05:43:42Z | stash orphan | 19 arquivos de produção preservados em stash (pré-governança) |
+| 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved`
