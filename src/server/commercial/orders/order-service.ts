@@ -86,7 +86,8 @@ export class OrderService {
     };
 
     this.orders.set(order.id, order);
-    this.repository.persistOrder(order);
+    // Persistência de orders não está implementada no CommercialRepository;
+    // o Map em memória continua sendo a fonte de verdade por enquanto.
 
     this.auditService.record({
       action: 'ORDER_CREATED',

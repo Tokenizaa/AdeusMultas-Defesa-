@@ -348,7 +348,7 @@ router.get(['/users', '/admin/users'], async (req, res) => {
 
     const { search, role } = req.query as Record<string, string | undefined>;
 
-    const validRole = (['admin', 'citizen'] as const).includes(role as 'admin' | 'citizen')
+    const validRole = typeof role === 'string' && (role === 'admin' || role === 'citizen')
       ? (role as 'admin' | 'citizen')
       : null;
 

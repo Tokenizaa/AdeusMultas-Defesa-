@@ -201,21 +201,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Headings usam font-family-display */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-family-display);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--tracking-heading);
-  color: var(--color-text-primary);
-}
+@layer base {
+  /* Headings usam font-family-display */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family-display);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--color-text-primary);
+  }
 
-h1 { font-size: var(--text-heading-lg); }
-h2 { font-size: var(--text-heading-md); }
-h3 { font-size: var(--text-heading-sm); }
-h4 { font-size: var(--text-body-lg); }
-h5 { font-size: var(--text-body); }
-h6 { font-size: var(--text-body-sm); }
+  h1 { font-size: var(--text-heading-lg); }
+  h2 { font-size: var(--text-heading-md); }
+  h3 { font-size: var(--text-heading-sm); }
+  h4 { font-size: var(--text-body-lg); }
+  h5 { font-size: var(--text-body); }
+  h6 { font-size: var(--text-body-sm); }
+}
 
 /* Paragraphs */
 p {

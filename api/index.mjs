@@ -5127,38 +5127,29 @@ router.get(["/integrations/overview", "/admin/integrations/overview"], async (re
 });
 router.get(["/users", "/admin/users"], async (req, res) => {
   try {
-    const domains = [];
-    for (const row of databaseRows.values()) {
-      domains.push(CanonicalMapper.rowToDomain(row));
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase indispon\xEDvel." });
     }
-    const usersMap = /* @__PURE__ */ new Map();
-    domains.forEach((c) => {
-      const email = c.clientEmail || c.userEmail;
-      if (!email) return;
-      if (usersMap.has(email)) return;
-      usersMap.set(email, {
-        id: c.userId || email,
-        name: c.clientName || c.userEmail?.split("@")[0] || "Usu\xE1rio",
-        email,
-        role: c.userId === "usr_admin_defesai" ? "admin" : "citizen",
-        createdAt: c.createdAt,
-        cpf: c.clientCpf || null
-      });
-    });
-    let users = Array.from(usersMap.values());
+    let query = supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at");
     const { search, role } = req.query;
+    const validRole = typeof role === "string" && (role === "admin" || role === "citizen") ? role : null;
+    if (validRole) {
+      query = query.eq("role", validRole);
+    }
     if (search) {
-      const q = search.toLowerCase();
-      users = users.filter(
-        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.cpf && u.cpf.includes(q)
-      );
+      const q = `%${search}%`;
+      query = query.or(`name.ilike.${q},email.ilike.${q},cpf.ilike.${q}`);
     }
-    if (role) {
-      users = users.filter((u) => u.role === role);
+    query = query.order("created_at", { ascending: false });
+    const { data, error } = await query;
+    if (error) {
+      console.error("Erro ao buscar user_profiles:", error);
+      return res.status(500).json({ error: "Erro ao carregar usu\xE1rios." });
     }
-    res.json({ users, total: users.length });
+    res.json({ users: data || [], total: (data || []).length });
   } catch (err) {
-    console.error("Erro em /api/admin/users:", err);
+    console.error("Erro em /api/admin/users GET:", err);
     res.status(500).json({ error: "Erro ao carregar usu\xE1rios." });
   }
 });
@@ -5171,7 +5162,28 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     if (!["admin", "citizen"].includes(role)) {
       return res.status(400).json({ error: "role inv\xE1lida. Use admin ou citizen." });
     }
-    res.json({ success: true, message: "Role atualizada (placeholder).", email, role });
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase indispon\xEDvel." });
+    }
+    const { data: profile, error: profileError } = await supabase.from("user_profiles").select("id, email, name, role").eq("email", email).maybeSingle();
+    if (profileError) {
+      console.error("Erro ao buscar profile:", profileError);
+      return res.status(500).json({ error: "Erro ao localizar usu\xE1rio." });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: "Usu\xE1rio n\xE3o encontrado em user_profiles." });
+    }
+    const { error: rpcError } = await supabase.rpc("admin_update_user_role_by_email", {
+      target_user_email: email,
+      new_role: role
+    });
+    if (rpcError) {
+      console.error("Erro ao atualizar role via RPC:", rpcError);
+      return res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
+    }
+    const { data: updated } = await supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at").eq("id", profile.id).single();
+    res.json({ success: true, user: updated });
   } catch (err) {
     console.error("Erro em PUT /api/admin/users:", err);
     res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
@@ -5695,6 +5707,13 @@ var CommercialRepository = class {
     this._referralRelations = [];
     this._referralConfig = null;
     this._commercialAuditLogs = [];
+    // ============================================================
+    // Commercial Orders (stub — tabela commercial_orders não existe
+    // no schema atual; a fonte de verdade permanece o Map em
+    // memória do OrderService/OrderRepository até termos ADR para
+    // criar/persistir esta entidade no Supabase).
+    // ============================================================
+    this._orders = /* @__PURE__ */ new Map();
   }
   // ==========================================
   // Helpers
@@ -6148,6 +6167,19 @@ var CommercialRepository = class {
         count: this._commercialAuditLogs.length
       });
     }
+  }
+  persistOrder(_order) {
+  }
+  updateOrderStatus(_orderId, _status) {
+  }
+  getOrderById(orderId) {
+    return this._orders.get(orderId);
+  }
+  getOrdersByCase(caseId) {
+    return Array.from(this._orders.values()).filter((o) => o.caseId === caseId);
+  }
+  getOrdersByUser(userId) {
+    return Array.from(this._orders.values()).filter((o) => o.userId === userId);
   }
 };
 var commercialRepository = new CommercialRepository();
@@ -18714,6 +18746,7 @@ router11.post("/payments/credit-card/create", prodAuth, async (req, res) => {
         domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
       }
     }
     logger.info("payments", "gateway", "create_credit_card_order", "Credit card order endpoint called", {
@@ -18797,6 +18830,7 @@ router11.post("/webhooks/pagbank", (req, res) => {
         });
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,
@@ -18978,6 +19012,7 @@ router11.post("/webhooks/ggpix", (req, res) => {
         });
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
         commercialService.processPaymentConfirmationEvent({
           paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,

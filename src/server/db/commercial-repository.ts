@@ -589,5 +589,35 @@ export class CommercialRepository {
       });
     }
   }
+
+  // ============================================================
+  // Commercial Orders (stub — tabela commercial_orders não existe
+  // no schema atual; a fonte de verdade permanece o Map em
+  // memória do OrderService/OrderRepository até termos ADR para
+  // criar/persistir esta entidade no Supabase).
+  // ============================================================
+
+  private _orders: Map<string, any> = new Map();
+
+  persistOrder(_order: any): void {
+    // Sem tabela commercial_orders ainda — no-op.
+    // Mantido para não quebrar OrderService/OrderRepository.
+  }
+
+  updateOrderStatus(_orderId: string, _status: string): void {
+    // Sem tabela commercial_orders ainda — no-op.
+  }
+
+  getOrderById(orderId: string): any | undefined {
+    return this._orders.get(orderId);
+  }
+
+  getOrdersByCase(caseId: string): any[] {
+    return Array.from(this._orders.values()).filter((o: any) => o.caseId === caseId);
+  }
+
+  getOrdersByUser(userId: string): any[] {
+    return Array.from(this._orders.values()).filter((o: any) => o.userId === userId);
+  }
 }
 export const commercialRepository = new CommercialRepository();

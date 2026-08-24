@@ -329,7 +329,7 @@ const recentCases = overviewData?.recentCases || [];
       </div>
 
       {/* 4. TABELA OPERACIONAL DE CASOS RECENTES (Com Ações Rápidas) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xs">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-white font-mono">Fila Operacional de Autuações</h3>

@@ -109,7 +109,7 @@ export const AdminUsersListView: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto shadow-sm">
         {isLoading ? (
           <div className="p-6 text-center text-sm text-slate-400">Carregando usuários…</div>
         ) : (

@@ -273,7 +273,7 @@ export const AdminAuditView: React.FC = () => {
           </div>
 
           {/* System Logs Table */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-x-auto">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
 <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800 font-mono text-sm uppercase">
@@ -376,7 +376,7 @@ export const AdminAuditView: React.FC = () => {
           </div>
 
           {/* Audit Logs Table */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-x-auto">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
 <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800 font-mono text-sm uppercase">

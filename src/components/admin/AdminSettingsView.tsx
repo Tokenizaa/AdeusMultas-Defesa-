@@ -515,8 +515,8 @@ const handleTestIntegration = async (serviceId: string) => {
         )}
       </div>
 
-      {/* Audit Trail Section */}
-      <div className="bg-slate-950 border border-slate-900 rounded-2xl overflow-hidden shadow-sm">
+{/* Audit Trail Section */}
+      <div className="bg-slate-950 border border-slate-900 rounded-2xl overflow-x-auto shadow-sm">
         <div className="p-4 border-b border-slate-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-orange-400" />
