@@ -11,8 +11,68 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';
-
 const router = Router();
+
+// ============================================================================
+// Validação comercial (backend decide o preço)
+// ============================================================================
+
+type CommercialOffer = {
+  commercialId: string;
+  serviceType: string;
+  stageId: string | null;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  eligible: boolean;
+  available: boolean;
+  requirements: string[];
+};
+
+function resolveOffer(params: {
+  serviceType: string;
+  caseId?: string;
+}): { offer: CommercialOffer | null; error?: string } {
+  const { serviceType } = params;
+
+  if (!serviceType) {
+    return { offer: null, error: 'serviceType é obrigatório para criar o pagamento.' };
+  }
+
+  const result = commercialService.resolveCommercialOffer({
+    serviceType,
+  });
+
+  if (!result.offer) {
+    return {
+      offer: null,
+      error: result.reason || `Serviço "${serviceType}" não possui oferta comercial disponível.`,
+    };
+  }
+
+  const offer = result.offer;
+  if (!offer.eligible || !offer.available) {
+    return {
+      offer: null,
+      error: offer.name
+        ? `A oferta "${offer.name}" não está disponível no momento.`
+        : result.reason,
+    };
+  }
+
+  return { offer };
+}
+
+function assertAmountMatchesOffer(amount: number, offer: CommercialOffer): void {
+  const tolerance = 0.01;
+  if (Math.abs(amount - offer.price) > tolerance) {
+    throw new Error(
+      `Valor de cobrança incompatível com a oferta. ` +
+      `Oferta: R$ ${offer.price.toFixed(2)} | Recebido: R$ ${amount.toFixed(2)}`
+    );
+  }
+}
 
 // ============================================================================
 // Modo de teste / auth condicional
@@ -57,93 +117,54 @@ router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
   });
 });
 
-// Official PagBank Integration (Orders, PIX & Webhooks)
-router.post('/pagbank/orders', prodAuth, async (req, res) => {
+// Official Gateway-Agnostic PIX Creation (resolves price from commercial catalog)
+// MANTÉM alias /api/pagbank/orders para compatibilidade reversa.
+router.post(['/pagbank/orders', '/payments/pix/create'], prodAuth, async (req, res) => {
   try {
-    const { caseId, customerName, customerEmail, customerCpf, amount = PRICING.DEFAULT_PRICE } = req.body;
-    
-const orderResult = await pagBankIntegration.createPixOrder({
-       caseId: caseId || `case_${Date.now()}`,
-       customer: {
-name: customerName || 'Condutor DefesAi',
-         email: customerEmail || 'contato@www.defesai.shop',
-         taxId: customerCpf || '12345678909',
-       },
-      amount: Number(amount),
+    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
+
+    // serviceType é obrigatório; o backend decide o preço.
+    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    if (!offerResult.offer) {
+      return res.status(400).json({
+        error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
+        hint: 'Informe serviceType válido (ex: defesa_previa) ou verifique o catálogo.',
+      });
+    }
+
+    const finalAmount = offerResult.offer.price;
+    const gateway = gatewayManager.getActiveGateway();
+
+    const orderResult = await gateway.createPix({
+      caseId: caseId || `case_${Date.now()}`,
+      referenceId: `defesai_case_${caseId || Date.now()}`,
+      payer: {
+        name: customerName || 'Condutor DefesAi',
+        email: customerEmail || 'contato@www.defesai.shop',
+        document: (customerCpf || '12345678909').replace(/\D/g, ''),
+      },
+      amountInCents: Math.round(finalAmount * 100),
+      description: `DefesAi - ${offerResult.offer.name}`,
+      webhookUrl: `${process.env.APP_URL || 'https://www.defesai.shop'}/api/webhooks/${gateway.id === 'ggpixapi' ? 'ggpix' : 'pagbank'}`,
     });
 
-    // Update case with payment reference if existing
-    if (caseId) {
-      const row = databaseRows.get(caseId);
-      if (row) {
-        const domain = CanonicalMapper.rowToDomain(row);
-        domain.payment = {
-          status: 'pending',
-          amount: Number(amount),
-          transactionId: orderResult.orderId,
-          paymentMethod: 'pix',
-        };
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
-      }
-    }
+    const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
 
     res.json({
       success: true,
       order: orderResult,
-      pixCopyPasteString: orderResult.qrCodeText,
+      pixCopyPasteString: orderResult.pixCopyPaste,
       qrCodeDataUrl: orderResult.qrCodeDataUrl,
-      txId: orderResult.orderId,
+      txId: orderResult.gatewayTransactionId,
+      amount: finalAmount,
+      serviceType: offerResult.offer.serviceType,
+      commercialOfferId: offerResult.offer.commercialId,
       status: 'aguardando_pagamento',
+      gateway: gateway.id,
     });
   } catch (error: any) {
-    logger.error('payments', 'pagbank', 'create_pix_order', 'Error creating PIX order', { error: error.message });
-    res.status(500).json({ error: error.message || 'Erro ao gerar pedido PagBank' });
-  }
-});
-
-// Alias for existing frontend compatibility — now gateway-agnostic
-router.post('/pix/create', prodAuth, async (req, res) => {
-  try {
-    const { caseId, amount = PRICING.DEFAULT_PRICE, customerCpf, customerName, customerEmail } = req.body;
-
-    // Usar o gateway ativo (PagBank ou GGPIXAPI)
-    const gateway = gatewayManager.getActiveGateway();
-    const appUrl = process.env.APP_URL || 'https://www.defesai.shop/';
-
-    const pixResult = await gateway.createPix({
-      caseId: caseId || `case_${Date.now()}`,
-      amountInCents: Math.round(Number(amount) * 100),
-      description: 'DefesaAi - Minuta Jurídica',
-      referenceId: `defesai_case_${caseId || Date.now()}`,
-      payer: {
-name: customerName || 'Condutor DefesAi',
-         email: customerEmail || 'contato@www.defesai.shop',
-         document: customerCpf || '12345678909',
-      },
-      webhookUrl: `${appUrl}/api/webhooks/${gateway.id === 'ggpixapi' ? 'ggpix' : 'pagbank'}`,
-    });
-
-    logger.info('payments', 'gateway', 'create_pix', `PIX created via ${gateway.id}`, {
-      caseId,
-      gatewayTransactionId: pixResult.gatewayTransactionId,
-      gateway: gateway.id,
-    });
-
-    res.json({
-      success: true,
-      txId: pixResult.gatewayTransactionId,
-      amount: pixResult.amountInCents / 100,
-      pixCopyPasteString: pixResult.pixCopyPaste,
-      qrCodeDataUrl: pixResult.qrCodeDataUrl,
-      expiresInMinutes: 30,
-      status: 'aguardando_pagamento',
-      gateway: gateway.id,
-      order: pixResult,
-    });
-  } catch (err: any) {
-    logger.error('payments', 'gateway', 'create_pix_order_alias', 'Error creating PIX order', { error: err.message });
-    res.status(500).json({ error: err.message });
+    logger.error('payments', 'pix_create', 'create_pix_order', 'Error creating PIX order', { error: error.message });
+    res.status(500).json({ error: error.message || 'Erro ao gerar pedido PIX' });
   }
 });
 
@@ -186,27 +207,50 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
 });
 
 // Credit Card Order Creation Endpoint — gateway-agnostic
-router.post('/credit-card/create', prodAuth, async (req, res) => {
+// Only PagBank supports credit card; GGPIXAPI is blocked by the gateway manager.
+router.post('/payments/credit-card/create', prodAuth, async (req, res) => {
   try {
     const {
       caseId,
       customerName,
       customerEmail,
       customerCpf,
-      amount = PRICING.DEFAULT_PRICE,
+      amount,
       installments = 1,
+      serviceType,
       cardToken,
       authenticationMethod = 'CHALLENGE',
-      softDescriptor
+      softDescriptor,
     } = req.body;
 
     if (!cardToken) {
       return res.status(400).json({ error: 'cardToken é obrigatório para pagamento com cartão de crédito' });
     }
 
-    const gateway = gatewayManager.getActiveGateway();
+    if (!serviceType) {
+      return res.status(400).json({
+        error: 'serviceType é obrigatório para criar o pagamento.',
+        hint: 'Informe serviceType válido (ex: defesa_previa).',
+      });
+    }
 
-    // GGPIXAPI não suporta cartão — retornar erro claro
+    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    if (!offerResult.offer) {
+      return res.status(400).json({
+        error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
+        hint: 'Verifique o catálogo comercial antes de prosseguir.',
+      });
+    }
+
+    if (amount !== undefined && Number(amount) !== offerResult.offer.price) {
+      return res.status(400).json({
+        error: 'Valor informado não corresponde ao preço da oferta. O backend recalcula automaticamente.',
+        expectedPrice: offerResult.offer.price,
+        receivedAmount: Number(amount),
+      });
+    }
+
+    const gateway = gatewayManager.getActiveGateway();
     if (gateway.id !== 'pagbank') {
       return res.status(400).json({
         error: 'Gateway ativo não suporta pagamento com cartão de crédito.',
@@ -218,29 +262,33 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
 
     const orderResult = await pagBankIntegration.createCreditCardOrder({
       caseId: caseId || `case_${Date.now()}`,
+      referenceId: `defesai_case_${caseId || Date.now()}`,
       customer: {
-name: customerName || 'Condutor DefesAi',
-         email: customerEmail || 'contato@www.defesai.shop',
-         taxId: customerCpf || '12345678909',
+        name: customerName || 'Condutor DefesAi',
+        email: customerEmail || 'contato@www.defesai.shop',
+        taxId: (customerCpf || '12345678909').replace(/\D/g, ''),
       },
-      amount: Number(amount),
+      amount: offerResult.offer.price,
       installments: Number(installments),
       cardToken,
       authenticationMethod,
       softDescriptor,
+      notificationUrls: [`${process.env.APP_URL || 'https://www.defesai.shop'}/api/webhooks/pagbank`],
     });
 
-    // Update case with payment reference if existing
+    // Update case with payment and commercial offer reference
     if (caseId) {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
         domain.payment = {
           status: 'pending',
-          amount: Number(amount),
+          amount: offerResult.offer.price,
           transactionId: orderResult.orderId,
           paymentMethod: 'credit_card',
         };
+        domain.serviceType = offerResult.offer.serviceType as any;
+        domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
       }
@@ -253,6 +301,8 @@ name: customerName || 'Condutor DefesAi',
         orderId: orderResult.orderId,
         orderStatus: orderResult.status,
         threeDsRequired: orderResult.threeDsChallengeRequired,
+        serviceType: offerResult.offer.serviceType,
+        commercialOfferId: offerResult.offer.commercialId,
         gateway: 'pagbank',
       },
     });
@@ -261,6 +311,9 @@ name: customerName || 'Condutor DefesAi',
       success: true,
       order: orderResult,
       txId: orderResult.orderId,
+      amount: offerResult.offer.price,
+      serviceType: offerResult.offer.serviceType,
+      commercialOfferId: offerResult.offer.commercialId,
       status: orderResult.threeDsChallengeRequired ? 'aguardando_3ds' : 'autorizado',
       threeDsUrl: orderResult.threeDsUrl,
       threeDsChallengeRequired: orderResult.threeDsChallengeRequired,
@@ -289,7 +342,17 @@ router.post('/webhooks/pagbank', (req: Request, res: Response) => {
                      req.headers['x-pagbank-signature'] as string ||
                      req.headers['x-authenticity-token'] as string;
 
-    const webhookResult = pagBankIntegration.processWebhook(rawBody, signature, payload);
+    const webhookResult = pagBankIntegration.processWebhook(rawBody, signature, payload) as {
+      signatureValid: boolean;
+      status: string;
+      orderId?: string;
+      amountInCents?: number;
+      transactionType?: string;
+      gatewayTransactionId?: string;
+      commercialOfferId?: string;
+      serviceType?: string;
+      paidAt?: string;
+    };
 
     if (!webhookResult.signatureValid) {
       logger.error('payments', 'pagbank', 'webhook', 'Invalid signature - rejecting webhook', {
@@ -298,44 +361,58 @@ router.post('/webhooks/pagbank', (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Assinatura inválida', received: false });
     }
 
-    if (webhookResult.caseId) {
-      const row = databaseRows.get(webhookResult.caseId);
-      if (row && webhookResult.status === 'PAID') {
+    const caseId = typeof payload.referenceId === 'string'
+      ? payload.referenceId.replace('defesai_case_', '')
+      : null;
+
+    if (caseId && webhookResult.status === 'PAID') {
+      const row = databaseRows.get(caseId);
+      if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
+        const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
+
         domain.isPaid = true;
         domain.paidAt = new Date().toISOString();
         domain.status = 'defesa_pronta';
         domain.currentStage = 3;
-        
-        const paymentMethod = payload.charges?.[0]?.payment_method?.type === 'CREDIT_CARD' ? 'credit_card' : 'pix';
-        
+        domain.serviceType = domain.serviceType || 'defesa_previa';
+
+        const paymentMethod = (domain.payment?.paymentMethod ||
+          (webhookResult.transactionType === 'CREDIT_CARD' ? 'credit_card' : 'pix'));
+
         domain.payment = {
           status: 'approved',
-          amount: payload.charges?.[0]?.amount?.value / 100 || PRICING.DEFAULT_PRICE,
+          amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
           paidAt: new Date().toISOString(),
-          transactionId: webhookResult.orderId,
+          transactionId: webhookResult.orderId || webhookResult.gatewayTransactionId,
           paymentMethod,
         };
+        if (webhookResult.commercialOfferId) {
+          domain.commercialOfferId = webhookResult.commercialOfferId;
+        }
+        if (webhookResult.serviceType && !domain.serviceType) {
+          domain.serviceType = webhookResult.serviceType as any;
+        }
+
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: 'Pagamento Confirmado via Webhook PagBank',
-          description: `Transação ${webhookResult.orderId} aprovada automaticamente pela instituição financeira.`,
+          description: `Transação ${webhookResult.orderId || webhookResult.gatewayTransactionId} aprovada pela instituição financeira.`,
           timestamp: new Date().toISOString(),
           type: 'payment',
         });
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(webhookResult.caseId, updatedRow);
+        databaseRows.set(caseId, updatedRow);
 
-        // Dispatch Commercial Payment Event (Calculates 3-level commissions & ledgers)
         commercialService.processPaymentConfirmationEvent({
-          paymentId: webhookResult.orderId || `ord_${domain.id}`,
+          paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,
           buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
           buyerUserName: domain.clientName || 'Condutor DefesAi',
-          grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          grossAmount: domain.payment.amount,
           discountAmount: 0,
-          effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          effectivelyPaid: domain.payment.amount,
         });
 
         auditLogs.unshift({
@@ -346,7 +423,7 @@ router.post('/webhooks/pagbank', (req: Request, res: Response) => {
           action: 'PAYMENT_CONFIRMED',
           targetResource: domain.id,
           ipHash: '3a88c42b109e',
-          details: `Pagamento de R$ ${domain.payment?.amount || PRICING.DEFAULT_PRICE} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
+          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
           gdprCompliant: true,
         });
       }
@@ -446,7 +523,7 @@ const { caseId, case: casePayload } = req.body;
     
     domain.payment = {
       status: 'approved',
-      amount: PRICING.DEFAULT_PRICE,
+      amount: PRICING.FALLBACK_PRICE,
       paidAt: new Date().toISOString(),
       transactionId: orderId,
       paymentMethod: 'pix',
@@ -470,9 +547,9 @@ const { caseId, case: casePayload } = req.body;
       caseId: domain.id,
       buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
       buyerUserName: domain.clientName || 'Condutor DefesAi',
-      grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+      grossAmount: domain.payment?.amount || PRICING.FALLBACK_PRICE,
       discountAmount: 0,
-      effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+      effectivelyPaid: domain.payment?.amount || PRICING.FALLBACK_PRICE,
     });
 
     auditLogs.unshift({
@@ -483,7 +560,7 @@ const { caseId, case: casePayload } = req.body;
       action: 'PAYMENT_CONFIRMED',
       targetResource: domain.id,
       ipHash: '3a88c42b109e',
-      details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.DEFAULT_PRICE).toFixed(2).replace('.', ',')} via PIX ${gateway.displayName} confirmado.`,
+      details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.FALLBACK_PRICE).toFixed(2).replace('.', ',')} via PIX ${gateway.displayName} confirmado.`,
       gdprCompliant: true,
     });
 
@@ -522,18 +599,28 @@ router.post('/webhooks/ggpix', (req: Request, res: Response) => {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
+        const paymentAmount = Number((event.amountInCents || 0) / 100);
+
         domain.isPaid = true;
         domain.paidAt = event.paidAt || new Date().toISOString();
         domain.status = 'defesa_pronta';
         domain.currentStage = 3;
+        domain.serviceType = domain.serviceType || 'defesa_previa';
 
         domain.payment = {
           status: 'approved',
-          amount: (event.amountInCents || 8990) / 100,
+          amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
           paidAt: event.paidAt || new Date().toISOString(),
           transactionId: event.gatewayTransactionId,
           paymentMethod: 'pix',
         };
+        if ((event as any).commercialOfferId) {
+          domain.commercialOfferId = (event as any).commercialOfferId as string;
+        }
+        if ((event as any).serviceType && !domain.serviceType) {
+          domain.serviceType = (event as any).serviceType as any;
+        }
+
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: 'Pagamento Confirmado via Webhook GGPIXAPI',
@@ -550,9 +637,9 @@ router.post('/webhooks/ggpix', (req: Request, res: Response) => {
           caseId: domain.id,
           buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
           buyerUserName: domain.clientName || 'Condutor DefesAi',
-          grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          grossAmount: domain.payment.amount,
           discountAmount: 0,
-          effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          effectivelyPaid: domain.payment.amount,
         });
 
         auditLogs.unshift({
@@ -563,7 +650,7 @@ router.post('/webhooks/ggpix', (req: Request, res: Response) => {
           action: 'PAYMENT_CONFIRMED',
           targetResource: domain.id,
           ipHash: '3a88c42b109e',
-          details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.DEFAULT_PRICE).toFixed(2)} via PIX GGPIXAPI confirmado.`,
+          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX GGPIXAPI confirmado.`,
           gdprCompliant: true,
         });
       }

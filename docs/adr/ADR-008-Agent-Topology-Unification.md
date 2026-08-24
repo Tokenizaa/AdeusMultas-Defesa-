@@ -50,3 +50,14 @@ This is consistent with commit `57253b9` ("exclude legacy agents/ scaffold from 
 ### References
 - ADR-005-Missing-Agent-Implementations.md (documents `CaseContext` never existing, 38/62 agents unimplemented)
 - commit `57253b9` (agents/ excluded from tsconfig)
+
+## Errata (2026-08-24)
+
+Verificação factual posterior (@supervisor) identificou imprecisões nesta decisão:
+
+1. **O commit `57253b9`, citado acima, não existe no histórico atual** deste repositório (37 commits no total; nenhum menciona exclusão de `agents/` ou tsconfig). O único commit que tocou `tsconfig.json` é `7fbe44b`. A referência provavelmente se perdeu em reescrita/migração do histórico.
+2. **O `tsconfig.json` atual NÃO contém `"agents"` em `exclude`.** Consequência verificada em 2026-08-24: `npx tsc --noEmit` retorna exatamente **31 erros, todos sob `agents/`, zero fora** — os erros pré-existentes do scaffold vazam para todo typecheck do projeto.
+
+Os erros são exatamente os pré-existentes documentados (`TS2307` em `@/lib/types/agent-interfaces` + derivados) — **nenhuma regressão nova existe fora de `agents/`**. A decisão central permanece válida: AGENTS.md como fonte única de verdade, `agents/` arquivado no lugar, proibição de imports.
+
+**Follow-up EXECUTADO em 2026-08-24** (autorizado pelo usuário, delegado ao @build-error-resolver): `"agents"` restaurada em `tsconfig.exclude`. Verificação independente do @supervisor: `npx tsc --noEmit` → **exit=0, zero erros TS no projeto**; os 31 erros pré-existentes permanecem arquivados sob `agents/`, fora da checagem.

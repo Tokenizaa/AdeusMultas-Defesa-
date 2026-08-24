@@ -381,7 +381,7 @@ class ConfigService {
         category: 'payments',
         type: 'number',
         description: 'Preço base para emissão da minuta jurídica personalizada com garantia',
-        defaultValue: PRICING.DEFAULT_PRICE,
+        defaultValue: PRICING.FALLBACK_PRICE,
         isSecret: false,
         isRequired: true,
         isEditable: true,

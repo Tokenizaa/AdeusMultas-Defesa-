@@ -177,7 +177,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         {
           id: `tl_${Date.now()}_2`,
           title: `Pagamento ${paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'} Confirmado`,
-          description: `Valor de R$ ${price.toFixed(2)} recebido com sucesso.`,
+          description: `Valor de R$ ${documentData.price.toFixed(2)} recebido com sucesso.`,
           timestamp: new Date().toISOString(),
           type: 'payment',
         },
@@ -337,7 +337,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-slate-400 line-through mr-2 font-mono">R$ 197,00</span>
-                  <span className="text-2xl font-extrabold text-slate-900 font-mono">R$ {price.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-2xl font-extrabold text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
             </div>
@@ -415,7 +415,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {price.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</p>
                 </div>
               </div>
 
@@ -559,7 +559,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {price.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</p>
                 </div>
               </div>
 
@@ -568,7 +568,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 customerName={documentData.applicantName}
                 customerEmail={documentData.applicantEmail}
                 customerCpf={documentData.applicantCpf}
-                amount={price}
+                amount={documentData.price}
                 onSuccess={handleCreditCardSuccess}
                 onError={handleCreditCardError}
               />

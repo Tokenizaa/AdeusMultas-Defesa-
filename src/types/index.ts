@@ -233,6 +233,9 @@ export interface CaseDomain {
   documentGenerationStatus?: DocumentGenerationStatus;
   defenseDraft?: DefenseDraft;
   
+  // Comercial: oferta resolvida no checkout (rastreabilidade)
+  commercialOfferId?: string;
+
   // Instruções de protocolo para o cidadão (e compatibilidade legada)
   submissionInstructions?: SubmissionInstructions;
   protocolInfo?: SubmissionInstructions;
@@ -304,6 +307,7 @@ export interface CaseRow {
   analysis_json?: string;
   defense_draft_json?: string;
   protocol_info_json?: string;
+  commercial_offer_id?: string;
   timeline_json?: string;
   is_anonymous: boolean;
   claim_token?: string;

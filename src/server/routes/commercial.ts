@@ -2,11 +2,70 @@ import { Router } from 'express';
 import { commercialService } from '../commercial/commercial-service';
 import { runCommercialTestSuite } from '../commercial/commercial-test-suite';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
+import type { CommercialOffer } from '../commercial/commercial-service';
 
 const router = Router();
 
 // Run authenticateToken so req.user is populated if token is present
 router.use(authenticateToken);
+
+// =========================================================================
+// COMMERCIAL OFFER RESOLUTION (fonte canônica de preço para checkout)
+// =========================================================================
+
+// POST /api/commercial/offers/resolve — resolve a oferta comercial canônica para um serviço.
+// Usado pelo checkout para NÃO depender de preços vindos do frontend.
+// O backend valida: serviceType, regras de elegibilidade, preço do catálogo.
+router.post('/offers/resolve', authenticateToken, (req, res) => {
+  try {
+    const { serviceType } = req.body ?? {};
+
+    if (!serviceType || typeof serviceType !== 'string') {
+      return res.status(400).json({
+        error: 'serviceType é obrigatório.',
+        hint: 'Envie o ProcedureType identificado no onboarding (ex: defesa_previa).',
+      });
+    }
+
+    const result = commercialService.resolveCommercialOffer({ serviceType });
+    if (!result.offer) {
+      return res.status(404).json({
+        error: result.reason || `Serviço "${serviceType}" não possui oferta comercial disponível.`,
+        serviceType,
+        available: false,
+      });
+    }
+
+    const offer: CommercialOffer & { available: boolean } = {
+      ...result.offer,
+      available: true,
+    };
+    res.json({ offer });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/commercial/offers/available — lista ofertas disponíveis para o usuário atual
+router.get('/offers/available', authenticateToken, (_req, res) => {
+  try {
+    const available = commercialService
+      .getPricings()
+      .filter((p) => p.isActive)
+      .map((p) => ({
+        commercialId: p.id,
+        serviceType: p.serviceType,
+        name: p.serviceName,
+        description: p.description,
+        price: p.promotionalPrice ?? p.standardPrice,
+        currency: 'BRL',
+        available: true,
+      }));
+    res.json({ offers: available });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // =========================================================================
 // PRICING ENDPOINTS

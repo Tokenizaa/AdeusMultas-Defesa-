@@ -204,9 +204,9 @@ O diretório `agents/` na raiz contém o **scaffold morto do antigo pipeline de 
 - Definições `.md` + implementações `.ts` parciais: `base-agent`, `case-agent`, `ai-analysis-agent`, `document-agent`, `communication-agent`, `crm-agent`, `knowledge-agent`, `automation-agent`, `admin-agent`, `infrastructure-agent`, `marketing-agent`, `payment-agent` e subdiretórios (`legal/`, `document/`, `ocr/`, `quality/`, `product/`, `marketing-platform/`, `pipeline/`).
 
 **Por que é legacy:**
-- Excluído do `tsconfig.json` (commit `57253b9`)
 - Zero imports de `src/` (`rg "agents/" src/` → 0 matches)
-- 31 erros TypeScript; depende de `CaseContext` que nunca existiu ([ADR-005](docs/adr/ADR-005-Missing-Agent-Implementations.md))
+- **31 erros TypeScript pré-existentes, todos isolados em `agents/`** (verificado 2026-08-24 via `npx tsc --noEmit`: 31 erros, `TS2307` em `@/lib/types/agent-interfaces` + derivados; zero erros fora de `agents/`); depende de `CaseContext`, que nunca existiu ([ADR-005](docs/adr/ADR-005-Missing-Agent-Implementations.md))
+- ⚠️ **Correção factual** ([Errata no ADR-008](docs/adr/ADR-008-Agent-Topology-Unification.md)): o commit `57253b9` citado anteriormente **não existe** no histórico atual. Em 2026-08-24 a exclusão `"agents"` foi **restaurada no `tsconfig.json`** (autorizada pelo usuário, executada via @build-error-resolver): o typecheck do projeto volta a zerar (`tsc --noEmit` → 0 erros); os 31 erros pré-existentes permanecem arquivados sob `agents/`, fora da checagem. Qualquer ressurreição deles exige ADR novo (Regras abaixo).
 
 **Regras:**
 1. Nenhum código novo importa de `agents/`.

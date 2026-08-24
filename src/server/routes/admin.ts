@@ -117,7 +117,7 @@ router.get(['/payments', '/admin/payments'], (req, res) => {
       customerName: c.clientName || 'Condutor DefesAi',
       customerEmail: c.clientEmail || 'contato@www.defesai.shop',
       customerCpf: c.clientCpf || '***.***.***-**',
-      amount: c.payment?.amount || PRICING.DEFAULT_PRICE,
+      amount: c.payment?.amount || PRICING.FALLBACK_PRICE,
       status: isPaid ? 'PAID' : (c.payment?.status === 'pending' ? 'PENDING' : 'WAITING'),
       method: c.payment?.paymentMethod || 'PIX',
       createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 3600000).toISOString(),
@@ -146,7 +146,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
   }
 
   try {
-    const { caseId, status = 'PAID', amount = PRICING.DEFAULT_PRICE } = req.body;
+    const { caseId, status = 'PAID', amount = PRICING.FALLBACK_PRICE } = req.body;
     if (!caseId) {
       return res.status(400).json({ error: 'caseId é obrigatório' });
     }

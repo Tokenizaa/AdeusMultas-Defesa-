@@ -504,7 +504,7 @@ if (data.id) {
         referenceId: `ref_${orderOrCaseId}`,
         caseId: orderOrCaseId.replace('case_', ''),
         status: 'PAID',
-        amount: PRICING.DEFAULT_PRICE,
+        amount: PRICING.FALLBACK_PRICE,
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         createdAt: new Date().toISOString(),
         paymentMethod: 'pix',
