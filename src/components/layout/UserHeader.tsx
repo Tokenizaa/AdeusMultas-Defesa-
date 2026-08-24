@@ -58,9 +58,9 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
 
         <div
           onClick={() => navigate('/perfil')}
-          className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-slate-50 transition-colors"
+          className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-slate-50 transition-colors min-w-0"
         >
-          <div className="w-7 h-7 rounded-full bg-[#071D41] text-white flex items-center justify-center font-bold text-sm">
+          <div className="w-7 h-7 rounded-full bg-[#071D41] text-white flex items-center justify-center font-bold text-sm shrink-0">
             {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
           </div>
           <span className="text-sm font-semibold text-slate-700 hidden sm:inline truncate max-w-[120px]">
