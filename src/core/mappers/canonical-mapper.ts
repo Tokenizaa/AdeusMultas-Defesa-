@@ -71,6 +71,7 @@ export class CanonicalMapper {
       status: (row.status as CaseStatus) || 'novo',
       currentStage: (row.current_stage as JourneyStage) || 1,
       serviceType: (row.service_type as ProcedureType) || 'defesa_previa',
+      commercialOfferId: row.commercial_offer_id,
       vehicle: {
         plate: row.vehicle_plate || 'SEM PLACA',
         brandModel: row.vehicle_brand_model || 'Veículo não informado',
@@ -165,6 +166,7 @@ export class CanonicalMapper {
       analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : undefined,
       defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : undefined,
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : undefined,
+      commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),
       claim_token: domain.claimToken,

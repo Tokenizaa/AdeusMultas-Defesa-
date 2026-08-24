@@ -20,6 +20,7 @@ import {
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
 import { useAuthFetch } from '../../hooks/useAuthFetch';
+import { emitCasesChanged } from '../../context/casesEvents';
 import {
   UserSituation,
   UserProcessStage,
@@ -373,6 +374,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const data = await res.json();
       if (data.id) {
         setSavedCaseId(data.id);
+        // FIX 2: caso persistido no servidor → invalida cache de casos
+        // (dashboard/listagem refetcham imediatamente).
+        emitCasesChanged();
       }
       // Se o backend retornou análise com successRate > 0, usar a do backend
       if (data.analysis && data.analysis.overallSuccessRate > 0) {
@@ -465,6 +469,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             userNome: authUser.name,
           }),
         });
+        // FIX 2: vinculação caso↔usuário altera a lista canônica → invalida cache.
+        emitCasesChanged();
       } catch (err) {
         console.error('Error claiming case for user:', err);
       }
@@ -602,6 +608,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           vehicleData={vehicleData}
           leadName={leadName}
           leadPhone={leadPhone}
+          category={infractionCategory}
           onUpdateInfraction={setInfractionData}
           onUpdateVehicle={setVehicleData}
           onUpdateLead={handleLeadUpdate}

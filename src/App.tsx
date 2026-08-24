@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { RouterProvider, useRouter } from './core/router/RouterContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import { api } from './lib/api/client';
+import { CASES_CHANGED_EVENT } from './context/casesEvents';
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
@@ -79,6 +80,18 @@ function AppContent() {
     loadCases();
   }, []);
 
+  // FIX 2 — invalidação de cache: quando qualquer fluxo (wizard, checkout)
+  // persiste um caso no servidor, refazemos o fetch canônico para que
+  // dashboard (/dashboard), listagem (/cases) e views admin reflitam o novo
+  // caso imediatamente, sem depender de reload manual.
+  useEffect(() => {
+    const handleCasesChanged = () => {
+      loadCases();
+    };
+    window.addEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
+    return () => window.removeEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
+  }, []);
+
   // Sync activeCase if URL params has an ID
   useEffect(() => {
     if (params.id && cases.length > 0) {
@@ -101,6 +114,8 @@ function AppContent() {
   const handlePaymentSuccess = (updatedCase: CaseDomain) => {
     setActiveCase(updatedCase);
     setCases((prev) => prev.map((c) => (c.id === updatedCase.id ? updatedCase : c)));
+    // Reconciliação server-truth após mutação de pagamento (aditivo ao patch otimista).
+    loadCases();
     navigate(`/cases/${updatedCase.id}`);
   };
 

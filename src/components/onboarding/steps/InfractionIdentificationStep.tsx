@@ -20,20 +20,22 @@ import { InfractionData, VehicleData } from '../../../types';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 
 import { TestFillButton } from '../../ui/TestFillButton';
+import { InfractionCategory } from '../../../core/onboarding/rules-matrix';
 import {
   generateRandomName,
   generateRandomPhone,
   generateRandomVehicleData,
-  generateRandomInfractionData,
-  generateRandomAIT,
   generateRandomPlate,
 } from '../../../utils/test-data-generator';
+import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
 
 interface InfractionIdentificationStepProps {
   infractionData: InfractionData;
   vehicleData: VehicleData;
   leadName?: string;
   leadPhone?: string;
+  /** Categoria selecionada na fase anterior (quando disponível) — torna os dados de teste 🧪 coerentes com ela. */
+  category?: InfractionCategory;
   onUpdateInfraction: (data: InfractionData) => void;
   onUpdateVehicle: (data: VehicleData) => void;
   onUpdateLead?: (name: string, phone: string) => void;
@@ -47,6 +49,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
   vehicleData,
   leadName = '',
   leadPhone = '',
+  category,
   onUpdateInfraction,
   onUpdateVehicle,
   onUpdateLead,
@@ -131,9 +134,14 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
             const vehicle = generateRandomVehicleData({
               plate: generateRandomPlate(),
             });
-            const infraction = generateRandomInfractionData({
-              aitNumber: generateRandomAIT(),
-            });
+            // FIX 3: infração de teste coerente com a categoria selecionada.
+            // Com categoria conhecida → conjunto completo coerente (artigo/código/
+            // descrição da MESMA categoria, sem campos contraditórios).
+            // Sem categoria conhecida → apenas campos neutros (AIT, data, órgão),
+            // preservando qualquer seleção humana já feita.
+            const infraction = category
+              ? buildCoherentTestInfraction(category, infractionData)
+              : buildNeutralTestIdentification(infractionData);
             if (onUpdateLead) onUpdateLead(name, phone);
             setCurrentLeadName(name);
             setCurrentLeadPhone(phone);
