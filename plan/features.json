@@ -23,8 +23,8 @@
       "verification": {
         "verdict": "PASS",
         "by": "gov-orchestrator",
-        "at": "2026-08-24T05:37:54Z",
-        "commit": "pending"
+        "at": "2026-08-24T05:43:42Z",
+        "commit": "ecdaa42"
       }
     },
     {
