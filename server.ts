@@ -211,6 +211,16 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // Warm-up: carregar dados persistidos do Supabase ANTES de montar rotas.
+  // O continue permite que o servidor suba mesmo se o Supabase estiver indisponível.
+  try {
+    await caseRepository.loadAllFromSupabase().catch((warmupErr: any) => {
+      console.warn(`[warmup] Falha ao carregar casos do Supabase: ${warmupErr?.message || warmupErr}`);
+    });
+  } catch (warmupErr: any) {
+    console.warn(`[warmup] Falha no warmup: ${warmupErr?.message || warmupErr}`);
+  }
+
   // Mount Modular API Routes First
   app.use('/api/admin/commercial', commercialRoutes);
   app.use('/api/commercial', commercialRoutes);
@@ -1262,9 +1272,8 @@ app.get('/api/audit/logs', (req, res) => {
     try {
       marketingOrchestrator.start();
       marketingMetricsCollector.collect().catch(() => {});
-      caseRepository.loadAllFromSupabase().catch(() => {});
     } catch (workerErr) {
-      console.warn('Background workers initialization notice:', workerErr);
+      // Silently ignore worker init errors in dev; workers are optional
     }
   });
 }

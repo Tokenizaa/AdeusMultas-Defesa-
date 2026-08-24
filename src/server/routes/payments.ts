@@ -4,6 +4,7 @@ import { gatewayManager, processGatewayWebhook } from '../integrations/gateway';
 import type { GatewayId } from '../integrations/gateway';
 import { commercialService } from '../commercial/commercial-service';
 import { databaseRows, auditLogs } from '../app';
+import { caseRepository } from '../db/case-repository';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
@@ -291,6 +292,7 @@ router.post('/payments/credit-card/create', prodAuth, async (req, res) => {
         domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
       }
     }
 
@@ -404,6 +406,7 @@ router.post('/webhooks/pagbank', (req: Request, res: Response) => {
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
@@ -631,6 +634,7 @@ router.post('/webhooks/ggpix', (req: Request, res: Response) => {
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
+        caseRepository.set(caseId, updatedRow);
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: event.gatewayTransactionId || `ord_${domain.id}`,

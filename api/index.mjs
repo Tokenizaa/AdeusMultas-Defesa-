@@ -361,8 +361,8 @@ import { createClient } from "@supabase/supabase-js";
 
 // src/server/config/pricing.ts
 var PRICING = {
-  DEFAULT_PRICE: 89.9,
-  ORIGINAL_PRICE: 197,
+  FALLBACK_PRICE: 89.9,
+  REFERENCE_PRICE: 197,
   CURRENCY: "BRL",
   FINE_AVERAGE: 293.47,
   POINTS_AVERAGE: 5
@@ -687,7 +687,7 @@ var ConfigService = class {
         category: "payments",
         type: "number",
         description: "Pre\xE7o base para emiss\xE3o da minuta jur\xEDdica personalizada com garantia",
-        defaultValue: PRICING.DEFAULT_PRICE,
+        defaultValue: PRICING.FALLBACK_PRICE,
         isSecret: false,
         isRequired: true,
         isEditable: true
@@ -1577,6 +1577,7 @@ var CanonicalMapper = class _CanonicalMapper {
       status: row.status || "novo",
       currentStage: row.current_stage || 1,
       serviceType: row.service_type || "defesa_previa",
+      commercialOfferId: row.commercial_offer_id,
       vehicle: {
         plate: row.vehicle_plate || "SEM PLACA",
         brandModel: row.vehicle_brand_model || "Ve\xEDculo n\xE3o informado",
@@ -1668,6 +1669,7 @@ var CanonicalMapper = class _CanonicalMapper {
       analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : void 0,
       defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : void 0,
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : void 0,
+      commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),
       claim_token: domain.claimToken,
@@ -4925,7 +4927,7 @@ router.get(["/payments", "/admin/payments"], (req, res) => {
       customerName: c.clientName || "Condutor DefesAi",
       customerEmail: c.clientEmail || "contato@www.defesai.shop",
       customerCpf: c.clientCpf || "***.***.***-**",
-      amount: c.payment?.amount || PRICING.DEFAULT_PRICE,
+      amount: c.payment?.amount || PRICING.FALLBACK_PRICE,
       status: isPaid ? "PAID" : c.payment?.status === "pending" ? "PENDING" : "WAITING",
       method: c.payment?.paymentMethod || "PIX",
       createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 36e5).toISOString(),
@@ -4951,7 +4953,7 @@ router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], 
     });
   }
   try {
-    const { caseId, status = "PAID", amount = PRICING.DEFAULT_PRICE } = req.body;
+    const { caseId, status = "PAID", amount = PRICING.FALLBACK_PRICE } = req.body;
     if (!caseId) {
       return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
     }
@@ -5122,6 +5124,58 @@ router.get(["/integrations/overview", "/admin/integrations/overview"], async (re
       status: "HEALTHY"
     }
   });
+});
+router.get(["/users", "/admin/users"], async (req, res) => {
+  try {
+    const domains = [];
+    for (const row of databaseRows.values()) {
+      domains.push(CanonicalMapper.rowToDomain(row));
+    }
+    const usersMap = /* @__PURE__ */ new Map();
+    domains.forEach((c) => {
+      const email = c.clientEmail || c.userEmail;
+      if (!email) return;
+      if (usersMap.has(email)) return;
+      usersMap.set(email, {
+        id: c.userId || email,
+        name: c.clientName || c.userEmail?.split("@")[0] || "Usu\xE1rio",
+        email,
+        role: c.userId === "usr_admin_defesai" ? "admin" : "citizen",
+        createdAt: c.createdAt,
+        cpf: c.clientCpf || null
+      });
+    });
+    let users = Array.from(usersMap.values());
+    const { search, role } = req.query;
+    if (search) {
+      const q = search.toLowerCase();
+      users = users.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.cpf && u.cpf.includes(q)
+      );
+    }
+    if (role) {
+      users = users.filter((u) => u.role === role);
+    }
+    res.json({ users, total: users.length });
+  } catch (err) {
+    console.error("Erro em /api/admin/users:", err);
+    res.status(500).json({ error: "Erro ao carregar usu\xE1rios." });
+  }
+});
+router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
+  try {
+    const { email, role } = req.body;
+    if (!email || !role) {
+      return res.status(400).json({ error: "email e role s\xE3o obrigat\xF3rios." });
+    }
+    if (!["admin", "citizen"].includes(role)) {
+      return res.status(400).json({ error: "role inv\xE1lida. Use admin ou citizen." });
+    }
+    res.json({ success: true, message: "Role atualizada (placeholder).", email, role });
+  } catch (err) {
+    console.error("Erro em PUT /api/admin/users:", err);
+    res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
+  }
 });
 var admin_default = router;
 
@@ -5627,9 +5681,6 @@ var meta_default = router2;
 // src/server/routes/commercial.ts
 import { Router as Router3 } from "express";
 
-// src/server/commercial/commercial-service.ts
-init_logger();
-
 // src/server/db/commercial-repository.ts
 init_logger();
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -6101,65 +6152,13 @@ var CommercialRepository = class {
 };
 var commercialRepository = new CommercialRepository();
 
-// src/server/commercial/commercial-service.ts
-var CommercialService = class {
-  constructor() {
-    this.pricings = /* @__PURE__ */ new Map();
-    this.promotions = /* @__PURE__ */ new Map();
-    this.coupons = /* @__PURE__ */ new Map();
-    this.bonusLedger = [];
-    this.commissionLedger = [];
-    this.commercialAuditLogs = [];
-    // Referral relationship map: childUserId -> parentUserId
-    this.referralParents = /* @__PURE__ */ new Map();
-    // Global Referral Configuration
-    this.referralConfig = {
-      level1Percent: 10,
-      level2Percent: 5,
-      level3Percent: 2,
-      calculationBase: "effectively_paid",
-      payoutDelayDays: 0,
-      minWithdrawalAmount: 50,
-      signupBonusAmount: 20,
-      referrerBonusAmount: 20,
-      isReferralProgramActive: true,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedBy: "system"
-    };
-    this.loadDataFromRepository();
+// src/server/commercial/pricing/pricing-service.ts
+var PricingService = class {
+  constructor(pricings, repository, recordAudit) {
+    this.pricings = pricings;
+    this.repository = repository;
+    this.recordAudit = recordAudit;
   }
-  async loadDataFromRepository() {
-    await commercialRepository.loadAllFromSupabase();
-    const pricingsArray = commercialRepository.getPricings();
-    this.pricings.clear();
-    for (const pricing of pricingsArray) {
-      this.pricings.set(pricing.id, pricing);
-    }
-    const promotionsArray = commercialRepository.getPromotions();
-    this.promotions.clear();
-    for (const promotion of promotionsArray) {
-      this.promotions.set(promotion.id, promotion);
-    }
-    const couponsArray = commercialRepository.getCoupons();
-    this.coupons.clear();
-    for (const coupon of couponsArray) {
-      this.coupons.set(coupon.code.toUpperCase(), coupon);
-    }
-    this.bonusLedger = [...commercialRepository.getBonusLedger()];
-    this.commissionLedger = [...commercialRepository.getCommissionLedger()];
-    this.commercialAuditLogs = [...commercialRepository.getCommercialAuditLogs()];
-    this.referralParents.clear();
-    const relations = commercialRepository.getReferralRelations();
-    for (const relation of relations) {
-      this.referralParents.set(relation.referredId, relation.referrerId);
-    }
-    const config = commercialRepository.getReferralConfig();
-    if (config) {
-      this.referralConfig = config;
-    }
-  }
-  // 1. GESTÃO DE PREÇOS
-  // =========================================================================
   getPricings() {
     return Array.from(this.pricings.values());
   }
@@ -6169,7 +6168,7 @@ var CommercialService = class {
   getPricingForService(serviceType) {
     return Array.from(this.pricings.values()).find(
       (p) => p.serviceType === serviceType || p.id === `price_${serviceType}`
-    ) || Array.from(this.pricings.values())[0];
+    );
   }
   createPricing(data) {
     const baseId = `price_${data.serviceType}`;
@@ -6183,7 +6182,7 @@ var CommercialService = class {
     const newPricing = {
       id,
       serviceType: data.serviceType,
-      serviceName: data.serviceName,
+      serviceName: data.serviceName ?? data.serviceType,
       description: data.description,
       standardPrice: data.standardPrice,
       promotionalPrice: data.promotionalPrice ?? null,
@@ -6194,7 +6193,6 @@ var CommercialService = class {
       updatedAt: now,
       updatedBy: "Admin Comercial"
     };
-    this.pricings.set(id, newPricing);
     const historyEntry = {
       id: `ph_${Date.now()}`,
       previousStandardPrice: 0,
@@ -6206,6 +6204,16 @@ var CommercialService = class {
       changedAt: now
     };
     newPricing.history = [historyEntry];
+    this.pricings.set(id, newPricing);
+    this.repository.persistPricing(newPricing);
+    this.recordAudit({
+      action: "PRICE_CHANGE",
+      changedBy: "Admin Comercial",
+      target: id,
+      previousState: null,
+      newState: newPricing,
+      reason: `Cria\xE7\xE3o de pre\xE7o para ${data.serviceType}`
+    });
     return newPricing;
   }
   updatePricing(id, updates) {
@@ -6239,10 +6247,10 @@ var CommercialService = class {
     existing.updatedBy = updates.changedBy || "Admin Comercial";
     existing.history.unshift(historyEntry);
     this.pricings.set(id, existing);
-    commercialRepository.persistPricing(existing);
+    this.repository.persistPricing(existing);
     this.recordAudit({
       action: "PRICE_CHANGE",
-      changedBy: updates.changedBy || "Admin Comercial",
+      changedBy: updates.changedBy,
       target: id,
       previousState,
       newState: {
@@ -6254,11 +6262,29 @@ var CommercialService = class {
     });
     return existing;
   }
-  // =========================================================================
-  // 2. PROMOÇÕES
-  // =========================================================================
+};
+
+// src/server/commercial/promotions/promotion-service.ts
+var PromotionService = class {
+  constructor(promotions, repository, recordAudit) {
+    this.promotions = promotions;
+    this.repository = repository;
+    this.recordAudit = recordAudit;
+  }
   getPromotions() {
     return Array.from(this.promotions.values());
+  }
+  getPromotionById(id) {
+    return this.promotions.get(id);
+  }
+  getActivePromotions() {
+    const now = /* @__PURE__ */ new Date();
+    return Array.from(this.promotions.values()).filter((p) => {
+      if (p.status !== "active") return false;
+      if (new Date(p.startDate) > now) return false;
+      if (new Date(p.endDate) < now) return false;
+      return true;
+    });
   }
   createPromotion(data, author = "Admin Comercial") {
     const id = `promo_${Date.now()}`;
@@ -6269,7 +6295,7 @@ var CommercialService = class {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.promotions.set(id, newPromo);
-    commercialRepository.persistPromotion(newPromo);
+    this.repository.persistPromotion(newPromo);
     this.recordAudit({
       action: "PROMO_CHANGE",
       changedBy: author,
@@ -6292,7 +6318,7 @@ var CommercialService = class {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.promotions.set(id, updated);
-    commercialRepository.persistPromotion(updated);
+    this.repository.persistPromotion(updated);
     this.recordAudit({
       action: "PROMO_CHANGE",
       changedBy: author,
@@ -6303,11 +6329,20 @@ var CommercialService = class {
     });
     return updated;
   }
-  // =========================================================================
-  // 3. GESTÃO DE CUPONS
-  // =========================================================================
+};
+
+// src/server/commercial/coupons/coupon-service.ts
+var CouponService = class {
+  constructor(coupons, repository, recordAudit) {
+    this.coupons = coupons;
+    this.repository = repository;
+    this.recordAudit = recordAudit;
+  }
   getCoupons() {
     return Array.from(this.coupons.values());
+  }
+  getCouponByCode(code) {
+    return this.coupons.get(code.toUpperCase());
   }
   createCoupon(data, author = "Admin Comercial") {
     const code = data.code.trim().toUpperCase();
@@ -6324,7 +6359,7 @@ var CommercialService = class {
       usageHistory: []
     };
     this.coupons.set(code, newCoupon);
-    commercialRepository.persistCoupon(newCoupon);
+    this.repository.persistCoupon(newCoupon);
     this.recordAudit({
       action: "COUPON_CHANGE",
       changedBy: author,
@@ -6342,12 +6377,9 @@ var CommercialService = class {
       throw new Error(`Cupom n\xE3o encontrado: ${code}`);
     }
     const previousState = { ...coupon };
-    const updated = {
-      ...coupon,
-      ...updates
-    };
+    const updated = { ...coupon, ...updates };
     this.coupons.set(cleanCode, updated);
-    commercialRepository.persistCoupon(updated);
+    this.repository.persistCoupon(updated);
     this.recordAudit({
       action: "COUPON_CHANGE",
       changedBy: author,
@@ -6362,20 +6394,45 @@ var CommercialService = class {
     const code = rawCode.trim().toUpperCase();
     const coupon = this.coupons.get(code);
     if (!coupon) {
-      return { valid: false, discountAmount: 0, finalPrice: orderAmount, message: "Cupom inv\xE1lido ou n\xE3o cadastrado." };
+      return {
+        valid: false,
+        discountAmount: 0,
+        finalPrice: orderAmount,
+        message: "Cupom inv\xE1lido ou n\xE3o cadastrado."
+      };
     }
     if (!coupon.isActive) {
-      return { valid: false, discountAmount: 0, finalPrice: orderAmount, message: "Este cupom est\xE1 desativado." };
+      return {
+        valid: false,
+        discountAmount: 0,
+        finalPrice: orderAmount,
+        message: "Este cupom est\xE1 desativado."
+      };
     }
     const now = /* @__PURE__ */ new Date();
     if (new Date(coupon.validFrom) > now) {
-      return { valid: false, discountAmount: 0, finalPrice: orderAmount, message: "Este cupom ainda n\xE3o \xE9 v\xE1lido." };
+      return {
+        valid: false,
+        discountAmount: 0,
+        finalPrice: orderAmount,
+        message: "Este cupom ainda n\xE3o \xE9 v\xE1lido."
+      };
     }
     if (new Date(coupon.validUntil) < now) {
-      return { valid: false, discountAmount: 0, finalPrice: orderAmount, message: "Este cupom expirou." };
+      return {
+        valid: false,
+        discountAmount: 0,
+        finalPrice: orderAmount,
+        message: "Este cupom expirou."
+      };
     }
     if (coupon.usedCount >= coupon.totalLimit) {
-      return { valid: false, discountAmount: 0, finalPrice: orderAmount, message: "Limite total de usos deste cupom foi atingido." };
+      return {
+        valid: false,
+        discountAmount: 0,
+        finalPrice: orderAmount,
+        message: "Limite total de usos deste cupom foi atingido."
+      };
     }
     if (coupon.minOrderValue && orderAmount < coupon.minOrderValue) {
       return {
@@ -6394,7 +6451,9 @@ var CommercialService = class {
       };
     }
     if (userId) {
-      const userUsage = coupon.usageHistory.filter((u) => u.userId === userId).length;
+      const userUsage = coupon.usageHistory.filter(
+        (u) => u.userId === userId
+      ).length;
       if (userUsage >= coupon.userLimit) {
         return {
           valid: false,
@@ -6424,7 +6483,12 @@ var CommercialService = class {
     };
   }
   redeemCoupon(rawCode, userId, userName, caseId, orderAmount, serviceType) {
-    const validation = this.validateCoupon(rawCode, orderAmount, serviceType, userId);
+    const validation = this.validateCoupon(
+      rawCode,
+      orderAmount,
+      serviceType,
+      userId
+    );
     if (!validation.valid || !validation.coupon) {
       throw new Error(validation.message);
     }
@@ -6440,14 +6504,600 @@ var CommercialService = class {
       usedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
     this.coupons.set(coupon.code, coupon);
-    commercialRepository.persistCoupon(coupon);
+    this.repository.persistCoupon(coupon);
+    this.recordAudit({
+      action: "COUPON_CHANGE",
+      changedBy: userName,
+      target: coupon.code,
+      previousState: { usedCount: coupon.usedCount - 1 },
+      newState: { usedCount: coupon.usedCount },
+      reason: `Resgate de cupom ${coupon.code} no pedido ${caseId}`
+    });
     return {
       discountApplied: validation.discountAmount,
       finalPrice: validation.finalPrice
     };
   }
+};
+
+// src/server/commercial/affiliates/affiliate-service.ts
+var AffiliateService = class {
+  constructor(referralParents, repository, recordAudit) {
+    this.referralParents = referralParents;
+    this.repository = repository;
+    this.recordAudit = recordAudit;
+  }
+  getReferralConfig() {
+    const config = this.repository.getReferralConfig();
+    return config ?? {
+      level1Percent: 10,
+      level2Percent: 5,
+      level3Percent: 2,
+      calculationBase: "effectively_paid",
+      payoutDelayDays: 0,
+      minWithdrawalAmount: 50,
+      signupBonusAmount: 20,
+      referrerBonusAmount: 20,
+      isReferralProgramActive: true,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedBy: "system"
+    };
+  }
+  updateReferralConfig(updates, author = "Admin Comercial") {
+    const previous = this.getReferralConfig();
+    const updated = {
+      ...previous,
+      ...updates,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedBy: author
+    };
+    this.repository.persistReferralConfig(updated);
+    this.recordAudit({
+      action: "REFERRAL_CONFIG_CHANGE",
+      changedBy: author,
+      target: "referral_config",
+      previousState: previous,
+      newState: updated,
+      reason: "Atualiza\xE7\xE3o das taxas e regras do programa de indica\xE7\xE3o em 3 n\xEDveis"
+    });
+    return updated;
+  }
+  registerReferral(newUserId, referrerCodeOrId) {
+    if (newUserId === referrerCodeOrId) return;
+    let referrerId = referrerCodeOrId;
+    if (referrerCodeOrId.startsWith("REF_")) {
+      referrerId = referrerCodeOrId.replace("REF_", "usr_").toLowerCase();
+    }
+    this.referralParents.set(newUserId, referrerId);
+    this.repository.persistReferralRelation(newUserId, referrerId);
+  }
+  getReferralTree(userId, commissionLedger) {
+    const l1Ids = [];
+    for (const [child, parent] of this.referralParents.entries()) {
+      if (parent === userId) l1Ids.push(child);
+    }
+    const l2Ids = [];
+    for (const l1 of l1Ids) {
+      for (const [child, parent] of this.referralParents.entries()) {
+        if (parent === l1) l2Ids.push(child);
+      }
+    }
+    const l3Ids = [];
+    for (const l2 of l2Ids) {
+      for (const [child, parent] of this.referralParents.entries()) {
+        if (parent === l2) l3Ids.push(child);
+      }
+    }
+    const mapUserNode = (id, level) => {
+      const comms = commissionLedger.filter(
+        (c) => c.beneficiaryId === userId && c.buyerUserId === id
+      );
+      const rev = comms.reduce((acc, c) => acc + c.baseAmount, 0);
+      const earned = comms.filter((c) => c.status !== "REVERSED" && c.status !== "CANCELLED").reduce((acc, c) => acc + c.commissionAmount, 0);
+      return {
+        id,
+        name: id === "usr_beatriz" ? "Beatriz Santos" : id === "usr_andre" ? "Andr\xE9 Oliveira" : id === "usr_daniela" ? "Daniela Ferreira" : `Condutor ${id}`,
+        email: `${id}@www.defesai.shop`,
+        joinedAt: new Date(
+          Date.now() - (level === 1 ? 20 : level === 2 ? 12 : 4) * 864e5
+        ).toISOString(),
+        purchasesCount: comms.length,
+        revenueGenerated: Number(rev.toFixed(2)),
+        commissionGeneratedForReferrer: Number(earned.toFixed(2))
+      };
+    };
+    const level1 = l1Ids.map((id) => mapUserNode(id, 1));
+    const level2 = l2Ids.map((id) => mapUserNode(id, 2));
+    const level3 = l3Ids.map((id) => mapUserNode(id, 3));
+    const totalReferrals = level1.length + level2.length + level3.length;
+    const allUserComms = commissionLedger.filter(
+      (c) => c.beneficiaryId === userId
+    );
+    const totalComms = allUserComms.filter((c) => c.status !== "REVERSED").reduce((acc, c) => acc + c.commissionAmount, 0);
+    const availComms = allUserComms.filter((c) => c.status === "AVAILABLE").reduce((acc, c) => acc + c.commissionAmount, 0);
+    return {
+      referrerId: userId,
+      referrerName: userId === "usr_carlos" ? "Carlos Eduardo Silveira" : `Indicador (${userId})`,
+      referrerEmail: `${userId}@www.defesai.shop`,
+      referralCode: `REF_${userId.toUpperCase()}`,
+      referralLink: `https://app.www.defesai.shop/r/${userId.toUpperCase()}`,
+      level1,
+      level2,
+      level3,
+      totalReferralsCount: totalReferrals,
+      totalSalesCount: allUserComms.length,
+      totalRevenueGenerated: allUserComms.reduce((acc, c) => acc + c.baseAmount, 0),
+      totalCommissionsEarned: Number(totalComms.toFixed(2)),
+      availableCommissionBalance: Number(availComms.toFixed(2)),
+      bonusBalance: 0
+    };
+  }
+};
+
+// src/server/commercial/affiliates/commission-service.ts
+var CommissionService = class {
+  constructor(commissionLedger, referralParents, referralConfig, repository, recordAudit) {
+    this.commissionLedger = commissionLedger;
+    this.referralParents = referralParents;
+    this.referralConfig = referralConfig;
+    this.repository = repository;
+    this.recordAudit = recordAudit;
+  }
+  getCommissionsLedger(beneficiaryId) {
+    if (beneficiaryId) {
+      return this.commissionLedger.filter((c) => c.beneficiaryId === beneficiaryId);
+    }
+    return this.commissionLedger;
+  }
+  getCommissionsByPayment(paymentId) {
+    return this.commissionLedger.filter((c) => c.paymentId === paymentId);
+  }
+  markCommissionPaid(commissionId, author = "Admin Financeiro") {
+    const comm = this.commissionLedger.find((c) => c.id === commissionId);
+    if (!comm) {
+      throw new Error(`Comiss\xE3o n\xE3o encontrada: ${commissionId}`);
+    }
+    if (comm.status === "REVERSED" || comm.status === "CANCELLED") {
+      throw new Error(`N\xE3o \xE9 poss\xEDvel pagar comiss\xE3o com status ${comm.status}`);
+    }
+    const prev = { ...comm };
+    comm.status = "PAID";
+    comm.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    this.repository.updateCommissionsStatus(comm.paymentId, "PAID", {
+      paidAt: comm.paidAt,
+      level: comm.level
+    });
+    this.recordAudit({
+      action: "COMMISSION_PAYOUT",
+      changedBy: author,
+      target: comm.id,
+      previousState: prev,
+      newState: comm,
+      reason: "Pagamento de comiss\xE3o liquidado"
+    });
+    return comm;
+  }
+  reverseCommissionsForPayment(paymentId, reason = "Cancelamento de pagamento / Estorno PagBank", author = "Admin Financeiro") {
+    const comms = this.commissionLedger.filter(
+      (c) => c.paymentId === paymentId && c.status !== "REVERSED"
+    );
+    for (const comm of comms) {
+      const prev = { ...comm };
+      comm.status = "REVERSED";
+      comm.reversedAt = (/* @__PURE__ */ new Date()).toISOString();
+      comm.reversalReason = reason;
+      this.recordAudit({
+        action: "COMMISSION_REVERSAL",
+        changedBy: author,
+        target: comm.id,
+        previousState: prev,
+        newState: comm,
+        reason
+      });
+    }
+    if (comms.length > 0) {
+      const reversedAt = comms[0].reversedAt;
+      this.repository.updateCommissionsStatus(paymentId, "REVERSED", {
+        reversedAt,
+        reversalReason: reason
+      });
+    }
+  }
+  processPaymentConfirmationEvent(params) {
+    const { paymentId, buyerUserId, grossAmount, discountAmount, effectivelyPaid } = params;
+    const existing = this.commissionLedger.filter((c) => c.paymentId === paymentId);
+    if (existing.length > 0) {
+      return existing;
+    }
+    if (!this.referralConfig.isReferralProgramActive) {
+      return [];
+    }
+    let baseAmount = effectivelyPaid;
+    if (this.referralConfig.calculationBase === "gross_amount") {
+      baseAmount = grossAmount;
+    } else if (this.referralConfig.calculationBase === "after_discount") {
+      baseAmount = grossAmount - discountAmount;
+    } else if (this.referralConfig.calculationBase === "net_amount") {
+      baseAmount = effectivelyPaid * 0.95;
+    }
+    const created = [];
+    const createEntry = (level, beneficiaryId, percent) => {
+      if (!beneficiaryId || percent <= 0) return null;
+      const commissionAmount = Number((baseAmount * percent / 100).toFixed(2));
+      const status = this.referralConfig.payoutDelayDays === 0 ? "AVAILABLE" : "PENDING";
+      const entry = {
+        id: `comm_${Date.now()}_l${level}_${beneficiaryId}`,
+        beneficiaryId,
+        beneficiaryName: `Indicador N${level} (${beneficiaryId})`,
+        buyerUserId,
+        buyerUserName: "",
+        level,
+        appliedPercent: percent,
+        baseAmount,
+        commissionAmount,
+        paymentId,
+        caseId: params.caseId,
+        status,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        availableAt: new Date(
+          Date.now() + this.referralConfig.payoutDelayDays * 864e5
+        ).toISOString()
+      };
+      this.commissionLedger.unshift(entry);
+      this.repository.persistCommission(entry);
+      created.push(entry);
+      return entry;
+    };
+    const l1 = this.referralParents.get(buyerUserId);
+    const l1Entry = createEntry(1, l1 ?? "", this.referralConfig.level1Percent);
+    if (l1Entry) {
+      const l2 = this.referralParents.get(l1);
+      const l2Entry = createEntry(2, l2 ?? "", this.referralConfig.level2Percent);
+      if (l2Entry) {
+        const l3 = this.referralParents.get(l2);
+        createEntry(3, l3 ?? "", this.referralConfig.level3Percent);
+      }
+    }
+    return created;
+  }
+};
+
+// src/server/commercial/audit/audit-service.ts
+init_logger();
+var CommercialAuditService = class {
+  constructor(repository) {
+    this.repository = repository;
+  }
+  record(entry) {
+    const log = {
+      ...entry,
+      id: `caudit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.repository.persistAuditLog(log);
+    logger.info("commercial", "audit", entry.action, `A\xE7\xE3o comercial auditada: ${entry.action} no alvo ${entry.target}`, {
+      action: entry.action,
+      changedBy: entry.changedBy,
+      target: entry.target
+    });
+    return log;
+  }
+  getAuditLogs() {
+    return this.repository.getCommercialAuditLogs();
+  }
+};
+
+// src/server/commercial/offers/offer-service.ts
+var roundToCents = (value) => Math.round(value);
+var OfferService = class {
+  constructor(pricings, promotions, coupons, recordAudit, getDocumentCount) {
+    this.pricings = pricings;
+    this.promotions = promotions;
+    this.coupons = coupons;
+    this.recordAudit = recordAudit;
+    this.getDocumentCount = getDocumentCount;
+  }
+  resolve(params) {
+    const { serviceType, stageId, userId, documentCount: docCountInput, couponCode } = params;
+    if (!serviceType || typeof serviceType !== "string") {
+      return { offer: null, reason: "serviceType \xE9 obrigat\xF3rio." };
+    }
+    const normalized = serviceType.toLowerCase().trim();
+    const requiresCommercialRule = [
+      "recurso_jari",
+      "recurso_cetran",
+      "conversao_advertencia",
+      "indicacao_condutor",
+      "suspensao_cnh",
+      "cassacao_cnh",
+      "analise_tecnica"
+    ];
+    if (requiresCommercialRule.includes(normalized)) {
+      return {
+        offer: null,
+        reason: `O servi\xE7o "${normalized}" ainda n\xE3o possui oferta comercial dispon\xEDvel.`
+      };
+    }
+    const pricing = this.getPricingForService(normalized);
+    if (!pricing) {
+      return {
+        offer: null,
+        reason: `Nenhuma tabela de pre\xE7o cadastrada para o servi\xE7o "${normalized}".`
+      };
+    }
+    if (!pricing.isActive) {
+      return {
+        offer: null,
+        reason: `A oferta para "${normalized}" est\xE1 indispon\xEDvel no momento.`
+      };
+    }
+    const now = /* @__PURE__ */ new Date();
+    if (pricing.validFrom && new Date(pricing.validFrom) > now) {
+      return { offer: null, reason: `A oferta "${normalized}" ainda n\xE3o est\xE1 vigente.` };
+    }
+    if (pricing.validUntil && new Date(pricing.validUntil) < now) {
+      return { offer: null, reason: `A oferta "${normalized}" expirou.` };
+    }
+    const baseAmount = pricing.standardPrice;
+    let promotionDiscount = 0;
+    let promotionId;
+    const activePromotions = Array.from(this.promotions.values()).filter((p) => {
+      if (p.status !== "active") return false;
+      if (new Date(p.startDate) > now) return false;
+      if (new Date(p.endDate) < now) return false;
+      if (!p.applicableServices.includes("all") && !p.applicableServices.includes(normalized)) return false;
+      return true;
+    });
+    if (activePromotions.length > 0) {
+      const promo = activePromotions[0];
+      promotionId = promo.id;
+      if (promo.discountType === "percentage") {
+        promotionDiscount = roundToCents(baseAmount * promo.discountValue / 100);
+      } else {
+        promotionDiscount = roundToCents(promo.discountValue);
+      }
+    } else if (pricing.promotionalPrice !== null && pricing.promotionalPrice < baseAmount) {
+      promotionDiscount = baseAmount - pricing.promotionalPrice;
+    }
+    const priceAfterPromo = baseAmount - promotionDiscount;
+    let documentNumber = 1;
+    if (typeof docCountInput === "number") {
+      documentNumber = docCountInput + 1;
+    } else if (userId && typeof this.getDocumentCount === "function") {
+      const count = this.getDocumentCount(userId);
+      documentNumber = (typeof count === "number" ? count : 0) + 1;
+    }
+    let firstDocumentsDiscount = 0;
+    let finalAmount;
+    if (documentNumber <= 3) {
+      const rawFinal = priceAfterPromo / 2;
+      firstDocumentsDiscount = priceAfterPromo - Math.round(rawFinal);
+      finalAmount = Math.round(rawFinal);
+    } else {
+      finalAmount = priceAfterPromo;
+    }
+    let couponDiscount = 0;
+    if (couponCode) {
+      const code = couponCode.trim().toUpperCase();
+      const coupon = this.coupons.get(code);
+      if (coupon && coupon.isActive) {
+        let discount = 0;
+        if (coupon.discountType === "percentage") {
+          discount = roundToCents(finalAmount * coupon.discountValue / 100);
+          if (coupon.maxDiscountAmount) {
+            discount = Math.min(discount, coupon.maxDiscountAmount);
+          }
+        } else {
+          discount = roundToCents(coupon.discountValue);
+        }
+        couponDiscount = Math.min(discount, finalAmount);
+        finalAmount = Math.max(0, finalAmount - couponDiscount);
+      }
+    }
+    finalAmount = Math.max(0, finalAmount);
+    const offer = {
+      commercialId: pricing.id,
+      serviceType: normalized,
+      stageId: stageId ?? null,
+      name: pricing.serviceName,
+      description: pricing.description,
+      baseAmount,
+      promotionDiscount,
+      firstDocumentsDiscount,
+      couponDiscount,
+      finalAmount,
+      currency: "BRL",
+      promotionId,
+      documentNumber,
+      eligible: true,
+      available: true,
+      requirements: []
+    };
+    return { offer };
+  }
+  getPricingForService(serviceType) {
+    return Array.from(this.pricings.values()).find(
+      (p) => p.serviceType === serviceType || p.id === `price_${serviceType}`
+    );
+  }
+};
+
+// src/server/commercial/commercial-service.ts
+var CommercialServiceFacade = class {
+  constructor() {
+    // In-memory state
+    this.pricings = /* @__PURE__ */ new Map();
+    this.promotions = /* @__PURE__ */ new Map();
+    this.coupons = /* @__PURE__ */ new Map();
+    this.bonusLedger = [];
+    this.commissionLedger = [];
+    this.commercialAuditLogs = [];
+    this.referralParents = /* @__PURE__ */ new Map();
+    this.referralConfig = {
+      level1Percent: 10,
+      level2Percent: 5,
+      level3Percent: 2,
+      calculationBase: "effectively_paid",
+      payoutDelayDays: 0,
+      minWithdrawalAmount: 50,
+      signupBonusAmount: 20,
+      referrerBonusAmount: 20,
+      isReferralProgramActive: true,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedBy: "system"
+    };
+    this.auditService = new CommercialAuditService(commercialRepository);
+    const audit = (entry) => this.auditService.record(entry);
+    this.pricingService = new PricingService(
+      this.pricings,
+      commercialRepository,
+      audit
+    );
+    this.promotionService = new PromotionService(
+      this.promotions,
+      commercialRepository,
+      audit
+    );
+    this.couponService = new CouponService(
+      this.coupons,
+      commercialRepository,
+      audit
+    );
+    this.affiliateService = new AffiliateService(
+      this.referralParents,
+      commercialRepository,
+      audit
+    );
+    this.commissionService = new CommissionService(
+      this.commissionLedger,
+      this.referralParents,
+      this.referralConfig,
+      commercialRepository,
+      audit
+    );
+    this.offerService = new OfferService(
+      this.pricings,
+      this.promotions,
+      this.coupons,
+      audit
+    );
+    this.loadDataFromRepository();
+  }
+  async loadDataFromRepository() {
+    await commercialRepository.loadAllFromSupabase();
+    const pricingsArray = commercialRepository.getPricings();
+    this.pricings.clear();
+    for (const pricing of pricingsArray) {
+      this.pricings.set(pricing.id, pricing);
+    }
+    const promotionsArray = commercialRepository.getPromotions();
+    this.promotions.clear();
+    for (const promotion of promotionsArray) {
+      this.promotions.set(promotion.id, promotion);
+    }
+    const couponsArray = commercialRepository.getCoupons();
+    this.coupons.clear();
+    for (const coupon of couponsArray) {
+      this.coupons.set(coupon.code.toUpperCase(), coupon);
+    }
+    this.bonusLedger = [...commercialRepository.getBonusLedger()];
+    this.commissionLedger = [...commercialRepository.getCommissionLedger()];
+    this.commercialAuditLogs = [...commercialRepository.getCommercialAuditLogs()];
+    this.referralParents.clear();
+    const relations = commercialRepository.getReferralRelations();
+    for (const relation of relations) {
+      this.referralParents.set(relation.referredId, relation.referrerId);
+    }
+    const config = commercialRepository.getReferralConfig();
+    if (config) {
+      this.referralConfig = config;
+      this.commissionService = new CommissionService(
+        this.commissionLedger,
+        this.referralParents,
+        this.referralConfig,
+        commercialRepository,
+        (entry) => this.auditService.record(entry)
+      );
+    }
+  }
   // =========================================================================
-  // 4. SISTEMA DE BÔNUS COM LEDGER IMUTÁVEL
+  // Pricing delegation
+  // =========================================================================
+  getPricings() {
+    return this.pricingService.getPricings();
+  }
+  getPricingById(id) {
+    return this.pricingService.getPricingById(id);
+  }
+  getPricingForService(serviceType) {
+    return this.pricingService.getPricingForService(serviceType);
+  }
+  createPricing(data) {
+    return this.pricingService.createPricing(data);
+  }
+  updatePricing(id, updates) {
+    return this.pricingService.updatePricing(id, updates);
+  }
+  // =========================================================================
+  // Promotion delegation
+  // =========================================================================
+  getPromotions() {
+    return this.promotionService.getPromotions();
+  }
+  getActivePromotions() {
+    return this.promotionService.getActivePromotions();
+  }
+  createPromotion(data, author = "Admin Comercial") {
+    return this.promotionService.createPromotion(data, author);
+  }
+  updatePromotion(id, updates, author = "Admin Comercial") {
+    return this.promotionService.updatePromotion(id, updates, author);
+  }
+  // =========================================================================
+  // Coupon delegation
+  // =========================================================================
+  getCoupons() {
+    return this.couponService.getCoupons();
+  }
+  createCoupon(data, author = "Admin Comercial") {
+    return this.couponService.createCoupon(data, author);
+  }
+  updateCoupon(code, updates, author = "Admin Comercial") {
+    return this.couponService.updateCoupon(code, updates, author);
+  }
+  validateCoupon(rawCode, orderAmount, serviceType, userId) {
+    return this.couponService.validateCoupon(rawCode, orderAmount, serviceType, userId);
+  }
+  redeemCoupon(rawCode, userId, userName, caseId, orderAmount, serviceType) {
+    return this.couponService.redeemCoupon(rawCode, userId, userName, caseId, orderAmount, serviceType);
+  }
+  // =========================================================================
+  // Offer resolution
+  // =========================================================================
+  resolveCommercialOffer(params) {
+    const result = this.offerService.resolve(params);
+    if (!result.offer) {
+      return { offer: null, reason: result.reason };
+    }
+    const o = result.offer;
+    return {
+      offer: {
+        commercialId: o.commercialId,
+        serviceType: o.serviceType,
+        stageId: o.stageId,
+        name: o.name,
+        description: o.description,
+        price: o.finalAmount,
+        currency: o.currency,
+        eligible: o.eligible,
+        available: o.available,
+        requirements: o.requirements
+      },
+      reason: result.reason
+    };
+  }
+  // =========================================================================
+  // Bonus ledger delegation
   // =========================================================================
   getBonusLedger(userId) {
     if (userId) {
@@ -6482,7 +7132,7 @@ var CommercialService = class {
     };
     this.bonusLedger.unshift(entry);
     commercialRepository.persistBonus(entry);
-    this.recordAudit({
+    this.auditService.record({
       action: "BONUS_CREDIT",
       changedBy: params.adminAuthor || "Sistema Comercial",
       target: params.userId,
@@ -6516,7 +7166,7 @@ var CommercialService = class {
     };
     this.bonusLedger.unshift(entry);
     commercialRepository.persistBonus(entry);
-    this.recordAudit({
+    this.auditService.record({
       action: "BONUS_ADJUSTMENT",
       changedBy: params.adminAuthor || "Sistema Comercial",
       target: params.userId,
@@ -6546,7 +7196,7 @@ var CommercialService = class {
     };
     this.bonusLedger.unshift(entry);
     commercialRepository.persistBonus(entry);
-    this.recordAudit({
+    this.auditService.record({
       action: "BONUS_ADJUSTMENT",
       changedBy: params.adminAuthor,
       target: params.userId,
@@ -6557,279 +7207,37 @@ var CommercialService = class {
     return entry;
   }
   // =========================================================================
-  // 5. SISTEMA DE INDICAÇÃO EM 3 NÍVEIS & COMISSÕES
+  // Affiliate / Referral delegation
   // =========================================================================
   getReferralConfig() {
-    return { ...this.referralConfig };
+    return this.affiliateService.getReferralConfig();
   }
   updateReferralConfig(updates, author = "Admin Comercial") {
-    const previousState = { ...this.referralConfig };
-    this.referralConfig = {
-      ...this.referralConfig,
-      ...updates,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedBy: author
-    };
-    commercialRepository.persistReferralConfig(this.referralConfig);
-    this.recordAudit({
-      action: "REFERRAL_CONFIG_CHANGE",
-      changedBy: author,
-      target: "referral_config",
-      previousState,
-      newState: this.referralConfig,
-      reason: "Atualiza\xE7\xE3o das taxas e regras do programa de indica\xE7\xE3o em 3 n\xEDveis"
-    });
-    return this.referralConfig;
+    return this.affiliateService.updateReferralConfig(updates, author);
   }
   registerReferral(newUserId, referrerCodeOrId) {
-    if (newUserId === referrerCodeOrId) return;
-    let referrerId = referrerCodeOrId;
-    if (referrerCodeOrId.startsWith("REF_")) {
-      referrerId = referrerCodeOrId.replace("REF_", "usr_").toLowerCase();
-    }
-    this.referralParents.set(newUserId, referrerId);
-    commercialRepository.persistReferralRelation(newUserId, referrerId);
-    if (this.referralConfig.signupBonusAmount > 0) {
-      this.creditBonus({
-        userId: newUserId,
-        userName: `Condutor Indicado (${newUserId})`,
-        amount: this.referralConfig.signupBonusAmount,
-        origin: "signup",
-        reason: "B\xF4nus por cadastro via link de indica\xE7\xE3o",
-        referenceId: referrerId
-      });
-    }
-    logger.info("commercial", "referral", "registered", `Usu\xE1rio ${newUserId} vinculado ao indicador ${referrerId}`, {
-      newUserId,
-      referrerId
-    });
+    this.affiliateService.registerReferral(newUserId, referrerCodeOrId);
   }
-  /**
-   * Dispatches Commercial Payment Event
-   * Triggered ONLY when payment is confirmed (e.g. PagBank approved order).
-   * Generates 3-level commissions with frozen percentiles and prevents double-dipping.
-   */
-  processPaymentConfirmationEvent(params) {
-    const { paymentId, caseId, buyerUserId, buyerUserName, grossAmount, discountAmount, effectivelyPaid } = params;
-    const existing = this.commissionLedger.filter((c) => c.paymentId === paymentId);
-    if (existing.length > 0) {
-      logger.warn("commercial", "commissions", "duplicate_prevented", `Comiss\xF5es j\xE1 geradas para o pagamento ${paymentId}`, {
-        paymentId
-      });
-      return existing;
-    }
-    if (!this.referralConfig.isReferralProgramActive) {
-      return [];
-    }
-    let baseAmount = effectivelyPaid;
-    if (this.referralConfig.calculationBase === "gross_amount") {
-      baseAmount = grossAmount;
-    } else if (this.referralConfig.calculationBase === "after_discount") {
-      baseAmount = grossAmount - discountAmount;
-    } else if (this.referralConfig.calculationBase === "net_amount") {
-      baseAmount = effectivelyPaid * 0.95;
-    }
-    const createdCommissions = [];
-    const l1ParentId = this.referralParents.get(buyerUserId);
-    if (l1ParentId && this.referralConfig.level1Percent > 0) {
-      const commAmount = Number((baseAmount * this.referralConfig.level1Percent / 100).toFixed(2));
-      const entry = {
-        id: `comm_${Date.now()}_l1_${l1ParentId}`,
-        beneficiaryId: l1ParentId,
-        beneficiaryName: `Indicador N1 (${l1ParentId})`,
-        buyerUserId,
-        buyerUserName,
-        level: 1,
-        appliedPercent: this.referralConfig.level1Percent,
-        baseAmount,
-        commissionAmount: commAmount,
-        paymentId,
-        caseId,
-        status: this.referralConfig.payoutDelayDays === 0 ? "AVAILABLE" : "PENDING",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        availableAt: new Date(Date.now() + this.referralConfig.payoutDelayDays * 864e5).toISOString()
-      };
-      this.commissionLedger.unshift(entry);
-      commercialRepository.persistCommission(entry);
-      createdCommissions.push(entry);
-      const l2ParentId = this.referralParents.get(l1ParentId);
-      if (l2ParentId && this.referralConfig.level2Percent > 0) {
-        const commAmountL2 = Number((baseAmount * this.referralConfig.level2Percent / 100).toFixed(2));
-        const entryL2 = {
-          id: `comm_${Date.now()}_l2_${l2ParentId}`,
-          beneficiaryId: l2ParentId,
-          beneficiaryName: `Indicador N2 (${l2ParentId})`,
-          buyerUserId,
-          buyerUserName,
-          level: 2,
-          appliedPercent: this.referralConfig.level2Percent,
-          baseAmount,
-          commissionAmount: commAmountL2,
-          paymentId,
-          caseId,
-          status: this.referralConfig.payoutDelayDays === 0 ? "AVAILABLE" : "PENDING",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          availableAt: new Date(Date.now() + this.referralConfig.payoutDelayDays * 864e5).toISOString()
-        };
-        this.commissionLedger.unshift(entryL2);
-        commercialRepository.persistCommission(entryL2);
-        createdCommissions.push(entryL2);
-        const l3ParentId = this.referralParents.get(l2ParentId);
-        if (l3ParentId && this.referralConfig.level3Percent > 0) {
-          const commAmountL3 = Number((baseAmount * this.referralConfig.level3Percent / 100).toFixed(2));
-          const entryL3 = {
-            id: `comm_${Date.now()}_l3_${l3ParentId}`,
-            beneficiaryId: l3ParentId,
-            beneficiaryName: `Indicador N3 (${l3ParentId})`,
-            buyerUserId,
-            buyerUserName,
-            level: 3,
-            appliedPercent: this.referralConfig.level3Percent,
-            baseAmount,
-            commissionAmount: commAmountL3,
-            paymentId,
-            caseId,
-            status: this.referralConfig.payoutDelayDays === 0 ? "AVAILABLE" : "PENDING",
-            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-            availableAt: new Date(Date.now() + this.referralConfig.payoutDelayDays * 864e5).toISOString()
-          };
-          this.commissionLedger.unshift(entryL3);
-          commercialRepository.persistCommission(entryL3);
-          createdCommissions.push(entryL3);
-        }
-      }
-    }
-    logger.info("commercial", "commissions", "calculated", `Comiss\xF5es processadas para o pagamento ${paymentId} (${createdCommissions.length} n\xEDveis)`, {
-      paymentId,
-      commissionsCount: createdCommissions.length,
-      totalCommissionValue: createdCommissions.reduce((acc, c) => acc + c.commissionAmount, 0)
-    });
-    return createdCommissions;
-  }
-  /**
-   * Handles Payment Reversal / Chargeback / Cancellation
-   * Reverses all associated commissions.
-   */
-  reverseCommissionsForPayment(paymentId, reason = "Cancelamento de pagamento / Estorno PagBank", author = "Admin Financeiro") {
-    const comms = this.commissionLedger.filter((c) => c.paymentId === paymentId && c.status !== "REVERSED");
-    for (const comm of comms) {
-      const prev = { ...comm };
-      comm.status = "REVERSED";
-      comm.reversedAt = (/* @__PURE__ */ new Date()).toISOString();
-      comm.reversalReason = reason;
-      this.recordAudit({
-        action: "COMMISSION_REVERSAL",
-        changedBy: author,
-        target: comm.id,
-        previousState: prev,
-        newState: comm,
-        reason
-      });
-    }
-    if (comms.length > 0) {
-      const reversedAt = comms[0].reversedAt;
-      commercialRepository.updateCommissionsStatus(paymentId, "REVERSED", {
-        reversedAt,
-        reversalReason: reason
-      });
-    }
-    logger.warn("commercial", "commissions", "reversed", `Comiss\xF5es revertidas para o pagamento ${paymentId}`, {
-      paymentId,
-      reversedCount: comms.length
-    });
-  }
-  getCommissionsLedger(beneficiaryId) {
-    if (beneficiaryId) {
-      return this.commissionLedger.filter((c) => c.beneficiaryId === beneficiaryId);
-    }
-    return this.commissionLedger;
-  }
-  markCommissionPaid(commissionId, author = "Admin Financeiro") {
-    const comm = this.commissionLedger.find((c) => c.id === commissionId);
-    if (!comm) {
-      throw new Error(`Comiss\xE3o n\xE3o encontrada: ${commissionId}`);
-    }
-    if (comm.status === "REVERSED" || comm.status === "CANCELLED") {
-      throw new Error(`N\xE3o \xE9 poss\xEDvel pagar comiss\xE3o com status ${comm.status}`);
-    }
-    const prev = { ...comm };
-    comm.status = "PAID";
-    comm.paidAt = (/* @__PURE__ */ new Date()).toISOString();
-    commercialRepository.updateCommissionsStatus(comm.paymentId, "PAID", {
-      paidAt: comm.paidAt,
-      level: comm.level
-    });
-    this.recordAudit({
-      action: "COMMISSION_PAYOUT",
-      changedBy: author,
-      target: comm.id,
-      previousState: prev,
-      newState: comm,
-      reason: "Pagamento de comiss\xE3o liquidado"
-    });
-    return comm;
-  }
-  /**
-   * Generates Full 3-Level Referral Tree for a user
-   */
   getReferralTree(userId) {
-    const l1Ids = [];
-    for (const [child, parent] of this.referralParents.entries()) {
-      if (parent === userId) l1Ids.push(child);
-    }
-    const l2Ids = [];
-    for (const l1 of l1Ids) {
-      for (const [child, parent] of this.referralParents.entries()) {
-        if (parent === l1) l2Ids.push(child);
-      }
-    }
-    const l3Ids = [];
-    for (const l2 of l2Ids) {
-      for (const [child, parent] of this.referralParents.entries()) {
-        if (parent === l2) l3Ids.push(child);
-      }
-    }
-    const mapUserNode = (id, level) => {
-      const comms = this.commissionLedger.filter((c) => c.beneficiaryId === userId && c.buyerUserId === id);
-      const rev = comms.reduce((acc, c) => acc + c.baseAmount, 0);
-      const earned = comms.filter((c) => c.status !== "REVERSED" && c.status !== "CANCELLED").reduce((acc, c) => acc + c.commissionAmount, 0);
-      return {
-        id,
-        name: id === "usr_beatriz" ? "Beatriz Santos" : id === "usr_andre" ? "Andr\xE9 Oliveira" : id === "usr_daniela" ? "Daniela Ferreira" : `Condutor ${id}`,
-        email: `${id}@www.defesai.shop`,
-        joinedAt: new Date(Date.now() - (level === 1 ? 20 : level === 2 ? 12 : 4) * 864e5).toISOString(),
-        purchasesCount: comms.length,
-        revenueGenerated: Number(rev.toFixed(2)),
-        commissionGeneratedForReferrer: Number(earned.toFixed(2))
-      };
-    };
-    const level1 = l1Ids.map((id) => mapUserNode(id, 1));
-    const level2 = l2Ids.map((id) => mapUserNode(id, 2));
-    const level3 = l3Ids.map((id) => mapUserNode(id, 3));
-    const totalReferrals = level1.length + level2.length + level3.length;
-    const allUserComms = this.commissionLedger.filter((c) => c.beneficiaryId === userId);
-    const totalComms = allUserComms.filter((c) => c.status !== "REVERSED").reduce((acc, c) => acc + c.commissionAmount, 0);
-    const paidComms = allUserComms.filter((c) => c.status === "PAID").reduce((acc, c) => acc + c.commissionAmount, 0);
-    const availComms = allUserComms.filter((c) => c.status === "AVAILABLE").reduce((acc, c) => acc + c.commissionAmount, 0);
-    return {
-      referrerId: userId,
-      referrerName: userId === "usr_carlos" ? "Carlos Eduardo Silveira" : `Indicador (${userId})`,
-      referrerEmail: `${userId}@www.defesai.shop`,
-      referralCode: `REF_${userId.toUpperCase()}`,
-      referralLink: `https://app.www.defesai.shop/r/${userId.toUpperCase()}`,
-      level1,
-      level2,
-      level3,
-      totalReferralsCount: totalReferrals,
-      totalSalesCount: allUserComms.length,
-      totalRevenueGenerated: allUserComms.reduce((acc, c) => acc + c.baseAmount, 0),
-      totalCommissionsEarned: Number(totalComms.toFixed(2)),
-      availableCommissionBalance: Number(availComms.toFixed(2)),
-      bonusBalance: this.getUserBonusBalance(userId)
-    };
+    return this.affiliateService.getReferralTree(userId, this.commissionLedger);
   }
   // =========================================================================
-  // 6. OVERVIEW METRICS & AUDIT
+  // Commission delegation
+  // =========================================================================
+  processPaymentConfirmationEvent(params) {
+    return this.commissionService.processPaymentConfirmationEvent(params);
+  }
+  reverseCommissionsForPayment(paymentId, reason = "Cancelamento de pagamento / Estorno PagBank", author = "Admin Financeiro") {
+    this.commissionService.reverseCommissionsForPayment(paymentId, reason, author);
+  }
+  getCommissionsLedger(beneficiaryId) {
+    return this.commissionService.getCommissionsLedger(beneficiaryId);
+  }
+  markCommissionPaid(commissionId, author = "Admin Financeiro") {
+    return this.commissionService.markCommissionPaid(commissionId, author);
+  }
+  // =========================================================================
+  // Metrics & Audit delegation
   // =========================================================================
   getCommercialMetrics() {
     const totalComms = this.commissionLedger.filter((c) => c.status !== "REVERSED");
@@ -6857,24 +7265,10 @@ var CommercialService = class {
     };
   }
   getCommercialAuditLogs() {
-    return this.commercialAuditLogs;
-  }
-  recordAudit(entry) {
-    const log = {
-      ...entry,
-      id: `caudit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.commercialAuditLogs.unshift(log);
-    commercialRepository.persistAuditLog(log);
-    logger.info("commercial", "audit", entry.action, `A\xE7\xE3o comercial auditada: ${entry.action} no alvo ${entry.target}`, {
-      action: entry.action,
-      changedBy: entry.changedBy,
-      target: entry.target
-    });
+    return this.auditService.getAuditLogs();
   }
 };
-var commercialService = new CommercialService();
+var commercialService = new CommercialServiceFacade();
 
 // src/server/commercial/commercial-test-suite.ts
 function runCommercialTestSuite() {
@@ -7382,6 +7776,48 @@ function runCommercialTestSuite() {
 // src/server/routes/commercial.ts
 var router3 = Router3();
 router3.use(authenticateToken);
+router3.post("/offers/resolve", authenticateToken, (req, res) => {
+  try {
+    const { serviceType } = req.body ?? {};
+    if (!serviceType || typeof serviceType !== "string") {
+      return res.status(400).json({
+        error: "serviceType \xE9 obrigat\xF3rio.",
+        hint: "Envie o ProcedureType identificado no onboarding (ex: defesa_previa)."
+      });
+    }
+    const result = commercialService.resolveCommercialOffer({ serviceType });
+    if (!result.offer) {
+      return res.status(404).json({
+        error: result.reason || `Servi\xE7o "${serviceType}" n\xE3o possui oferta comercial dispon\xEDvel.`,
+        serviceType,
+        available: false
+      });
+    }
+    const offer = {
+      ...result.offer,
+      available: true
+    };
+    res.json({ offer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+router3.get("/offers/available", authenticateToken, (_req, res) => {
+  try {
+    const available = commercialService.getPricings().filter((p) => p.isActive).map((p) => ({
+      commercialId: p.id,
+      serviceType: p.serviceType,
+      name: p.serviceName,
+      description: p.description,
+      price: p.promotionalPrice ?? p.standardPrice,
+      currency: "BRL",
+      available: true
+    }));
+    res.json({ offers: available });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 router3.get(["/prices", "/admin/commercial/prices"], (req, res) => {
   try {
     const pricings = commercialService.getPricings();
@@ -17472,7 +17908,7 @@ var PagBankIntegrationService = class {
         referenceId: `ref_${orderOrCaseId}`,
         caseId: orderOrCaseId.replace("case_", ""),
         status: "PAID",
-        amount: PRICING.DEFAULT_PRICE,
+        amount: PRICING.FALLBACK_PRICE,
         expiresAt: new Date(Date.now() + 36e5).toISOString(),
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         paymentMethod: "pix"
@@ -18077,6 +18513,29 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
 // src/server/routes/payments.ts
 init_logger();
 var router11 = Router11();
+function resolveOffer(params) {
+  const { serviceType } = params;
+  if (!serviceType) {
+    return { offer: null, error: "serviceType \xE9 obrigat\xF3rio para criar o pagamento." };
+  }
+  const result = commercialService.resolveCommercialOffer({
+    serviceType
+  });
+  if (!result.offer) {
+    return {
+      offer: null,
+      error: result.reason || `Servi\xE7o "${serviceType}" n\xE3o possui oferta comercial dispon\xEDvel.`
+    };
+  }
+  const offer = result.offer;
+  if (!offer.eligible || !offer.available) {
+    return {
+      offer: null,
+      error: offer.name ? `A oferta "${offer.name}" n\xE3o est\xE1 dispon\xEDvel no momento.` : result.reason
+    };
+  }
+  return { offer };
+}
 function isTestMode() {
   return process.env.NODE_ENV !== "production";
 }
@@ -18109,81 +18568,46 @@ router11.use("/webhooks/ggpix", (req, res, next) => {
     next();
   });
 });
-router11.post("/pagbank/orders", prodAuth, async (req, res) => {
+router11.post(["/pagbank/orders", "/payments/pix/create"], prodAuth, async (req, res) => {
   try {
-    const { caseId, customerName, customerEmail, customerCpf, amount = PRICING.DEFAULT_PRICE } = req.body;
-    const orderResult = await pagBankIntegration.createPixOrder({
-      caseId: caseId || `case_${Date.now()}`,
-      customer: {
-        name: customerName || "Condutor DefesAi",
-        email: customerEmail || "contato@www.defesai.shop",
-        taxId: customerCpf || "12345678909"
-      },
-      amount: Number(amount)
-    });
-    if (caseId) {
-      const row = databaseRows.get(caseId);
-      if (row) {
-        const domain = CanonicalMapper.rowToDomain(row);
-        domain.payment = {
-          status: "pending",
-          amount: Number(amount),
-          transactionId: orderResult.orderId,
-          paymentMethod: "pix"
-        };
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
-      }
+    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
+    const offerResult = resolveOffer({ serviceType, caseId });
+    if (!offerResult.offer) {
+      return res.status(400).json({
+        error: offerResult.error || "N\xE3o foi poss\xEDvel determinar a oferta comercial.",
+        hint: "Informe serviceType v\xE1lido (ex: defesa_previa) ou verifique o cat\xE1logo."
+      });
     }
-    res.json({
-      success: true,
-      order: orderResult,
-      pixCopyPasteString: orderResult.qrCodeText,
-      qrCodeDataUrl: orderResult.qrCodeDataUrl,
-      txId: orderResult.orderId,
-      status: "aguardando_pagamento"
-    });
-  } catch (error) {
-    logger.error("payments", "pagbank", "create_pix_order", "Error creating PIX order", { error: error.message });
-    res.status(500).json({ error: error.message || "Erro ao gerar pedido PagBank" });
-  }
-});
-router11.post("/pix/create", prodAuth, async (req, res) => {
-  try {
-    const { caseId, amount = PRICING.DEFAULT_PRICE, customerCpf, customerName, customerEmail } = req.body;
+    const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
-    const appUrl = process.env.APP_URL || "https://www.defesai.shop/";
-    const pixResult = await gateway.createPix({
+    const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
-      amountInCents: Math.round(Number(amount) * 100),
-      description: "DefesaAi - Minuta Jur\xEDdica",
       referenceId: `defesai_case_${caseId || Date.now()}`,
       payer: {
         name: customerName || "Condutor DefesAi",
         email: customerEmail || "contato@www.defesai.shop",
-        document: customerCpf || "12345678909"
+        document: (customerCpf || "12345678909").replace(/\D/g, "")
       },
-      webhookUrl: `${appUrl}/api/webhooks/${gateway.id === "ggpixapi" ? "ggpix" : "pagbank"}`
+      amountInCents: Math.round(finalAmount * 100),
+      description: `DefesAi - ${offerResult.offer.name}`,
+      webhookUrl: `${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/${gateway.id === "ggpixapi" ? "ggpix" : "pagbank"}`
     });
-    logger.info("payments", "gateway", "create_pix", `PIX created via ${gateway.id}`, {
-      caseId,
-      gatewayTransactionId: pixResult.gatewayTransactionId,
-      gateway: gateway.id
-    });
+    const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
     res.json({
       success: true,
-      txId: pixResult.gatewayTransactionId,
-      amount: pixResult.amountInCents / 100,
-      pixCopyPasteString: pixResult.pixCopyPaste,
-      qrCodeDataUrl: pixResult.qrCodeDataUrl,
-      expiresInMinutes: 30,
+      order: orderResult,
+      pixCopyPasteString: orderResult.pixCopyPaste,
+      qrCodeDataUrl: orderResult.qrCodeDataUrl,
+      txId: orderResult.gatewayTransactionId,
+      amount: finalAmount,
+      serviceType: offerResult.offer.serviceType,
+      commercialOfferId: offerResult.offer.commercialId,
       status: "aguardando_pagamento",
-      gateway: gateway.id,
-      order: pixResult
+      gateway: gateway.id
     });
-  } catch (err) {
-    logger.error("payments", "gateway", "create_pix_order_alias", "Error creating PIX order", { error: err.message });
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    logger.error("payments", "pix_create", "create_pix_order", "Error creating PIX order", { error: error.message });
+    res.status(500).json({ error: error.message || "Erro ao gerar pedido PIX" });
   }
 });
 router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
@@ -18215,21 +18639,42 @@ router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-router11.post("/credit-card/create", prodAuth, async (req, res) => {
+router11.post("/payments/credit-card/create", prodAuth, async (req, res) => {
   try {
     const {
       caseId,
       customerName,
       customerEmail,
       customerCpf,
-      amount = PRICING.DEFAULT_PRICE,
+      amount,
       installments = 1,
+      serviceType,
       cardToken,
       authenticationMethod = "CHALLENGE",
       softDescriptor
     } = req.body;
     if (!cardToken) {
       return res.status(400).json({ error: "cardToken \xE9 obrigat\xF3rio para pagamento com cart\xE3o de cr\xE9dito" });
+    }
+    if (!serviceType) {
+      return res.status(400).json({
+        error: "serviceType \xE9 obrigat\xF3rio para criar o pagamento.",
+        hint: "Informe serviceType v\xE1lido (ex: defesa_previa)."
+      });
+    }
+    const offerResult = resolveOffer({ serviceType, caseId });
+    if (!offerResult.offer) {
+      return res.status(400).json({
+        error: offerResult.error || "N\xE3o foi poss\xEDvel determinar a oferta comercial.",
+        hint: "Verifique o cat\xE1logo comercial antes de prosseguir."
+      });
+    }
+    if (amount !== void 0 && Number(amount) !== offerResult.offer.price) {
+      return res.status(400).json({
+        error: "Valor informado n\xE3o corresponde ao pre\xE7o da oferta. O backend recalcula automaticamente.",
+        expectedPrice: offerResult.offer.price,
+        receivedAmount: Number(amount)
+      });
     }
     const gateway = gatewayManager.getActiveGateway();
     if (gateway.id !== "pagbank") {
@@ -18242,16 +18687,18 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     }
     const orderResult = await pagBankIntegration.createCreditCardOrder({
       caseId: caseId || `case_${Date.now()}`,
+      referenceId: `defesai_case_${caseId || Date.now()}`,
       customer: {
         name: customerName || "Condutor DefesAi",
         email: customerEmail || "contato@www.defesai.shop",
-        taxId: customerCpf || "12345678909"
+        taxId: (customerCpf || "12345678909").replace(/\D/g, "")
       },
-      amount: Number(amount),
+      amount: offerResult.offer.price,
       installments: Number(installments),
       cardToken,
       authenticationMethod,
-      softDescriptor
+      softDescriptor,
+      notificationUrls: [`${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/pagbank`]
     });
     if (caseId) {
       const row = databaseRows.get(caseId);
@@ -18259,10 +18706,12 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         const domain = CanonicalMapper.rowToDomain(row);
         domain.payment = {
           status: "pending",
-          amount: Number(amount),
+          amount: offerResult.offer.price,
           transactionId: orderResult.orderId,
           paymentMethod: "credit_card"
         };
+        domain.serviceType = offerResult.offer.serviceType;
+        domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
       }
@@ -18274,6 +18723,8 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         orderId: orderResult.orderId,
         orderStatus: orderResult.status,
         threeDsRequired: orderResult.threeDsChallengeRequired,
+        serviceType: offerResult.offer.serviceType,
+        commercialOfferId: offerResult.offer.commercialId,
         gateway: "pagbank"
       }
     });
@@ -18281,6 +18732,9 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       success: true,
       order: orderResult,
       txId: orderResult.orderId,
+      amount: offerResult.offer.price,
+      serviceType: offerResult.offer.serviceType,
+      commercialOfferId: offerResult.offer.commercialId,
       status: orderResult.threeDsChallengeRequired ? "aguardando_3ds" : "autorizado",
       threeDsUrl: orderResult.threeDsUrl,
       threeDsChallengeRequired: orderResult.threeDsChallengeRequired
@@ -18309,39 +18763,48 @@ router11.post("/webhooks/pagbank", (req, res) => {
       });
       return res.status(401).json({ error: "Assinatura inv\xE1lida", received: false });
     }
-    if (webhookResult.caseId) {
-      const row = databaseRows.get(webhookResult.caseId);
-      if (row && webhookResult.status === "PAID") {
+    const caseId = typeof payload.referenceId === "string" ? payload.referenceId.replace("defesai_case_", "") : null;
+    if (caseId && webhookResult.status === "PAID") {
+      const row = databaseRows.get(caseId);
+      if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
+        const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
         domain.isPaid = true;
         domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
         domain.status = "defesa_pronta";
         domain.currentStage = 3;
-        const paymentMethod = payload.charges?.[0]?.payment_method?.type === "CREDIT_CARD" ? "credit_card" : "pix";
+        domain.serviceType = domain.serviceType || "defesa_previa";
+        const paymentMethod = domain.payment?.paymentMethod || (webhookResult.transactionType === "CREDIT_CARD" ? "credit_card" : "pix");
         domain.payment = {
           status: "approved",
-          amount: payload.charges?.[0]?.amount?.value / 100 || PRICING.DEFAULT_PRICE,
+          amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
           paidAt: (/* @__PURE__ */ new Date()).toISOString(),
-          transactionId: webhookResult.orderId,
+          transactionId: webhookResult.orderId || webhookResult.gatewayTransactionId,
           paymentMethod
         };
+        if (webhookResult.commercialOfferId) {
+          domain.commercialOfferId = webhookResult.commercialOfferId;
+        }
+        if (webhookResult.serviceType && !domain.serviceType) {
+          domain.serviceType = webhookResult.serviceType;
+        }
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: "Pagamento Confirmado via Webhook PagBank",
-          description: `Transa\xE7\xE3o ${webhookResult.orderId} aprovada automaticamente pela institui\xE7\xE3o financeira.`,
+          description: `Transa\xE7\xE3o ${webhookResult.orderId || webhookResult.gatewayTransactionId} aprovada pela institui\xE7\xE3o financeira.`,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           type: "payment"
         });
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(webhookResult.caseId, updatedRow);
+        databaseRows.set(caseId, updatedRow);
         commercialService.processPaymentConfirmationEvent({
-          paymentId: webhookResult.orderId || `ord_${domain.id}`,
+          paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,
           buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
           buyerUserName: domain.clientName || "Condutor DefesAi",
-          grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          grossAmount: domain.payment.amount,
           discountAmount: 0,
-          effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE
+          effectivelyPaid: domain.payment.amount
         });
         auditLogs.unshift({
           id: `audit_pay_${Date.now()}`,
@@ -18351,7 +18814,7 @@ router11.post("/webhooks/pagbank", (req, res) => {
           action: "PAYMENT_CONFIRMED",
           targetResource: domain.id,
           ipHash: "3a88c42b109e",
-          details: `Pagamento de R$ ${domain.payment?.amount || PRICING.DEFAULT_PRICE} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
+          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
           gdprCompliant: true
         });
       }
@@ -18427,7 +18890,7 @@ router11.post("/pix/simulate-confirm", (req, res) => {
   }
   domain.payment = {
     status: "approved",
-    amount: PRICING.DEFAULT_PRICE,
+    amount: PRICING.FALLBACK_PRICE,
     paidAt: (/* @__PURE__ */ new Date()).toISOString(),
     transactionId: orderId,
     paymentMethod: "pix"
@@ -18447,9 +18910,9 @@ router11.post("/pix/simulate-confirm", (req, res) => {
     caseId: domain.id,
     buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
     buyerUserName: domain.clientName || "Condutor DefesAi",
-    grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+    grossAmount: domain.payment?.amount || PRICING.FALLBACK_PRICE,
     discountAmount: 0,
-    effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE
+    effectivelyPaid: domain.payment?.amount || PRICING.FALLBACK_PRICE
   });
   auditLogs.unshift({
     id: `audit_pay_${Date.now()}`,
@@ -18459,7 +18922,7 @@ router11.post("/pix/simulate-confirm", (req, res) => {
     action: "PAYMENT_CONFIRMED",
     targetResource: domain.id,
     ipHash: "3a88c42b109e",
-    details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.DEFAULT_PRICE).toFixed(2).replace(".", ",")} via PIX ${gateway.displayName} confirmado.`,
+    details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.FALLBACK_PRICE).toFixed(2).replace(".", ",")} via PIX ${gateway.displayName} confirmado.`,
     gdprCompliant: true
   });
   res.json({
@@ -18487,17 +18950,25 @@ router11.post("/webhooks/ggpix", (req, res) => {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
+        const paymentAmount = Number((event.amountInCents || 0) / 100);
         domain.isPaid = true;
         domain.paidAt = event.paidAt || (/* @__PURE__ */ new Date()).toISOString();
         domain.status = "defesa_pronta";
         domain.currentStage = 3;
+        domain.serviceType = domain.serviceType || "defesa_previa";
         domain.payment = {
           status: "approved",
-          amount: (event.amountInCents || 8990) / 100,
+          amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
           paidAt: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
           transactionId: event.gatewayTransactionId,
           paymentMethod: "pix"
         };
+        if (event.commercialOfferId) {
+          domain.commercialOfferId = event.commercialOfferId;
+        }
+        if (event.serviceType && !domain.serviceType) {
+          domain.serviceType = event.serviceType;
+        }
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: "Pagamento Confirmado via Webhook GGPIXAPI",
@@ -18512,9 +18983,9 @@ router11.post("/webhooks/ggpix", (req, res) => {
           caseId: domain.id,
           buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
           buyerUserName: domain.clientName || "Condutor DefesAi",
-          grossAmount: domain.payment?.amount || PRICING.DEFAULT_PRICE,
+          grossAmount: domain.payment.amount,
           discountAmount: 0,
-          effectivelyPaid: domain.payment?.amount || PRICING.DEFAULT_PRICE
+          effectivelyPaid: domain.payment.amount
         });
         auditLogs.unshift({
           id: `audit_pay_${Date.now()}`,
@@ -18524,7 +18995,7 @@ router11.post("/webhooks/ggpix", (req, res) => {
           action: "PAYMENT_CONFIRMED",
           targetResource: domain.id,
           ipHash: "3a88c42b109e",
-          details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.DEFAULT_PRICE).toFixed(2)} via PIX GGPIXAPI confirmado.`,
+          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via PIX GGPIXAPI confirmado.`,
           gdprCompliant: true
         });
       }

@@ -39,6 +39,7 @@
 | `@testes` | Qualidade/Testes | Unit, integração, E2E, performance |
 | `@build-error-resolver` | Build | Erros TypeScript, build, lint |
 | `@refactor-cleaner` | Refatoração | Dead code, duplicatas, dependências não usadas |
+| `@admin` | Painel Admin | Queries centralizadas, métricas, usuários, payments, documents, health |
 
 ### Specialized Agents
 
@@ -139,6 +140,10 @@
 ### @backend
 - **Permitido**: `src/server.ts`, `src/routes/**`, `src/services/**`, `src/middleware/**`, `src/validators/**`
 - **Proibido**: `src/components/**`, `src/pages/**`, `supabase/migrations/**` (exceto leitura)
+
+### @admin
+- **Permitido**: `src/server/routes/admin.ts`, `src/server/services/admin-query-service.ts`
+- **Proibido**: `src/components/admin/**` (frontend), `supabase/migrations/**`
 
 ### @frontend
 - **Permitido**: `src/components/**`, `src/pages/**`, `src/hooks/**`, `src/context/**`, `src/styles/**`

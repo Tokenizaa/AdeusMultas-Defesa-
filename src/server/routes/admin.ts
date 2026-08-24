@@ -13,6 +13,7 @@ import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';
+import { getSupabaseServerClient } from '../db/supabase-server';
 
 const router = Router();
 
@@ -329,6 +330,109 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
       status: 'HEALTHY',
     },
   });
+});
+
+// ─────────────────────────────────────────────
+// USERS (user_profiles + sync auth.users via SECURITY DEFINER function)
+// ─────────────────────────────────────────────
+router.get(['/users', '/admin/users'], async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    let query = supabase
+      .from('user_profiles')
+      .select('id, email, name, role, cpf, created_at, updated_at');
+
+    const { search, role } = req.query as Record<string, string | undefined>;
+
+    const validRole = (['admin', 'citizen'] as const).includes(role as 'admin' | 'citizen')
+      ? (role as 'admin' | 'citizen')
+      : null;
+
+    if (validRole) {
+      query = query.eq('role', validRole);
+    }
+
+    if (search) {
+      const q = `%${search}%`;
+      query = query.or(`name.ilike.${q},email.ilike.${q},cpf.ilike.${q}`);
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar user_profiles:', error);
+      return res.status(500).json({ error: 'Erro ao carregar usuários.' });
+    }
+
+    res.json({ users: data || [], total: (data || []).length });
+  } catch (err) {
+    console.error('Erro em /api/admin/users GET:', err);
+    res.status(500).json({ error: 'Erro ao carregar usuários.' });
+  }
+});
+
+// PUT /api/admin/users — atualiza role em user_profiles + auth.users (sync bidirecional)
+router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
+  try {
+    const { email, role } = req.body as { email?: string; role?: string };
+
+    if (!email || !role) {
+      return res.status(400).json({ error: 'email e role são obrigatórios.' });
+    }
+    if (!['admin', 'citizen'].includes(role)) {
+      return res.status(400).json({ error: 'role inválida. Use admin ou citizen.' });
+    }
+
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    // Buscar user_id pelo email em user_profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, email, name, role')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Erro ao buscar profile:', profileError);
+      return res.status(500).json({ error: 'Erro ao localizar usuário.' });
+    }
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Usuário não encontrado em user_profiles.' });
+    }
+
+    // Chamar SECURITY DEFINER function para atualizar BOTH user_profiles e auth.users
+    const { error: rpcError } = await (supabase.rpc as any)('admin_update_user_role_by_email', {
+      target_user_email: email,
+      new_role: role,
+    });
+
+    if (rpcError) {
+      console.error('Erro ao atualizar role via RPC:', rpcError);
+      return res.status(500).json({ error: 'Erro ao atualizar permissão.' });
+    }
+
+    // Retornar usuário atualizado
+    const { data: updated } = await supabase
+      .from('user_profiles')
+      .select('id, email, name, role, cpf, created_at, updated_at')
+      .eq('id', profile.id)
+      .single();
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('Erro em PUT /api/admin/users:', err);
+    res.status(500).json({ error: 'Erro ao atualizar permissão.' });
+  }
 });
 
 export default router;

@@ -210,7 +210,7 @@ function AppContent() {
     return (
       <AdminLayout pageTitle={title} pageSubtitle={subtitle}>
         {currentPath === '/admin' && (
-          <AdminDashboardView cases={cases} onSelectCase={handleSelectCaseFromList} />
+          <AdminDashboardView onSelectCase={handleSelectCaseFromList} />
         )}
         {currentPath === '/admin/cases' && (
           <AdminCasesListView

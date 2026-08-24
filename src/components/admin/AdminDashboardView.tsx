@@ -19,16 +19,16 @@ import {
   MessageSquare,
   Share2,
 } from 'lucide-react';
-import { CaseDomain } from '../../types';
+
 import { useRouter } from '../../core/router/RouterContext';
-import { PRICING } from '../../config/pricing';
+
 
 interface AdminDashboardViewProps {
-  cases: CaseDomain[];
-  onSelectCase: (c: CaseDomain) => void;
+  
+  onSelectCase: (c: any) => void;
 }
 
-export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ cases, onSelectCase }) => {
+export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelectCase }) => {
   const { navigate } = useRouter();
   const [overviewData, setOverviewData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,14 +59,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ cases, o
     fetchOverview();
   }, []);
 
-  const paidCases = cases.filter((c) => c.isPaid || c.payment?.status === 'paid' || c.payment?.status === 'approved');
-  const pendingPaymentCases = cases.filter((c) => !c.isPaid && c.payment?.status !== 'paid' && c.payment?.status !== 'approved');
-  const readyDraftCases = cases.filter((c) => c.status === 'defense_ready' || c.status === 'defesa_pronta' || Boolean(c.defenseDraft));
-  const pendingDraftCases = cases.filter((c) => !c.defenseDraft && c.status !== 'defense_ready' && c.status !== 'defesa_pronta');
+const recentCases = overviewData?.recentCases || [];
 
-  const totalRevenue = paidCases.reduce((sum, c) => sum + (c.payment?.amount || PRICING.DEFAULT_PRICE), 0);
-
-  // Simulate or execute quick probe
+// Simulate or execute quick probe
   const handleQuickProbe = async (serviceKey: string) => {
     setProbeStatus((prev) => ({ ...prev, [serviceKey]: 'checking' }));
     try {
@@ -109,7 +104,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ cases, o
             onClick={() => navigate('/admin/cases')}
             className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer font-mono shadow-xs"
           >
-            Fila de Casos ({cases.length})
+            Fila de Casos ({overviewData?.metrics?.totalCases ?? recentCases.length})
           </button>
           <button
             onClick={fetchOverview}
@@ -347,7 +342,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ cases, o
             onClick={() => navigate('/admin/cases')}
             className="text-sm font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 cursor-pointer font-mono"
           >
-            <span>Ver todos os {cases.length} casos</span>
+            <span>Ver todos os {(overviewData?.metrics?.totalCases ?? 0)} casos</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -365,7 +360,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ cases, o
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
-              {(cases || []).slice(0, 6).map((c) => {
+              {recentCases.map((c) => {
                 const isPaid = c.isPaid || c.payment?.status === 'paid' || c.payment?.status === 'approved';
                 return (
                   <tr key={c.id} className="hover:bg-slate-850/50 transition-colors">

@@ -151,14 +151,6 @@ export const AdminPaymentsView: React.FC = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-1">
-          <span className="text-sm text-slate-400 uppercase font-bold">Volume Total Faturado</span>
-          <p className="text-xl font-bold text-emerald-400">
-            R$ {summary.totalVolume.toFixed(2)}
-          </p>
-          <p className="text-sm text-slate-500">Valor líquido via PIX PagBank</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-1">
           <span className="text-sm text-slate-400 uppercase font-bold">Pedidos Aprovados</span>
           <p className="text-xl font-bold text-white">
             {summary.paidCount} <span className="text-sm text-slate-500">/ {summary.totalCount}</span>
@@ -166,22 +158,6 @@ export const AdminPaymentsView: React.FC = () => {
           <p className="text-sm text-emerald-400">
             {summary.totalCount > 0 ? ((summary.paidCount / summary.totalCount) * 100).toFixed(1) : 0}% taxa de conversão
           </p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-1">
-          <span className="text-sm text-slate-400 uppercase font-bold">Aguardando PIX</span>
-          <p className="text-xl font-bold text-amber-400">
-            {summary.pendingCount}
-          </p>
-          <p className="text-sm text-slate-500">QR Codes pendentes de leitura</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-1">
-          <span className="text-sm text-slate-400 uppercase font-bold">Ticket Médio</span>
-          <p className="text-xl font-bold text-white">
-            R$ {PRICING.DEFAULT_PRICE.toFixed(2).replace('.', ',')}
-          </p>
-          <p className="text-sm text-slate-500">Ticket médio por minuta</p>
         </div>
       </div>
 
