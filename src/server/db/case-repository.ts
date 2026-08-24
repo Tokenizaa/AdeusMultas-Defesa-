@@ -18,6 +18,7 @@ import { Database } from '../../types/supabase';
 import { EventTopics, eventBus } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { getSupabaseServerClient } from './supabase-server';
+import { domainIdToUuid } from './uuid-v5';
 
 /** Converte string JSON da row em valor tipado para JSONB (null-safe). */
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -82,7 +83,13 @@ export class CaseRepository {
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
     return {
-      id: row.id,
+      // PK uuid: id sintético do domínio (`case_*`) é mapeado para UUID v5
+      // determinístico (mesmo id → mesmo UUID → upsert idempotente entre
+      // restarts/instâncias). Ids já-UUID passam intactos.
+      id: domainIdToUuid(row.id) ?? undefined,
+      // Rastro do id de domínio original: permite hidratação e lookup pós-cold-start
+      // pelo id sintético antigo (índice único parcial cases_app_ref_key).
+      app_ref: isUuid(row.id) ? null : row.id,
       title: row.title,
       client_name: row.client_name,
       client_email: row.client_email ?? null,
@@ -171,7 +178,11 @@ export class CaseRepository {
     }
 
     const rows: CaseRow[] = (data || []).map((c) => ({
-      id: c.id,
+      // Chave em memória volta a ser o id ORIGINAL do domínio: app_ref guarda
+      // o id sintético (`case_*`) que gerou a linha — restaura links antigos
+      // (GET/PUT/claim por id) após cold-start. Linhas sem app_ref (legado ou
+      // ids já-UUID) usam a própria PK.
+      id: c.app_ref ?? c.id,
       title: c.title,
       client_name: c.client_name,
       client_email: c.client_email ?? undefined,

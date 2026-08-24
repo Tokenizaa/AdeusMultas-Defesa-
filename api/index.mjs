@@ -1240,6 +1240,36 @@ function getSupabaseServerClient() {
   return clientInstance;
 }
 
+// src/server/db/uuid-v5.ts
+import { createHash } from "node:crypto";
+var DEFESAI_UUID_NAMESPACE = "6f0a9d2e-8c47-4b3a-9f15-d7e0b2c4a681";
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value) {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+function parseNamespaceBytes(namespace) {
+  const hex = namespace.replace(/-/g, "");
+  if (!/^[0-9a-f]{32}$/i.test(hex)) {
+    throw new Error(`Namespace UUID inv\xE1lido: ${namespace}`);
+  }
+  return Buffer.from(hex, "hex");
+}
+function uuidV5(name, namespace = DEFESAI_UUID_NAMESPACE) {
+  const hash = createHash("sha1");
+  hash.update(parseNamespaceBytes(namespace));
+  hash.update(Buffer.from(name, "utf8"));
+  const bytes = Buffer.from(hash.digest().subarray(0, 16));
+  bytes[6] = bytes[6] & 15 | 80;
+  bytes[8] = bytes[8] & 63 | 128;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+function domainIdToUuid(id) {
+  if (!id) return null;
+  if (isUuid(id)) return id;
+  return uuidV5(id);
+}
+
 // src/server/db/case-repository.ts
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -1257,7 +1287,7 @@ function toDate(value) {
 function toNumeric(value) {
   return typeof value === "number" && !Number.isNaN(value) ? value : null;
 }
-function isUuid(value) {
+function isUuid2(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 var CaseRepository = class {
@@ -1287,13 +1317,19 @@ var CaseRepository = class {
   // ==========================================
   toPayload(row) {
     return {
-      id: row.id,
+      // PK uuid: id sintético do domínio (`case_*`) é mapeado para UUID v5
+      // determinístico (mesmo id → mesmo UUID → upsert idempotente entre
+      // restarts/instâncias). Ids já-UUID passam intactos.
+      id: domainIdToUuid(row.id) ?? void 0,
+      // Rastro do id de domínio original: permite hidratação e lookup pós-cold-start
+      // pelo id sintético antigo (índice único parcial cases_app_ref_key).
+      app_ref: isUuid2(row.id) ? null : row.id,
       title: row.title,
       client_name: row.client_name,
       client_email: row.client_email ?? null,
       client_phone: row.client_phone ?? null,
       client_cpf: row.client_cpf ?? null,
-      user_id: isUuid(row.user_id) ? row.user_id : null,
+      user_id: isUuid2(row.user_id) ? row.user_id : null,
       status: row.status,
       current_stage: row.current_stage,
       service_type: row.service_type,
@@ -1367,7 +1403,11 @@ var CaseRepository = class {
       return [];
     }
     const rows = (data || []).map((c) => ({
-      id: c.id,
+      // Chave em memória volta a ser o id ORIGINAL do domínio: app_ref guarda
+      // o id sintético (`case_*`) que gerou a linha — restaura links antigos
+      // (GET/PUT/claim por id) após cold-start. Linhas sem app_ref (legado ou
+      // ids já-UUID) usam a própria PK.
+      id: c.app_ref ?? c.id,
       title: c.title,
       client_name: c.client_name,
       client_email: c.client_email ?? void 0,
@@ -4258,7 +4298,7 @@ var metaInsightsService = new MetaInsightsService();
 
 // src/server/db/meta-repository.ts
 init_logger();
-var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var UUID_RE2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var MetaRepository = class {
   constructor() {
     this.client = getSupabaseServerClient();
@@ -4267,7 +4307,7 @@ var MetaRepository = class {
   // Helpers
   // ==========================================
   isUuid(value) {
-    return UUID_RE.test(value);
+    return UUID_RE2.test(value);
   }
   toJson(value) {
     return JSON.parse(JSON.stringify(value ?? null));
@@ -5592,7 +5632,7 @@ init_logger();
 
 // src/server/db/commercial-repository.ts
 init_logger();
-var UUID_RE2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var CommercialRepository = class {
   constructor() {
     this.client = getSupabaseServerClient();
@@ -5609,7 +5649,7 @@ var CommercialRepository = class {
   // Helpers
   // ==========================================
   isUuid(value) {
-    return UUID_RE2.test(value);
+    return UUID_RE3.test(value);
   }
   toJson(value) {
     return JSON.parse(JSON.stringify(value ?? null));
@@ -16969,7 +17009,7 @@ import QRCode from "qrcode";
 
 // src/server/db/payment-repository.ts
 init_logger();
-var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var UUID_RE4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var PaymentRepository = class {
   constructor() {
     this.client = getSupabaseServerClient();
@@ -16978,7 +17018,7 @@ var PaymentRepository = class {
   // Helpers
   // ==========================================
   isUuid(value) {
-    return UUID_RE3.test(value);
+    return UUID_RE4.test(value);
   }
   toJson(value) {
     return JSON.parse(JSON.stringify(value ?? null));
@@ -17000,8 +17040,10 @@ var PaymentRepository = class {
   // 1. Payment Orders → payment_orders
   // ==========================================
   /**
-   * Upsert por `case_id` (1 pedido por caso). Requer case_id UUID válido
-   * (FK NOT NULL para public.cases(id)); casos demo são ignorados.
+   * Upsert por `case_id` (1 pedido por caso). `case_id` é FK NOT NULL para
+   * public.cases(id): ids sintéticos são convertidos para o UUID v5
+   * determinístico correspondente (mesma tabela de casos), mantendo a
+   * integridade referencial e a idempotência entre restarts/instâncias.
    *
    * Suporta tanto PagBankOrderResult (compat) quanto GatewayPixResult (novo).
    * Campo `gateway` registra qual provedor criou o pagamento — essencial
@@ -17009,14 +17051,15 @@ var PaymentRepository = class {
    */
   persistOrder(order, extras = {}) {
     if (!this.client) return;
-    if (!this.isUuid(order.caseId)) {
+    const caseIdUuid = domainIdToUuid(order.caseId);
+    if (!caseIdUuid) {
       return;
     }
     const amount = "amount" in order && typeof order.amount === "number" ? order.amount : "amountInCents" in order && typeof order.amountInCents === "number" ? order.amountInCents / 100 : 0;
     const orderId = ("orderId" in order ? order.orderId : void 0) || ("gatewayTransactionId" in order ? order.gatewayTransactionId : void 0) || null;
     const pixText = ("qrCodeText" in order ? order.qrCodeText : void 0) || ("pixCopyPaste" in order ? order.pixCopyPaste : void 0) || null;
     const payload = {
-      case_id: order.caseId,
+      case_id: caseIdUuid,
       user_id: extras.userId && this.isUuid(extras.userId) ? extras.userId : null,
       reference_id: order.referenceId ?? null,
       pagbank_order_id: orderId,

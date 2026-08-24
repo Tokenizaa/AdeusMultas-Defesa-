@@ -188,6 +188,7 @@ export type Database = {
         Row: {
           ait_number: string
           analysis_json: Json | null
+          app_ref: string | null
           autuador_body: string
           claim_token: string | null
           client_cpf: string | null
@@ -235,6 +236,7 @@ export type Database = {
         Insert: {
           ait_number: string
           analysis_json?: Json | null
+          app_ref?: string | null
           autuador_body: string
           claim_token?: string | null
           client_cpf?: string | null
@@ -282,6 +284,7 @@ export type Database = {
         Update: {
           ait_number?: string
           analysis_json?: Json | null
+          app_ref?: string | null
           autuador_body?: string
           claim_token?: string | null
           client_cpf?: string | null
