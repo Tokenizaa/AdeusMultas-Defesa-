@@ -1,0 +1,17 @@
+{
+  "project": "DefesAi",
+  "max_sessions_per_day": 12,
+  "main_checkout": ".",
+  "smoke": "npx tsc --noEmit 2>&1 | head -100",
+  "invariants_glob": "tests/invariants/**/*.test.ts",
+  "allowed_migration_pattern": "supabase/migrations/",
+  "require_migration_triple": true,
+  "phase_gate": {
+    "require_approved_checkpoint": true,
+    "gate_check_command": "test -f loop/checkpoints/G{n}.approved"
+  },
+  "agents": {
+    "implementer": "gov-implementer",
+    "verifier": "gov-verifier"
+  }
+}
