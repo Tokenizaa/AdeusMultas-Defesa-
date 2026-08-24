@@ -89,7 +89,7 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
     'Geração de URL OAuth com v20.0 e escopos obrigatórios de publicação e insights',
     'OAuth',
     async () => {
-      const url = metaAuthService.generateOAuthUrl('https://defesai.com.br/api/meta/callback');
+      const url = metaAuthService.generateOAuthUrl('https://www.defesai.shop/api/meta/callback');
       if (!url.includes('facebook.com/v20.0/dialog/oauth')) {
         throw new Error(`URL OAuth não usa Graph API v20.0: ${url}`);
       }
