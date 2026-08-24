@@ -76,7 +76,7 @@ export const PrivateHeader: React.FC = () => {
           <div className="flex items-center gap-3 sm:gap-4">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 -ml-2 rounded-lg text-[#071D41] hover:bg-slate-100 focus:ring-2 focus-ring-[#FF6B35] cursor-pointer"
+              className="p-2 -ml-2 rounded-lg text-[#071D41] hover:bg-slate-100 focus:ring-2 focus:ring-[#FF6B35] cursor-pointer"
               aria-label="Abrir menu de navegação"
               aria-expanded={isMenuOpen}
             >
@@ -100,7 +100,7 @@ export const PrivateHeader: React.FC = () => {
                 <h1 className="text-sm sm:text-base font-bold text-[#071D41] tracking-tight flex items-center gap-1.5">
                   <span>Adeus</span>
                   <span className="text-orange-500">Multa</span>
-                  <span className="text-sm font-bold font-mono px-1.5 py-0.2 bg-orange-50 text-orange-100 border border-orange-200 rounded">
+                  <span className="text-sm font-bold font-mono px-1.5 py-0.2 bg-orange-50 text-orange-900 border border-orange-300 rounded">
                     CTB • CONTRAN
                   </span>
                 </h1>
@@ -228,13 +228,13 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/novo-caso');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg bg-orange-50 text-orange-100 font-bold flex items-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-orange-50 text-orange-900 font-bold flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" />
                     Nova Análise de Multa (Gratuita)
                   </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-orange-100" />
+                  <ChevronRight className="w-3.5 h-3.5 text-orange-700" />
                 </button>
               </div>
 
@@ -260,7 +260,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/cases');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-slate-500" />
@@ -273,7 +273,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/knowledge');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Scale className="w-3.5 h-3.5 text-slate-500" />
@@ -286,7 +286,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/marketing');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Bot className="w-3.5 h-3.5 text-slate-500" />
@@ -316,7 +316,7 @@ export const PrivateHeader: React.FC = () => {
                       navigate('/admin/audit');
                       setIsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-purple-50 text-purple-800 flex ions-center justify-between"
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-purple-50 text-purple-800 flex items-center justify-between"
                   >
                     <span>Auditoria & Compliance</span>
                     <ChevronRight className="w-3.5 h-3.5 text-purple-700" />

@@ -22,7 +22,7 @@ export const PrivateAccessibilityBar: React.FC = () => {
             title="Ir para o conteúdo principal (Alt + 1)"
           >
             <span>Ir para o conteúdo</span>
-            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-[9px] rounded font-mono border border-orange-500">
+            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-white text-micro rounded font-mono border border-orange-500">
               1
             </kbd>
           </a>
@@ -33,7 +33,7 @@ export const PrivateAccessibilityBar: React.FC = () => {
             title="Ir para o menu (Alt + 2)"
           >
             <span>Ir para o menu</span>
-            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-[9px] rounded font-mono border border-orange-500">
+            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-white text-micro rounded font-mono border border-orange-500">
               2
             </kbd>
           </a>
@@ -44,7 +44,7 @@ export const PrivateAccessibilityBar: React.FC = () => {
             title="Ir para a busca (Alt + 3)"
           >
             <span>Ir para a busca</span>
-            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-[9px] rounded font-mono border border-orange-500">
+            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-white text-micro rounded font-mono border border-orange-500">
               3
             </kbd>
           </a>
@@ -55,7 +55,7 @@ export const PrivateAccessibilityBar: React.FC = () => {
             title="Ir para o rodapé (Alt + 4)"
           >
             <span>Ir para o rodapé</span>
-            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-[9px] rounded font-mono border border-orange-500">
+            <kbd className="hidden md:inline-block px-1.5 py-0.2 bg-[#0C326F] text-white text-micro rounded font-mono border border-orange-500">
               4
             </kbd>
           </a>
