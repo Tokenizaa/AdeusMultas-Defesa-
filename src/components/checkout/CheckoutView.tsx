@@ -47,6 +47,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     threeDsChallengeRequired?: boolean;
   } | null>(null);
   const [creditCardError, setCreditCardError] = useState<string | null>(null);
+  const [pixError, setPixError] = useState<string | null>(null);
 
   // Dynamic Commercial State
   const [standardPrice, setStandardPrice] = useState<number>(119.90);

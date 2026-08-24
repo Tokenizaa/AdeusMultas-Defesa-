@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { CaseDomain, CaseDocumentData, InfractionData, VehicleData, CaseAnalysis, ProcedureType } from '../../../types';
 import { CreditCardForm } from '../../checkout/CreditCardForm';
-import { PRICING } from '../../../config/pricing';
 import { useAuthFetch } from '../../../hooks/useAuthFetch';
 
 interface DocumentCheckoutStepProps {
@@ -86,8 +85,6 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
 
   // Simulação só aparece para admin E quando o servidor confirma modo de teste
   const canSimulate = isAdmin && testMode;
-
-  const price = PRICING.FALLBACK_PRICE;
 
   // Load PIX when payment method is PIX
   useEffect(() => {
