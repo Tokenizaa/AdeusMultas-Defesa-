@@ -87,7 +87,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   // Simulação só aparece para admin E quando o servidor confirma modo de teste
   const canSimulate = isAdmin && testMode;
 
-  const price = PRICING.DEFAULT_PRICE;
+  const price = PRICING.FALLBACK_PRICE;
 
   // Load PIX when payment method is PIX
   useEffect(() => {
@@ -101,24 +101,27 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             caseId: currentCaseId || `case_${Date.now()}`,
-            amount: price,
+            serviceType,
             customerName: documentData.applicantName,
             customerEmail: documentData.applicantEmail,
             customerCpf: documentData.applicantCpf,
           }),
         });
         const data = await res.json();
-        if (data.success) {
-          setPixData(data);
-        } else {
-          setPixError(data.error || 'Não foi possível gerar o QR Code PIX. Tente novamente.');
+        if (!res.ok || !data.success) {
+          throw new Error(
+            data.error || data.hint || 'Não foi possível gerar o PIX. Verifique o catálogo comercial.'
+          );
         }
-      } catch {
-        setPixError('Falha de conexão ao gerar o QR Code PIX. Verifique sua internet e tente novamente.');
+        setPixData(data);
+      } catch (err: any) {
+        const msg = err?.message || 'Falha ao gerar PIX. Tente novamente.';
+        setPixError(msg);
+        console.error('Error fetching PIX:', msg);
       }
     }
     loadPix();
-  }, [currentCaseId, documentData.applicantCpf, documentData.applicantName, documentData.applicantEmail, paymentMethod, pixReloadKey]);
+  }, [currentCaseId, serviceType, documentData.applicantCpf, documentData.applicantName, documentData.applicantEmail, paymentMethod, pixReloadKey]);
 
   const gatewayLabel = pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank';
 

@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import { CaseDomain } from '../../types';
 import { CreditCardForm } from './CreditCardForm';
-import { PRICING } from '../../config/pricing';
 
 interface CheckoutViewProps {
   currentCase: CaseDomain;
@@ -51,7 +50,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   // Dynamic Commercial State
   const [standardPrice, setStandardPrice] = useState<number>(119.90);
-  const [basePrice, setBasePrice] = useState<number>(PRICING.DEFAULT_PRICE);
+  const [basePrice, setBasePrice] = useState<number>(89.90); // fallback local até carregar a API do catálogo
   const [couponCode, setCouponCode] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -90,6 +89,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   }, [currentCase.id, currentCase.clientEmail]);
 
+  // Resolve serviceType do case (fonte canônica — não hardcoded)
+  const serviceType = (currentCase as any).serviceType || (currentCase as any).procedureType || 'defesa_previa';
+
   // Load Pricing from Commercial Service
   useEffect(() => {
     async function loadPricing() {
@@ -97,10 +99,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         const res = await fetch('/api/admin/commercial/prices');
         if (res.ok) {
           const prices = await res.json();
-          const target = prices.find((p: any) => p.serviceType === 'recurso_multa') || prices[0];
+          const target = prices.find((p: any) => p.serviceType === serviceType) || prices[0];
           if (target) {
             setStandardPrice(target.standardPrice || 119.90);
-            setBasePrice(target.promotionalPrice || target.standardPrice || PRICING.DEFAULT_PRICE);
+            setBasePrice(target.promotionalPrice || target.standardPrice || 89.90);
           }
         }
       } catch (err) {
@@ -108,7 +110,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       }
     }
     loadPricing();
-  }, []);
+  }, [serviceType]);
 
   const validateCouponCode = async (codeToTest: string) => {
     const code = codeToTest.trim().toUpperCase();
@@ -125,7 +127,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         body: JSON.stringify({
           code,
           orderAmount: basePrice,
-          serviceType: 'recurso_multa',
+          serviceType,
           userId: currentCase.clientEmail || 'guest',
         }),
       });
@@ -168,28 +170,32 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     if (paymentMethod !== 'pix') return;
 
     async function loadPix() {
+      setPixError(null);
       try {
         const res = await fetch('/api/payments/pix/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             caseId: currentCase.id,
-            amount: finalAmount,
+            serviceType,
             customerCpf: currentCase.clientCpf,
             customerName: currentCase.clientName,
             customerEmail: currentCase.clientEmail,
           }),
         });
         const data = await res.json();
-        if (data.success) {
-          setPixData(data);
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || data.hint || 'Não foi possível gerar o PIX.');
         }
-      } catch (err) {
-        console.error('Error fetching PIX:', err);
+        setPixData(data);
+      } catch (err: any) {
+        const msg = err?.message || 'Erro ao gerar PIX. Tente novamente.';
+        setPixError(msg);
+        console.error('Error fetching PIX:', msg);
       }
     }
     loadPix();
-  }, [currentCase.id, currentCase.clientCpf, currentCase.clientName, currentCase.clientEmail, paymentMethod, finalAmount]);
+  }, [currentCase.id, currentCase.clientCpf, currentCase.clientName, currentCase.clientEmail, paymentMethod, finalAmount, serviceType]);
 
   const handleCopyPix = () => {
     if (pixData?.pixCopyPasteString) {
