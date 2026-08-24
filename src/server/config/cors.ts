@@ -11,7 +11,7 @@ export const allowedOrigins = [
   'http://localhost:3000',
   `http://localhost:${PORT}`,
   process.env.PRODUCTION_URL,
-  'https://defesai.com.br',
+  'https://www.defesai.shop',
 ].filter(Boolean) as string[];
 
 /**
@@ -41,6 +41,6 @@ export const corsMiddleware = cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-user-id', 'x-user-role', 'x-user-email', 'x-user-name'],
 });
 

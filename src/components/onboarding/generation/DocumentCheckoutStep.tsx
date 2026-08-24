@@ -18,6 +18,7 @@ import {
 import { CaseDomain, CaseDocumentData, InfractionData, VehicleData, CaseAnalysis, ProcedureType } from '../../../types';
 import { CreditCardForm } from '../../checkout/CreditCardForm';
 import { PRICING } from '../../../config/pricing';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 
 interface DocumentCheckoutStepProps {
   currentCaseId?: string;
@@ -27,6 +28,8 @@ interface DocumentCheckoutStepProps {
   analysis: CaseAnalysis;
   serviceType: ProcedureType;
   isAdmin?: boolean;
+  /** Id do usuário autenticado (Supabase auth.uid) — vincula cases.user_id */
+  userId?: string;
   onPaymentSuccess: (finalCase: CaseDomain) => void;
   onBack: () => void;
 }
@@ -41,9 +44,11 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   analysis,
   serviceType,
   isAdmin = false,
+  userId = '',
   onPaymentSuccess,
   onBack,
 }) => {
+  const authFetch = useAuthFetch();
   const [copied, setCopied] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [pixData, setPixData] = useState<{
@@ -148,6 +153,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
       clientEmail: documentData.applicantEmail,
       clientPhone: documentData.applicantPhone,
       clientCpf: documentData.applicantCpf,
+      // Identidade do usuário autenticado — mapeada pelo backend para cases.user_id
+      userId: userId || undefined,
       status: 'defesa_pronta',
       currentStage: 3,
       serviceType,
@@ -189,7 +196,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     // 1. Create / Persist Case if not existing
     const casePayload = buildCasePayload();
 
-    const saveRes = await fetch('/api/cases', {
+    const saveRes = await authFetch('/api/cases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(casePayload),

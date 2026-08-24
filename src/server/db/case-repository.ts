@@ -40,6 +40,16 @@ function toNumeric(value?: number | null): number | null {
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
 }
 
+/**
+ * Valida formato UUID v4-ish — mesmo padrão usado por payment-repository.
+ * Evita persistir ids mock de dev (ex.: 'usr_admin_defesai') que violariam
+ * o tipo uuid da coluna cases.user_id e derrubariam o upsert inteiro.
+ */
+function isUuid(value?: string | null): boolean {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export class CaseRepository {
   private rows: Map<string, CaseRow> = new Map();
   private client: SupabaseClient<Database> | null = getSupabaseServerClient();
@@ -78,6 +88,7 @@ export class CaseRepository {
       client_email: row.client_email ?? null,
       client_phone: row.client_phone ?? null,
       client_cpf: row.client_cpf ?? null,
+      user_id: isUuid(row.user_id) ? row.user_id : null,
       status: row.status,
       current_stage: row.current_stage,
       service_type: row.service_type,
@@ -166,6 +177,7 @@ export class CaseRepository {
       client_email: c.client_email ?? undefined,
       client_phone: c.client_phone ?? undefined,
       client_cpf: c.client_cpf ?? undefined,
+      user_id: c.user_id ?? undefined,
       status: c.status,
       current_stage: c.current_stage,
       service_type: c.service_type,

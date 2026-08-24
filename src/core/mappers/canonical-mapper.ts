@@ -67,6 +67,7 @@ export class CanonicalMapper {
       clientEmail: row.client_email,
       clientPhone: row.client_phone,
       clientCpf: row.client_cpf,
+      userId: row.user_id,
       status: (row.status as CaseStatus) || 'novo',
       currentStage: (row.current_stage as JourneyStage) || 1,
       serviceType: (row.service_type as ProcedureType) || 'defesa_previa',

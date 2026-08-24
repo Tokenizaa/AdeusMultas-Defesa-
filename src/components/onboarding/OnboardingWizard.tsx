@@ -19,6 +19,7 @@ import {
 } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
 import {
   UserSituation,
   UserProcessStage,
@@ -101,6 +102,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 }) => {
   const { navigate } = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
+  const authFetch = useAuthFetch();
+  // Canal duplo de admin: prop explícita do pai (legado) OU sessão autenticada
+  // com role=admin (AuthContext). Corrige o caso em que App.tsx passa `isAdmin`
+  // mas o wizard lia uma prop inexistente (`isAdminFromParent`), deixando todos
+  // os botões de teste invisíveis.
+  const effectiveIsAdmin = isAdminFromParent || isAdmin;
 
   // Load persisted wizard state if available (e.g., after email confirmation)
   const savedState = loadWizardState();
@@ -344,7 +351,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleAnalysisCompleted = async () => {
     try {
-      const res = await fetch('/api/cases', {
+      const res = await authFetch('/api/cases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -353,6 +360,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           infraction: infractionData,
           vehicle: vehicleData,
           isAnonymous: !isAuthenticated,
+          // Identidade do usuário autenticado — mapeada pelo backend para
+          // cases.user_id (CanonicalMapper.domainToRow). Ausente ⇒ caso anônimo.
+          userId: user?.id,
           userNome: user?.name || leadName,
           userEmail: user?.email,
           status: 'analisado',
@@ -444,7 +454,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // If case was already saved on backend, link it to the user
     if (savedCaseId) {
       try {
-        await fetch('/api/cases/claim', {
+        await authFetch('/api/cases/claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -582,7 +592,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(2);
             }
           }}
-          isAdmin={isAdminFromParent}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -607,7 +617,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(3);
             }
           }}
-          isAdmin={isAdminFromParent}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -619,7 +629,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onNext={handleRunAnalysis}
           onBack={() => setStep(4)}
           onChangeCategory={() => setStep(3)}
-          isAdmin={isAdminFromParent}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -652,7 +662,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onUpdateDocumentData={setDocumentData}
           onNext={() => setStep(9)}
           onBack={() => setStep(7)}
-          isAdmin={isAdminFromParent}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -677,7 +687,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           vehicleData={vehicleData}
           analysis={caseAnalysis}
           serviceType={mappedProcedure}
-          isAdmin={isAdminFromParent}
+          isAdmin={effectiveIsAdmin}
+          userId={user?.id}
           onPaymentSuccess={handlePaymentSuccess}
           onBack={() => setStep(9)}
         />
