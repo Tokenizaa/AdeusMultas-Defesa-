@@ -348,9 +348,9 @@ export interface MarketingAgentState {
 export interface EditorialContentItem {
   id: string;
   title: string;
-  channel: 'instagram' | 'blog' | 'tiktok' | 'linkedin' | 'email';
-  format: 'carrossel' | 'artigo_seo' | 'reels_roteiro' | 'infografico' | 'newsletter';
-  legalTheme: string;
+  channel: 'instagram' | 'blog' | 'tiktok' | 'linkedin' | 'email' | 'facebook' | string;
+  format: 'carrossel' | 'artigo_seo' | 'reels_roteiro' | 'infografico' | 'newsletter' | 'post_imagem' | 'story' | string;
+  legalTheme?: string;
   infractionTargetCode?: string;
   status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
   scheduledDate: string;
@@ -360,6 +360,9 @@ export interface EditorialContentItem {
   visualPrompt: string;
   authorAgent: string;
   qualityReviewScore: number;
+  imageUrl?: string | null;
+  mediaUrl?: string | null;
+  visual_prompt?: string | null;
 }
 
 export interface BrandIdentityConfig {

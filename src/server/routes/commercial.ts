@@ -16,9 +16,9 @@ router.use(authenticateToken);
 // POST /api/commercial/offers/resolve — resolve a oferta comercial canônica para um serviço.
 // Usado pelo checkout para NÃO depender de preços vindos do frontend.
 // O backend valida: serviceType, regras de elegibilidade, preço do catálogo.
-router.post('/offers/resolve', authenticateToken, (req, res) => {
+router.post('/offers/resolve', (req, res) => {
   try {
-    const { serviceType } = req.body ?? {};
+    const { serviceType, stageId, documentCount, couponCode, userId: bodyUserId } = req.body ?? {};
 
     if (!serviceType || typeof serviceType !== 'string') {
       return res.status(400).json({
@@ -27,7 +27,15 @@ router.post('/offers/resolve', authenticateToken, (req, res) => {
       });
     }
 
-    const result = commercialService.resolveCommercialOffer({ serviceType });
+    const userId = req.user?.id || bodyUserId;
+    const result = commercialService.resolveCommercialOffer({
+      serviceType,
+      stageId,
+      documentCount: typeof documentCount === 'number' ? documentCount : undefined,
+      couponCode,
+      userId,
+    });
+
     if (!result.offer) {
       return res.status(404).json({
         error: result.reason || `Serviço "${serviceType}" não possui oferta comercial disponível.`,
@@ -40,7 +48,7 @@ router.post('/offers/resolve', authenticateToken, (req, res) => {
       ...result.offer,
       available: true,
     };
-    res.json({ offer });
+    res.json({ offer, breakdown: result.breakdown });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

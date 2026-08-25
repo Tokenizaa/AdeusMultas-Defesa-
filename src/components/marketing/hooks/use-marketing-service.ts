@@ -58,8 +58,9 @@ interface UseMarketingServiceReturn {
   
   // Actions
   refreshMarketingData: () => Promise<void>;
+  createManualContent: (initialData?: Partial<EditorialContentItem>) => Promise<EditorialContentItem | null>;
   updateContentStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
-  updateContentFields: (id: string, fields: { copyText?: string; title?: string; channel?: string }, versionNote?: { agent?: string; author?: string; changes?: string }) => Promise<void>;
+  updateContentFields: (id: string, fields: Partial<EditorialContentItem>, versionNote?: { agent?: string; author?: string; changes?: string }) => Promise<void>;
   fetchContentVersions: (id: string) => Promise<{ id: string; version: number; agent: string; author: string; changes: string; createdAt: string }[]>;
   runCycleTick: () => Promise<void>;
   generateContent: (theme: string, channel: string, format: string) => Promise<void>;
@@ -160,8 +161,39 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   // Alias compatível: refreshMarketingData = refreshStatus
   const refreshMarketingData = refreshStatus;
 
+  // Criação manual de conteúdo
+  const createManualContent = useCallback(async (initialData?: Partial<EditorialContentItem>) => {
+    try {
+      const res = await fetch('/api/marketing/contents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: initialData?.title || 'Novo Conteúdo de Marketing',
+          copyText: initialData?.copyText || 'Escreva o texto do post e orientações jurídicas aqui...',
+          channel: initialData?.channel || 'instagram',
+          format: initialData?.format || 'carrossel',
+          status: initialData?.status || 'rascunho',
+          hashtags: initialData?.hashtags || ['#AdeusMulta', '#DireitoDeTransito', '#CTB'],
+          scheduledDate: initialData?.scheduledDate || new Date(Date.now() + 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 16),
+          imageUrl: initialData?.imageUrl || null,
+          mediaUrl: initialData?.mediaUrl || null,
+          visualPrompt: initialData?.visualPrompt || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.content) {
+        setContents((prev) => [data.content, ...prev]);
+        setSelectedContent(data.content);
+        return data.content as EditorialContentItem;
+      }
+    } catch (err) {
+      console.error('Error creating manual content:', err);
+    }
+    return null;
+  }, []);
+
   // Edição de texto/título com registro de versão (editor + macros IA)
-  const updateContentFields = useCallback(async (id: string, fields: { copyText?: string; title?: string; channel?: string }, versionNote?: { agent?: string; author?: string; changes?: string }) => {
+  const updateContentFields = useCallback(async (id: string, fields: Partial<EditorialContentItem>, versionNote?: { agent?: string; author?: string; changes?: string }) => {
     const res = await fetch(`/api/marketing/contents/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -356,6 +388,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
     
     // Actions
     refreshMarketingData,
+    createManualContent,
     updateContentStatus,
     updateContentFields,
     fetchContentVersions,

@@ -22,6 +22,7 @@ export type LogService =
   | 'ocr'
   | 'pipeline'
   | 'marketing'
+  | 'messaging'
   | 'system'
   | 'auth'
   | 'communication'
