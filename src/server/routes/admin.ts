@@ -10,6 +10,7 @@ import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
+import { adminQueryService } from '../services/admin-query-service';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
@@ -122,40 +123,18 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   });
 });
 
-router.get(['/payments', '/admin/payments'], (req, res) => {
-  const domains: CaseDomain[] = [];
-  for (const row of caseRepository.values()) {
-    domains.push(CanonicalMapper.rowToDomain(row));
+router.get(['/payments', '/admin/payments'], async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = (req.query.status as string) || 'all';
+
+    const result = await adminQueryService.getPayments({ limit, offset, status });
+    res.json(result);
+  } catch (err: any) {
+    logger.error('payments', 'admin', 'payments', `Erro ao buscar pagamentos: ${err.message}`);
+    res.status(500).json({ error: 'Erro ao buscar pagamentos' });
   }
-
-  // Combine pagBank stored orders and cases
-  const paymentsList = domains.map((c, index) => {
-    const isPaid = Boolean(c.isPaid) || (c.payment?.status as string) === 'paid' || (c.payment?.status as string) === 'approved';
-    return {
-      id: c.payment?.transactionId || `ord_pagbank_${c.id}`,
-      caseId: c.id,
-      caseTitle: c.title || `Recurso Auto ${c.infraction?.aitNumber || c.id}`,
-      customerName: c.clientName || 'Condutor DefesAi',
-      customerEmail: c.clientEmail || 'contato@www.defesai.shop',
-      customerCpf: c.clientCpf || '***.***.***-**',
-      amount: c.payment?.amount || PRICING.FALLBACK_PRICE,
-      status: isPaid ? 'PAID' : (c.payment?.status === 'pending' ? 'PENDING' : 'WAITING'),
-      method: c.payment?.paymentMethod || 'PIX',
-      createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 3600000).toISOString(),
-      paidAt: isPaid ? (c.paidAt || c.updatedAt || new Date().toISOString()) : null,
-      externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
-      infractionCode: c.infraction?.infractionCode || '745-50',
-      organ: c.infraction?.autuadorBody || 'DETRAN',
-    };
-  });
-
-  res.json({
-    payments: paymentsList,
-    totalCount: paymentsList.length,
-    totalVolume: paymentsList.reduce((acc, p) => p.status === 'PAID' ? acc + p.amount : acc, 0),
-    paidCount: paymentsList.filter(p => p.status === 'PAID').length,
-    pendingCount: paymentsList.filter(p => p.status === 'PENDING' || p.status === 'WAITING').length,
-  });
 });
 
 router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], async (req, res) => {

@@ -16,15 +16,26 @@ import { logger } from '../observability/logger';
 import { Database } from '../../types/supabase';
 
 let clientInstance: SupabaseClient<Database> | null = null;
-let initialized = false;
 
-export function getSupabaseServerClient(): SupabaseClient<Database> | null {
-  if (initialized) return clientInstance;
-  initialized = true;
+/**
+ * Inicializa (ou reinicializa) o client Supabase server-side.
+ * Se a primeira chamada ocorre antes do dotenv injetar envs,
+ * clientInstance fica null — a próxima chamada re-tenta automaticamente.
+ *
+ * Usa process.env diretamente porque o configService pode ter
+ * cacheado valores vazios durante init (antes do dotenv injetar).
+ */
+function ensureClient(): SupabaseClient<Database> | null {
+  if (clientInstance) return clientInstance;
 
-  const url = configService.get('VITE_SUPABASE_URL');
+  // Prefer process.env (sempre atualizado) sobre configService (pode ter cache stale)
+  const url =
+    process.env.VITE_SUPABASE_URL ||
+    configService.get('VITE_SUPABASE_URL');
   const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY') ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
     configService.get('VITE_SUPABASE_ANON_KEY');
 
   if (url && serviceKey && url.startsWith('https://')) {
@@ -36,9 +47,12 @@ export function getSupabaseServerClient(): SupabaseClient<Database> | null {
       clientInstance = null;
     }
   } else {
-    logger.info('supabase', 'db_server', 'init', 'Supabase não configurado. Operando via Store local (memória).');
     clientInstance = null;
   }
 
   return clientInstance;
+}
+
+export function getSupabaseServerClient(): SupabaseClient<Database> | null {
+  return ensureClient();
 }

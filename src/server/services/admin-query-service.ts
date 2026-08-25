@@ -241,9 +241,10 @@ export class AdminQueryService {
     }
 
     const payments: PaginatedPayments['payments'] = data.map((row: any) => ({
+      // reference_id armazena 'defesai_case_<domainId>' — extrai o domainId para o frontend
       id: row.pagbank_order_id || row.id,
-      caseId: row.case_id,
-      caseTitle: `Recurso Auto ${row.case_id}`,
+      caseId: row.reference_id?.replace('defesai_case_', '') || row.case_id,
+      caseTitle: `Recurso Auto ${row.reference_id?.replace('defesai_case_', '') || row.case_id}`,
       customerName: 'Condutor DefesAi',
       customerEmail: 'contato@www.defesai.shop',
       customerCpf: '***.***.***-**',
