@@ -461,7 +461,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
     }
 
     // Chamar SECURITY DEFINER function para atualizar BOTH user_profiles e auth.users
-    const { error: rpcError } = await (supabase.rpc as any)('admin_update_user_role_by_email', {
+    const { error: rpcError } = await supabase.rpc('admin_update_user_role_by_email', {
       target_user_email: email,
       new_role: role,
     });

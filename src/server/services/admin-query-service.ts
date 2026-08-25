@@ -385,35 +385,6 @@ export class AdminQueryService {
       previewCount: documentsList.filter((d) => d.status === 'GERADO_PREVIEW').length,
     };
   }
-
-  // ==========================================
-  // Usuários (placeholder — requer user_profaces sincronizado)
-  // ==========================================
-
-  async getUsers(_params?: { search?: string; role?: string }): Promise<any[]> {
-    // TODO: Substituir por query a user_profiles quando houver sincronização com auth.users
-    // Por enquanto, retornar emails únicos dos casos como proxy de usuários.
-    const domains: CaseDomain[] = [];
-    for (const row of caseRepository.values()) {
-      domains.push(CanonicalMapper.rowToDomain(row));
-    }
-
-    const usersMap = new Map<string, any>();
-    domains.forEach((c) => {
-      const email = c.clientEmail || c.userEmail;
-      if (!email) return;
-      if (usersMap.has(email)) return;
-      usersMap.set(email, {
-        id: c.userId || email,
-        name: c.clientName || c.userEmail?.split('@')[0] || 'Usuário',
-        email,
-        role: c.userId === 'usr_admin_defesai' ? 'admin' : 'citizen',
-        createdAt: c.createdAt,
-      });
-    });
-
-    return Array.from(usersMap.values());
-  }
 }
 
 export const adminQueryService = new AdminQueryService();
