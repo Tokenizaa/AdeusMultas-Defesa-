@@ -1219,12 +1219,10 @@ var configService = new ConfigService();
 // src/server/db/supabase-server.ts
 init_logger();
 var clientInstance = null;
-var initialized = false;
-function getSupabaseServerClient() {
-  if (initialized) return clientInstance;
-  initialized = true;
-  const url = configService.get("VITE_SUPABASE_URL");
-  const serviceKey = configService.get("SUPABASE_SERVICE_ROLE_KEY") || configService.get("VITE_SUPABASE_ANON_KEY");
+function ensureClient() {
+  if (clientInstance) return clientInstance;
+  const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL");
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY") || process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
   if (url && serviceKey && url.startsWith("https://")) {
     try {
       clientInstance = createClient(url, serviceKey);
@@ -1234,10 +1232,12 @@ function getSupabaseServerClient() {
       clientInstance = null;
     }
   } else {
-    logger.info("supabase", "db_server", "init", "Supabase n\xE3o configurado. Operando via Store local (mem\xF3ria).");
     clientInstance = null;
   }
   return clientInstance;
+}
+function getSupabaseServerClient() {
+  return ensureClient();
 }
 
 // src/server/db/uuid-v5.ts
@@ -3492,6 +3492,247 @@ var aiProviderManager = new AiProviderManager();
 // src/server/routes/admin.ts
 init_logger();
 
+// src/config/pricing.ts
+var PRICING2 = {
+  DEFAULT_PRICE: 89.9,
+  ORIGINAL_PRICE: 197
+};
+
+// src/server/services/admin-query-service.ts
+var AdminQueryService = class {
+  // ==========================================
+  // Métricas principais do Dashboard
+  // ==========================================
+  getDashboardMetrics() {
+    const domains = [];
+    for (const row of caseRepository.values()) {
+      domains.push(CanonicalMapper.rowToDomain(row));
+    }
+    const totalCases = domains.length;
+    const analyzedCases = domains.filter(
+      (c) => Boolean(c.analysis) || c.status !== "novo"
+    ).length;
+    const defenseReadyCases = domains.filter(
+      (c) => c.status === "defense_ready" || c.status === "defesa_pronta" || Boolean(c.defenseDraft)
+    ).length;
+    const paidCasesList = domains.filter(
+      (c) => Boolean(c.isPaid) || c.payment?.status === "paid" || c.payment?.status === "approved"
+    );
+    const paidCases = paidCasesList.length;
+    const totalRevenue = paidCasesList.reduce((sum, c) => {
+      const amount = c.payment?.amount;
+      return typeof amount === "number" && !isNaN(amount) && amount > 0 ? sum + amount : sum;
+    }, 0);
+    const conversionRate = totalCases > 0 ? Number((paidCases / totalCases * 100).toFixed(1)) : 0;
+    const analysisToDocRate = analyzedCases > 0 ? Number((defenseReadyCases / analyzedCases * 100).toFixed(1)) : 0;
+    const metricsOverview = metricsService.getOverview();
+    const uniqueEmails = new Set(
+      domains.filter((c) => c.clientEmail || c.userEmail).map((c) => c.clientEmail || c.userEmail)
+    );
+    const totalUsers = uniqueEmails.size;
+    const thesesSet = /* @__PURE__ */ new Set();
+    domains.forEach((c) => {
+      if (c.analysis?.recommendedArguments) {
+        c.analysis.recommendedArguments.forEach((arg) => thesesSet.add(arg.id));
+      }
+      if (c.defenseDraft) {
+        const dd = c.defenseDraft;
+        if (dd.selectedArgumentIds) {
+          dd.selectedArgumentIds.forEach((id) => thesesSet.add(String(id)));
+        }
+      }
+    });
+    const thesesCount = thesesSet.size;
+    return {
+      totalCases,
+      analyzedCases,
+      defenseReadyCases,
+      paidCases,
+      totalRevenue,
+      conversionRate,
+      analysisToDocRate,
+      aiErrorRatePercent: metricsOverview.errorRatePercent,
+      totalAiCalls: metricsOverview.totalAiRequests,
+      pendingJobs: 0,
+      systemUptimePercent: 0,
+      thesesCount,
+      totalUsers
+    };
+  }
+  // ==========================================
+  // Casos recentes (para dashboard)
+  // ==========================================
+  getRecentCases(limit = 6) {
+    const domains = [];
+    for (const row of caseRepository.values()) {
+      domains.push(CanonicalMapper.rowToDomain(row));
+    }
+    domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return domains.slice(0, limit);
+  }
+  // ==========================================
+  // Status de saúde dos serviços
+  // ==========================================
+  async getSystemHealth() {
+    const healthReport = await healthService.getHealth(false);
+    const metrics = metricsService.getOverview();
+    return {
+      services: healthReport.services,
+      ai: {
+        primaryProvider: "nvidia",
+        fallbackProvider: "9router",
+        nvidiaHealthy: healthReport.services.find((s) => s.id === "nvidia")?.status === "HEALTHY" || false,
+        nineRouterHealthy: healthReport.services.find((s) => s.id === "9router")?.status === "HEALTHY" || false,
+        fallbackRatePercent: metrics.fallbackRatePercent,
+        p95LatencyMs: metrics.p95LatencyMs
+      },
+      integrations: {
+        supabase: healthReport.services.find((s) => s.id === "supabase_db")?.status || "UNKNOWN",
+        pagbank: healthReport.services.find((s) => s.id === "pagbank")?.status || "UNKNOWN",
+        meta: healthReport.services.find((s) => s.id === "meta")?.status || "UNKNOWN",
+        ocr: healthReport.services.find((s) => s.id === "ocr")?.status || "UNKNOWN",
+        whatsapp: healthReport.services.find((s) => s.id === "whatsapp")?.status || "UNKNOWN"
+      }
+    };
+  }
+  // ==========================================
+  // Pagamentos com paginação (fonte: payment_orders no Supabase)
+  // ==========================================
+  async getPayments(params) {
+    const limit = Math.min(Math.max(params.limit ?? 50, 10), 200);
+    const offset = Math.max(params.offset ?? 0, 0);
+    const statusFilter = params.status && params.status !== "all" ? params.status : null;
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return this.getPaymentsFromMemory({ limit, offset, status: statusFilter || void 0 });
+    }
+    let query = supabase.from("payment_orders").select("*", { count: "exact" }).order("created_at", { ascending: false });
+    if (statusFilter) {
+      query = query.eq("status", statusFilter.toUpperCase());
+    }
+    const from = offset;
+    const to = offset + limit - 1;
+    query = query.range(from, to);
+    const { data, error, count } = await query;
+    if (error || !data || data.length === 0) {
+      return this.getPaymentsFromMemory({ limit, offset, status: statusFilter || void 0 });
+    }
+    const payments = data.map((row) => ({
+      // reference_id armazena 'defesai_case_<domainId>' — extrai o domainId para o frontend
+      id: row.pagbank_order_id || row.id,
+      caseId: row.reference_id?.replace("defesai_case_", "") || row.case_id,
+      caseTitle: `Recurso Auto ${row.reference_id?.replace("defesai_case_", "") || row.case_id}`,
+      customerName: "Condutor DefesAi",
+      customerEmail: "contato@www.defesai.shop",
+      customerCpf: "***.***.***-**",
+      amount: Number(row.amount || 0),
+      status: row.status === "PAID" ? "PAID" : row.status === "PENDING" ? "PENDING" : row.status === "DECLINED" ? "DECLINED" : row.status === "CANCELED" ? "CANCELED" : "WAITING",
+      method: row.payment_method || "PIX",
+      createdAt: row.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+      paidAt: row.paid_at,
+      externalId: `PAGBANK_TX_${(row.case_id || "").substring(0, 10).toUpperCase()}`,
+      infractionCode: "745-50",
+      organ: "DETRAN"
+    }));
+    const totalCount = count ?? payments.length;
+    const totalVolume = payments.filter((p) => p.status === "PAID").reduce((acc, p) => acc + p.amount, 0);
+    const paidCount = payments.filter((p) => p.status === "PAID").length;
+    const pendingCount = payments.filter((p) => p.status === "PENDING" || p.status === "WAITING").length;
+    return {
+      payments,
+      totalCount,
+      totalVolume,
+      paidCount,
+      pendingCount,
+      pagination: { limit, offset, hasMore: offset + limit < totalCount }
+    };
+  }
+  /** Fallback: lê pagamentos do caseRepository em memória (comportamento antigo). */
+  getPaymentsFromMemory(params) {
+    const { limit, offset, status } = params;
+    const domains = [];
+    for (const row of caseRepository.values()) {
+      domains.push(CanonicalMapper.rowToDomain(row));
+    }
+    const allPayments = domains.map((c, index) => {
+      const isPaid = Boolean(c.isPaid) || c.payment?.status === "paid" || c.payment?.status === "approved";
+      return {
+        id: c.payment?.transactionId || `ord_pagbank_${c.id}`,
+        caseId: c.id,
+        caseTitle: c.title || `Recurso Auto ${c.infraction?.aitNumber || c.id}`,
+        customerName: c.clientName || "Condutor DefesAi",
+        customerEmail: c.clientEmail || "contato@www.defesai.shop",
+        customerCpf: c.clientCpf || "***.***.***-**",
+        amount: c.payment?.amount || PRICING2.DEFAULT_PRICE,
+        status: isPaid ? "PAID" : c.payment?.status === "pending" ? "PENDING" : "WAITING",
+        method: c.payment?.paymentMethod || "PIX",
+        createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 36e5).toISOString(),
+        paidAt: isPaid ? c.paidAt || c.updatedAt || (/* @__PURE__ */ new Date()).toISOString() : null,
+        externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
+        infractionCode: c.infraction?.infractionCode || "745-50",
+        organ: c.infraction?.autuadorBody || "DETRAN"
+      };
+    });
+    const totalCount = allPayments.length;
+    const totalVolume = allPayments.reduce((acc, p) => p.status === "PAID" ? acc + p.amount : acc, 0);
+    const paidCount = allPayments.filter((p) => p.status === "PAID").length;
+    const pendingCount = allPayments.filter((p) => p.status === "PENDING" || p.status === "WAITING").length;
+    let paginatedPayments = allPayments.slice(offset, offset + limit);
+    if (status) {
+      paginatedPayments = paginatedPayments.filter((p) => p.status === status);
+    }
+    return {
+      payments: paginatedPayments,
+      totalCount,
+      totalVolume,
+      paidCount,
+      pendingCount,
+      pagination: { limit, offset, hasMore: offset + limit < totalCount }
+    };
+  }
+  // ==========================================
+  // Documentos gerados
+  // ==========================================
+  getDocuments(caseId) {
+    let domains = [];
+    for (const row of caseRepository.values()) {
+      domains.push(CanonicalMapper.rowToDomain(row));
+    }
+    if (caseId) {
+      domains = domains.filter((c) => c.id === caseId);
+    }
+    const documentsList = domains.map((c) => {
+      const hasDraft = Boolean(c.defenseDraft);
+      return {
+        id: `doc_${c.id}`,
+        caseId: c.id,
+        title: c.title || `Peti\xE7\xE3o Auto ${c.infraction?.aitNumber || c.id}`,
+        clientName: c.clientName || "Condutor DefesAi",
+        clientCpf: c.clientCpf || "000.000.000-00",
+        aitNumber: c.infraction?.aitNumber || "1B892014",
+        infractionCode: c.infraction?.infractionCode || "745-50",
+        infractionDescription: c.infraction?.description || "Excesso de velocidade",
+        organ: c.infraction?.autuadorBody || "DETRAN-SP",
+        procedureType: c.serviceType || "defesa_previa",
+        procedureLabel: c.serviceType === "conversao_advertencia" ? "Convers\xE3o em Advert\xEAncia (Art. 267 CTB)" : c.serviceType === "recurso_jari" ? "Recurso JARI (1\xAA Inst\xE2ncia)" : "Defesa Pr\xE9via (Autua\xE7\xE3o)",
+        status: hasDraft ? c.isPaid ? "LIBERADO_PAGO" : "GERADO_PREVIEW" : "PENDENTE_DADOS",
+        thesesCount: c.analysis?.recommendedArguments?.length || (c.defenseDraft?.selectedArgumentIds?.length || 2),
+        engine: "Determin\xEDstico CTB + IA Reasoning",
+        generatedAt: c.updatedAt || c.createdAt,
+        draftText: c.defenseDraft?.fullDraftText || c.defenseDraft?.factsNarrative || "",
+        vehiclePlate: c.vehicle?.plate || "SEM PLACA"
+      };
+    });
+    return {
+      documents: documentsList,
+      totalCount: documentsList.length,
+      readyCount: documentsList.filter((d) => d.status === "LIBERADO_PAGO").length,
+      previewCount: documentsList.filter((d) => d.status === "GERADO_PREVIEW").length
+    };
+  }
+};
+var adminQueryService = new AdminQueryService();
+
 // src/integrations/meta/adapters/meta-adapter.ts
 init_logger();
 
@@ -4927,37 +5168,17 @@ router.get(["/overview", "/admin/overview"], async (req, res) => {
     }
   });
 });
-router.get(["/payments", "/admin/payments"], (req, res) => {
-  const domains = [];
-  for (const row of caseRepository.values()) {
-    domains.push(CanonicalMapper.rowToDomain(row));
+router.get(["/payments", "/admin/payments"], async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    const status = req.query.status || "all";
+    const result = await adminQueryService.getPayments({ limit, offset, status });
+    res.json(result);
+  } catch (err) {
+    logger.error("payments", "admin", "payments", `Erro ao buscar pagamentos: ${err.message}`);
+    res.status(500).json({ error: "Erro ao buscar pagamentos" });
   }
-  const paymentsList = domains.map((c, index) => {
-    const isPaid = Boolean(c.isPaid) || c.payment?.status === "paid" || c.payment?.status === "approved";
-    return {
-      id: c.payment?.transactionId || `ord_pagbank_${c.id}`,
-      caseId: c.id,
-      caseTitle: c.title || `Recurso Auto ${c.infraction?.aitNumber || c.id}`,
-      customerName: c.clientName || "Condutor DefesAi",
-      customerEmail: c.clientEmail || "contato@www.defesai.shop",
-      customerCpf: c.clientCpf || "***.***.***-**",
-      amount: c.payment?.amount || PRICING.FALLBACK_PRICE,
-      status: isPaid ? "PAID" : c.payment?.status === "pending" ? "PENDING" : "WAITING",
-      method: c.payment?.paymentMethod || "PIX",
-      createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 36e5).toISOString(),
-      paidAt: isPaid ? c.paidAt || c.updatedAt || (/* @__PURE__ */ new Date()).toISOString() : null,
-      externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
-      infractionCode: c.infraction?.infractionCode || "745-50",
-      organ: c.infraction?.autuadorBody || "DETRAN"
-    };
-  });
-  res.json({
-    payments: paymentsList,
-    totalCount: paymentsList.length,
-    totalVolume: paymentsList.reduce((acc, p) => p.status === "PAID" ? acc + p.amount : acc, 0),
-    paidCount: paymentsList.filter((p) => p.status === "PAID").length,
-    pendingCount: paymentsList.filter((p) => p.status === "PENDING" || p.status === "WAITING").length
-  });
 });
 router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], async (req, res) => {
   if (process.env.NODE_ENV === "production") {
@@ -18621,6 +18842,22 @@ function prodAuth(req, res, next) {
   }
   next();
 }
+router11.get("/resolve-price", (req, res) => {
+  const { serviceType } = req.query;
+  if (!serviceType || typeof serviceType !== "string") {
+    return res.status(400).json({ error: "serviceType \xE9 obrigat\xF3rio." });
+  }
+  const result = resolveOffer({ serviceType });
+  if (!result.offer) {
+    return res.status(404).json({ error: result.error || "Servi\xE7o n\xE3o encontrado no cat\xE1logo." });
+  }
+  res.json({
+    price: result.offer.price,
+    serviceName: result.offer.name,
+    serviceType: result.offer.serviceType,
+    currency: result.offer.currency
+  });
+});
 router11.use("/webhooks/pagbank", (req, res, next) => {
   let rawBody = "";
   req.setEncoding("utf8");
