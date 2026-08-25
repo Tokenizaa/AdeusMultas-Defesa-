@@ -56,7 +56,7 @@ export const CasesTableAdminView: React.FC<CasesTableAdminViewProps> = ({
   }
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800 font-mono text-sm uppercase">

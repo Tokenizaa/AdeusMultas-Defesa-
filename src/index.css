@@ -1,5 +1,133 @@
 @import "tailwindcss";
 
+/* ========================================================================
+   DESIGN SYSTEM — Tailwind v4 @theme
+   Gera utilitários semânticos (bg-primary, text-foreground, bg-background,
+   border-border, z-dropdown, container-standard, safe-area-*) a partir dos
+   tokens GOV.BR definidos em :root. Aditivo: não altera o :root existente.
+   ======================================================================== */
+@theme {
+  /* --- Cores semânticas (mapeadas dos tokens :root) --- */
+  --color-primary: var(--blue-warm-vivid-60);
+  --color-primary-hover: var(--blue-warm-vivid-80);
+  --color-primary-bg: var(--blue-warm-10);
+  --color-primary-border: var(--blue-warm-20);
+  --color-primary-dark: var(--blue-warm-vivid-70);
+
+  --color-secondary: var(--orange-500);
+  --color-secondary-hover: var(--orange-600);
+  --color-secondary-bg: var(--orange-50);
+  --color-secondary-border: var(--orange-200);
+
+  --color-success: var(--green-cool-vivid-50);
+  --color-success-bg: var(--green-cool-10);
+  --color-error: var(--red-vivid-50);
+  --color-error-bg: var(--red-vivid-10);
+  --color-warning: var(--yellow-vivid-20);
+  --color-warning-bg: var(--yellow-vivid-10);
+
+  --color-background: var(--gray-2);
+  --color-foreground: var(--gray-90);
+  --color-card: var(--pure-white);
+  --color-card-foreground: var(--gray-90);
+  --color-input: var(--gray-5);
+  --color-border: var(--gray-10);
+  --color-border-strong: var(--gray-20);
+  --color-muted: var(--gray-5);
+  --color-muted-foreground: var(--gray-60);
+  --color-accent: var(--blue-warm-10);
+  --color-accent-foreground: var(--blue-warm-vivid-80);
+  --color-ring: var(--blue-warm-vivid-60);
+
+  /* --- Neutros explícitos (para utilitários bg-slate-* nativos ficarem coerentes) --- */
+  --color-brand-50: var(--blue-warm-10);
+  --color-brand-100: var(--blue-warm-20);
+  --color-brand-600: var(--blue-warm-vivid-60);
+  --color-brand-800: var(--blue-warm-vivid-80);
+  --color-brand-900: var(--blue-warm-vivid-70);
+
+  /* --- Tipografia (famílias já usadas no :root) --- */
+  --font-display: var(--font-family-display);
+  --font-sans: var(--font-family-ui);
+  --font-mono: var(--font-family-mono);
+
+  /* --- Espaçamento (base 4px) → utilitários p-4/mt-8/gap-12, etc. --- */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+
+  /* --- Border Radius → rounded-sm/md/lg/xl/2xl/full --- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* --- Shadows → shadow-2xs/xs/sm/md/lg --- */
+  --shadow-2xs: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-sm: 0 4px 6px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 10px 15px rgb(0 0 0 / 0.1), 0 4px 6px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 20px 25px rgb(0 0 0 / 0.15), 0 10px 10px rgb(0 0 0 / 0.04);
+
+  /* --- Z-Index Scale → z-dropdown/z-sticky/z-header/z-drawer/z-modal/z-toast/z-tooltip --- */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-header: 300;
+  --z-drawer: 400;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+
+  /* ⚠️ NOTA (2026-08-25): chaves --container-* REMOVIDAS do @theme.
+     No Tailwind v4 o namespace --container-* gera utilidades de width/max-width;
+     a chave `full` colidia com a utilidade estática w-full, sobrescrevendo-a
+     para 90rem (1440px) em vez de 100% — quebrava TODOS os layouts do app
+     (tela "mais larga que tudo", botões com 1440px). Nenhuma classe
+     w-narrow/w-standard/w-wide era usada; os containers utilitários continuam
+     disponíveis como CSS puro (.container-narrow/.standard/.wide/.full, linhas abaixo).
+     Se precisar de containers semânticos no @theme no futuro, use nomes que não
+     colidam com keywords de utilidade (ex.: --container-page: 90rem). */
+}
+
+/* ========================================================================
+   SAFE AREA UTILITIES (PWA / iOS notch + home indicator)
+   env(safe-area-inset-*) só tem efeito com viewport-fit=cover (já no index.html).
+   ======================================================================== */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-right { padding-right: env(safe-area-inset-right); }
+
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+
+/* Bottom navigation bar — soma safe-area ao padding inferior nativo */
+.bottom-nav-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+}
+
+/* CTA fixo (banner PWA, checkout) — não sobrepõe a home indicator */
+.fixed-bottom-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 :root {
   /* ========================================================================
      DESIGN TOKENS — DefesAi | Padrão Digital GOV.BR + eMAG + WCAG 2.1 AA
@@ -201,21 +329,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Headings usam font-family-display */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-family-display);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--tracking-heading);
-  color: var(--color-text-primary);
+@layer base {
+  /* Headings: apenas reset de estilo; tamanho e peso definem-se via classes Tailwind por componente */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family-display);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--color-text-primary);
+    font-size: inherit; /* permite sobrescrita total por classes Tailwind (text-sm, text-base, etc.) */
+  }
 }
-
-h1 { font-size: var(--text-heading-lg); }
-h2 { font-size: var(--text-heading-md); }
-h3 { font-size: var(--text-heading-sm); }
-h4 { font-size: var(--text-body-lg); }
-h5 { font-size: var(--text-body); }
-h6 { font-size: var(--text-body-sm); }
 
 /* Paragraphs */
 p {
@@ -224,9 +348,12 @@ p {
   letter-spacing: var(--tracking-body);
 }
 
-/* Links */
+/* Links — herdam cor do elemento pai (WCAG 2.1 §1.4.3 contraste).
+   Use class Tailwind text-[#155BCB] ou text-primary nos <a> que precisam
+   de azul explícito. A regra global NÃO força mais cor azul, evitando
+   azul-sobre-azul em headers/nav com fundo escuro. */
 a {
-  color: var(--color-primary);
+  color: inherit;
   text-decoration: none;
   transition: color var(--duration-fast) var(--easing-standard);
 }
@@ -620,3 +747,35 @@ html.high-contrast .border-rose-200 {
 .container-standard { max-width: 64rem; margin: 0 auto; }    /* 1024px */
 .container-wide { max-width: 80rem; margin: 0 auto; }        /* 1280px */
 .container-full { max-width: 90rem; margin: 0 auto; }        /* 1440px */
+
+/* ========================================================================
+   COMPONENT UTILITIES — Botão "Nova Análise Gratuita"
+   Padroniza sizing mobile-first em TODOS os headers (User, Admin, Private)
+   ======================================================================== */
+
+.btn-nova-analise {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;    /* 12px mobile */
+  font-weight: 700;
+  line-height: 1;
+  height: 1.75rem;       /* 28px mobile */
+  max-height: 1.75rem;
+  white-space: nowrap;
+  border-radius: 0.5rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+@media (min-width: 640px) {
+  .btn-nova-analise {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.875rem;  /* 14px desktop */
+    height: auto;
+    max-height: none;
+    gap: 0.375rem;
+  }
+}

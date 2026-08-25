@@ -32,7 +32,7 @@ export const PrivateHeader: React.FC = () => {
   };
 
   return (
-    <header className="w-full bg-white border-b border-[#CCCCCC] relative z-40">
+    <header className="w-full bg-white border-b border-[#CCCCCC] relative z-40 safe-top">
       {/* 1. Barra Institucional DefesAi */}
       <div className="bg-[#071D41] text-white py-1 px-4 sm:px-6 lg:px-8 text-sm border-b border-[#0C326F]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -71,12 +71,12 @@ export const PrivateHeader: React.FC = () => {
 
       {/* 2. Cabeçalho Principal do Sistema (Logo DefesAi + Nome do Serviço + Busca + Login) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
           {/* Lado Esquerdo: Menu Hambúrguer + Logo DefesAi + Título */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 -ml-2 rounded-lg text-[#071D41] hover:bg-slate-100 focus:ring-2 focus-ring-[#FF6B35] cursor-pointer"
+              className="p-2 -ml-2 rounded-lg text-[#071D41] hover:bg-slate-100 focus:ring-2 focus:ring-[#FF6B35] cursor-pointer"
               aria-label="Abrir menu de navegação"
               aria-expanded={isMenuOpen}
             >
@@ -88,7 +88,7 @@ export const PrivateHeader: React.FC = () => {
               onClick={() => navigate('/')}
               className="flex items-center gap-3 cursor-pointer select-none group"
             >
-              <div className="flex items-center font-extrabold text-2xl tracking-tighter text-[#071D41] font-sans">
+              <div className="flex items-center font-extrabold text-lg sm:text-2xl tracking-tighter text-[#071D41] font-sans">
                 <span>Defe</span>
                 <span className="text-orange-500">s</span>
                 <span className="text-[#168821]">Ai</span>
@@ -96,11 +96,11 @@ export const PrivateHeader: React.FC = () => {
 
               <div className="h-6 w-px bg-slate-300 hidden sm:block" />
 
-              <div>
+              <div className="truncate max-w-[120px] sm:max-w-none">
                 <h1 className="text-sm sm:text-base font-bold text-[#071D41] tracking-tight flex items-center gap-1.5">
                   <span>Adeus</span>
                   <span className="text-orange-500">Multa</span>
-                  <span className="text-sm font-bold font-mono px-1.5 py-0.2 bg-orange-50 text-orange-100 border border-orange-200 rounded">
+                  <span className="text-[10px] sm:text-sm font-bold font-mono px-1 py-0.5 bg-orange-50 text-orange-900 border border-orange-300 rounded">
                     CTB • CONTRAN
                   </span>
                 </h1>
@@ -135,7 +135,7 @@ export const PrivateHeader: React.FC = () => {
             {/* Ação Primária: Iniciar Análise Gratuita */}
             <button
               onClick={() => navigate('/novo-caso')}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-bold transition-colors cursor-pointer shadow-2xs"
+              className="btn-nova-analise bg-orange-500 hover:bg-orange-600 text-white hidden sm:inline-flex shadow-2xs"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#FFCD07]" />
               <span>Análise Gratuita</span>
@@ -146,7 +146,7 @@ export const PrivateHeader: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
-                  className="px-3 py-1.5 bg-[#071D41] hover:bg-[#0C326F] text-white rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer transition-colors"
+                  className="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm bg-[#071D41] hover:bg-[#0C326F] text-white rounded-lg font-bold flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors"
                 >
                   <User className="w-3.5 h-3.5 text-orange-400" />
                   <span className="max-w-[120px] truncate">{user.name.split(' ')[0]}</span>
@@ -228,13 +228,13 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/novo-caso');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg bg-orange-50 text-orange-100 font-bold flex items-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-orange-50 text-orange-900 font-bold flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" />
                     Nova Análise de Multa (Gratuita)
                   </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-orange-100" />
+                  <ChevronRight className="w-3.5 h-3.5 text-orange-700" />
                 </button>
               </div>
 
@@ -260,7 +260,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/cases');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-slate-500" />
@@ -273,7 +273,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/knowledge');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Scale className="w-3.5 h-3.5 text-slate-500" />
@@ -286,7 +286,7 @@ export const PrivateHeader: React.FC = () => {
                     navigate('/marketing');
                     setIsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex ions-center justify-between"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-100 text-slate-800 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-2">
                     <Bot className="w-3.5 h-3.5 text-slate-500" />
@@ -316,7 +316,7 @@ export const PrivateHeader: React.FC = () => {
                       navigate('/admin/audit');
                       setIsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-purple-50 text-purple-800 flex ions-center justify-between"
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-purple-50 text-purple-800 flex items-center justify-between"
                   >
                     <span>Auditoria & Compliance</span>
                     <ChevronRight className="w-3.5 h-3.5 text-purple-700" />

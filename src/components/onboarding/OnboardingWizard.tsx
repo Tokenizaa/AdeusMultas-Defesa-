@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sparkles,
   ShieldCheck,
@@ -19,6 +19,8 @@ import {
 } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
+import { emitCasesChanged } from '../../context/casesEvents';
 import {
   UserSituation,
   UserProcessStage,
@@ -91,20 +93,34 @@ import { AccountVerificationGate } from './AccountVerificationGate';
 interface OnboardingWizardProps {
   onCaseReadyForCheckout?: (newCase: CaseDomain) => void;
   onOpenKnowledge?: () => void;
+  isAdmin?: boolean;
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onCaseReadyForCheckout,
   onOpenKnowledge,
+  isAdminFromParent = false,
 }) => {
   const { navigate } = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
+  const authFetch = useAuthFetch();
+  // Canal duplo de admin: prop explícita do pai (legado) OU sessão autenticada
+  // com role=admin (AuthContext). Corrige o caso em que App.tsx passa `isAdmin`
+  // mas o wizard lia uma prop inexistente (`isAdminFromParent`), deixando todos
+  // os botões de teste invisíveis.
+  const effectiveIsAdmin = isAdminFromParent || isAdmin;
 
   // Load persisted wizard state if available (e.g., after email confirmation)
   const savedState = loadWizardState();
 
   // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
   const [step, setStep] = useState<number>(savedState?.step ?? 1);
+  const wizardTopRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top of wizard on every step change
+  useEffect(() => {
+    wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
   const [leadName, setLeadName] = useState<string>(savedState?.leadName || user?.name || '');
@@ -342,7 +358,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleAnalysisCompleted = async () => {
     try {
-      const res = await fetch('/api/cases', {
+      const res = await authFetch('/api/cases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -351,6 +367,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           infraction: infractionData,
           vehicle: vehicleData,
           isAnonymous: !isAuthenticated,
+          // Identidade do usuário autenticado — mapeada pelo backend para
+          // cases.user_id (CanonicalMapper.domainToRow). Ausente ⇒ caso anônimo.
+          userId: user?.id,
           userNome: user?.name || leadName,
           userEmail: user?.email,
           status: 'analisado',
@@ -361,6 +380,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const data = await res.json();
       if (data.id) {
         setSavedCaseId(data.id);
+        // FIX 2: caso persistido no servidor → invalida cache de casos
+        // (dashboard/listagem refetcham imediatamente).
+        emitCasesChanged();
       }
       // Se o backend retornou análise com successRate > 0, usar a do backend
       if (data.analysis && data.analysis.overallSuccessRate > 0) {
@@ -442,7 +464,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // If case was already saved on backend, link it to the user
     if (savedCaseId) {
       try {
-        await fetch('/api/cases/claim', {
+        await authFetch('/api/cases/claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -453,6 +475,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             userNome: authUser.name,
           }),
         });
+        // FIX 2: vinculação caso↔usuário altera a lista canônica → invalida cache.
+        emitCasesChanged();
       } catch (err) {
         console.error('Error claiming case for user:', err);
       }
@@ -501,7 +525,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div ref={wizardTopRef} className="max-w-4xl mx-auto space-y-6">
       {/* Top Breadcrumb & Phase Indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
         <div className="flex items-center gap-3">
@@ -580,7 +604,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(2);
             }
           }}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -590,6 +614,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           vehicleData={vehicleData}
           leadName={leadName}
           leadPhone={leadPhone}
+          category={infractionCategory}
           onUpdateInfraction={setInfractionData}
           onUpdateVehicle={setVehicleData}
           onUpdateLead={handleLeadUpdate}
@@ -605,7 +630,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               setStep(3);
             }
           }}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -617,7 +642,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onNext={handleRunAnalysis}
           onBack={() => setStep(4)}
           onChangeCategory={() => setStep(3)}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -650,7 +675,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onUpdateDocumentData={setDocumentData}
           onNext={() => setStep(9)}
           onBack={() => setStep(7)}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
         />
       )}
 
@@ -675,7 +700,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           vehicleData={vehicleData}
           analysis={caseAnalysis}
           serviceType={mappedProcedure}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
+          userId={user?.id}
           onPaymentSuccess={handlePaymentSuccess}
           onBack={() => setStep(9)}
         />

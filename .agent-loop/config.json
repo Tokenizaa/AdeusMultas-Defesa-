@@ -1,0 +1,61 @@
+{
+  "project": "DefesAi",
+  "root": "/home/lg/workspace/projects/DefesAi_AdeusMultas",
+  "loop": {
+    "max_attempts": 3,
+    "auto_commit": true,
+    "require_quality_gate": true,
+    "learning_enabled": true
+  },
+  "agents": {
+    "default_start_agent": "qualidade",
+    "parallel_execution": true
+  },
+  "scope_defaults": {
+    "allowed_paths": [
+      "src/**",
+      "tests/**",
+      "supabase/migrations/**",
+      ".agent-loop/**"
+    ],
+    "forbidden_paths": [
+      "node_modules/**",
+      "dist/**",
+      ".playwright-mcp/**",
+      "comfyui-marketing-os/**"
+    ]
+  },
+  "gates": {
+    "progress": {
+      "enabled": true,
+      "max_cycles_no_progress": 3
+    },
+    "scope": {
+      "enabled": true,
+      "strict": true
+    },
+    "evidence": {
+      "enabled": true,
+      "require_observed": true
+    },
+    "max_attempts": {
+      "enabled": true,
+      "default": 3
+    },
+    "quality": {
+      "enabled": true,
+      "require_approval": true
+    }
+  },
+  "learning": {
+    "enabled": true,
+    "auto_collect": true,
+    "promotion_threshold": {
+      "observation_to_lesson": 1,
+      "lesson_to_pattern": 3,
+      "pattern_to_rule": 5,
+      "rule_to_skill": 10,
+      "skill_to_canonical": 20
+    }
+  }
+}

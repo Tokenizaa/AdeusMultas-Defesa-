@@ -39,7 +39,7 @@ export class MetaAdapter {
         userId: 'usr_system_admin',
         metaUserId: 'usr_meta_system_001',
         metaUserName: 'DefesAi Brasil (Oficial)',
-        metaUserEmail: 'contato@defesai.com.br',
+        metaUserEmail: 'contato@www.defesai.shop',
         userAccessToken: systemToken,
         tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         scopes: [
@@ -240,7 +240,7 @@ export class MetaAdapter {
       userId,
       metaUserId: 'usr_meta_manual_token',
       metaUserName: 'DefesAi Business Manager',
-      metaUserEmail: 'marketing@defesai.com.br',
+      metaUserEmail: 'marketing@www.defesai.shop',
       userAccessToken: accessToken,
       tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
       scopes: [

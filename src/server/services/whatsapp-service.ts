@@ -278,6 +278,79 @@ class WhatsAppService {
   }
 
   /**
+   * Configure/Register Webhook in Evolution API pointing to our app
+   * Endpoint: POST /webhook/set/:instance
+   */
+  async configureWebhook(
+    webhookUrl?: string,
+    instanceName?: string
+  ): Promise<{ success: boolean; url?: string; error?: string }> {
+    const instance = instanceName || this.config.instanceName;
+    const targetUrl =
+      webhookUrl ||
+      process.env.EVOLUTION_WEBHOOK_URL ||
+      `${process.env.APP_URL || ''}/api/webhooks/whatsapp`;
+
+    if (!targetUrl) {
+      return { success: false, error: 'URL do webhook não informada' };
+    }
+
+    try {
+      logger.info('whatsapp', 'whatsapp-service', 'config_webhook', `Configurando webhook Evolution API para ${targetUrl}`, {
+        instance,
+        targetUrl,
+      });
+
+      const result = await this.makeRequest<any>('POST', `/webhook/set/${instance}`, {
+        webhook: {
+          enabled: true,
+          url: targetUrl,
+          byEvents: false,
+          base64: false,
+          events: [
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'SEND_MESSAGE',
+            'CONNECTION_UPDATE',
+          ],
+        },
+      });
+
+      return {
+        success: true,
+        url: targetUrl,
+      };
+    } catch (err: any) {
+      logger.warn('whatsapp', 'whatsapp-service', 'config_webhook_error', `Falha ao registrar webhook Evolution API: ${err.message}`, {
+        instance,
+        targetUrl,
+      });
+      return {
+        success: false,
+        error: err.message,
+        url: targetUrl,
+      };
+    }
+  }
+
+  /**
+   * Get Webhook configuration for instance in Evolution API
+   */
+  async getWebhookConfig(instanceName?: string): Promise<any> {
+    const instance = instanceName || this.config.instanceName;
+    try {
+      const result = await this.makeRequest<any>('GET', `/webhook/find/${instance}`);
+      return result;
+    } catch (err: any) {
+      return {
+        enabled: false,
+        url: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
+        configured: this.isConfigured,
+      };
+    }
+  }
+
+  /**
    * Parse incoming webhook payload from Evolution API
    */
   parseWebhook(payload: WebhookPayload): {
@@ -288,22 +361,22 @@ class WhatsAppService {
     messageId: string;
   } {
     const { data, instance } = payload;
-    const jid = data.key?.remoteJid || '';
+    const jid = data?.key?.remoteJid || '';
     const from = jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, '');
 
     let text = '';
     let type: 'text' | 'image' | 'document' | 'audio' | 'unknown' = 'unknown';
 
-    if (data.message?.conversation) {
+    if (data?.message?.conversation) {
       text = data.message.conversation;
       type = 'text';
-    } else if (data.message?.extendedTextMessage?.text) {
+    } else if (data?.message?.extendedTextMessage?.text) {
       text = data.message.extendedTextMessage.text;
       type = 'text';
-    } else if (data.message?.imageMessage?.caption) {
+    } else if (data?.message?.imageMessage?.caption) {
       text = data.message.imageMessage.caption;
       type = 'image';
-    } else if (data.message?.documentMessage?.fileName) {
+    } else if (data?.message?.documentMessage?.fileName) {
       text = data.message.documentMessage.fileName;
       type = 'document';
     }
@@ -313,7 +386,7 @@ class WhatsAppService {
       from,
       text,
       instance,
-      messageId: data.key?.id || `msg_${Date.now()}`,
+      messageId: data?.key?.id || `msg_${Date.now()}`,
     };
   }
 }

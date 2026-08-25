@@ -18,8 +18,10 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { PromotionCampaign } from '../../types/commercial';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 export const AdminCommercialPromotionsView: React.FC = () => {
+  const authFetch = useAuthFetch();
   const [promotions, setPromotions] = useState<PromotionCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -42,7 +44,8 @@ export const AdminCommercialPromotionsView: React.FC = () => {
   const fetchPromotions = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/promotions');
+      // FIX 1: sessão injetada (fetch cru resultava em 401 silenciado).
+      const res = await authFetch('/api/admin/commercial/promotions');
       const data = await res.json();
       setPromotions(data);
     } catch (err) {
@@ -74,7 +77,8 @@ export const AdminCommercialPromotionsView: React.FC = () => {
         status: 'active',
       };
 
-      const res = await fetch('/api/admin/commercial/promotions', {
+      // FIX 1: sessão injetada.
+      const res = await authFetch('/api/admin/commercial/promotions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -97,7 +101,8 @@ export const AdminCommercialPromotionsView: React.FC = () => {
   const handleToggleStatus = async (promo: PromotionCampaign) => {
     const nextStatus = promo.status === 'active' ? 'paused' : 'active';
     try {
-      const res = await fetch(`/api/admin/commercial/promotions/${promo.id}`, {
+      // FIX 1: sessão injetada.
+      const res = await authFetch(`/api/admin/commercial/promotions/${promo.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),

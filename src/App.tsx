@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import { RouterProvider, useRouter } from './core/router/RouterContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import { api } from './lib/api/client';
+import { CASES_CHANGED_EVENT } from './context/casesEvents';
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
@@ -79,6 +80,18 @@ function AppContent() {
     loadCases();
   }, []);
 
+  // FIX 2 — invalidação de cache: quando qualquer fluxo (wizard, checkout)
+  // persiste um caso no servidor, refazemos o fetch canônico para que
+  // dashboard (/dashboard), listagem (/cases) e views admin reflitam o novo
+  // caso imediatamente, sem depender de reload manual.
+  useEffect(() => {
+    const handleCasesChanged = () => {
+      loadCases();
+    };
+    window.addEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
+    return () => window.removeEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
+  }, []);
+
   // Sync activeCase if URL params has an ID
   useEffect(() => {
     if (params.id && cases.length > 0) {
@@ -95,12 +108,14 @@ function AppContent() {
       const exists = prev.some((c) => c.id === newCase.id);
       return exists ? prev.map((c) => (c.id === newCase.id ? newCase : c)) : [newCase, ...prev];
     });
-    navigate('/checkout');
+    navigate(`/cases/${newCase.id}`);
   };
 
   const handlePaymentSuccess = (updatedCase: CaseDomain) => {
     setActiveCase(updatedCase);
     setCases((prev) => prev.map((c) => (c.id === updatedCase.id ? updatedCase : c)));
+    // Reconciliação server-truth após mutação de pagamento (aditivo ao patch otimista).
+    loadCases();
     navigate(`/cases/${updatedCase.id}`);
   };
 
@@ -195,7 +210,7 @@ function AppContent() {
     return (
       <AdminLayout pageTitle={title} pageSubtitle={subtitle}>
         {currentPath === '/admin' && (
-          <AdminDashboardView cases={cases} onSelectCase={handleSelectCaseFromList} />
+          <AdminDashboardView onSelectCase={handleSelectCaseFromList} />
         )}
         {currentPath === '/admin/cases' && (
           <AdminCasesListView
@@ -287,12 +302,24 @@ function AppContent() {
           />
         )}
 
-        {currentPath === '/checkout' && activeCase && (
+        {currentPath === '/checkout' && activeCase && isAdmin && (
           <CheckoutView
             currentCase={activeCase}
             onPaymentSuccess={handlePaymentSuccess}
             onBackToOnboarding={() => navigate('/novo-caso')}
           />
+        )}
+        {(currentPath === '/checkout' && activeCase && !isAdmin) && (
+          <div className="max-w-lg mx-auto py-20 px-4 text-center space-y-4">
+            <h1 className="text-xl font-bold text-slate-900">Checkout indisponível</h1>
+            <p className="text-sm text-slate-600">Complete o processo no wizard de onboarding.</p>
+            <button
+              onClick={() => navigate('/cases')}
+              className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm"
+            >
+              Ver meus casos
+            </button>
+          </div>
         )}
 
         {currentPath === '/perfil' && <UserSettingsView />}
@@ -327,8 +354,8 @@ function AppContent() {
       {currentPath === '/novo-caso' && (
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
           <OnboardingWizard
-            onCaseReadyForCheckout={handleCaseReadyForCheckout}
             onOpenKnowledge={() => navigate('/admin/knowledge')}
+            isAdmin={isAdmin}
           />
         </div>
       )}

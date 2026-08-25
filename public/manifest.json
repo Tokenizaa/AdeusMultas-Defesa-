@@ -1,0 +1,64 @@
+{
+  "name": "DefesAi — Recursos de Multas & Trânsito",
+  "short_name": "DefesAi",
+  "description": "Plataforma pericial de recursos de multas de trânsito, defesas técnicas fundamentadas no CTB e marketing jurídico com inteligência artificial.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#071D41",
+  "theme_color": "#071D41",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "legal", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova Análise de Multa",
+      "short_name": "Analisar Multa",
+      "description": "Faça o upload do auto de infração e gere a defesa técnica",
+      "url": "/?action=new_analysis",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Marketing OS",
+      "short_name": "Marketing",
+      "description": "Gerador de criativos, campanhas e inteligência de mercado",
+      "url": "/?tab=marketing",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}

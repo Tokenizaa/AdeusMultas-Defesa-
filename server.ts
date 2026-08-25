@@ -30,6 +30,7 @@ import paymentsRoutes from './src/server/routes/payments';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
+import { commercialService } from './src/server/commercial/commercial-service';
 import { LEGAL_ARGUMENTS } from './src/data/knowledge-base';
 import { buildDocumentRollText } from './src/core/documents/document-roll';
 import { aiProviderManager } from './src/server/observability/ai-provider-manager';
@@ -37,6 +38,7 @@ import { metaIntegration } from './src/server/integrations/meta';
 import { marketingOrchestrator } from './src/server/workers/marketing-orchestrator.worker';
 import { marketingMetricsCollector } from './src/server/workers/marketing-metrics.worker';
 import healthRoutes from './src/server/routes/health';
+import { logger } from './src/server/observability/logger';
 
 dotenv.config();
 
@@ -209,6 +211,28 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Warm-up: carregar dados persistidos do Supabase ANTES de montar rotas.
+  // O continue permite que o servidor suba mesmo se o Supabase estiver indisponível.
+  try {
+    await caseRepository.loadAllFromSupabase().catch((warmupErr: any) => {
+      console.warn(`[warmup] Falha ao carregar casos do Supabase: ${warmupErr?.message || warmupErr}`);
+    });
+  } catch (warmupErr: any) {
+    console.warn(`[warmup] Falha no warmup: ${warmupErr?.message || warmupErr}`);
+  }
+
+  // Warm-up: catálogo comercial (service_pricings, promotions, coupons).
+  // O construtor de CommercialServiceFacade é executado durante module load
+  // (antes do dotenv.config()), então o Supabase client estava null na época.
+  // Este warmup recarrega os dados com as env vars já disponíveis.
+  try {
+    await commercialService.warmup().catch((warmupErr: any) => {
+      console.warn(`[warmup] Falha ao carregar catálogo comercial do Supabase: ${warmupErr?.message || warmupErr}`);
+    });
+  } catch (warmupErr: any) {
+    console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
+  }
 
   // Mount Modular API Routes First
   app.use('/api/admin/commercial', commercialRoutes);
@@ -1204,9 +1228,36 @@ Instruções:
     res.json(auditLogsStore.slice(0, 50));
   });
 
-  app.get('/api/audit/logs', (req, res) => {
-    res.json({ logs: auditLogsStore.slice(0, 50) });
-  });
+app.get('/api/audit/logs', (req, res) => {
+     res.json({ logs: auditLogsStore.slice(0, 50) });
+   });
+
+   // Error handling middleware - must come after all route definitions
+   app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+     // If response already sent, delegate to Express' default error handling
+     if (res.headersSent) {
+       return next(error);
+     }
+     
+     logger.error('system', 'error', 'unhandled_exception', `Unhandled exception: ${error.message}`, {
+       error: error.message,
+       stack: error.stack,
+       url: req.originalUrl,
+       method: req.method
+     });
+
+     // If it's a syntax error from JSON parsing, return 400
+     if (error instanceof SyntaxError && (error as any).status === 400 && 'body' in error) {
+       return res.status(400).json({ error: 'Invalid JSON payload' });
+     }
+
+     // Default error response
+     res.status(error.status || 500).json({
+       error: error.message || 'Internal Server Error',
+       // Include stack in non-production environments for debugging
+       ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+     });
+   });
 
   // Mount Vite Middleware or Static Assets
   if (process.env.NODE_ENV !== 'production') {
@@ -1234,9 +1285,8 @@ Instruções:
     try {
       marketingOrchestrator.start();
       marketingMetricsCollector.collect().catch(() => {});
-      caseRepository.loadAllFromSupabase().catch(() => {});
     } catch (workerErr) {
-      console.warn('Background workers initialization notice:', workerErr);
+      // Silently ignore worker init errors in dev; workers are optional
     }
   });
 }

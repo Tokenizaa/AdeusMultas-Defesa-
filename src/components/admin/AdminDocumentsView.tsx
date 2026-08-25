@@ -185,7 +185,7 @@ export const AdminDocumentsView: React.FC = () => {
       </div>
 
       {/* Documents Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse font-mono text-sm">
             <thead>

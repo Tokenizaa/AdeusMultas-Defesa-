@@ -27,6 +27,7 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/tests/**"
+    "**/tests/**",
+    "agents"
   ]
 }

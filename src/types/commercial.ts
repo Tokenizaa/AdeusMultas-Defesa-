@@ -9,16 +9,18 @@
 
 import { ProcedureType } from './index';
 
+/**
+ * Canonical commercial service types — must match service_pricings.service_type in DB.
+ * Any addition/removal requires a DB migration + this type update.
+ */
 export type CommercialServiceType =
-  | 'recurso_multa'
+  | 'defesa_previa'
+  | 'recurso_jari'
+  | 'recurso_cetran'
   | 'suspensao'
   | 'cassacao'
   | 'indicacao_condutor'
-  | 'conversao_advertencia'
-  | 'analise_tecnica'
-  | 'recurso_jari'
-  | 'recurso_cetran'
-  | 'geracao_documento';
+  | 'conversao_advertencia';
 
 export interface PriceHistoryEntry {
   id: string;

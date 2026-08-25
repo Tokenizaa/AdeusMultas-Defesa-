@@ -233,6 +233,9 @@ export interface CaseDomain {
   documentGenerationStatus?: DocumentGenerationStatus;
   defenseDraft?: DefenseDraft;
   
+  // Comercial: oferta resolvida no checkout (rastreabilidade)
+  commercialOfferId?: string;
+
   // Instruções de protocolo para o cidadão (e compatibilidade legada)
   submissionInstructions?: SubmissionInstructions;
   protocolInfo?: SubmissionInstructions;
@@ -304,6 +307,7 @@ export interface CaseRow {
   analysis_json?: string;
   defense_draft_json?: string;
   protocol_info_json?: string;
+  commercial_offer_id?: string;
   timeline_json?: string;
   is_anonymous: boolean;
   claim_token?: string;
@@ -344,9 +348,9 @@ export interface MarketingAgentState {
 export interface EditorialContentItem {
   id: string;
   title: string;
-  channel: 'instagram' | 'blog' | 'tiktok' | 'linkedin' | 'email';
-  format: 'carrossel' | 'artigo_seo' | 'reels_roteiro' | 'infografico' | 'newsletter';
-  legalTheme: string;
+  channel: 'instagram' | 'blog' | 'tiktok' | 'linkedin' | 'email' | 'facebook' | string;
+  format: 'carrossel' | 'artigo_seo' | 'reels_roteiro' | 'infografico' | 'newsletter' | 'post_imagem' | 'story' | string;
+  legalTheme?: string;
   infractionTargetCode?: string;
   status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
   scheduledDate: string;
@@ -356,6 +360,9 @@ export interface EditorialContentItem {
   visualPrompt: string;
   authorAgent: string;
   qualityReviewScore: number;
+  imageUrl?: string | null;
+  mediaUrl?: string | null;
+  visual_prompt?: string | null;
 }
 
 export interface BrandIdentityConfig {
@@ -439,6 +446,8 @@ export interface CaseDocumentData {
   addressCityState: string;
   vehicleRenavam?: string;
   factsNarrative?: string;
+  /** Preço efetivo resolvido pelo catálogo comercial (em reais). */
+  price?: number;
 }
 
 // ==========================================
@@ -508,5 +517,5 @@ export interface PagBankPaymentConfirmation {
 }
 
 // Commercial Module Domain Types
-export * from './commercial.ts';
+export * from './commercial';
 

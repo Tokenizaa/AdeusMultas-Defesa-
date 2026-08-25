@@ -12,19 +12,25 @@
  *
  * Regras de mapeamento:
  *  - `payment_orders`: upsert por `case_id` (UNIQUE natural; 1 pedido/caso).
- *    Só é persistido quando `case_id` é um UUID válido — a coluna é FK NOT NULL
- *    para `public.cases(id)` e os casos demo (`case_*`) vivem apenas em memória.
+ *    O PK é gerado pelo banco (uuid default) — nunca enviamos id sintético.
+ *    `case_id` é FK NOT NULL para `public.cases(id)`: ids já-UUID passam
+ *    intactos; ids sintéticos (`case_*`) são mapeados para o MESMO UUID v5
+ *    determinístico usado pelo case-repository (ver uuid-v5.ts), garantindo
+ *    que o pedido aponte para a linha correta do caso em qualquer instância.
+ *    Se o caso ainda não foi persistido, a violação de FK é engolida pelo
+ *    padrão best-effort (`fire`) — igual às demais falhas de persistência.
  *    Campo `gateway` registra qual provedor criou o pagamento.
  *  - `payment_webhook_events`: insert/upsert append-only com idempotência por
  *    `pagbank_event_id` (coluna UNIQUE TEXT).
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Database, Json } from '../../types/supabase.ts';
-import { logger } from '../observability/logger.ts';
-import { getSupabaseServerClient } from './supabase-server.ts';
-import { PagBankOrderResult, PagBankWebhookPayload } from '../integrations/pagbank.ts';
-import { GatewayId } from '../integrations/gateway/types.ts';
+import { Database, Json } from '../../types/supabase';
+import { logger } from '../observability/logger';
+import { getSupabaseServerClient } from './supabase-server';
+import { domainIdToUuid } from './uuid-v5';
+import { PagBankOrderResult, PagBankWebhookPayload } from '../integrations/pagbank';
+import { GatewayId } from '../integrations/gateway/types';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -71,8 +77,10 @@ export class PaymentRepository {
   // ==========================================
 
   /**
-   * Upsert por `case_id` (1 pedido por caso). Requer case_id UUID válido
-   * (FK NOT NULL para public.cases(id)); casos demo são ignorados.
+   * Upsert por `case_id` (1 pedido por caso). `case_id` é FK NOT NULL para
+   * public.cases(id): ids sintéticos são convertidos para o UUID v5
+   * determinístico correspondente (mesma tabela de casos), mantendo a
+   * integridade referencial e a idempotência entre restarts/instâncias.
    *
    * Suporta tanto PagBankOrderResult (compat) quanto GatewayPixResult (novo).
    * Campo `gateway` registra qual provedor criou o pagamento — essencial
@@ -101,7 +109,11 @@ export class PaymentRepository {
     } = {}
   ): void {
     if (!this.client) return;
-    if (!this.isUuid(order.caseId)) {
+
+    // Mesmo mapeamento do case-repository: id sintético (`case_*`) → UUID v5
+    // determinístico; id já-UUID passa intacto. Logs/metas preservam o id original.
+    const caseIdUuid = domainIdToUuid(order.caseId);
+    if (!caseIdUuid) {
       return;
     }
 
@@ -121,7 +133,7 @@ export class PaymentRepository {
       || null;
 
     const payload: Database['public']['Tables']['payment_orders']['Insert'] = {
-      case_id: order.caseId,
+      case_id: caseIdUuid,
       user_id: extras.userId && this.isUuid(extras.userId) ? extras.userId : null,
       reference_id: order.referenceId ?? null,
       pagbank_order_id: orderId,

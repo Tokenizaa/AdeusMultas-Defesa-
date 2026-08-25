@@ -13,11 +13,12 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { CaseRow } from '../../types/index.ts';
+import { CaseRow } from '../../types/index';
 import { Database } from '../../types/supabase';
 import { EventTopics, eventBus } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { getSupabaseServerClient } from './supabase-server';
+import { domainIdToUuid } from './uuid-v5';
 
 /** Converte string JSON da row em valor tipado para JSONB (null-safe). */
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -38,6 +39,16 @@ function toDate(value?: string | null): string | null {
 
 function toNumeric(value?: number | null): number | null {
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
+}
+
+/**
+ * Valida formato UUID v4-ish — mesmo padrão usado por payment-repository.
+ * Evita persistir ids mock de dev (ex.: 'usr_admin_defesai') que violariam
+ * o tipo uuid da coluna cases.user_id e derrubariam o upsert inteiro.
+ */
+function isUuid(value?: string | null): boolean {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 export class CaseRepository {
@@ -72,12 +83,19 @@ export class CaseRepository {
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
     return {
-      id: row.id,
+      // PK uuid: id sintético do domínio (`case_*`) é mapeado para UUID v5
+      // determinístico (mesmo id → mesmo UUID → upsert idempotente entre
+      // restarts/instâncias). Ids já-UUID passam intactos.
+      id: domainIdToUuid(row.id) ?? undefined,
+      // Rastro do id de domínio original: permite hidratação e lookup pós-cold-start
+      // pelo id sintético antigo (índice único parcial cases_app_ref_key).
+      app_ref: isUuid(row.id) ? null : row.id,
       title: row.title,
       client_name: row.client_name,
       client_email: row.client_email ?? null,
       client_phone: row.client_phone ?? null,
       client_cpf: row.client_cpf ?? null,
+      user_id: isUuid(row.user_id) ? row.user_id : null,
       status: row.status,
       current_stage: row.current_stage,
       service_type: row.service_type,
@@ -160,12 +178,17 @@ export class CaseRepository {
     }
 
     const rows: CaseRow[] = (data || []).map((c) => ({
-      id: c.id,
+      // Chave em memória volta a ser o id ORIGINAL do domínio: app_ref guarda
+      // o id sintético (`case_*`) que gerou a linha — restaura links antigos
+      // (GET/PUT/claim por id) após cold-start. Linhas sem app_ref (legado ou
+      // ids já-UUID) usam a própria PK.
+      id: c.app_ref ?? c.id,
       title: c.title,
       client_name: c.client_name,
       client_email: c.client_email ?? undefined,
       client_phone: c.client_phone ?? undefined,
       client_cpf: c.client_cpf ?? undefined,
+      user_id: c.user_id ?? undefined,
       status: c.status,
       current_stage: c.current_stage,
       service_type: c.service_type,

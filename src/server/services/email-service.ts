@@ -111,13 +111,13 @@ function defenseReadyTemplate(data: DefenseReadyEmailData): string {
       </p>
     </div>
 
-    <!-- Footer -->
-    <div style="padding:24px 16px;text-align:center">
-      <p style="color:#9ca3af;font-size:12px;margin:0">
-        DefesAi — Defesa de Infrações de Trânsito com IA<br>
-        <a href="https://defesai.com.br" style="color:#6b7280">defesai.com.br</a>
-      </p>
-    </div>
+<!-- Footer -->
+     <div style="padding:24px 16px;text-align:center">
+       <p style="color:#9ca3af;font-size:12px;margin:0">
+         DefesAi — Defesa de Infrações de Trânsito com IA<br>
+         <a href="https://www.defesai.shop" style="color:#6b7280">www.defesai.shop</a>
+       </p>
+     </div>
   </div>
 </body>
 </html>`;
@@ -156,12 +156,12 @@ function paymentConfirmationTemplate(data: PaymentConfirmationEmailData): string
       </p>
     </div>
 
-    <div style="padding:24px 16px;text-align:center">
-      <p style="color:#9ca3af;font-size:12px;margin:0">
-        DefesAi — Defesa de Infrações de Trânsito com IA<br>
-        <a href="https://defesai.com.br" style="color:#6b7280">defesai.com.br</a>
-      </p>
-    </div>
+<div style="padding:24px 16px;text-align:center">
+       <p style="color:#9ca3af;font-size:12px;margin:0">
+         DefesAi — Defesa de Infrações de Trânsito com IA<br>
+         <a href="https://www.defesai.shop" style="color:#6b7280">www.defesai.shop</a>
+       </p>
+     </div>
   </div>
 </body>
 </html>`;
@@ -179,7 +179,7 @@ class EmailService {
 
   constructor() {
     this.apiKey = process.env.RESEND_API_KEY || '';
-    this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@defesai.com.br';
+    this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@www.defesai.shop';
     this.fromName = process.env.EMAIL_FROM_NAME || 'DefesAi';
   }
 

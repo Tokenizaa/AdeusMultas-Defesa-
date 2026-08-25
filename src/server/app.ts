@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
-import { caseRepository } from './db/case-repository.ts';
+import { caseRepository } from './db/case-repository';
 import type { AuditLogEntry } from '../types';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
@@ -139,6 +139,7 @@ export function createApp() {
   app.use('/api', metaRoutes);
   app.use('/api/marketing', marketingRoutes);
   app.use('/api/communication', whatsappRoutes);
+  app.use('/api', whatsappRoutes);
   app.use('/api/ocr', ocrRoutes);
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
@@ -173,9 +174,10 @@ export function createApp() {
   // Sync
   app.use('/api', syncRoutes);
 
-  // Meta Status Direct Fallback Route for UI Compatibility
-  app.get(['/api/meta/status', '/api/marketing/meta/status'], (_req, res) => {
-    res.json(metaIntegration.getStatus());
+  // API 404 fallback — garante que nenhum endpoint /api/* responda HTML
+  // (evita "Expected JSON response" no cliente quando a rota não existe).
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint não encontrado' });
   });
 
   return app;

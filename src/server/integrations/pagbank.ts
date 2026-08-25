@@ -6,10 +6,10 @@
 
 import * as crypto from 'crypto';
 import QRCode from 'qrcode';
-import { eventBus, EventTopics } from '../../core/events/topics.ts';
-import { paymentRepository } from '../db/payment-repository.ts';
-import { logger, LogOperationStatus } from '../observability/logger.ts';
-import { PRICING } from '../config/pricing.ts';
+import { eventBus, EventTopics } from '../../core/events/topics';
+import { paymentRepository } from '../db/payment-repository';
+import { logger, LogOperationStatus } from '../observability/logger';
+import { PRICING } from '../config/pricing';
 
 export interface PagBankCustomer {
   name: string;
@@ -104,7 +104,7 @@ class PagBankIntegrationService {
         ? 'https://api.pagseguro.com'
         : 'https://sandbox.api.pagseguro.com';
     this.webhookSecret = process.env.PAGBANK_WEBHOOK_SECRET || '';
-    this.appBaseUrl = process.env.APP_URL || 'https://defesai.com.br';
+    this.appBaseUrl = process.env.APP_URL || 'https://www.defesai.shop/';
   }
 
 /**
@@ -171,7 +171,7 @@ class PagBankIntegrationService {
     const orderId = `ORDE_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
     // Estrutura oficial PIX EMV do PagBank
-    const emvPixString = `00020126580014br.gov.bcb.pix0136defesai.pagbank@defesai.com.br0204MULT5204000053039865405${amount.toFixed(
+    const emvPixString = `00020126580014br.gov.bcb.pix0136defesai.pagbank@www.defesai.shop0204MULT5204000053039865405${amount.toFixed(
       2
     )}5802BR5915DEFESAI BRASIL6009SAO PAULO62070503***6304E8A9`;
 
@@ -224,7 +224,7 @@ paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
             reference_id: referenceId,
             customer: {
               name: customer.name || 'Condutor DefesAi',
-              email: customer.email || 'contato@defesai.com.br',
+              email: customer.email || 'contato@www.defesai.shop',
               tax_id: cleanCpf,
             },
             items: [
@@ -318,7 +318,7 @@ threeDsChallengeRequired: authenticationMethod === 'CHALLENGE',
              reference_id: referenceId,
              customer: {
                name: customer.name || 'Condutor DefesAi',
-               email: customer.email || 'contato@defesai.com.br',
+email: customer.email || 'contato@www.defesai.shop',
                tax_id: cleanCpf,
              },
              items: [
@@ -504,7 +504,7 @@ if (data.id) {
         referenceId: `ref_${orderOrCaseId}`,
         caseId: orderOrCaseId.replace('case_', ''),
         status: 'PAID',
-        amount: PRICING.DEFAULT_PRICE,
+        amount: PRICING.FALLBACK_PRICE,
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         createdAt: new Date().toISOString(),
         paymentMethod: 'pix',

@@ -152,12 +152,51 @@ export class MetaGraphClient {
         requestInit.body = JSON.stringify(body);
       }
 
-      try {
-        const response = await fetch(url, requestInit);
-        const data = await response.json();
+try {
+         const response = await fetch(url, requestInit);
+         
+         // Check if response is JSON before attempting to parse
+         const contentType = response.headers.get('content-type');
+         if (!contentType || !contentType.includes('application/json')) {
+           // Handle non-JSON responses (HTML error pages, login redirects, etc.)
+           const text = await response.text();
+            logger.error('meta', 'client', 'non_json_response', `Meta API returned non-JSON response for ${endpoint}`, {
+              endpoint,
+              method,
+              httpStatus: response.status,
+              contentType,
+             responseBody: text.substring(0, 500) // Log first 500 chars for debugging
+           });
+           
+           // If we got an HTML response, it's likely a login redirect or error page
+           if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+             throw new MetaIntegrationError(
+               'Meta API returned HTML response (likely login redirect or error page). Check if access token is valid and not expired.',
+               'META_NON_JSON_RESPONSE',
+               response.status,
+               { 
+                 receivedContentType: contentType,
+                 responsePreview: text.substring(0, 200)
+               }
+             );
+           }
+           
+           // For other non-JSON responses, throw a generic error
+           throw new MetaIntegrationError(
+             `Meta API returned non-JSON response (Content-Type: ${contentType}). Expected JSON.`,
+             'META_NON_JSON_RESPONSE',
+             response.status,
+             { 
+               receivedContentType: contentType,
+               responsePreview: text.substring(0, 200)
+             }
+           );
+         }
+         
+         const data = await response.json();
 
-        // Check if Meta returned an API error envelope
-        if (!response.ok || data.error) {
+         // Check if Meta returned an API error envelope
+         if (!response.ok || data.error) {
           const errorObj = data.error || {};
           const metaCode = errorObj.code;
           const metaSubcode = errorObj.error_subcode;

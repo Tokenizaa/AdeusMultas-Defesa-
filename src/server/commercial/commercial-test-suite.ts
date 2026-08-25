@@ -50,7 +50,7 @@ export function runCommercialTestSuite(): CommercialTestSuiteSummary {
   // =========================================================================
   const t1Start = Date.now();
   try {
-    const pricing = commercialService.getPricingForService('recurso_multa');
+    const pricing = commercialService.getPricingForService('defesa_previa');
     const isValid = pricing && (pricing.promotionalPrice || pricing.standardPrice) > 0;
     results.push({
       code: 'COMMERCIAL-001',
@@ -58,7 +58,7 @@ export function runCommercialTestSuite(): CommercialTestSuiteSummary {
       category: 'PRICING',
       status: isValid ? 'PASSED' : 'FAILED',
       durationMs: Date.now() - t1Start,
-      expected: 'Preço ativo configurado para recurso_multa (R$ 89,90 ou R$ 119,90)',
+      expected: 'Preço ativo configurado para defesa_previa (R$ 89,90 ou R$ 44,95)',
       actual: `Preço retornado: Standard R$ ${pricing?.standardPrice}, Promo R$ ${pricing?.promotionalPrice}`,
       details: { pricing },
     });
@@ -109,7 +109,7 @@ export function runCommercialTestSuite(): CommercialTestSuiteSummary {
   // =========================================================================
   const t3Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon('DEFESAI10', 100.0, 'recurso_multa');
+    const validation = commercialService.validateCoupon('DEFESAI10', 100.0, 'defesa_previa');
     const isSuccess = validation.valid && validation.discountAmount === 10.0 && validation.finalPrice === 90.0;
     results.push({
       code: 'COMMERCIAL-003',
@@ -138,7 +138,7 @@ export function runCommercialTestSuite(): CommercialTestSuiteSummary {
   // =========================================================================
   const t4Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon('EXPIRADO2023', 100.0, 'recurso_multa');
+    const validation = commercialService.validateCoupon('EXPIRADO2023', 100.0, 'defesa_previa');
     const isSuccess = !validation.valid && validation.discountAmount === 0;
     results.push({
       code: 'COMMERCIAL-004',

@@ -19,7 +19,7 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
   const { user, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white border-b border-[#CCCCCC] h-14 px-4 sm:px-6 flex items-center justify-between shadow-2xs">
+    <header className="sticky top-0 z-30 w-full bg-white border-b border-[#CCCCCC] h-14 px-4 sm:px-6 flex items-center justify-between shadow-2xs overflow-hidden safe-top">
       <div className="flex items-center gap-3">
         {onToggleMobileMenu && (
           <button
@@ -41,11 +41,11 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 min-w-0">
         <button
           id="user-header-new-case"
           onClick={() => navigate('/novo-caso')}
-          className="px-3.5 py-1.5 text-sm font-bold text-white bg-[#155BCB] hover:bg-[#0C326F] rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          className="btn-nova-analise bg-[#155BCB] hover:bg-[#0C326F] text-white shadow-xs"
         >
           <PlusCircle className="w-3.5 h-3.5" />
           <span>Nova Análise Gratuita</span>
@@ -58,9 +58,9 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
 
         <div
           onClick={() => navigate('/perfil')}
-          className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-slate-50 transition-colors"
+          className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-slate-50 transition-colors min-w-0"
         >
-          <div className="w-7 h-7 rounded-full bg-[#071D41] text-white flex items-center justify-center font-bold text-sm">
+          <div className="w-7 h-7 rounded-full bg-[#071D41] text-white flex items-center justify-center font-bold text-sm shrink-0">
             {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
           </div>
           <span className="text-sm font-semibold text-slate-700 hidden sm:inline truncate max-w-[120px]">

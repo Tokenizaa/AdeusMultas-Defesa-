@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { whatsappService } from '../services/whatsapp-service';
+import { messagingService } from '../services/messaging-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
@@ -147,40 +148,102 @@ router.get('/communication/whatsapp/qrcode', requireAdmin, async (req, res) => {
 });
 
 /**
- * POST /api/webhooks/whatsapp
- * Webhook endpoint for Evolution API incoming messages
+ * POST /api/webhooks/whatsapp & aliases
+ * Webhook endpoint for Evolution API incoming messages — Publicly accessible (no auth middleware)
  */
-router.post('/webhooks/whatsapp', async (req, res) => {
+const handleWebhook = async (req: any, res: any) => {
   try {
     const payload = req.body;
 
-    // Acknowledge receipt immediately
-    res.json({ received: true });
+    // Responde 200 OK imediatamente para evitar retries da Evolution API
+    res.status(200).json({ received: true, success: true, timestamp: new Date().toISOString() });
 
-    if (!payload?.event || !payload?.data) {
+    if (!payload || (!payload.event && !payload.type && !payload.data)) {
       return;
     }
 
     const parsed = whatsappService.parseWebhook(payload);
 
-    logger?.info?.('whatsapp', 'webhook', 'incoming', 'WhatsApp message received', {
+    logger?.info?.('whatsapp', 'webhook', 'incoming', 'WhatsApp message received via Evolution API', {
       from: parsed.from,
       type: parsed.type,
       instance: parsed.instance,
     });
 
-    // Emit event for downstream processing (chatbot, notifications, etc.)
-    eventBus.publish('whatsapp.message.received' as any, {
-      from: parsed.from,
-      text: parsed.text,
-      type: parsed.type,
-      instance: parsed.instance,
-      messageId: parsed.messageId,
-    }, 'whatsapp_webhook');
+    // Processa pelo Channel Adapter unificado (normalização, contato, conversa, lead CRM e IA)
+    await messagingService.handleEvolutionWebhook(payload);
 
+    // Emite evento para downstream
+    eventBus.publish(
+      EventTopics.WHATSAPP_WEBHOOK_RECEIVED || ('whatsapp.webhook_received' as any),
+      {
+        from: parsed.from,
+        text: parsed.text,
+        type: parsed.type,
+        instance: parsed.instance,
+        messageId: parsed.messageId,
+        rawPayload: payload,
+      },
+      'whatsapp_webhook'
+    );
   } catch (error: any) {
-    console.error('[WhatsApp Webhook] Error:', error);
-    // Don't return error to Evolution API — it will retry
+    console.error('[WhatsApp Webhook] Erro ao processar webhook:', error);
+    // Não retornar 500 para o webhook da Evolution API para evitar retries infinitos
+  }
+};
+
+// Aliases para cobrir todas as convenções de URL possíveis na Evolution API
+router.post('/webhooks/whatsapp', handleWebhook);
+router.post('/whatsapp/webhook', handleWebhook);
+router.post('/webhook', handleWebhook);
+router.post('/webhook/whatsapp', handleWebhook);
+
+// Verificação GET (Health check / Probes de webhook)
+router.get('/webhooks/whatsapp', (req, res) => {
+  res.json({
+    status: 'active',
+    endpoint: '/api/webhooks/whatsapp',
+    description: 'DefesAi Evolution API Webhook Receiver',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+router.get('/whatsapp/webhook', (req, res) => {
+  res.json({
+    status: 'active',
+    endpoint: '/api/webhooks/whatsapp',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /api/communication/whatsapp/webhook-config
+ * Retorna o status de configuração do Webhook na Evolution API
+ */
+router.get('/communication/whatsapp/webhook-config', authenticateToken, async (req, res) => {
+  try {
+    const config = await whatsappService.getWebhookConfig();
+    res.json({
+      success: true,
+      currentConfig: config,
+      recommendedUrl: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/communication/whatsapp/webhook-config
+ * Registra a URL do Webhook na Evolution API apontando para /api/webhooks/whatsapp
+ */
+router.post('/communication/whatsapp/webhook-config', requireAdmin, async (req, res) => {
+  try {
+    const { webhookUrl, instanceName } = req.body;
+    const result = await whatsappService.configureWebhook(webhookUrl, instanceName);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

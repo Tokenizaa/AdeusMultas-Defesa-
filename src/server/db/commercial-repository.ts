@@ -41,12 +41,163 @@ import { getSupabaseServerClient } from '../db/supabase-server';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export class CommercialRepository {
-  private client: SupabaseClient<Database> | null = getSupabaseServerClient();
+const DEFAULT_CANONICAL_PRICINGS: ServicePricing[] = [
+  {
+    id: 'price_defesa_previa',
+    serviceType: 'defesa_previa',
+    serviceName: 'Defesa Prévia',
+    description: 'Defesa administrativa em primeira instância contra autuação de trânsito.',
+    standardPrice: 89.90,
+    promotionalPrice: 44.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_recurso_jari',
+    serviceType: 'recurso_jari',
+    serviceName: 'Recurso JARI',
+    description: 'Recurso à Junta Administrativa de Recursos de Infrações (1ª Instância).',
+    standardPrice: 119.90,
+    promotionalPrice: 59.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_recurso_cetran',
+    serviceType: 'recurso_cetran',
+    serviceName: 'Recurso CETRAN',
+    description: 'Recurso ao Conselho Estadual de Trânsito (2ª Instância).',
+    standardPrice: 149.90,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_suspensao',
+    serviceType: 'suspensao',
+    serviceName: 'Defesa de Suspensão de CNH',
+    description: 'Defesa técnica completa contra processo de suspensão do direito de dirigir.',
+    standardPrice: 149.90,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_cassacao',
+    serviceType: 'cassacao',
+    serviceName: 'Defesa de Cassação de CNH',
+    description: 'Defesa especializada contra instauração de processo de cassação da CNH.',
+    standardPrice: 199.90,
+    promotionalPrice: 99.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_indicacao_condutor',
+    serviceType: 'indicacao_condutor',
+    serviceName: 'Indicação de Real Condutor',
+    description: 'Requerimento formal e documentação para indicação do real condutor infrator.',
+    standardPrice: 49.90,
+    promotionalPrice: 24.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+  {
+    id: 'price_conversao_advertencia',
+    serviceType: 'conversao_advertencia',
+    serviceName: 'Conversão em Advertência por Escrito',
+    description: 'Requerimento de conversão de multa em advertência por escrito (Art. 267 do CTB).',
+    standardPrice: 69.90,
+    promotionalPrice: 34.95,
+    isActive: true,
+    history: [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Canonical Seed',
+  },
+];
 
-  private _pricings: ServicePricing[] = [];
-  private _promotions: PromotionCampaign[] = [];
-  private _coupons: Coupon[] = [];
+const DEFAULT_CANONICAL_PROMOTIONS: PromotionCampaign[] = [
+  {
+    id: 'promo_launch_50',
+    name: 'Promoção de Lançamento (50% OFF)',
+    description: '50% de desconto em todos os serviços da plataforma DefesAi.',
+    discountType: 'percentage',
+    discountValue: 50,
+    applicableServices: ['all'],
+    startDate: new Date(Date.now() - 30 * 86400000).toISOString(),
+    endDate: new Date(Date.now() + 365 * 86400000).toISOString(),
+    usageLimit: 999999,
+    usageCount: 0,
+    userUsageLimit: 99,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_CANONICAL_COUPONS: Coupon[] = [
+  {
+    id: 'cp_defesai10',
+    code: 'DEFESAI10',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderValue: 0,
+    maxDiscountAmount: 50,
+    applicableServices: ['all'],
+    totalLimit: 10000,
+    totalUsed: 0,
+    perUserLimit: 5,
+    startDate: new Date(Date.now() - 30 * 86400000).toISOString(),
+    endDate: new Date(Date.now() + 365 * 86400000).toISOString(),
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'cp_black30',
+    code: 'BLACK30',
+    discountType: 'percentage',
+    discountValue: 30,
+    minOrderValue: 0,
+    maxDiscountAmount: 100,
+    applicableServices: ['all'],
+    totalLimit: 5000,
+    totalUsed: 0,
+    perUserLimit: 2,
+    startDate: new Date(Date.now() - 30 * 86400000).toISOString(),
+    endDate: new Date(Date.now() + 365 * 86400000).toISOString(),
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+export class CommercialRepository {
+  /**
+   * Lazy getter: chama getSupabaseServerClient() a cada acesso para garantir
+   * que o client seja criado SOMENTE após dotenv.config() injetar as env vars.
+   * O singleton anterior capturava null no construtor (antes do dotenv) e
+   * nunca reconnectava — causando o bug "Nenhuma tabela de preço cadastrada".
+   */
+  private get client(): SupabaseClient<Database> | null {
+    return getSupabaseServerClient();
+  }
+
+  private _pricings: ServicePricing[] = [...DEFAULT_CANONICAL_PRICINGS];
+  private _promotions: PromotionCampaign[] = [...DEFAULT_CANONICAL_PROMOTIONS];
+  private _coupons: Coupon[] = [...DEFAULT_CANONICAL_COUPONS];
   private _bonusLedger: BonusLedgerEntry[] = [];
   private _commissionLedger: CommissionLedgerEntry[] = [];
   private _referralRelations: { referredId: string; referrerId: string; level: number }[] = [];
@@ -385,15 +536,17 @@ export class CommercialRepository {
       .order('service_type');
     if (pricingsError) {
       this.warn('pricings', 'loadAll', pricingsError.message);
-    } else if (pricings) {
+    } else if (pricings && pricings.length > 0) {
       this._pricings = pricings.map((p: any) => ({
-        id: p.id,
+        id: p.id || `price_${p.service_type}`,
         serviceType: p.service_type,
-        serviceName: p.service_name,
+        serviceName: p.service_name || p.service_type,
         description: p.description,
-        standardPrice: p.standard_price,
-        promotionalPrice: p.promotional_price,
-        isActive: p.is_active,
+        standardPrice: p.standard_price > 1000 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
+        promotionalPrice: p.promotional_price !== null && p.promotional_price !== undefined
+          ? (p.promotional_price > 1000 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)))
+          : null,
+        isActive: p.is_active ?? true,
         validFrom: p.valid_from,
         validUntil: p.valid_until,
         history: p.history ?? [],
@@ -411,7 +564,7 @@ export class CommercialRepository {
       .order('created_at', { ascending: false });
     if (promotionsError) {
       this.warn('promotions', 'loadAll', promotionsError.message);
-    } else if (promotions) {
+    } else if (promotions && promotions.length > 0) {
       this._promotions = promotions.map((p: any) => ({
         id: p.id,
         name: p.name,
@@ -440,7 +593,7 @@ export class CommercialRepository {
       .order('created_at', { ascending: false });
     if (couponsError) {
       this.warn('coupons', 'loadAll', couponsError.message);
-    } else if (coupons) {
+    } else if (coupons && coupons.length > 0) {
       this._coupons = coupons.map((c: any) => ({
         id: c.id,
         code: c.code,
@@ -588,6 +741,36 @@ export class CommercialRepository {
         count: this._commercialAuditLogs.length,
       });
     }
+  }
+
+  // ============================================================
+  // Commercial Orders (stub — tabela commercial_orders não existe
+  // no schema atual; a fonte de verdade permanece o Map em
+  // memória do OrderService/OrderRepository até termos ADR para
+  // criar/persistir esta entidade no Supabase).
+  // ============================================================
+
+  private _orders: Map<string, any> = new Map();
+
+  persistOrder(_order: any): void {
+    // Sem tabela commercial_orders ainda — no-op.
+    // Mantido para não quebrar OrderService/OrderRepository.
+  }
+
+  updateOrderStatus(_orderId: string, _status: string): void {
+    // Sem tabela commercial_orders ainda — no-op.
+  }
+
+  getOrderById(orderId: string): any | undefined {
+    return this._orders.get(orderId);
+  }
+
+  getOrdersByCase(caseId: string): any[] {
+    return Array.from(this._orders.values()).filter((o: any) => o.caseId === caseId);
+  }
+
+  getOrdersByUser(userId: string): any[] {
+    return Array.from(this._orders.values()).filter((o: any) => o.userId === userId);
   }
 }
 export const commercialRepository = new CommercialRepository();

@@ -488,9 +488,9 @@ Muitos motoristas pagam multas indevidas por desconhecerem que falhas formais do
       <text x="68" y="${height - 66}" fill="#94A3B8" font-family="system-ui, sans-serif" font-size="13" font-weight="600">
         Direito de Trânsito • Defesa Prévia • JARI • Efeito Suspensivo
       </text>
-      <text x="${width - 70}" y="${height - 66}" fill="#FFCD07" text-anchor="end" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">
-        defesai.com.br
-      </text>
+<text x="${width - 70}" y="${height - 66}" fill="#FFCD07" text-anchor="end" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">
+  www.defesai.shop
+</text>
     </svg>`;
 
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;

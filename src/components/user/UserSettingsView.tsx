@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../core/auth/AuthContext';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { TestFillButton } from '../ui/TestFillButton';
 import {
@@ -50,6 +51,8 @@ export const UserSettingsView: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState('');
+  const [passwordStatusType, setPasswordStatusType] = useState<'success' | 'error'>('success');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'profile' | 'settings' | 'privacy'>('profile');
@@ -79,16 +82,38 @@ export const UserSettingsView: React.FC = () => {
   };
 
   // Settings handlers
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 6) {
+      setPasswordStatusType('error');
       setPasswordStatus('A nova senha deve ter no mínimo 6 caracteres.');
       return;
     }
-    setPasswordStatus('Senha alterada com sucesso!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setTimeout(() => setPasswordStatus(''), 3000);
+    if (!isSupabaseConfigured || !supabase) {
+      setPasswordStatusType('error');
+      setPasswordStatus('Alteração de senha indisponível: autenticação Supabase não configurada neste ambiente.');
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      // Requer sessão ativa: atualiza auth.users via Supabase Auth (client-side).
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordStatusType('error');
+        setPasswordStatus(error.message || 'Não foi possível alterar a senha. Tente novamente.');
+      } else {
+        setPasswordStatusType('success');
+        setPasswordStatus('Senha alterada com sucesso!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setTimeout(() => setPasswordStatus(''), 5000);
+      }
+    } catch {
+      setPasswordStatusType('error');
+      setPasswordStatus('Erro de conexão ao alterar a senha. Verifique sua internet e tente novamente.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -391,7 +416,14 @@ export const UserSettingsView: React.FC = () => {
             </div>
 
             {passwordStatus && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 font-medium">
+              <div
+                role="status"
+                className={`p-3 rounded-xl text-sm font-medium ${
+                  passwordStatusType === 'error'
+                    ? 'bg-rose-50 border border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                }`}
+              >
                 {passwordStatus}
               </div>
             )}
@@ -427,9 +459,14 @@ export const UserSettingsView: React.FC = () => {
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer"
+                disabled={isChangingPassword}
+                className={`px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-sm transition-colors ${
+                  isChangingPassword
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'hover:bg-slate-800 cursor-pointer'
+                }`}
               >
-                Atualizar Senha
+                {isChangingPassword ? 'Atualizando...' : 'Atualizar Senha'}
               </button>
             </div>
           </form>

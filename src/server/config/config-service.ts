@@ -7,7 +7,7 @@
  * 2. In-memory and environment-backed configuration with typed validation.
  * 3. Masked serialization for frontend (secrets never leaked in plain text).
  */
-import { PRICING } from './pricing.ts';
+import { PRICING } from './pricing';
 export type SettingCategory =
   | 'ai'
   | 'commercial'
@@ -381,7 +381,7 @@ class ConfigService {
         category: 'payments',
         type: 'number',
         description: 'Preço base para emissão da minuta jurídica personalizada com garantia',
-        defaultValue: PRICING.DEFAULT_PRICE,
+        defaultValue: PRICING.FALLBACK_PRICE,
         isSecret: false,
         isRequired: true,
         isEditable: true,
@@ -572,7 +572,7 @@ class ConfigService {
         category: 'system',
         type: 'string',
         description: 'Domínio canônico para geração de links seguros, webhooks e callbacks OAuth',
-        defaultValue: process.env.APP_URL || 'https://defesai.com.br',
+        defaultValue: process.env.APP_URL || 'https://www.defesai.shop/',
         isSecret: false,
         isRequired: true,
         isEditable: true,
@@ -621,7 +621,7 @@ class ConfigService {
         category: 'notifications',
         type: 'string',
         description: 'URL base da instância Evolution API para entrega de mensagens via WhatsApp',
-        defaultValue: 'https://whatsapp.defesai.com.br',
+        defaultValue: 'https://whatsapp.www.defesai.shop',
         isSecret: false,
         isRequired: false,
         isEditable: true,

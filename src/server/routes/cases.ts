@@ -58,6 +58,15 @@ router.post('/cases', authenticateToken, (req, res) => {
     if (!domainData.id) {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
+
+    // Ownership fallback (defesa em profundidade): se o payload não trouxer userId,
+    // carimba a partir da sessão autenticada. Só preenche quando ausente e UUID válido
+    // (ids mock de dev não são uuid e violariam cases.user_id).
+    if (!domainData.userId && req.user?.id
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
+      domainData.userId = req.user.id;
+    }
+
     if (!domainData.createdAt) {
       domainData.createdAt = new Date().toISOString();
     }
@@ -121,6 +130,11 @@ router.put('/cases/:id', (req, res) => {
   updatedDomain.updatedAt = new Date().toISOString();
 
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
+  // Preserva o dono original quando o payload de update não carrega userId
+  // (evita apagar cases.user_id via write-through em updates parciais/antigos).
+  if (!newRow.user_id && existingRow.user_id) {
+    newRow.user_id = existingRow.user_id;
+  }
   databaseRows.set(req.params.id, newRow);
 
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, 'case_engine');
@@ -143,6 +157,13 @@ router.post('/cases/:id/claim', authenticateToken, (req, res) => {
   domain.clientCpf = cpf || domain.clientCpf;
   domain.isAnonymous = false;
   domain.updatedAt = new Date().toISOString();
+
+  // Claim autenticado vincula o caso ao dono da sessão (cases.user_id).
+  // Retrocompatível: sem req.user (convidado em produção), mantém comportamento antigo.
+  if (req.user?.id
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
+    domain.userId = req.user.id;
+  }
 
   domain.timeline.push({
     id: `tl_${Date.now()}`,

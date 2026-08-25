@@ -1,0 +1,185 @@
+{
+  "project": "DefesAi",
+  "root": "/home/lg/workspace/projects/AdeusMultas-Defesa-",
+  "phases": [
+    "G0",
+    "G1",
+    "G2",
+    "G3",
+    "G4",
+    "G5",
+    "G6"
+  ],
+  "features": [
+    {
+      "id": "G0-01",
+      "phase": "G0",
+      "title": "Estrutura de governança inicial",
+      "priority": 0,
+      "depends_on": [],
+      "kind": "infrastructure",
+      "passes": true,
+      "acceptance": "loop/CHECKPOINT.md existe; loop/loop.config.json válido (JSON parseável); plan/features.json com ≥1 feature; loop/inbox.items.md inicializado",
+      "verification": {
+        "verdict": "PASS",
+        "by": "gov-orchestrator",
+        "at": "2026-08-24T05:43:42Z",
+        "commit": "ecdaa42"
+      }
+    },
+    {
+      "id": "G0-02",
+      "phase": "G0",
+      "title": "Suíte de invariantes下定",
+      "priority": 1,
+      "depends_on": [],
+      "kind": "infrastructure",
+      "passes": true,
+      "acceptance": "tests/invariants/ com ≥3 suítes; cada suíte falha ao ser deletada (PreToolUse + pre-commit ativos); runner de invariantes registra output"
+    },
+    {
+      "id": "G0-03",
+      "phase": "G0",
+      "title": "Registro de estado inicial do projeto (progress.md + discovery snapshot)",
+      "priority": 2,
+      "depends_on": [
+        "G0-01"
+      ],
+      "kind": "documentation",
+      "passes": true,
+      "acceptance": "plan/progress.md com seção 'Estado inicial do projeto' documentando fases existentes, deploy ativo, e audit reports relevantes; ≥1 linha descrevendo mapa atual de funcionalidades"
+    },
+    {
+      "id": "G1-01",
+      "phase": "G1",
+      "title": "Schema de banco e RLS — Supabase migrações aplicadas",
+      "priority": 0,
+      "depends_on": [
+        "G0-01"
+      ],
+      "kind": "database",
+      "passes": false,
+      "acceptance": "supabase/migrations/ contém: setup_auth_schema, update_profiles, add_case_indexes, fix_user_profiles_trigger_and_role_enum, revoke_public_trigger_functions_and_tighten_insert_policy; cada arquivo com NNNN único em ordem crescente sem buraco; 'supabase db push' ou deploy sem erro; RLS enabled em profiles e cases"
+    },
+    {
+      "id": "G1-02",
+      "phase": "G1",
+      "title": "Servidor Express com middleware de auth e rate-limit",
+      "priority": 1,
+      "depends_on": [
+        "G1-01"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "src/server/routes/auth.ts com POST /login, /register, /forgot-password, /reset-password, /logout, /claim-anonymous-case, GET /user/:claimToken, PUT /profile; src/server/middleware/auth-middleware.ts exporta authenticate/authorizeAdmin/authorizeCitizen; rate-limit.middleware.ts exporta middleware aplicado a endpoints de auth"
+    },
+    {
+      "id": "G1-03",
+      "phase": "G1",
+      "title": "Supabase client e configuração de ambiente",
+      "priority": 2,
+      "depends_on": [
+        "G1-02"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "src/lib/supabase.ts exporta client browser e admin server-side; .env.example lista todas as variáveis Supabase sem segredo; circular-deps em src/lib inexistente (rg circular src/lib retorna 0 linhas)"
+    },
+    {
+      "id": "G2-01",
+      "phase": "G2",
+      "title": "Onboarding Wizard — duas fases com persistência localStorage",
+      "priority": 0,
+      "depends_on": [
+        "G1-02"
+      ],
+      "kind": "frontend",
+      "passes": false,
+      "acceptance": "src/components/onboarding/OnboardingWizard.tsx com prop isAdmin?:boolean; App.tsx passa isAdmin={isAdmin} ao wizard; localStorage lê/grava dados por userId; fluxo bifurca admin vs cidadão; passo 4/5/8 exibem botões 'Preencher com dados de teste' só quando isAdmin=true"
+    },
+    {
+      "id": "G2-02",
+      "phase": "G2",
+      "title": "CRUD de casos com proteção IDOR",
+      "priority": 1,
+      "depends_on": [
+        "G2-01"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "CaseRepository em src/server/db/ ou src/server/services/ com createCase, getCase, getUserCases, updateCase; RLS ou service-role impede acesso a caso de outra organização; claim-anonymous-case associa caso sem user_id a usuário autenticado"
+    },
+    {
+      "id": "G3-01",
+      "phase": "G3",
+      "title": "Pipeline de geração de defesa com fallback determinístico",
+      "priority": 0,
+      "depends_on": [
+        "G2-02"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "POST /generate-defense com body {procedureType, infractionData}; RagPipeline (src/server/knowledge/ ou equivalente) chama LLM com timeout; fallback monta defesa estruturada a partir do catálogo CTB quando LLM indisponível; resposta em formato JSON com texto da defesa e referências"
+    },
+    {
+      "id": "G3-02",
+      "phase": "G3",
+      "title": "Gerenciador de documentos dinâmico por tipo de procedimento",
+      "priority": 1,
+      "depends_on": [
+        "G3-01"
+      ],
+      "kind": "frontend",
+      "passes": false,
+      "acceptance": "stage 2 UI exibe checklist de documentos conforme procedureType; upload/vinculação de PDFs por caso; download/dispatch de documento final; storage com paths segregados por organização (ex.: cases/{orgId}/{caseId}/)"
+    },
+    {
+      "id": "G4-01",
+      "phase": "G4",
+      "title": "Integração Meta — adaptador unificado",
+      "priority": 0,
+      "depends_on": [
+        "G3-02"
+      ],
+      "kind": "integration",
+      "passes": false,
+      "acceptance": "src/integrations/meta/adapters/meta-adapter.ts exporta funções publishPost, getMetrics, webhookHandler; GET /api/integrations/meta/status retorna JSON com conexão ativa; POST /api/integrations/meta/webhook valida assinatura X-Hub-Signature"
+    },
+    {
+      "id": "G5-01",
+      "phase": "G5",
+      "title": "Gateway de pagamento unificado (PagBank + GGPIX)",
+      "priority": 0,
+      "depends_on": [
+        "G3-02"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "src/server/integrations/pagbank.ts exporta createPixCharge, createCardCharge, verifyPayment, handleWebhook; webhook verifica assinatura antes de liberar defesa; pagamento registera transactionId único e idempotente"
+    },
+    {
+      "id": "G5-02",
+      "phase": "G5",
+      "title": "Landing page e páginas públicas",
+      "priority": 1,
+      "depends_on": [
+        "G5-01"
+      ],
+      "kind": "frontend",
+      "passes": false,
+      "acceptance": "src/pages/HomePage.tsx e ComoFunciona.tsx responsivos; metadados SEO preenchidos (title, description, og:title); tema visual consistente com DESIGN.md; acessibilidade WCAG AA validada"
+    },
+    {
+      "id": "G6-01",
+      "phase": "G6",
+      "title": "Dashboard administrativo e endpoints /api/admin",
+      "priority": 0,
+      "depends_on": [
+        "G5-01"
+      ],
+      "kind": "frontend",
+      "passes": false,
+      "acceptance": "src/components/admin/ com Overview, Users, Cases, Integrations views; src/server/routes/admin.ts com authorizeAdmin; GET /api/admin/overview retorna KPIs; /api/admin/users e /api/admin/cases suportam paginação"
+    }
+  ]
+}

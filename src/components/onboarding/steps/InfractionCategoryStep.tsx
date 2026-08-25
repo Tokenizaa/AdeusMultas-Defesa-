@@ -90,6 +90,7 @@ export const InfractionCategoryStep: React.FC<InfractionCategoryStepProps> = ({
 
   const handleCardClick = (catId: InfractionCategory) => {
     onSelectCategory(catId);
+    onNext();
   };
 
   return (

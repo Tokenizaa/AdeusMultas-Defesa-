@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { databaseRows } from '../app';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { metricsService } from '../observability/metrics-service';
 import { healthService } from '../observability/health-service';
@@ -9,6 +8,9 @@ import { configService } from '../config/config-service';
 import { commercialService } from '../commercial/commercial-service';
 import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
+import { domainIdToUuid } from '../db/uuid-v5';
+import { getSupabaseServerClient } from '../db/supabase-server';
+import { adminQueryService } from '../services/admin-query-service';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
@@ -22,7 +24,7 @@ router.use(authenticateToken, requireAdmin);
 // Dedicated Admin API Suite (Overview, Payments, Documents, AI, Integrations)
 router.get(['/overview', '/admin/overview'], async (req, res) => {
   const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
 
@@ -32,11 +34,31 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   const paidCasesList = domains.filter((c) => Boolean(c.isPaid) || (c.payment?.status as string) === 'paid' || (c.payment?.status as string) === 'approved');
   const paidCases = paidCasesList.length;
   
-  // Only count real payment amounts, no fallbacks
-  const totalRevenue = paidCasesList.reduce((sum, c) => {
-    const amount = c.payment?.amount;
-    return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
-  }, 0);
+  // totalRevenue: prioriza SUM(payment_orders) pago no Supabase; fallback para case.payment.amount
+  let totalRevenue: number;
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data: sumData, error: sumError } = supabase
+      ? await supabase
+          .from('payment_orders')
+          .select('amount')
+          .eq('status', 'PAID')
+      : { data: null, error: null };
+
+    if (!sumError && sumData && Array.isArray(sumData) && sumData.length > 0) {
+      totalRevenue = (sumData as { amount: number }[]).reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
+    } else {
+      totalRevenue = paidCasesList.reduce((sum, c) => {
+        const amount = c.payment?.amount;
+        return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
+      }, 0);
+    }
+  } catch {
+    totalRevenue = paidCasesList.reduce((sum, c) => {
+      const amount = c.payment?.amount;
+      return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
+    }, 0);
+  }
   
   const conversionRate = totalCases > 0 ? ((paidCases / totalCases) * 100).toFixed(1) : '0.0';
   const analysisToDocRate = analyzedCases > 0 ? ((defenseReadyCases / analyzedCases) * 100).toFixed(1) : '0.0';
@@ -101,43 +123,21 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   });
 });
 
-router.get(['/payments', '/admin/payments'], (req, res) => {
-  const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
-    domains.push(CanonicalMapper.rowToDomain(row));
+router.get(['/payments', '/admin/payments'], async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = (req.query.status as string) || 'all';
+
+    const result = await adminQueryService.getPayments({ limit, offset, status });
+    res.json(result);
+  } catch (err: any) {
+    logger.error('payments', 'admin', 'payments', `Erro ao buscar pagamentos: ${err.message}`);
+    res.status(500).json({ error: 'Erro ao buscar pagamentos' });
   }
-
-  // Combine pagBank stored orders and cases
-  const paymentsList = domains.map((c, index) => {
-    const isPaid = Boolean(c.isPaid) || (c.payment?.status as string) === 'paid' || (c.payment?.status as string) === 'approved';
-    return {
-      id: c.payment?.transactionId || `ord_pagbank_${c.id}`,
-      caseId: c.id,
-      caseTitle: c.title || `Recurso Auto ${c.infraction?.aitNumber || c.id}`,
-      customerName: c.clientName || 'Condutor DefesAi',
-      customerEmail: c.clientEmail || 'contato@defesai.com.br',
-      customerCpf: c.clientCpf || '***.***.***-**',
-      amount: c.payment?.amount || PRICING.DEFAULT_PRICE,
-      status: isPaid ? 'PAID' : (c.payment?.status === 'pending' ? 'PENDING' : 'WAITING'),
-      method: c.payment?.paymentMethod || 'PIX',
-      createdAt: c.createdAt || new Date(Date.now() - (index + 1) * 3600000).toISOString(),
-      paidAt: isPaid ? (c.paidAt || c.updatedAt || new Date().toISOString()) : null,
-      externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
-      infractionCode: c.infraction?.infractionCode || '745-50',
-      organ: c.infraction?.autuadorBody || 'DETRAN',
-    };
-  });
-
-  res.json({
-    payments: paymentsList,
-    totalCount: paymentsList.length,
-    totalVolume: paymentsList.reduce((acc, p) => p.status === 'PAID' ? acc + p.amount : acc, 0),
-    paidCount: paymentsList.filter(p => p.status === 'PAID').length,
-    pendingCount: paymentsList.filter(p => p.status === 'PENDING' || p.status === 'WAITING').length,
-  });
 });
 
-router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], (req, res) => {
+router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ 
       error: 'Simulação indisponível em produção',
@@ -146,12 +146,12 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
   }
 
   try {
-    const { caseId, status = 'PAID', amount = PRICING.DEFAULT_PRICE } = req.body;
+    const { caseId, status = 'PAID', amount = PRICING.FALLBACK_PRICE } = req.body;
     if (!caseId) {
       return res.status(400).json({ error: 'caseId é obrigatório' });
     }
 
-    const row = databaseRows.get(caseId);
+    const row = caseRepository.get(caseId);
     if (!row) {
       return res.status(404).json({ error: 'Caso não encontrado' });
     }
@@ -187,7 +187,37 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
     }
 
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(caseId, updatedRow);
+    caseRepository.set(caseId, updatedRow);
+
+    if (status === 'PAID') {
+      try {
+        const caseIdUuid = domainIdToUuid(domain.id);
+        const supabaseForOrder = getSupabaseServerClient();
+        if (supabaseForOrder && caseIdUuid) {
+          await (supabaseForOrder.from('payment_orders') as any).upsert({
+            case_id: caseIdUuid,
+            user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+            reference_id: `defesai_case_${domain.id}`,
+            pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
+            gateway: 'pagbank',
+            status: 'PAID',
+            amount: Number(amount),
+            currency: 'BRL',
+            payment_method: 'pix',
+            paid_at: new Date().toISOString(),
+            base_amount: Number(amount),
+            discount_amount: 0,
+            final_amount: Number(amount),
+            expires_at: null,
+          }, { onConflict: 'case_id' });
+        }
+      } catch (orderErr) {
+        logger.warn('payments', 'admin', 'payments', 'Falha ao inserir payment_orders (não-bloqueante)', {
+          error: (orderErr as Error).message,
+          caseId: domain.id,
+        });
+      }
+    }
 
     logger.info('payments', 'pagbank_webhook', 'simulate', `Webhook simulado para o caso ${caseId} com status ${status}`, {
       caseId,
@@ -207,7 +237,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
 
 router.get(['/documents', '/admin/documents'], (req, res) => {
   const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
 
@@ -307,7 +337,7 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
     pagbank: {
       name: 'PagBank (PagSeguro) Orders v2',
       apiVersion: 'v2.0',
-      webhookUrl: 'https://app.defesai.com.br/api/webhooks/pagbank',
+      webhookUrl: 'https://app.www.defesai.shop/api/webhooks/pagbank',
       idempotencyEnabled: true,
       status: 'HEALTHY',
     },
@@ -329,6 +359,109 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
       status: 'HEALTHY',
     },
   });
+});
+
+// ─────────────────────────────────────────────
+// USERS (user_profiles + sync auth.users via SECURITY DEFINER function)
+// ─────────────────────────────────────────────
+router.get(['/users', '/admin/users'], async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    let query = supabase
+      .from('user_profiles')
+      .select('id, email, name, role, cpf, created_at, updated_at');
+
+    const { search, role } = req.query as Record<string, string | undefined>;
+
+    const validRole = typeof role === 'string' && (role === 'admin' || role === 'citizen')
+      ? (role as 'admin' | 'citizen')
+      : null;
+
+    if (validRole) {
+      query = query.eq('role', validRole);
+    }
+
+    if (search) {
+      const q = `%${search}%`;
+      query = query.or(`name.ilike.${q},email.ilike.${q},cpf.ilike.${q}`);
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar user_profiles:', error);
+      return res.status(500).json({ error: 'Erro ao carregar usuários.' });
+    }
+
+    res.json({ users: data || [], total: (data || []).length });
+  } catch (err) {
+    console.error('Erro em /api/admin/users GET:', err);
+    res.status(500).json({ error: 'Erro ao carregar usuários.' });
+  }
+});
+
+// PUT /api/admin/users — atualiza role em user_profiles + auth.users (sync bidirecional)
+router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
+  try {
+    const { email, role } = req.body as { email?: string; role?: string };
+
+    if (!email || !role) {
+      return res.status(400).json({ error: 'email e role são obrigatórios.' });
+    }
+    if (!['admin', 'citizen'].includes(role)) {
+      return res.status(400).json({ error: 'role inválida. Use admin ou citizen.' });
+    }
+
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    // Buscar user_id pelo email em user_profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, email, name, role')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Erro ao buscar profile:', profileError);
+      return res.status(500).json({ error: 'Erro ao localizar usuário.' });
+    }
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Usuário não encontrado em user_profiles.' });
+    }
+
+    // Chamar SECURITY DEFINER function para atualizar BOTH user_profiles e auth.users
+    const { error: rpcError } = await supabase.rpc('admin_update_user_role_by_email', {
+      target_user_email: email,
+      new_role: role,
+    });
+
+    if (rpcError) {
+      console.error('Erro ao atualizar role via RPC:', rpcError);
+      return res.status(500).json({ error: 'Erro ao atualizar permissão.' });
+    }
+
+    // Retornar usuário atualizado
+    const { data: updated } = await supabase
+      .from('user_profiles')
+      .select('id, email, name, role, cpf, created_at, updated_at')
+      .eq('id', profile.id)
+      .single();
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('Erro em PUT /api/admin/users:', err);
+    res.status(500).json({ error: 'Erro ao atualizar permissão.' });
+  }
 });
 
 export default router;

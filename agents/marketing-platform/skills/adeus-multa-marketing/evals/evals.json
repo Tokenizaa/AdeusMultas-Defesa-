@@ -1,0 +1,50 @@
+{
+  "skill_name": "adeus-multa-marketing",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "reel-jari",
+      "prompt": "Preciso criar um Reel pro Instagram do Adeus Multa explicando o que é JARI e como funciona. A ideia é mostrar que recorrer não é tão complicado quanto parece. Pode me ajudar com o roteiro completo?",
+      "expected_output": "Roteiro completo de Reel com gancho, estrutura por tempo, legendas, CTA e sugestão de thumbnail",
+      "files": [],
+      "expectations": [
+        "O roteiro inclui um gancho nos primeiros 2 segundos",
+        "O roteiro especifica a duração entre 30-60 segundos",
+        "O roteiro inclui CTA verbal e textual",
+        "O roteiro não contém promessas de resultado (ex: 'garantimos a anulação')",
+        "O roteiro menciona o perfil @adeusmulta",
+        "O roteiro usa linguagem simples e acessível, sem juridiquês"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "carrossel-direitos-motorista",
+      "prompt": "Preciso de um carrossel educativo sobre os direitos do motorista quando recebe uma multa. Quero mostrar que a pessoa pode contestar e quais os principais direitos. Pode criar o roteiro slide por slide com textos e descrição visual?",
+      "expected_output": "Carrossel completo com 5-10 slides incluindo capa, conteúdo e CTA final",
+      "files": [],
+      "expectations": [
+        "Carrossel tem entre 5-10 slides",
+        "Slide 1 (capa) tem título e logo Adeus Multa",
+        "Último slide tem CTA claro",
+        "Máximo 3 linhas por slide",
+        "Nenhum slide promete resultado garantido",
+        "Inclui hashtags na legenda do post (8-15)"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "campanha-maio-amarelo",
+      "prompt": "Maio Amarelo está chegando e quero planejar uma campanha especial para o Instagram do Adeus Multa. Preciso de um plano com: tema da campanha, calendário de posts para a semana, tipos de conteúdo (Reels, Carrosséis, Stories) e CTAs alinhados ao pilar editorial de Educação em Trânsito.",
+      "expected_output": "Plano de campanha com tema, calendário semanal, tipos de conteúdo e CTAs",
+      "files": [],
+      "expectations": [
+        "A campanha está alinhada ao pilar Educação em Trânsito",
+        "O plano inclui pelo menos 3 formatos diferentes (Reels, Carrosséis, Stories)",
+        "Inclui CTAs da biblioteca de CTAs do Adeus Multa",
+        "Nenhuma promessa de resultado (ex: 'vamos eliminar suas multas')",
+        "Inclui distribuição entre os dias da semana",
+        "Usa linguagem educativa e acessível, sem juridiquês"
+      ]
+    }
+  ]
+}

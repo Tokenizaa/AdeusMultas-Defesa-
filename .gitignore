@@ -37,4 +37,21 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
-.vercel
+
+# Secrets (NEVER commit)
+env_*.md
+*Zone.Identifier
+
+# Runtime / temp artifacts
+server.pid
+*.pid
+.vercel/
+wrangler.json.bak
+
+# Test artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# Screenshots at repo root
+/*.png

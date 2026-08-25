@@ -16,8 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import { CommissionLedgerEntry } from '../../types/commercial';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 export const AdminCommercialCommissionsView: React.FC = () => {
+  const authFetch = useAuthFetch();
   const [commissions, setCommissions] = useState<CommissionLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({
@@ -39,7 +41,8 @@ export const AdminCommercialCommissionsView: React.FC = () => {
   const fetchCommissions = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/commissions');
+      // FIX 1: sessão injetada (fetch cru resultava em 401 silenciado).
+      const res = await authFetch('/api/admin/commercial/commissions');
       const data = await res.json();
       setCommissions(data.commissions || []);
       setTotals({
@@ -62,7 +65,8 @@ export const AdminCommercialCommissionsView: React.FC = () => {
   const handleMarkPaid = async (commId: string) => {
     if (!confirm('Deseja marcar esta comissão como PAGA?')) return;
     try {
-      const res = await fetch(`/api/admin/commercial/commissions/${commId}/pay`, {
+      // FIX 1: sessão injetada.
+      const res = await authFetch(`/api/admin/commercial/commissions/${commId}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ author: 'Admin Financeiro' }),
@@ -83,7 +87,8 @@ export const AdminCommercialCommissionsView: React.FC = () => {
 
     setReversalLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/commissions/reverse', {
+      // FIX 1: sessão injetada.
+      const res = await authFetch('/api/admin/commercial/commissions/reverse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
