@@ -8,6 +8,7 @@
  *   FUNCTION_INVOCATION_FAILED, permitindo diagnóstico via curl.
  */
 import { createApp, databaseRows } from '../src/server/app';
+import { commercialService } from '../src/server/commercial/commercial-service';
 
 type AppFn = (
   req: import('http').IncomingMessage,
@@ -24,6 +25,8 @@ export default async function handler(
     if (!cachedApp) {
       // Warm-up best-effort: hidrata casos do Supabase quando configurado.
       void databaseRows.loadAllFromSupabase().catch(() => {});
+      // Warm-up comercial: carrega catálogo de preços/promoções/cupons do Supabase.
+      void commercialService.warmup().catch(() => {});
       cachedApp = createApp();
     }
     cachedApp(req, res);

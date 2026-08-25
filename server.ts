@@ -30,6 +30,7 @@ import paymentsRoutes from './src/server/routes/payments';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
+import { commercialService } from './src/server/commercial/commercial-service';
 import { LEGAL_ARGUMENTS } from './src/data/knowledge-base';
 import { buildDocumentRollText } from './src/core/documents/document-roll';
 import { aiProviderManager } from './src/server/observability/ai-provider-manager';
@@ -219,6 +220,18 @@ async function startServer() {
     });
   } catch (warmupErr: any) {
     console.warn(`[warmup] Falha no warmup: ${warmupErr?.message || warmupErr}`);
+  }
+
+  // Warm-up: catálogo comercial (service_pricings, promotions, coupons).
+  // O construtor de CommercialServiceFacade é executado durante module load
+  // (antes do dotenv.config()), então o Supabase client estava null na época.
+  // Este warmup recarrega os dados com as env vars já disponíveis.
+  try {
+    await commercialService.warmup().catch((warmupErr: any) => {
+      console.warn(`[warmup] Falha ao carregar catálogo comercial do Supabase: ${warmupErr?.message || warmupErr}`);
+    });
+  } catch (warmupErr: any) {
+    console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
   }
 
   // Mount Modular API Routes First

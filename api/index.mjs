@@ -5962,7 +5962,6 @@ init_logger();
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var CommercialRepository = class {
   constructor() {
-    this.client = getSupabaseServerClient();
     this._pricings = [];
     this._promotions = [];
     this._coupons = [];
@@ -5978,6 +5977,15 @@ var CommercialRepository = class {
     // criar/persistir esta entidade no Supabase).
     // ============================================================
     this._orders = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Lazy getter: chama getSupabaseServerClient() a cada acesso para garantir
+   * que o client seja criado SOMENTE após dotenv.config() injetar as env vars.
+   * O singleton anterior capturava null no construtor (antes do dotenv) e
+   * nunca reconnectava — causando o bug "Nenhuma tabela de preço cadastrada".
+   */
+  get client() {
+    return getSupabaseServerClient();
   }
   // ==========================================
   // Helpers
@@ -7085,6 +7093,15 @@ var CommercialAuditService = class {
 
 // src/server/commercial/offers/offer-service.ts
 var roundToCents = (value) => Math.round(value);
+var SERVICE_TYPE_ALIASES = {
+  suspensao_cnh: "suspensao",
+  cassacao_cnh: "cassacao",
+  recurso_multa: "defesa_previa"
+};
+function normalizeServiceType(raw) {
+  const key = raw.toLowerCase().trim();
+  return SERVICE_TYPE_ALIASES[key] ?? key;
+}
 var OfferService = class {
   constructor(pricings, promotions, coupons, recordAudit, getDocumentCount) {
     this.pricings = pricings;
@@ -7098,17 +7115,13 @@ var OfferService = class {
     if (!serviceType || typeof serviceType !== "string") {
       return { offer: null, reason: "serviceType \xE9 obrigat\xF3rio." };
     }
-    const normalized = serviceType.toLowerCase().trim();
-    const requiresCommercialRule = [
-      "recurso_jari",
-      "recurso_cetran",
-      "conversao_advertencia",
-      "indicacao_condutor",
-      "suspensao_cnh",
-      "cassacao_cnh",
-      "analise_tecnica"
+    const normalized = normalizeServiceType(serviceType);
+    const servicesWithoutCommercialOffer = [
+      "analise_tecnica",
+      "geracao_documento",
+      "relatorio_pericial"
     ];
-    if (requiresCommercialRule.includes(normalized)) {
+    if (servicesWithoutCommercialOffer.includes(normalized)) {
       return {
         offer: null,
         reason: `O servi\xE7o "${normalized}" ainda n\xE3o possui oferta comercial dispon\xEDvel.`
@@ -7277,7 +7290,17 @@ var CommercialServiceFacade = class {
       this.coupons,
       audit
     );
-    this.loadDataFromRepository();
+    this.loadDataFromRepository().catch(() => {
+    });
+  }
+  /**
+   * Recarrega dados do catálogo comercial do Supabase para a memória.
+   * DEVE ser chamado em server.ts APÓS dotenv.config() — o construtor
+   * é executado durante module load (antes do dotenv) e neste ponto
+   * o Supabase client pode ainda estar null.
+   */
+  async warmup() {
+    await this.loadDataFromRepository();
   }
   async loadDataFromRepository() {
     await commercialRepository.loadAllFromSupabase();
@@ -7571,7 +7594,7 @@ function runCommercialTestSuite() {
   const results = [];
   const t1Start = Date.now();
   try {
-    const pricing = commercialService.getPricingForService("recurso_multa");
+    const pricing = commercialService.getPricingForService("defesa_previa");
     const isValid = pricing && (pricing.promotionalPrice || pricing.standardPrice) > 0;
     results.push({
       code: "COMMERCIAL-001",
@@ -7579,7 +7602,7 @@ function runCommercialTestSuite() {
       category: "PRICING",
       status: isValid ? "PASSED" : "FAILED",
       durationMs: Date.now() - t1Start,
-      expected: "Pre\xE7o ativo configurado para recurso_multa (R$ 89,90 ou R$ 119,90)",
+      expected: "Pre\xE7o ativo configurado para defesa_previa (R$ 89,90 ou R$ 44,95)",
       actual: `Pre\xE7o retornado: Standard R$ ${pricing?.standardPrice}, Promo R$ ${pricing?.promotionalPrice}`,
       details: { pricing }
     });
@@ -7622,7 +7645,7 @@ function runCommercialTestSuite() {
   }
   const t3Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon("DEFESAI10", 100, "recurso_multa");
+    const validation = commercialService.validateCoupon("DEFESAI10", 100, "defesa_previa");
     const isSuccess = validation.valid && validation.discountAmount === 10 && validation.finalPrice === 90;
     results.push({
       code: "COMMERCIAL-003",
@@ -7647,7 +7670,7 @@ function runCommercialTestSuite() {
   }
   const t4Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon("EXPIRADO2023", 100, "recurso_multa");
+    const validation = commercialService.validateCoupon("EXPIRADO2023", 100, "defesa_previa");
     const isSuccess = !validation.valid && validation.discountAmount === 0;
     results.push({
       code: "COMMERCIAL-004",
@@ -22056,6 +22079,8 @@ async function handler(req, res) {
   try {
     if (!cachedApp) {
       void databaseRows.loadAllFromSupabase().catch(() => {
+      });
+      void commercialService.warmup().catch(() => {
       });
       cachedApp = createApp();
     }

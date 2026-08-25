@@ -105,7 +105,20 @@ class CommercialServiceFacade {
       audit,
     );
 
-    this.loadDataFromRepository();
+    // Fire-and-forget: popula cache em memória se Supabase já estiver disponível.
+    // Caso contrário, o warmup() público (chamado em server.ts após dotenv)
+    // recarregará os dados corretamente.
+    this.loadDataFromRepository().catch(() => {});
+  }
+
+  /**
+   * Recarrega dados do catálogo comercial do Supabase para a memória.
+   * DEVE ser chamado em server.ts APÓS dotenv.config() — o construtor
+   * é executado durante module load (antes do dotenv) e neste ponto
+   * o Supabase client pode ainda estar null.
+   */
+  public async warmup(): Promise<void> {
+    await this.loadDataFromRepository();
   }
 
   private async loadDataFromRepository(): Promise<void> {

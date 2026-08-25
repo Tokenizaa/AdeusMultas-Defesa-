@@ -42,7 +42,15 @@ import { getSupabaseServerClient } from '../db/supabase-server';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CommercialRepository {
-  private client: SupabaseClient<Database> | null = getSupabaseServerClient();
+  /**
+   * Lazy getter: chama getSupabaseServerClient() a cada acesso para garantir
+   * que o client seja criado SOMENTE após dotenv.config() injetar as env vars.
+   * O singleton anterior capturava null no construtor (antes do dotenv) e
+   * nunca reconnectava — causando o bug "Nenhuma tabela de preço cadastrada".
+   */
+  private get client(): SupabaseClient<Database> | null {
+    return getSupabaseServerClient();
+  }
 
   private _pricings: ServicePricing[] = [];
   private _promotions: PromotionCampaign[] = [];

@@ -14,6 +14,26 @@ export { CommercialOfferBreakdown, ResolveOfferParams, ResolveOfferResult };
 
 const roundToCents = (value: number): number => Math.round(value);
 
+/**
+ * Normalize serviceType aliases to canonical DB values.
+ * Single source of truth — no page should implement its own normalization.
+ *
+ * Known aliases (from onboarding rules, frontend, legacy):
+ *  - suspensao_cnh  → suspensao
+ *  - cassacao_cnh   → cassacao
+ *  - recurso_multa  → defesa_previa (legacy)
+ */
+const SERVICE_TYPE_ALIASES: Record<string, string> = {
+  suspensao_cnh: 'suspensao',
+  cassacao_cnh: 'cassacao',
+  recurso_multa: 'defesa_previa',
+};
+
+export function normalizeServiceType(raw: string): string {
+  const key = raw.toLowerCase().trim();
+  return SERVICE_TYPE_ALIASES[key] ?? key;
+}
+
 export class OfferService {
   constructor(
     private pricings: Map<string, ServicePricing>,
@@ -37,19 +57,20 @@ export class OfferService {
       return { offer: null, reason: 'serviceType é obrigatório.' };
     }
 
-    const normalized = serviceType.toLowerCase().trim();
+    const normalized = normalizeServiceType(serviceType);
 
-    const requiresCommercialRule: string[] = [
-      'recurso_jari',
-      'recurso_cetran',
-      'conversao_advertencia',
-      'indicacao_condutor',
-      'suspensao_cnh',
-      'cassacao_cnh',
+    /**
+     * Services that exist in the DB but do NOT have a commercial catalog entry yet.
+     * Once a row is inserted into service_pricings for any of these, remove it here.
+     * NOTE: This list uses CANONICAL names (post-normalization).
+     */
+    const servicesWithoutCommercialOffer: string[] = [
       'analise_tecnica',
+      'geracao_documento',
+      'relatorio_pericial',
     ];
 
-    if (requiresCommercialRule.includes(normalized)) {
+    if (servicesWithoutCommercialOffer.includes(normalized)) {
       return {
         offer: null,
         reason: `O serviço "${normalized}" ainda não possui oferta comercial disponível.`,
