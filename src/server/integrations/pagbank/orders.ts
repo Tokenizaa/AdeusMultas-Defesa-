@@ -2,6 +2,7 @@
 // Based on DefesAi v1 implementation
 
 import { pagbankServer } from './client.server';
+import { domainIdToUuid } from '../../db/uuid-v5';
 import type {
   PagBankCustomer,
   PagBankItem,
@@ -148,8 +149,8 @@ async function savePaymentToDatabase(
     const paymentMethod = charge.payment_method.type;
 
     const paymentData = {
-      case_id: data.caseId,
-      user_id: data.userId,
+      case_id: domainIdToUuid(data.caseId),
+      user_id: data.userId && /^[0-9a-f-]{36}$/i.test(data.userId) ? data.userId : null,
       pagbank_order_id: order.id,
       pagbank_charge_id: charge.id!,
       pagbank_reference_id: order.reference_id,

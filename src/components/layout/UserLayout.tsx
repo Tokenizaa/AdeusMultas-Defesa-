@@ -24,7 +24,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
+    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground overflow-x-clip">
       {/* Skip link + Barra de Acessibilidade gov.br / eMAG (atalhos 1/2/3/4) */}
       <AccessibilityBar />
 

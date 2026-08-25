@@ -162,17 +162,17 @@ test.describe('Overflow visual regression (FASE 8)', () => {
       // Mobile 390 — bottom nav (fixed bottom-0) VISÍVEL e com safe-area
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(400);
+
+      // Espera o UserLayout renderizar (bottom nav contém o rótulo "Meus Casos").
       const navMobile = page.locator('div.fixed.bottom-0:has-text("Meus Casos")');
       await expect(navMobile).toBeVisible();
-      // safe-area: o utilitário .bottom-nav-safe adiciona padding-bottom calc(env(safe-area...) + 0.75rem)
+      // safe-area: .bottom-nav-safe adiciona padding-bottom calc(env(safe-area...) + 0.75rem)
       const paddingBottom = await navMobile.evaluate((el) => getComputedStyle(el).paddingBottom);
       expect(paddingBottom, 'bottom nav deve ter padding bottom (safe-area)').not.toBe('0px');
 
       // Desktop 1280 — bottom nav deve estar OCULTO (md:hidden → display:none), não apenas ausente do DOM
       await page.setViewportSize({ width: 1280, height: 800 });
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(400);
       const navDesktop = page.locator('div.md\:hidden.fixed.bottom-0:has-text("Meus Casos")');
       await expect(navDesktop).toBeHidden();
     });
