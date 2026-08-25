@@ -8,6 +8,7 @@ import { configService } from '../config/config-service';
 import { commercialService } from '../commercial/commercial-service';
 import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
+import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
@@ -211,11 +212,12 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
 
     if (status === 'PAID') {
       try {
+        const caseIdUuid = domainIdToUuid(domain.id);
         const supabaseForOrder = getSupabaseServerClient();
-        if (supabaseForOrder) {
-          await supabaseForOrder.from('payment_orders').insert({
-            case_id: domain.id,
-            user_id: domain.userId || null,
+        if (supabaseForOrder && caseIdUuid) {
+          await (supabaseForOrder.from('payment_orders') as any).upsert({
+            case_id: caseIdUuid,
+            user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
             reference_id: `defesai_case_${domain.id}`,
             pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
             gateway: 'pagbank',
@@ -228,7 +230,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
             discount_amount: 0,
             final_amount: Number(amount),
             expires_at: null,
-          } as any);
+          }, { onConflict: 'case_id' });
         }
       } catch (orderErr) {
         logger.warn('payments', 'admin', 'payments', 'Falha ao inserir payment_orders (não-bloqueante)', {

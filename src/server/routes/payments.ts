@@ -5,6 +5,7 @@ import type { GatewayId } from '../integrations/gateway';
 import { commercialService } from '../commercial/commercial-service';
 import { databaseRows, auditLogs } from '../app';
 import { caseRepository } from '../db/case-repository';
+import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { eventBus, EventTopics } from '../../core/events/topics';
@@ -152,40 +153,6 @@ router.post(['/pagbank/orders', '/payments/pix/create'], prodAuth, async (req, r
 
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
 
-    // INSERT inicial em payment_orders com status pending (histórico completo desde a criação do PIX)
-    try {
-      const supabaseForOrder = getSupabaseServerClient();
-      if (supabaseForOrder) {
-        const { error: orderError } = await (supabaseForOrder.from('payment_orders') as any).insert({
-          case_id: caseId || `case_${Date.now()}`,
-          user_id: null,
-          reference_id: orderResult.referenceId || `defesai_case_${caseId || Date.now()}`,
-          pagbank_order_id: orderResult.gatewayTransactionId,
-          gateway: gateway.id,
-          status: 'pending',
-          amount: finalAmount,
-          currency: 'BRL',
-          payment_method: 'pix',
-          paid_at: null,
-          base_amount: finalAmount,
-          discount_amount: 0,
-          final_amount: finalAmount,
-          expires_at: orderResult.expiresAt || new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        });
-        if (orderError) {
-          logger.warn('payments', 'pix_create', 'create_pix_order', 'Falha ao inserir payment_orders (pending)', {
-            error: orderError.message,
-            caseId: caseId || null,
-          });
-        }
-      }
-    } catch (orderErr) {
-      logger.warn('payments', 'pix_create', 'create_pix_order', 'Exceção ao inserir payment_orders (pending)', {
-        error: (orderErr as Error).message,
-        caseId: caseId || null,
-      });
-    }
-
     res.json({
       success: true,
       order: orderResult,
@@ -328,40 +295,6 @@ router.post('/payments/credit-card/create', prodAuth, async (req, res) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
-
-        // INSERT em payment_orders (pending) para cartão de crédito
-        try {
-          const supabaseForOrder = getSupabaseServerClient();
-          if (supabaseForOrder) {
-            const { error: orderError } = await (supabaseForOrder.from('payment_orders') as any).insert({
-              case_id: caseId,
-              user_id: domain.userId || null,
-              reference_id: `defesai_case_${caseId}`,
-              pagbank_order_id: orderResult.orderId,
-              gateway: 'pagbank',
-              status: 'pending',
-              amount: offerResult.offer.price,
-              currency: 'BRL',
-              payment_method: 'credit_card',
-              paid_at: null,
-              base_amount: offerResult.offer.price,
-              discount_amount: 0,
-              final_amount: offerResult.offer.price,
-              expires_at: null,
-            });
-            if (orderError) {
-              logger.warn('payments', 'credit_card', 'create_credit_card_order', 'Falha ao inserir payment_orders', {
-                error: orderError.message,
-                caseId,
-              });
-            }
-          }
-        } catch (orderErr) {
-          logger.warn('payments', 'credit_card', 'create_credit_card_order', 'Exceção ao inserir payment_orders', {
-            error: (orderErr as Error).message,
-            caseId,
-          });
-        }
       }
     }
 
@@ -476,38 +409,6 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
-
-        // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
-        if (webhookResult.status === 'PAID') {
-          try {
-            const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
-            const gatewayTxnId = webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`;
-            const supabaseForOrder = getSupabaseServerClient();
-            if (supabaseForOrder) {
-              await (supabaseForOrder.from('payment_orders') as any).insert({
-                case_id: domain.id,
-                user_id: domain.userId || null,
-                reference_id: payload.reference_id || `defesai_case_${domain.id}`,
-                pagbank_order_id: gatewayTxnId,
-                gateway: 'pagbank',
-                status: 'paid',
-                amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                currency: 'BRL',
-                payment_method: paymentMethod,
-                paid_at: new Date().toISOString(),
-                base_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                discount_amount: 0,
-                final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                expires_at: null,
-              });
-            }
-          } catch (orderErr) {
-            logger.warn('payments', 'pagbank', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
-              error: (orderErr as Error).message,
-              caseId: domain.id,
-            });
-          }
-        }
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
@@ -648,15 +549,16 @@ const { caseId, case: casePayload } = req.body;
 
     // UPDATE em payment_orders (marcar como paid) para manter a fonte de verdade
     try {
+      const caseIdUuid = domainIdToUuid(domain.id);
       const supabaseForOrder = getSupabaseServerClient();
-      if (supabaseForOrder) {
+      if (supabaseForOrder && caseIdUuid) {
         const { error: orderError } = await (supabaseForOrder.from('payment_orders') as any)
           .update({
             status: 'paid',
             paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
-          .eq('case_id', domain.id)
+          .eq('case_id', caseIdUuid)
           .eq('status', 'pending');
         if (orderError) {
           logger.warn('payments', 'gateway', 'simulate_confirm', 'Falha ao atualizar payment_orders', {
@@ -769,11 +671,12 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
           try {
             const paymentAmount = Number((event.amountInCents || 0) / 100);
             const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const caseIdUuid = domainIdToUuid(domain.id);
             const supabaseForOrder = getSupabaseServerClient();
-            if (supabaseForOrder) {
-              await (supabaseForOrder.from('payment_orders') as any).insert({
-                case_id: domain.id,
-                user_id: domain.userId || null,
+            if (supabaseForOrder && caseIdUuid) {
+              await (supabaseForOrder.from('payment_orders') as any).upsert({
+                case_id: caseIdUuid,
+                user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
                 reference_id: event.referenceId || `defesai_case_${domain.id}`,
                 pagbank_order_id: gatewayTxnId,
                 gateway: 'ggpixapi',
@@ -786,7 +689,7 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
                 discount_amount: 0,
                 final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
                 expires_at: null,
-              });
+              }, { onConflict: 'case_id' });
             }
           } catch (orderErr) {
             logger.warn('payments', 'ggpix', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
