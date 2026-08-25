@@ -17,21 +17,74 @@ import {
   Tag,
   Ticket,
   Percent,
+  ShieldAlert,
 } from 'lucide-react';
 import { CaseDomain } from '../../types';
 import { CreditCardForm } from './CreditCardForm';
+import { useAuth } from '../../core/auth/AuthContext';
+import { useRouter } from '../../core/router/RouterContext';
 
 interface CheckoutViewProps {
   currentCase: CaseDomain;
   onPaymentSuccess: (updatedCase: CaseDomain) => void;
   onBackToOnboarding: () => void;
+  isAdmin?: boolean;
 }
 
 export const CheckoutView: React.FC<CheckoutViewProps> = ({
   currentCase,
   onPaymentSuccess,
   onBackToOnboarding,
+  isAdmin: isAdminProp = false,
 }) => {
+  const { isAdmin: isAdminAuth } = useAuth();
+  const { navigate } = useRouter();
+  const isAdmin = isAdminProp || isAdminAuth;
+
+  // ── Admin-only guard ──────────────────────────────────────────────────
+  if (!isAdmin) {
+    return (
+      <div className="max-w-lg mx-auto py-20 px-4 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-7 h-7 text-amber-600" />
+        </div>
+        <h1 className="text-xl font-bold text-slate-900">Ferramenta de Teste Administrativo</h1>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Esta página de checkout é destinada exclusivamente a administradores para simulação de pagamentos.
+          Acesse o painel administrativo para usar esta ferramenta.
+        </p>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar ao Painel
+        </button>
+      </div>
+    );
+  }
+
+  // ── Already-paid guard ────────────────────────────────────────────────
+  if (currentCase.isPaid || currentCase.status === 'defesa_pronta' || currentCase.status === 'finalizado') {
+    return (
+      <div className="max-w-lg mx-auto py-20 px-4 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
+          <Check className="w-7 h-7 text-emerald-600" />
+        </div>
+        <h1 className="text-xl font-bold text-slate-900">Pagamento já realizado</h1>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          O caso <span className="font-mono font-bold">{currentCase.infraction?.aitNumber || currentCase.id}</span> já foi pago.
+          Não é necessário um novo checkout.
+        </p>
+        <button
+          onClick={() => navigate(`/cases/${currentCase.id}`)}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer"
+        >
+          Ver Detalhes do Caso
+        </button>
+      </div>
+    );
+  }
   const [copied, setCopied] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [pixData, setPixData] = useState<{
@@ -49,9 +102,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [creditCardError, setCreditCardError] = useState<string | null>(null);
   const [pixError, setPixError] = useState<string | null>(null);
 
-  // Dynamic Commercial State
-  const [standardPrice, setStandardPrice] = useState<number>(119.90);
-  const [basePrice, setBasePrice] = useState<number>(89.90); // fallback local até carregar a API do catálogo
+  // Dynamic Commercial State (breakdown completo retornado pelo backend)
+  const [resolvedBreakdown, setResolvedBreakdown] = useState<{
+    baseAmount: number;
+    promotionDiscount: number;
+    firstDocumentsDiscount: number;
+    finalAmount: number;
+    documentNumber: number;
+    couponDiscount?: number;
+  } | null>(null);
   const [couponCode, setCouponCode] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -63,7 +122,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState<boolean>(false);
 
-  const finalAmount = Math.max(0, Number((basePrice - (appliedCoupon?.discountAmount || 0)).toFixed(2)));
+  // Usa o finalAmount do backend (breakdown) como fonte de verdade; fallback para cálculo local
+  const basePrice = resolvedBreakdown?.baseAmount ?? 89.90;
+  const finalAmount = resolvedBreakdown?.finalAmount ?? Math.max(0, Number((basePrice - (appliedCoupon?.discountAmount || 0)).toFixed(2)));
 
   // Check URL params for coupon or referral
   useEffect(() => {
@@ -93,17 +154,24 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   // Resolve serviceType do case (fonte canônica — não hardcoded)
   const serviceType = (currentCase as any).serviceType || (currentCase as any).procedureType || 'defesa_previa';
 
-  // Load Pricing from Commercial Service
+  // Load Pricing from Resolve Price Service (breakdown completo)
   useEffect(() => {
     async function loadPricing() {
       try {
-        const res = await fetch('/api/admin/commercial/prices');
+        const params = new URLSearchParams({ serviceType });
+        if (couponCode) params.set('couponCode', couponCode);
+        const res = await fetch(`/api/payments/resolve-price?${params.toString()}`);
         if (res.ok) {
-          const prices = await res.json();
-          const target = prices.find((p: any) => p.serviceType === serviceType) || prices[0];
-          if (target) {
-            setStandardPrice(target.standardPrice || 119.90);
-            setBasePrice(target.promotionalPrice || target.standardPrice || 89.90);
+          const data = await res.json();
+          if (typeof data.baseAmount === 'number' && typeof data.finalAmount === 'number') {
+            setResolvedBreakdown({
+              baseAmount: data.baseAmount,
+              promotionDiscount: data.promotionDiscount || 0,
+              firstDocumentsDiscount: data.firstDocumentsDiscount || 0,
+              finalAmount: data.finalAmount,
+              documentNumber: data.documentNumber ?? 0,
+              couponDiscount: data.couponDiscount,
+            });
           }
         }
       } catch (err) {
@@ -111,7 +179,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       }
     }
     loadPricing();
-  }, [serviceType]);
+  }, [serviceType, couponCode]);
 
   const validateCouponCode = async (codeToTest: string) => {
     const code = codeToTest.trim().toUpperCase();
@@ -182,6 +250,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             customerCpf: currentCase.clientCpf,
             customerName: currentCase.clientName,
             customerEmail: currentCase.clientEmail,
+            userId: currentCase.clientEmail || null,
+            couponCode: couponCode || null,
           }),
         });
         const data = await res.json();
@@ -232,19 +302,20 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     if (result.threeDsChallengeRequired && result.threeDsUrl) {
       window.location.href = result.threeDsUrl;
     } else if (result.status === 'AUTHORIZED' || result.status === 'PAID') {
-      setIsProcessing(true);
-      fetch('/api/payments/pix/simulate-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseId: currentCase.id }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            onPaymentSuccess(data.case);
-          }
-        })
-        .finally(() => setIsProcessing(false));
+      // Credit card was already charged via PagBank SDK — just notify parent
+      const paidCase: CaseDomain = {
+        ...currentCase,
+        isPaid: true,
+        paidAt: new Date().toISOString(),
+        status: 'defesa_pronta',
+        payment: {
+          status: 'approved',
+          amount: finalAmount,
+          paidAt: new Date().toISOString(),
+          paymentMethod: 'credit_card',
+        },
+      };
+      onPaymentSuccess(paidCase);
     }
   };
 
@@ -345,19 +416,40 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
 
               {/* Price Breakdown */}
-              <div className="border-t border-slate-200 pt-3 space-y-1">
-                <div className="flex justify-between text-slate-500 text-sm font-mono">
-                  <span>Preço Padrão:</span>
-                  <span className="line-through">R$ {standardPrice.toFixed(2)}</span>
-                </div>
-                {appliedCoupon && (
-                  <div className="flex justify-between text-emerald-600 text-sm font-mono font-bold">
-                    <span>Cupom ({appliedCoupon.code}):</span>
-                    <span>- R$ {appliedCoupon.discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="pt-2 flex justify-between items-baseline">
-                  <div>
+                <div className="border-t border-slate-200 pt-3 space-y-1">
+                  {resolvedBreakdown && (
+                    <>
+                      <div className="flex justify-between text-slate-500 text-sm font-mono">
+                        <span>Preço Padrão:</span>
+                        <span className="line-through">R$ {(resolvedBreakdown.baseAmount / 100).toFixed(2)}</span>
+                      </div>
+                      {resolvedBreakdown.promotionDiscount > 0 && (
+                        <div className="flex justify-between text-amber-600 text-sm font-mono font-bold">
+                          <span>Promoção:</span>
+                          <span>- R$ {(resolvedBreakdown.promotionDiscount / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {resolvedBreakdown.firstDocumentsDiscount > 0 && (
+                        <div className="flex justify-between text-emerald-600 text-sm font-mono font-bold">
+                          <span>Benefício 3 primeiros documentos:</span>
+                          <span>- R$ {(resolvedBreakdown.firstDocumentsDiscount / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {resolvedBreakdown.documentNumber <= 3 && (
+                        <div className="flex justify-between text-emerald-700 text-sm font-mono font-bold bg-emerald-50 px-2 py-1 rounded">
+                          <span>🎉 Benefício ativo: 50% OFF nos 3 primeiros docs!</span>
+                        </div>
+                      )}
+                      {appliedCoupon && (
+                        <div className="flex justify-between text-emerald-600 text-sm font-mono font-bold">
+                          <span>Cupom ({appliedCoupon.code}):</span>
+                          <span>- R$ {appliedCoupon.discountAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="pt-2 flex justify-between items-baseline">
+                    <div>
                     <span className="text-sm font-bold text-slate-900 uppercase font-mono">Investimento Único</span>
                     <p className="text-sm text-slate-500 font-mono">Sem mensalidades adicionais</p>
                   </div>

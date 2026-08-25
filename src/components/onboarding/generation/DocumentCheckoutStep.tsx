@@ -69,6 +69,17 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   const [creditCardError, setCreditCardError] = useState<string | null>(null);
   // Preço efetivo resolvido pelo catálogo comercial (backend decide).
   const [resolvedPrice, setResolvedPrice] = useState<number | null>(null);
+  // Breakdown completo retornado por /api/payments/resolve-price
+  const [resolvedBreakdown, setResolvedBreakdown] = useState<{
+    baseAmount: number;
+    promotionDiscount: number;
+    firstDocumentsDiscount: number;
+    finalAmount: number;
+    documentNumber: number;
+    couponDiscount?: number;
+  } | null>(null);
+  // Código do cupom aplicado (enviado ao backend no create)
+  const [couponCode, setCouponCode] = useState<string>('');
   // Modo de teste anunciado pelo servidor (/gateway/status → testMode).
   // Não dependemos de import.meta.env.DEV: funciona também rodando o build
   // localmente enquanto o backend estiver fora de produção.
@@ -88,23 +99,36 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   // Resolve preço do catálogo comercial (funciona para qualquer método de pagamento)
   useEffect(() => {
     let active = true;
-    fetch(`/api/payments/resolve-price?serviceType=${encodeURIComponent(serviceType)}`)
+    fetch(`/api/payments/resolve-price?serviceType=${encodeURIComponent(serviceType)}${couponCode ? `&couponCode=${encodeURIComponent(couponCode)}` : ''}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (active && data && typeof data.price === 'number') {
-          setResolvedPrice(data.price);
+        if (active && data) {
+          if (typeof data.finalAmount === 'number') {
+            setResolvedPrice(data.finalAmount);
+          }
+          if (typeof data.baseAmount === 'number' && typeof data.finalAmount === 'number') {
+            setResolvedBreakdown({
+              baseAmount: data.baseAmount,
+              promotionDiscount: data.promotionDiscount || 0,
+              firstDocumentsDiscount: data.firstDocumentsDiscount || 0,
+              finalAmount: data.finalAmount,
+              documentNumber: data.documentNumber ?? 0,
+              couponDiscount: data.couponDiscount,
+            });
+          }
         }
       })
       .catch(() => {/* fallback para pixData.amount */});
     return () => { active = false; };
-  }, [serviceType]);
+  }, [serviceType, couponCode]);
 
   // Simulação só aparece para admin E quando o servidor confirma modo de teste
   const canSimulate = isAdmin && testMode;
 
-  // Preço efetivo: catálogo (resolve-price) > PIX response > documentData > fallback 89.90
+  // Preço efetivo: breakdown (finalAmount) > catálogo > PIX response > documentData > fallback 89.90
   const effectivePrice: number =
-    resolvedPrice
+    resolvedBreakdown?.finalAmount
+    ?? resolvedPrice
     ?? pixData?.amount
     ?? (typeof documentData.price === 'number' ? documentData.price : 89.90);
 
@@ -124,6 +148,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             customerName: documentData.applicantName,
             customerEmail: documentData.applicantEmail,
             customerCpf: documentData.applicantCpf,
+            userId: userId || null,
+            couponCode: couponCode || null,
           }),
         });
         const data = await res.json();
@@ -358,16 +384,51 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 <span className="font-semibold text-emerald-700 font-mono">Incluso</span>
               </div>
 
-              <div className="border-t border-slate-200 pt-3 flex justify-between items-baseline">
-                <div>
-                  <span className="text-xs font-bold text-slate-900 uppercase font-mono">Investimento Único</span>
-                  <p className="text-[10px] text-slate-500 font-mono">Sem mensalidade ou cobranças adicionais</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 line-through mr-2 font-mono">R$ 197,00</span>
-                  <span className="text-2xl font-extrabold text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</span>
-                </div>
-              </div>
+              {(() => {
+                const displayBaseAmount = resolvedBreakdown?.baseAmount ?? 197;
+                const displayPromotionDiscount = resolvedBreakdown?.promotionDiscount ?? 0;
+                const displayFirstDocumentsDiscount = resolvedBreakdown?.firstDocumentsDiscount ?? 0;
+                const isFirstThreeDocuments = (resolvedBreakdown?.documentNumber ?? 0) <= 3;
+                return (
+                  <div className="border-t border-slate-200 pt-3 space-y-1">
+                    <div className="flex justify-between text-slate-500 text-xs font-mono">
+                      <span>Preço padrão:</span>
+                      <span className="line-through">R$ {displayBaseAmount.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    {displayPromotionDiscount > 0 && (
+                      <div className="flex justify-between text-emerald-600 text-xs font-mono font-bold">
+                        <span>Desconto da promoção:</span>
+                        <span>- R$ {displayPromotionDiscount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+                    {displayFirstDocumentsDiscount > 0 && (
+                      <div className="flex justify-between text-emerald-600 text-xs font-mono font-bold">
+                        <span>Desconto Primeiros Documentos:</span>
+                        <span>- R$ {displayFirstDocumentsDiscount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+                    {isFirstThreeDocuments && displayFirstDocumentsDiscount > 0 && (
+                      <div className="flex items-center justify-center gap-1.5 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-xs font-bold text-emerald-700">
+                          Benefício dos 3 primeiros documentos: 50% OFF aplicado!
+                        </span>
+                      </div>
+                    )}
+                    <div className="pt-2 flex justify-between items-baseline">
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 uppercase font-mono">Investimento Único</span>
+                        <p className="text-[10px] text-slate-500 font-mono">Sem mensalidade ou cobranças adicionais</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-extrabold text-slate-900 font-mono">
+                          R$ {effectivePrice.toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

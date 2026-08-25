@@ -27,6 +27,7 @@ import type {
 } from '../../types/index';
 import { logger } from '../observability/logger';
 import { commercialRepository } from '../db/commercial-repository';
+import { caseRepository } from '../db/case-repository';
 
 import { PricingService, CreatePricingInput, UpdatePricingInput } from './pricing/pricing-service';
 import { PromotionService, CreatePromotionInput } from './promotions/promotion-service';
@@ -68,6 +69,12 @@ class CommercialServiceFacade {
   private auditService: CommercialAuditService;
   private offerService: OfferService;
 
+  private getDocumentCount(userId: string): number {
+    return Array.from(caseRepository.values()).filter(
+      (r) => r.user_id === userId && r.is_paid,
+    ).length;
+  }
+
   constructor() {
     this.auditService = new CommercialAuditService(commercialRepository);
     const audit = (entry: any) => this.auditService.record(entry);
@@ -98,11 +105,12 @@ class CommercialServiceFacade {
       commercialRepository,
       audit,
     );
-    this.offerService = new OfferService(
+this.offerService = new OfferService(
       this.pricings,
       this.promotions,
       this.coupons,
       audit,
+      this.getDocumentCount.bind(this),
     );
 
     // Fire-and-forget: popula cache em memória se Supabase já estiver disponível.
@@ -246,7 +254,7 @@ class CommercialServiceFacade {
     return this.couponService.redeemCoupon(rawCode, userId, userName, caseId, orderAmount, serviceType);
   }
 
-  // =========================================================================
+// =========================================================================
   // Offer resolution
   // =========================================================================
 
@@ -257,7 +265,28 @@ class CommercialServiceFacade {
     userId?: string;
     documentCount?: number;
     couponCode?: string;
-  }): { offer: { commercialId: string; serviceType: string; stageId: string | null; name: string; description: string; price: number; currency: string; eligible: boolean; available: boolean; requirements: string[] } | null; reason?: string } {
+  }): {
+    offer: {
+      commercialId: string;
+      serviceType: string;
+      stageId: string | null;
+      name: string;
+      description: string;
+      price: number;
+      currency: string;
+      eligible: boolean;
+      available: boolean;
+      requirements: string[];
+      baseAmount: number;
+      promotionDiscount: number;
+      firstDocumentsDiscount: number;
+      couponDiscount?: number;
+      finalAmount: number;
+      promotionId?: string;
+      documentNumber: number;
+    } | null;
+    reason?: string;
+  } {
     const result = this.offerService.resolve(params);
     if (!result.offer) {
       return { offer: null, reason: result.reason };
@@ -275,6 +304,13 @@ class CommercialServiceFacade {
         eligible: o.eligible,
         available: o.available,
         requirements: o.requirements,
+        baseAmount: o.baseAmount,
+        promotionDiscount: o.promotionDiscount,
+        firstDocumentsDiscount: o.firstDocumentsDiscount,
+        couponDiscount: o.couponDiscount,
+        finalAmount: o.finalAmount,
+        promotionId: o.promotionId,
+        documentNumber: o.documentNumber,
       },
       reason: result.reason,
     };

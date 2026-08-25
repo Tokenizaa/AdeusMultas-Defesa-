@@ -31,13 +31,22 @@ type CommercialOffer = {
   eligible: boolean;
   available: boolean;
   requirements: string[];
+  baseAmount: number;
+  promotionDiscount: number;
+  firstDocumentsDiscount: number;
+  couponDiscount?: number;
+  finalAmount: number;
+  promotionId?: string;
+  documentNumber: number;
 };
 
 function resolveOffer(params: {
   serviceType: string;
+  userId?: string;
+  couponCode?: string;
   caseId?: string;
 }): { offer: CommercialOffer | null; error?: string } {
-  const { serviceType } = params;
+  const { serviceType, userId, couponCode } = params;
 
   if (!serviceType) {
     return { offer: null, error: 'serviceType é obrigatório para criar o pagamento.' };
@@ -45,6 +54,8 @@ function resolveOffer(params: {
 
   const result = commercialService.resolveCommercialOffer({
     serviceType,
+    userId,
+    couponCode,
   });
 
   if (!result.offer) {
@@ -103,16 +114,27 @@ function prodAuth(req: Request, res: Response, next: NextFunction): void {
 // ============================================================================
 
 router.get('/resolve-price', (req: Request, res: Response) => {
-  const { serviceType } = req.query;
+  const { serviceType, userId, couponCode } = req.query;
   if (!serviceType || typeof serviceType !== 'string') {
     return res.status(400).json({ error: 'serviceType é obrigatório.' });
   }
-  const result = resolveOffer({ serviceType });
+  const result = resolveOffer({
+    serviceType,
+    userId: typeof userId === 'string' ? userId : undefined,
+    couponCode: typeof couponCode === 'string' ? couponCode : undefined,
+  });
   if (!result.offer) {
     return res.status(404).json({ error: result.error || 'Serviço não encontrado no catálogo.' });
   }
   res.json({
     price: result.offer.price,
+    finalAmount: result.offer.finalAmount,
+    baseAmount: result.offer.baseAmount,
+    promotionDiscount: result.offer.promotionDiscount,
+    firstDocumentsDiscount: result.offer.firstDocumentsDiscount,
+    couponDiscount: result.offer.couponDiscount,
+    promotionId: result.offer.promotionId,
+    documentNumber: result.offer.documentNumber,
     serviceName: result.offer.name,
     serviceType: result.offer.serviceType,
     currency: result.offer.currency,
@@ -145,10 +167,24 @@ router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
 // MANTÉM alias /api/pagbank/orders para compatibilidade reversa.
 router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
   try {
-    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
+    const {
+      caseId,
+      customerName,
+      customerEmail,
+      customerCpf,
+      amount,
+      serviceType,
+      userId,
+      couponCode,
+    } = req.body;
 
     // serviceType é obrigatório; o backend decide o preço.
-    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    const offerResult = resolveOffer({
+      serviceType: serviceType as string,
+      userId: userId as string | undefined,
+      couponCode: couponCode as string | undefined,
+      caseId,
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
@@ -245,6 +281,8 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       cardToken,
       authenticationMethod = 'CHALLENGE',
       softDescriptor,
+      userId,
+      couponCode,
     } = req.body;
 
     if (!cardToken) {
@@ -258,7 +296,12 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       });
     }
 
-    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    const offerResult = resolveOffer({
+      serviceType: serviceType as string,
+      userId: userId as string | undefined,
+      couponCode: couponCode as string | undefined,
+      caseId,
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
