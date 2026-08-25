@@ -226,7 +226,7 @@ export class AdminQueryService {
       .order('created_at', { ascending: false });
 
     if (statusFilter) {
-      query = query.eq('status', statusFilter.toLowerCase());
+      query = query.eq('status', statusFilter.toUpperCase());
     }
 
     const from = offset;
@@ -248,7 +248,7 @@ export class AdminQueryService {
       customerEmail: 'contato@www.defesai.shop',
       customerCpf: '***.***.***-**',
       amount: Number(row.amount || 0),
-      status: (row.status === 'paid' ? 'PAID' : row.status === 'pending' ? 'PENDING' : 'WAITING') as
+      status: (row.status === 'PAID' ? 'PAID' : row.status === 'PENDING' ? 'PENDING' : row.status === 'DECLINED' ? 'DECLINED' : row.status === 'CANCELED' ? 'CANCELED' : 'WAITING') as
         | 'PAID'
         | 'PENDING'
         | 'WAITING'

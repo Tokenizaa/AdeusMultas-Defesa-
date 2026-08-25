@@ -92,11 +92,15 @@
   --z-tooltip: 700;
   --z-toast: 800;
 
-  /* --- Breakpoints semânticos (container) --- */
-  --container-narrow: 48rem;
-  --container-standard: 64rem;
-  --container-wide: 80rem;
-  --container-full: 90rem;
+  /* ⚠️ NOTA (2026-08-25): chaves --container-* REMOVIDAS do @theme.
+     No Tailwind v4 o namespace --container-* gera utilidades de width/max-width;
+     a chave `full` colidia com a utilidade estática w-full, sobrescrevendo-a
+     para 90rem (1440px) em vez de 100% — quebrava TODOS os layouts do app
+     (tela "mais larga que tudo", botões com 1440px). Nenhuma classe
+     w-narrow/w-standard/w-wide era usada; os containers utilitários continuam
+     disponíveis como CSS puro (.container-narrow/.standard/.wide/.full, linhas abaixo).
+     Se precisar de containers semânticos no @theme no futuro, use nomes que não
+     colidam com keywords de utilidade (ex.: --container-page: 90rem). */
 }
 
 /* ========================================================================

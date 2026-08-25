@@ -4859,7 +4859,7 @@ router.get(["/overview", "/admin/overview"], async (req, res) => {
   let totalRevenue;
   try {
     const supabase = getSupabaseServerClient();
-    const { data: sumData, error: sumError } = supabase ? await supabase.from("payment_orders").select("amount").eq("status", "paid") : { data: null, error: null };
+    const { data: sumData, error: sumError } = supabase ? await supabase.from("payment_orders").select("amount").eq("status", "PAID") : { data: null, error: null };
     if (!sumError && sumData && Array.isArray(sumData) && sumData.length > 0) {
       totalRevenue = sumData.reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
     } else {
@@ -5017,7 +5017,7 @@ router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], 
             reference_id: `defesai_case_${domain.id}`,
             pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
             gateway: "pagbank",
-            status: "paid",
+            status: "PAID",
             amount: Number(amount),
             currency: "BRL",
             payment_method: "pix",
@@ -18988,10 +18988,10 @@ router11.post("/pix/simulate-confirm", async (req, res) => {
     const supabaseForOrder = getSupabaseServerClient();
     if (supabaseForOrder && caseIdUuid) {
       const { error: orderError } = await supabaseForOrder.from("payment_orders").update({
-        status: "paid",
+        status: "PAID",
         paid_at: (/* @__PURE__ */ new Date()).toISOString(),
         updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("case_id", caseIdUuid).eq("status", "pending");
+      }).eq("case_id", caseIdUuid).eq("status", "PENDING");
       if (orderError) {
         logger.warn("payments", "gateway", "simulate_confirm", "Falha ao atualizar payment_orders", {
           error: orderError.message,
@@ -19092,7 +19092,7 @@ router11.post("/webhooks/ggpix", async (req, res) => {
                 reference_id: event.referenceId || `defesai_case_${domain.id}`,
                 pagbank_order_id: gatewayTxnId,
                 gateway: "ggpixapi",
-                status: "paid",
+                status: "PAID",
                 amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
                 currency: "BRL",
                 payment_method: "pix",

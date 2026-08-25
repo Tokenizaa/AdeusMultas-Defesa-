@@ -554,12 +554,12 @@ const { caseId, case: casePayload } = req.body;
       if (supabaseForOrder && caseIdUuid) {
         const { error: orderError } = await (supabaseForOrder.from('payment_orders') as any)
           .update({
-            status: 'paid',
+            status: 'PAID',
             paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('case_id', caseIdUuid)
-          .eq('status', 'pending');
+          .eq('status', 'PENDING');
         if (orderError) {
           logger.warn('payments', 'gateway', 'simulate_confirm', 'Falha ao atualizar payment_orders', {
             error: orderError.message,
@@ -680,7 +680,7 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
                 reference_id: event.referenceId || `defesai_case_${domain.id}`,
                 pagbank_order_id: gatewayTxnId,
                 gateway: 'ggpixapi',
-                status: 'paid',
+                status: 'PAID',
                 amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
                 currency: 'BRL',
                 payment_method: 'pix',

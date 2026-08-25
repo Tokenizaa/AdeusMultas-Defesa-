@@ -41,7 +41,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
       ? await supabase
           .from('payment_orders')
           .select('amount')
-          .eq('status', 'paid')
+          .eq('status', 'PAID')
       : { data: null, error: null };
 
     if (!sumError && sumData && Array.isArray(sumData) && sumData.length > 0) {
@@ -221,7 +221,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
             reference_id: `defesai_case_${domain.id}`,
             pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
             gateway: 'pagbank',
-            status: 'paid',
+            status: 'PAID',
             amount: Number(amount),
             currency: 'BRL',
             payment_method: 'pix',
