@@ -247,58 +247,70 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                 </div>
 
                 {/* Explicação no estilo GOV.BR */}
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* O que verificamos */}
-                  <div className="flex items-start gap-3">
-                    <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
-                      <Clock className="w-3 h-3" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <Clock className="w-3 h-3" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que verificamos</span>
                     </div>
-                    <span className="text-base font-medium text-slate-700">O que verificamos:</span>
-                    <p className="text-lg text-slate-600 leading-relaxed ml-3">{point.title}</p>
+                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.title}</p>
                   </div>
 
                   {/* O que a lei diz */}
-                  <div className="flex items-start gap-3 mt-4">
-                    <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
-                      <BookOpen className="w-3 h-3" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-3 h-3" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que a lei diz</span>
                     </div>
-                    <span className="text-base font-medium text-slate-700">O que a lei diz:</span>
-                    <p className="text-lg text-slate-600 leading-relaxed ml-3">{point.lawExplanation}</p>
+                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.lawExplanation}</p>
                   </div>
 
                   {/* O que encontramos */}
-                  <div className="flex items-start gap-3 mt-4">
-                    <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
-                      <ExternalLink className="w-3 h-3" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <ExternalLink className="w-3 h-3" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que encontramos nos seus dados</span>
                     </div>
-                    <span className="text-base font-medium text-slate-700">O que encontramos nos seus dados:</span>
-                    <p className="text-lg text-slate-600 leading-relaxed ml-3">{point.evidenceResult}</p>
+                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.evidenceResult}</p>
                   </div>
 
                   {/* O que isso significa */}
-                  <div className="flex items-start gap-3 mt-4">
-                    <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
-                      <Check className="w-3 h-3" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que isso significa para você</span>
                     </div>
-                    <span className="text-base font-medium text-slate-700">O que isso significa para você:</span>
-                    <p className="text-lg text-slate-600 leading-relaxed ml-3">{point.userImpact}</p>
+                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.userImpact}</p>
                   </div>
 
                   {/* Nível de confiança */}
-                  <div className="flex items-start gap-3 mt-4">
-                    <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
-                      <BarChart2 className="w-3 h-3" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <BarChart2 className="w-3 h-3" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Nível de confiança</span>
                     </div>
-                    <span className="text-base font-medium text-slate-700">Nível de confiança:</span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium 
-                      ${point.confidenceLevel === 'Muito Alto' ? 'bg-emerald-50 text-emerald-700' : ''}
-                      ${point.confidenceLevel === 'Alto' ? 'bg-blue-50 text-blue-700' : ''}
-                      ${point.confidenceLevel === 'Médio' ? 'bg-amber-50 text-amber-700' : ''}
-                      ${point.confidenceLevel === 'Baixo' ? 'bg-rose-50 text-rose-700' : ''}
-                    ">
-                      {point.confidenceLevel}
-                    </span>
-                    <span className="text-base text-slate-500 ml-1">({point.confidenceReason})</span>
+                    <div className="flex items-center gap-2 pl-6 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-bold ${
+                        point.confidenceLevel === 'Muito Alto' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        point.confidenceLevel === 'Alto' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                        point.confidenceLevel === 'Médio' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                        'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {point.confidenceLevel}
+                      </span>
+                      <span className="text-sm text-slate-500">{point.confidenceReason}</span>
+                    </div>
                   </div>
                 </div>
               </div>
