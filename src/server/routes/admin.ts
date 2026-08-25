@@ -32,11 +32,31 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   const paidCasesList = domains.filter((c) => Boolean(c.isPaid) || (c.payment?.status as string) === 'paid' || (c.payment?.status as string) === 'approved');
   const paidCases = paidCasesList.length;
   
-  // Only count real payment amounts, no fallbacks
-  const totalRevenue = paidCasesList.reduce((sum, c) => {
-    const amount = c.payment?.amount;
-    return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
-  }, 0);
+  // totalRevenue: prioriza SUM(payment_orders) pago no Supabase; fallback para case.payment.amount
+  let totalRevenue: number;
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data: sumData, error: sumError } = supabase
+      ? await supabase
+          .from('payment_orders')
+          .select('amount')
+          .eq('status', 'paid')
+      : { data: null, error: null };
+
+    if (!sumError && sumData && Array.isArray(sumData) && sumData.length > 0) {
+      totalRevenue = (sumData as { amount: number }[]).reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
+    } else {
+      totalRevenue = paidCasesList.reduce((sum, c) => {
+        const amount = c.payment?.amount;
+        return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
+      }, 0);
+    }
+  } catch {
+    totalRevenue = paidCasesList.reduce((sum, c) => {
+      const amount = c.payment?.amount;
+      return typeof amount === 'number' && !isNaN(amount) && amount > 0 ? sum + amount : sum;
+    }, 0);
+  }
   
   const conversionRate = totalCases > 0 ? ((paidCases / totalCases) * 100).toFixed(1) : '0.0';
   const analysisToDocRate = analyzedCases > 0 ? ((defenseReadyCases / analyzedCases) * 100).toFixed(1) : '0.0';

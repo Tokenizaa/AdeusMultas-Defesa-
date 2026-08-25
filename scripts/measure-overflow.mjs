@@ -17,23 +17,20 @@ const browser = await chromium.launch();
 const results = [];
 
 // Seed an authenticated session (localStorage fallback) so /dashboard,/cases,/admin render.
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-const page = await ctx.newPage();
-await page.goto('http://localhost:3000/login');
-await page.evaluate(() => {
-  localStorage.setItem('defesai_auth_user', JSON.stringify({ id: 'seed', name: 'Condutor Teste', email: 'c@t.com', role: 'admin', isAdmin: true }));
-});
-await page.close();
-await ctx.close();
+const ADMIN_SESSION = {
+  id: 'usr_admin_defesai', name: 'Administrador DefesAi', email: 'admin@www.defesai.shop',
+  role: 'admin', cpf: '000.111.222-33', phone: '(11) 99999-0000', cityState: 'Brasília/DF',
+  createdAt: '2026-01-01T08:00:00.000Z',
+};
 
 for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   const context = await browser.newContext({ viewport: vp, isMobile: vp.width <= 430 });
   const pg = await context.newPage();
-  // restore auth seed
+  // restore auth seed using the correct storage key
   await pg.goto('http://localhost:3000/login');
-  await pg.evaluate(() => {
-    localStorage.setItem('defesai_auth_user', JSON.stringify({ id: 'seed', name: 'Condutor Teste', email: 'c@t.com', role: 'admin', isAdmin: true }));
-  });
+  await pg.evaluate((session) => {
+    localStorage.setItem('defesai_auth_session_v1', JSON.stringify(session));
+  }, ADMIN_SESSION);
   for (const route of ROUTES) {
     try {
       await pg.goto('http://localhost:3000' + route, { waitUntil: 'networkidle' });
@@ -51,9 +48,12 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
             if (overflow > worstOverflow) { worstOverflow = overflow; worst = `${el.tagName}.${el.className?.toString().slice(0,60)}`; }
           }
         }
-        return { overflow: doc, worst, title: document.title.slice(0, 40) };
+        const layout =
+          document.querySelector('#menu-navegacao aside') || document.querySelector('#menu-navegacao') ? 'nav' : '';
+        const hasUserBottomNav = !!document.querySelector('[class*="fixed bottom-0"]');
+        return { overflow: doc, worst, layout, hasUserBottomNav, title: document.title.slice(0, 40) };
       });
-      results.push({ vp: vpName, route, overflow: m.overflow, worst: m.worst, title: m.title });
+      results.push({ vp: vpName, route, overflow: m.overflow, worst: m.worst, layout: m.layout, title: m.title, bottomNav: m.hasUserBottomNav });
     } catch (e) {
       results.push({ vp: vpName, route, error: String(e.message).slice(0, 60) });
     }
