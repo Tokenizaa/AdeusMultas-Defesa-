@@ -4848,7 +4848,7 @@ var router = Router();
 router.use(authenticateToken, requireAdmin);
 router.get(["/overview", "/admin/overview"], async (req, res) => {
   const domains = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
   const totalCases = domains.length;
@@ -4915,7 +4915,7 @@ router.get(["/overview", "/admin/overview"], async (req, res) => {
 });
 router.get(["/payments", "/admin/payments"], (req, res) => {
   const domains = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
   const paymentsList = domains.map((c, index) => {
@@ -4945,7 +4945,7 @@ router.get(["/payments", "/admin/payments"], (req, res) => {
     pendingCount: paymentsList.filter((p) => p.status === "PENDING" || p.status === "WAITING").length
   });
 });
-router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], (req, res) => {
+router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], async (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(403).json({
       error: "Simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
@@ -4957,7 +4957,7 @@ router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], 
     if (!caseId) {
       return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
     }
-    const row = databaseRows.get(caseId);
+    const row = caseRepository.get(caseId);
     if (!row) {
       return res.status(404).json({ error: "Caso n\xE3o encontrado" });
     }
@@ -4991,7 +4991,35 @@ router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], 
       };
     }
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(caseId, updatedRow);
+    caseRepository.set(caseId, updatedRow);
+    if (status === "PAID") {
+      try {
+        const supabaseForOrder = getSupabaseServerClient();
+        if (supabaseForOrder) {
+          await supabaseForOrder.from("payment_orders").insert({
+            case_id: domain.id,
+            user_id: domain.userId || null,
+            reference_id: `defesai_case_${domain.id}`,
+            pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
+            gateway: "pagbank",
+            status: "paid",
+            amount: Number(amount),
+            currency: "BRL",
+            payment_method: "pix",
+            paid_at: (/* @__PURE__ */ new Date()).toISOString(),
+            base_amount: Number(amount),
+            discount_amount: 0,
+            final_amount: Number(amount),
+            expires_at: null
+          });
+        }
+      } catch (orderErr) {
+        logger.warn("payments", "admin", "payments", "Falha ao inserir payment_orders (n\xE3o-bloqueante)", {
+          error: orderErr.message,
+          caseId: domain.id
+        });
+      }
+    }
     logger.info("payments", "pagbank_webhook", "simulate", `Webhook simulado para o caso ${caseId} com status ${status}`, {
       caseId,
       status,
@@ -5008,7 +5036,7 @@ router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], 
 });
 router.get(["/documents", "/admin/documents"], (req, res) => {
   const domains = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
   const documentsList = domains.map((c) => {
@@ -18784,7 +18812,7 @@ router11.get("/pagbank/orders/:id", (req, res) => {
   }
   res.json(order);
 });
-router11.post("/webhooks/pagbank", (req, res) => {
+router11.post("/webhooks/pagbank", async (req, res) => {
   try {
     const rawBody = req.rawBody || JSON.stringify(req.body);
     const payload = req.body;
@@ -18831,6 +18859,36 @@ router11.post("/webhooks/pagbank", (req, res) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
+        if (webhookResult.status === "PAID") {
+          try {
+            const paymentAmount2 = Number((webhookResult.amountInCents || 0) / 100);
+            const gatewayTxnId = webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`;
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder) {
+              await supabaseForOrder.from("payment_orders").insert({
+                case_id: domain.id,
+                user_id: domain.userId || null,
+                reference_id: payload.reference_id || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: "pagbank",
+                status: "paid",
+                amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                currency: "BRL",
+                payment_method: paymentMethod,
+                paid_at: (/* @__PURE__ */ new Date()).toISOString(),
+                base_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                discount_amount: 0,
+                final_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                expires_at: null
+              });
+            }
+          } catch (orderErr) {
+            logger.warn("payments", "pagbank", "webhook", "Falha ao inserir payment_orders (n\xE3o-bloqueante)", {
+              error: orderErr.message,
+              caseId: domain.id
+            });
+          }
+        }
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,
@@ -18967,7 +19025,7 @@ router11.post("/pix/simulate-confirm", (req, res) => {
     order: { orderId }
   });
 });
-router11.post("/webhooks/ggpix", (req, res) => {
+router11.post("/webhooks/ggpix", async (req, res) => {
   try {
     const rawBody = req.rawBody || JSON.stringify(req.body);
     const payload = req.body;
@@ -19013,6 +19071,36 @@ router11.post("/webhooks/ggpix", (req, res) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
+        if (event.status === "PAID") {
+          try {
+            const paymentAmount2 = Number((event.amountInCents || 0) / 100);
+            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder) {
+              await supabaseForOrder.from("payment_orders").insert({
+                case_id: domain.id,
+                user_id: domain.userId || null,
+                reference_id: event.referenceId || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: "ggpixapi",
+                status: "paid",
+                amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                currency: "BRL",
+                payment_method: "pix",
+                paid_at: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
+                base_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                discount_amount: 0,
+                final_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                expires_at: null
+              });
+            }
+          } catch (orderErr) {
+            logger.warn("payments", "ggpix", "webhook", "Falha ao inserir payment_orders (n\xE3o-bloqueante)", {
+              error: orderErr.message,
+              caseId: domain.id
+            });
+          }
+        }
         commercialService.processPaymentConfirmationEvent({
           paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,

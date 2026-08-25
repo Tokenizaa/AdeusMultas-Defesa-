@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { databaseRows } from '../app';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { metricsService } from '../observability/metrics-service';
 import { healthService } from '../observability/health-service';
@@ -9,11 +8,11 @@ import { configService } from '../config/config-service';
 import { commercialService } from '../commercial/commercial-service';
 import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
+import { getSupabaseServerClient } from '../db/supabase-server';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';
-import { getSupabaseServerClient } from '../db/supabase-server';
 
 const router = Router();
 
@@ -23,7 +22,7 @@ router.use(authenticateToken, requireAdmin);
 // Dedicated Admin API Suite (Overview, Payments, Documents, AI, Integrations)
 router.get(['/overview', '/admin/overview'], async (req, res) => {
   const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
 
@@ -104,7 +103,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
 
 router.get(['/payments', '/admin/payments'], (req, res) => {
   const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
 
@@ -138,7 +137,7 @@ router.get(['/payments', '/admin/payments'], (req, res) => {
   });
 });
 
-router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], (req, res) => {
+router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ 
       error: 'Simulação indisponível em produção',
@@ -152,7 +151,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
       return res.status(400).json({ error: 'caseId é obrigatório' });
     }
 
-    const row = databaseRows.get(caseId);
+    const row = caseRepository.get(caseId);
     if (!row) {
       return res.status(404).json({ error: 'Caso não encontrado' });
     }
@@ -188,7 +187,36 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
     }
 
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(caseId, updatedRow);
+    caseRepository.set(caseId, updatedRow);
+
+    if (status === 'PAID') {
+      try {
+        const supabaseForOrder = getSupabaseServerClient();
+        if (supabaseForOrder) {
+          await supabaseForOrder.from('payment_orders').insert({
+            case_id: domain.id,
+            user_id: domain.userId || null,
+            reference_id: `defesai_case_${domain.id}`,
+            pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
+            gateway: 'pagbank',
+            status: 'paid',
+            amount: Number(amount),
+            currency: 'BRL',
+            payment_method: 'pix',
+            paid_at: new Date().toISOString(),
+            base_amount: Number(amount),
+            discount_amount: 0,
+            final_amount: Number(amount),
+            expires_at: null,
+          } as any);
+        }
+      } catch (orderErr) {
+        logger.warn('payments', 'admin', 'payments', 'Falha ao inserir payment_orders (não-bloqueante)', {
+          error: (orderErr as Error).message,
+          caseId: domain.id,
+        });
+      }
+    }
 
     logger.info('payments', 'pagbank_webhook', 'simulate', `Webhook simulado para o caso ${caseId} com status ${status}`, {
       caseId,
@@ -208,7 +236,7 @@ router.post(['/payments/simulate-webhook', '/admin/payments/simulate-webhook'], 
 
 router.get(['/documents', '/admin/documents'], (req, res) => {
   const domains: CaseDomain[] = [];
-  for (const row of databaseRows.values()) {
+  for (const row of caseRepository.values()) {
     domains.push(CanonicalMapper.rowToDomain(row));
   }
 

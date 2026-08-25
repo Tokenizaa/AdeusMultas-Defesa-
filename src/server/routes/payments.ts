@@ -5,6 +5,7 @@ import type { GatewayId } from '../integrations/gateway';
 import { commercialService } from '../commercial/commercial-service';
 import { databaseRows, auditLogs } from '../app';
 import { caseRepository } from '../db/case-repository';
+import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
@@ -336,7 +337,7 @@ router.get('/pagbank/orders/:id', (req, res) => {
 });
 
 // PagBank Official Webhook with HMAC-SHA256 Signature Verification & Idempotency
-router.post('/webhooks/pagbank', (req: Request, res: Response) => {
+router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
   try {
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
     const payload = req.body;
@@ -407,6 +408,38 @@ router.post('/webhooks/pagbank', (req: Request, res: Response) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
+
+        // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
+        if (webhookResult.status === 'PAID') {
+          try {
+            const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
+            const gatewayTxnId = webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`;
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder) {
+              await (supabaseForOrder.from('payment_orders') as any).insert({
+                case_id: domain.id,
+                user_id: domain.userId || null,
+                reference_id: payload.reference_id || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: 'pagbank',
+                status: 'paid',
+                amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                currency: 'BRL',
+                payment_method: paymentMethod,
+                paid_at: new Date().toISOString(),
+                base_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                discount_amount: 0,
+                final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                expires_at: null,
+              });
+            }
+          } catch (orderErr) {
+            logger.warn('payments', 'pagbank', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
+              error: (orderErr as Error).message,
+              caseId: domain.id,
+            });
+          }
+        }
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
@@ -579,7 +612,7 @@ const { caseId, case: casePayload } = req.body;
 // ============================================================================
 // GGPIXAPI Webhook — gateway-agnostic via processGatewayWebhook()
 // ============================================================================
-router.post('/webhooks/ggpix', (req: Request, res: Response) => {
+router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
   try {
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
     const payload = req.body;
@@ -635,6 +668,38 @@ router.post('/webhooks/ggpix', (req: Request, res: Response) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
+
+        // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
+        if (event.status === 'PAID') {
+          try {
+            const paymentAmount = Number((event.amountInCents || 0) / 100);
+            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder) {
+              await (supabaseForOrder.from('payment_orders') as any).insert({
+                case_id: domain.id,
+                user_id: domain.userId || null,
+                reference_id: event.referenceId || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: 'ggpixapi',
+                status: 'paid',
+                amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                currency: 'BRL',
+                payment_method: 'pix',
+                paid_at: event.paidAt || new Date().toISOString(),
+                base_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                discount_amount: 0,
+                final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                expires_at: null,
+              });
+            }
+          } catch (orderErr) {
+            logger.warn('payments', 'ggpix', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
+              error: (orderErr as Error).message,
+              caseId: domain.id,
+            });
+          }
+        }
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: event.gatewayTransactionId || `ord_${domain.id}`,

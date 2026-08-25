@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ai_execution_logs: {
@@ -364,6 +389,157 @@ export type Database = {
         }
         Relationships: []
       }
+      commercial_offers: {
+        Row: {
+          available: boolean
+          base_amount: number
+          coupon_discount: number
+          coupon_id: string | null
+          created_at: string | null
+          currency: string
+          description: string | null
+          document_number: string | null
+          eligible: boolean
+          final_amount: number
+          first_documents_discount: number
+          id: string
+          name: string
+          promotion_discount: number
+          promotion_id: string | null
+          requirements: Json
+          service_type: string
+          stage_id: string | null
+        }
+        Insert: {
+          available?: boolean
+          base_amount: number
+          coupon_discount?: number
+          coupon_id?: string | null
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          document_number?: string | null
+          eligible?: boolean
+          final_amount: number
+          first_documents_discount?: number
+          id?: string
+          name: string
+          promotion_discount?: number
+          promotion_id?: string | null
+          requirements?: Json
+          service_type: string
+          stage_id?: string | null
+        }
+        Update: {
+          available?: boolean
+          base_amount?: number
+          coupon_discount?: number
+          coupon_id?: string | null
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          document_number?: string | null
+          eligible?: boolean
+          final_amount?: number
+          first_documents_discount?: number
+          id?: string
+          name?: string
+          promotion_discount?: number
+          promotion_id?: string | null
+          requirements?: Json
+          service_type?: string
+          stage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_offers_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_orders: {
+        Row: {
+          affiliate_id: string | null
+          base_amount: number
+          case_id: string
+          commercial_offer_id: string
+          commission_amount: number
+          commission_base: number
+          coupon_discount: number
+          coupon_id: string | null
+          created_at: string
+          currency: string
+          document_number: number
+          final_amount: number
+          first_documents_discount: number
+          id: string
+          promotion_discount: number
+          promotion_id: string | null
+          service_type: string
+          stage_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          affiliate_id?: string | null
+          base_amount: number
+          case_id: string
+          commercial_offer_id: string
+          commission_amount: number
+          commission_base: number
+          coupon_discount: number
+          coupon_id?: string | null
+          created_at?: string
+          currency?: string
+          document_number: number
+          final_amount: number
+          first_documents_discount: number
+          id?: string
+          promotion_discount: number
+          promotion_id?: string | null
+          service_type: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          affiliate_id?: string | null
+          base_amount?: number
+          case_id?: string
+          commercial_offer_id?: string
+          commission_amount?: number
+          commission_base?: number
+          coupon_discount?: number
+          coupon_id?: string | null
+          created_at?: string
+          currency?: string
+          document_number?: number
+          final_amount?: number
+          first_documents_discount?: number
+          id?: string
+          promotion_discount?: number
+          promotion_id?: string | null
+          service_type?: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_orders_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commission_ledger: {
         Row: {
           applied_percent: number
@@ -383,7 +559,7 @@ export type Database = {
           status: string
         }
         Insert: {
-          applied_percent?: number
+          applied_percent: number
           available_at?: string | null
           base_amount: number
           beneficiary_id: string
@@ -408,6 +584,57 @@ export type Database = {
           case_id?: string | null
           commission_amount?: number
           created_at?: string
+          id?: string
+          level?: number
+          paid_at?: string | null
+          payment_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      commissions: {
+        Row: {
+          available_at: string | null
+          base_amount: number
+          beneficiary_id: string
+          buyer_user_id: string | null
+          case_id: string
+          commission_amount: number
+          created_at: string | null
+          id: string
+          level: number
+          paid_at: string | null
+          payment_id: string | null
+          reversal_reason: string | null
+          reversed_at: string | null
+          status: string
+        }
+        Insert: {
+          available_at?: string | null
+          base_amount: number
+          beneficiary_id: string
+          buyer_user_id?: string | null
+          case_id: string
+          commission_amount: number
+          created_at?: string | null
+          id?: string
+          level?: number
+          paid_at?: string | null
+          payment_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          status?: string
+        }
+        Update: {
+          available_at?: string | null
+          base_amount?: number
+          beneficiary_id?: string
+          buyer_user_id?: string | null
+          case_id?: string
+          commission_amount?: number
+          created_at?: string | null
           id?: string
           level?: number
           paid_at?: string | null
@@ -472,6 +699,33 @@ export type Database = {
           user_limit?: number
           valid_from?: string
           valid_until?: string
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          id: string
+          order_id: string | null
+          service_type: string
+          status: string
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          service_type: string
+          status?: string
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          service_type?: string
+          status?: string
         }
         Relationships: []
       }
@@ -990,6 +1244,68 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          affiliate_id: string | null
+          base_amount: number
+          case_id: string
+          commercial_offer_id: string | null
+          commission_amount: number
+          coupon_discount: number
+          created_at: string | null
+          currency: string
+          final_amount: number
+          first_documents_discount: number
+          id: string
+          promotion_discount: number
+          service_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          affiliate_id?: string | null
+          base_amount: number
+          case_id: string
+          commercial_offer_id?: string | null
+          commission_amount?: number
+          coupon_discount?: number
+          created_at?: string | null
+          currency?: string
+          final_amount: number
+          first_documents_discount?: number
+          id?: string
+          promotion_discount?: number
+          service_type: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          affiliate_id?: string | null
+          base_amount?: number
+          case_id?: string
+          commercial_offer_id?: string | null
+          commission_amount?: number
+          coupon_discount?: number
+          created_at?: string | null
+          currency?: string
+          final_amount?: number
+          first_documents_discount?: number
+          id?: string
+          promotion_discount?: number
+          service_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_commercial_offer_id_fkey"
+            columns: ["commercial_offer_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_events: {
         Row: {
           created_at: string
@@ -1158,6 +1474,48 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          case_id: string
+          commercial_offer_id: string | null
+          created_at: string | null
+          gateway: string
+          gateway_transaction_id: string | null
+          id: string
+          order_id: string
+          paid_at: string | null
+          service_type: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          case_id: string
+          commercial_offer_id?: string | null
+          created_at?: string | null
+          gateway: string
+          gateway_transaction_id?: string | null
+          id?: string
+          order_id: string
+          paid_at?: string | null
+          service_type?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          case_id?: string
+          commercial_offer_id?: string | null
+          created_at?: string | null
+          gateway?: string
+          gateway_transaction_id?: string | null
+          id?: string
+          order_id?: string
+          paid_at?: string | null
+          service_type?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       platform_events: {
         Row: {
           aggregate_id: string | null
@@ -1242,6 +1600,42 @@ export type Database = {
         }
         Relationships: []
       }
+      promotions: {
+        Row: {
+          applicable_services: Json
+          created_at: string | null
+          discount_type: string
+          discount_value: number
+          ends_at: string
+          id: string
+          name: string
+          starts_at: string
+          status: string
+        }
+        Insert: {
+          applicable_services?: Json
+          created_at?: string | null
+          discount_type: string
+          discount_value: number
+          ends_at: string
+          id: string
+          name: string
+          starts_at: string
+          status?: string
+        }
+        Update: {
+          applicable_services?: Json
+          created_at?: string | null
+          discount_type?: string
+          discount_value?: number
+          ends_at?: string
+          id?: string
+          name?: string
+          starts_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       referral_config: {
         Row: {
           calculation_base: string
@@ -1320,12 +1714,12 @@ export type Database = {
           history: Json
           id: string
           is_active: boolean
-          promotional_price: number | null
+          promotional_price: number
           service_name: string
           service_type: string
           standard_price: number
-          updated_at: string
-          updated_by: string
+          updated_at: string | null
+          updated_by: string | null
           valid_from: string | null
           valid_until: string | null
         }
@@ -1334,12 +1728,12 @@ export type Database = {
           history?: Json
           id?: string
           is_active?: boolean
-          promotional_price?: number | null
+          promotional_price: number
           service_name: string
           service_type: string
           standard_price: number
-          updated_at?: string
-          updated_by?: string
+          updated_at?: string | null
+          updated_by?: string | null
           valid_from?: string | null
           valid_until?: string | null
         }
@@ -1348,12 +1742,12 @@ export type Database = {
           history?: Json
           id?: string
           is_active?: boolean
-          promotional_price?: number | null
+          promotional_price?: number
           service_name?: string
           service_type?: string
           standard_price?: number
-          updated_at?: string
-          updated_by?: string
+          updated_at?: string | null
+          updated_by?: string | null
           valid_from?: string | null
           valid_until?: string | null
         }
@@ -1412,6 +1806,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_update_user_role: {
+        Args: { new_role: string; target_user_id: string }
+        Returns: undefined
+      }
+      admin_update_user_role_by_email: {
+        Args: { new_role: string; target_user_email: string }
+        Returns: Json
+      }
       current_user_id: { Args: never; Returns: string }
       emit_event: {
         Args: {
@@ -1558,12 +1960,30 @@ export type Enums<
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][EnumName]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
-export type CompositeTypes = never
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       user_role: ["citizen", "admin"],

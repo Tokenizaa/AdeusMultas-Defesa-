@@ -12,6 +12,7 @@
 
 import { caseRepository } from '../db/case-repository';
 import { commercialRepository } from '../db/commercial-repository';
+import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { PRICING } from '../../config/pricing';
@@ -204,13 +205,83 @@ export class AdminQueryService {
   }
 
   // ==========================================
-  // Pagamentos com paginação
+  // Pagamentos com paginação (fonte: payment_orders no Supabase)
   // ==========================================
 
-  getPayments(params: { limit?: number; offset?: number; status?: string }): PaginatedPayments {
+  async getPayments(params: { limit?: number; offset?: number; status?: string }): Promise<PaginatedPayments> {
     const limit = Math.min(Math.max(params.limit ?? 50, 10), 200);
     const offset = Math.max(params.offset ?? 0, 0);
+    const statusFilter = params.status && params.status !== 'all' ? params.status : null;
 
+    const supabase = getSupabaseServerClient();
+
+    // Tenta ler do Supabase (payment_orders); se indisponível, fallback para memória.
+    if (!supabase) {
+      return this.getPaymentsFromMemory({ limit, offset, status: statusFilter || undefined });
+    }
+
+    let query = supabase
+      .from('payment_orders')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (statusFilter) {
+      query = query.eq('status', statusFilter.toLowerCase());
+    }
+
+    const from = offset;
+    const to = offset + limit - 1;
+    query = query.range(from, to);
+
+    const { data, error, count } = await query;
+
+    if (error || !data || data.length === 0) {
+      // Fallback para memória se Supabase retornar vazio/erro
+      return this.getPaymentsFromMemory({ limit, offset, status: statusFilter || undefined });
+    }
+
+    const payments: PaginatedPayments['payments'] = data.map((row: any) => ({
+      id: row.pagbank_order_id || row.id,
+      caseId: row.case_id,
+      caseTitle: `Recurso Auto ${row.case_id}`,
+      customerName: 'Condutor DefesAi',
+      customerEmail: 'contato@www.defesai.shop',
+      customerCpf: '***.***.***-**',
+      amount: Number(row.amount || 0),
+      status: (row.status === 'paid' ? 'PAID' : row.status === 'pending' ? 'PENDING' : 'WAITING') as
+        | 'PAID'
+        | 'PENDING'
+        | 'WAITING'
+        | 'DECLINED'
+        | 'CANCELED',
+      method: row.payment_method || 'PIX',
+      createdAt: row.created_at || new Date().toISOString(),
+      paidAt: row.paid_at,
+      externalId: `PAGBANK_TX_${(row.case_id || '').substring(0, 10).toUpperCase()}`,
+      infractionCode: '745-50',
+      organ: 'DETRAN',
+    }));
+
+    const totalCount = count ?? payments.length;
+    const totalVolume = payments
+      .filter((p) => p.status === 'PAID')
+      .reduce((acc, p) => acc + p.amount, 0);
+    const paidCount = payments.filter((p) => p.status === 'PAID').length;
+    const pendingCount = payments.filter((p) => p.status === 'PENDING' || p.status === 'WAITING').length;
+
+    return {
+      payments,
+      totalCount,
+      totalVolume,
+      paidCount,
+      pendingCount,
+      pagination: { limit, offset, hasMore: offset + limit < totalCount },
+    };
+  }
+
+  /** Fallback: lê pagamentos do caseRepository em memória (comportamento antigo). */
+  private getPaymentsFromMemory(params: { limit: number; offset: number; status?: string }): PaginatedPayments {
+    const { limit, offset, status } = params;
     const domains: CaseDomain[] = [];
     for (const row of caseRepository.values()) {
       domains.push(CanonicalMapper.rowToDomain(row));
@@ -250,8 +321,8 @@ export class AdminQueryService {
     const pendingCount = allPayments.filter((p) => p.status === 'PENDING' || p.status === 'WAITING').length;
 
     let paginatedPayments = allPayments.slice(offset, offset + limit);
-    if (params.status && params.status !== 'all') {
-      paginatedPayments = paginatedPayments.filter((p) => p.status === params.status);
+    if (status) {
+      paginatedPayments = paginatedPayments.filter((p) => p.status === status);
     }
 
     return {
