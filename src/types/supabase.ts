@@ -1357,6 +1357,8 @@ export type Database = {
           discount_type: string | null
           expires_at: string | null
           final_amount: number
+          gateway: string
+          gateway_transaction_id: string | null
           id: string
           pagbank_order_id: string | null
           paid_at: string | null
@@ -1381,6 +1383,8 @@ export type Database = {
           discount_type?: string | null
           expires_at?: string | null
           final_amount?: number
+          gateway?: string
+          gateway_transaction_id?: string | null
           id?: string
           pagbank_order_id?: string | null
           paid_at?: string | null
@@ -1405,6 +1409,8 @@ export type Database = {
           discount_type?: string | null
           expires_at?: string | null
           final_amount?: number
+          gateway?: string
+          gateway_transaction_id?: string | null
           id?: string
           pagbank_order_id?: string | null
           paid_at?: string | null

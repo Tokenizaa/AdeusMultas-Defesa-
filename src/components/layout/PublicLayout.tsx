@@ -10,7 +10,7 @@ interface PublicLayoutProps {
 
 export const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen bg-[#F8F8F8] flex flex-col font-sans text-[#1B1B1B]">
+    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
       {/* 0. Skip link + Barra de Acessibilidade gov.br / eMAG (atalhos 1/2/3/4) */}
       <AccessibilityBar />
 

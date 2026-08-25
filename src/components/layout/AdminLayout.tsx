@@ -25,7 +25,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       </div>
 
       {/* Top Private Security Bar - Fixed at the very top */}
-      <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-sm font-mono text-slate-400 z-40">
+      <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-sm font-mono text-slate-400 z-40 safe-top">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           <span className="font-semibold text-slate-200">DefesAi Admin OS</span>

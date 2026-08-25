@@ -19,7 +19,7 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
   const { user, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white border-b border-[#CCCCCC] h-14 px-4 sm:px-6 flex items-center justify-between shadow-2xs overflow-hidden">
+    <header className="sticky top-0 z-30 w-full bg-white border-b border-[#CCCCCC] h-14 px-4 sm:px-6 flex items-center justify-between shadow-2xs overflow-hidden safe-top">
       <div className="flex items-center gap-3">
         {onToggleMobileMenu && (
           <button

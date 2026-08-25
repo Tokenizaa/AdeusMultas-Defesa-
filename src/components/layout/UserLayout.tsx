@@ -24,7 +24,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#F8F8F8] flex flex-col font-sans text-[#1B1B1B]">
+    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
       {/* Skip link + Barra de Acessibilidade gov.br / eMAG (atalhos 1/2/3/4) */}
       <AccessibilityBar />
 
@@ -71,7 +71,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#CCCCCC] py-3 px-4 flex items-center justify-around text-sm font-semibold text-slate-600 shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#CCCCCC] px-4 pt-3 flex items-center justify-around text-sm font-semibold text-slate-600 shadow-lg bottom-nav-safe">
         <button
           onClick={() => navigate('/dashboard')}
           className={`flex flex-col items-center gap-0.5 p-2 ${

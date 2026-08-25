@@ -32,7 +32,7 @@ export const PrivateHeader: React.FC = () => {
   };
 
   return (
-    <header className="w-full bg-white border-b border-[#CCCCCC] relative z-40">
+    <header className="w-full bg-white border-b border-[#CCCCCC] relative z-40 safe-top">
       {/* 1. Barra Institucional DefesAi */}
       <div className="bg-[#071D41] text-white py-1 px-4 sm:px-6 lg:px-8 text-sm border-b border-[#0C326F]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
