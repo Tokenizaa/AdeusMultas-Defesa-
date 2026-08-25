@@ -39,6 +39,11 @@ export const EventTopics = {
   WHATSAPP_MESSAGE_SENT: 'whatsapp.message_sent',
   WHATSAPP_WEBHOOK_RECEIVED: 'whatsapp.webhook_received',
 
+  // Omnichannel Messaging (WhatsApp, Meta Messenger, Instagram Direct)
+  MESSAGING_MESSAGE_RECEIVED: 'messaging.message_received',
+  MESSAGING_MESSAGE_SENT: 'messaging.message_sent',
+  MESSAGING_LEAD_QUALIFIED: 'messaging.lead_qualified',
+
   // Marketing OS 7-Agent Organism
   MARKETING_CYCLE_TICK: 'marketing.cycle_tick',
   MARKETING_STRATEGY_UPDATED: 'marketing.strategy_updated',

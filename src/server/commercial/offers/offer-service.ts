@@ -12,7 +12,7 @@ import type { CommercialOfferBreakdown, ResolveOfferParams, ResolveOfferResult }
 
 export { CommercialOfferBreakdown, ResolveOfferParams, ResolveOfferResult };
 
-const roundToCents = (value: number): number => Math.round(value);
+const round2 = (value: number): number => Number((Math.round(value * 100) / 100).toFixed(2));
 
 /**
  * Normalize serviceType aliases to canonical DB values.
@@ -30,7 +30,7 @@ const SERVICE_TYPE_ALIASES: Record<string, string> = {
 };
 
 export function normalizeServiceType(raw: string): string {
-  const key = raw.toLowerCase().trim();
+  const key = (raw || '').toLowerCase().trim();
   return SERVICE_TYPE_ALIASES[key] ?? key;
 }
 
@@ -100,49 +100,59 @@ export class OfferService {
       return { offer: null, reason: `A oferta "${normalized}" expirou.` };
     }
 
-    const baseAmount = pricing.standardPrice;
+    // Normaliza basePrice para Reais (caso esteja em centavos > 1000)
+    const rawStandard = pricing.standardPrice;
+    const baseAmount = round2(rawStandard > 1000 ? rawStandard / 100 : rawStandard);
+
     let promotionDiscount = 0;
     let promotionId: string | undefined;
+    let promotionName: string | undefined;
 
     const activePromotions = Array.from(this.promotions.values()).filter((p) => {
       if (p.status !== 'active') return false;
-      if (new Date(p.startDate) > now) return false;
-      if (new Date(p.endDate) < now) return false;
-      if (!p.applicableServices.includes('all') && !p.applicableServices.includes(normalized)) return false;
+      if (p.startDate && new Date(p.startDate) > now) return false;
+      if (p.endDate && new Date(p.endDate) < now) return false;
+      if (p.applicableServices && !p.applicableServices.includes('all') && !p.applicableServices.includes(normalized)) return false;
       return true;
     });
 
     if (activePromotions.length > 0) {
       const promo = activePromotions[0];
       promotionId = promo.id;
+      promotionName = promo.name;
       if (promo.discountType === 'percentage') {
-        promotionDiscount = roundToCents((baseAmount * promo.discountValue) / 100);
+        promotionDiscount = round2((baseAmount * promo.discountValue) / 100);
       } else {
-        promotionDiscount = roundToCents(promo.discountValue);
+        const rawDisc = promo.discountValue > 1000 ? promo.discountValue / 100 : promo.discountValue;
+        promotionDiscount = round2(rawDisc);
       }
-    } else if (pricing.promotionalPrice !== null && pricing.promotionalPrice < baseAmount) {
-      promotionDiscount = baseAmount - pricing.promotionalPrice;
+    } else if (pricing.promotionalPrice !== null && pricing.promotionalPrice !== undefined) {
+      const rawPromo = pricing.promotionalPrice > 1000 ? pricing.promotionalPrice / 100 : pricing.promotionalPrice;
+      if (rawPromo < baseAmount) {
+        promotionDiscount = round2(baseAmount - rawPromo);
+        promotionName = 'Preço Promocional';
+      }
     }
 
-    const priceAfterPromo = baseAmount - promotionDiscount;
+    const priceAfterPromo = round2(baseAmount - promotionDiscount);
 
     let documentNumber = 1;
     if (typeof docCountInput === 'number') {
-      documentNumber = docCountInput + 1;
+      documentNumber = Math.max(1, docCountInput + 1);
     } else if (userId && typeof this.getDocumentCount === 'function') {
       const count = this.getDocumentCount(userId);
       documentNumber = (typeof count === 'number' ? count : 0) + 1;
     }
 
+    const isFirstDocumentsBeneficiary = documentNumber <= 3;
+    const remainingBenefitedDocuments = Math.max(0, 3 - documentNumber + 1);
+
     let firstDocumentsDiscount = 0;
     let finalAmount: number;
-    if (documentNumber <= 3) {
-      // 50% sobre o valor pós-promoção.
-      // Arredonda o RESULTADO (valor que o cliente paga), não o desconto intermediário,
-      // para evitar perda de 1 centavo (ex.: 4495 * 50% = 2247.5 -> paga 2248).
-      const rawFinal = priceAfterPromo / 2;
-      firstDocumentsDiscount = priceAfterPromo - Math.round(rawFinal);
-      finalAmount = Math.round(rawFinal);
+    if (isFirstDocumentsBeneficiary) {
+      // 50% de desconto adicional sobre o valor pós-promoção para os 3 primeiros documentos
+      firstDocumentsDiscount = round2(priceAfterPromo * 0.5);
+      finalAmount = round2(priceAfterPromo - firstDocumentsDiscount);
     } else {
       finalAmount = priceAfterPromo;
     }
@@ -154,19 +164,21 @@ export class OfferService {
       if (coupon && coupon.isActive) {
         let discount = 0;
         if (coupon.discountType === 'percentage') {
-          discount = roundToCents((finalAmount * coupon.discountValue) / 100);
+          discount = round2((finalAmount * coupon.discountValue) / 100);
           if (coupon.maxDiscountAmount) {
-            discount = Math.min(discount, coupon.maxDiscountAmount);
+            const maxDisc = coupon.maxDiscountAmount > 1000 ? coupon.maxDiscountAmount / 100 : coupon.maxDiscountAmount;
+            discount = Math.min(discount, maxDisc);
           }
         } else {
-          discount = roundToCents(coupon.discountValue);
+          const rawVal = coupon.discountValue > 1000 ? coupon.discountValue / 100 : coupon.discountValue;
+          discount = round2(rawVal);
         }
-        couponDiscount = Math.min(discount, finalAmount);
-        finalAmount = Math.max(0, finalAmount - couponDiscount);
+        couponDiscount = round2(Math.min(discount, finalAmount));
+        finalAmount = round2(Math.max(0, finalAmount - couponDiscount));
       }
     }
 
-    finalAmount = Math.max(0, finalAmount);
+    finalAmount = round2(Math.max(0, finalAmount));
 
     const offer: CommercialOfferBreakdown = {
       commercialId: pricing.id,
@@ -181,7 +193,10 @@ export class OfferService {
       finalAmount,
       currency: 'BRL',
       promotionId,
+      promotionName: promotionName || 'Promoção Vigente',
       documentNumber,
+      isFirstDocumentsBeneficiary,
+      remainingBenefitedDocuments,
       eligible: true,
       available: true,
       requirements: [],

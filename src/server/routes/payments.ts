@@ -36,15 +36,21 @@ type CommercialOffer = {
 function resolveOffer(params: {
   serviceType: string;
   caseId?: string;
-}): { offer: CommercialOffer | null; error?: string } {
-  const { serviceType } = params;
+  documentCount?: number;
+  couponCode?: string;
+  userId?: string;
+}): { offer: CommercialOffer | null; breakdown?: any; error?: string } {
+  const { serviceType, documentCount, couponCode, userId } = params;
 
   if (!serviceType) {
-    return { offer: null, error: 'serviceType é obrigatório para criar o pagamento.' };
+    return { offer: null, error: 'serviceType é obrigatório para determinar a oferta comercial.' };
   }
 
   const result = commercialService.resolveCommercialOffer({
     serviceType,
+    documentCount,
+    couponCode,
+    userId,
   });
 
   if (!result.offer) {
@@ -64,7 +70,7 @@ function resolveOffer(params: {
     };
   }
 
-  return { offer };
+  return { offer, breakdown: result.breakdown };
 }
 
 function assertAmountMatchesOffer(amount: number, offer: CommercialOffer): void {
@@ -103,19 +109,41 @@ function prodAuth(req: Request, res: Response, next: NextFunction): void {
 // ============================================================================
 
 router.get('/resolve-price', (req: Request, res: Response) => {
-  const { serviceType } = req.query;
+  const { serviceType, documentCount, couponCode, userId: queryUserId } = req.query;
   if (!serviceType || typeof serviceType !== 'string') {
     return res.status(400).json({ error: 'serviceType é obrigatório.' });
   }
-  const result = resolveOffer({ serviceType });
+
+  const docCountNum = documentCount !== undefined ? parseInt(String(documentCount), 10) : undefined;
+  const userId = typeof queryUserId === 'string' ? queryUserId : req.user?.id;
+
+  const result = resolveOffer({
+    serviceType,
+    documentCount: isNaN(docCountNum as number) ? undefined : docCountNum,
+    couponCode: typeof couponCode === 'string' ? couponCode : undefined,
+    userId,
+  });
+
   if (!result.offer) {
     return res.status(404).json({ error: result.error || 'Serviço não encontrado no catálogo.' });
   }
+
   res.json({
     price: result.offer.price,
+    basePrice: result.offer.basePrice ?? result.offer.price,
+    standardPrice: result.offer.basePrice ?? result.offer.price,
+    promotionalDiscount: result.offer.promotionalDiscount ?? 0,
+    firstDocumentsDiscount: result.offer.firstDocumentsDiscount ?? 0,
+    couponDiscount: result.offer.couponDiscount ?? 0,
+    finalAmount: result.offer.finalPrice ?? result.offer.price,
     serviceName: result.offer.name,
     serviceType: result.offer.serviceType,
     currency: result.offer.currency,
+    documentNumber: result.offer.documentNumber ?? 1,
+    isFirstDocumentsBeneficiary: result.offer.isFirstDocumentsBeneficiary ?? true,
+    remainingBenefitedDocuments: result.offer.remainingBenefitedDocuments ?? 3,
+    promotionName: result.offer.promotionName ?? 'Promoção de Lançamento (50% OFF)',
+    breakdown: result.breakdown,
   });
 });
 
@@ -145,10 +173,17 @@ router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
 // MANTÉM alias /api/pagbank/orders para compatibilidade reversa.
 router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
   try {
-    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
+    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType, documentCount, couponCode } = req.body;
 
-    // serviceType é obrigatório; o backend decide o preço.
-    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    // serviceType é obrigatório; o backend decide o preço canônico.
+    const userId = req.user?.id;
+    const offerResult = resolveOffer({
+      serviceType: serviceType as string,
+      caseId,
+      documentCount: typeof documentCount === 'number' ? documentCount : undefined,
+      couponCode: typeof couponCode === 'string' ? couponCode : undefined,
+      userId,
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
@@ -245,6 +280,8 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       cardToken,
       authenticationMethod = 'CHALLENGE',
       softDescriptor,
+      documentCount,
+      couponCode,
     } = req.body;
 
     if (!cardToken) {
@@ -258,7 +295,14 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       });
     }
 
-    const offerResult = resolveOffer({ serviceType: serviceType as string, caseId });
+    const userId = req.user?.id;
+    const offerResult = resolveOffer({
+      serviceType: serviceType as string,
+      caseId,
+      documentCount: typeof documentCount === 'number' ? documentCount : undefined,
+      couponCode: typeof couponCode === 'string' ? couponCode : undefined,
+      userId,
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || 'Não foi possível determinar a oferta comercial.',

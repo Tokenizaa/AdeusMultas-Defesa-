@@ -257,10 +257,14 @@ class CommercialServiceFacade {
     userId?: string;
     documentCount?: number;
     couponCode?: string;
-  }): { offer: { commercialId: string; serviceType: string; stageId: string | null; name: string; description: string; price: number; currency: string; eligible: boolean; available: boolean; requirements: string[] } | null; reason?: string } {
+  }): {
+    offer: CommercialOffer | null;
+    breakdown?: CommercialOfferBreakdown | null;
+    reason?: string;
+  } {
     const result = this.offerService.resolve(params);
     if (!result.offer) {
-      return { offer: null, reason: result.reason };
+      return { offer: null, breakdown: null, reason: result.reason };
     }
     const o = result.offer;
     return {
@@ -271,11 +275,21 @@ class CommercialServiceFacade {
         name: o.name,
         description: o.description,
         price: o.finalAmount,
+        basePrice: o.baseAmount,
+        promotionalDiscount: o.promotionDiscount,
+        firstDocumentsDiscount: o.firstDocumentsDiscount,
+        couponDiscount: o.couponDiscount,
+        finalPrice: o.finalAmount,
+        documentNumber: o.documentNumber,
+        isFirstDocumentsBeneficiary: o.isFirstDocumentsBeneficiary,
+        remainingBenefitedDocuments: o.remainingBenefitedDocuments,
+        promotionName: o.promotionName,
         currency: o.currency,
         eligible: o.eligible,
         available: o.available,
         requirements: o.requirements,
       },
+      breakdown: o,
       reason: result.reason,
     };
   }
@@ -526,6 +540,15 @@ export interface CommercialOffer {
   name: string;
   description: string;
   price: number;
+  basePrice?: number;
+  promotionalDiscount?: number;
+  firstDocumentsDiscount?: number;
+  couponDiscount?: number;
+  finalPrice?: number;
+  documentNumber?: number;
+  isFirstDocumentsBeneficiary?: boolean;
+  remainingBenefitedDocuments?: number;
+  promotionName?: string;
   currency: string;
   eligible: boolean;
   available: boolean;

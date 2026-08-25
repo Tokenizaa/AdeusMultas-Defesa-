@@ -224,6 +224,67 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
     return { success: true, content: savedContent };
   }
 
+  // Create manual content item
+  async createManualContent(input: {
+    title: string;
+    channel: string;
+    format: string;
+    copyText: string;
+    scheduledDate: string;
+    hashtags?: string[];
+    imageUrl?: string | null;
+    mediaUrl?: string | null;
+    visualPrompt?: string;
+    status?: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
+    legalTheme?: string;
+  }) {
+    const newContent: any = {
+      id: `cnt-${Date.now()}`,
+      title: input.title,
+      channel: input.channel || 'instagram',
+      format: input.format || 'carrossel',
+      legalTheme: input.legalTheme || input.title,
+      legal_theme: input.legalTheme || input.title,
+      status: input.status || 'rascunho',
+      scheduledDate: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 16),
+      scheduled_date: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 16),
+      estimatedReach: Math.floor(10000 + Math.random() * 20000),
+      estimated_reach: Math.floor(10000 + Math.random() * 20000),
+      copyText: input.copyText || '',
+      copy_text: input.copyText || '',
+      hashtags: input.hashtags || ['#AdeusMulta', '#CTB'],
+      imageUrl: input.imageUrl || null,
+      image_url: input.imageUrl || null,
+      mediaUrl: input.mediaUrl || input.imageUrl || null,
+      media_url: input.mediaUrl || input.imageUrl || null,
+      visualPrompt: input.visualPrompt || '',
+      visual_prompt: input.visualPrompt || '',
+      authorAgent: '@marketing-criador',
+      author_agent: '@marketing-criador',
+      qualityReviewScore: 9.5,
+    };
+
+    let savedContent = newContent;
+    if (this.supabase) {
+      try {
+        const { data, error } = await (this.supabase as any)
+          .from('editorial_content')
+          .insert([newContent])
+          .select()
+          .single();
+        if (!error && data) {
+          savedContent = { ...newContent, ...data };
+        }
+      } catch (err) {
+        logger.warn('marketing', 'service', 'createManualContent', 'Fallback to memory only');
+      }
+    }
+
+    this.editorialContents.unshift(savedContent);
+    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, 'marketing_os');
+    return savedContent;
+  }
+
   // Update marketing agent (for external updates)
   async updateMarketingAgent(agentId: string, updates: Partial<any>) {
     const agentIndex = this.marketingAgents.findIndex(agent => agent.id === agentId);

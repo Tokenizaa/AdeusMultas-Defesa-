@@ -30,33 +30,43 @@ interface ContentEditorProps {
   content: EditorialContentItem | null;
   brand: BrandIdentityConfig | null;
   onClose: () => void;
-  onSave: (id: string, fields: { copyText?: string; title?: string }, versionNote?: { agent?: string; author?: string; changes?: string }) => Promise<void>;
+  onSave: (
+    id: string, 
+    fields: Partial<EditorialContentItem>, 
+    versionNote?: { agent?: string; author?: string; changes?: string }
+  ) => Promise<void>;
   onStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
-  onChannel: (id: string, channel: string) => Promise<void>;
+  onChannel?: (id: string, channel: string) => Promise<void>;
   onFetchVersions: (id: string) => Promise<ContentVersion[]>;
-  contents: EditorialContentItem[];
+  contents?: EditorialContentItem[];
+  onPublishToMeta?: (destination: 'facebook' | 'instagram' | 'both', contentId: string) => Promise<void>;
 }
 
-type Network = 'instagram' | 'tiktok' | 'blog';
+type Network = 'instagram' | 'tiktok' | 'blog' | 'facebook' | 'linkedin';
 
 const FORMAT_LABELS: Record<string, string> = {
   carrossel: 'Carrossel',
   artigo_seo: 'Artigo SEO',
-  reels_roteiro: 'Reels',
+  reels_roteiro: 'Reels / Roteiro',
   infografico: 'Infográfico',
   newsletter: 'Newsletter',
+  post_imagem: 'Post Único',
 };
 
 export const ContentEditor: React.FC<ContentEditorProps> = ({
-  content, brand, onClose, onSave, onStatus, onChannel, onFetchVersions, contents,
+  content, brand, onClose, onSave, onStatus, onChannel, onFetchVersions, contents, onPublishToMeta
 }) => {
   const [title, setTitle] = useState(content?.title ?? '');
   const [text, setText] = useState(content?.copyText ?? '');
-  const [hashtags, setHashtags] = useState(content?.hashtags?.join(' ') ?? '');
-  const [panelTab, setPanelTab] = useState<PanelTab>('info');
+  const [hashtags, setHashtags] = useState(content?.hashtags ? (Array.isArray(content.hashtags) ? content.hashtags.join(' ') : String(content.hashtags)) : '#AdeusMulta #CTB');
+  const [channel, setChannel] = useState(content?.channel ?? 'instagram');
+  const [format, setFormat] = useState(content?.format ?? 'carrossel');
+  const [scheduledDate, setScheduledDate] = useState(content?.scheduledDate ?? new Date(Date.now() + 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 16));
+  const [panelTab, setPanelTab] = useState<PanelTab>('assets');
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [previewNetwork, setPreviewNetwork] = useState<Network>('instagram');
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [liveText, setLiveText] = useState(text);
@@ -174,20 +184,54 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
 
   if (!content) return null;
 
-  const persist = async (next: string, versionNote?: { agent?: string; author?: string; changes?: string }) => {
+  const persist = async (nextText?: string, versionNote?: { agent?: string; author?: string; changes?: string }) => {
     setSaving(true);
     setNotice(null);
+    const textToSave = nextText !== undefined ? nextText : liveText;
     try {
-      await onSave(content.id, { copyText: next }, versionNote);
-      setText(next);
-      setLiveText(next);
+      await onSave(
+        content.id, 
+        { 
+          title,
+          copyText: textToSave,
+          channel,
+          format,
+          scheduledDate,
+          hashtags: hashtags.split(' ').filter(Boolean),
+          imageUrl: attachedImageUrl,
+          mediaUrl: attachedImageUrl,
+          visualPrompt: editorVisualPrompt,
+        }, 
+        versionNote
+      );
+      if (nextText !== undefined) {
+        setText(nextText);
+        setLiveText(nextText);
+      }
       const vs = await onFetchVersions(content.id);
       setVersions(vs);
-      setNotice({ kind: 'ok', msg: versionNote?.changes ? `${versionNote.changes} — salvo.` : 'Salvo.' });
+      setNotice({ kind: 'ok', msg: versionNote?.changes ? `${versionNote.changes} — salvo.` : 'Salvo com sucesso.' });
     } catch {
       setNotice({ kind: 'err', msg: 'Falha ao salvar alterações.' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePublishMeta = async () => {
+    if (!onPublishToMeta) {
+      onStatus(content.id, 'publicado');
+      setNotice({ kind: 'ok', msg: 'Conteúdo marcado como publicado.' });
+      return;
+    }
+    setPublishing(true);
+    try {
+      await onPublishToMeta('both', content.id);
+      setNotice({ kind: 'ok', msg: 'Publicado no Facebook & Instagram!' });
+    } catch (e: any) {
+      setNotice({ kind: 'err', msg: `Erro ao publicar: ${e?.message || 'Tente novamente'}` });
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -335,6 +379,16 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
           >
             <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar'}
           </button>
+          {content.status !== 'publicado' && (
+            <button
+              onClick={handlePublishMeta}
+              disabled={publishing}
+              className="px-3 py-2 bg-[#155BCB] hover:bg-[#1149a4] text-white rounded-lg text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
+              <span>{publishing ? 'Publicando...' : 'Publicar'}</span>
+            </button>
+          )}
           <button
             onClick={() => { onStatus(content.id, 'aprovado_qualidade'); setNotice({ kind: 'ok', msg: 'Conteúdo aprovado pela qualidade.' }); }}
             className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold cursor-pointer"
@@ -363,6 +417,53 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
                 placeholder="Título do conteúdo"
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-500"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="font-bold text-slate-700 uppercase block text-xs font-mono mb-1">Canal</label>
+                <select
+                  value={channel}
+                  onChange={(e) => {
+                    setChannel(e.target.value);
+                    if (onChannel) onChannel(content.id, e.target.value);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="blog">Blog / SEO</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="email">E-mail</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 uppercase block text-xs font-mono mb-1">Formato</label>
+                <select
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="carrossel">Carrossel</option>
+                  <option value="post_imagem">Post Único</option>
+                  <option value="reels_roteiro">Reels / Roteiro</option>
+                  <option value="artigo_seo">Artigo SEO</option>
+                  <option value="infografico">Infográfico</option>
+                  <option value="newsletter">Newsletter</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 uppercase block text-xs font-mono mb-1">Agendamento</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledDate.replace(' ', 'T').slice(0, 16)}
+                  onChange={(e) => setScheduledDate(e.target.value.replace('T', ' '))}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
             </div>
 
             <div>
