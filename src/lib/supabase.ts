@@ -2052,16 +2052,23 @@ const STORAGE_KEY_AUTH = 'defesai_auth_session_v1';
 const STORAGE_KEY_USERS = 'defesai_registered_users_v1';
 
 export function getStoredUsers(): Record<string, { user: AuthUser; passwordHash: string }> {
-  if (typeof window === 'undefined') return {};
+  if (typeof window === 'undefined') return DEMO_USERS;
 
   const raw = localStorage.getItem(STORAGE_KEY_USERS);
-  if (!raw) return {};
+  let users: Record<string, { user: AuthUser; passwordHash: string }> = {};
 
   try {
-    return JSON.parse(raw);
+    users = JSON.parse(raw) || {};
   } catch {
-    return {};
+    users = {};
   }
+
+  // Fallback to DEMO_USERS if localStorage is empty (Supabase down / not configured)
+  if (Object.keys(users).length === 0 && Object.keys(DEMO_USERS).length > 0) {
+    return DEMO_USERS;
+  }
+
+  return users;
 }
 
 export function saveStoredUser(email: string, user: AuthUser, passwordHash: string) {

@@ -11,7 +11,7 @@ import {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (name: string, email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (name: string, email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<AuthUser>) => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
@@ -144,11 +144,9 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
         });
 
         if (error) {
-          setIsLoading(false);
-          return { success: false, error: error.message || 'Credenciais inválidas.' };
-        }
-
-        if (data.user) {
+          console.warn('Supabase login failed, trying local fallback:', error.message);
+          // Fall through to local fallback instead of failing hard
+        } else if (data.user) {
            // Get role from user_profiles table for accuracy, fallback to user_metadata
            let roleFromProfile: UserRole | undefined;
            if (isSupabaseConfigured && supabase) {
@@ -208,7 +206,7 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
     return { success: true };
   };
 
-  const signUp = async (name: string, email: string, password: string, phone?: string): Promise<{ success: boolean; error?: string }> => {
+  const signUp = async (name: string, email: string, password: string, phone?: string): Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
@@ -245,27 +243,47 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
         });
 
         if (error) {
-          setIsLoading(false);
-          return { success: false, error: error.message };
-        }
+          console.warn('Supabase signUp failed, falling back to local storage:', error.message);
+          // NÃO retorna erro — cai para fallback local automaticamente
+        } else if (data.user) {
+          // Garante que o perfil do usuário existe no banco (user_profiles)
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .insert({
+              user_id: data.user.id,
+              name: cleanName,
+              email: cleanEmail,
+              phone: cleanPhone,
+              role: 'citizen',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
 
-        if (data.user) {
-          const authUser: AuthUser = {
-            id: data.user.id,
-            name: cleanName,
-            email: cleanEmail,
-            role: 'citizen',
-            phone: cleanPhone,
-            createdAt: new Date().toISOString(),
-          };
-          setUser(authUser);
-          setStoredSession(authUser);
-          saveStoredUser(cleanEmail, authUser, password);
+          if (profileError) {
+            console.error('Supabase user_profiles insert failed:', profileError);
+          }
+
+          if (data.session) {
+            const authUser: AuthUser = {
+              id: data.user.id,
+              name: cleanName,
+              email: cleanEmail,
+              role: 'citizen',
+              phone: cleanPhone,
+              createdAt: new Date().toISOString(),
+            };
+            setUser(authUser);
+            setStoredSession(authUser);
+            saveStoredUser(cleanEmail, authUser, password);
+            setIsLoading(false);
+            return { success: true };
+          }
+
           setIsLoading(false);
-          return { success: true };
+          return { success: true, requiresEmailConfirmation: true };
         }
       } catch (err: any) {
-        console.error('Supabase signUp error:', err);
+        console.warn('Supabase signUp exception, falling back to local storage:', err);
       }
     }
 

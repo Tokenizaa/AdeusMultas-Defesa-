@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Sparkles, Mail, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
+import { ShieldCheck, Sparkles, Mail, CheckCircle2, ArrowRight, Loader2, X } from 'lucide-react';
 import { useAuth } from '../../core/auth/AuthContext';
-import { supabase as supabaseClient } from '../../lib/supabase';
+import { supabase as supabaseClient, getStoredUsers } from '../../lib/supabase';
 import { InfractionData, VehicleData, CaseAnalysis } from '../../types';
 import { SharedAuthForm, AuthFormMode } from '../auth/SharedAuthForm';
 
@@ -67,15 +67,12 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
   // Auto-detect if user already has an account when email changes
   const handleEmailChange = (emailValue: string) => {
     if (emailValue.includes('@') && emailValue.length > 5) {
-      // Check localStorage for existing users (dev/demo mode)
+      // Check local storage for existing users (dev/demo mode)
       try {
-        const raw = localStorage.getItem('defesai_users');
-        if (raw) {
-          const allUsers = JSON.parse(raw);
-          const clean = emailValue.trim().toLowerCase();
-          if (allUsers[clean]) {
-            setMode('login');
-          }
+        const allUsers = getStoredUsers();
+        const clean = emailValue.trim().toLowerCase();
+        if (allUsers[clean]) {
+          setMode('login');
         }
       } catch { /* ignore */ }
     }
@@ -183,8 +180,11 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
   // Main Auth Form
   // ==========================================================================
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onClick={onCancel}>
+      <div
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header with Case Preservation Banner */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -193,12 +193,21 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
               100% dos Dados Coletados Preservados
             </span>
 
-            <button
-              onClick={onCancel}
-              className="text-xs text-slate-400 hover:text-slate-600 font-semibold cursor-pointer"
-            >
-              Voltar ao Diagnóstico
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onCancel}
+                className="text-xs text-slate-400 hover:text-slate-600 font-semibold cursor-pointer"
+              >
+                Voltar ao Diagnóstico
+              </button>
+              <button
+                onClick={onCancel}
+                className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div>
@@ -235,8 +244,8 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
           theme="blue"
           showPhone={true}
           phoneRequired={true}
-          showPasswordConfirm={false}
-          showTerms={false}
+          showPasswordConfirm={true}
+          showTerms={true}
           initialName={leadName || 'Carlos Eduardo Silveira'}
           initialPhone={leadPhone || '(11) 98765-4321'}
           onLogin={handleLogin}
