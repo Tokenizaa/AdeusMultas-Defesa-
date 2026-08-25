@@ -18667,6 +18667,38 @@ router11.post(["/pagbank/orders", "/payments/pix/create"], prodAuth, async (req,
       webhookUrl: `${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/${gateway.id === "ggpixapi" ? "ggpix" : "pagbank"}`
     });
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
+    try {
+      const supabaseForOrder = getSupabaseServerClient();
+      if (supabaseForOrder) {
+        const { error: orderError } = await supabaseForOrder.from("payment_orders").insert({
+          case_id: caseId || `case_${Date.now()}`,
+          user_id: null,
+          reference_id: orderResult.referenceId || `defesai_case_${caseId || Date.now()}`,
+          pagbank_order_id: orderResult.gatewayTransactionId,
+          gateway: gateway.id,
+          status: "pending",
+          amount: finalAmount,
+          currency: "BRL",
+          payment_method: "pix",
+          paid_at: null,
+          base_amount: finalAmount,
+          discount_amount: 0,
+          final_amount: finalAmount,
+          expires_at: orderResult.expiresAt || new Date(Date.now() + 30 * 60 * 1e3).toISOString()
+        });
+        if (orderError) {
+          logger.warn("payments", "pix_create", "create_pix_order", "Falha ao inserir payment_orders (pending)", {
+            error: orderError.message,
+            caseId: caseId || null
+          });
+        }
+      }
+    } catch (orderErr) {
+      logger.warn("payments", "pix_create", "create_pix_order", "Exce\xE7\xE3o ao inserir payment_orders (pending)", {
+        error: orderErr.message,
+        caseId: caseId || null
+      });
+    }
     res.json({
       success: true,
       order: orderResult,
@@ -18789,6 +18821,38 @@ router11.post("/payments/credit-card/create", prodAuth, async (req, res) => {
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
         caseRepository.set(caseId, updatedRow);
+        try {
+          const supabaseForOrder = getSupabaseServerClient();
+          if (supabaseForOrder) {
+            const { error: orderError } = await supabaseForOrder.from("payment_orders").insert({
+              case_id: caseId,
+              user_id: domain.userId || null,
+              reference_id: `defesai_case_${caseId}`,
+              pagbank_order_id: orderResult.orderId,
+              gateway: "pagbank",
+              status: "pending",
+              amount: offerResult.offer.price,
+              currency: "BRL",
+              payment_method: "credit_card",
+              paid_at: null,
+              base_amount: offerResult.offer.price,
+              discount_amount: 0,
+              final_amount: offerResult.offer.price,
+              expires_at: null
+            });
+            if (orderError) {
+              logger.warn("payments", "credit_card", "create_credit_card_order", "Falha ao inserir payment_orders", {
+                error: orderError.message,
+                caseId
+              });
+            }
+          }
+        } catch (orderErr) {
+          logger.warn("payments", "credit_card", "create_credit_card_order", "Exce\xE7\xE3o ao inserir payment_orders", {
+            error: orderErr.message,
+            caseId
+          });
+        }
       }
     }
     logger.info("payments", "gateway", "create_credit_card_order", "Credit card order endpoint called", {
@@ -18931,7 +18995,7 @@ router11.post("/webhooks/pagbank", async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-router11.post("/pix/simulate-confirm", (req, res) => {
+router11.post("/pix/simulate-confirm", async (req, res) => {
   if (!isTestMode()) {
     return res.status(403).json({
       error: "Rota de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
@@ -19011,6 +19075,28 @@ router11.post("/pix/simulate-confirm", (req, res) => {
   });
   const updatedRow = CanonicalMapper.domainToRow(domain);
   databaseRows.set(domain.id, updatedRow);
+  caseRepository.set(domain.id, updatedRow);
+  try {
+    const supabaseForOrder = getSupabaseServerClient();
+    if (supabaseForOrder) {
+      const { error: orderError } = await supabaseForOrder.from("payment_orders").update({
+        status: "paid",
+        paid_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("case_id", domain.id).eq("status", "pending");
+      if (orderError) {
+        logger.warn("payments", "gateway", "simulate_confirm", "Falha ao atualizar payment_orders", {
+          error: orderError.message,
+          caseId: domain.id
+        });
+      }
+    }
+  } catch (orderErr) {
+    logger.warn("payments", "gateway", "simulate_confirm", "Exce\xE7\xE3o ao atualizar payment_orders", {
+      error: orderErr.message,
+      caseId: domain.id
+    });
+  }
   commercialService.processPaymentConfirmationEvent({
     paymentId: orderId || `ord_${domain.id}`,
     caseId: domain.id,

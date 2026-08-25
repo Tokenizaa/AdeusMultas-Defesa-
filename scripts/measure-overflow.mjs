@@ -68,6 +68,6 @@ let hasOverflow = 0;
 for (const r of results) {
   const flag = r.overflow > 0 ? '❌ OVERFLOW' : (r.error ? '❌ ERROR' : '✅ ok');
   if (r.overflow > 0 || r.error) hasOverflow++;
-  console.log(`${flag.padEnd(12)} ${(r.vp||'').padEnd(14)} ${(r.route||'').padEnd(14)} overflow=${r.overflow ?? '-'}${r.worst ? ' worst=' + r.worst : ''}${r.error ? ' err=' + r.error : ''}`);
+  console.log(`${flag.padEnd(12)} ${(r.vp||'').padEnd(14)} ${(r.route||'').padEnd(14)} overflow=${r.overflow ?? '-'} layout=${r.layout ?? '?'} bottomNav=${r.bottomNav ?? '-'}${r.worst ? ' worst=' + r.worst : ''}${r.error ? ' err=' + r.error : ''}`);
 }
 console.log(`\nTotal issues: ${hasOverflow}/${results.length}`);
