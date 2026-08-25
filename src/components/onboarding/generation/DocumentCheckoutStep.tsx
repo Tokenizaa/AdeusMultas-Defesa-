@@ -67,6 +67,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     threeDsChallengeRequired?: boolean;
   } | null>(null);
   const [creditCardError, setCreditCardError] = useState<string | null>(null);
+  // Preço efetivo resolvido pelo catálogo comercial (backend decide).
+  const [resolvedPrice, setResolvedPrice] = useState<number | null>(null);
   // Modo de teste anunciado pelo servidor (/gateway/status → testMode).
   // Não dependemos de import.meta.env.DEV: funciona também rodando o build
   // localmente enquanto o backend estiver fora de produção.
@@ -83,8 +85,28 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     return () => { active = false; };
   }, []);
 
+  // Resolve preço do catálogo comercial (funciona para qualquer método de pagamento)
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/payments/resolve-price?serviceType=${encodeURIComponent(serviceType)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (active && data && typeof data.price === 'number') {
+          setResolvedPrice(data.price);
+        }
+      })
+      .catch(() => {/* fallback para pixData.amount */});
+    return () => { active = false; };
+  }, [serviceType]);
+
   // Simulação só aparece para admin E quando o servidor confirma modo de teste
   const canSimulate = isAdmin && testMode;
+
+  // Preço efetivo: catálogo (resolve-price) > PIX response > documentData > fallback 89.90
+  const effectivePrice: number =
+    resolvedPrice
+    ?? pixData?.amount
+    ?? (typeof documentData.price === 'number' ? documentData.price : 89.90);
 
   // Load PIX when payment method is PIX
   useEffect(() => {
@@ -164,6 +186,12 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
       isAnonymous: false,
       isPaid: true,
       paidAt: new Date().toISOString(),
+      payment: {
+        status: 'approved',
+        amount: effectivePrice,
+        paidAt: new Date().toISOString(),
+        paymentMethod: paymentMethod === 'credit_card' ? 'credit_card' : 'pix',
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       timeline: [
@@ -177,7 +205,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         {
           id: `tl_${Date.now()}_2`,
           title: `Pagamento ${paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'} Confirmado`,
-          description: `Valor de R$ ${documentData.price.toFixed(2)} recebido com sucesso.`,
+          description: `Valor de R$ ${effectivePrice.toFixed(2)} recebido com sucesso.`,
           timestamp: new Date().toISOString(),
           type: 'payment',
         },
@@ -337,7 +365,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-slate-400 line-through mr-2 font-mono">R$ 197,00</span>
-                  <span className="text-2xl font-extrabold text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-2xl font-extrabold text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
             </div>
@@ -415,7 +443,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</p>
                 </div>
               </div>
 
@@ -559,7 +587,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {documentData.price.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</p>
                 </div>
               </div>
 
@@ -568,7 +596,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 customerName={documentData.applicantName}
                 customerEmail={documentData.applicantEmail}
                 customerCpf={documentData.applicantCpf}
-                amount={documentData.price}
+                amount={effectivePrice}
                 onSuccess={handleCreditCardSuccess}
                 onError={handleCreditCardError}
               />

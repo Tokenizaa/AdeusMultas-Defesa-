@@ -443,6 +443,8 @@ export interface CaseDocumentData {
   addressCityState: string;
   vehicleRenavam?: string;
   factsNarrative?: string;
+  /** Preço efetivo resolvido pelo catálogo comercial (em reais). */
+  price?: number;
 }
 
 // ==========================================

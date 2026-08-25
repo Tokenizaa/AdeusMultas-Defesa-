@@ -98,6 +98,27 @@ function prodAuth(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+// ============================================================================
+// Resolução de preço a partir do catálogo comercial (endpoint público)
+// ============================================================================
+
+router.get('/resolve-price', (req: Request, res: Response) => {
+  const { serviceType } = req.query;
+  if (!serviceType || typeof serviceType !== 'string') {
+    return res.status(400).json({ error: 'serviceType é obrigatório.' });
+  }
+  const result = resolveOffer({ serviceType });
+  if (!result.offer) {
+    return res.status(404).json({ error: result.error || 'Serviço não encontrado no catálogo.' });
+  }
+  res.json({
+    price: result.offer.price,
+    serviceName: result.offer.name,
+    serviceType: result.offer.serviceType,
+    currency: result.offer.currency,
+  });
+});
+
 // Middleware to capture raw body for webhook signature verification
 router.use('/webhooks/pagbank', (req: Request, res: Response, next) => {
   let rawBody = '';
