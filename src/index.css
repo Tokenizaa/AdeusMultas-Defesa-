@@ -348,9 +348,12 @@ p {
   letter-spacing: var(--tracking-body);
 }
 
-/* Links */
+/* Links — herdam cor do elemento pai (WCAG 2.1 §1.4.3 contraste).
+   Use class Tailwind text-[#155BCB] ou text-primary nos <a> que precisam
+   de azul explícito. A regra global NÃO força mais cor azul, evitando
+   azul-sobre-azul em headers/nav com fundo escuro. */
 a {
-  color: var(--color-primary);
+  color: inherit;
   text-decoration: none;
   transition: color var(--duration-fast) var(--easing-standard);
 }
