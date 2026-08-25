@@ -143,7 +143,7 @@ router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
 
 // Official Gateway-Agnostic PIX Creation (resolves price from commercial catalog)
 // MANTÉM alias /api/pagbank/orders para compatibilidade reversa.
-router.post(['/pagbank/orders', '/payments/pix/create'], prodAuth, async (req, res) => {
+router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
   try {
     const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
 
@@ -232,7 +232,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
 
 // Credit Card Order Creation Endpoint — gateway-agnostic
 // Only PagBank supports credit card; GGPIXAPI is blocked by the gateway manager.
-router.post('/payments/credit-card/create', prodAuth, async (req, res) => {
+router.post('/credit-card/create', prodAuth, async (req, res) => {
   try {
     const {
       caseId,

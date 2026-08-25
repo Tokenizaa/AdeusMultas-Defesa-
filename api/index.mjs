@@ -18880,7 +18880,7 @@ router11.use("/webhooks/ggpix", (req, res, next) => {
     next();
   });
 });
-router11.post(["/pagbank/orders", "/payments/pix/create"], prodAuth, async (req, res) => {
+router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => {
   try {
     const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
     const offerResult = resolveOffer({ serviceType, caseId });
@@ -18951,7 +18951,7 @@ router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-router11.post("/payments/credit-card/create", prodAuth, async (req, res) => {
+router11.post("/credit-card/create", prodAuth, async (req, res) => {
   try {
     const {
       caseId,
