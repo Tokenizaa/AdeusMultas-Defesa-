@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sparkles,
   ShieldCheck,
@@ -115,6 +115,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
   const [step, setStep] = useState<number>(savedState?.step ?? 1);
+  const wizardTopRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top of wizard on every step change
+  useEffect(() => {
+    wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
   const [leadName, setLeadName] = useState<string>(savedState?.leadName || user?.name || '');
@@ -519,7 +525,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div ref={wizardTopRef} className="max-w-4xl mx-auto space-y-6">
       {/* Top Breadcrumb & Phase Indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
         <div className="flex items-center gap-3">
