@@ -190,7 +190,7 @@ test.describe('Comprehensive Case Creation - Testing Multiple Infraction Types',
     await page.click('#btn-next-to-identification');
     await waitForStep(page, 4);
     
-// Step 4: Fill identification form
+    // Step 4: Fill identification form
     await fillInput(page, 'input-lead-name', ADMIN_USER.name);
     await fillInput(page, 'input-lead-phone', ADMIN_USER.phone);
     await fillInput(page, 'input-ait-number', '1B892014');
@@ -201,7 +201,7 @@ test.describe('Comprehensive Case Creation - Testing Multiple Infraction Types',
     await page.click('#btn-next-to-specifics');
     await page.waitForTimeout(500);
     await waitForStep(page, 5);
-await page.waitForSelector('#btn-run-analysis', { state: 'attached' });
+  await page.waitForSelector('#btn-run-analysis', { state: 'attached' });
     await page.waitForSelector('#btn-run-analysis', { state: 'visible' });
     await page.click('#btn-run-analysis', { force: true });
     
@@ -236,7 +236,7 @@ await page.waitForSelector('#btn-run-analysis', { state: 'attached' });
     await page.waitForSelector('#category-card-lei_seca', { state: 'visible' });
     await page.click('#category-card-lei_seca');
     await page.click('#btn-next-to-identification');
-await waitForStep(page, 4);
+    await waitForStep(page, 4);
     
     // Fill identification form
     await fillInput(page, 'input-lead-name', ADMIN_USER.name);
@@ -248,8 +248,8 @@ await waitForStep(page, 4);
     await fillInput(page, 'input-datetime', '2024-01-15');
     
     // Step 5: Use test fill button (wait for button to be visible)
-    await page.waitForSelector('button:has-text("Preencher com dados de teste")', { state: 'visible' });
-    await page.click('button:has-text("Preencher com dados de teste")');
+    await page.waitForSelector('button:has-text("🧪 Preencher com dados de teste")', { state: 'visible' });
+    await page.click('button:has-text("🧪 Preencher com dados de teste")');
     
     // Wait for the test fill button to populate the lei_seca specific data
     // This ensures the button click was processed and the form is updated
@@ -307,7 +307,7 @@ await waitForStep(page, 4);
     // Test fill button (wait for button to be visible)
     await page.waitForSelector('button:has-text("Preencher com dados de teste")', { state: 'visible' });
     await page.click('button:has-text("Preencher com dados de teste")');
-// Wait for the test fill button to populate the celular specific data
+    // Wait for the test fill button to populate the celular specific data
     // This ensures the button click was processed and the form is updated
     await page.waitForSelector('#select-celular-circunstancia', { state: 'visible' });
     await page.waitForFunction(() => {
