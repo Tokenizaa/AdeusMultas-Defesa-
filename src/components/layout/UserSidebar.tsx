@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -20,59 +20,102 @@ import { useAuth } from '../../core/auth/AuthContext';
 
 interface UserSidebarProps {
   activeCaseCount?: number;
+  onNavigate?: () => void;
 }
 
-interface NavItem {
-  label: string;
-  path: string;
-  icon: any;
-  badge: number | null;
-  highlight?: boolean;
+interface NavGroup {
+  title: string;
+  items: {
+    label: string;
+    path: string;
+    icon: any;
+    badge?: number | null;
+    highlight?: boolean;
+    exact?: boolean;
+  }[];
 }
 
-export const UserSidebar: React.FC<UserSidebarProps> = ({ activeCaseCount = 0 }) => {
+export const UserSidebar: React.FC<UserSidebarProps> = ({ activeCaseCount = 0, onNavigate }) => {
   const { currentPath, navigate } = useRouter();
   const { user, logout, isAdmin } = useAuth();
 
-  const navItems: NavItem[] = [
-    {
-      label: 'Painel do Cidadão',
-      path: '/dashboard',
-      icon: LayoutDashboard,
-      badge: null,
-    },
-    {
-      label: 'Meus Recursos',
-      path: '/cases',
-      icon: FileText,
-      badge: activeCaseCount > 0 ? activeCaseCount : null,
-    },
-    {
-      label: 'Programa de Afiliados',
-      path: '/afiliado',
-      icon: Share2,
-      badge: null,
-      highlight: true,
-    },
-    {
-      label: 'Minhas Configurações',
-      path: '/perfil', // This will now show the consolidated UserSettingsView
-      icon: Settings,
-      badge: null,
-    },
-  ];
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    'Navegação do Cidadão': true,
+    'Acesso Governamental': false,
+  });
 
-  const isActive = (itemPath: string) => {
-    if (itemPath === '/dashboard') return currentPath === '/dashboard';
+  const toggleGroup = (title: string) => {
+    setOpenGroups((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
+
+  const isActive = (itemPath: string, exact?: boolean) => {
+    if (exact || itemPath === '/dashboard') return currentPath === itemPath;
     return currentPath.startsWith(itemPath);
   };
+
+  const isGroupActive = (items: NavGroup['items']) => {
+    return items.some((item) => isActive(item.path, item.exact));
+  };
+
+  const handleClick = (path: string) => {
+    navigate(path);
+    onNavigate?.();
+  };
+
+  const navGroups: NavGroup[] = [
+    {
+      title: 'Navegação do Cidadão',
+      items: [
+        {
+          label: 'Painel do Cidadão',
+          path: '/dashboard',
+          icon: LayoutDashboard,
+          badge: null,
+        },
+        {
+          label: 'Meus Recursos',
+          path: '/cases',
+          icon: FileText,
+          badge: activeCaseCount > 0 ? activeCaseCount : null,
+        },
+        {
+          label: 'Programa de Afiliados',
+          path: '/afiliado',
+          icon: Share2,
+          badge: null,
+          highlight: true,
+        },
+        {
+          label: 'Minhas Configurações',
+          path: '/perfil',
+          icon: Settings,
+          badge: null,
+        },
+      ],
+    },
+    ...(isAdmin
+      ? [
+          {
+            title: 'Acesso Governamental',
+            items: [
+              {
+                label: 'Console Administrativo',
+                path: '/admin',
+                icon: Building2,
+                badge: null,
+              },
+            ],
+          } as NavGroup,
+        ]
+      : []),
+  ];
 
   return (
     <aside className="w-64 bg-white border-r border-[#CCCCCC] flex flex-col shrink-0 min-h-screen">
       {/* Brand Header */}
       <div className="p-4 border-b border-[#E6E6E6] bg-slate-50/50">
         <div
-          onClick={() => navigate('/dashboard')}
+          onClick={() => handleClick('/dashboard')}
           className="flex items-center gap-2.5 cursor-pointer group"
         >
           <div className="w-8 h-8 rounded-xl bg-[#155BCB] flex items-center justify-center font-bold text-white shadow-xs group-hover:scale-105 transition-transform text-sm">
@@ -92,35 +135,65 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ activeCaseCount = 0 })
 
       {/* Main User Navigation */}
       <div className="p-3 flex-1 space-y-4 overflow-y-auto">
-        <div className="px-3 py-1.5 text-sm font-bold text-slate-500 uppercase tracking-wider font-mono">
-          Navegação do Cidadão
-        </div>
-
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path);
-
-return (
-             <button
-               key={item.path}
-               id={`nav-user-${item.path.replace('/', '')}`}
-               onClick={() => navigate(item.path)}
-               className={`w-full px-3 py-3 rounded-xl text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                 active
-                   ? 'bg-[#E7EFFF] text-[#155BCB] font-bold border-l-4 border-[#155BCB]'
-                   : item.highlight
-                   ? 'bg-blue-50/80 text-[#071D41] hover:bg-blue-100/70'
-                   : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-               }`}
-             >
-              <div className="flex items-center gap-2.5">
-                <Icon
-                  className={`w-4 h-4 ${active ? 'text-[#155BCB]' : item.highlight ? 'text-[#155BCB]' : 'text-slate-500'}`}
+        {navGroups.map((group) => {
+          const groupOpen = openGroups[group.title] ?? isGroupActive(group.items);
+          return (
+            <div key={group.title} className="space-y-1">
+              <button
+                onClick={() => toggleGroup(group.title)}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-sm font-bold text-slate-500 uppercase tracking-wider font-mono cursor-pointer hover:text-slate-700"
+                aria-expanded={groupOpen}
+              >
+                <span>{group.title}</span>
+                <ChevronRight
+                  className={`w-3.5 h-3.5 transition-transform ${groupOpen ? 'rotate-90' : ''}`}
                 />
-                <span>{item.label}</span>
-              </div>
-              {active && <ChevronRight className="w-3.5 h-3.5 text-[#155BCB]" />}
-            </button>
+              </button>
+
+              {groupOpen && (
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActive(item.path, item.exact);
+                    return (
+                      <button
+                        key={item.path}
+                        id={`nav-user-${item.path.replace('/', '')}`}
+                        onClick={() => handleClick(item.path)}
+                        className={`w-full px-3 py-3 rounded-xl text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                          active
+                            ? 'bg-[#E7EFFF] text-[#155BCB] font-bold border-l-4 border-[#155BCB]'
+                            : item.highlight
+                            ? 'bg-blue-50/80 text-[#071D41] hover:bg-blue-100/70'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon
+                            className={`w-4 h-4 ${
+                              active
+                                ? 'text-[#155BCB]'
+                                : item.highlight
+                                ? 'text-[#155BCB]'
+                                : 'text-slate-500'
+                            }`}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {item.badge && item.badge > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#155BCB] text-white text-[10px] font-bold">
+                              {item.badge}
+                            </span>
+                          )}
+                          {active && <ChevronRight className="w-3.5 h-3.5 text-[#155BCB]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -128,7 +201,7 @@ return (
       {/* CTA Button - Nova Análise */}
       <div className="p-3 border-t border-[#CCCCCC]">
         <button
-          onClick={() => navigate('/novo-caso')}
+          onClick={() => handleClick('/novo-caso')}
           className="w-full px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-bold flex items-center justify-between transition-all cursor-pointer shadow-xs shadow-orange-200"
         >
           <div className="flex items-center gap-2">
@@ -137,25 +210,6 @@ return (
           </div>
         </button>
       </div>
-
-      {/* Link para o Painel Admin caso seja administrador */}
-      {isAdmin && (
-        <div className="pt-4 mt-4 border-t border-slate-200">
-          <div className="px-3 py-1 text-sm font-bold text-purple-700 uppercase tracking-wider font-mono">
-            Acesso Governamental
-          </div>
-          <button
-            onClick={() => navigate('/admin')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-purple-700" />
-              <span>Console Administrativo</span>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-purple-500" />
-          </button>
-        </div>
-      )}
 
       {/* User Info & Logout footer */}
       <div className="p-3 border-t border-[#CCCCCC] bg-[#F8F8F8]">
@@ -180,8 +234,8 @@ return (
            >
              <LogOut className="w-4 h-4" />
            </button>
-         </div>
-       </div>
+        </div>
+      </div>
     </aside>
   );
 };

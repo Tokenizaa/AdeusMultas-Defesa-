@@ -49,7 +49,10 @@ export const UserLayout: React.FC<UserLayoutProps> = ({
               >
                 <X className="w-5 h-5" />
               </button>
-              <UserSidebar activeCaseCount={activeCaseCount} />
+<UserSidebar 
+                activeCaseCount={activeCaseCount} 
+                onNavigate={() => setMobileDrawerOpen(false)} 
+              />
             </div>
           </div>
         )}
