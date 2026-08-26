@@ -36,9 +36,9 @@ export const AdminCommercialBonusesView: React.FC = () => {
   const fetchBonuses = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/bonuses');
+      const res = await fetch('/api/admin/commercial/bonus-ledger');
       const data = await res.json();
-      setLedger(data.ledger || []);
+      setLedger(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch bonuses:', err);
     } finally {
@@ -58,7 +58,7 @@ export const AdminCommercialBonusesView: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/admin/commercial/bonuses/credit', {
+      const res = await fetch('/api/admin/commercial/bonus/credit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

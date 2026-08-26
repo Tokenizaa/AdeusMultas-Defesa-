@@ -38,9 +38,9 @@ export const AdminCommercialReferralsView: React.FC = () => {
   const fetchConfig = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/referrals');
+      const res = await fetch('/api/admin/commercial/referral-config');
       const data = await res.json();
-      setConfig(data.config);
+      setConfig(data);
       if (data.config) {
         setFormLevel1(data.config.level1Percent);
         setFormLevel2(data.config.level2Percent);
@@ -59,7 +59,7 @@ export const AdminCommercialReferralsView: React.FC = () => {
   const fetchUserTree = async (userId: string) => {
     setTreeLoading(true);
     try {
-      const res = await fetch(`/api/admin/commercial/referrals/tree/${userId}`);
+      const res = await fetch(`/api/admin/commercial/referral-tree/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setUserTree(data);
@@ -80,7 +80,7 @@ export const AdminCommercialReferralsView: React.FC = () => {
     e.preventDefault();
     setSaveLoading(true);
     try {
-      const res = await fetch('/api/admin/commercial/referrals/config', {
+      const res = await fetch('/api/admin/commercial/referral-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
