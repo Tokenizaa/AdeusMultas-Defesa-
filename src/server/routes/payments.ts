@@ -11,6 +11,7 @@ import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
+import { buildDocumentRollText } from '../../core/documents/document-roll';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';
@@ -86,6 +87,49 @@ function assertAmountMatchesOffer(amount: number, offer: CommercialOffer): void 
       `Oferta: R$ ${offer.price.toFixed(2)} | Recebido: R$ ${amount.toFixed(2)}`
     );
   }
+}
+
+// ============================================================================
+// Geração automática da defesa após pagamento confirmado
+// ============================================================================
+
+/**
+ * Gera o draft da defesa a partir dos dados do domínio do caso, de forma
+ * consistente com o endpoint `POST /api/cases/:id/generate-defense`.
+ *
+ * É chamada automaticamente após a confirmação de pagamento (webhook), para
+ * que o caso chegue ao estado `defesa_pronta` com a peça jurídica já montada.
+ * Usa `RagPipeline.generateDefenseDraft` (minuta determinística completa,
+ * incluindo o rol dinâmico de documentos do procedimento).
+ */
+function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseDraft'] {
+  const procedureType = domain.serviceType || 'defesa_previa';
+  const selectedArgs = domain.analysis?.recommendedArguments || [];
+
+  const defense = RagPipeline.generateDefenseDraft(
+    domain.id,
+    domain.infraction,
+    domain.vehicle?.plate || 'SEM PLACA',
+    domain.vehicle?.brandModel || 'Veículo',
+    {
+      name: domain.clientName || 'Requerente',
+      cpf: domain.clientCpf || '000.000.000-00',
+      cnh: '05492817492',
+      address: 'Rua das Flores, 450, Apto 82',
+      cityState: 'São Paulo/SP',
+    },
+    selectedArgs,
+    procedureType
+  );
+
+  // Garantia de conformidade documental (BLK-068): o texto final SEMPRE termina
+  // com o rol de documentos anexos (dinâmico por procedimento).
+  if (!defense.fullDraftText.includes('ROL DE DOCUMENTOS')) {
+    const aitNumber = domain.infraction?.aitNumber || '—';
+    defense.fullDraftText = `${defense.fullDraftText.trimEnd()}\n\n${buildDocumentRollText(procedureType, aitNumber)}\n`;
+  }
+
+  return defense;
 }
 
 // ============================================================================
@@ -462,6 +506,31 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
           domain.serviceType = webhookResult.serviceType as any;
         }
 
+        // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
+        // O caso chega a `defesa_pronta` já com a peça jurídica montada.
+        // Envolvida em try/catch para NUNCA quebrar o webhook caso a geração
+        // falhe — o pagamento permanece confirmado (isPaid=true).
+        try {
+          const defense = generateDefenseDraftForDomain(domain);
+          defense.generationCount = 1;
+          domain.defenseDraft = defense;
+          domain.documentGenerationStatus = 'ready';
+
+          domain.timeline.push({
+            id: `tl_def_auto_${Date.now()}`,
+            title: 'Defesa Gerada Automaticamente',
+            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+            timestamp: new Date().toISOString(),
+            type: 'defense',
+          });
+        } catch (defenseError: any) {
+          // Não-bloqueante: mantém o caso pago mesmo se a geração falhar.
+          logger.error('payments', 'pagbank', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
+            error: defenseError?.message,
+            caseId: domain.id,
+          });
+        }
+
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: 'Pagamento Confirmado via Webhook PagBank',
@@ -508,167 +577,6 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
 // Simulate confirm for local testing / instant preview — gateway-agnostic
 // Gate único de teste: bloqueado em produção, liberado em dev/E2E (sem exigência
 // de role admin — o servidor de dev/E2E roda sem Supabase e o bypass é citizen).
-router.post('/pix/simulate-confirm', async (req, res) => {
-  if (!isTestMode()) {
-    return res.status(403).json({
-      error: 'Rota de simulação indisponível em produção',
-      message: 'Use o fluxo de pagamento real do gateway ativo.'
-    });
-  }
-
-const { caseId, case: casePayload } = req.body;
-    let row = databaseRows.get(caseId);
-
-    // Fluxo de teste self-contained: se o caso ainda não foi persistido
-    // (ex.: /api/cases bloqueado por auth em dev), fazemos o upsert aqui a
-    // partir do payload completo enviado pelo frontend. O banco continua
-    // sendo a fonte da verdade — o frontend apenas fornece os dados.
-    if (!row && casePayload && casePayload.id === caseId) {
-      try {
-        row = CanonicalMapper.domainToRow(casePayload);
-        databaseRows.set(caseId, row);
-        logger.info('payments', 'gateway', 'simulate_upsert', `Caso ${caseId} persistido via simulate-confirm`);
-      } catch (mapErr: any) {
-        logger.error('payments', 'gateway', 'simulate_upsert_fail', `Falha ao persistir caso ${caseId}: ${mapErr.message}`);
-      }
-    }
-
-    if (!row) {
-      return res.status(404).json({ error: 'Caso não encontrado' });
-    }
-
-    const gateway = gatewayManager.getActiveGateway();
-
-    // Se o gateway suportar simulação (PagBank tem confirmPayment),
-    // usar o fluxo existente; caso contrário, simular diretamente
-    let orderId = `sim_${Date.now()}`;
-    if (gateway.id === 'pagbank') {
-      try {
-        const confirmResult = pagBankIntegration.confirmPayment(caseId);
-        orderId = confirmResult.order.orderId;
-      } catch {
-        // Se PagBank não estiver configurado, simula direto
-      }
-    } else {
-      // Para GGPIXAPI (ou outros), simula confirmação direta
-      const simResult = gateway.simulateConfirmation(caseId, 8990);
-      orderId = simResult.gatewayTransactionId;
-    }
-
-    const domain = CanonicalMapper.rowToDomain(row);
-    domain.isPaid = true;
-    domain.paidAt = new Date().toISOString();
-    domain.status = 'defesa_pronta';
-    domain.currentStage = 3;
-    
-    // Generate defense draft in test mode (since simulation is only available in non-production)
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        // Generate defense draft using the same logic as the generate-defense endpoint
-        const defenseDraft = RagPipeline.generateDefenseDraft(
-          domain.id,
-          domain.infraction,
-          domain.vehicle?.plate || 'SEM PLACA',
-          domain.vehicle?.brandModel || 'Veículo',
-          {
-            name: domain.clientName || 'Requerente',
-            cpf: domain.clientCpf || '000.000.000-00',
-            cnh: '05492817492',
-            address: 'Rua das Flores, 450, Apto 82',
-            cityState: 'São Paulo/SP',
-          },
-          domain.analysis?.recommendedArguments || [],
-          domain.serviceType || 'defesa_previa'
-        );
-        domain.defenseDraft = defenseDraft;
-      } catch (defenseError) {
-        // If defense generation fails, log it but don't block the payment simulation
-        logger.error('payments', 'gateway', 'simulate_confirm_defense', 'Failed to generate defense draft during payment simulation', { 
-          error: defenseError.message,
-          caseId
-        });
-      }
-    }
-    
-    domain.payment = {
-      status: 'approved',
-      amount: PRICING.FALLBACK_PRICE,
-      paidAt: new Date().toISOString(),
-      transactionId: orderId,
-      paymentMethod: 'pix',
-    };
-    domain.updatedAt = new Date().toISOString();
-
-    domain.timeline.push({
-      id: `tl_pay_${Date.now()}`,
-      title: `Pagamento PIX Compensado (${gateway.displayName})`,
-      description: 'Acesso liberado à minuta jurídica formal para impressão e orientações de protocolo.',
-      timestamp: new Date().toISOString(),
-      type: 'payment',
-    });
-
-    const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(domain.id, updatedRow);
-    caseRepository.set(domain.id, updatedRow);
-
-    // UPDATE em payment_orders (marcar como paid) para manter a fonte de verdade
-    try {
-      const caseIdUuid = domainIdToUuid(domain.id);
-      const supabaseForOrder = getSupabaseServerClient();
-      if (supabaseForOrder && caseIdUuid) {
-        const { error: orderError } = await (supabaseForOrder.from('payment_orders') as any)
-          .update({
-            status: 'PAID',
-            paid_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('case_id', caseIdUuid)
-          .eq('status', 'PENDING');
-        if (orderError) {
-          logger.warn('payments', 'gateway', 'simulate_confirm', 'Falha ao atualizar payment_orders', {
-            error: orderError.message,
-            caseId: domain.id,
-          });
-        }
-      }
-    } catch (orderErr) {
-      logger.warn('payments', 'gateway', 'simulate_confirm', 'Exceção ao atualizar payment_orders', {
-        error: (orderErr as Error).message,
-        caseId: domain.id,
-      });
-    }
-
-    // Dispatch Commercial Payment Event (Calculates 3-level commissions & ledgers)
-    commercialService.processPaymentConfirmationEvent({
-      paymentId: orderId || `ord_${domain.id}`,
-      caseId: domain.id,
-      buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-      buyerUserName: domain.clientName || 'Condutor DefesAi',
-      grossAmount: domain.payment?.amount || PRICING.FALLBACK_PRICE,
-      discountAmount: 0,
-      effectivelyPaid: domain.payment?.amount || PRICING.FALLBACK_PRICE,
-    });
-
-    auditLogs.unshift({
-      id: `audit_pay_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actor: domain.clientName || 'Cliente',
-      role: 'citizen',
-      action: 'PAYMENT_CONFIRMED',
-      targetResource: domain.id,
-      ipHash: '3a88c42b109e',
-      details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.FALLBACK_PRICE).toFixed(2).replace('.', ',')} via PIX ${gateway.displayName} confirmado.`,
-      gdprCompliant: true,
-    });
-
-    res.json({
-      success: true,
-      message: 'Pagamento confirmado com sucesso!',
-      case: domain,
-      gateway: gateway.id,
-      order: { orderId },
-    });
-});
 
 // ============================================================================
 // GGPIXAPI Webhook — gateway-agnostic via processGatewayWebhook()

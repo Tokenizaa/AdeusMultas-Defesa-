@@ -417,6 +417,10 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
       {/* ========================================================================= */}
       {activeStage === 2 && (() => {
         const recommendedArgs = LEGAL_ARGUMENTS.filter((a) => selectedArgIds.includes(a.id)).slice(0, 3);
+        const MAX_GENERATIONS = 3;
+        // O backend controla o limite efetivo; o frontend apenas reflete o estado.
+        const generationCount = caseData.defenseDraft?.generationCount ?? 0;
+        const generationLimitReached = generationCount >= MAX_GENERATIONS;
         return (
         <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -445,12 +449,13 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             <button
               id="regenerate-with-selected-button"
               onClick={handleRegenerateDefense}
-              disabled={isRegenerating}
-              className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 uppercase tracking-tight ${
+              disabled={isRegenerating || generationLimitReached}
+              className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-tight ${
                 professionalMode
                   ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
                   : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-200 px-6 py-2.5'
               }`}
+              title={generationLimitReached ? 'Limite de 3 gerações atingido' : undefined}
             >
               {isRegenerating ? (
                 <>
@@ -463,11 +468,21 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                   {professionalMode ? (
                     <span>Gerar Minuta ({selectedArgIds.length} Teses)</span>
                   ) : (
-                    <span>Gerar Minha Defesa Automática</span>
+                    <span>Gerar Nova Defesa</span>
                   )}
                 </>
               )}
             </button>
+            {generationLimitReached ? (
+              <span className="flex items-center gap-1.5 text-xs font-bold text-orange-600">
+                <AlertTriangle className="w-4 h-4" />
+                Limite de 3 gerações atingido
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-slate-500">
+                {generationCount}/{MAX_GENERATIONS} gerações
+              </span>
+            )}
           </div>
 
           {!professionalMode ? (

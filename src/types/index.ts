@@ -163,6 +163,12 @@ export interface DefenseDraft {
   isReady: boolean;
   version: number;
   updatedAt: string;
+  /**
+   * Quantidade de gerações de defesa já realizadas para este caso.
+   * O backend controla o limite efetivo (máximo 3). O frontend apenas reflete
+   * esse estado para desabilitar o botão quando o limite é atingido.
+   */
+  generationCount?: number;
 }
 
 /**

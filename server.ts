@@ -650,6 +650,24 @@ async function startServer() {
       }
 
       const domain = CanonicalMapper.toDomain(row);
+
+      // Guarda de pagamento (BLK: fluxo de negócio) — a defesa só pode ser
+      // gerada/regenerada após o pagamento ser confirmado.
+      if (!domain.isPaid) {
+        return res.status(403).json({
+          error: 'Pagamento não confirmado. Realize o pagamento para gerar a defesa.',
+        });
+      }
+
+      // Guarda de limite de gerações — no máximo 3 gerações por caso
+      // (o botão de regeneração respeita este teto).
+      const currentCount = domain.defenseDraft?.generationCount ?? 0;
+      if (currentCount >= 3) {
+        return res.status(429).json({
+          error: 'Limite de 3 gerações atingido.',
+        });
+      }
+
       const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body || {};
 
       const selectedArgs = LEGAL_ARGUMENTS.filter((a: any) =>
@@ -724,6 +742,10 @@ Escreva a minuta em português formal e impecável.`,
         const resolvedProcedure = procedureType || domain.serviceType;
         defense.fullDraftText = `${defense.fullDraftText.trimEnd()}\n\n${buildDocumentRollText(resolvedProcedure, aitNumber)}\n`;
       }
+
+      // Incrementa o contador de gerações: inicializa em 1 na primeira
+      // geração; soma 1 nas regenerações (respeitando o teto de 3).
+      defense.generationCount = currentCount + 1;
 
       domain.defenseDraft = defense;
       domain.currentStage = 3;

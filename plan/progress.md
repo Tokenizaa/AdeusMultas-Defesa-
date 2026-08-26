@@ -43,4 +43,5 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 |-----------|---------|-----------|
 | 2026-08-24T05:37:54Z | G0-gov-baseline | PASS feats: G0-01/02/03 commits: ecdaa42,149112f,05472be,cfabdb1 |
 | 2026-08-24T05:43:42Z | stash orphan | 19 arquivos de produção preservados em stash (pré-governança) |
-| 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved`
+| 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved` |
+| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. Docs: `docs/adr/ADR-010-Automatic-Defense-Generation-and-Limit.md` + `.ticket.md`. Ver `docs/adr/`. |
