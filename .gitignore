@@ -50,8 +50,10 @@ wrangler.json.bak
 
 # Test artifacts
 .playwright-mcp/
+.playwright-cli/
 playwright-report/
 test-results/
 
-# Screenshots at repo root
+# Screenshots
+screenshots/
 /*.png
