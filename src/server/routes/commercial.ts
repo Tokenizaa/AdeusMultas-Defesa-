@@ -48,7 +48,7 @@ router.post('/offers/resolve', (req, res) => {
       ...result.offer,
       available: true,
     };
-    res.json({ offer, breakdown: result.breakdown });
+    res.json({ offer });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
