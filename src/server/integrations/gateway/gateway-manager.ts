@@ -93,31 +93,18 @@ export class GatewayManager {
 
   /**
    * Retorna o adapter do gateway ativo.
-   * Se o gateway configurado não estiver disponível ou configurado,
-   * faz fallback para PagBank (preserva comportamento existente).
+   * Lança erro se o gateway configurado não estiver configurado.
    */
   getActiveGateway(): PaymentGateway {
     const currentId = this.resolveActiveGatewayId();
     const active = this.gateways.get(currentId);
-    if (active && active.isConfigured()) {
-      return active;
+    if (!active) {
+      throw new Error(`Gateway '${currentId}' not found.`);
     }
-
-    // Fallback: tentar PagBank
-    const pagbank = this.gateways.get('pagbank');
-    if (pagbank && pagbank.isConfigured()) {
-      logger.warn('payments', 'gateway_manager', 'get_active',
-        `Configured gateway '${currentId}' not available, falling back to PagBank`
-      );
-      return pagbank;
+    if (!active.isConfigured()) {
+      throw new Error(`Gateway '${active.displayName}' não está configurado. Configure as credenciais.`);
     }
-
-    // Último recurso: retornar o gateway configurado mesmo não validado
-    // (deixa o adapter lançar erro descritivo)
-    if (active) return active;
-
-    // Nunca deveria chegar aqui, mas por segurança
-    throw new Error('Nenhum gateway de pagamento disponível. Configure PAGBANK_TOKEN ou GGPIX_API_KEY.');
+    return active;
   }
 
   /**

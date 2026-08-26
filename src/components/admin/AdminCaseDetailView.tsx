@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from '../../core/router/RouterContext';
 import {
   RefreshCw,
   AlertTriangle,
@@ -16,12 +17,18 @@ import {
 } from 'lucide-react';
 import { CaseDetailBase } from '../shared/CaseDetailBase';
 import { CaseDomain } from '../../types';
-import { useRouter } from '../../core/router/RouterContext';
 import { PRICING } from '../../config/pricing';
 
 export const AdminCaseDetailView: React.FC = () => {
-  const { params, navigate } = useRouter();
+  const { params, navigate, queryParams } = useRouter();
   const caseId = params.id;
+  
+  // Get tab from query parameters, default to 'overview'
+  const [activeTab, setActiveTabState] = useState<'overview' | 'theses' | 'document' | 'payment' | 'logs'>('overview');
+  useEffect(() => {
+    const tab = queryParams.tab as 'overview' | 'theses' | 'document' | 'payment' | 'logs' || 'overview';
+    setActiveTabState(tab);
+  }, [queryParams.tab]);
   
   const shared = CaseDetailBase({
     caseId,
@@ -39,8 +46,6 @@ export const AdminCaseDetailView: React.FC = () => {
     caseData,
     isLoading,
     error,
-    activeTab,
-    setActiveTab,
     isSimulatingPayment,
     actionSuccess,
     handleSimulatePayment,
@@ -155,7 +160,7 @@ export const AdminCaseDetailView: React.FC = () => {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('overview')}
+          onClick={() => navigate(`/admin/cases/${caseId}?tab=overview`)}
           className={`px-3.5 py-2 rounded-xl text-sm font-bold font-mono flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'overview'
               ? 'bg-orange-500 text-white shadow-xs'
@@ -167,7 +172,7 @@ export const AdminCaseDetailView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('theses')}
+          onClick={() => navigate(`/admin/cases/${caseId}?tab=theses`)}
           className={`px-3.5 py-2 rounded-xl text-sm font-bold font-mono flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'theses'
               ? 'bg-orange-500 text-white shadow-xs'
@@ -179,7 +184,7 @@ export const AdminCaseDetailView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('document')}
+          onClick={() => navigate(`/admin/cases/${caseId}?tab=document`)}
           className={`px-3.5 py-2 rounded-xl text-sm font-bold font-mono flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'document'
               ? 'bg-orange-500 text-white shadow-xs'
@@ -191,7 +196,7 @@ export const AdminCaseDetailView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('payment')}
+          onClick={() => navigate(`/admin/cases/${caseId}?tab=payment`)}
           className={`px-3.5 py-2 rounded-xl text-sm font-bold font-mono flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'payment'
               ? 'bg-orange-500 text-white shadow-xs'
@@ -203,7 +208,7 @@ export const AdminCaseDetailView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('logs')}
+          onClick={() => navigate(`/admin/cases/${caseId}?tab=logs`)}
           className={`px-3.5 py-2 rounded-xl text-sm font-bold font-mono flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'logs'
               ? 'bg-orange-500 text-white shadow-xs'
@@ -346,14 +351,14 @@ export const AdminCaseDetailView: React.FC = () => {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
               <h3 className="text-sm font-bold text-white font-mono uppercase">Atalhos Operacionais</h3>
               <button
-                onClick={() => setActiveTab('document')}
+                onClick={() => navigate(`/admin/cases/${caseId}?tab=document`)}
                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5 text-orange-400" />
                 <span>Visualizar Minuta A4</span>
               </button>
               <button
-                onClick={() => setActiveTab('payment')}
+                onClick={() => navigate(`/admin/cases/${caseId}?tab=payment`)}
                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <CreditCard className="w-3.5 h-3.5 text-emerald-400" />

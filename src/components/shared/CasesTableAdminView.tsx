@@ -7,7 +7,6 @@ interface CasesTableAdminViewProps {
   onSelectCase: (caseItem: any) => void;
   showNewCaseButton: boolean;
   onNewCase: () => void;
-  simulatePayment: (caseId: string) => Promise<void>;
   onRefreshCases: () => void;
 }
 
@@ -16,19 +15,8 @@ export const CasesTableAdminView: React.FC<CasesTableAdminViewProps> = ({
   onSelectCase,
   showNewCaseButton,
   onNewCase,
-  simulatePayment,
   onRefreshCases
 }) => {
-  const handleSimulatePayment = async (caseId: string) => {
-    if (simulatePayment) {
-      try {
-        await simulatePayment(caseId);
-        if (onRefreshCases) onRefreshCases();
-      } catch (err) {
-        console.error('Error simulating payment:', err);
-      }
-    }
-  };
 
   if (filteredCases.length === 0) {
     return (
@@ -91,12 +79,7 @@ export const CasesTableAdminView: React.FC<CasesTableAdminViewProps> = ({
                       <CheckCircle2 className="w-3.5 h-3.5" /> Pago (R$ {(c.payment?.amount || PRICING.DEFAULT_PRICE).toFixed(2).replace('.', ',')}
                     </span>
                   ) : (
-                    <button
-                      onClick={() => handleSimulatePayment(c.id)}
-                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-orange-400 rounded text-sm flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <DollarSign className="w-3 h-3" /> Simular PIX
-                    </button>
+                    <span className="text-slate-500 text-sm">Aguardando pagamento</span>
                   )}
                 </td>
                 <td className="py-3 px-4 text-right">

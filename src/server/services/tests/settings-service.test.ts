@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, beforeAll, beforeEach, describe, test, expect } from 'vitest';
 
 // Mock Supabase
 const mockSupabase = {

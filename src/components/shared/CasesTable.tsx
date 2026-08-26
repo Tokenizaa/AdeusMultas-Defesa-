@@ -15,12 +15,10 @@ interface CasesTableProps {
   cases: CaseDomain[];
   onSelectCase: (caseItem: CaseDomain) => void;
   onNewCase?: () => void;
-  onRefreshCases?: () => void;
   showNewCaseButton?: boolean;
   showFilters?: boolean;
   showStats?: boolean;
   variant?: 'user' | 'admin';
-  simulatePayment?: (caseId: string) => Promise<void>;
   
   // Controlled props for search and filters
   searchTerm?: string;
@@ -38,13 +36,10 @@ export const CasesTable: React.FC<CasesTableProps> = ({
   cases,
   onSelectCase,
   onNewCase,
-  onRefreshCases,
   showNewCaseButton = true,
   showFilters = true,
   showStats = true,
   variant = 'user',
-  simulatePayment,
-  
   // Controlled props
   searchTerm,
   onSearchChange,
@@ -109,16 +104,6 @@ export const CasesTable: React.FC<CasesTableProps> = ({
     return true;
   });
   
-  const handleSimulatePayment = async (caseId: string) => {
-    if (simulatePayment) {
-      try {
-        await simulatePayment(caseId);
-        if (onRefreshCases) onRefreshCases();
-      } catch (err) {
-        console.error('Error simulating payment:', err);
-      }
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -256,8 +241,6 @@ export const CasesTable: React.FC<CasesTableProps> = ({
             onSelectCase={onSelectCase}
             showNewCaseButton={showNewCaseButton}
             onNewCase={onNewCase}
-            simulatePayment={simulatePayment}
-            onRefreshCases={onRefreshCases}
           />
         )}
       </div>

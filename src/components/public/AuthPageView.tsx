@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Mail } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
 import { SharedAuthForm, AuthFormMode } from '../auth/SharedAuthForm';
@@ -19,6 +19,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({ initialTab = 'login'
   });
 
   const redirectTarget = queryParams.redirect || '/dashboard';
+  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
   // Sync tab with path if route changes
   useEffect(() => {
@@ -27,11 +28,13 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({ initialTab = 'login'
     } else if (currentPath === '/login') {
       setMode('login');
     }
+    setEmailConfirmationRequired(false);
   }, [currentPath]);
 
   // Handle tab change + URL navigation
   const handleModeChange = (newMode: AuthFormMode) => {
     setMode(newMode);
+    setEmailConfirmationRequired(false);
     if (newMode === 'register' && currentPath !== '/cadastro') {
       navigate('/cadastro');
     } else if (newMode === 'login' && currentPath !== '/login') {
@@ -52,8 +55,11 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({ initialTab = 'login'
   const handleRegister = async (name: string, email: string, password: string, phone?: string) => {
     const result = await signUp(name, email, password, phone);
     if (result.success) {
-      // Short delay so user sees the success message
-      setTimeout(() => navigate(redirectTarget), 600);
+      if (result.requiresEmailConfirmation) {
+        setEmailConfirmationRequired(true);
+      } else {
+        setTimeout(() => navigate(redirectTarget), 600);
+      }
     }
     return result;
   };
@@ -87,6 +93,12 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({ initialTab = 'login'
 
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-6">
+          {emailConfirmationRequired && (
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-blue-800 text-sm animate-fade-in">
+              <Mail className="w-4 h-4 text-[#155BCB] shrink-0 mt-0.5" />
+              <span>Enviamos um link de confirmação para o seu e-mail. Por favor, verifique sua caixa de entrada (e spam) para ativar sua conta.</span>
+            </div>
+          )}
           <SharedAuthForm
             mode={mode}
             onModeChange={handleModeChange}

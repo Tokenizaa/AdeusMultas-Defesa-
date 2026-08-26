@@ -88,6 +88,7 @@ export interface Coupon {
   applicableServices: string[];
   totalLimit: number;
   usedCount: number;
+  totalUsed?: number;
   userLimit: number;
   validFrom: string;
   validUntil: string;
