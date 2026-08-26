@@ -11,6 +11,7 @@ import {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithFacebook: () => Promise<{ success: boolean; error?: string }>;
   signUp: (name: string, email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<AuthUser>) => Promise<void>;
@@ -206,6 +207,29 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
     return { success: true };
   };
 
+  const loginWithFacebook = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: false, error: 'Autenticação social não configurada. Use e-mail e senha.' };
+    }
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) {
+        console.warn('Facebook OAuth error:', error.message);
+        return { success: false, error: error.message || 'Erro ao autenticar com Facebook.' };
+      }
+      // OAuth redirect is handled by Supabase — user will be redirected
+      return { success: true };
+    } catch (err: any) {
+      console.error('Facebook login exception:', err);
+      return { success: false, error: err.message || 'Erro inesperado ao autenticar com Facebook.' };
+    }
+  };
+
   const signUp = async (name: string, email: string, password: string, phone?: string): Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
@@ -391,6 +415,7 @@ const resetPassword = async (email: string): Promise<{ success: boolean; message
         isAdmin,
         isLoading,
         login,
+        loginWithFacebook,
         signUp,
         logout,
         updateProfile,
