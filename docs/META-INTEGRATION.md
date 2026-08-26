@@ -1,7 +1,7 @@
-# Integração Meta (Facebook + Instagram) — DefesAi
+# Integração Meta (Facebook + Instagram + Messenger) — DefesAi
 
 **Última atualização:** 2026-08-26  
-**Status:** ✅ Credenciais configuradas, token de longa duração obtido
+**Status:** ✅ App criado, produtos ativados, OAuth configurado, token de longa duração obtido
 
 ---
 
@@ -126,6 +126,96 @@ INSTAGRAM_PROFILE_ID="netto_farias_oficial"
 
 ---
 
+## 4. Webhooks (ESSENCIAL para Messenger e Instagram Direct)
+
+**Os webhooks são OBRIGATÓRIOS** para receber mensagens em tempo real via Messenger e Instagram Direct.
+
+### Endpoint do Webhook
+```
+GET/POST /api/meta/webhook
+```
+
+### Verificação (hub.challenge)
+- **Verify Token:** `EAAdQz0Pr4lgBSe7WkkNP2Y2n89jBXzjvZBaK1wKwWfUTiNnZCe37pq4T9uujBlb4iQEhdJhNHu8bM03c9SlaIwHcosVuL1dlxdVnlN6e7BWagUrTZBoFLouDdOOXRHodAxeteN90Os4Uamw3Nqs1nFmwJ5qHKNN53JOZBb799LVdE4UGcjsHTEw8ivjKsCt1` (META_WEBHOOK_VERIFY_TOKEN)
+
+### Campos Inscritos (Page + Instagram)
+| Campo | Uso |
+|-------|-----|
+| `messages` | Mensagens recebidas (Messenger + Instagram Direct) |
+| `messaging_postbacks` | Cliques em botões (quick replies, postbacks) |
+| `message_reads` | Confirmação de leitura |
+| `message_deliveries` | Confirmação de entrega |
+| `messaging_optins` | Opt-in via mensagem |
+| `message_mention` | Menções em stories (Instagram) |
+| `mention` | Menções genéricas |
+
+### Inscrição Confirmada
+```json
+{
+  "id": "1567264377574412",
+  "subscribed_fields": [
+    "messages",
+    "messaging_postbacks",
+    "message_reads",
+    "message_deliveries",
+    "messaging_optins",
+    "message_mention",
+    "mention"
+  ]
+}
+```
+
+### Fluxo Webhook
+```
+Meta envia POST para https://www.defesai.shop/api/meta/webhook
+    ↓
+Valida assinatura X-Hub-Signature-256 (HMAC SHA-256)
+    ↓
+Verifica idempotência (eventId único)
+    ↓
+Processa eventos de messaging
+    ↓
+Envia para messagingService.handleMetaMessagingWebhook()
+    ↓
+Responde 200 OK
+```
+
+### Teste de Webhook
+Para testar se o webhook está funcionando, você precisa:
+1. Servidor rodando em `https://www.defesai.shop` (ou usar ngrok/tunnel para local)
+2. Enviar uma mensagem para a página do Facebook ou Instagram Direct
+3. Verificar logs do backend
+
+### Importante
+- O webhook **NÃO funciona em localhost** — precisa de URL pública HTTPS
+- Em produção, usar `https://www.defesai.shop/api/meta/webhook`
+- Em desenvolvimento local, usar ngrok: `https://<ngrok-id>.ngrok.io/api/meta/webhook`
+
+---
+
+## 5. Produtos Instalados no App
+
+| Produto | Status | URL/Configuração |
+|---------|--------|----------------|
+| **Login do Facebook para Empresas** | ✅ Ativo | `/business-login/settings/` |
+| **Instagram Business** | ✅ Ativo | `/instagram-business/` |
+| **Messenger** | ✅ Ativo | `/messenger/` |
+| **API de Marketing** | ✅ Ativo | `/marketing-api/` |
+| **App Events** | ✅ Ativo | `/analytics/quickstart/` |
+| **Webhooks** | ✅ Ativo | `/webhooks/` |
+| **Jobs** | ✅ Adicionado | Requer configuração adicional |
+
+### Configuração OAuth Facebook Login
+- **URIs de redirecionamento válidos:**
+  - `https://www.defesai.shop/api/integrations/meta/callback` (app)
+  - `https://llmxnpgjpxcvyrqjkfwb.supabase.co/auth/v1/callback` (Supabase)
+- **Domínios SDK JavaScript:** `https://www.defesai.shop/`
+- **OAuth Web:** ✅ Ativo
+- **HTTPS obrigatório:** ✅ Ativo
+- **Modo estrito:** ✅ Ativo
+
+---
+
 ## 5. Configuração Supabase (Auth Provider)
 
 ### Callback URL do Supabase
@@ -223,19 +313,17 @@ Criar um cron job ou edge function que:
 ## 8. Checklist de Produção
 
 - [x] Novo App Meta criado (Empresa, não Lifestyle)
-- [x] Produtos adicionados (Instagram Business + Facebook Login)
-- [x] OAuth configurado (domínio + redirect URI)
+- [x] Produtos instalados (Facebook Login, Instagram, Messenger, Marketing API, App Events, Webhooks, Jobs)
+- [x] OAuth configurado (domínio + redirect URI + HTTPS + strict mode)
 - [x] 55 permissões selecionadas
 - [x] User Access Token gerado
 - [x] Page Access Token obtido
 - [x] Long-lived Page Token (60 dias)
 - [x] Teste de publicação OK
 - [x] `.env` atualizado
-- [ ] **Supabase Dashboard:** Configurar Facebook Auth Provider
-- [ ] **Facebook Dashboard:** Adicionar Callback URL do Supabase
-- [ ] **Supabase Dashboard:** Configurar Redirect URL para `https://www.defesai.shop`
-- [ ] **.env:** Adicionar `META_PAGE_ID=1199235773284220`
-- [ ] **.env:** Adicionar `INSTAGRAM_ACCOUNT_ID` (ID numérico do Instagram)
+- [x] `META_PAGE_ID` e `INSTAGRAM_ACCOUNT_ID` adicionados ao `.env`
+- [x] Callback URL do Supabase adicionada ao Facebook App
+- [ ] **Supabase Dashboard:** Configurar Facebook Auth Provider (manual)
 - [ ] **Produção:** Configurar verificação da empresa (Business Verification)
 - [ ] **Produção:** Publicar app (sair do modo desenvolvimento)
 - [ ] **Cron:** Implementar renovação automática de token
@@ -249,7 +337,11 @@ Criar um cron job ou edge function que:
 | Facebook Developers | https://developers.facebook.com/apps/1567264377574412/ |
 | Graph API Explorer | https://developers.facebook.com/tools/explorer/1567264377574412/ |
 | App Settings | https://developers.facebook.com/apps/1567264377574412/settings/basic/ |
-| Facebook Login Settings | https://developers.facebook.com/apps/1567264377574412/fb-login/settings/ |
+| Facebook Login Settings | https://developers.facebook.com/apps/1567264377574412/business-login/settings/ |
+| Marketing API | https://developers.facebook.com/apps/1567264377574412/marketing-api/ |
+| App Events | https://developers.facebook.com/apps/1567264377574412/analytics/ |
+| Webhooks | https://developers.facebook.com/apps/1567264377574412/webhooks/ |
+| Jobs | https://developers.facebook.com/apps/1567264377574412/jobs/ |
 | Supabase Dashboard | https://supabase.com/dashboard/project/llmxnpgjpxcvyrqjkfwb |
 | Supabase Auth Providers | https://supabase.com/dashboard/project/llmxnpgjpxcvyrqjkfwb/auth/providers |
 | Facebook Page | https://www.facebook.com/profile.php?id=61593349865857 |
