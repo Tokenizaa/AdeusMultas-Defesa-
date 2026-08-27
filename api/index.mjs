@@ -1,255 +1,3 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
-// src/server/observability/logger.ts
-var logger_exports = {};
-__export(logger_exports, {
-  logger: () => logger
-});
-var MAX_LOG_BUFFER_SIZE, StructuredLogger, logger;
-var init_logger = __esm({
-  "src/server/observability/logger.ts"() {
-    MAX_LOG_BUFFER_SIZE = 2e3;
-    StructuredLogger = class {
-      constructor() {
-        this.buffer = [];
-        this.listeners = /* @__PURE__ */ new Set();
-      }
-      /**
-       * Sanitizes object data, stripping sensitive tokens, keys, passwords and masking CPFs.
-       */
-      sanitize(data) {
-        if (!data) return data;
-        if (typeof data !== "object") {
-          if (typeof data === "string") {
-            return this.sanitizeString(data);
-          }
-          return data;
-        }
-        if (Array.isArray(data)) {
-          return data.map((item) => this.sanitize(item));
-        }
-        const cleaned = {};
-        const sensitiveKeys = [
-          "key",
-          "apikey",
-          "api_key",
-          "token",
-          "access_token",
-          "secret",
-          "password",
-          "authorization",
-          "bearer",
-          "creditcard",
-          "card_number",
-          "cvv"
-        ];
-        for (const [k, v] of Object.entries(data)) {
-          const lowerKey = k.toLowerCase().replace(/[-_]/g, "");
-          const isSensitive = sensitiveKeys.some((s) => lowerKey.includes(s));
-          if (isSensitive && typeof v === "string" && v.length > 0) {
-            cleaned[k] = "\u2022\u2022\u2022\u2022[PROTEGIDO]\u2022\u2022\u2022\u2022";
-          } else if (k === "cpf" || k === "clientCpf" || k === "applicantCpf") {
-            cleaned[k] = typeof v === "string" ? this.maskCpf(v) : v;
-          } else {
-            cleaned[k] = this.sanitize(v);
-          }
-        }
-        return cleaned;
-      }
-      sanitizeString(str) {
-        let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
-        sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
-        sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
-        sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-**");
-        return sanitized;
-      }
-      maskCpf(cpf) {
-        const clean = cpf.replace(/\D/g, "");
-        if (clean.length === 11) {
-          return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
-        }
-        return "***.***.***-**";
-      }
-      /**
-       * Primary entry point for structured log emission
-       */
-      log(entry) {
-        const fullEntry = {
-          level: entry.level,
-          service: entry.service,
-          module: entry.module,
-          operation: entry.operation,
-          requestId: entry.requestId,
-          correlationId: entry.correlationId,
-          status: entry.status,
-          ...entry,
-          id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          message: this.sanitizeString(entry.message),
-          metadata: entry.metadata ? this.sanitize(entry.metadata) : void 0,
-          sanitized: true
-        };
-        this.buffer.unshift(fullEntry);
-        if (this.buffer.length > MAX_LOG_BUFFER_SIZE) {
-          this.buffer.pop();
-        }
-        const timeShort = new Date(fullEntry.timestamp).toLocaleTimeString();
-        const tag = `[${fullEntry.level.toUpperCase()}][${fullEntry.service}:${fullEntry.module}]`;
-        const dur = fullEntry.duration ? ` (${fullEntry.duration}ms)` : "";
-        if (fullEntry.level === "error" || fullEntry.level === "fatal") {
-          console.error(`${timeShort} ${tag} ${fullEntry.message}${dur}`, fullEntry.metadata || "");
-        } else if (fullEntry.level === "warn") {
-          console.warn(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
-        } else if (process.env.NODE_ENV !== "production" && fullEntry.level === "debug") {
-          console.debug(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
-        }
-        this.listeners.forEach((listener) => {
-          try {
-            listener(fullEntry);
-          } catch (err) {
-            console.error("[Logger] Listener notification error:", err);
-          }
-        });
-        return fullEntry;
-      }
-      info(service, module, operation, message, opts = {}) {
-        return this.log({
-          level: "info",
-          service,
-          module,
-          operation,
-          message,
-          requestId: opts.requestId || `req_${Date.now()}`,
-          correlationId: opts.correlationId || `corr_${Date.now()}`,
-          status: opts.status || "success",
-          ...opts
-        });
-      }
-      warn(service, module, operation, message, opts = {}) {
-        return this.log({
-          level: "warn",
-          service,
-          module,
-          operation,
-          message,
-          requestId: opts.requestId || `req_${Date.now()}`,
-          correlationId: opts.correlationId || `corr_${Date.now()}`,
-          status: opts.status || "failed",
-          ...opts
-        });
-      }
-      error(service, module, operation, message, opts = {}) {
-        return this.log({
-          level: "error",
-          service,
-          module,
-          operation,
-          message,
-          requestId: opts.requestId || `req_${Date.now()}`,
-          correlationId: opts.correlationId || `corr_${Date.now()}`,
-          status: opts.status || "failed",
-          ...opts
-        });
-      }
-      debug(service, module, operation, message, opts = {}) {
-        return this.log({
-          level: "debug",
-          service,
-          module,
-          operation,
-          message,
-          requestId: opts.requestId || `req_${Date.now()}`,
-          correlationId: opts.correlationId || `corr_${Date.now()}`,
-          status: opts.status || "success",
-          ...opts
-        });
-      }
-      /**
-       * Query filtered logs for the Log Explorer
-       */
-      query(params = {}) {
-        let filtered = [...this.buffer];
-        const levelsCount = {
-          debug: 0,
-          info: 0,
-          warn: 0,
-          error: 0,
-          fatal: 0
-        };
-        this.buffer.forEach((e) => {
-          levelsCount[e.level] = (levelsCount[e.level] || 0) + 1;
-        });
-        if (params.level) {
-          filtered = filtered.filter((e) => e.level === params.level);
-        }
-        if (params.service) {
-          filtered = filtered.filter((e) => e.service === params.service);
-        }
-        if (params.provider) {
-          filtered = filtered.filter((e) => e.provider === params.provider);
-        }
-        if (params.status) {
-          filtered = filtered.filter((e) => e.status === params.status);
-        }
-        if (params.correlationId) {
-          filtered = filtered.filter(
-            (e) => e.correlationId.toLowerCase().includes(params.correlationId.toLowerCase())
-          );
-        }
-        if (params.caseId) {
-          filtered = filtered.filter(
-            (e) => e.caseId?.toLowerCase().includes(params.caseId.toLowerCase())
-          );
-        }
-        if (params.requestId) {
-          filtered = filtered.filter(
-            (e) => e.requestId.toLowerCase().includes(params.requestId.toLowerCase())
-          );
-        }
-        if (params.search) {
-          const q = params.search.toLowerCase();
-          filtered = filtered.filter(
-            (e) => e.message.toLowerCase().includes(q) || e.module.toLowerCase().includes(q) || e.operation.toLowerCase().includes(q) || e.errorCode && e.errorCode.toLowerCase().includes(q)
-          );
-        }
-        if (params.startDate) {
-          filtered = filtered.filter((e) => new Date(e.timestamp) >= new Date(params.startDate));
-        }
-        if (params.endDate) {
-          filtered = filtered.filter((e) => new Date(e.timestamp) <= new Date(params.endDate));
-        }
-        const total = filtered.length;
-        const offset = params.offset || 0;
-        const limit = params.limit || 50;
-        const results = filtered.slice(offset, offset + limit);
-        return { total, results, levelsCount };
-      }
-      /**
-       * Fetch all logs related to a correlationId (tracing)
-       */
-      getTrace(correlationId) {
-        return this.buffer.filter((e) => e.correlationId === correlationId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      }
-      subscribe(fn) {
-        this.listeners.add(fn);
-        return () => this.listeners.delete(fn);
-      }
-      clear() {
-        this.buffer = [];
-      }
-    };
-    logger = new StructuredLogger();
-  }
-});
-
 // src/server/app.ts
 import express from "express";
 import helmet from "helmet";
@@ -357,8 +105,238 @@ var EventBus = class {
 };
 var eventBus = new EventBus();
 
-// src/server/db/case-repository.ts
-init_logger();
+// src/server/observability/logger.ts
+var MAX_LOG_BUFFER_SIZE = 2e3;
+var StructuredLogger = class {
+  constructor() {
+    this.buffer = [];
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Sanitizes object data, stripping sensitive tokens, keys, passwords and masking CPFs.
+   */
+  sanitize(data) {
+    if (!data) return data;
+    if (typeof data !== "object") {
+      if (typeof data === "string") {
+        return this.sanitizeString(data);
+      }
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return data.map((item) => this.sanitize(item));
+    }
+    const cleaned = {};
+    const sensitiveKeys = [
+      "key",
+      "apikey",
+      "api_key",
+      "token",
+      "access_token",
+      "secret",
+      "password",
+      "authorization",
+      "bearer",
+      "creditcard",
+      "card_number",
+      "cvv"
+    ];
+    for (const [k, v] of Object.entries(data)) {
+      const lowerKey = k.toLowerCase().replace(/[-_]/g, "");
+      const isSensitive = sensitiveKeys.some((s) => lowerKey.includes(s));
+      if (isSensitive && typeof v === "string" && v.length > 0) {
+        cleaned[k] = "\u2022\u2022\u2022\u2022[PROTEGIDO]\u2022\u2022\u2022\u2022";
+      } else if (k === "cpf" || k === "clientCpf" || k === "applicantCpf") {
+        cleaned[k] = typeof v === "string" ? this.maskCpf(v) : v;
+      } else {
+        cleaned[k] = this.sanitize(v);
+      }
+    }
+    return cleaned;
+  }
+  sanitizeString(str) {
+    let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-**");
+    return sanitized;
+  }
+  maskCpf(cpf) {
+    const clean = cpf.replace(/\D/g, "");
+    if (clean.length === 11) {
+      return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
+    }
+    return "***.***.***-**";
+  }
+  /**
+   * Primary entry point for structured log emission
+   */
+  log(entry) {
+    const fullEntry = {
+      level: entry.level,
+      service: entry.service,
+      module: entry.module,
+      operation: entry.operation,
+      requestId: entry.requestId,
+      correlationId: entry.correlationId,
+      status: entry.status,
+      ...entry,
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      message: this.sanitizeString(entry.message),
+      metadata: entry.metadata ? this.sanitize(entry.metadata) : void 0,
+      sanitized: true
+    };
+    this.buffer.unshift(fullEntry);
+    if (this.buffer.length > MAX_LOG_BUFFER_SIZE) {
+      this.buffer.pop();
+    }
+    const timeShort = new Date(fullEntry.timestamp).toLocaleTimeString();
+    const tag = `[${fullEntry.level.toUpperCase()}][${fullEntry.service}:${fullEntry.module}]`;
+    const dur = fullEntry.duration ? ` (${fullEntry.duration}ms)` : "";
+    if (fullEntry.level === "error" || fullEntry.level === "fatal") {
+      console.error(`${timeShort} ${tag} ${fullEntry.message}${dur}`, fullEntry.metadata || "");
+    } else if (fullEntry.level === "warn") {
+      console.warn(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
+    } else if (process.env.NODE_ENV !== "production" && fullEntry.level === "debug") {
+      console.debug(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
+    }
+    this.listeners.forEach((listener) => {
+      try {
+        listener(fullEntry);
+      } catch (err) {
+        console.error("[Logger] Listener notification error:", err);
+      }
+    });
+    return fullEntry;
+  }
+  info(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "info",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "success",
+      ...opts
+    });
+  }
+  warn(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "warn",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "failed",
+      ...opts
+    });
+  }
+  error(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "error",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "failed",
+      ...opts
+    });
+  }
+  debug(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "debug",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "success",
+      ...opts
+    });
+  }
+  /**
+   * Query filtered logs for the Log Explorer
+   */
+  query(params = {}) {
+    let filtered = [...this.buffer];
+    const levelsCount = {
+      debug: 0,
+      info: 0,
+      warn: 0,
+      error: 0,
+      fatal: 0
+    };
+    this.buffer.forEach((e) => {
+      levelsCount[e.level] = (levelsCount[e.level] || 0) + 1;
+    });
+    if (params.level) {
+      filtered = filtered.filter((e) => e.level === params.level);
+    }
+    if (params.service) {
+      filtered = filtered.filter((e) => e.service === params.service);
+    }
+    if (params.provider) {
+      filtered = filtered.filter((e) => e.provider === params.provider);
+    }
+    if (params.status) {
+      filtered = filtered.filter((e) => e.status === params.status);
+    }
+    if (params.correlationId) {
+      filtered = filtered.filter(
+        (e) => e.correlationId.toLowerCase().includes(params.correlationId.toLowerCase())
+      );
+    }
+    if (params.caseId) {
+      filtered = filtered.filter(
+        (e) => e.caseId?.toLowerCase().includes(params.caseId.toLowerCase())
+      );
+    }
+    if (params.requestId) {
+      filtered = filtered.filter(
+        (e) => e.requestId.toLowerCase().includes(params.requestId.toLowerCase())
+      );
+    }
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(
+        (e) => e.message.toLowerCase().includes(q) || e.module.toLowerCase().includes(q) || e.operation.toLowerCase().includes(q) || e.errorCode && e.errorCode.toLowerCase().includes(q)
+      );
+    }
+    if (params.startDate) {
+      filtered = filtered.filter((e) => new Date(e.timestamp) >= new Date(params.startDate));
+    }
+    if (params.endDate) {
+      filtered = filtered.filter((e) => new Date(e.timestamp) <= new Date(params.endDate));
+    }
+    const total = filtered.length;
+    const offset = params.offset || 0;
+    const limit = params.limit || 50;
+    const results = filtered.slice(offset, offset + limit);
+    return { total, results, levelsCount };
+  }
+  /**
+   * Fetch all logs related to a correlationId (tracing)
+   */
+  getTrace(correlationId) {
+    return this.buffer.filter((e) => e.correlationId === correlationId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+  clear() {
+    this.buffer = [];
+  }
+};
+var logger = new StructuredLogger();
 
 // src/server/db/supabase-server.ts
 import { createClient } from "@supabase/supabase-js";
@@ -1221,7 +1199,6 @@ var ConfigService = class {
 var configService = new ConfigService();
 
 // src/server/db/supabase-server.ts
-init_logger();
 var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
@@ -1841,7 +1818,6 @@ var MetricsService = class {
 var metricsService = new MetricsService();
 
 // src/server/observability/health-service.ts
-init_logger();
 async function fetchWithTimeout(url, options = {}) {
   const { timeout = 5e3, ...fetchOptions } = options;
   const controller = new AbortController();
@@ -3176,9 +3152,6 @@ var NvidiaKeyRotator = class {
 };
 var nvidiaKeyRotator = new NvidiaKeyRotator();
 
-// src/server/observability/ai-provider-manager.ts
-init_logger();
-
 // src/server/gemini.ts
 import { GoogleGenAI } from "@google/genai";
 var aiClient = null;
@@ -3493,9 +3466,6 @@ ${JSON.stringify(context)}` }
 };
 var aiProviderManager = new AiProviderManager();
 
-// src/server/routes/admin.ts
-init_logger();
-
 // src/config/pricing.ts
 var PRICING2 = {
   DEFAULT_PRICE: 89.9,
@@ -3736,15 +3706,6 @@ var AdminQueryService = class {
   }
 };
 var adminQueryService = new AdminQueryService();
-
-// src/integrations/meta/adapters/meta-adapter.ts
-init_logger();
-
-// src/integrations/meta/auth/meta-auth-service.ts
-init_logger();
-
-// src/integrations/meta/client/meta-graph-client.ts
-init_logger();
 
 // src/integrations/meta/errors/meta-errors.ts
 var MetaIntegrationError = class extends Error {
@@ -4203,7 +4164,6 @@ var MetaAuthService = class {
 var metaAuthService = new MetaAuthService();
 
 // src/integrations/meta/pages/meta-pages-service.ts
-init_logger();
 var MetaPagesService = class {
   /**
    * Fetches all Facebook Pages authorized by the user token
@@ -4256,7 +4216,6 @@ var MetaPagesService = class {
 var metaPagesService = new MetaPagesService();
 
 // src/integrations/meta/publishing/meta-publishing-service.ts
-init_logger();
 var MetaPublishingService = class {
   /**
    * Publishes content to Facebook Page
@@ -4404,7 +4363,6 @@ var MetaPublishingService = class {
 var metaPublishingService = new MetaPublishingService();
 
 // src/integrations/meta/insights/meta-insights-service.ts
-init_logger();
 var MetaInsightsService = class {
   /**
    * Fetches insights for a Facebook Post
@@ -4518,7 +4476,6 @@ var MetaInsightsService = class {
 var metaInsightsService = new MetaInsightsService();
 
 // src/server/db/meta-repository.ts
-init_logger();
 var UUID_RE2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var MetaRepository = class {
   constructor() {
@@ -4665,6 +4622,17 @@ var MetaAdapter = class {
         lastValidatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
     }
+  }
+  /**
+   * Checks if there is an active connection or valid environment credentials to publish
+   */
+  isConnected() {
+    if (this.activeConnection && this.activeConnection.status === "connected" && this.activeConnection.pages.length > 0) {
+      return true;
+    }
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const pageId = process.env.META_PAGE_ID;
+    return Boolean(systemToken && pageId);
   }
   /**
    * Returns safe sanitized DTO for frontend
@@ -4929,7 +4897,6 @@ var MetaAdapter = class {
 var metaAdapter = new MetaAdapter();
 
 // src/server/integrations/meta.ts
-init_logger();
 async function validateMetaAppConnection(customToken) {
   const appId = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || "";
   const appSecret = process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "";
@@ -5112,7 +5079,6 @@ var MetaIntegrationBridge = class {
 var metaIntegration = new MetaIntegrationBridge();
 
 // src/server/middleware/auth-middleware.ts
-init_logger();
 async function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -5488,11 +5454,7 @@ var admin_default = router;
 import { Router as Router2 } from "express";
 
 // src/integrations/meta/webhooks/meta-webhook-service.ts
-init_logger();
 import crypto from "crypto";
-
-// src/server/services/marketing-service.ts
-init_logger();
 
 // src/data/marketing-agents-data.ts
 var INITIAL_MARKETING_AGENTS = [
@@ -6458,11 +6420,7 @@ async function runMetaIntegrationTests() {
   };
 }
 
-// src/server/services/messaging-service.ts
-init_logger();
-
 // src/server/services/whatsapp-service.ts
-init_logger();
 var WhatsAppService = class {
   constructor() {
     this.config = {
@@ -6592,11 +6550,16 @@ var WhatsAppService = class {
     const instance = instanceName || this.config.instanceName;
     try {
       const result = await this.makeRequest("GET", `/instance/connectionState/${instance}`);
+      const rawState = result?.state || result?.instance?.state || "close";
+      const status = rawState === "open" ? "open" : rawState === "connecting" ? "connecting" : "close";
+      const rawPhone = result?.instance?.owner || result?.owner || result?.instance?.phone;
+      const phone = rawPhone ? String(rawPhone).replace(/@s\.whatsapp\.net$/, "") : void 0;
       return {
-        instanceName: instance,
-        instanceId: result.instance?.instanceId || instance,
-        status: result.state || "close",
-        phone: result.instance?.owner
+        instanceName: result?.instance?.instanceName || instance,
+        instanceId: result?.instance?.instanceId || instance,
+        status,
+        owner: result?.instance?.profileName || result?.profileName || void 0,
+        phone
       };
     } catch (err) {
       logger.warn("whatsapp", "whatsapp-service", "get_instance_status", "Failed to get instance status", {
@@ -6637,12 +6600,17 @@ var WhatsAppService = class {
         instance,
         targetUrl
       });
+      const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
       const result = await this.makeRequest("POST", `/webhook/set/${instance}`, {
         webhook: {
           enabled: true,
           url: targetUrl,
           byEvents: false,
           base64: false,
+          // Envia o segredo de validacao de origem como custom header
+          // (suportado pela Evolution API v2; exigido pelo receiver quando
+          // EVOLUTION_WEBHOOK_SECRET estiver setado). Nunca loga o valor.
+          ...webhookSecret ? { headers: { "X-Webhook-Secret": webhookSecret } } : {},
           events: [
             "MESSAGES_UPSERT",
             "MESSAGES_UPDATE",
@@ -7788,7 +7756,6 @@ var MessagingService = class {
 var messagingService = new MessagingService();
 
 // src/server/routes/meta.ts
-init_logger();
 var router2 = Router2();
 router2.get(
   [
@@ -8106,7 +8073,6 @@ var meta_default = router2;
 import { Router as Router3 } from "express";
 
 // src/server/db/commercial-repository.ts
-init_logger();
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var DEFAULT_CANONICAL_PRICINGS = [
   {
@@ -9391,7 +9357,6 @@ var CommissionService = class {
 };
 
 // src/server/commercial/audit/audit-service.ts
-init_logger();
 var CommercialAuditService = class {
   constructor(repository) {
     this.repository = repository;
@@ -10886,7 +10851,6 @@ var monitoring_default = router4;
 import { Router as Router5 } from "express";
 
 // src/server/services/settings-service.ts
-init_logger();
 var SettingsService = class {
   constructor() {
     this.settings = /* @__PURE__ */ new Map();
@@ -11217,7 +11181,6 @@ var SettingsService = class {
 var settingsService = new SettingsService();
 
 // src/server/routes/settings.ts
-init_logger();
 var router5 = Router5();
 router5.use(authenticateToken, requireAdmin);
 router5.get(["/", "/settings"], async (req, res) => {
@@ -11305,7 +11268,6 @@ router5.post(["/test-integration", "/settings/test-integration"], async (req, re
 var settings_default = router5;
 
 // src/server/routes/logs.ts
-init_logger();
 import { Router as Router6 } from "express";
 var router6 = Router6();
 router6.use(authenticateToken, requireAdmin);
@@ -11356,14 +11318,7 @@ router6.post(["/clear", "/logs/clear"], (req, res) => {
 var logs_default = router6;
 
 // src/server/routes/marketing.ts
-init_logger();
 import { Router as Router7 } from "express";
-
-// src/server/workers/marketing-orchestrator.worker.ts
-init_logger();
-
-// src/server/workers/agents/estrategico-agent.worker.ts
-init_logger();
 
 // src/core/legal-base/ctb-articles.ts
 var CTB_ARTICLES_DB = [
@@ -14985,7 +14940,6 @@ var knowledgeService = KnowledgeService.getInstance();
 
 // src/server/knowledge/embedding-service.ts
 import crypto3 from "crypto";
-init_logger();
 var EmbeddingService = class _EmbeddingService {
   constructor() {
     this.cache = /* @__PURE__ */ new Map();
@@ -15270,7 +15224,6 @@ var embeddingService = EmbeddingService.getInstance();
 
 // src/server/knowledge/vector-store.ts
 import { createClient as createClient2 } from "@supabase/supabase-js";
-init_logger();
 var VectorStore = class _VectorStore {
   constructor() {
     // In-Memory Storage Tables
@@ -15622,7 +15575,6 @@ var RerankerService = class _RerankerService {
 var rerankerService = RerankerService.getInstance();
 
 // src/server/knowledge/search-service.ts
-init_logger();
 var SearchService = class _SearchService {
   constructor() {
   }
@@ -15992,7 +15944,6 @@ var EstrategicoAgent = class {
 var estrategicoAgent = new EstrategicoAgent();
 
 // src/server/workers/agents/planejamento-agent.worker.ts
-init_logger();
 var PlanejamentoAgent = class {
   constructor() {
     this.id = "planejamento";
@@ -16191,498 +16142,775 @@ var PlanejamentoAgent = class {
 };
 var planejamentoAgent = new PlanejamentoAgent();
 
-// src/server/workers/agents/criador-agent.worker.ts
-init_logger();
+// src/server/media/hardware-detector.ts
+import os from "os";
+import { execSync } from "child_process";
+var HardwareDetector = class {
+  static {
+    this.cachedInfo = null;
+  }
+  static getHardwareInfo() {
+    if (this.cachedInfo) {
+      return this.cachedInfo;
+    }
+    const platform = os.platform();
+    const arch = os.arch();
+    const cpus = os.cpus() || [];
+    const cpuCount = cpus.length;
+    const cpuModel = cpus[0]?.model || "Generic CPU";
+    const totalMemoryBytes = os.totalmem();
+    const freeMemoryBytes = os.freemem();
+    let hasGpu = false;
+    let gpuName;
+    let vramBytes;
+    let hasCuda = false;
+    let hasRocm = false;
+    let hasDocker = false;
+    let pythonVersion;
+    try {
+      pythonVersion = execSync("python3 --version", { timeout: 1500, stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    } catch {
+      pythonVersion = void 0;
+    }
+    try {
+      const dockerOut = execSync("docker --version", { timeout: 1500, stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+      if (dockerOut) hasDocker = true;
+    } catch {
+      hasDocker = false;
+    }
+    try {
+      const nvidiaOut = execSync("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits", {
+        timeout: 2e3,
+        stdio: ["pipe", "pipe", "ignore"]
+      }).toString().trim();
+      if (nvidiaOut) {
+        hasGpu = true;
+        const [name, memoryMb] = nvidiaOut.split(",").map((s) => s.trim());
+        gpuName = name;
+        if (memoryMb && !isNaN(Number(memoryMb))) {
+          vramBytes = Number(memoryMb) * 1024 * 1024;
+        }
+      }
+    } catch {
+      hasGpu = false;
+    }
+    try {
+      execSync("which nvcc", { timeout: 1e3, stdio: ["pipe", "pipe", "ignore"] });
+      hasCuda = true;
+    } catch {
+      hasCuda = false;
+    }
+    try {
+      execSync("which rocm-smi", { timeout: 1e3, stdio: ["pipe", "pipe", "ignore"] });
+      hasRocm = true;
+    } catch {
+      hasRocm = false;
+    }
+    let classification = "REMOTE_REQUIRED";
+    const ramGb = totalMemoryBytes / (1024 * 1024 * 1024);
+    const vramGb = (vramBytes || 0) / (1024 * 1024 * 1024);
+    if (hasGpu && vramGb >= 16 && ramGb >= 24) {
+      classification = "LOCAL_GPU_READY";
+    } else if (hasGpu && vramGb >= 6) {
+      classification = "LOCAL_GPU_LIMITED";
+    } else if (ramGb >= 16) {
+      classification = "LOCAL_CPU_ONLY";
+    } else {
+      classification = "REMOTE_REQUIRED";
+    }
+    this.cachedInfo = {
+      os: `${platform} (${os.release()})`,
+      arch,
+      cpuCount,
+      cpuModel,
+      totalMemoryBytes,
+      freeMemoryBytes,
+      hasGpu,
+      gpuName,
+      vramBytes,
+      hasCuda,
+      hasRocm,
+      hasDocker,
+      pythonVersion,
+      nodeVersion: process.version,
+      classification
+    };
+    return this.cachedInfo;
+  }
+};
 
-// src/server/workers/comfyui-worker.ts
-init_logger();
-
-// src/server/integrations/comfyui-marketing.ts
-init_logger();
-var ComfyUIMarketing = class {
-  constructor(config = {}) {
-    this.isConnected = false;
-    this.config = {
-      serverUrl: config.serverUrl || process.env.COMFYUI_SERVER_URL || "http://localhost:8188",
-      quality: config.quality || "production",
-      defaultTimeout: config.defaultTimeout || 12e4
-      // 2 minutes
+// src/server/media/providers/dev-mock-provider.ts
+var DevMockMediaProvider = class {
+  constructor() {
+    this.id = "dev_mock";
+    this.name = "Development Mock Media Provider";
+    this.kind = "dev_mock";
+  }
+  async isAvailable() {
+    return process.env.NODE_ENV === "development" || process.env.MEDIA_PROVIDER === "dev_mock";
+  }
+  async generateImage(options) {
+    const width = options.aspectRatio === "9:16" ? 576 : options.aspectRatio === "16:9" ? 1024 : 768;
+    const height = options.aspectRatio === "9:16" ? 1024 : options.aspectRatio === "16:9" ? 576 : 768;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f172a"/>
+          <stop offset="50%" stop-color="#1e293b"/>
+          <stop offset="100%" stop-color="#334155"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bg)"/>
+      <rect x="20" y="20" width="${width - 40}" height="${height - 40}" rx="16" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="6,6" opacity="0.3"/>
+      <circle cx="${width / 2}" cy="${height / 2 - 40}" r="48" fill="#3b82f6" opacity="0.2"/>
+      <polygon points="${width / 2},${height / 2 - 68} ${width / 2 + 28},${height / 2 - 20} ${width / 2 - 28},${height / 2 - 20}" fill="#60a5fa"/>
+      <text x="${width / 2}" y="${height / 2 + 40}" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">
+        [DEV MOCK] Gera\xE7\xE3o de Imagem
+      </text>
+      <text x="${width / 2}" y="${height / 2 + 70}" font-family="system-ui, sans-serif" font-size="14" fill="#94a3b8" text-anchor="middle">
+        Prompt: ${options.prompt.slice(0, 45)}...
+      </text>
+      <text x="${width / 2}" y="${height - 40}" font-family="system-ui, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+        Provider: development/mock (Sem custo / Sem GPU)
+      </text>
+    </svg>`;
+    const b64 = Buffer.from(svg).toString("base64");
+    return {
+      base64: b64,
+      mimeType: "image/svg+xml",
+      url: `data:image/svg+xml;base64,${b64}`,
+      metadata: {
+        provider: this.id,
+        isDevelopmentMock: true,
+        prompt: options.prompt
+      }
     };
   }
-  /**
-   * Test connection to ComfyUI server
-   */
-  async testConnection() {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2e3);
-      const response = await fetch(`${this.config.serverUrl}/system_stats`, {
-        signal: controller.signal
-      }).catch(() => null);
-      clearTimeout(timeoutId);
-      if (response && response.ok) {
-        const stats = await response.json();
-        logger.info("marketing", "comfyui", "connection", "ComfyUI connected", {
-          version: stats.system?.comfyui_version,
-          devices: stats.devices?.length || 0
-        });
-        this.isConnected = true;
-        return true;
+  async generateVideo(options, onProgress) {
+    if (onProgress) {
+      onProgress(30);
+      await new Promise((r) => setTimeout(r, 200));
+      onProgress(70);
+      await new Promise((r) => setTimeout(r, 200));
+      onProgress(100);
+    }
+    return {
+      url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      mimeType: "video/mp4",
+      durationSeconds: options.durationSeconds || 5,
+      metadata: {
+        provider: this.id,
+        isDevelopmentMock: true,
+        prompt: options.prompt
       }
-      this.isConnected = false;
-      return false;
-    } catch {
-      this.isConnected = false;
-      return false;
+    };
+  }
+  async generateImageToVideo(options, onProgress) {
+    if (onProgress) {
+      onProgress(40);
+      await new Promise((r) => setTimeout(r, 200));
+      onProgress(100);
+    }
+    return {
+      url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      mimeType: "video/mp4",
+      durationSeconds: options.durationSeconds || 5,
+      metadata: {
+        provider: this.id,
+        isDevelopmentMock: true,
+        mode: "image_to_video"
+      }
+    };
+  }
+};
+
+// src/server/media/providers/local-provider.ts
+var LocalMediaProvider = class {
+  constructor() {
+    this.id = "local_opensource";
+    this.name = "Local Open-Source Model Runner";
+    this.kind = "local";
+    this.endpointUrl = process.env.MEDIA_LOCAL_ENDPOINT || "http://127.0.0.1:8000";
+  }
+  async isAvailable() {
+    const isEnabled = process.env.MEDIA_LOCAL_ENABLED === "true";
+    if (!isEnabled) return false;
+    const hw = HardwareDetector.getHardwareInfo();
+    if (hw.classification === "LOCAL_CPU_ONLY" || hw.classification === "REMOTE_REQUIRED") {
+      try {
+        const ping = await fetch(`${this.endpointUrl}/health`, { method: "GET", signal: AbortSignal.timeout(1e3) });
+        return ping.ok;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+  async generateImage(options) {
+    const available = await this.isAvailable();
+    if (!available) {
+      throw new Error("Local Media Provider n\xE3o est\xE1 dispon\xEDvel ou hardware local \xE9 insuficiente.");
+    }
+    const response = await fetch(`${this.endpointUrl}/v1/images/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: options.prompt,
+        aspect_ratio: options.aspectRatio || "1:1",
+        negative_prompt: options.negativePrompt
+      }),
+      signal: AbortSignal.timeout(12e4)
+    });
+    if (!response.ok) {
+      throw new Error(`Erro na infer\xEAncia local de imagem: ${await response.text()}`);
+    }
+    const data = await response.json();
+    return {
+      url: data.url || (data.base64 ? `data:image/png;base64,${data.base64}` : void 0),
+      base64: data.base64,
+      mimeType: data.mimeType || "image/png",
+      metadata: {
+        provider: this.id,
+        model: data.model || "sdxl-lightning",
+        local: true
+      }
+    };
+  }
+  async generateVideo(options, onProgress) {
+    const available = await this.isAvailable();
+    if (!available) {
+      throw new Error("Local Media Provider para v\xEDdeo n\xE3o est\xE1 dispon\xEDvel.");
+    }
+    if (onProgress) onProgress(20);
+    const response = await fetch(`${this.endpointUrl}/v1/videos/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: options.prompt,
+        duration: options.durationSeconds || 4,
+        aspect_ratio: options.aspectRatio || "16:9"
+      }),
+      signal: AbortSignal.timeout(3e5)
+    });
+    if (!response.ok) {
+      throw new Error(`Erro na infer\xEAncia local de v\xEDdeo: ${await response.text()}`);
+    }
+    const data = await response.json();
+    if (onProgress) onProgress(100);
+    return {
+      url: data.url,
+      mimeType: "video/mp4",
+      durationSeconds: options.durationSeconds || 4,
+      metadata: {
+        provider: this.id,
+        model: data.model || "wan-2.2-ti2v-5b",
+        local: true
+      }
+    };
+  }
+  async generateImageToVideo(options, onProgress) {
+    const available = await this.isAvailable();
+    if (!available) {
+      throw new Error("Local Image-to-Video Provider n\xE3o est\xE1 dispon\xEDvel.");
+    }
+    if (onProgress) onProgress(25);
+    const response = await fetch(`${this.endpointUrl}/v1/videos/image-to-video`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: options.prompt,
+        image_base64: options.referenceImageBase64,
+        image_url: options.referenceImageUrl,
+        duration: options.durationSeconds || 4
+      }),
+      signal: AbortSignal.timeout(3e5)
+    });
+    if (!response.ok) {
+      throw new Error(`Erro na infer\xEAncia local Image-to-Video: ${await response.text()}`);
+    }
+    const data = await response.json();
+    if (onProgress) onProgress(100);
+    return {
+      url: data.url,
+      mimeType: "video/mp4",
+      durationSeconds: options.durationSeconds || 4,
+      metadata: {
+        provider: this.id,
+        model: data.model || "wan-2.2-i2v",
+        local: true
+      }
+    };
+  }
+};
+
+// src/server/media/providers/remote-provider.ts
+import { GoogleGenAI as GoogleGenAI2 } from "@google/genai";
+var RemoteMediaProvider = class {
+  constructor() {
+    this.id = "remote_genai";
+    this.name = "Remote Cloud Media Generator";
+    this.kind = "remote";
+    this.aiClient = null;
+  }
+  getClient() {
+    if (!this.aiClient) {
+      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "";
+      this.aiClient = new GoogleGenAI2({ apiKey });
+    }
+    return this.aiClient;
+  }
+  async isAvailable() {
+    const key = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    return !!key && key.trim().length > 0;
+  }
+  async generateImage(options) {
+    const client = this.getClient();
+    const model = "imagen-3.0-generate-002";
+    let prompt = options.prompt;
+    if (options.stylePreset) {
+      prompt += `, style: ${options.stylePreset}`;
+    }
+    try {
+      const response = await client.models.generateImages({
+        model,
+        prompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: "image/jpeg",
+          aspectRatio: options.aspectRatio || "1:1"
+        }
+      });
+      const base64Data = response.generatedImages?.[0]?.image?.imageBytes;
+      if (!base64Data) {
+        throw new Error("A API remota n\xE3o retornou bytes de imagem v\xE1lidos.");
+      }
+      return {
+        base64: base64Data,
+        mimeType: "image/jpeg",
+        url: `data:image/jpeg;base64,${base64Data}`,
+        metadata: {
+          provider: this.id,
+          model,
+          aspectRatio: options.aspectRatio || "1:1"
+        }
+      };
+    } catch (err) {
+      if (options.allowFallback !== false) {
+        try {
+          const fallbackRes = await client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Gere uma descri\xE7\xE3o visual ultra-detalhada e SVG sem\xE2ntico profissional para o seguinte briefing de marketing de tr\xE2nsito: "${prompt}". Retorne apenas o c\xF3digo SVG puro sem formata\xE7\xE3o markdown.`
+          });
+          const svgText = fallbackRes.text?.replace(/```xml|```svg|```/gi, "").trim() || "";
+          if (svgText.includes("<svg")) {
+            const b64Svg = Buffer.from(svgText).toString("base64");
+            return {
+              base64: b64Svg,
+              mimeType: "image/svg+xml",
+              url: `data:image/svg+xml;base64,${b64Svg}`,
+              isFallback: true,
+              metadata: {
+                provider: this.id,
+                model: "gemini-2.5-flash-svg",
+                fallbackReason: err.message
+              }
+            };
+          }
+        } catch {
+        }
+      }
+      throw new Error(`Falha no provedor remoto de imagem: ${err?.message || err}`);
     }
   }
-  /**
-   * Generate image using ComfyUI
-   */
-  async generateImage(request) {
-    logger.info("marketing", "comfyui", "generateImage", "Starting image generation", {
-      type: request.type,
-      topic: request.topic,
-      platform: request.platform
-    });
-    const workflow = this.buildImageWorkflow(request);
-    const result = await this.queueWorkflow(workflow);
-    return result.outputImages || [];
-  }
-  /**
-   * Generate video using ComfyUI
-   */
-  async generateVideo(request) {
-    const durationSeconds = request.duration ? parseInt(request.duration.replace("s", "")) : 0;
-    logger.info("marketing", "comfyui", "generateVideo", "Starting video generation", {
-      type: request.type,
-      topic: request.topic,
-      duration: durationSeconds
-    });
-    const workflow = this.buildVideoWorkflow(request);
-    const result = await this.queueWorkflow(workflow);
-    return result.outputVideos || [];
-  }
-  /**
-   * Build image workflow based on request type
-   */
-  buildImageWorkflow(request) {
-    const baseWorkflow = {
-      "1": {
-        "class_type": "CheckpointLoaderSimple",
-        "inputs": {
-          "ckpt_name": "v1-5-pruned-emaonly.safetensors"
+  async generateVideo(options, onProgress) {
+    const client = this.getClient();
+    const model = "veo-2.0-generate-001";
+    if (onProgress) onProgress(15);
+    try {
+      let operation = await client.models.generateVideos({
+        model,
+        prompt: options.prompt,
+        config: {
+          aspectRatio: options.aspectRatio || "16:9",
+          personGeneration: "allow_adult"
         }
-      },
-      "2": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-          "text": this.buildImagePrompt(request),
-          "clip": ["1", 1]
+      });
+      let pollCount = 0;
+      const maxPolls = 60;
+      while (!operation.done && pollCount < maxPolls) {
+        pollCount++;
+        await new Promise((resolve) => setTimeout(resolve, 5e3));
+        if (onProgress) {
+          const simulatedProgress = Math.min(90, 20 + Math.round(pollCount / maxPolls * 70));
+          onProgress(simulatedProgress);
         }
-      },
-      "3": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-          "text": "low quality, blurry, distorted, ugly, bad anatomy",
-          "clip": ["1", 1]
-        }
-      },
-      "4": {
-        "class_type": "EmptyLatentImage",
-        "inputs": {
-          "width": this.getImageWidth(request),
-          "height": this.getImageHeight(request),
-          "batch_size": request.batchSize || 1
-        }
-      },
-      "5": {
-        "class_type": "KSampler",
-        "inputs": {
-          "seed": Math.floor(Math.random() * 1e6),
-          "steps": this.config.quality === "production" ? 25 : 15,
-          "cfg": 3.5,
-          "sampler_name": "euler",
-          "scheduler": "normal",
-          "denoise": 1,
-          "model": ["1", 0],
-          "positive": ["2", 0],
-          "negative": ["3", 0],
-          "latent_image": ["4", 0]
-        }
-      },
-      "6": {
-        "class_type": "VAEDecode",
-        "inputs": {
-          "samples": ["5", 0],
-          "vae": ["1", 2]
-        }
-      },
-      "7": {
-        "class_type": "SaveImage",
-        "inputs": {
-          "filename_prefix": `marketing_${request.type}_${Date.now()}`,
-          "images": ["6", 0]
-        }
+        operation = await client.operations.getVideosOperation({
+          operation
+        });
       }
-    };
-    return baseWorkflow;
+      if (!operation.done) {
+        throw new Error("A gera\xE7\xE3o remota de v\xEDdeo excedeu o tempo limite.");
+      }
+      if (onProgress) onProgress(100);
+      const videoResult = operation.response?.generatedVideos?.[0];
+      const videoUri = videoResult?.video?.uri;
+      if (!videoUri) {
+        throw new Error("Nenhum URI de v\xEDdeo retornado pelo modelo de v\xEDdeo remoto.");
+      }
+      return {
+        url: videoUri,
+        mimeType: "video/mp4",
+        durationSeconds: options.durationSeconds || 5,
+        metadata: {
+          provider: this.id,
+          model,
+          aspectRatio: options.aspectRatio
+        }
+      };
+    } catch (err) {
+      throw new Error(`Falha no provedor remoto de v\xEDdeo (${model}): ${err?.message || err}`);
+    }
+  }
+  async generateImageToVideo(options, onProgress) {
+    const client = this.getClient();
+    const model = "veo-2.0-generate-001";
+    if (!options.referenceImageBase64 && !options.referenceImageUrl) {
+      throw new Error("Image-to-Video requer uma imagem de refer\xEAncia em base64 ou URL.");
+    }
+    if (onProgress) onProgress(15);
+    try {
+      let imageBytes = options.referenceImageBase64;
+      let mimeType = options.referenceMimeType || "image/jpeg";
+      if (!imageBytes && options.referenceImageUrl) {
+        const fetchRes = await fetch(options.referenceImageUrl);
+        const arrayBuf = await fetchRes.arrayBuffer();
+        imageBytes = Buffer.from(arrayBuf).toString("base64");
+        mimeType = fetchRes.headers.get("content-type") || mimeType;
+      }
+      let operation = await client.models.generateVideos({
+        model,
+        prompt: options.prompt || "Animate this scene naturally with realistic motion and high fidelity",
+        image: {
+          imageBytes,
+          mimeType
+        },
+        config: {
+          aspectRatio: options.aspectRatio || "16:9",
+          personGeneration: "allow_adult"
+        }
+      });
+      let pollCount = 0;
+      const maxPolls = 60;
+      while (!operation.done && pollCount < maxPolls) {
+        pollCount++;
+        await new Promise((resolve) => setTimeout(resolve, 5e3));
+        if (onProgress) {
+          const simulatedProgress = Math.min(92, 20 + Math.round(pollCount / maxPolls * 72));
+          onProgress(simulatedProgress);
+        }
+        operation = await client.operations.getVideosOperation({
+          operation
+        });
+      }
+      if (!operation.done) {
+        throw new Error("A gera\xE7\xE3o Image-to-Video remota excedeu o tempo limite.");
+      }
+      if (onProgress) onProgress(100);
+      const videoResult = operation.response?.generatedVideos?.[0];
+      const videoUri = videoResult?.video?.uri;
+      if (!videoUri) {
+        throw new Error("Nenhum URI de v\xEDdeo retornado pelo modelo remoto Image-to-Video.");
+      }
+      return {
+        url: videoUri,
+        mimeType: "video/mp4",
+        durationSeconds: options.durationSeconds || 5,
+        metadata: {
+          provider: this.id,
+          model,
+          mode: "image_to_video"
+        }
+      };
+    } catch (err) {
+      throw new Error(`Falha no provedor remoto Image-to-Video: ${err?.message || err}`);
+    }
+  }
+};
+
+// src/server/media/provider-router.ts
+var ProviderRouter = class {
+  constructor() {
+    this.localProvider = new LocalMediaProvider();
+    this.remoteProvider = new RemoteMediaProvider();
+    this.mockProvider = new DevMockMediaProvider();
   }
   /**
-   * Build video workflow based on request type.
-   * REQUIRES: GPU, Wan2.2 diffusion model, VHS_VideoCombine node.
-   * Current environment: CPU-only, no video models → throws explicit error.
+   * Decide e retorna o melhor provedor para a solicitação atual.
    */
-  buildVideoWorkflow(_request) {
-    throw new Error(
-      "ComfyUI video generation unavailable: requires GPU + Wan2.2 model + VHS_VideoCombine node. Current environment is CPU-only with no video models installed."
+  async resolveProvider(type, explicitProviderPreference) {
+    if (explicitProviderPreference === "local") {
+      if (await this.localProvider.isAvailable()) return this.localProvider;
+    } else if (explicitProviderPreference === "remote") {
+      if (await this.remoteProvider.isAvailable()) return this.remoteProvider;
+    } else if (explicitProviderPreference === "dev_mock") {
+      return this.mockProvider;
+    }
+    const globalSetting = (process.env.MEDIA_PROVIDER || "auto").toLowerCase();
+    if (globalSetting === "dev_mock") {
+      return this.mockProvider;
+    }
+    let typeSetting = "auto";
+    if (type === "image") {
+      typeSetting = (process.env.MEDIA_IMAGE_PROVIDER || globalSetting).toLowerCase();
+    } else if (type === "video" || type === "image_to_video") {
+      typeSetting = (process.env.MEDIA_VIDEO_PROVIDER || globalSetting).toLowerCase();
+    }
+    if (typeSetting === "local" && await this.localProvider.isAvailable()) {
+      return this.localProvider;
+    }
+    if (typeSetting === "remote" && await this.remoteProvider.isAvailable()) {
+      return this.remoteProvider;
+    }
+    const hw = HardwareDetector.getHardwareInfo();
+    if (process.env.MEDIA_LOCAL_ENABLED === "true" && hw.classification === "LOCAL_GPU_READY") {
+      if (await this.localProvider.isAvailable()) {
+        return this.localProvider;
+      }
+    }
+    if (process.env.MEDIA_REMOTE_ENABLED !== "false" && await this.remoteProvider.isAvailable()) {
+      return this.remoteProvider;
+    }
+    if (await this.localProvider.isAvailable()) {
+      return this.localProvider;
+    }
+    return this.mockProvider;
+  }
+  getAvailableProviders() {
+    return [
+      { id: this.remoteProvider.id, name: this.remoteProvider.name, kind: this.remoteProvider.kind },
+      { id: this.localProvider.id, name: this.localProvider.name, kind: this.localProvider.kind },
+      { id: this.mockProvider.id, name: this.mockProvider.name, kind: this.mockProvider.kind }
+    ];
+  }
+};
+
+// src/server/media/job-queue.ts
+import { randomUUID } from "crypto";
+var MediaJobQueue = class {
+  constructor(router24) {
+    this.jobs = /* @__PURE__ */ new Map();
+    this.activeJobsCount = 0;
+    this.cancelledJobIds = /* @__PURE__ */ new Set();
+    this.router = router24;
+    const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
+    this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
+  }
+  createJob(type, prompt, options, inputMedia, explicitProvider) {
+    const id = `job_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const job = {
+      id,
+      type,
+      provider: explicitProvider || "auto",
+      providerKind: "remote",
+      model: "auto",
+      prompt,
+      options,
+      inputMedia,
+      status: "QUEUED",
+      progress: 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.jobs.set(id, job);
+    this.scheduleNext();
+    return job;
+  }
+  getJob(id) {
+    return this.jobs.get(id);
+  }
+  listJobs(limit = 50) {
+    return Array.from(this.jobs.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, limit);
+  }
+  cancelJob(id) {
+    const job = this.jobs.get(id);
+    if (!job) return false;
+    if (job.status === "COMPLETED" || job.status === "FAILED" || job.status === "CANCELLED") {
+      return false;
+    }
+    this.cancelledJobIds.add(id);
+    job.status = "CANCELLED";
+    job.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+    return true;
+  }
+  scheduleNext() {
+    if (this.activeJobsCount >= this.maxConcurrent) {
+      return;
+    }
+    const queuedJob = Array.from(this.jobs.values()).find((j) => j.status === "QUEUED");
+    if (!queuedJob) {
+      return;
+    }
+    this.processJob(queuedJob);
+  }
+  async processJob(job) {
+    this.activeJobsCount++;
+    job.status = "PROCESSING";
+    job.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    job.progress = 5;
+    try {
+      if (this.cancelledJobIds.has(job.id)) {
+        job.status = "CANCELLED";
+        return;
+      }
+      const provider = await this.router.resolveProvider(
+        job.type,
+        job.provider !== "auto" ? job.provider : void 0
+      );
+      job.provider = provider.id;
+      job.providerKind = provider.kind;
+      let output;
+      const onProgress = (p) => {
+        if (!this.cancelledJobIds.has(job.id)) {
+          job.progress = Math.max(job.progress, p);
+        }
+      };
+      if (job.type === "image") {
+        output = await provider.generateImage(job.options);
+      } else if (job.type === "video") {
+        output = await provider.generateVideo(job.options, onProgress);
+      } else {
+        const i2vOpts = job.options;
+        if (!i2vOpts.referenceImageBase64 && job.inputMedia?.imageBase64Preview) {
+          i2vOpts.referenceImageBase64 = job.inputMedia.imageBase64Preview;
+        }
+        if (!i2vOpts.referenceImageUrl && job.inputMedia?.imageUrl) {
+          i2vOpts.referenceImageUrl = job.inputMedia.imageUrl;
+        }
+        output = await provider.generateImageToVideo(i2vOpts, onProgress);
+      }
+      if (this.cancelledJobIds.has(job.id)) {
+        job.status = "CANCELLED";
+      } else {
+        job.status = "COMPLETED";
+        job.progress = 100;
+        job.output = output;
+        job.model = output.metadata?.model || job.model;
+        job.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      }
+    } catch (err) {
+      if (this.cancelledJobIds.has(job.id)) {
+        job.status = "CANCELLED";
+      } else {
+        job.status = "FAILED";
+        job.error = err?.message || String(err);
+        job.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      }
+    } finally {
+      this.activeJobsCount--;
+      this.scheduleNext();
+    }
+  }
+};
+
+// src/server/media/media-generation-service.ts
+var MediaGenerationService = class _MediaGenerationService {
+  constructor() {
+    this.router = new ProviderRouter();
+    this.queue = new MediaJobQueue(this.router);
+  }
+  static getInstance() {
+    if (!_MediaGenerationService.instance) {
+      _MediaGenerationService.instance = new _MediaGenerationService();
+    }
+    return _MediaGenerationService.instance;
+  }
+  /**
+   * Enfileira job assíncrono para geração de imagem.
+   */
+  enqueueImageJob(options, explicitProvider) {
+    return this.queue.createJob("image", options.prompt, options, void 0, explicitProvider);
+  }
+  /**
+   * Enfileira job assíncrono para geração de vídeo.
+   */
+  enqueueVideoJob(options, explicitProvider) {
+    return this.queue.createJob("video", options.prompt, options, void 0, explicitProvider);
+  }
+  /**
+   * Enfileira job assíncrono para Image-to-Video.
+   */
+  enqueueImageToVideoJob(options, inputMedia, explicitProvider) {
+    return this.queue.createJob(
+      "image_to_video",
+      options.prompt || "Animate this image",
+      options,
+      inputMedia,
+      explicitProvider
     );
   }
   /**
-   * Build image prompt based on request
+   * Consulta o estado e progresso de um job.
    */
-  buildImagePrompt(request) {
-    const topicPrompts = {
-      "defesa de multa": "Professional legal defense against traffic fines, Brazilian law, justice symbol, scales of justice",
-      "CNH": "Brazilian driver license (CNH), driving authorization, traffic document",
-      "multas de tr\xE2nsito": "Traffic fines, penalty notifications, Brazilian traffic law",
-      "direito de tr\xE2nsito": "Traffic law, legal consultation, attorney at law",
-      "recurso de multa": "Traffic fine appeal, legal document, justice"
-    };
-    const topicKey = Object.keys(topicPrompts).find(
-      (key) => request.topic.toLowerCase().includes(key)
-    ) || request.topic;
-    const basePrompt = topicPrompts[topicKey] || request.topic;
-    const styleModifiers = {
-      professional: "professional, clean, modern design, corporate",
-      educational: "educational, informative, clear, teaching material",
-      engaging: "engaging, eye-catching, vibrant, social media style"
-    };
-    const platformModifiers = {
-      instagram: "Instagram post style, square format, bold text area",
-      facebook: "Facebook post style, news feed optimized",
-      linkedin: "LinkedIn professional style, business appropriate",
-      tiktok: "TikTok style, vertical format, dynamic"
-    };
-    return `${basePrompt}, ${styleModifiers[request.style || "professional"]}, ${platformModifiers[request.platform || "instagram"]}, Brazilian Portuguese text space, high quality, detailed`;
+  getJob(id) {
+    return this.queue.getJob(id);
   }
   /**
-   * Build video prompt based on request
+   * Cancela um job em fila ou em execução.
    */
-  buildVideoPrompt(request) {
-    const topicPrompts = {
-      "defesa de multa": "Animated explanation of traffic fine defense process, legal steps, justice",
-      "5 dicas": "Educational listicle video, tips for drivers, Brazilian traffic law",
-      "direito de tr\xE2nsito": "Traffic law explanation, legal consultation, attorney advice"
-    };
-    const topicKey = Object.keys(topicPrompts).find(
-      (key) => request.topic.toLowerCase().includes(key)
-    ) || request.topic;
-    const basePrompt = topicPrompts[topicKey] || request.topic;
-    const typeModifiers = {
-      "reel": "short-form vertical video, Instagram Reel style, dynamic cuts",
-      "explainer": "educational explainer video, clear narration, step-by-step",
-      "talking-head": "talking head video, professional speaker, direct address",
-      "animated-infographic": "animated infographic, data visualization, motion graphics"
-    };
-    return `${basePrompt}, ${typeModifiers[request.type]}, smooth animation, professional quality, Brazilian Portuguese`;
+  cancelJob(id) {
+    return this.queue.cancelJob(id);
   }
   /**
-   * Get image dimensions based on request type and platform
+   * Lista os jobs recentes.
    */
-  getImageWidth(request) {
-    if (request.type === "social-media" && request.platform) {
-      const socialMediaDimensions = {
-        instagram: 1024,
-        facebook: 1344,
-        linkedin: 1344,
-        tiktok: 576
-      };
-      return socialMediaDimensions[request.platform] || 1024;
-    }
-    const dimensions = {
-      "blog-header": 1344,
-      "infographic": 1024,
-      "quote-card": 1024,
-      "carousel": 1024
-    };
-    return dimensions[request.type] || 1024;
-  }
-  getImageHeight(request) {
-    if (request.type === "social-media" && request.platform) {
-      const socialMediaDimensions = {
-        instagram: 1024,
-        facebook: 672,
-        linkedin: 672,
-        tiktok: 1024
-      };
-      return socialMediaDimensions[request.platform] || 1024;
-    }
-    const dimensions = {
-      "blog-header": 768,
-      "infographic": 1360,
-      "quote-card": 1024,
-      "carousel": 1024
-    };
-    return dimensions[request.type] || 1024;
+  listJobs(limit = 50) {
+    return this.queue.listJobs(limit);
   }
   /**
-   * Get frame count based on duration
+   * Geração direta síncrona/await de imagem (quando o chamador necessita de resposta imediata).
    */
-  getFrameCount(duration) {
-    const frameCounts = {
-      "5s": 81,
-      "10s": 161,
-      "15s": 241,
-      "30s": 481
-    };
-    return frameCounts[duration] || 81;
+  async generateImageDirect(options, explicitProvider) {
+    const provider = await this.router.resolveProvider("image", explicitProvider);
+    return provider.generateImage(options);
   }
   /**
-   * Queue workflow for execution
+   * Geração direta de vídeo (aguarda conclusão).
    */
-  async queueWorkflow(workflow) {
-    try {
-      const promptResponse = await fetch(`${this.config.serverUrl}/prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: workflow })
-      });
-      if (!promptResponse.ok) {
-        throw new Error(`Failed to queue workflow: ${promptResponse.statusText}`);
-      }
-      const { prompt_id } = await promptResponse.json();
-      logger.info("marketing", "comfyui", "queue", "Workflow queued", { promptId: prompt_id });
-      const result = await this.waitForCompletion(prompt_id);
-      return result;
-    } catch (error) {
-      logger.error("marketing", "comfyui", "queue", "Failed to queue workflow", { error });
-      throw error;
-    }
+  async generateVideoDirect(options, explicitProvider, onProgress) {
+    const provider = await this.router.resolveProvider("video", explicitProvider);
+    return provider.generateVideo(options, onProgress);
   }
   /**
-   * Wait for workflow completion
+   * Geração direta Image-to-Video.
    */
-  async waitForCompletion(promptId) {
-    const startTime = Date.now();
-    while (Date.now() - startTime < this.config.defaultTimeout) {
-      try {
-        const historyResponse = await fetch(`${this.config.serverUrl}/history/${promptId}`);
-        const history = await historyResponse.json();
-        if (history[promptId]) {
-          const outputs = history[promptId].outputs;
-          const outputImages = [];
-          const outputVideos = [];
-          Object.values(outputs).forEach((nodeOutput) => {
-            if (nodeOutput.images) {
-              outputImages.push(...nodeOutput.images.map((img) => img.filename));
-            }
-            if (nodeOutput.gifs) {
-              outputVideos.push(...nodeOutput.gifs.map((gif) => gif.filename));
-            }
-          });
-          return { outputImages, outputVideos };
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1e3));
-      } catch (error) {
-        logger.warn("marketing", "comfyui", "wait", "Error checking history", { error });
-        await new Promise((resolve) => setTimeout(resolve, 2e3));
-      }
-    }
-    throw new Error("Workflow execution timed out");
+  async generateImageToVideoDirect(options, explicitProvider, onProgress) {
+    const provider = await this.router.resolveProvider("image_to_video", explicitProvider);
+    return provider.generateImageToVideo(options, onProgress);
   }
   /**
-   * Get available models from ComfyUI
+   * Retorna informações e classificação de hardware do ambiente.
    */
-  async getAvailableModels() {
-    try {
-      const response = await fetch(`${this.config.serverUrl}/object_info`);
-      const objectInfo = await response.json();
-      const checkpoints = [];
-      const vae = [];
-      const clip = [];
-      if (objectInfo.CheckpointLoaderSimple) {
-        checkpoints.push(...objectInfo.CheckpointLoaderSimple.input.required.ckpt_name[0]);
-      }
-      if (objectInfo.VAELoader) {
-        vae.push(...objectInfo.VAELoader.input.required.vae_name[0]);
-      }
-      if (objectInfo.CLIPLoader) {
-        clip.push(...objectInfo.CLIPLoader.input.required.clip_name[0]);
-      }
-      return { checkpoints, vae, clip };
-    } catch (error) {
-      logger.error("marketing", "comfyui", "models", "Failed to get available models", { error });
-      return { checkpoints: [], vae: [], clip: [] };
-    }
-  }
-};
-var comfyuiMarketing = new ComfyUIMarketing({
-  serverUrl: process.env.COMFYUI_SERVER_URL || "http://localhost:8188",
-  quality: "production"
-});
-
-// src/server/workers/comfyui-worker.ts
-var ComfyUIWorker = class {
-  constructor() {
-    this.id = "comfyui";
-    this.lastRun = null;
-    this.isRunning = false;
-    this.isAvailable = false;
-    this.testConnection();
+  getHardwareAudit() {
+    return HardwareDetector.getHardwareInfo();
   }
   /**
-   * Test connection to ComfyUI server
+   * Retorna os provedores registrados e estado de roteamento.
    */
-  async testConnection() {
-    try {
-      this.isAvailable = await comfyuiMarketing.testConnection();
-      if (this.isAvailable) {
-        logger.info("marketing", "comfyui", "connection", "ComfyUI worker connected and ready");
-      } else {
-        logger.debug("marketing", "comfyui", "connection", "ComfyUI server offline or optional");
-      }
-    } catch {
-      this.isAvailable = false;
-    }
-  }
-  /**
-   * Generate image for marketing content
-   */
-  async generateImage(request) {
-    if (!this.isAvailable) {
-      logger.warn("marketing", "comfyui", "generateImage", "ComfyUI not available, skipping image generation");
-      return [];
-    }
-    if (this.isRunning) {
-      logger.warn("marketing", "comfyui", "generateImage", "ComfyUI worker busy");
-      return [];
-    }
-    this.isRunning = true;
-    const startTime = /* @__PURE__ */ new Date();
-    try {
-      logger.info("marketing", "comfyui", "generateImage", "Starting image generation", {
-        type: request.type,
-        topic: request.topic,
-        platform: request.platform
-      });
-      const images = await comfyuiMarketing.generateImage(request);
-      logger.info("marketing", "comfyui", "generateImage", "Image generation completed", {
-        count: images.length,
-        durationMs: (/* @__PURE__ */ new Date()).getTime() - startTime.getTime()
-      });
-      return images;
-    } catch (error) {
-      logger.error("marketing", "comfyui", "generateImage", "Image generation failed", { error });
-      throw error;
-    } finally {
-      this.isRunning = false;
-    }
-  }
-  /**
-   * Generate video for marketing content
-   */
-  async generateVideo(request) {
-    if (!this.isAvailable) {
-      logger.warn("marketing", "comfyui", "generateVideo", "ComfyUI not available, skipping video generation");
-      return [];
-    }
-    if (this.isRunning) {
-      logger.warn("marketing", "comfyui", "generateVideo", "ComfyUI worker busy");
-      return [];
-    }
-    this.isRunning = true;
-    const startTime = /* @__PURE__ */ new Date();
-    try {
-      logger.info("marketing", "comfyui", "generateVideo", "Starting video generation", {
-        metadata: {
-          type: request.type,
-          topic: request.topic,
-          videoDuration: request.duration
-        }
-      });
-      const videos = await comfyuiMarketing.generateVideo(request);
-      logger.info("marketing", "comfyui", "generateVideo", "Video generation completed", {
-        count: videos.length,
-        durationMs: (/* @__PURE__ */ new Date()).getTime() - startTime.getTime()
-      });
-      return videos;
-    } catch (error) {
-      logger.error("marketing", "comfyui", "generateVideo", "Video generation failed", { error });
-      throw error;
-    } finally {
-      this.isRunning = false;
-    }
-  }
-  /**
-   * Generate multiple images in batch
-   */
-  async batchGenerateImages(requests) {
-    const results = /* @__PURE__ */ new Map();
-    for (const request of requests) {
-      try {
-        const images = await this.generateImage(request);
-        results.set(request, images);
-      } catch (error) {
-        logger.error("marketing", "comfyui", "batchGenerate", "Failed to generate image for request", {
-          request,
-          error
-        });
-        results.set(request, []);
-      }
-    }
-    return results;
-  }
-  /**
-   * Generate content for Criador Agent
-   */
-  async generateContentForCriadorAgent(contentType, topic, platforms) {
-    const images = /* @__PURE__ */ new Map();
-    const videos = /* @__PURE__ */ new Map();
-    for (const platform of platforms) {
-      try {
-        const imageRequest = {
-          type: contentType,
-          topic,
-          platform,
-          style: "professional"
-        };
-        const platformImages = await this.generateImage(imageRequest);
-        images.set(platform, platformImages);
-      } catch (error) {
-        logger.error("marketing", "comfyui", "criador", `Failed to generate image for ${platform}`, { error });
-        images.set(platform, []);
-      }
-    }
-    if (contentType === "video" || contentType === "reel") {
-      try {
-        const videoRequest = {
-          type: "reel",
-          topic,
-          duration: "15s"
-        };
-        const videoFiles = await this.generateVideo(videoRequest);
-        videos.set("main", videoFiles);
-      } catch (error) {
-        logger.error("marketing", "comfyui", "criador", "Failed to generate video", { error });
-        videos.set("main", []);
-      }
-    }
-    return { images, videos };
-  }
-  /**
-   * Get worker status
-   */
-  getStatus() {
+  getProvidersInfo() {
     return {
-      id: this.id,
-      isRunning: this.isRunning,
-      isAvailable: this.isAvailable,
-      lastRun: this.lastRun
+      providers: this.router.getAvailableProviders(),
+      hardware: this.getHardwareAudit(),
+      config: {
+        MEDIA_PROVIDER: process.env.MEDIA_PROVIDER || "auto",
+        MEDIA_IMAGE_PROVIDER: process.env.MEDIA_IMAGE_PROVIDER || "auto",
+        MEDIA_VIDEO_PROVIDER: process.env.MEDIA_VIDEO_PROVIDER || "auto",
+        MEDIA_LOCAL_ENABLED: process.env.MEDIA_LOCAL_ENABLED === "true",
+        MEDIA_REMOTE_ENABLED: process.env.MEDIA_REMOTE_ENABLED !== "false",
+        MEDIA_MAX_CONCURRENT_JOBS: process.env.MEDIA_MAX_CONCURRENT_JOBS || "2"
+      }
     };
   }
 };
-var comfyuiWorker = new ComfyUIWorker();
+var mediaGenerationService = MediaGenerationService.getInstance();
 
 // src/server/workers/agents/criador-agent.worker.ts
 var CriadorAgent = class {
@@ -16726,153 +16954,58 @@ var CriadorAgent = class {
       }
       await this.updateAgentStatus("Criando conte\xFAdo jur\xEDdico para redes sociais");
       this.lastRun = /* @__PURE__ */ new Date();
-      logger.info("marketing", "agents", "run", "Criador agent cycle completed", {
-        durationMs: (/* @__PURE__ */ new Date()).getTime() - startTime.getTime()
-      });
+      const duration = this.lastRun.getTime() - startTime.getTime();
+      logger.info("marketing", "agents", "run", `Criador agent cycle completed in ${duration}ms`);
     } catch (error) {
-      logger.error("marketing", "agents", "run", "Criador agent cycle failed", { message: String(error) });
-      throw error;
+      logger.error("marketing", "agents", "run", "Error in Criador agent cycle", { error });
     } finally {
       this.isRunning = false;
     }
   }
-  /**
-   * P1: Melhorar threshold de geração de conteúdo
-   * Basear decisão em análise real de lacunas no calendário e desempenho histórico
-   * Não usar valor hardcoded arbitrario
-   */
   async shouldGenerateNewContent() {
     try {
       const contents = await marketingService.getEditorialContents();
-      const draftCount = contents.filter((c) => c.status === "rascunho").length;
-      const approvedCount = contents.filter((c) => c.status === "aprovado_qualidade").length;
-      const scheduledCount = contents.filter((c) => c.status === "agendado").length;
-      const publishedCount = contents.filter((c) => c.status === "publicado").length;
-      const now = /* @__PURE__ */ new Date();
-      const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1e3);
-      const upcomingScheduled = contents.filter((c) => {
-        const scheduledDate = new Date(c.scheduled_date || c.scheduledDate);
-        return c.status === "agendado" && scheduledDate >= now && scheduledDate <= next24Hours;
-      }).length;
-      const hasDraftBuffer = draftCount < 2;
-      const hasScheduleGap = scheduledCount < 3;
-      const performanceSuggestsMore = await this.performanceSuggestsMoreContent();
-      return hasDraftBuffer && (hasScheduleGap || performanceSuggestsMore);
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error in content generation decision, using fallback", { error });
-      const contents = await marketingService.getEditorialContents();
-      const pending = contents.filter(
-        (c) => c.status === "rascunho"
-      ).length;
-      return pending < 2;
-    }
-  }
-  /**
-   * P1: Analisar se o desempenho sugere que precisamos de mais conteúdo
-   * Basear decisão em análise real de lacunas no calendário e desempenho histórico
-   */
-  async performanceSuggestsMoreContent() {
-    try {
-      logger.debug("marketing", "agents", "criador", "Checking performance data for content generation decision");
-      const contents = await marketingService.getEditorialContents();
-      const recentPublished = contents.filter(
-        (c) => c.status === "publicado" && new Date(c.updated_at || c.updatedAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3)
-        // Last 7 days
-      ).length;
-      return recentPublished < 2;
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error checking performance suggestion", { error });
+      const scheduledPosts = contents.filter((c) => c.status === "agendado" || c.status === "em_revisao");
+      if (scheduledPosts.length < 3) {
+        logger.info("marketing", "agents", "criador", `Calendar has only ${scheduledPosts.length} upcoming posts, triggering content creation`);
+        return true;
+      }
+      return false;
+    } catch {
       return false;
     }
   }
-  /**
-   * P2: Enriquecer geração de conteúdo com conhecimento real
-   * Usar argumentos jurídicos da knowledge base para criar conteúdo mais substantivo
-   * Variar templates baseado no tipo de infração e público-alvo
-   */
-  async enrichContentWithLegalKnowledge(theme) {
-    try {
-      logger.debug("marketing", "agents", "criador", "Enriching content with legal knowledge from KB");
-      const sampleArguments = knowledgeService.getAllArguments().slice(0, 5);
-      const channel = await this.selectOptimalChannel();
-      const format = await this.selectOptimalFormat();
-      return {
-        theme,
-        channel,
-        format,
-        legalArguments: sampleArguments
-      };
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error enriching content with legal knowledge, using base theme", { error });
-      return {
-        theme,
-        channel: "instagram",
-        format: "carrossel",
-        legalArguments: []
-      };
-    }
-  }
-  /**
-   * P1/P2: Selecionar canal ótimo baseado em dados de desempenho
-   * Basear decisão em análise real de lacunas no calendário e desempenho histórico
-   */
-  async selectOptimalChannel() {
-    try {
-      logger.debug("marketing", "agents", "criador", "Selecting optimal channel based on performance data");
-      return "instagram";
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error selecting optimal channel, using default", { error });
-      return "instagram";
-    }
-  }
-  /**
-   * P1/P2: Selecionar formato ótimo baseado em dados de desempenho
-   * Basear decisão em análise real de lacunas no calendário e desempenho histórico
-   */
-  async selectOptimalFormat() {
-    try {
-      logger.debug("marketing", "agents", "criador", "Selecting optimal format based on performance data");
-      return "carrossel";
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error selecting optimal format, using default", { error });
-      return "carrossel";
-    }
-  }
-  /**
-   * Select a relevant legal theme based on knowledge base and performance data
-   * In a full implementation, this would use learning data from the aprendizado agent
-   * For now, we'll use the knowledge base to ensure themes are legally sound
-   */
   async selectRelevantLegalTheme() {
-    try {
-      logger.debug("marketing", "agents", "criador", "Selecting relevant legal theme using knowledge base");
-      const sampleInfractions = knowledgeService.getAllInfractions().slice(0, 5);
-      const legallyAccurateThemes = [
-        "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB",
-        "Radares Port\xE1teis: Falta de Estudo T\xE9cnico do \xD3rg\xE3o",
-        "Notifica\xE7\xE3o Vencida Invalida o Auto de Infra\xE7\xE3o",
-        "Direito de Recurso \xE0 JARI e suas Garantias",
-        "Multa de Radar sem Placa R-19: Nulidade do Auto de Infra\xE7\xE3o",
-        "Cancelamento de Multa por Falta de Sinaliza\xE7\xE3o Adequada",
-        "Recurso Hier\xE1rquico contra Multa de Estacionamento",
-        "Prescri\xE7\xE3o Interrompida: Quando a Multa N\xE3o Pode Mais Ser Cobrada"
-      ];
-      const themeIndex = Math.floor(Date.now() / 1e4) % legallyAccurateThemes.length;
-      const selectedTheme = legallyAccurateThemes[themeIndex];
-      logger.debug("marketing", "agents", "criador", `Selected theme: ${selectedTheme}`);
-      return selectedTheme;
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Error selecting legal theme, falling back to default", { error });
-      return "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB";
-    }
+    const topics = [
+      "Radar sem aferi\xE7\xE3o do INMETRO",
+      "Defesa contra baf\xF4metro / Lei Seca",
+      "Notifica\xE7\xE3o de penalidade fora do prazo legal (30 dias)",
+      "Como recorrer de suspens\xE3o da CNH",
+      "Multas indevidas em faixas exclusivas"
+    ];
+    return topics[Math.floor(Math.random() * topics.length)];
+  }
+  async selectOptimalChannel() {
+    const channels = ["instagram", "facebook", "linkedin"];
+    return channels[Math.floor(Math.random() * channels.length)];
+  }
+  async selectOptimalFormat() {
+    const formats = ["carrossel", "reels", "artigo", "story"];
+    return formats[Math.floor(Math.random() * formats.length)];
+  }
+  async enrichContentWithLegalKnowledge(theme) {
+    const legalArguments = knowledgeService.getAllArguments().slice(0, 2);
+    return {
+      theme,
+      channel: "instagram",
+      format: "carrossel",
+      legalArguments
+    };
   }
   async researchLegalTopic() {
-    logger.debug("marketing", "agents", "criador", "Researching legal topic using knowledge base");
     try {
-      const sampleInfractions = knowledgeService.getAllInfractions();
-      if (sampleInfractions.length > 0) {
-        logger.debug("marketing", "agents", "criador", `Knowledge base accessible: ${sampleInfractions.length} infractions available`);
-      }
+      const sampleArguments = knowledgeService.getAllArguments().slice(0, 3);
+      logger.debug("marketing", "agents", "criador", `Available legal arguments for research: ${sampleArguments.length}`);
     } catch (error) {
       logger.warn("marketing", "agents", "criador", "Could not access knowledge base for legal research", { error });
     }
@@ -16891,57 +17024,32 @@ var CriadorAgent = class {
   }
   async optimizeForPlatform() {
     logger.debug("marketing", "agents", "criador", "Optimizing content for target platform");
-    try {
-      logger.debug("marketing", "agents", "criador", "Checking platform-specific optimization guidelines");
-    } catch (error) {
-      logger.warn("marketing", "agents", "criador", "Could not access optimization guidelines", { error });
-    }
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   /**
-   * Generate visual content using ComfyUI
+   * Gera conteúdo visual através do MediaGenerationService desacoplado.
    */
   async generateVisualContent() {
     try {
-      logger.debug("marketing", "agents", "criador", "Generating visual content with ComfyUI");
-      if (!comfyuiWorker.getStatus().isAvailable) {
-        logger.debug("marketing", "agents", "criador", "ComfyUI not available, skipping external visual generation");
-        return;
-      }
-      const currentTopic = "defesa de multa";
-      const platforms = ["instagram", "facebook", "linkedin"];
+      logger.debug("marketing", "agents", "criador", "Generating visual content with MediaGenerationService");
+      const currentTopic = "Defesa de multa de tr\xE2nsito - Direitos do condutor";
+      const platforms = ["instagram", "facebook"];
       for (const platform of platforms) {
         try {
-          const imageRequest = {
-            type: "social-media",
-            topic: currentTopic,
-            platform,
-            style: "professional"
-          };
-          const images = await comfyuiWorker.generateImage(imageRequest);
-          if (images.length > 0) {
-            logger.info("marketing", "agents", "criador", `Generated ${images.length} images for ${platform}`, {
-              files: images
-            });
-          }
-        } catch (error) {
-          logger.error("marketing", "agents", "criador", `Failed to generate image for ${platform}`, { error });
-        }
-      }
-      try {
-        const videoRequest = {
-          type: "reel",
-          topic: currentTopic,
-          duration: "15s"
-        };
-        const videos = await comfyuiWorker.generateVideo(videoRequest);
-        if (videos.length > 0) {
-          logger.info("marketing", "agents", "criador", `Generated ${videos.length} videos`, {
-            files: videos
+          const prompt = `Post profissional de marketing jur\xEDdico de tr\xE2nsito sobre ${currentTopic} no estilo ${platform}`;
+          const job = mediaGenerationService.enqueueImageJob({
+            prompt,
+            aspectRatio: platform === "instagram" ? "1:1" : "16:9",
+            imageSize: "1K",
+            stylePreset: "professional legal"
           });
+          logger.info("marketing", "agents", "criador", `Media job enqueued for ${platform}`, {
+            jobId: job.id,
+            jobStatus: job.status
+          });
+        } catch (error) {
+          logger.error("marketing", "agents", "criador", `Failed to enqueue image for ${platform}`, { error });
         }
-      } catch (error) {
-        logger.error("marketing", "agents", "criador", "Failed to generate video", { error });
       }
     } catch (error) {
       logger.error("marketing", "agents", "criador", "Failed to generate visual content", { error });
@@ -16971,7 +17079,6 @@ var CriadorAgent = class {
 var criadorAgent = new CriadorAgent();
 
 // src/server/workers/agents/qualidade-agent.worker.ts
-init_logger();
 var QualidadeAgent = class {
   constructor() {
     this.id = "qualidade";
@@ -17269,11 +17376,7 @@ var QualidadeAgent = class {
 };
 var qualidadeAgent = new QualidadeAgent();
 
-// src/server/workers/agents/publicacao-agent.worker.ts
-init_logger();
-
 // src/server/workers/meta-publisher.worker.ts
-init_logger();
 var MAX_ATTEMPTS = 3;
 var RETRY_BASE_MS = 60 * 1e3;
 var MetaPublisher = class {
@@ -17295,6 +17398,22 @@ var MetaPublisher = class {
       attempts: 0,
       nextRetryAt: Date.now()
     };
+    if (!metaAdapter.isConnected()) {
+      const rec2 = {
+        id: item.id,
+        channel: request.destination,
+        contentId,
+        status: "failed",
+        attempts: 0,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        resolvedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        error: "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth."
+      };
+      this.jobHistory.unshift(rec2);
+      this.persistJobRecord(rec2);
+      logger.info("meta", "meta-publisher", "enqueue_deferred", `Publica\xE7\xE3o ${item.id} n\xE3o enfileirada: Meta desconectada`);
+      return { queued: false, itemId: item.id };
+    }
     const rec = {
       id: item.id,
       channel: request.destination,
@@ -17402,6 +17521,32 @@ var MetaPublisher = class {
       }
       logger.info("meta", "meta-publisher", "publish", `Publica\xE7\xE3o ${item.id} entregue`);
     } catch (err) {
+      const isAuthError = err instanceof MetaAuthenticationRequiredError || err?.name === "MetaAuthenticationRequiredError" || String(err?.message || err).includes("Nenhuma conex\xE3o ativa com a Meta") || String(err?.message || err).includes("Token da Meta ausente");
+      if (isAuthError) {
+        const rec = this.jobHistory.find((j) => j.id === item.id);
+        if (rec) {
+          rec.status = "failed";
+          rec.attempts = item.attempts;
+          rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
+          rec.error = err.message || "Nenhuma conex\xE3o ativa com a Meta";
+          this.persistJobRecord(rec);
+        }
+        eventBus.publish(
+          EventTopics.MARKETING_CONTENT_PUBLISHED,
+          {
+            queueItemId: item.id,
+            result: {
+              success: false,
+              destination: item.request.destination,
+              publishedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              error: err.message || String(err)
+            }
+          },
+          "meta_publisher"
+        );
+        logger.info("meta", "meta-publisher", "auth_pending", "Publica\xE7\xE3o suspensa: Nenhuma conex\xE3o ativa com a Meta (configure credenciais no ambiente ou autentique via OAuth).");
+        return;
+      }
       if (item.attempts < MAX_ATTEMPTS) {
         item.nextRetryAt = Date.now() + RETRY_BASE_MS * item.attempts;
         this.queue.push(item);
@@ -17475,6 +17620,10 @@ var PublicacaoAgent = class {
   async processScheduledContent() {
     try {
       logger.debug("marketing", "agents", "publicacao", "Processing scheduled content");
+      if (!metaAdapter.isConnected()) {
+        logger.debug("marketing", "agents", "publicacao", "Publica\xE7\xE3o suspensa no ciclo aut\xF4nomo: Meta n\xE3o configurada/conectada.");
+        return;
+      }
       const contents = await marketingService.getEditorialContents();
       const approvedContent = contents.filter((c) => c.status === "aprovado_qualidade");
       const now = /* @__PURE__ */ new Date();
@@ -17577,7 +17726,6 @@ ${(content.hashtags || []).join(" ")}`,
 var publicacaoAgent = new PublicacaoAgent();
 
 // src/server/workers/agents/inteligencia-agent.worker.ts
-init_logger();
 var InteligenciaAgent = class {
   constructor() {
     this.id = "inteligencia";
@@ -17855,7 +18003,6 @@ var InteligenciaAgent = class {
 var inteligenciaAgent = new InteligenciaAgent();
 
 // src/server/workers/agents/aprendizado-agent.worker.ts
-init_logger();
 var AprendizadoAgent = class {
   constructor() {
     this.id = "aprendizado";
@@ -18266,7 +18413,6 @@ var MarketingOrchestrator = class {
 var marketingOrchestrator = new MarketingOrchestrator();
 
 // src/server/workers/marketing-metrics.worker.ts
-init_logger();
 var MarketingMetricsCollector = class {
   constructor() {
     this.metrics = {
@@ -18669,12 +18815,43 @@ var agents_default = router8;
 
 // src/server/routes/whatsapp.ts
 import { Router as Router9 } from "express";
+
+// src/server/shared/webhook/evolution-webhook-auth.ts
+import { createHash as createHash2, timingSafeEqual } from "node:crypto";
+var EVOLUTION_WEBHOOK_SECRET_HEADER = "x-webhook-secret";
+var EVOLUTION_WEBHOOK_SECRET_ENV = "EVOLUTION_WEBHOOK_SECRET";
+function secureCompare(a, b) {
+  const hashA = createHash2("sha256").update(a).digest();
+  const hashB = createHash2("sha256").update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+function resolveWebhookSecret() {
+  return process.env[EVOLUTION_WEBHOOK_SECRET_ENV] || null;
+}
+function extractHeader(headers, name) {
+  const value = headers[name];
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+function authorizeEvolutionWebhook(headers) {
+  const secret = resolveWebhookSecret();
+  if (!secret) {
+    return { ok: true, mode: "disabled" };
+  }
+  const provided = extractHeader(headers, EVOLUTION_WEBHOOK_SECRET_HEADER);
+  if (!provided) {
+    return { ok: false, mode: "rejected", reason: "missing-header" };
+  }
+  return secureCompare(provided, secret) ? { ok: true, mode: "validated" } : { ok: false, mode: "rejected", reason: "invalid-secret" };
+}
+
+// src/server/routes/whatsapp.ts
 var router9 = Router9();
 router9.post("/communication/whatsapp/send", authenticateToken, async (req, res) => {
   try {
     const { phone, message, caseId, notificationType } = req.body;
     if (!phone || !message) {
-      return res.status(400).json({ error: " phone e message s\xE3o obrigat\xF3rios" });
+      return res.status(400).json({ error: "phone e message s\xE3o obrigat\xF3rios" });
     }
     const formattedPhone = phone.replace(/\D/g, "");
     const result = await whatsappService.sendText({
@@ -18682,13 +18859,17 @@ router9.post("/communication/whatsapp/send", authenticateToken, async (req, res)
       message
     });
     if (result.success) {
-      eventBus.publish(EventTopics.WHATSAPP_MESSAGE_SENT, {
-        phone: formattedPhone,
-        caseId,
-        notificationType,
-        delivered: true,
-        messageId: result.messageId
-      }, "whatsapp_service");
+      eventBus.publish(
+        EventTopics.WHATSAPP_MESSAGE_SENT,
+        {
+          phone: formattedPhone,
+          caseId,
+          notificationType,
+          delivered: true,
+          messageId: result.messageId
+        },
+        "whatsapp_service"
+      );
       return res.json({
         success: true,
         messageId: result.messageId,
@@ -18697,35 +18878,22 @@ router9.post("/communication/whatsapp/send", authenticateToken, async (req, res)
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
-    if (!whatsappService["isConfigured"] && process.env.NODE_ENV !== "production") {
-      eventBus.publish(EventTopics.WHATSAPP_MESSAGE_SENT, {
-        phone: formattedPhone,
-        caseId,
-        notificationType,
-        delivered: true
-      }, "evolution_api");
-      return res.json({
-        success: true,
-        messageId: `wamid_${Date.now()}`,
-        status: "delivered",
-        destination: formattedPhone,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString()
-      });
-    }
-    res.status(502).json({
+    return res.status(502).json({
       error: "Falha no envio via WhatsApp",
       message: result.error || "Servi\xE7o indispon\xEDvel"
     });
   } catch (error) {
-    console.error("[WhatsApp] Send error:", error);
-    res.status(500).json({ error: error.message || "Erro ao enviar mensagem WhatsApp" });
+    logger.error("whatsapp", "whatsapp-route", "send_error", "Erro ao enviar mensagem WhatsApp", {
+      error: error.message
+    });
+    return res.status(500).json({ error: error.message || "Erro ao enviar mensagem WhatsApp" });
   }
 });
 router9.post("/communication/whatsapp/send-document", authenticateToken, async (req, res) => {
   try {
     const { phone, pdfUrl, caseId, message } = req.body;
     if (!phone || !pdfUrl) {
-      return res.status(400).json({ error: " phone e pdfUrl s\xE3o obrigat\xF3rios" });
+      return res.status(400).json({ error: "phone e pdfUrl s\xE3o obrigat\xF3rios" });
     }
     const formattedPhone = phone.replace(/\D/g, "");
     const result = await whatsappService.sendDefenseDocument(
@@ -18741,47 +18909,63 @@ router9.post("/communication/whatsapp/send-document", authenticateToken, async (
         destination: formattedPhone
       });
     }
-    res.status(502).json({
+    return res.status(502).json({
       error: "Falha no envio do documento",
       message: result.error
     });
   } catch (error) {
-    res.status(500).json({ error: error.message || "Erro ao enviar documento" });
+    return res.status(500).json({ error: error.message || "Erro ao enviar documento" });
   }
 });
-router9.get("/communication/whatsapp/status", authenticateToken, async (req, res) => {
+router9.get("/communication/whatsapp/status", authenticateToken, async (_req, res) => {
   try {
     const status = await whatsappService.getInstanceStatus();
-    res.json({
+    return res.json({
       connected: status?.status === "open",
-      status: status?.status || "unknown",
-      phone: status?.phone,
-      instance: status?.instanceName
+      status: status?.status || "disconnected",
+      phone: status?.phone || null,
+      instance: status?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || "defesai",
+      instanceId: status?.instanceId || null
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
-router9.get("/communication/whatsapp/qrcode", requireAdmin, async (req, res) => {
+router9.get("/communication/whatsapp/qrcode", requireAdmin, async (_req, res) => {
   try {
     const qrCode = await whatsappService.getQrCode();
     if (qrCode) {
       return res.json({ success: true, qrcode: qrCode });
     }
-    res.status(404).json({ error: "QR code n\xE3o dispon\xEDvel \u2014 inst\xE2ncia pode j\xE1 estar conectada" });
+    return res.status(404).json({ error: "QR code n\xE3o dispon\xEDvel \u2014 inst\xE2ncia pode j\xE1 estar conectada" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 var handleWebhook = async (req, res) => {
   try {
-    const payload = req.body;
+    const authDecision = authorizeEvolutionWebhook(req.headers);
+    if (authDecision.ok === false) {
+      const reason = authDecision.reason;
+      logger.warn(
+        "whatsapp",
+        "whatsapp_webhook",
+        "auth_rejected",
+        "Rejeitando webhook Evolution API por falha de autentica\xE7\xE3o",
+        { reason }
+      );
+      return res.status(401).json({
+        error: "Unauthorized webhook source",
+        reason
+      });
+    }
     res.status(200).json({ received: true, success: true, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+    const payload = req.body;
     if (!payload || !payload.event && !payload.type && !payload.data) {
       return;
     }
     const parsed = whatsappService.parseWebhook(payload);
-    logger2?.info?.("whatsapp", "webhook", "incoming", "WhatsApp message received via Evolution API", {
+    logger.info("whatsapp", "whatsapp_webhook", "incoming", "WhatsApp message received via Evolution API", {
       from: parsed.from,
       type: parsed.type,
       instance: parsed.instance
@@ -18800,14 +18984,13 @@ var handleWebhook = async (req, res) => {
       "whatsapp_webhook"
     );
   } catch (error) {
-    console.error("[WhatsApp Webhook] Erro ao processar webhook:", error);
+    logger.error("whatsapp", "whatsapp_webhook", "process_error", "Erro ao processar webhook da Evolution API", {
+      error: error.message
+    });
   }
 };
 router9.post("/webhooks/whatsapp", handleWebhook);
-router9.post("/whatsapp/webhook", handleWebhook);
-router9.post("/webhook", handleWebhook);
-router9.post("/webhook/whatsapp", handleWebhook);
-router9.get("/webhooks/whatsapp", (req, res) => {
+router9.get("/webhooks/whatsapp", (_req, res) => {
   res.json({
     status: "active",
     endpoint: "/api/webhooks/whatsapp",
@@ -18815,38 +18998,26 @@ router9.get("/webhooks/whatsapp", (req, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router9.get("/whatsapp/webhook", (req, res) => {
-  res.json({
-    status: "active",
-    endpoint: "/api/webhooks/whatsapp",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
-  });
-});
-router9.get("/communication/whatsapp/webhook-config", authenticateToken, async (req, res) => {
+router9.get("/communication/whatsapp/webhook-config", authenticateToken, async (_req, res) => {
   try {
     const config = await whatsappService.getWebhookConfig();
-    res.json({
+    return res.json({
       success: true,
       currentConfig: config,
       recommendedUrl: `${process.env.APP_URL || ""}/api/webhooks/whatsapp`
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 router9.post("/communication/whatsapp/webhook-config", requireAdmin, async (req, res) => {
   try {
     const { webhookUrl, instanceName } = req.body;
     const result = await whatsappService.configureWebhook(webhookUrl, instanceName);
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
-});
-var logger2;
-Promise.resolve().then(() => (init_logger(), logger_exports)).then((m) => {
-  logger2 = m;
-}).catch(() => {
 });
 var whatsapp_default = router9;
 
@@ -19552,7 +19723,6 @@ var RagPipeline = class {
 };
 
 // src/server/services/ocr-service.ts
-init_logger();
 var PLATE_PATTERN = /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g;
 var AIT_PATTERN = /\b(?:AIT|Nº?|N°|Numero|NÚMERO)[:\s]*(\d{4,12})\b/i;
 var CODE_PATTERN = /\b(?:Código|Artigo|Art)\.?\s*(\d{3}-\d{2})\b/i;
@@ -20116,7 +20286,6 @@ import * as crypto4 from "crypto";
 import QRCode from "qrcode";
 
 // src/server/db/payment-repository.ts
-init_logger();
 var UUID_RE4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var PaymentRepository = class {
   constructor() {
@@ -20238,7 +20407,6 @@ var PaymentRepository = class {
 var paymentRepository = new PaymentRepository();
 
 // src/server/integrations/pagbank.ts
-init_logger();
 var PagBankIntegrationService = class {
   constructor() {
     // Armazenamento em memória para transações e idempotência
@@ -20799,7 +20967,6 @@ var PagBankAdapter = class {
 var pagbankAdapter = new PagBankAdapter();
 
 // src/server/integrations/gateway/ggpix-adapter.ts
-init_logger();
 import QRCode2 from "qrcode";
 var GGRAPI_BASE_URL = "https://ggpixapi.com/api/v1";
 var GGRAPI_BACKUP_URL = "https://ggatepixapi.com/api/v1";
@@ -20981,7 +21148,6 @@ var GGPIXAdapter = class {
 var ggpixAdapter = new GGPIXAdapter();
 
 // src/server/integrations/gateway/gateway-manager.ts
-init_logger();
 function resolveActiveGatewayIdFromEnv() {
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || "").toLowerCase().trim();
   if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
@@ -21134,7 +21300,6 @@ var GatewayManager = class {
 var gatewayManager = new GatewayManager();
 
 // src/server/integrations/gateway/webhook-handler.ts
-init_logger();
 function detectGatewayFromPath(path) {
   const normalized = path.toLowerCase();
   if (normalized.includes("pagbank")) return "pagbank";
@@ -21194,7 +21359,6 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
 }
 
 // src/server/routes/payments.ts
-init_logger();
 var router11 = Router11();
 function resolveOffer(params) {
   const { serviceType, userId, couponCode } = params;
@@ -22093,8 +22257,7 @@ var knowledge_default = router12;
 import { Router as Router13 } from "express";
 
 // src/server/services/ai-media-service.ts
-init_logger();
-import { GoogleGenAI as GoogleGenAI2, GenerateVideosOperation } from "@google/genai";
+import { GoogleGenAI as GoogleGenAI3, GenerateVideosOperation } from "@google/genai";
 var AIMediaService = class {
   getClient() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -22102,7 +22265,7 @@ var AIMediaService = class {
       logger.warn("ai_media", "service", "getClient", "GEMINI_API_KEY not configured");
       return null;
     }
-    return new GoogleGenAI2({
+    return new GoogleGenAI3({
       apiKey,
       httpOptions: {
         headers: {
@@ -22523,10 +22686,179 @@ Muitos motoristas pagam multas indevidas por desconhecerem que falhas formais do
 var aiMediaService = new AIMediaService();
 
 // src/server/routes/media.ts
-init_logger();
-import { GenerateVideosOperation as GenerateVideosOperation2, GoogleGenAI as GoogleGenAI3 } from "@google/genai";
+import { GenerateVideosOperation as GenerateVideosOperation2, GoogleGenAI as GoogleGenAI4 } from "@google/genai";
 var router13 = Router13();
 router13.use(authenticateToken, requireAdmin);
+router13.get("/hardware", (req, res) => {
+  try {
+    const hardware = mediaGenerationService.getHardwareAudit();
+    res.json({ success: true, hardware });
+  } catch (error) {
+    logger.error("media", "routes", "getHardware", "Failed to inspect hardware", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao auditar hardware" });
+  }
+});
+router13.get("/providers", (req, res) => {
+  try {
+    const info = mediaGenerationService.getProvidersInfo();
+    res.json({ success: true, ...info });
+  } catch (error) {
+    logger.error("media", "routes", "getProviders", "Failed to get providers", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao listar provedores" });
+  }
+});
+router13.post("/image", async (req, res) => {
+  try {
+    const { prompt, aspectRatio, imageSize, stylePreset, negativePrompt, provider, sync } = req.body;
+    if (!prompt || typeof prompt !== "string") {
+      res.status(400).json({ success: false, error: "Prompt de texto \xE9 obrigat\xF3rio." });
+      return;
+    }
+    if (sync === true) {
+      const output = await mediaGenerationService.generateImageDirect(
+        { prompt, aspectRatio, imageSize, stylePreset, negativePrompt },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+    const job = mediaGenerationService.enqueueImageJob(
+      { prompt, aspectRatio, imageSize, stylePreset, negativePrompt },
+      provider
+    );
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: "Job de gera\xE7\xE3o de imagem enfileirado com sucesso."
+    });
+  } catch (error) {
+    logger.error("media", "routes", "postImage", "Failed to create image job", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar imagem" });
+  }
+});
+router13.post("/video", async (req, res) => {
+  try {
+    const { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt, provider, sync } = req.body;
+    if (!prompt || typeof prompt !== "string") {
+      res.status(400).json({ success: false, error: "Prompt de texto \xE9 obrigat\xF3rio." });
+      return;
+    }
+    if (sync === true) {
+      const output = await mediaGenerationService.generateVideoDirect(
+        { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+    const job = mediaGenerationService.enqueueVideoJob(
+      { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt },
+      provider
+    );
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: "Job de gera\xE7\xE3o de v\xEDdeo enfileirado com sucesso."
+    });
+  } catch (error) {
+    logger.error("media", "routes", "postVideo", "Failed to create video job", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar v\xEDdeo" });
+  }
+});
+router13.post("/image-to-video", async (req, res) => {
+  try {
+    const {
+      prompt,
+      referenceImageBase64,
+      referenceImageUrl,
+      referenceMimeType,
+      durationSeconds,
+      aspectRatio,
+      provider,
+      sync
+    } = req.body;
+    if (!referenceImageBase64 && !referenceImageUrl) {
+      res.status(400).json({ success: false, error: "Imagem de refer\xEAncia (base64 ou URL) \xE9 obrigat\xF3ria para Image-to-Video." });
+      return;
+    }
+    if (sync === true) {
+      const output = await mediaGenerationService.generateImageToVideoDirect(
+        { prompt: prompt || "Animate naturally", referenceImageBase64, referenceImageUrl, referenceMimeType, durationSeconds, aspectRatio },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+    const job = mediaGenerationService.enqueueImageToVideoJob(
+      { prompt: prompt || "Animate naturally", referenceImageBase64, referenceImageUrl, referenceMimeType, durationSeconds, aspectRatio },
+      {
+        imageBase64Preview: referenceImageBase64 ? referenceImageBase64.slice(0, 100) : void 0,
+        imageUrl: referenceImageUrl,
+        mimeType: referenceMimeType
+      },
+      provider
+    );
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: "Job de Image-to-Video enfileirado com sucesso."
+    });
+  } catch (error) {
+    logger.error("media", "routes", "postImageToVideo", "Failed to create I2V job", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar Image-to-Video" });
+  }
+});
+router13.get("/jobs/:id", (req, res) => {
+  try {
+    const job = mediaGenerationService.getJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ success: false, error: "Job n\xE3o encontrado." });
+      return;
+    }
+    res.json({
+      success: true,
+      jobId: job.id,
+      type: job.type,
+      provider: job.provider,
+      status: job.status,
+      progress: job.progress,
+      output: job.output,
+      error: job.error,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt
+    });
+  } catch (error) {
+    logger.error("media", "routes", "getJob", "Failed to query job", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao consultar job" });
+  }
+});
+router13.post("/jobs/:id/cancel", (req, res) => {
+  try {
+    const cancelled = mediaGenerationService.cancelJob(req.params.id);
+    if (!cancelled) {
+      res.status(400).json({ success: false, error: "N\xE3o foi poss\xEDvel cancelar o job (inexistente ou j\xE1 finalizado)." });
+      return;
+    }
+    res.json({ success: true, message: "Job cancelado com sucesso." });
+  } catch (error) {
+    logger.error("media", "routes", "cancelJob", "Failed to cancel job", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao cancelar job" });
+  }
+});
+router13.get("/jobs", (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const jobs = mediaGenerationService.listJobs(limit);
+    res.json({ success: true, jobs });
+  } catch (error) {
+    logger.error("media", "routes", "listJobs", "Failed to list jobs", { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || "Erro ao listar jobs" });
+  }
+});
 router13.post(["/generate-image", "/marketing/generate-image"], async (req, res) => {
   try {
     const { prompt, imageSize, aspectRatio, referenceImageBase64, referenceMimeType, stylePreset } = req.body;
@@ -22605,7 +22937,7 @@ router13.post(["/video-download", "/marketing/video-download"], async (req, res)
       });
       return;
     }
-    const ai = new GoogleGenAI3({
+    const ai = new GoogleGenAI4({
       apiKey,
       httpOptions: { headers: { "User-Agent": "aistudio-build" } }
     });
@@ -22853,7 +23185,6 @@ var NotificationService = class {
 var notificationService = new NotificationService();
 
 // src/server/services/push-service.ts
-init_logger();
 var firebaseAdmin = null;
 async function getFirebaseAdmin() {
   if (firebaseAdmin) return firebaseAdmin;
@@ -23093,7 +23424,6 @@ var PushNotificationService = class {
 var pushService = new PushNotificationService();
 
 // src/server/services/email-service.ts
-init_logger();
 function defenseReadyTemplate(data) {
   const infractionRows = data.infractions.map(
     (inf) => `
