@@ -197,7 +197,7 @@ export const AdminCommercialPromotionsView: React.FC = () => {
                     </span>
                   )}
                   <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-sm font-mono border border-slate-700">
-                    Alvo: {(promo.targetServices ?? []).join(', ')}
+                    Alvo: {promo.targetServices.join(', ')}
                   </span>
                   {promo.minOrderAmount > 0 && (
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-sm font-mono border border-slate-700">

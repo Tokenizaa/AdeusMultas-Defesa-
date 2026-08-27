@@ -17,7 +17,7 @@ import { AutomationsView } from './components/AutomationsView';
 import { ResultsView } from './components/ResultsView';
 import { MarketingSettings } from './components/MarketingSettings';
 import { MediaStudioView } from './components/MediaStudioView';
-import { ProspectingPage } from './components/ProspectingPage';
+import { ProspectingAutomationView } from './components/ProspectingAutomationView';
 import { EditorialContentItem } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 
@@ -265,7 +265,7 @@ export const MarketingOSView: React.FC = () => {
           )}
 
           {activeView === 'prospecting' && (
-            <ProspectingPage />
+            <ProspectingAutomationView />
           )}
         </main>
 

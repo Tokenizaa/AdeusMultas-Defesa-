@@ -4,14 +4,10 @@
 #
 # Setup:
 #   cd infra/docker
-#   docker compose --env-file ../.env up -d
-#
-# Porta do host: 8090 (8080 estava ocupada — ver EVOLUTION_PORT no .env raiz).
-# O container escuta internamente em 8080; o mapeamento p/ o host é ${EVOLUTION_PORT}.
-# A API (whatsapp-service) lê EVOLUTION_API_URL apontando para a porta do host.
+#   docker compose up -d
 #
 # Access Evolution API Manager:
-#   http://localhost:8090/manager
+#   http://localhost:8080/manager
 #   API Key: (from .env → EVOLUTION_API_KEY)
 #
 # Connect WhatsApp:
@@ -34,10 +30,10 @@ services:
     image: evoapicloud/evolution-api:v2.1.1
     container_name: defesai-whatsapp
     ports:
-      - "${EVOLUTION_PORT:-8090}:8080"
+      - "${EVOLUTION_PORT:-8080}:8080"
     environment:
       # Server
-      - SERVER_URL=${EVOLUTION_URL:-http://localhost:8090}
+      - SERVER_URL=${EVOLUTION_URL:-http://localhost:8080}
       - SERVER_PORT=8080
       - SERVER_TYPE=http
 

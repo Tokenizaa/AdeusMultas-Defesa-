@@ -92,12 +92,8 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       newParams.id = segments[2];
     } else if (segments[0] === 'admin' && segments[1] === 'users' && segments[2]) {
       newParams.id = segments[2];
-    } else if (segments[0] === 'admin' && segments[1] === 'marketing') {
-      if (segments[2] === 'prospecting') {
-        newParams.prospectingView = segments[3] || 'overview';
-      } else if (segments[2]) {
-        newParams.view = segments[2];
-      }
+    } else if (segments[0] === 'admin' && segments[1] === 'marketing' && segments[2]) {
+      newParams.view = segments[2];
     }
     
     setParams(newParams);
@@ -140,13 +136,6 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
   }, [currentPath, isAuthenticated, isAdmin, isLoading, navigate, queryParams.redirect]);
-
-  // Redirect: ?view=prospecting -> /admin/marketing/prospecting (rota própria)
-  useEffect(() => {
-    if (currentPath === '/admin/marketing' && queryParams.view === 'prospecting') {
-      navigate('/admin/marketing/prospecting', { replace: true });
-    }
-  }, [currentPath, queryParams.view, navigate]);
   
   // Determine active area
   let activeArea: 'public' | 'user' | 'admin' = 'public';

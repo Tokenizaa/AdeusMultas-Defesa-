@@ -23,7 +23,6 @@ export interface Lead extends RawLead {
   id?: string;
   lead_type?: LeadType;
   phone_normalized?: string | null;
-  source_url?: string | null;
   source: string;
   scraped_at: string;
   created_at?: string;

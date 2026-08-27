@@ -170,16 +170,6 @@ router.get('/stats', async (_req, res) => {
     const { count: totalMessages } = await supabaseAdmin.from('marketing_messages').select('*', { count: 'exact', head: true });
     const { count: pendingQueue } = await supabaseAdmin.from('marketing_automation_queue').select('*', { count: 'exact', head: true });
 
-    const { count: contacted } = await supabaseAdmin
-      .from('marketing_lead_campaigns')
-      .select('*', { count: 'exact', head: true })
-      .gte('contact_count', 1);
-
-    const { count: erroredQueue } = await supabaseAdmin
-      .from('marketing_automation_queue')
-      .select('*', { count: 'exact', head: true })
-      .gte('attempts', 3);
-
     res.json({
       totalLeads: totalLeads || 0,
       totalCampaigns: totalCampaigns || 0,
@@ -190,9 +180,6 @@ router.get('/stats', async (_req, res) => {
       exhausted: exhausted || 0,
       totalMessages: totalMessages || 0,
       pendingQueue: pendingQueue || 0,
-      contacted: contacted || 0,
-      interested: (responded || 0) + (converted || 0),
-      errors: erroredQueue || 0,
     });
   } catch (err) {
     res.status(500).json({ error: 'Falha ao buscar estatísticas', message: (err as Error).message });
@@ -211,82 +198,6 @@ router.get('/leads', async (_req, res) => {
     res.json(data || []);
   } catch (err) {
     res.status(500).json({ error: 'Falha ao buscar leads', message: (err as Error).message });
-  }
-});
-
-router.get('/leads/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data, error } = await supabaseAdmin
-      .from('marketing_leads')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Lead não encontrado' });
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Falha ao buscar lead', message: (err as Error).message });
-  }
-});
-
-router.get('/health', async (_req, res) => {
-  try {
-    const dbStart = Date.now();
-    const { error: dbError } = await supabaseAdmin.from('marketing_leads').select('*', { count: 'exact', head: true });
-    const dbLatency = Date.now() - dbStart;
-
-    const { count: queueCount } = await supabaseAdmin
-      .from('marketing_automation_queue')
-      .select('*', { count: 'exact', head: true });
-
-    const workerStatus = await marketingAutomationWorker.getStatus();
-
-    res.json({
-      database: {
-        status: dbError ? 'offline' : 'online',
-        latencyMs: dbLatency,
-        error: dbError?.message || null,
-      },
-      queue: {
-        status: 'online',
-        pendingJobs: queueCount || 0,
-      },
-      worker: {
-        status: workerStatus.status.toLowerCase(),
-        processedCount: workerStatus.processedCount,
-        lastError: workerStatus.lastError,
-        lastProcessedAt: workerStatus.lastProcessedAt,
-      },
-      evolution: {
-        status: 'unknown',
-      },
-      lastLeadProcessedAt: workerStatus.lastProcessedAt,
-      lastError: workerStatus.lastError,
-    });
-  } catch (err) {
-    res.status(500).json({
-      database: { status: 'unknown', error: (err as Error).message },
-      queue: { status: 'unknown' },
-      worker: { status: 'unknown' },
-      evolution: { status: 'unknown' },
-    });
-  }
-});
-
-router.get('/queue', async (_req, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('marketing_automation_queue')
-      .select('*, lead_campaign:marketing_lead_campaigns(lead:marketing_leads(*), campaign:marketing_campaigns(*))')
-      .order('scheduled_at', { ascending: true })
-      .limit(50);
-
-    if (error) throw error;
-    res.json(data || []);
-  } catch (err) {
-    res.status(500).json({ error: 'Falha ao buscar fila', message: (err as Error).message });
   }
 });
 

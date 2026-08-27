@@ -27,7 +27,6 @@ import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
 import { KnowledgeHub } from './components/knowledge/KnowledgeHub';
 import { MarketingOSView } from './components/marketing/MarketingOSView';
-import { ProspectingPage } from './components/marketing/components/ProspectingPage';
 import { AdminAuditView } from './components/admin/AdminAuditView';
 import { WhatsAppSimulatorModal } from './components/communication/WhatsAppSimulatorModal';
 import { PWAInstallBanner } from './components/pwa/PWAInstallBanner';
@@ -231,8 +230,7 @@ function AppContent() {
         {currentPath === '/admin/ai' && <AdminAiGatewayView />}
         {currentPath === '/admin/integrations' && <AdminIntegrationsView />}
         {currentPath === '/admin/knowledge' && <KnowledgeHub />}
-        {currentPath === '/admin/marketing/prospecting' && <ProspectingPage />}
-        {currentPath.startsWith('/admin/marketing') && currentPath !== '/admin/marketing/prospecting' && <MarketingOSView />}
+        {currentPath === '/admin/marketing' && <MarketingOSView />}
         {currentPath === '/admin/settings' && <AdminSettingsView />}
         {currentPath === '/admin/logs' && <AdminAuditView />}
         {currentPath === '/admin/monitoring' && <AdminMonitoringView />}

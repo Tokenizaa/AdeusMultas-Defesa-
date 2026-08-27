@@ -9,8 +9,7 @@ export interface AdminNavItem {
 
 export interface AdminNavSubGroup {
   title: string;
-  items?: AdminNavItem[];
-  children?: AdminNavSubGroup[];
+  items: AdminNavItem[];
 }
 
 export interface AdminNavGroup {
