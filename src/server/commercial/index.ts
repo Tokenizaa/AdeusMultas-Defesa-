@@ -12,8 +12,10 @@ export { AffiliateService } from './affiliates/affiliate-service';
 export { CommissionService, type ProcessPaymentParams } from './affiliates/commission-service';
 export { CommercialAuditService } from './audit/audit-service';
 export { OfferService } from './offers/offer-service';
+export { OrderService } from './orders/order-service';
 export type {
   CommercialOfferBreakdown,
   ResolveOfferParams,
   ResolveOfferResult,
 } from './offers/offer-types';
+export type { CommercialOrder, CreateOrderInput, OrderStatus } from './orders/order-types';
