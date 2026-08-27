@@ -27,6 +27,9 @@ import {
   UsersRound,
   Wallet,
   TestTube2,
+  ListChecks,
+  Settings2,
+  List,
 } from 'lucide-react';
 import type { AdminNavGroup } from './admin-nav-types';
 
@@ -127,11 +130,17 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       },
       {
         title: 'Crescimento & Aquisição',
-        items: [
+        children: [
           {
-            label: 'Prospecção B2B Autônoma',
-            path: '/admin/marketing/prospecting',
-            icon: Target,
+            title: 'Prospecção B2B Autônoma',
+            items: [
+              { label: 'Visão Geral', path: '/admin/marketing/prospecting', icon: LayoutDashboard, exact: true },
+              { label: 'Leads', path: '/admin/marketing/prospecting/leads', icon: Users },
+              { label: 'Campanhas', path: '/admin/marketing/prospecting/campaigns', icon: ListChecks },
+              { label: 'Automação', path: '/admin/marketing/prospecting/automation', icon: Settings2 },
+              { label: 'Fila', path: '/admin/marketing/prospecting/queue', icon: List },
+              { label: 'Coleta', path: '/admin/marketing/prospecting/collection', icon: Bot },
+            ],
           },
         ],
       },

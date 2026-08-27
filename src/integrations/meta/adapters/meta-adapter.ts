@@ -76,6 +76,18 @@ export class MetaAdapter {
   }
 
   /**
+   * Checks if there is an active connection or valid environment credentials to publish
+   */
+  public isConnected(): boolean {
+    if (this.activeConnection && this.activeConnection.status === 'connected' && this.activeConnection.pages.length > 0) {
+      return true;
+    }
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const pageId = process.env.META_PAGE_ID;
+    return Boolean(systemToken && pageId);
+  }
+
+  /**
    * Returns safe sanitized DTO for frontend
    */
   public getSafeStatus(): MetaConnectionSafeDTO {

@@ -2,6 +2,7 @@ import { logger } from '../../../server/observability/logger';
 import { eventBus, EventTopics } from '../../../core/events/topics';
 import { marketingService } from '../../services/marketing-service';
 import { metaPublisher } from '../meta-publisher.worker';
+import { metaAdapter } from '../../../integrations/meta/adapters/meta-adapter';
 
 
 /**
@@ -49,6 +50,12 @@ export class PublicacaoAgent {
   private async processScheduledContent(): Promise<void> {
     try {
       logger.debug('marketing', 'agents', 'publicacao', 'Processing scheduled content');
+
+      // Se a conexão com a Meta não estiver configurada, aguarda configuração ou OAuth sem gerar erros de publicação
+      if (!metaAdapter.isConnected()) {
+        logger.debug('marketing', 'agents', 'publicacao', 'Publicação suspensa no ciclo autônomo: Meta não configurada/conectada.');
+        return;
+      }
       
       // Get content that is approved and ready for scheduling
       const contents = await marketingService.getEditorialContents();

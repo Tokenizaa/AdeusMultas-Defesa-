@@ -3,6 +3,7 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { marketingService } from '../services/marketing-service';
 import { MetaPublishRequest, MetaPublishResult } from '../../types';
 import { metaAdapter } from '../../integrations/meta/adapters/meta-adapter';
+import { MetaAuthenticationRequiredError } from '../../integrations/meta/errors/meta-errors';
 import { getSupabaseServerClient } from '../db/supabase-server';
 
 /**
@@ -51,6 +52,24 @@ export class MetaPublisher {
       attempts: 0,
       nextRetryAt: Date.now(),
     };
+
+    if (!metaAdapter.isConnected()) {
+      const rec: PublisherJobRecord = {
+        id: item.id,
+        channel: request.destination,
+        contentId,
+        status: 'failed',
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+        resolvedAt: new Date().toISOString(),
+        error: 'Nenhuma conexão ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth.',
+      };
+      this.jobHistory.unshift(rec);
+      this.persistJobRecord(rec);
+      logger.info('meta', 'meta-publisher', 'enqueue_deferred', `Publicação ${item.id} não enfileirada: Meta desconectada`);
+      return { queued: false, itemId: item.id };
+    }
+
     const rec: PublisherJobRecord = {
       id: item.id,
       channel: request.destination,
@@ -176,6 +195,38 @@ export class MetaPublisher {
 
       logger.info('meta', 'meta-publisher', 'publish', `Publicação ${item.id} entregue`);
     } catch (err: any) {
+      const isAuthError =
+        err instanceof MetaAuthenticationRequiredError ||
+        err?.name === 'MetaAuthenticationRequiredError' ||
+        String(err?.message || err).includes('Nenhuma conexão ativa com a Meta') ||
+        String(err?.message || err).includes('Token da Meta ausente');
+
+      if (isAuthError) {
+        const rec = this.jobHistory.find((j) => j.id === item.id);
+        if (rec) {
+          rec.status = 'failed';
+          rec.attempts = item.attempts;
+          rec.resolvedAt = new Date().toISOString();
+          rec.error = err.message || 'Nenhuma conexão ativa com a Meta';
+          this.persistJobRecord(rec);
+        }
+        eventBus.publish(
+          EventTopics.MARKETING_CONTENT_PUBLISHED,
+          {
+            queueItemId: item.id,
+            result: {
+              success: false,
+              destination: item.request.destination,
+              publishedAt: new Date().toISOString(),
+              error: err.message || String(err),
+            },
+          },
+          'meta_publisher'
+        );
+        logger.info('meta', 'meta-publisher', 'auth_pending', 'Publicação suspensa: Nenhuma conexão ativa com a Meta (configure credenciais no ambiente ou autentique via OAuth).');
+        return;
+      }
+
       if (item.attempts < MAX_ATTEMPTS) {
         item.nextRetryAt = Date.now() + RETRY_BASE_MS * item.attempts;
         this.queue.push(item);
