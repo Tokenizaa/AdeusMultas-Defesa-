@@ -3,6 +3,7 @@ import { eventBus, EventTopics } from '../../../core/events/topics';
 import { marketingService } from '../../services/marketing-service';
 import { knowledgeService } from '../../../server/knowledge/knowledge-service';
 import { ingestionService } from '../../../server/knowledge/ingestion-service';
+import { searchService } from '../../../server/knowledge/search-service';
 
 
 /**
@@ -364,7 +365,12 @@ return null;
           details: [] as string[]
         };
 
-        const articles = knowledgeBase.searchArticles('');
+        let articles: any[] = [];
+        try {
+          articles = await searchService.searchKnowledge('trânsito legislação multas');
+        } catch {
+          articles = [];
+        }
         if (articles.length > 0) {
           updates.updatesAvailable = true;
           updates.updateTypes = ['CTB_ARTICLE', 'CONTRAN_RESOLUTION'];

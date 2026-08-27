@@ -152,9 +152,9 @@ export const AdminDocumentsView: React.FC = () => {
             Todas as Peças
           </button>
           <button
-            onClick={() => setTypeFilter('defesa_previa')}
+            onClick={() => setTypeFilter('recurso_jari')}
             className={`px-3 py-1.5 rounded-xl cursor-pointer transition-colors whitespace-nowrap ${
-              typeFilter === 'defesa_previa'
+              typeFilter === 'recurso_jari'
                 ? 'bg-orange-500 text-white font-bold'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}

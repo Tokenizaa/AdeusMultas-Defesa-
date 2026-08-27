@@ -17,6 +17,7 @@ import { AutomationsView } from './components/AutomationsView';
 import { ResultsView } from './components/ResultsView';
 import { MarketingSettings } from './components/MarketingSettings';
 import { MediaStudioView } from './components/MediaStudioView';
+import { ProspectingAutomationView } from './components/ProspectingAutomationView';
 import { EditorialContentItem } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 
@@ -30,7 +31,8 @@ export type ViewKey =
   | 'channels'
   | 'automations'
   | 'results'
-  | 'settings';
+  | 'settings'
+  | 'prospecting';
 
 interface NavSection {
   group: string;
@@ -72,6 +74,12 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { key: 'results', label: 'Análise de Resultados', description: 'Performance de alcance e conversão', icon: BarChart3 },
       { key: 'settings', label: 'Configurações de Marca', description: 'Identidade, tom de voz e regras OAB', icon: Settings },
+    ],
+  },
+  {
+    group: 'Crescimento & Aquisição',
+    items: [
+      { key: 'prospecting', label: 'Prospecção B2B Autônoma', description: 'Motor automático de prospecção WhatsApp', icon: Target },
     ],
   },
 ];
@@ -254,6 +262,10 @@ export const MarketingOSView: React.FC = () => {
 
           {activeView === 'settings' && (
             <MarketingSettings brand={brandIdentity} />
+          )}
+
+          {activeView === 'prospecting' && (
+            <ProspectingAutomationView />
           )}
         </main>
 

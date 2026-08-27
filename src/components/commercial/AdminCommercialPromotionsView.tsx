@@ -396,7 +396,6 @@ export const AdminCommercialPromotionsView: React.FC = () => {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-orange-500"
                   >
                     <option value="all">Todos os Serviços</option>
-                    <option value="defesa_previa">Defesa Prévia</option>
                     <option value="recurso_jari">Recurso JARI</option>
                     <option value="recurso_cetran">Recurso CETRAN</option>
                     <option value="suspensao_cnh">Suspensão de CNH</option>

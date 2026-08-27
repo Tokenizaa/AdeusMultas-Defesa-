@@ -135,7 +135,7 @@ export class RagPipeline {
       cityState: string;
     },
     selectedArguments: LegalArgumentDomain[],
-    procedureType: ProcedureType = 'defesa_previa'
+    procedureType: ProcedureType = 'recurso_jari'
   ): DefenseDraft {
     return DocumentAssemblyEngine.assemble({
       caseId,

@@ -60,13 +60,6 @@ export const KNOWLEDGE_CATEGORIES = [
 
 export const KNOWLEDGE_SERVICES = [
   {
-    id: 'defesa_previa',
-    nome: 'Defesa Prévia (Notificação de Autuação)',
-    descricao: 'Impugnação inicial focada em nulidades do AIT, decadência de 30 dias e conversão em advertência.',
-    prazoDias: 30,
-    instancia: 'Autoridade de Trânsito do Órgão Autuador',
-  },
-  {
     id: 'recurso_jari',
     nome: 'Recurso Ordinário à JARI (1ª Instância)',
     descricao: 'Recurso colegiado contra Notificação de Penalidade com efeito suspensivo.',

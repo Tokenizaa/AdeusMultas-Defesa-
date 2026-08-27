@@ -157,14 +157,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     formalFlawsDetected: [],
   });
 
-  const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseAnalysis ?? {
+const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseAnalysis ?? {
     id: `an_${Date.now()}`,
     caseId: `temp_${Date.now()}`,
     createdAt: new Date().toISOString(),
     overallSuccessRate: 0,
     detectedInconsistencies: [],
     recommendedArguments: [],
-    recommendedProcedure: 'defesa_previa',
+    recommendedProcedure: '',
     competentBody: '',
     summaryReasoning: '',
   });
@@ -227,7 +227,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       ? 'recurso_jari'
       : processStage === 'recurso_cetran' || processStage === 'recurso_jari_negado'
       ? 'recurso_cetran'
-      : 'defesa_previa';
+      : 'recurso_jari';
 
   const isPhase1 = step <= 7;
   const isPhase2 = step >= 8;

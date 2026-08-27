@@ -9,41 +9,8 @@ import { ProcedureModel } from '../domain/knowledge-schema';
 
 export const PROCEDURES_CATALOG: ProcedureModel[] = [
   {
-    id: 'defesa_previa',
-    code: 'PROC_001',
-    name: 'Defesa Prévia (Fase de Notificação de Autuação)',
-    category: 'Fase Inicial da Autuação',
-    objective: 'Demonstrar vícios formais insanáveis no Auto de Infração de Trânsito (AIT), decadência de 30 dias na notificação, inconsistência de dados ou solicitar conversão em advertência antes da imposição da penalidade pecuniária.',
-    legalBasis: 'Art. 281, parágrafo único, II do CTB c/c Resolução CONTRAN nº 918/2022 e Súmula 312 do STJ',
-    competentBody: 'Autoridade de Trânsito do Órgão Autuador (Diretor de Trânsito / Superintendente)',
-    suspensiveEffectRule: 'Impede a lavratura da Notificação de Penalidade (NP) e a cobrança financeira enquanto pendente de análise.',
-    stages: [
-      { stepNumber: 1, name: 'Recebimento da Notificação de Autuação (NA)', description: 'Identificação da data de expedição e cálculo do prazo decadencial de 30 dias.', deadlineDays: 30, actingParty: 'Cidadão/Condutor' },
-      { stepNumber: 2, name: 'Análise de Nulidades Formais e Metrológicas', description: 'Conferência de dados do AIT, aferição do radar no INMETRO e requisitos do Art. 280 do CTB.', deadlineDays: 5, actingParty: 'Cidadão/Condutor' },
-      { stepNumber: 3, name: 'Protocolo da Peça de Defesa Prévia', description: 'Envio online via portal oficial do órgão autuador ou correios com aviso de recebimento.', deadlineDays: 30, actingParty: 'Cidadão/Condutor' },
-      { stepNumber: 4, name: 'Julgamento de Consistência pela Autoridade', description: 'Apreciação pela autoridade de trânsito para deferimento (arquivamento) ou indeferimento com emissão de NP.', deadlineDays: 180, actingParty: 'Autoridade de Trânsito' },
-    ],
-    requiredDocuments: [
-      { name: 'Cópia da Notificação de Autuação (NA) ou espelho do AIT', required: true, description: 'Documento recebido com data de postagem e número do AIT.' },
-      { name: 'Documento oficial de identidade (CNH ou RG/CPF)', required: true, description: 'Comprovação de legitimidade ativa do requerente.' },
-      { name: 'Certificado de Registro e Licenciamento do Veículo (CRLV)', required: true, description: 'Comprovação de propriedade ou posse legítima do veículo.' },
-      { name: 'Comprovante de residência atualizado', required: false, description: 'Para ratificação de endereço no prontuário do órgão.' },
-      { name: 'Procuração com poderes específicos (se representado)', required: false, description: 'Obrigatória caso interposto por representante legal.' },
-    ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008'],
-    availableTemplates: ['TPL_DEFESA_PREVIA_PADRAO', 'TPL_DEFESA_PREVIA_VELOCIDADE', 'TPL_CONVERSAO_ADVERTENCIA'],
-    executionChecklist: [
-      'Conferir se a notificação foi postada em menos de 30 dias da data do fato',
-      'Checar no portal do INMETRO se o laudo do radar tinha menos de 12 meses',
-      'Verificar se todos os campos obrigatórios do Art. 280 estão preenchidos',
-      'Anexar CNH e CRLV legíveis em PDF',
-      'Assinar a petição fisicamente ou com certificado digital GOV.BR',
-    ],
-    notes: 'A Defesa Prévia é a oportunidade mais rápida de cancelamento da autuação antes que ela se converta em dívida ou pontuação na CNH.',
-  },
-  {
     id: 'recurso_jari',
-    code: 'PROC_002',
+    code: 'PROC_001',
     name: 'Recurso Ordinário à JARI (1ª Instância Administrativa)',
     category: 'Instância Recursal Colegiada',
     objective: 'Impugnar a Notificação de Imposição de Penalidade perante o colegiado da JARI, atacando tanto as preliminares processuais quanto o mérito fático e probatório da autuação.',
@@ -74,7 +41,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'recurso_cetran',
-    code: 'PROC_003',
+    code: 'PROC_002',
     name: 'Recurso Especial ao CETRAN / CONTRAN (2ª Instância Final)',
     category: 'Instância Recursal Colegiada Final',
     objective: 'Reapreciar a matéria perante o Conselho Estadual de Trânsito após indeferimento na JARI, demonstrando ausência de motivação, violação à lei federal ou divergência jurisprudencial.',
@@ -103,7 +70,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'suspensao_cnh',
-    code: 'PROC_004',
+    code: 'PROC_003',
     name: 'Defesa em Processo de Suspensão do Direito de Dirigir (PSDD)',
     category: 'Processos Específicos de Habilitação',
     objective: 'Evitar o bloqueio da CNH por acúmulo de pontos (20, 30 ou 40 pontos - Lei 14.071/20) ou por infração mandatória autossuspensiva (Lei Seca, velocidade acima de 50%, manobra perigosa).',
@@ -132,7 +99,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'cassacao_cnh',
-    code: 'PROC_005',
+    code: 'PROC_004',
     name: 'Defesa em Processo de Cassação da CNH (PCDD)',
     category: 'Processos Específicos de Habilitação',
     objective: 'Defender condutor acusado de dirigir com a CNH suspensa ou reincidir em infrações mandatórias no período de 12 meses, evitando a perda total da carteira por 2 anos.',
@@ -159,7 +126,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'indicacao_condutor',
-    code: 'PROC_006',
+    code: 'PROC_005',
     name: 'Formulário de Indicação do Real Condutor Infrator (FARI)',
     category: 'Procedimentos de Responsabilidade',
     objective: 'Transferir a responsabilidade pelas infrações cometidas por terceiro para a pontuação do real condutor, desonerando o proprietário do veículo.',
@@ -186,7 +153,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'conversao_advertencia',
-    code: 'PROC_007',
+    code: 'PROC_006',
     name: 'Requerimento de Conversão em Advertência por Escrito',
     category: 'Procedimentos de Benefício Legal',
     objective: 'Exercer o direito subjetivo previsto no Art. 267 do CTB para cancelar a cobrança em dinheiro e zerar os pontos de multas leves ou médias de condutores ficha-limpa.',
@@ -214,7 +181,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'analise_tecnica',
-    code: 'PROC_008',
+    code: 'PROC_007',
     name: 'Parecer Técnico de Consistência e Vícios Formais',
     category: 'Serviços Periciais & Diagnósticos',
     objective: 'Emitir relatório técnico especializado avaliando todas as vulnerabilidades formais, metrológicas, de engenharia e procedimentais do Auto de Infração de Trânsito.',
@@ -239,7 +206,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
   },
   {
     id: 'relatorio_pericial',
-    code: 'PROC_009',
+    code: 'PROC_008',
     name: 'Relatório Técnico Pericial de Engenharia e Metrologia',
     category: 'Serviços Periciais & Diagnósticos',
     objective: 'Produzir laudo pericial circunstanciado demonstrando falhas nos estudos técnicos de instalação de radares, defeito no laço indutivo ou tempo de amarelo insuficiente.',

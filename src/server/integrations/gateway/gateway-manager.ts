@@ -42,8 +42,18 @@ import { logger } from '../../observability/logger';
 function resolveActiveGatewayIdFromEnv(): GatewayId {
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || '').toLowerCase().trim();
   if (envValue === 'ggpixapi' || envValue === 'ggpix') return 'ggpixapi';
-  if (envValue === 'pagbank') return 'pagbank';
-  // Fallback: PagBank para manter compatibilidade com deploy atual
+  if (envValue === 'pagbank') {
+    if (process.env.NODE_ENV === 'production') {
+      // Em produção, NUNCA permitir PagBank como gateway ativo
+      return 'ggpixapi';
+    }
+    return 'pagbank';
+  }
+  // Em dev/teste, manter fallback PagBank para compatibilidade
+  if (process.env.NODE_ENV === 'production') {
+    // Em produção, fallback é GGPIXAPI
+    return 'ggpixapi';
+  }
   return 'pagbank';
 }
 
@@ -155,6 +165,14 @@ export class GatewayManager {
    */
   getActiveGatewayId(): GatewayId {
     return this.resolveActiveGatewayId();
+  }
+
+  /**
+   * Verifica se o gateway é de produção.
+   * Apenas GGPIXAPI é considerado gateway de produção (PagBank é sandbox/teste).
+   */
+  isProductionGateway(id: GatewayId): boolean {
+    return id === 'ggpixapi';
   }
 
   /**

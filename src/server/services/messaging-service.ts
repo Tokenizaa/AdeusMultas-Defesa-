@@ -143,11 +143,11 @@ export class EvolutionWhatsAppAdapter implements IChannelAdapter {
         error: res?.error,
       };
     } catch (err: any) {
-      logger.warn('messaging', 'adapter_evolution', 'send_fallback', `Falha envio Evolution: ${err.message}`);
+      logger.error('messaging', 'adapter_evolution', 'send_fallback', `Falha envio Evolution: ${err.message}`);
       return {
-        success: true, // Sandbox fallback
-        externalMessageId: `wpp_fallback_${Date.now()}`,
-        status: 'sent',
+        success: false,
+        externalMessageId: '',
+        status: 'failed',
         error: err.message,
       };
     }
@@ -249,11 +249,11 @@ export class MetaMessengerAdapter implements IChannelAdapter {
         rawResponse: res,
       };
     } catch (err: any) {
-      logger.warn('messaging', 'adapter_messenger', 'send_fallback', `Falha envio Messenger: ${err.message}`);
+      logger.error('messaging', 'adapter_messenger', 'send_fallback', `Falha envio Messenger: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `fb_fallback_${Date.now()}`,
-        status: 'sent',
+        success: false,
+        externalMessageId: '',
+        status: 'failed',
         error: err.message,
       };
     }
@@ -331,11 +331,11 @@ export class InstagramDirectAdapter implements IChannelAdapter {
         rawResponse: res,
       };
     } catch (err: any) {
-      logger.warn('messaging', 'adapter_instagram', 'send_fallback', `Falha envio Instagram: ${err.message}`);
+      logger.error('messaging', 'adapter_instagram', 'send_fallback', `Falha envio Instagram: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `ig_fallback_${Date.now()}`,
-        status: 'sent',
+        success: false,
+        externalMessageId: '',
+        status: 'failed',
         error: err.message,
       };
     }
@@ -410,11 +410,11 @@ export class MetaWhatsAppCloudAdapter implements IChannelAdapter {
         rawResponse: res,
       };
     } catch (err: any) {
-      logger.warn('messaging', 'adapter_whatsapp_cloud', 'send_fallback', `Falha envio WhatsApp Cloud: ${err.message}`);
+      logger.error('messaging', 'adapter_whatsapp_cloud', 'send_fallback', `Falha envio WhatsApp Cloud: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `wpp_cloud_fallback_${Date.now()}`,
-        status: 'sent',
+        success: false,
+        externalMessageId: '',
+        status: 'failed',
         error: err.message,
       };
     }

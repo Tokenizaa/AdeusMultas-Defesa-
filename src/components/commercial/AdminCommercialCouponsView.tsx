@@ -218,7 +218,6 @@ export const AdminCommercialCouponsView: React.FC = () => {
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono focus:outline-hidden focus:border-orange-500"
             >
               <option value="recurso_multa">Recurso de Multa</option>
-              <option value="defesa_previa">Defesa Prévia</option>
               <option value="suspensao_cnh">Suspensão de CNH</option>
               <option value="cassacao_cnh">Cassação de CNH</option>
             </select>

@@ -324,7 +324,7 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
     const defenseDoc = {
       id: 'doc_' + Math.random().toString(36).substring(2, 9),
       caseId: caseData.id,
-      tipoDefesa: caseData.tipoServico || caseData.serviceType || 'defesa_previa',
+      tipoDefesa: caseData.tipoServico || caseData.serviceType || 'recurso_jari',
       titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || 'N/A'}`,
       orgaoDestinatario: infraction.orgaoAutuador || infraction.autuadorBody,
       autorNome: infraction.nomeCondutor || 'Condutor / Requerente',

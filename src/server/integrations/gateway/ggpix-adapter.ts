@@ -139,7 +139,10 @@ export class GGPIXAdapter implements PaymentGateway {
     const config = getConfig();
     const cleanDoc = (input.payer.document || '12345678909').replace(/\D/g, '');
     const referenceId = input.referenceId || `defesai_case_${input.caseId}_${Date.now()}`;
-    const amountInCents = input.amountInCents || 8990;
+    if (!input.amountInCents || typeof input.amountInCents !== 'number' || input.amountInCents <= 0) {
+      throw new Error('amountInCents inválido: deve ser um número maior que zero.');
+    }
+    const amountInCents = input.amountInCents;
 
     let transactionId = `ggpix_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     let pixCopyPaste = `00020126580014br.gov.bcb.pix0136${referenceId}520400005303986540${(amountInCents / 100).toFixed(2)}5802BR5916DEFESAI TECNOLOG6009SAO PAULO62070503***6304`;
@@ -174,13 +177,26 @@ export class GGPIXAdapter implements PaymentGateway {
           netAmountInCents = data.fees?.netAmount;
         } else {
           const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-          logger.warn('payments', 'ggpix', 'create_pix', 'GGPIXAPI PIX In returned non-200, using local fallback', {
+          // [PRODUCTION] Não retornar dados locais como se fossem reais
+          if (process.env.NODE_ENV === 'production') {
+            logger.error('payments', 'ggpix', 'create_pix', 'GGPIXAPI retornou erro em produção — transação NÃO criada', {
+              httpStatus: response.status,
+              error: errorData,
+            });
+            throw new Error(`GGPIXAPI retornou erro HTTP ${response.status}. Pagamento não processado.`);
+          }
+          logger.warn('payments', 'ggpix', 'create_pix', 'GGPIXAPI PIX In returned non-200 — modo dev: usando dados locais', {
             httpStatus: response.status,
             error: errorData,
           });
         }
       } catch (err: any) {
-        logger.warn('payments', 'ggpix', 'create_pix', 'GGPIXAPI request failed, fallback to sandbox', { error: err.message });
+        // [PRODUCTION] Não retornar dados locais como se fossem reais
+        if (process.env.NODE_ENV === 'production') {
+          logger.error('payments', 'ggpix', 'create_pix', 'GGPIXAPI falhou em produção — transação NÃO criada', { error: err.message });
+          throw new Error('Falha ao conectar com GGPIXAPI. Pagamento não processado.');
+        }
+        logger.warn('payments', 'ggpix', 'create_pix', 'GGPIXAPI request failed — modo dev: usando dados locais', { error: err.message });
       }
     }
 

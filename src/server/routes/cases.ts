@@ -92,7 +92,7 @@ router.post('/cases', authenticateToken, (req, res) => {
           cityState: 'São Paulo/SP',
         },
         domainData.analysis?.recommendedArguments || [],
-        domainData.serviceType || 'defesa_previa'
+        domainData.serviceType || 'recurso_jari'
       );
     }
 

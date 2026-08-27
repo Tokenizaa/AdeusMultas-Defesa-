@@ -70,7 +70,7 @@ export class CanonicalMapper {
       userId: row.user_id,
       status: (row.status as CaseStatus) || 'novo',
       currentStage: (row.current_stage as JourneyStage) || 1,
-      serviceType: (row.service_type as ProcedureType) || 'defesa_previa',
+      serviceType: (row.service_type as ProcedureType) || 'recurso_jari',
       commercialOfferId: row.commercial_offer_id,
       vehicle: {
         plate: row.vehicle_plate || 'SEM PLACA',
@@ -138,7 +138,7 @@ export class CanonicalMapper {
       user_id: domain.userId,
       status: domain.status || 'novo',
       current_stage: Number(domain.currentStage || domain.stageAtual || 1),
-      service_type: domain.serviceType || domain.tipoServico || 'defesa_previa',
+      service_type: domain.serviceType || domain.tipoServico || 'recurso_jari',
       vehicle_plate: vehicle.plate || infraction.placa || 'SEM PLACA',
       vehicle_brand_model: vehicle.brandModel || infraction.marcaModelo || 'Veículo',
       vehicle_renavam: vehicle.renavam || infraction.renavam,

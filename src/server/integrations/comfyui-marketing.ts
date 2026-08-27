@@ -118,11 +118,12 @@ export class ComfyUIMarketing {
    * Build image workflow based on request type
    */
   private buildImageWorkflow(request: ImageGenerationRequest): ComfyUIWorkflow {
+    // ponytail: upgrade to flux1-dev or sdXL when GPU + model available
     const baseWorkflow: ComfyUIWorkflow = {
       "1": {
-        "class_type": "LoadCheckpoint",
+        "class_type": "CheckpointLoaderSimple",
         "inputs": {
-          "ckpt_name": "flux1-dev.safetensors"
+          "ckpt_name": "v1-5-pruned-emaonly.safetensors"
         }
       },
       "2": {
@@ -182,81 +183,15 @@ export class ComfyUIMarketing {
   }
 
   /**
-   * Build video workflow based on request type
+   * Build video workflow based on request type.
+   * REQUIRES: GPU, Wan2.2 diffusion model, VHS_VideoCombine node.
+   * Current environment: CPU-only, no video models → throws explicit error.
    */
-  private buildVideoWorkflow(request: VideoGenerationRequest): ComfyUIWorkflow {
-    // Video workflows are more complex, using Wan I2V or AnimateDiff
-    const baseWorkflow: ComfyUIWorkflow = {
-      "1": {
-        "class_type": "LoadDiffusionModel",
-        "inputs": {
-          "unet_name": "wan2.2_i2v_480p_14B_bf16.safetensors"
-        }
-      },
-      "2": {
-        "class_type": "LoadCLIP",
-        "inputs": {
-          "clip_name": "umt5-xxl-enc-fp8_e4m3fn.safetensors"
-        }
-      },
-      "3": {
-        "class_type": "LoadVAE",
-        "inputs": {
-          "vae_name": "wan_2.2_vae.safetensors"
-        }
-      },
-      "4": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-          "text": this.buildVideoPrompt(request),
-          "clip": ["2", 0]
-        }
-      },
-      "5": {
-        "class_type": "EmptySD3LatentImage",
-        "inputs": {
-          "width": 832,
-          "height": 480,
-          "batch_size": this.getFrameCount(request.duration || '5s')
-        }
-      },
-      "6": {
-        "class_type": "KSampler",
-        "inputs": {
-          "seed": Math.floor(Math.random() * 1000000),
-          "steps": 30,
-          "cfg": 6.0,
-          "sampler_name": "euler",
-          "scheduler": "normal",
-          "denoise": 1.0,
-          "model": ["1", 0],
-          "positive": ["4", 0],
-          "negative": ["4", 0], // Using same for negative in this example
-          "latent_image": ["5", 0]
-        }
-      },
-      "7": {
-        "class_type": "VAEDecode",
-        "inputs": {
-          "samples": ["6", 0],
-          "vae": ["3", 0]
-        }
-      },
-      "8": {
-        "class_type": "VHS_VideoCombine",
-        "inputs": {
-          "frame_rate": 16,
-          "loop_count": 0,
-          "filename_prefix": `marketing_video_${request.type}_${Date.now()}`,
-          "format": "video/h264-mp4",
-          "pingpong": false,
-          "save_output": true,
-          "images": ["7", 0]
-        }
-      }
-    };
-
-    return baseWorkflow;
+  private buildVideoWorkflow(_request: VideoGenerationRequest): ComfyUIWorkflow {
+    throw new Error(
+      'ComfyUI video generation unavailable: requires GPU + Wan2.2 model + VHS_VideoCombine node. ' +
+      'Current environment is CPU-only with no video models installed.'
+    );
   }
 
   /**

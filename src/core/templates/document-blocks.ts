@@ -46,7 +46,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Cabeçalho formal direcionado à autoridade de trânsito do órgão autuador para protocolo de Defesa Prévia da autuação.',
     contentTemplate: `ILUSTRÍSSIMO SENHOR DIRETOR / AUTORIDADE DE TRÂNSITO DO(A) {{orgao_autuador}}\nJURISDIÇÃO DA COMARCA DE {{cidade_estado}}`,
     supportedVariables: ['{{orgao_autuador}}', '{{cidade_estado}}'],
-    recommendedProcedures: ['defesa_previa', 'conversao_advertencia', 'indicacao_condutor'],
+    recommendedProcedures: ['conversao_advertencia', 'indicacao_condutor'],
   },
   {
     id: 'BLK-002',
@@ -131,7 +131,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
       '{{veiculo_placa}}',
       '{{veiculo_renavam}}',
     ],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    recommendedProcedures: ['recurso_jari', 'recurso_cetran'],
   },
   {
     id: 'BLK-009',
@@ -153,7 +153,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
       '{{veiculo_renavam}}',
       '{{numero_ait}}',
     ],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-010',
@@ -240,7 +240,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
       '{{data_infracao}}',
       '{{local_infracao}}',
     ],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-014',
@@ -258,7 +258,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
       '{{local_infracao}}',
       '{{data_infracao}}',
     ],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-015',
@@ -268,7 +268,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para autuações por avanço semafórico eletrônico ou por fiscalização presencial.',
     contentTemplate: `I - DOS FATOS\n\nConsta no Auto de Infração nº {{numero_ait}} a suposta prática da conduta capitulada no Art. 208 do CTB (Avançar o sinal vermelho do semáforo), ocorrida em {{data_infracao}} no cruzamento de {{local_infracao}}.\n\nCumpre destacar que a imagem capturada pelo sistema automatizado não registra a transposição da linha de retenção após o início do ciclo vermelho, nem comprova que o veículo não realizou manobra segura para desobstrução de via ou passagem de veículo em urgência, em total desacordo com o Manual Brasileiro de Fiscalização de Trânsito (Res. CONTRAN 985/2022).`,
     supportedVariables: ['{{numero_ait}}', '{{data_infracao}}', '{{local_infracao}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-016',
@@ -278,7 +278,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para multas de celular sem abordagem do condutor e sem detalhamento fático no campo de observações.',
     contentTemplate: `I - DOS FATOS\n\nImputa-se ao(à) Requerente a conduta do Artigo 252, parágrafo único do CTB (Manusear ou segurar telefone celular ao volante), lavrada no AIT nº {{numero_ait}} em {{data_infracao}}, na via {{local_infracao}}, sem que tenha havido qualquer abordagem policial ou parada do veículo.\n\nO agente de trânsito limitou-se a expedir autuação remota e instantânea, sem consignar no campo de observações a descrição circunstanciada da conduta (como a posição do aparelho e o tempo de visualização), violando frontalmente a ficha de enquadramento da Resolução CONTRAN nº 985/2022.`,
     supportedVariables: ['{{numero_ait}}', '{{data_infracao}}', '{{local_infracao}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-017',
@@ -288,7 +288,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para autuações de estacionamento em que inexiste sinalização regulamentar ou configurou-se parada rápida.',
     contentTemplate: `I - DOS FATOS\n\nO(A) Requerente foi surpreendido(a) com a lavratura do AIT nº {{numero_ait}}, apontando suposto cometimento da infração do Art. 181, inciso XVIII do CTB (Estacionar em local/horário proibido pela sinalização), em {{data_infracao}}, na altura de {{local_infracao}}.\n\nOcorre que no exato local não havia sinalização horizontal ou vertical R-6a visível, legível e regulamentar no sentido da via, ou, subsidiariamente, tratou-se de mera parada emergencial e momentânea estritamente destinada ao embarque/desembarque de passageiro, ato plenamente respaldado pelo Anexo I do CTB.`,
     supportedVariables: ['{{numero_ait}}', '{{data_infracao}}', '{{local_infracao}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-018',
@@ -298,7 +298,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para autuações sob alegação de recusa, sem constatação de sinais clínicos de alteração psicomotora.',
     contentTemplate: `I - DO CONTEXTO FÁTICO DA ABORDAGEM\n\nEm {{data_infracao}}, ao transitar pelo endereço {{local_infracao}}, o(a) Requerente foi submetido(a) a abordagem em fiscalização de trânsito (Operação Lei Seca). O agente fiscalizador solicitou a realização do teste de ar alveolar (etilômetro), ao que o(a) condutor(a) exerceu seu direito constitucional de não autoincriminação.\n\nOcorre que o(a) Requerente não apresentava qualquer sinal exterior, notório ou clínico de embriaguez ou alteração da capacidade psicomotora. Não foi preenchido Termo de Constatação de Sinais nos moldes do Anexo II da Resolução CONTRAN nº 432/2013, demonstrando que o ato sancionatório fundou-se exclusivamente na mera recusa desacompanhada de qualquer risco à segurança viária.`,
     supportedVariables: ['{{data_infracao}}', '{{local_infracao}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'processo_suspensao'],
+    recommendedProcedures: ['recurso_jari', 'processo_suspensao'],
   },
   {
     id: 'BLK-019',
@@ -308,7 +308,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa fática impugnando autuações de cinto de segurança sem abordagem e com erro de visualização.',
     contentTemplate: `I - DOS FATOS\n\nO Auto de Infração nº {{numero_ait}} imputa ao(à) Requerente a conduta tipificada no Art. 167 do CTB (Deixar o condutor ou passageiro de usar o cinto de segurança), alegadamente verificada em {{data_infracao}}, no endereço {{local_infracao}}.\n\nO(A) Requerente sempre fez uso do cinto de segurança de três pontos regularmente afivelado. No momento da passagem pelo ponto de fiscalização, a utilização de vestimenta escura e as condições de luminosidade geraram equívoco de percepção do agente de trânsito, que não procedeu à abordagem fiscalizatória para verificação do fato.`,
     supportedVariables: ['{{numero_ait}}', '{{data_infracao}}', '{{local_infracao}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-020',
@@ -318,7 +318,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para casos em que as taxas de licenciamento foram recolhidas ou houve falha nos sistemas do DETRAN.',
     contentTemplate: `I - DOS FATOS\n\nEm {{data_infracao}}, o(a) Requerente teve seu veículo autuado sob o AIT nº {{numero_ait}} por suposta infração ao Artigo 230, V do CTB (Conduzir veículo que não esteja registrado e devidamente licenciado).\n\nConforme comprovantes fiscais e bancários em anexo, os tributos e taxas de licenciamento anual já haviam sido integralmente quitados antes da abordagem fiscal, ocorrendo mera demora sistêmica no processamento e emissão do CRLV-e pelo DETRAN/{{uf_requerente}}, restando patente a boa-fé do administrado e a ausência de infração consumada.`,
     supportedVariables: ['{{data_infracao}}', '{{numero_ait}}', '{{uf_requerente}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-021',
@@ -328,7 +328,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa para impugnação de penalidade por não indicação de condutor em veículo de pessoa jurídica.',
     contentTemplate: `I - DOS FATOS\n\nA empresa Requerente foi notificada da imposição da penalidade pecuniária por Não Indicação de Condutor Infrator (Multa NIC), calculada com fator multiplicador sobre o AIT originário nº {{numero_ait}}, sob a alegação de que não teria indicado o condutor no prazo assinalado.\n\nContudo, a empresa procedeu ao envio regular e tempestivo da documentação do real condutor pelos canais oficiais / protocolo eletrônico, ou, alternativamente, o próprio Auto de Infração originário padece de nulidade absoluta prévia, o que acarreta a nulidade reflexa da sanção acessória por força do princípio da gravitação jurídica.`,
     supportedVariables: ['{{numero_ait}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-022',
@@ -372,7 +372,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Narrativa fática demonstrando o enquadramento perfeito nos requisitos do Art. 267 do CTB.',
     contentTemplate: `I - DO ENQUADRAMENTO AOS REQUISITOS LEGAIS DO ARTIGO 267 DO CTB\n\nO(A) Requerente foi notificado(a) da autuação referente ao AIT nº {{numero_ait}}, decorrente do enquadramento no {{enquadramento_ctb}}, classificada pela legislação como infração de natureza {{gravidade_infracao}} (leve ou média).\n\nConforme certidão de prontuário e histórico de CNH extraídos do sistema SENATRAN/DETRAN em anexo, o(a) Requerente não cometeu nenhuma outra infração de trânsito nos últimos 12 (doze) meses anteriores à data da autuação. Trata-se, portanto, de hipótese de imposição obrigatória de conversão da penalidade pecuniária em advertência por escrito, constituindo direito subjetivo do condutor após o advento da Lei nº 14.071/2020.`,
     supportedVariables: ['{{numero_ait}}', '{{enquadramento_ctb}}', '{{gravidade_infracao}}'],
-    recommendedProcedures: ['conversao_advertencia', 'defesa_previa'],
+    recommendedProcedures: ['conversao_advertencia'],
   },
 
   // ==========================================
@@ -386,7 +386,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade e arquivamento obrigatório da autuação quando a Notificação da Autuação for postada após 30 dias (Art. 281, II CTB).',
     contentTemplate: `II.1 - DA DECADÊNCIA DO DIREITO DE PUNIR DA ADMINISTRAÇÃO PÚBLICA (ART. 281, PARÁGRAFO ÚNICO, II DO CTB)\n\nPreceitua de forma cogente o Artigo 281, parágrafo único, inciso II do Código de Trânsito Brasileiro que o Auto de Infração será arquivado e seu registro julgado insubsistente quando "se, no prazo máximo de 30 (trinta) dias, não for expedida a notificação da autuação".\n\nNo presente caso, a suposta infração ocorreu em {{data_infracao}}, ao passo que a Notificação de Autuação (NA) somente foi postada/expedida pelo órgão em {{data_expedicao}}, operando-se o lapso temporal de {{dias_decorridos}} dias, superando manifestamente o prazo decadencial improrrogável previsto em lei.\n\nTratando-se de prazo decadencial de ordem pública, extinguiu-se o próprio direito punitivo do Estado, impondo-se o imediato arquivamento do feito.`,
     supportedVariables: ['{{data_infracao}}', '{{data_expedicao}}', '{{dias_decorridos}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    recommendedProcedures: ['recurso_jari', 'recurso_cetran'],
   },
   {
     id: 'BLK-027',
@@ -406,7 +406,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade por falta de dados essenciais como modelo, placa, local exato ou identificação do agente.',
     contentTemplate: `II.3 - DA INCONSISTÊNCIA E IRREGULARIDADE FORMAL DO AIT (ART. 280 DO CTB C/C ART. 281, I DO CTB)\n\nO Artigo 280 do Código de Trânsito Brasileiro disciplina os requisitos formais de validade do Auto de Infração de Trânsito. A ausência de elementos tipificadores precisos — tais como a indicação exata do local (com numeral ou ponto de referência), marca e modelo corretos do veículo, ou assinatura e matrícula do agente autuador — torna o auto inconsistente e irregular.\n\nO Artigo 281, parágrafo único, inciso I do CTB é categórico ao determinar que "o auto de infração será arquivado e seu registro julgado insubsistente se considerado inconsistente ou irregular", impondo-se a anulação do ato administrativo com base no princípio da legalidade estrita.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-029',
@@ -416,7 +416,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Incompetência de órgão municipal em rodovia estadual/federal sem convênio expresso ou vice-versa.',
     contentTemplate: `II.4 - DA INCOMPETÊNCIA DO ÓRGÃO AUTUADOR (ART. 21 E ART. 24 DO CTB)\n\nO Código de Trânsito Brasileiro distribui de forma estrita as competências materiais de fiscalização entre os órgãos executivos rodoviários (DER, DNIT, PRF) e os órgãos municipais de trânsito.\n\nNo caso em tela, a autuação foi promovida pelo(a) {{orgao_autuador}} em trecho que refoge à sua circunscrição originária de fiscalização, inexistindo nos autos prova de convênio de delegação de competência em vigor na data do fato, violando o princípio do juiz natural administrativo e a Lei de Processo Administrativo.`,
     supportedVariables: ['{{orgao_autuador}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-030',
@@ -446,7 +446,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade de autuações sucessivas pelo mesmo fato continuado em curto espaço de tempo e mesma via.',
     contentTemplate: `II.7 - DA ILICITUDE DE DUPLICIDADE DE AUTUAÇÃO (BIS IN IDEM / FATO CONTÍNUO)\n\nO(A) Requerente foi autuado(a) múltiplas vezes no mesmo dia e na mesma avenida/rodovia em um intervalo de poucos minutos/quilômetros. A jurisprudência pátria e a Portaria SENATRAN vedam a aplicação cumulativa de sanções sobre a mesma conduta contínua de circulação sem interrupção de viagem, sob pena de intolerável bis in idem e enriquecimento sem causa do Estado.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
 
   // ==========================================
@@ -460,7 +460,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade do registro de velocidade quando o equipamento não foi aferido pelo INMETRO no prazo máximo de 12 meses.',
     contentTemplate: `III.1 - DA INVALIDADE DA MEDIÇÃO: AFERIÇÃO METROLÓGICA ANUAL DO INMETRO VENCIDA (RES. CONTRAN Nº 798/2020)\n\nO Artigo 4º, inciso III da Resolução CONTRAN nº 798/2020 estabelece de maneira expressa e inderrogável que todo medidor de velocidade deve obrigatoriamente "ter seu modelo aprovado pelo INMETRO e ser submetido à verificação metrológica com periodicidade máxima de 12 (doze) meses".\n\nConforme consulta efetuada ao Portal de Serviços do INMETRO (PSInmetro), o equipamento medidor utilizado na autuação encontrava-se na data do fato com seu laudo de aferição metrológica vencido ou inexistente. A ausência de calibração válida retira a presunção de veracidade da medição e contamina de nulidade o registro, não podendo subsidiar penalidade pecuniária ou pontuação.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    recommendedProcedures: ['recurso_jari', 'recurso_cetran'],
   },
   {
     id: 'BLK-040',
@@ -470,7 +470,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Inaplicabilidade de penalidade por ausência de sinalização visível de velocidade antes do radar.',
     contentTemplate: `III.2 - DA INAPLICABILIDADE DA PENALIDADE POR AUSÊNCIA DE SINALIZAÇÃO R-19 REGULAMENTAR (ART. 90 DO CTB)\n\nDetermina de forma cogente o Artigo 90 do Código de Trânsito Brasileiro: "Não serão aplicadas as sanções previstas neste Código por inobservância à sinalização quando esta for insuficiente ou incorreta".\n\nPor sua vez, a Resolução CONTRAN nº 798/2020 estabelece no Artigo 12 e Anexo II a obrigatoriedade da instalação prévia de placa de velocidade regulamentar R-19, em perfeito estado de visibilidade e nas distâncias métricas fixadas pela engenharia de tráfego. No local da fiscalização, a inexistência, ocultação por vegetação ou distância incorreta da placa desonera o condutor de responsabilidade infracional.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-041',
@@ -480,7 +480,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Erro de enquadramento quando a velocidade considerada com a dedução da margem do INMETRO reclassifica ou exclui a infração.',
     contentTemplate: `III.3 - DO ERRO MATERIAL DE CÁLCULO E MARGEM DE ERRO METROLÓGICA (TABELA DO ANEXO II DA RES. 798/2020)\n\nTodo instrumento medidor de velocidade possui margem de erro admitida (tolerância metrológica) de 7 km/h para velocidades até 100 km/h e de 7% para velocidades superiores. A velocidade considerada para fins de aplicação da penalidade é o resultado da velocidade medida subtraída da margem de erro.\n\nNo presente caso, procedendo-se ao correto abatimento da tolerância obrigatória, a velocidade considerada enquadra-se em faixa diversa ou inferior à constante na notificação, impondo-se a anulação ou retificação do enquadramento fiscal.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-042',
@@ -490,7 +490,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Exigência legal de estudo técnico prévio de engenharia para instalação e operação de radares fixos.',
     contentTemplate: `III.4 - DA AUSÊNCIA DE ESTUDO TÉCNICO COMPROBATÓRIO DE INSTALAÇÃO (ART. 6º DA RES. CONTRAN 798/2020)\n\nA instalação e operação de medidores de velocidade do tipo fixo exige a realização de prévio Estudo Técnico de Engenharia devidamente aprovado pelo órgão com circunscrição sobre a via, demonstrando o histórico de acidentes e a necessidade de controle de velocidade no trecho.\n\nA ausência de disponibilização e juntada do estudo técnico válido com ART (Anotação de Responsabilidade Técnica) acarreta a nulidade da instalação do equipamento fiscalizador e das autuações dele decorrentes.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
 
   // ==========================================
@@ -504,7 +504,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade da autuação de avanço semafórico quando a fotografia não comprova a posição do veículo antes da linha de retenção.',
     contentTemplate: `III.5 - DA AUSÊNCIA DE PROVA DA TRANSPOSIÇÃO DA LINHA DE RETENÇÃO NO CICLO VERMELHO (MBFT - RES. CONTRAN 985/2022)\n\nO Manual Brasileiro de Fiscalização de Trânsito exige expressamente que a fiscalização eletrônica de avanço de sinal vermelho registre, no mínimo, duas fotos sequenciais: a primeira demonstrando o veículo antes da linha de retenção já com o foco vermelho ativo, e a segunda demonstrando a transposição e o cruzamento efetivo.\n\nNa imagem disponibilizada pelo órgão, não é possível comprovar que o veículo iniciou a transposição no sinal vermelho, tendo o ingresso no cruzamento ocorrido ainda sob a fase amarela, situação em que o Art. 208 do CTB não autoriza a punição.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-045',
@@ -514,7 +514,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade de autuação de celular do Art. 252 sem abordagem e sem esclarecer detalhadamente a forma de manuseio no AIT.',
     contentTemplate: `III.6 - DA ATIPICIDADE E NULIDADE POR FALTA DE DETALHAMENTO NO CAMPO DE OBSERVAÇÕES (ART. 252 DO CTB)\n\nA ficha de enquadramento do código 736-62 da Resolução CONTRAN nº 985/2022 determina de forma expressa que o agente fiscalizador deve registrar no campo de observações do AIT como o aparelho estava sendo manuseado (ex: "segurando junto ao ouvido", "digitando mensagem no painel", etc.).\n\nA lavratura desprovida de qualquer relato circunstanciado, sem abordagem policial que pudesse aferir se o aparelho não se tratava de outro objeto ou se estava acoplado a suporte de navegação GPS veicular legalmente autorizado, desconstitui a presunção relativa de veracidade do ato.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
   {
     id: 'BLK-046',
@@ -524,7 +524,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Diferenciação legal entre parada e estacionamento conforme Anexo I do CTB.',
     contentTemplate: `III.7 - DA DESCARACTERIZAÇÃO DE ESTACIONAMENTO: MERA PARADA PARA EMBARQUE E DESEMBARQUE (ANEXO I DO CTB)\n\nO Anexo I do Código de Trânsito Brasileiro estabelece distinção categórica entre Estacionamento e Parada. Parada é a "imobilização do veículo com a finalidade e pelo tempo estritamente necessário para efetuar embarque ou desembarque de passageiros", ao passo que estacionamento pressupõe imobilização por tempo superior.\n\nO veículo do(a) Requerente apenas imobilizou-se momentaneamente pelo tempo estritamente indispensável ao desembarque de ocupante, mantendo-se o motor em funcionamento e o condutor ao volante com o pisca-alerta acionado, inexistindo a infração de estacionamento descrita no Art. 181 do CTB.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari'],
+    recommendedProcedures: ['recurso_jari'],
   },
 
   // ==========================================
@@ -538,7 +538,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Nulidade da autuação do Art. 165 / 165-A quando o agente não preencheu o Termo formal atestando sinais clínicos de alcoolemia.',
     contentTemplate: `III.8 - DA NULIDADE ABSOLUTA: AUSÊNCIA DE TERMO DE CONSTATAÇÃO DE SINAIS DE ALTERAÇÃO DA CAPACIDADE PSICOMOTORA (RES. CONTRAN Nº 432/2013)\n\nO Artigo 5º da Resolução CONTRAN nº 432/2013 exige que, na hipótese de não realização do teste de ar alveolar, os sinais de alteração da capacidade psicomotora deverão ser atestados mediante preenchimento obrigatório de Termo de Constatação de Sinais (Anexo II), com descrição circunstanciada de um conjunto consistente de sinais exteriores (odor etílico, olhos vermelhos, fala alterada, desequilíbrio).\n\nA omissão na lavratura do Termo de Constatação de Sinais impede a presunção de embriaguez, tornando a autuação manifestamente infundada e violadora do princípio da presunção de inocência e do direito à ampla defesa.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'processo_suspensao'],
+    recommendedProcedures: ['recurso_jari', 'processo_suspensao'],
   },
   {
     id: 'BLK-052',
@@ -548,7 +548,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Incompatibilidade da punição por mera recusa sem a demonstração fática de alteração na condução do veículo.',
     contentTemplate: `III.9 - DO PRINCÍPIO CONSTITUCIONAL DO NEMO TENETUR SE DETEGERE (ART. 5º, LXIII DA CF/88 E PACTO DE SAN JOSÉ DA COSTA RICA)\n\nO ordenamento jurídico brasileiro consagra o postulado universal de que ninguém pode ser compelido a produzir prova contra si mesmo (Art. 5º, inciso LXIII da Constituição Federal e Artigo 8º, 2, 'g' da Convenção Americana sobre Direitos Humanos).\n\nA aplicação de gravíssima penalidade pecuniária e suspensiva fundada estritamente no exercício regular de um direito fundamental, sem qualquer indício ou prova material de embriaguez ou perigo na direção, afigura-se desproporcional e inconstitucional.`,
     supportedVariables: [],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'processo_suspensao'],
+    recommendedProcedures: ['recurso_jari', 'processo_suspensao'],
   },
 
   // ==========================================
@@ -586,7 +586,7 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Bloco padronizado de requerimentos formais para Defesa Prévia.',
     contentTemplate: `IV - DOS PEDIDOS\n\nAnte todo o exposto, com fundamento nos preceitos do Código de Trânsito Brasileiro e nas garantias constitucionais vigentes, REQUER a Vossa Senhoria:\n\n1. O RECEBIMENTO da presente Defesa Prévia por ser própria, tempestiva e instruída com os documentos de praxe;\n2. O ACOLHIMENTO integral das preliminares suscitadas, reconhecendo-se a nulidade/decadência e determinando-se o ARQUIVAMENTO DEFINITIVO do Auto de Infração de Trânsito nº {{numero_ait}} com julgamento de seu registro como INSUBSISTENTE (Art. 281, parágrafo único do CTB);\n3. A EXTINÇÃO de qualquer sanção pecuniária correlata bem como a abstenção de lançamento de pontos no prontuário de CNH do condutor;\n4. Subsidiariamente, na remota hipótese de não acolhimento do arquivamento, a conversão da autuação em Advertência por Escrito ex officio (Art. 267 do CTB).`,
     supportedVariables: ['{{numero_ait}}'],
-    recommendedProcedures: ['defesa_previa'],
+    recommendedProcedures: [],
   },
   {
     id: 'BLK-057',
@@ -671,7 +671,6 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
       '{{cnh_requerente}}',
     ],
     recommendedProcedures: [
-      'defesa_previa',
       'recurso_jari',
       'recurso_cetran',
       'processo_suspensao',
@@ -705,6 +704,6 @@ export const DOCUMENT_BLOCKS: DocumentBlockModel[] = [
     description: 'Relação descritiva de documentos probatórios que instruem o processo administrativo.',
     contentTemplate: `ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE PEÇA:\n\n1. Cópia do Documento de Identidade (RG) e CPF do(a) Requerente;\n2. Cópia da Carteira Nacional de Habilitação (CNH) válida;\n3. Cópia do Certificado de Registro e Licenciamento do Veículo (CRLV-e);\n4. Cópia da Notificação de Autuação / Notificação de Penalidade do AIT nº {{numero_ait}};\n5. Documentos comprobatórios dos fatos alegados (fotografias, laudos do INMETRO, comprovantes de pagamento e certidões).`,
     supportedVariables: ['{{numero_ait}}'],
-    recommendedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran', 'processo_suspensao', 'processo_cassacao', 'indicacao_condutor', 'conversao_advertencia'],
+    recommendedProcedures: ['recurso_jari', 'recurso_cetran', 'processo_suspensao', 'processo_cassacao', 'indicacao_condutor', 'conversao_advertencia'],
   },
 ];

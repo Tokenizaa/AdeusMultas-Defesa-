@@ -44,11 +44,11 @@ interface PresetCase {
 const PRESET_CASES: PresetCase[] = [
   {
     label: '1. Defesa Prévia - Radar com Aferição Vencida (Art. 218, I)',
-    procedureType: 'defesa_previa',
+    procedureType: 'recurso_jari',
     description: 'Auto de infração de excesso de velocidade captado por radar com laudo metrológico do INMETRO expirado há mais de 12 meses.',
     payload: {
       caseId: 'CASE-TEST-001',
-      procedureType: 'defesa_previa',
+      procedureType: 'recurso_jari',
       infraction: {
         id: 'inf-001',
         aitNumber: 'E025988412',

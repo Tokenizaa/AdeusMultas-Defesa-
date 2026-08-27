@@ -252,8 +252,11 @@ class EmailService {
     const totalValue = data.infractions.reduce((sum, inf) => sum + inf.fineAmount, 0);
     const html = defenseReadyTemplate(data);
 
+    if (!data.userName.includes('@')) {
+      return { success: false, error: 'E-mail do usuário inválido para notificação de defesa pronta.' };
+    }
     return this.send({
-      to: data.userName.includes('@') ? data.userName : `${data.userName}@placeholder.com`,
+      to: data.userName,
       subject: `🛡️ Sua defesa está pronta — ${data.infractions.length} infração(ões) — R$ ${totalValue.toFixed(2)}`,
       html,
       tags: [
@@ -269,8 +272,11 @@ class EmailService {
   async sendPaymentConfirmation(data: PaymentConfirmationEmailData): Promise<EmailResult> {
     const html = paymentConfirmationTemplate(data);
 
+    if (!data.userName.includes('@')) {
+      return { success: false, error: 'E-mail do usuário inválido para confirmação de pagamento.' };
+    }
     return this.send({
-      to: data.userName.includes('@') ? data.userName : `${data.userName}@placeholder.com`,
+      to: data.userName,
       subject: `✅ Pagamento confirmado — Caso #${data.caseId}`,
       html,
       tags: [

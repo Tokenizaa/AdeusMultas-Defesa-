@@ -509,7 +509,6 @@ export const AUTUADOR_BODIES: AutuadorBodyInfo[] = [
 ];
 
 export const PROCEDURE_TITLES: Record<ProcedureType, string> = {
-  defesa_previa: 'Defesa Prévia (Fase da Notificação de Autuação)',
   recurso_jari: 'Recurso à JARI — 1ª Instância Administrativa',
   recurso_cetran: 'Recurso ao CETRAN / CONTRAN — 2ª Instância Final',
   conversao_advertencia: 'Requerimento de Conversão em Advertência por Escrito (Art. 267 CTB)',

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { notificationService } from '../services/notification-service';
 import { pushService } from '../services/push-service';
 import { emailService } from '../services/email-service';
-import { whatsAppService } from '../services/whatsapp-service';
+import { whatsappService } from '../services/whatsapp-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
@@ -145,7 +145,14 @@ router.post('/send-push', async (req, res) => {
 });
 
 // POST /api/notifications/send-test - Send test push
-router.post('/send-test', async (req, res) => {
+router.post('/send-test', requireAdmin, async (req, res) => {
+  // [PRODUCTION] Bloquear testes com dados fictícios em produção
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(501).json({
+      error: 'Endpoint de teste indisponível em produção',
+      message: 'Envio de notificações de teste não permitido em ambiente de produção.',
+    });
+  }
   try {
     const { title, body, userEmail, fcmToken } = req.body;
 
@@ -213,7 +220,7 @@ router.post('/push', authenticateToken, async (req, res) => {
     if (!pushResult.success) {
       return res.status(503).json({
         success: false,
-        error: pushResult.error || 'Serviço de Push Notification indisponível ou não configurado.',
+        error: (pushResult as any).error || pushResult.errors?.[0] || 'Serviço de Push Notification indisponível ou não configurado.',
       });
     }
 
@@ -283,7 +290,7 @@ router.post('/whatsapp/send', requireAdmin, async (req, res) => {
       }
     }
 
-    const result = await whatsAppService.sendText({
+    const result = await whatsappService.sendText({
       to: phone.replace(/\D/g, ''),
       message: messageText,
     });
@@ -310,10 +317,45 @@ router.post('/whatsapp/send', requireAdmin, async (req, res) => {
   }
 });
 
-// Alias for backwards compatibility with legacy callers, routing to real WhatsApp sender
+// Alias para desenvolvimento — executa a mesma lógica de envio sem routing interno frágil
 router.post('/whatsapp/simulate', requireAdmin, async (req, res, next) => {
-  req.url = '/whatsapp/send';
-  router.handle(req, res, next);
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(501).json({
+      error: 'Endpoint de simulação indisponível em produção',
+      message: 'Simulação de WhatsApp não permitida em ambiente de produção.',
+    });
+  }
+  try {
+    const { phone, eventType, caseId, customText } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Número de telefone é obrigatório.' });
+    }
+
+    let messageText = customText || '';
+    if (!messageText) {
+      switch (eventType) {
+        case 'case_ready':
+          messageText = `🛡️ Sua defesa está pronta! Caso #${caseId || 'N/A'}. Acesse para visualizar.`;
+          break;
+        case 'status_update':
+          messageText = `📋 O status do caso #${caseId || 'N/A'} foi atualizado. Consulte na plataforma.`;
+          break;
+        case 'payment_confirmed':
+          messageText = `✅ Pagamento confirmado! Caso #${caseId || 'N/A'} em processamento.`;
+          break;
+        default:
+          messageText = `🔔 DefesAi: Você tem uma nueva atualização. Acesse a plataforma.`;
+      }
+    }
+
+    const result = await whatsappService.sendText({ to: phone.replace(/\D/g, ''), message: messageText });
+    if (!result.success) {
+      return res.status(503).json({ success: false, error: result.error || 'Falha ao enviar WhatsApp.' });
+    }
+    res.json({ success: true, sentAt: new Date().toISOString(), channel: 'whatsapp', phone, messageId: result.messageId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao simular envio WhatsApp' });
+  }
 });
 
 export default router;

@@ -103,7 +103,7 @@ function assertAmountMatchesOffer(amount: number, offer: CommercialOffer): void 
  * incluindo o rol dinâmico de documentos do procedimento).
  */
 function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseDraft'] {
-  const procedureType = domain.serviceType || 'defesa_previa';
+  const procedureType = domain.serviceType || 'recurso_jari';
   const selectedArgs = domain.analysis?.recommendedArguments || [];
 
   const defense = RagPipeline.generateDefenseDraft(
@@ -232,12 +232,19 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || 'Não foi possível determinar a oferta comercial.',
-        hint: 'Informe serviceType válido (ex: defesa_previa) ou verifique o catálogo.',
+        hint: 'Informe serviceType válido (ex: recurso_jari) ou verifique o catálogo.',
       });
     }
 
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
+
+    if (gateway.id === 'pagbank') {
+      const userRole = (req as any).user?.role;
+      if (userRole && userRole !== 'admin') {
+        return res.status(403).json({ error: "Não autorizado. Faça login como administrador." });
+      }
+    }
 
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
@@ -253,6 +260,21 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     });
 
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
+
+    logger.info('payments', 'gateway', 'create_pix_order', 'PIX order created', {
+      serviceType: offerResult.offer.serviceType,
+      pricingId: offerResult.offer.commercialId,
+      baseAmount: offerResult.offer.baseAmount,
+      discounts: {
+        promotion: offerResult.offer.promotionDiscount,
+        firstDocuments: offerResult.offer.firstDocumentsDiscount,
+        coupon: offerResult.offer.couponDiscount,
+      },
+      finalAmount: offerResult.offer.finalAmount,
+      gateway: gateway.id,
+      environment: process.env.NODE_ENV,
+      userRole: (req as any).user?.role,
+    });
 
     res.json({
       success: true,
@@ -281,29 +303,27 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
       return res.status(400).json({ error: 'txId é obrigatório' });
     }
 
-    // Consulta o gateway ativo primeiro; se PENDING, tenta os demais configurados
-    const order: GatewayId[] = [gatewayManager.getActiveGatewayId(), 'pagbank', 'ggpixapi'];
-    const tried = new Set<string>();
-    let lastStatus = 'PENDING';
-
-    for (const id of order) {
-      if (tried.has(id)) continue;
-      tried.add(id);
-      const gw = gatewayManager.getGateway(id);
-      if (!gw || !gw.isConfigured()) continue;
-
-      try {
-        const result = await gw.getPaymentStatus(txId);
-        lastStatus = result.status;
-        if (result.status !== 'PENDING') {
-          return res.json({ success: true, txId, status: result.status, paidAt: result.paidAt });
-        }
-      } catch {
-        // Gateway indisponível — tenta o próximo
-      }
+    // Consulta apenas o gateway ativo. Em produção, NÃO há fallback para PagBank.
+    const activeGatewayId = gatewayManager.getActiveGatewayId();
+    const gw = gatewayManager.getGateway(activeGatewayId);
+    if (!gw || !gw.isConfigured()) {
+      return res.status(500).json({ error: 'Gateway ativo não configurado.' });
     }
 
-    return res.json({ success: true, txId, status: lastStatus });
+    try {
+      const result = await gw.getPaymentStatus(txId);
+      if (result.status !== 'PENDING') {
+        return res.json({ success: true, txId, status: result.status, paidAt: result.paidAt });
+      }
+      return res.json({ success: true, txId, status: result.status });
+    } catch (err: any) {
+      logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', {
+        error: err.message,
+        gateway: activeGatewayId,
+        environment: process.env.NODE_ENV,
+      });
+      return res.status(500).json({ error: err.message || 'Erro ao consultar status do pagamento' });
+    }
   } catch (err: any) {
     logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', { error: err.message });
     return res.status(500).json({ error: err.message });
@@ -336,7 +356,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     if (!serviceType) {
       return res.status(400).json({
         error: 'serviceType é obrigatório para criar o pagamento.',
-        hint: 'Informe serviceType válido (ex: defesa_previa).',
+        hint: 'Informe serviceType válido (ex: recurso_jari).',
       });
     }
 
@@ -362,6 +382,14 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     }
 
     const gateway = gatewayManager.getActiveGateway();
+
+    if (gateway.id === 'pagbank') {
+      const userRole = (req as any).user?.role;
+      if (userRole && userRole !== 'admin') {
+        return res.status(403).json({ error: "Não autorizado. Faça login como administrador." });
+      }
+    }
+
     if (gateway.id !== 'pagbank') {
       return res.status(400).json({
         error: 'Gateway ativo não suporta pagamento com cartão de crédito.',
@@ -370,6 +398,13 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
         supportedMethods: ['pix'],
       });
     }
+
+    logger.info('payments', 'gateway', 'credit_card_gateway_check', 'Credit card gateway validated', {
+      gateway: gateway.id,
+      environment: process.env.NODE_ENV,
+      userRole: (req as any).user?.role,
+      serviceType: offerResult.offer?.serviceType,
+    });
 
     const orderResult = await pagBankIntegration.createCreditCardOrder({
       caseId: caseId || `case_${Date.now()}`,
@@ -487,7 +522,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
         domain.paidAt = new Date().toISOString();
         domain.status = 'defesa_pronta';
         domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || 'defesa_previa';
+        domain.serviceType = domain.serviceType || 'recurso_jari';
 
         const paymentMethod = (domain.payment?.paymentMethod ||
           (webhookResult.transactionType === 'CREDIT_CARD' ? 'credit_card' : 'pix'));
@@ -610,7 +645,7 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
         domain.paidAt = event.paidAt || new Date().toISOString();
         domain.status = 'defesa_pronta';
         domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || 'defesa_previa';
+        domain.serviceType = domain.serviceType || 'recurso_jari';
 
         domain.payment = {
           status: 'approved',

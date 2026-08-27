@@ -1,5 +1,4 @@
 export type ProcedureType =
-  | 'defesa_previa'
   | 'recurso_jari'
   | 'recurso_cetran'
   | 'conversao_advertencia'
@@ -427,7 +426,7 @@ export interface AuditLogEntry {
 export interface CaseAnalysisData {
   serviceType: ProcedureType;
   infractionType: 'radar' | 'lei_seca' | 'celular' | 'vermelho' | 'estacionamento' | 'cnh_suspensao' | 'outro';
-  defenseStage: 'defesa_previa' | 'recurso_jari' | 'recurso_cetran' | 'conversao_advertencia';
+  defenseStage: 'recurso_jari' | 'recurso_cetran' | 'conversao_advertencia';
   infraction: InfractionData;
   vehicle: VehicleData;
   uploadedFileName?: string;

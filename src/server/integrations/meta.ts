@@ -228,7 +228,7 @@ class MetaIntegrationBridge {
         id: p.id,
         name: p.name,
         category: p.category,
-        access_token: 'PROTECTED_SERVER_TOKEN',
+        access_token: null,
         instagram_business_account: p.instagramBusinessAccount
           ? {
               id: p.instagramBusinessAccount.id,

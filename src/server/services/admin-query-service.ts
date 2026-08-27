@@ -361,7 +361,7 @@ export class AdminQueryService {
         infractionCode: c.infraction?.infractionCode || '745-50',
         infractionDescription: c.infraction?.description || 'Excesso de velocidade',
         organ: c.infraction?.autuadorBody || 'DETRAN-SP',
-        procedureType: c.serviceType || 'defesa_previa',
+        procedureType: c.serviceType || 'recurso_jari',
         procedureLabel: c.serviceType === 'conversao_advertencia'
           ? 'Conversão em Advertência (Art. 267 CTB)'
           : c.serviceType === 'recurso_jari'

@@ -243,69 +243,108 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
   );
 
   // 8. Webhook GET Subscription Challenge Verification
-  await runTest(
-    'WH-01',
-    'Verificação de desafio GET do webhook Meta (hub.challenge / verify_token)',
-    'Webhooks',
-    async () => {
-      const token = process.env.META_WEBHOOK_VERIFY_TOKEN || 'defesai_meta_webhook_secret_verify_token';
-      const response = metaWebhookService.verifyChallenge('subscribe', token, 'challenge_code_12345');
-      if (response !== 'challenge_code_12345') {
-        throw new Error('Verificação de challenge falhou para token correto');
-      }
+  // Nota: sem META_WEBHOOK_VERIFY_TOKEN configurado o challenge É rejeitado (comportamento seguro).
+  // O teste abaixo só executa se o token está configurado no ambiente.
+  const configuredVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  if (configuredVerifyToken) {
+    await runTest(
+      'WH-01',
+      'Verificação de desafio GET do webhook Meta (hub.challenge / verify_token) — rejeita token inválido e aceita o correto',
+      'Webhooks',
+      async () => {
+        const response = metaWebhookService.verifyChallenge('subscribe', configuredVerifyToken, 'challenge_code_12345');
+        if (response !== 'challenge_code_12345') {
+          throw new Error('Verificação de challenge falhou para token correto');
+        }
 
-      const invalid = metaWebhookService.verifyChallenge('subscribe', 'wrong_token', 'challenge_code_12345');
-      if (invalid !== null) {
-        throw new Error('Webhook deveria rejeitar token incorreto');
+        const invalid = metaWebhookService.verifyChallenge('subscribe', 'wrong_token', 'challenge_code_12345');
+        if (invalid !== null) {
+          throw new Error('Webhook deveria rejeitar token incorreto');
+        }
+
+        const noToken = metaWebhookService.verifyChallenge('subscribe', undefined, 'challenge_code_12345');
+        if (noToken !== null) {
+          throw new Error('Webhook deveria rejeitar chamada sem token');
+        }
       }
-    }
-  );
+    );
+  }
 
   // 9. Webhook POST HMAC SHA-256 Signature Verification
-  await runTest(
-    'WH-02',
-    'Verificação de assinatura criptográfica HMAC SHA-256 do webhook Meta',
-    'Webhooks',
-    async () => {
-      const secret = process.env.META_APP_SECRET || 'test_secret_key';
-      const payload = JSON.stringify({ object: 'page', entry: [{ id: '109847291847192', time: Date.now() }] });
-      const hmac = crypto.createHmac('sha256', secret);
-      hmac.update(payload);
-      const signature = `sha256=${hmac.digest('hex')}`;
+  // Nota: sem META_APP_SECRET, verifySignature RECUSA (bypass removido por segurança).
+  const configuredAppSecret = process.env.META_APP_SECRET;
+  if (configuredAppSecret) {
+    await runTest(
+      'WH-02',
+      'Verificação de assinatura criptográfica HMAC SHA-256 do webhook Meta',
+      'Webhooks',
+      async () => {
+        const payload = JSON.stringify({ object: 'page', entry: [{ id: '109847291847192', time: Date.now() }] });
+        const hmac = crypto.createHmac('sha256', configuredAppSecret);
+        hmac.update(payload);
+        const signature = `sha256=${hmac.digest('hex')}`;
 
-      const isValid = metaWebhookService.verifySignature(payload, signature);
-      if (!isValid) {
-        throw new Error('Assinatura HMAC válida foi incorretamente rejeitada');
+        const isValid = metaWebhookService.verifySignature(payload, signature);
+        if (!isValid) {
+          throw new Error('Assinatura HMAC válida foi incorretamente rejeitada');
+        }
+
+        // Garantir que sem header de assinatura → rejeitado
+        const noSig = metaWebhookService.verifySignature(payload, undefined);
+        if (noSig) {
+          throw new Error('Payload sem assinatura deveria ser rejeitado');
+        }
       }
-    }
-  );
+    );
+  }
 
   // 10. Webhook Ingestion, Idempotency and Ingestion History
-  await runTest(
-    'WH-03',
-    'Ingestão assíncrona, idempotência e auditoria de webhooks',
-    'Webhooks',
-    async () => {
-      const payload = {
-        object: 'page',
-        entry: [
-          {
-            id: 'page_fb_123',
-            time: 1723901823,
-            changes: [{ field: 'feed', value: { item: 'post', verb: 'add', post_id: 'post_999' } }],
-          },
-        ],
-      };
-      const result = await metaWebhookService.handleWebhookPayload(JSON.stringify(payload), undefined, payload);
-      if (!result.processed || !result.eventId) {
-        throw new Error('Processamento do payload do webhook falhou');
+  const payloadWh03 = {
+    object: 'page',
+    entry: [
+      {
+        id: 'page_fb_123',
+        time: 1723901823,
+        changes: [{ field: 'feed', value: { item: 'post', verb: 'add', post_id: 'post_999' } }],
+      },
+    ],
+  };
+  if (configuredAppSecret) {
+    await runTest(
+      'WH-03',
+      'Ingestão assíncrona, idempotência e auditoria de webhooks (assinado)',
+      'Webhooks',
+      async () => {
+        const payloadStr = JSON.stringify(payloadWh03);
+        const hmac = crypto.createHmac('sha256', configuredAppSecret);
+        hmac.update(payloadStr);
+        const sig = `sha256=${hmac.digest('hex')}`;
+        const result = await metaWebhookService.handleWebhookPayload(payloadStr, sig, payloadWh03);
+        if (!result.processed || !result.eventId) {
+          throw new Error('Processamento do payload do webhook falhou');
+        }
+        const logs = metaWebhookService.getRecentWebhooks();
+        if (logs.length === 0 || !logs.some((l) => l.id === result.eventId)) {
+          throw new Error('Histórico de webhooks não registrou o evento');
+        }
       }
-      const logs = metaWebhookService.getRecentWebhooks();
-      if (logs.length === 0 || !logs.some((l) => l.id === result.eventId)) {
-        throw new Error('Histórico de webhooks não registrou o evento');
+    );
+  } else {
+    await runTest(
+      'WH-03',
+      'Webhook rejeita payloads não assinados quando META_APP_SECRET não configurado',
+      'Webhooks',
+      async () => {
+        try {
+          await metaWebhookService.handleWebhookPayload(JSON.stringify(payloadWh03), undefined, payloadWh03);
+          throw new Error('Payload não assinado deveria ser rejeitado quando META_APP_SECRET ausente');
+        } catch (err: any) {
+          if (err.message.includes('assinatura')) return; // Esperado: rejeição segura
+          throw err;
+        }
       }
-    }
-  );
+    );
+  }
 
   // 11. Insights & Analytics Normalization
   await runTest(

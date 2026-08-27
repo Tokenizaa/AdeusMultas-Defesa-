@@ -23,7 +23,7 @@ router.post('/offers/resolve', (req, res) => {
     if (!serviceType || typeof serviceType !== 'string') {
       return res.status(400).json({
         error: 'serviceType é obrigatório.',
-        hint: 'Envie o ProcedureType identificado no onboarding (ex: defesa_previa).',
+        hint: 'Envie o ProcedureType identificado no onboarding (ex: recurso_jari).',
       });
     }
 
@@ -220,7 +220,7 @@ router.post(['/coupons/:code/validate', '/admin/commercial/coupons/:code/validat
   try {
     const { code } = req.params;
     const { orderAmount, serviceType, userId } = req.body ?? {};
-    const result = commercialService.validateCoupon(code, orderAmount ?? 0, serviceType ?? 'defesa_previa', userId);
+    const result = commercialService.validateCoupon(code, orderAmount ?? 0, serviceType ?? 'recurso_jari', userId);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -232,7 +232,7 @@ router.post(['/coupons/:code/redeem', '/admin/commercial/coupons/:code/redeem'],
   try {
     const { code } = req.params;
     const { userId, userName, caseId, orderAmount, serviceType } = req.body ?? {};
-    const result = commercialService.redeemCoupon(code, userId, userName, caseId, orderAmount ?? 0, serviceType ?? 'defesa_previa');
+    const result = commercialService.redeemCoupon(code, userId, userName, caseId, orderAmount ?? 0, serviceType ?? 'recurso_jari');
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

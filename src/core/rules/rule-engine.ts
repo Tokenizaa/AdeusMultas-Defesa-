@@ -249,7 +249,7 @@ export class ExpertRuleEngine {
     }
 
     // 3. Determine recommended procedure based on rules
-    let procedure: ProcedureType = 'defesa_previa';
+    let procedure: ProcedureType = 'recurso_jari';
     if (infraction.infractionCode === '516-91' || infraction.infractionCode === '747-10') {
       procedure = 'suspensao_cnh';
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-051')) {

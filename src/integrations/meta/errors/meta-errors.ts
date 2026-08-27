@@ -95,7 +95,7 @@ export class MetaContentPolicyRejectionError extends MetaIntegrationError {
 
 export class MetaWebhookSignatureInvalidError extends MetaIntegrationError {
   constructor(details?: any) {
-    super('Assinatura HMAC SHA-256 do webhook Meta inválida.', 'META_WEBHOOK_SIGNATURE_INVALID', 401, details);
+    super('assinatura HMAC SHA-256 do webhook Meta inválida.', 'META_WEBHOOK_SIGNATURE_INVALID', 401, details);
   }
 }
 

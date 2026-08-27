@@ -86,6 +86,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   const [testMode, setTestMode] = useState<boolean>(false);
 
   useEffect(() => {
+    console.log("[DocumentCheckoutStep] serviceType:", serviceType, "couponCode:", couponCode);
     let active = true;
     fetch('/api/payments/gateway/status')
       .then((r) => (r.ok ? r.json() : null))
@@ -98,6 +99,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
 
   // Resolve preço do catálogo comercial (funciona para qualquer método de pagamento)
   useEffect(() => {
+    console.log("[DocumentCheckoutStep] serviceType:", serviceType, "couponCode:", couponCode);
     let active = true;
     fetch(`/api/payments/resolve-price?serviceType=${encodeURIComponent(serviceType)}${couponCode ? `&couponCode=${encodeURIComponent(couponCode)}` : ''}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -122,15 +124,16 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     return () => { active = false; };
   }, [serviceType, couponCode]);
 
-  // Preço efetivo: breakdown (finalAmount) > catálogo > PIX response > documentData > fallback 89.90
-  const effectivePrice: number =
-    resolvedBreakdown?.finalAmount
-    ?? resolvedPrice
-    ?? pixData?.amount
-    ?? (typeof documentData.price === 'number' ? documentData.price : 89.90);
+// Preço efetivo: breakdown (finalAmount) > catálogo > PIX response — sem fallback hardcoded
+   const effectivePrice: number | null =
+     resolvedBreakdown?.finalAmount
+     ?? resolvedPrice
+     ?? pixData?.amount
+     ?? null;
 
   // Load PIX when payment method is PIX
   useEffect(() => {
+    console.log("[DocumentCheckoutStep] serviceType:", serviceType, "couponCode:", couponCode);
     if (paymentMethod !== 'pix') return;
 
     async function loadPix() {
@@ -191,18 +194,17 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
   };
 
   const buildCasePayload = (): CaseDomain => {
-    return {
+return {
       id: currentCaseId || `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title: `Recurso Auto ${infractionData.aitNumber || 'N/A'} — ${infractionData.ctbArticle || 'Art. 218 CTB'}`,
       clientName: documentData.applicantName,
       clientEmail: documentData.applicantEmail,
       clientPhone: documentData.applicantPhone,
       clientCpf: documentData.applicantCpf,
-      // Identidade do usuário autenticado — mapeada pelo backend para cases.user_id
       userId: userId || undefined,
       status: 'defesa_pronta',
       currentStage: 3,
-      serviceType,
+      serviceType: serviceType || undefined,
       vehicle: vehicleData,
       infraction: infractionData,
       analysis,
@@ -211,7 +213,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
       paidAt: new Date().toISOString(),
       payment: {
         status: 'approved',
-        amount: effectivePrice,
+        amount: Number((pixData?.amount ?? effectivePrice ?? 0).toFixed(2)),
         paidAt: new Date().toISOString(),
         paymentMethod: paymentMethod === 'credit_card' ? 'credit_card' : 'pix',
       },
@@ -355,7 +357,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
               </div>
 
               {(() => {
-                const displayBaseAmount = resolvedBreakdown?.baseAmount ?? 197;
+                const displayBaseAmount = resolvedBreakdown?.baseAmount ?? null;
                 const displayPromotionDiscount = resolvedBreakdown?.promotionDiscount ?? 0;
                 const displayFirstDocumentsDiscount = resolvedBreakdown?.firstDocumentsDiscount ?? 0;
                 const isFirstThreeDocuments = (resolvedBreakdown?.documentNumber ?? 0) <= 3;
@@ -363,7 +365,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                   <div className="border-t border-slate-200 pt-3 space-y-1">
                     <div className="flex justify-between text-slate-500 text-xs font-mono">
                       <span>Preço padrão:</span>
-                      <span className="line-through">R$ {displayBaseAmount.toFixed(2).replace('.', ',')}</span>
+                      <span className="line-through">{displayBaseAmount !== null ? `R$ ${displayBaseAmount.toFixed(2).replace('.', ',')}` : 'Carregando...'}</span>
                     </div>
                     {displayPromotionDiscount > 0 && (
                       <div className="flex justify-between text-emerald-600 text-xs font-mono font-bold">
@@ -391,9 +393,9 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                         <p className="text-[10px] text-slate-500 font-mono">Sem mensalidade ou cobranças adicionais</p>
                       </div>
                       <div className="text-right">
-                        <span className="text-2xl font-extrabold text-slate-900 font-mono">
-                          R$ {effectivePrice.toFixed(2).replace('.', ',')}
-                        </span>
+<span className="text-2xl font-extrabold text-slate-900 font-mono">
+                           {effectivePrice !== null ? `R$ ${effectivePrice.toFixed(2).replace('.', ',')}` : 'Carregando...'}
+                         </span>
                       </div>
                     </div>
                   </div>
@@ -474,7 +476,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">{effectivePrice !== null ? `R$ ${effectivePrice.toFixed(2).replace('.', ',')}` : 'Carregando...'}</p>
                 </div>
               </div>
 
@@ -595,7 +597,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">R$ {effectivePrice.toFixed(2).replace('.', ',')}</p>
+                  <p className="font-extrabold text-sm text-slate-900 font-mono">{effectivePrice !== null ? `R$ ${effectivePrice.toFixed(2).replace('.', ',')}` : 'Carregando...'}</p>
                 </div>
               </div>
 

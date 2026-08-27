@@ -53,7 +53,7 @@ export const USER_SITUATIONS: ServiceDefinition[] = [
     title: 'Multa de Trânsito',
     subtitle: 'Radar, celular ao volante, sinal vermelho, estacionamento, rodízio ou infrações gerais.',
     badge: 'Análise Gratuita',
-    mappedProcedure: 'defesa_previa',
+    mappedProcedure: 'recurso_jari',
   },
   {
     id: 'conversao_advertencia',
@@ -103,7 +103,7 @@ export const USER_PROCESS_STAGES: StageDefinition[] = [
     title: 'Recebi a primeira notificação (Sem boleto)',
     subtitle: 'Notificação de Autuação (NA). Prazo aberto para Defesa Prévia antes da aplicação de penalidade.',
     badge: 'Fase Inicial • Defesa Prévia',
-    mappedProcedure: 'defesa_previa',
+    mappedProcedure: 'recurso_jari',
   },
   {
     id: 'notificacao_penalidade',
@@ -138,7 +138,7 @@ export const USER_PROCESS_STAGES: StageDefinition[] = [
     title: 'Não tenho certeza da fase',
     subtitle: 'Vamos identificar a melhor estratégia jurídica pelo número do auto e pelo órgão autuador.',
     badge: 'Diagnóstico Automático',
-    mappedProcedure: 'defesa_previa',
+    mappedProcedure: 'recurso_jari',
   },
 ];
 

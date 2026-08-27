@@ -14,56 +14,6 @@ export interface ExtendedDocumentTemplateModel extends DocumentTemplateModel {
 
 export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
   // ==========================================
-  // 1. DEFESA PRÉVIA (TPL-01)
-  // ==========================================
-  {
-    id: 'TPL_DEFESA_PREVIA',
-    code: 'DEFESA_PREVIA_V2026',
-    name: 'Petição Padrão de Defesa Prévia (Notificação de Autuação)',
-    procedureType: 'defesa_previa',
-    version: 'v2026.1',
-    description: 'Petição formal apresentada perante a autoridade executiva de trânsito contra a Notificação de Autuação, com foco em vícios de forma do AIT, decadência de 30 dias e atipicidade.',
-    fillingRules: [
-      'Identificar o órgão autuador e endereçar à autoridade executiva competente',
-      'Inserir a qualificação completa do proprietário e dados do veículo',
-      'Articular preliminares formais (decadência do Art. 281 II, erro do AIT) antes do mérito',
-      'Concluir com requerimento expresso de insubsistência e arquivamento definitivo do AIT',
-    ],
-    blockIds: ['BLK-001', 'BLK-008', 'BLK-013', 'BLK-026', 'BLK-039', 'BLK-056', 'BLK-066', 'BLK-068'],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-001')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-013')!,
-      {
-        id: 'BLK_PRELIMINARES_DEFESA',
-        type: 'preliminary_arguments',
-        title: 'Das Preliminares de Nulidade e Decadência',
-        isMandatory: false,
-        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE E VÍCIOS FORMAIS\n\n{{bloco_preliminares_formatado}}`,
-        supportedVariables: ['{{bloco_preliminares_formatado}}'],
-      },
-      {
-        id: 'BLK_MERITO_DEFESA',
-        type: 'merit_arguments',
-        title: 'Do Mérito e dos Fundamentos Técnicos',
-        isMandatory: true,
-        contentTemplate: `III - DO MÉRITO E DA ATIPICIDADE DA CONDUTA\n\n{{bloco_merito_formatado}}`,
-        supportedVariables: ['{{bloco_merito_formatado}}'],
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-056')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
-    ].map((b, idx) => ({
-      id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables,
-    })),
-  },
-
-  // ==========================================
   // 2. RECURSO À JARI - 1ª INSTÂNCIA (TPL-02)
   // ==========================================
   {

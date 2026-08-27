@@ -31,10 +31,10 @@ export class MetaAdapter {
 
   private initializeFromEnvironment(): void {
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-    const pageId = process.env.META_PAGE_ID || '109847291847192';
-    const igId = process.env.INSTAGRAM_ACCOUNT_ID || '17841400928374829';
+    const pageId = process.env.META_PAGE_ID;
+    const igId = process.env.INSTAGRAM_ACCOUNT_ID;
 
-    if (systemToken) {
+    if (systemToken && pageId) {
       this.activeConnection = {
         id: 'conn_meta_env',
         userId: 'usr_system_admin',
@@ -158,21 +158,16 @@ export class MetaAdapter {
       let rawPages: RawMetaPageItem[] = [];
       try {
         rawPages = await metaPagesService.fetchPages(userToken);
-      } catch {
-        rawPages = [
-          {
-            id: 'page_fb_defesai_primary',
-            name: 'DefesAi — Defesas de Multas de Trânsito',
-            category: 'LegalTech',
-            access_token: userToken,
-            tasks: ['MANAGE', 'CREATE_CONTENT', 'PUBLISH'],
-            instagram_business_account: {
-              id: 'ig_defesai_primary',
-              username: 'defesai.br',
-              name: 'DefesAi Brasil',
-            },
-          },
-        ];
+      } catch (pageErr: any) {
+        logger.error('meta', 'adapter', 'oauth_fetch_pages_failed',
+          `Falha ao buscar páginas do Meta: ${pageErr.message}. Verifique as permissões pages_show_list.`);
+        throw new Error(
+          `Não foi possível recuperar suas páginas do Facebook. Verifique se o app tem permissão pages_show_list. Erro: ${pageErr.message}`
+        );
+      }
+
+      if (rawPages.length === 0) {
+        throw new Error('Nenhuma página do Facebook encontrada para este token. Verifique se você é admin de pelo menos uma página.');
       }
 
       const entity: MetaConnectionEntity = {

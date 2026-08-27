@@ -8,6 +8,8 @@ export interface GenerateImageOptions {
   referenceImageBase64?: string;
   referenceMimeType?: string;
   stylePreset?: string;
+  /** Quando true, NÃO gera IA — retorna placeholder SVG (exemplo: ambiente sem GEMINI_API_KEY). */
+  allowFallback?: boolean;
 }
 
 export interface GenerateVideoOptions {
@@ -48,6 +50,8 @@ export class AIMediaService {
     aspectRatio?: string;
     promptUsed?: string;
     error?: string;
+    /** true quando a saída é SVG placeholder (nenhum modelo IA respondeu) */
+    isFallback?: boolean;
   }> {
     const {
       prompt,
@@ -139,12 +143,30 @@ export class AIMediaService {
       }
     }
 
+    // Fallback SVG placeholder quando IA indisponível E caller explícito permitiu
+    if (options.allowFallback) {
+      const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio || '1:1', imageSize || '1K');
+      logger.warn('ai_media', 'service', 'generateImage',
+        'Nenhum modelo IA disponível — retornando SVG placeholder', { promptUsed: fullPrompt });
+      return {
+        success: true,
+        imageUrl: fallbackUrl,
+        imageBase64: undefined,
+        mimeType: 'image/svg+xml',
+        promptUsed: fullPrompt,
+        aspectRatio,
+        imageSize,
+        isFallback: true,
+      };
+    }
+
     return {
       success: false,
       error: `Falha na geração de imagem com IA: ${lastError || 'Nenhum modelo de imagem retornou conteúdo válido.'}`,
       promptUsed: fullPrompt,
       aspectRatio,
       imageSize,
+      isFallback: false,
     };
   }
 

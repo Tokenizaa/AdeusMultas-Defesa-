@@ -15,29 +15,39 @@ export class MetaWebhookService {
   private recentWebhooks: MetaWebhookEventRecord[] = [];
   private processedEventIds = new Set<string>();
 
-  private getVerifyToken(): string {
+  private getVerifyToken(): string | undefined {
     return (
-      process.env.META_WEBHOOK_VERIFY_TOKEN ||
-      'defesai_meta_webhook_secret_verify_token'
+      process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      process.env.META_VERIFY_TOKEN?.trim() ||
+      undefined
     );
   }
 
-  private getAppSecret(): string {
+  private getAppSecret(): string | undefined {
     return (
-      process.env.META_APP_SECRET ||
-      process.env.FACEBOOK_APP_SECRET ||
-      ''
+      process.env.META_APP_SECRET?.trim() ||
+      process.env.FACEBOOK_APP_SECRET?.trim() ||
+      undefined
     );
   }
 
   /**
    * Validates GET verification challenge from Meta Webhook Subscription setup
+   * SECURITY: Rejeita desafio se META_WEBHOOK_VERIFY_TOKEN não está configurado.
+   * Bypass removido: fallback hardcoded era vetor de ataque.
    */
   public verifyChallenge(mode?: string, token?: string, challenge?: string): string | null {
     const configuredToken = this.getVerifyToken();
 
+    // NÃO PERMITIR bypass de segurança: sem env var configurada, rejeitar
+    if (!configuredToken) {
+      logger.warn('meta', 'webhook', 'challenge_no_configured_token',
+        'Webhook challenge rejeitado: META_WEBHOOK_VERIFY_TOKEN ausente. Configure antes de registrar o webhook.');
+      return null;
+    }
+
     if (mode === 'subscribe' && token === configuredToken) {
-      logger.info('meta', 'webhook', 'challenge_verified', 'Webhook Meta verificado com sucesso');
+      logger.info('meta', 'webhook', 'challenge_verified', 'Webhook challenge verificado com sucesso');
       return challenge || 'OK';
     }
 
@@ -49,12 +59,17 @@ export class MetaWebhookService {
 
   /**
    * Verifies X-Hub-Signature-256 HMAC header
+   * SECURITY: Sem META_APP_SECRET configurado, NÃO aceita payloads não assinados.
+   * O bypass anterior (return true quando sem segredo) permitia injeção de webhooks falsos.
    */
   public verifySignature(rawPayload: string | Buffer, signatureHeader?: string): boolean {
     const appSecret = this.getAppSecret();
+
+    // Sem app secret configurado → rejeitar assinatura (não existe forma de validar)
     if (!appSecret) {
-      // If secret is not configured in local environment, allow pass-through with warning
-      return true;
+      logger.warn('meta', 'webhook', 'signature_no_secret',
+        'Verificação HMAC rejeitada: META_APP_SECRET ausente no ambiente. Configure para receber eventos legitimamente.');
+      return false;
     }
 
     if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {

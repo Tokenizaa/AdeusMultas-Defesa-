@@ -345,6 +345,12 @@ router.post('/inbox/self-test', async (_req, res) => {
  * Allows testing incoming traffic from drivers directly from UI
  */
 router.post('/inbox/simulate-inbound', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(501).json({
+      error: 'Endpoint de simulação indisponível em produção',
+      message: 'Simulação de mensagens não permitida em ambiente de produção.',
+    });
+  }
   try {
     const { channel, senderName, text, phoneOrId, vehiclePlate } = req.body;
     const result = await messagingService.processIncomingMessage({

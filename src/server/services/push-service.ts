@@ -12,6 +12,7 @@
  */
 
 import { logger } from '../observability/logger';
+import { notificationService } from './notification-service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -301,6 +302,39 @@ class PushNotificationService {
         tag: `status-${caseId}`,
       },
       data: { caseId, type: 'status_update', status: newStatus },
+    });
+  }
+
+  /**
+   * Send push notification by user email (resolves device token automatically)
+   */
+  async sendPushToUser(
+    userEmail: string,
+    notification: { title: string; body: string; url?: string; tag?: string; image?: string; data?: Record<string, any> },
+  ): Promise<PushResult> {
+    if (!userEmail) {
+      return { success: false, errors: ['Email do destinatário é obrigatório para envio de push.'] };
+    }
+
+    const subscriptions = notificationService.getSubscriptions(userEmail);
+    const token = subscriptions[0]?.fcmToken || subscriptions[0]?.endpoint;
+
+    if (!token) {
+      logger.warn('push', 'push-service', 'send_push_to_user', 'Nenhum device token encontrado para o email', { userEmail });
+      return { success: false, errors: ['Nenhum dispositivo registrado para push notifications (user sem subscription).'] };
+    }
+
+    return this.sendToDevice({
+      token,
+      notification: {
+        title: notification.title,
+        body: notification.body,
+        url: notification.url,
+        tag: notification.tag,
+        icon: '/icons/icon-192.png',
+        ...(notification.image ? { image: notification.image } : {}),
+      },
+      data: notification.data || {},
     });
   }
 

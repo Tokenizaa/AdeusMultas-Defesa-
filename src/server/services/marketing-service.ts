@@ -301,9 +301,21 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
 
   // Insere conteúdo no topo (duplicação/variação)
   // Histórico de versões (agent: humano | copywriting | seo | compliance)
-  getContentVersions(contentId: string) {
-    // If Supabase is available, try to fetch from there
-    // For now, we'll keep in-memory as the primary source with Supabase backup
+  async getContentVersions(contentId: string) {
+    if (this.supabase) {
+      try {
+        const { data, error } = await (this.supabase as any)
+          .from('content_versions')
+          .select('*')
+          .eq('content_id', contentId)
+          .order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data;
+        }
+      } catch {
+        // fall through to in-memory
+      }
+    }
     return [...(this.contentVersions[contentId] ?? [])];
   }
 
@@ -316,16 +328,25 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
       createdAt: new Date().toISOString(),
     };
     this.contentVersions[contentId].unshift(rec);
-    
-    // Persist to Supabase if available
+
+    // Persist to Supabase content_versions table
     if (this.supabase) {
-      try {
-        logger.debug('marketing', 'service', 'addContentVersion', 'Version persisted (placeholder)', { contentId, version: rec.version });
-      } catch (error) {
-        logger.warn('marketing', 'service', 'addContentVersion', 'Failed to persist version to Supabase', { error });
-      }
+      (this.supabase as any)
+        .from('content_versions')
+        .insert({
+          content_id: contentId,
+          version: rec.version,
+          agent: entry.agent,
+          author: entry.author,
+          changes: entry.changes,
+          created_at: rec.createdAt,
+        })
+        .then(({ error }: any) => {
+          if (error) logger.warn('marketing', 'service', 'addContentVersion', 'Failed to persist version', { error: error.message });
+        })
+        .catch(() => {});
     }
-    
+
     return rec;
   }
 

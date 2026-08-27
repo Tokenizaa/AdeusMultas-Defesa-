@@ -33,7 +33,7 @@ router.get('/governance/law-enforcement-verify', (req, res) => {
       autoInfracao: c.infraction?.aitNumber,
       placa: c.vehicle?.plate,
       orgaoAutuador: c.infraction?.autuadorBody,
-      instanciaAtual: c.serviceType === 'defesa_previa' ? 'Defesa Prévia' : 'JARI / Processo Administrativo',
+      instanciaAtual: c.serviceType === 'recurso_jari' ? 'Defesa Prévia' : 'JARI / Processo Administrativo',
       dataProtocolo: c.protocolInfo?.submissionDate || c.createdAt,
       hashAutenticidade:
         'sha256:' + Buffer.from(c.id + c.infraction?.aitNumber).toString('hex').substring(0, 32),

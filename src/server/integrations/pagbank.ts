@@ -210,10 +210,18 @@ expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
 paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
 
      // Chamar API real do PagBank se o token estiver configurado
+     // [PRODUCTION] Bloquear tokens mock em produção — criar pagamento falso é fraude
+     if (this.token && this.token.startsWith('mock_')) {
+       if (process.env.NODE_ENV === 'production') {
+         throw new Error('PAGBANK_TOKEN com prefixo "mock_" não é permitido em produção. Configure um token válido.');
+       }
+       logger.warn('payments', 'pagbank', 'create_pix_order', 'Token mock detectado — usando modo sandbox local');
+     }
+
      if (this.token && !this.token.startsWith('mock_')) {
       try {
         const notificationUrls = this.buildNotificationUrls();
-        
+
         const response = await fetch(`${this.apiBaseUrl}/orders`, {
           method: 'POST',
           headers: {
@@ -261,8 +269,15 @@ paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
            this.orders.set(data.id, orderResult);
          }
       } catch (err) {
-        logger.warn('payments', 'pagbank', 'create_pix_order', 'Live API call fallback to sandbox order', { error: String(err) });
+        // [PRODUCTION] Não retornar ordem local como se fosse real quando a API falha
+        if (process.env.NODE_ENV === 'production') {
+          logger.error('payments', 'pagbank', 'create_pix_order', 'PagBank API falhou em produção — ordem NÃO criada', { error: String(err) });
+          throw new Error('Falha ao criar ordem PIX no PagBank. Tente novamente.');
+        }
+        logger.warn('payments', 'pagbank', 'create_pix_order', 'PagBank API falhou — modo dev: ordem local mantida', { error: String(err) });
       }
+    } else if (!this.token && process.env.NODE_ENV === 'production') {
+      throw new Error('PAGBANK_TOKEN não configurado. Pagamento indisponível em produção.');
     }
 
     eventBus.publish(
@@ -304,6 +319,14 @@ threeDsChallengeRequired: authenticationMethod === 'CHALLENGE',
     paymentRepository.persistOrder(orderResult, { paymentMethod: 'credit_card' });
 
 // Chamar API real do PagBank se o token estiver configurado
+// [PRODUCTION] Bloquear tokens mock em produção
+if (this.token && this.token.startsWith('mock_')) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('PAGBANK_TOKEN com prefixo "mock_" não é permitido em produção.');
+  }
+  logger.warn('payments', 'pagbank', 'create_credit_card_order', 'Token mock detectado — usando modo sandbox local');
+}
+
        if (this.token && !this.token.startsWith('mock_')) {
        try {
          const notificationUrls = this.buildNotificationUrls();
@@ -452,13 +475,17 @@ if (data.id) {
          throw new Error('Erro ao processar pagamento com cartão de crédito');
        }
      } else {
-       // Sandbox simulation
+       // [PRODUCTION] Sandbox simulation bloqueada em produção
+       if (process.env.NODE_ENV === 'production') {
+         throw new Error('PAGBANK_TOKEN não configurado. Pagamento com cartão indisponível em produção.');
+       }
+       // Sandbox simulation (dev only)
        orderResult.threeDsChallengeRequired = authenticationMethod === 'CHALLENGE';
-       orderResult.threeDsUrl = authenticationMethod === 'CHALLENGE' 
+       orderResult.threeDsUrl = authenticationMethod === 'CHALLENGE'
          ? `https://sandbox.pagseguro.com/3ds/challenge/${orderId}`
          : undefined;
        orderResult.status = authenticationMethod === 'CHALLENGE' ? 'WAITING' : 'AUTHORIZED';
-       
+
        logger.info('payments', 'pagbank', 'create_credit_card_order', 'Sandbox credit card order created', {
          orderId,
          referenceId,

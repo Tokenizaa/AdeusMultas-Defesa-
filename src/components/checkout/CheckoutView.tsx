@@ -122,9 +122,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState<boolean>(false);
 
-  // Usa o finalAmount do backend (breakdown) como fonte de verdade; fallback para cálculo local
-  const basePrice = resolvedBreakdown?.baseAmount ?? 89.90;
-  const finalAmount = resolvedBreakdown?.finalAmount ?? Math.max(0, Number((basePrice - (appliedCoupon?.discountAmount || 0)).toFixed(2)));
+  // Usa o finalAmount do backend (breakdown) como fonte de verdade; sem fallback hardcoded
+  const basePrice = resolvedBreakdown?.baseAmount ?? null; // FALLBACK REMOVIDO (era 89.90) — preço vem 100% do catálogo via API
+  const finalAmount = resolvedBreakdown?.finalAmount ?? null; // FALLBACK REMOVIDO (era cálculo local com basePrice) — exibir loading se catálogo indisponível
 
   // Check URL params for coupon or referral
   useEffect(() => {
@@ -152,7 +152,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   }, [currentCase.id, currentCase.clientEmail]);
 
   // Resolve serviceType do case (fonte canônica — não hardcoded)
-  const serviceType = (currentCase as any).serviceType || (currentCase as any).procedureType || 'defesa_previa';
+  const serviceType = (currentCase as any).serviceType || (currentCase as any).procedureType || '';
 
   // Load Pricing from Resolve Price Service (breakdown completo)
   useEffect(() => {
@@ -460,7 +460,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-extrabold text-slate-900 font-mono">
-                      R$ {finalAmount.toFixed(2)}
+                      {finalAmount !== null ? `R$ ${finalAmount.toFixed(2)}` : 'Carregando preço...'}
                     </span>
                   </div>
                 </div>
@@ -548,7 +548,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <div className="text-right">
                   <span className="text-sm text-slate-400 uppercase font-mono">Total</span>
                   <p className="font-extrabold text-sm text-slate-900 font-mono">
-                    R$ {finalAmount.toFixed(2)}
+                    {finalAmount !== null ? `R$ ${finalAmount.toFixed(2)}` : 'Carregando...'}
                   </p>
                 </div>
               </div>
@@ -640,9 +640,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-sm text-slate-400 uppercase font-mono">Total</span>
-                  <p className="font-extrabold text-sm text-slate-900 font-mono">
-                    R$ {finalAmount.toFixed(2)}
-                  </p>
+<p className="font-extrabold text-sm text-slate-900 font-mono">
+                     {finalAmount !== null ? `R$ ${finalAmount.toFixed(2)}` : 'Carregando...'}
+                   </p>
                 </div>
               </div>
 

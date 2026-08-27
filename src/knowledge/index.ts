@@ -217,12 +217,6 @@ export const KNOWLEDGE_GRAPH: KnowledgeGraphNode[] = INFRACTION_CATALOG.map((inf
   ctb_article_number: inf.article,
   applicable_procedures: [
     {
-      procedure_id: 'defesa_previa',
-      procedure_name: 'Defesa Prévia (Notificação de Autuação)',
-      applicable_arguments: inf.recommendedArgumentCodes,
-      template_id: 'TPL_DEFESA_PREVIA',
-    },
-    {
       procedure_id: 'recurso_jari',
       procedure_name: 'Recurso Ordinário à JARI',
       applicable_arguments: inf.recommendedArgumentCodes,

@@ -7,6 +7,7 @@ import type {
   ServicePricing,
   PromotionCampaign,
   Coupon,
+  CommercialServiceType,
 } from '../../../types/commercial';
 import type { CommercialOfferBreakdown, ResolveOfferParams, ResolveOfferResult } from './offer-types';
 
@@ -15,23 +16,34 @@ export { CommercialOfferBreakdown, ResolveOfferParams, ResolveOfferResult };
 const round2 = (value: number): number => Number((Math.round(value * 100) / 100).toFixed(2));
 
 /**
- * Normalize serviceType aliases to canonical DB values.
- * Single source of truth — no page should implement its own normalization.
+ * Mapeamento canônico de ProcedureType (plataforma) → CommercialServiceType (catálogo).
  *
- * Known aliases (from onboarding rules, frontend, legacy):
- *  - suspensao_cnh  → suspensao
- *  - cassacao_cnh   → cassacao
- *  - recurso_multa  → defesa_previa (legacy)
+ * Regra:
+ * - Serviços/subserviços pagos → mapeiam para o item comercial correspondente.
+ * - Procedimentos NÃO comerciais (analise_tecnica, relatorio_pericial) → retornam
+ *   o próprio nome para serem bloqueados em servicesWithoutCommercialOffer.
+ * - Nenhum serviço comercial válido deve "cair" para um procedimento genérico.
  */
-const SERVICE_TYPE_ALIASES: Record<string, string> = {
+const PROCEDURE_TO_COMMERCIAL: Record<string, CommercialServiceType | 'analise_tecnica' | 'relatorio_pericial'> = {
+  recurso_jari: 'recurso_jari',
+  recurso_cetran: 'recurso_cetran',
+  suspensao: 'suspensao',
+  cassacao: 'cassacao',
+  indicacao_condutor: 'indicacao_condutor',
+  conversao_advertencia: 'conversao_advertencia',
+  // Aliases/legados que chegavam como tipos distintos mas são o MESMO serviço comercial
   suspensao_cnh: 'suspensao',
   cassacao_cnh: 'cassacao',
-  recurso_multa: 'defesa_previa',
+  processo_suspensao: 'suspensao',
+  processo_cassacao: 'cassacao',
+  // Estes NÃO são serviços comerciais (sem preço no catálogo)
+  analise_tecnica: 'analise_tecnica',
+  relatorio_pericial: 'relatorio_pericial',
 };
 
 export function normalizeServiceType(raw: string): string {
   const key = (raw || '').toLowerCase().trim();
-  return SERVICE_TYPE_ALIASES[key] ?? key;
+  return PROCEDURE_TO_COMMERCIAL[key] ?? key;
 }
 
 export class OfferService {

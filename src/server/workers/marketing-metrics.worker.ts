@@ -29,8 +29,8 @@ export class MarketingMetricsCollector {
     const scheduled = contents.filter((c) => c.status === 'agendado').length;
 
     this.metrics = {
-      monthlyReach: this.metrics.monthlyReach || 284500, // acumulado histórico inicial
-      newCasesGenerated: Math.round(published * 0.5), // estimativa determinística
+      monthlyReach: this.metrics.monthlyReach, // accumulated from real Meta Insights only
+      newCasesGenerated: Math.round(published * 0.5),
       conversionRate: published > 0 ? Math.min(18, 10 + published * 0.4) : 0,
       publishedPosts: published,
       scheduledPosts: scheduled,

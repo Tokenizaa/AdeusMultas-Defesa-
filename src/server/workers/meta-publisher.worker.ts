@@ -3,10 +3,12 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { marketingService } from '../services/marketing-service';
 import { MetaPublishRequest, MetaPublishResult } from '../../types';
 import { metaAdapter } from '../../integrations/meta/adapters/meta-adapter';
+import { getSupabaseServerClient } from '../db/supabase-server';
 
 /**
  * MetaPublisher — Production delivery queue with retry and token health awareness.
  * Dispatches publications through the canonical MetaAdapter.
+ * Persists job records to Supabase for restart survival.
  */
 interface QueueItem {
   id: string;
@@ -35,6 +37,7 @@ export class MetaPublisher {
   private processing = false;
   private tokenExpired = false;
   private jobHistory: PublisherJobRecord[] = [];
+  private supabase = getSupabaseServerClient();
 
   getJobHistory(): PublisherJobRecord[] {
     return [...this.jobHistory].slice(0, 20);
@@ -48,18 +51,43 @@ export class MetaPublisher {
       attempts: 0,
       nextRetryAt: Date.now(),
     };
-    this.jobHistory.unshift({
+    const rec: PublisherJobRecord = {
       id: item.id,
       channel: request.destination,
       contentId,
       status: 'retrying',
       attempts: 0,
       createdAt: new Date().toISOString(),
-    });
+    };
+    this.jobHistory.unshift(rec);
     this.queue.push(item);
     logger.info('meta', 'meta-publisher', 'enqueue', `Publicação ${item.id} enfileirada`);
+
+    // Persist job record to Supabase
+    this.persistJobRecord(rec);
+
     this.process().catch(() => {});
     return { queued: true, itemId: item.id };
+  }
+
+  private persistJobRecord(rec: PublisherJobRecord): void {
+    if (!this.supabase) return;
+    (this.supabase as any)
+      .from('publisher_jobs')
+      .upsert({
+        id: rec.id,
+        channel: rec.channel,
+        content_id: rec.contentId,
+        status: rec.status,
+        attempts: rec.attempts,
+        created_at: rec.createdAt,
+        resolved_at: rec.resolvedAt,
+        error: rec.error,
+      }, { onConflict: 'id' })
+      .then(({ error }: any) => {
+        if (error) logger.warn('meta', 'meta-publisher', 'persist', `Failed to persist job ${rec.id}`, { error: error.message });
+      })
+      .catch(() => {});
   }
 
   getQueue() {
@@ -143,6 +171,7 @@ export class MetaPublisher {
         rec.status = 'delivered';
         rec.attempts = item.attempts;
         rec.resolvedAt = new Date().toISOString();
+        this.persistJobRecord(rec);
       }
 
       logger.info('meta', 'meta-publisher', 'publish', `Publicação ${item.id} entregue`);
@@ -160,6 +189,7 @@ export class MetaPublisher {
           rec.attempts = item.attempts;
           rec.resolvedAt = new Date().toISOString();
           rec.error = String(err.message || err);
+          this.persistJobRecord(rec);
         }
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,

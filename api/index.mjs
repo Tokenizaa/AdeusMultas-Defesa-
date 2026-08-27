@@ -1580,7 +1580,7 @@ var CanonicalMapper = class _CanonicalMapper {
       userId: row.user_id,
       status: row.status || "novo",
       currentStage: row.current_stage || 1,
-      serviceType: row.service_type || "defesa_previa",
+      serviceType: row.service_type || "recurso_jari",
       commercialOfferId: row.commercial_offer_id,
       vehicle: {
         plate: row.vehicle_plate || "SEM PLACA",
@@ -1645,7 +1645,7 @@ var CanonicalMapper = class _CanonicalMapper {
       user_id: domain.userId,
       status: domain.status || "novo",
       current_stage: Number(domain.currentStage || domain.stageAtual || 1),
-      service_type: domain.serviceType || domain.tipoServico || "defesa_previa",
+      service_type: domain.serviceType || domain.tipoServico || "recurso_jari",
       vehicle_plate: vehicle.plate || infraction.placa || "SEM PLACA",
       vehicle_brand_model: vehicle.brandModel || infraction.marcaModelo || "Ve\xEDculo",
       vehicle_renavam: vehicle.renavam || infraction.renavam,
@@ -3717,7 +3717,7 @@ var AdminQueryService = class {
         infractionCode: c.infraction?.infractionCode || "745-50",
         infractionDescription: c.infraction?.description || "Excesso de velocidade",
         organ: c.infraction?.autuadorBody || "DETRAN-SP",
-        procedureType: c.serviceType || "defesa_previa",
+        procedureType: c.serviceType || "recurso_jari",
         procedureLabel: c.serviceType === "conversao_advertencia" ? "Convers\xE3o em Advert\xEAncia (Art. 267 CTB)" : c.serviceType === "recurso_jari" ? "Recurso JARI (1\xAA Inst\xE2ncia)" : "Defesa Pr\xE9via (Autua\xE7\xE3o)",
         status: hasDraft ? c.isPaid ? "LIBERADO_PAGO" : "GERADO_PREVIEW" : "PENDENTE_DADOS",
         thesesCount: c.analysis?.recommendedArguments?.length || (c.defenseDraft?.selectedArgumentIds?.length || 2),
@@ -3807,12 +3807,17 @@ var MetaContentPolicyRejectionError = class extends MetaIntegrationError {
 };
 var MetaWebhookSignatureInvalidError = class extends MetaIntegrationError {
   constructor(details) {
-    super("Assinatura HMAC SHA-256 do webhook Meta inv\xE1lida.", "META_WEBHOOK_SIGNATURE_INVALID", 401, details);
+    super("assinatura HMAC SHA-256 do webhook Meta inv\xE1lida.", "META_WEBHOOK_SIGNATURE_INVALID", 401, details);
   }
 };
 var MetaTemporaryApiError = class extends MetaIntegrationError {
   constructor(message = "Erro tempor\xE1rio nos servidores da Meta. Nova tentativa ser\xE1 agendada.", details) {
     super(message, "META_TEMPORARY_API_ERROR", 503, details);
+  }
+};
+var MetaAuthenticationRequiredError = class extends MetaIntegrationError {
+  constructor(message = "Autentica\xE7\xE3o da Meta necess\xE1ria. Conecte sua conta antes de prosseguir.", details) {
+    super(message, "META_AUTHENTICATION_REQUIRED", 401, details);
   }
 };
 
@@ -3873,31 +3878,6 @@ var MetaGraphClient = class {
       params,
       retries = 2
     } = options;
-    if (endpoint.startsWith("mock_") || endpoint.includes("mock_") || accessToken && (accessToken.startsWith("EAAB_sandbox") || accessToken.startsWith("EAAB_simulated") || accessToken.startsWith("mock_") || accessToken === "PROTECTED_SERVER_TOKEN")) {
-      if (endpoint.includes("/photos") || endpoint.includes("/feed") || endpoint.includes("/media_publish")) {
-        return { id: `fb_post_${Date.now()}`, post_id: `fb_post_${Date.now()}` };
-      }
-      if (endpoint.includes("/media")) {
-        return { id: `ig_container_${Date.now()}`, status_code: "FINISHED", status: "FINISHED" };
-      }
-      if (endpoint.includes("/insights")) {
-        return {
-          data: [
-            { name: "post_impressions", values: [{ value: 1250 }] },
-            { name: "post_engaged_users", values: [{ value: 340 }] },
-            { name: "post_reactions_by_type_total", values: [{ value: { like: 85, love: 45 } }] },
-            { name: "impressions", values: [{ value: 1420 }] },
-            { name: "reach", values: [{ value: 980 }] },
-            { name: "engagement", values: [{ value: 210 }] },
-            { name: "saved", values: [{ value: 38 }] }
-          ]
-        };
-      }
-      if (endpoint.startsWith("ig_container_") || endpoint.startsWith("17841")) {
-        return { id: endpoint, status_code: "FINISHED", status: "FINISHED" };
-      }
-      return { success: true, id: `meta_${Date.now()}` };
-    }
     let attempt = 0;
     const maxAttempts = retries + 1;
     let lastError = null;
@@ -4063,14 +4043,8 @@ var MetaAuthService = class {
       throw new MetaOAuthInvalidCodeError("C\xF3digo de autoriza\xE7\xE3o n\xE3o fornecido.");
     }
     if (!appId || !appSecret) {
-      logger.warn("meta", "auth", "unconfigured_credentials", "META_APP_ID / META_APP_SECRET ausentes. Operando em modo de conting\xEAncia.");
-      const expiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1e3).toISOString();
-      return {
-        accessToken: `EAAB_simulated_${Date.now()}`,
-        tokenType: "bearer",
-        expiresInSeconds: 60 * 24 * 60 * 60,
-        expiresAt: expiry
-      };
+      logger.error("meta", "auth", "unconfigured_credentials", "META_APP_ID / META_APP_SECRET ausentes no ambiente.");
+      throw new MetaOAuthInvalidCodeError("Credenciais Meta OAuth (META_APP_ID / META_APP_SECRET) n\xE3o configuradas no servidor.");
     }
     try {
       const shortLived = await metaGraphClient.request({
@@ -4122,15 +4096,15 @@ var MetaAuthService = class {
     const appSecret = this.getAppSecret();
     if (!appId || !appSecret) {
       return {
-        appId: "mock_app_id",
-        type: "USER",
-        application: "DefesAi Legal Tech",
-        dataAccessExpiresAt: Date.now() + 5184e6,
-        expiresAt: Date.now() + 5184e6,
-        isValid: true,
-        issuedAt: Date.now(),
-        scopes: REQUIRED_META_SCOPES,
-        userId: "usr_meta_debug"
+        appId: "",
+        type: "UNKNOWN",
+        application: "",
+        dataAccessExpiresAt: 0,
+        expiresAt: 0,
+        isValid: false,
+        issuedAt: 0,
+        scopes: [],
+        userId: ""
       };
     }
     const appAccessToken = `${appId}|${appSecret}`;
@@ -4650,9 +4624,9 @@ var MetaAdapter = class {
   }
   initializeFromEnvironment() {
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-    const pageId = process.env.META_PAGE_ID || "109847291847192";
-    const igId = process.env.INSTAGRAM_ACCOUNT_ID || "17841400928374829";
-    if (systemToken) {
+    const pageId = process.env.META_PAGE_ID;
+    const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+    if (systemToken && pageId) {
       this.activeConnection = {
         id: "conn_meta_env",
         userId: "usr_system_admin",
@@ -4763,21 +4737,19 @@ var MetaAdapter = class {
       let rawPages = [];
       try {
         rawPages = await metaPagesService.fetchPages(userToken);
-      } catch {
-        rawPages = [
-          {
-            id: "page_fb_defesai_primary",
-            name: "DefesAi \u2014 Defesas de Multas de Tr\xE2nsito",
-            category: "LegalTech",
-            access_token: userToken,
-            tasks: ["MANAGE", "CREATE_CONTENT", "PUBLISH"],
-            instagram_business_account: {
-              id: "ig_defesai_primary",
-              username: "defesai.br",
-              name: "DefesAi Brasil"
-            }
-          }
-        ];
+      } catch (pageErr) {
+        logger.error(
+          "meta",
+          "adapter",
+          "oauth_fetch_pages_failed",
+          `Falha ao buscar p\xE1ginas do Meta: ${pageErr.message}. Verifique as permiss\xF5es pages_show_list.`
+        );
+        throw new Error(
+          `N\xE3o foi poss\xEDvel recuperar suas p\xE1ginas do Facebook. Verifique se o app tem permiss\xE3o pages_show_list. Erro: ${pageErr.message}`
+        );
+      }
+      if (rawPages.length === 0) {
+        throw new Error("Nenhuma p\xE1gina do Facebook encontrada para este token. Verifique se voc\xEA \xE9 admin de pelo menos uma p\xE1gina.");
       }
       const entity = {
         id: `conn_${Date.now()}`,
@@ -4900,13 +4872,22 @@ var MetaAdapter = class {
    */
   async publishContent(params) {
     if (!this.activeConnection || this.activeConnection.pages.length === 0) {
-      await this.connectWithToken("EAAB_sandbox_fallback_token");
+      const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+      const pageId = process.env.META_PAGE_ID;
+      const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+      if (systemToken && pageId) {
+        await this.connectWithToken(systemToken, pageId, igId);
+      } else {
+        throw new MetaAuthenticationRequiredError(
+          "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth."
+        );
+      }
     }
     const conn = this.activeConnection;
     const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
     const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
-    if (!page) {
-      throw new Error("Nenhuma p\xE1gina do Facebook configurada para publica\xE7\xE3o.");
+    if (!page || !page.accessToken) {
+      throw new MetaAuthenticationRequiredError("Nenhuma p\xE1gina do Facebook configurada com token de acesso para publica\xE7\xE3o.");
     }
     return metaPublishingService.publish(
       {
@@ -4921,7 +4902,10 @@ var MetaAdapter = class {
    * Fetches insights for a post or account
    */
   async getInsights(query) {
-    const token = this.activeConnection?.userAccessToken || "EAAB_token";
+    const token = this.activeConnection?.userAccessToken || process.env.META_ACCESS_TOKEN;
+    if (!token) {
+      throw new MetaAuthenticationRequiredError("Token da Meta ausente para consulta de m\xE9tricas e insights.");
+    }
     return metaInsightsService.query(query, token);
   }
   /**
@@ -5083,7 +5067,7 @@ var MetaIntegrationBridge = class {
         id: p.id,
         name: p.name,
         category: p.category,
-        access_token: "PROTECTED_SERVER_TOKEN",
+        access_token: null,
         instagram_business_account: p.instagramBusinessAccount ? {
           id: p.instagramBusinessAccount.id,
           username: p.instagramBusinessAccount.username,
@@ -5183,7 +5167,7 @@ async function authenticateToken(req, res, next) {
         );
       }
     }
-    if (!supabase || process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" && !supabase) {
       req.user = {
         id: "usr_admin_defesai",
         email: "admin@www.defesai.shop",
@@ -5332,7 +5316,7 @@ router.get(["/documents", "/admin/documents"], (req, res) => {
       infractionCode: c.infraction?.infractionCode || "745-50",
       infractionDescription: c.infraction?.description || "Excesso de velocidade",
       organ: c.infraction?.autuadorBody || "DETRAN-SP",
-      procedureType: c.serviceType || "defesa_previa",
+      procedureType: c.serviceType || "recurso_jari",
       procedureLabel: c.serviceType === "conversao_advertencia" ? "Convers\xE3o em Advert\xEAncia (Art. 267 CTB)" : c.serviceType === "recurso_jari" ? "Recurso JARI (1\xAA Inst\xE2ncia)" : "Defesa Pr\xE9via (Autua\xE7\xE3o)",
       status: hasDraft ? c.isPaid ? "LIBERADO_PAGO" : "GERADO_PREVIEW" : "PENDENTE_DADOS",
       version: "2.1.0",
@@ -5506,24 +5490,549 @@ import { Router as Router2 } from "express";
 // src/integrations/meta/webhooks/meta-webhook-service.ts
 init_logger();
 import crypto from "crypto";
+
+// src/server/services/marketing-service.ts
+init_logger();
+
+// src/data/marketing-agents-data.ts
+var INITIAL_MARKETING_AGENTS = [
+  {
+    id: "estrategico",
+    name: "Agente Estrat\xE9gico",
+    handle: "@marketing-estrategico",
+    description: "Monitora altera\xE7\xF5es legislativas no CTB, novas resolu\xE7\xF5es do CONTRAN e tend\xEAncias de busca de motoristas.",
+    status: "running",
+    lastActivity: "H\xE1 2 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 142,
+    currentTask: "Mapeando impacto da nova Portaria SENATRAN sobre radares port\xE1teis",
+    confidenceScore: 98,
+    metrics: [
+      { label: "Oportunidades Mapeadas", value: 28, trend: "up" },
+      { label: "Pautas Priorizadas", value: 12, trend: "neutral" }
+    ]
+  },
+  {
+    id: "planejamento",
+    name: "Agente de Planejamento",
+    handle: "@marketing-planejamento",
+    description: "Organiza a grade editorial semanal, frequ\xEAncia de postagens e distribui\xE7\xE3o multicanal (Instagram, Blog SEO, TikTok).",
+    status: "running",
+    lastActivity: "H\xE1 4 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 89,
+    currentTask: "Distribuindo 14 novos slots para a semana de Feriado / Blitz",
+    confidenceScore: 95,
+    metrics: [
+      { label: "Posts Agendados", value: 24, trend: "up" },
+      { label: "Taxa de Ocupa\xE7\xE3o da Grade", value: "92%", trend: "up" }
+    ]
+  },
+  {
+    id: "criador",
+    name: "Agente Criador de Conte\xFAdo",
+    handle: "@marketing-criador",
+    description: "Gera copies de alta convers\xE3o, carross\xE9is educativos, roteiros de Reels e guias pr\xE1ticos sobre anula\xE7\xE3o de multas.",
+    status: "running",
+    lastActivity: "H\xE1 1 minuto",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 236,
+    currentTask: 'Redigindo carrossel: "3 Erros Comuns no Baf\xF4metro que Anulam o Processo"',
+    confidenceScore: 96,
+    metrics: [
+      { label: "Minutas de Conte\xFAdo", value: 310, trend: "up" },
+      { label: "Varia\xE7\xF5es de Gancho", value: "4.8/post", trend: "up" }
+    ]
+  },
+  {
+    id: "qualidade",
+    name: "Agente Guardi\xE3o de Qualidade",
+    handle: "@marketing-qualidade",
+    description: "Gate duro que audita conformidade jur\xEDdica com o CTB/CONTRAN e bloqueia promessas falsas de ganho de causa.",
+    status: "idle",
+    lastActivity: "H\xE1 3 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 198,
+    currentTask: "Auditoria de assertividade jur\xEDdica conclu\xEDda com nota 9.8/10",
+    confidenceScore: 99,
+    metrics: [
+      { label: "Taxa de Aprova\xE7\xE3o", value: "94.2%", trend: "up" },
+      { label: "Vetos de Risco", value: 6, trend: "down" }
+    ]
+  },
+  {
+    id: "publicacao",
+    name: "Agente de Publica\xE7\xE3o & Despacho",
+    handle: "@marketing-publicacao",
+    description: "Gerencia a fila de agendamento autom\xE1tico e publica\xE7\xE3o sincronizada nas redes sociais e blog.",
+    status: "running",
+    lastActivity: "H\xE1 7 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 174,
+    currentTask: "Pr\xF3ximo disparo agendado para 18:30 (Instagram Carrossel)",
+    confidenceScore: 97,
+    metrics: [
+      { label: "Posts Publicados", value: 168, trend: "up" },
+      { label: "Uptime do Despacho", value: "99.9%", trend: "neutral" }
+    ]
+  },
+  {
+    id: "inteligencia",
+    name: "Agente de Intelig\xEAncia & M\xE9tricas",
+    handle: "@marketing-inteligencia",
+    description: "Coleta dados de engajamento, leads capturados no onboarding an\xF4nimo e taxa de convers\xE3o em checkout de defesas.",
+    status: "running",
+    lastActivity: "H\xE1 5 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 115,
+    currentTask: "Calculando CAC e taxa de conclus\xE3o de an\xE1lise gratuita por tema",
+    confidenceScore: 94,
+    metrics: [
+      { label: "Alcance Mensal", value: "284.5k", trend: "up" },
+      { label: "Convers\xE3o em Casos", value: "14.8%", trend: "up" }
+    ]
+  },
+  {
+    id: "aprendizado",
+    name: "Agente de Aprendizado Cont\xEDnuo",
+    handle: "@marketing-aprendizado",
+    description: "Processa o feedback dos resultados para refinar ganchos persuasivos e focar nos temas com maior retorno.",
+    status: "idle",
+    lastActivity: "H\xE1 6 minutos",
+    cycleIntervalMinutes: 5,
+    tasksCompleted: 77,
+    currentTask: 'Ajustando peso de convers\xE3o do tema "Multa de Radar sem Placa R-19"',
+    confidenceScore: 96,
+    metrics: [
+      { label: "Ganchos Otimizados", value: 43, trend: "up" },
+      { label: "Melhoria de CTR", value: "+22.4%", trend: "up" }
+    ]
+  }
+];
+var INITIAL_EDITORIAL_CONTENTS = [
+  {
+    id: "cnt-001",
+    title: "Recebeu notifica\xE7\xE3o de radar? Confira se a aferi\xE7\xE3o do INMETRO est\xE1 v\xE1lida!",
+    channel: "instagram",
+    format: "carrossel",
+    legalTheme: "Aferi\xE7\xE3o Metrol\xF3gica e Resolu\xE7\xE3o CONTRAN 798/2020",
+    infractionTargetCode: "745-50",
+    status: "agendado",
+    scheduledDate: "2026-08-15 18:30",
+    estimatedReach: 24500,
+    copyText: `\u{1F6A8} ATEN\xC7\xC3O MOTORISTA: Sabia que mais de 30% dos radares de tr\xE2nsito podem estar com o laudo do INMETRO vencido?
+
+Pela Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, todo radar eletr\xF4nico precisa de calibra\xE7\xE3o anual obrigat\xF3ria. Se passou de 365 dias, a multa \xE9 NULA!
+
+\u{1F449} Na notifica\xE7\xE3o que voc\xEA recebeu, verifique o campo "Data da \xFAltima verifica\xE7\xE3o".
+Se a data for superior a 1 ano da data da infra\xE7\xE3o, voc\xEA tem direito ao cancelamento imediato!
+
+Fa\xE7a a an\xE1lise gratuita do seu auto agora mesmo pelo link da bio! \u{1F697}\u{1F4A8}`,
+    hashtags: ["#DireitoDeTransito", "#AdeusMulta", "#RecursoDeMulta", "#CTB", "#RadarDeVelocidade"],
+    visualPrompt: "Carrossel moderno com fundo escuro elegante e destaque em amarelo para a data de aferi\xE7\xE3o do radar.",
+    authorAgent: "@marketing-criador",
+    qualityReviewScore: 9.8
+  },
+  {
+    id: "cnt-002",
+    title: "Como converter sua multa leve ou m\xE9dia em Advert\xEAncia por Escrito (Sem pagar nada)",
+    channel: "blog",
+    format: "artigo_seo",
+    legalTheme: "Convers\xE3o em Advert\xEAncia por Escrito \u2014 Art. 267 do CTB",
+    infractionTargetCode: "745-50",
+    status: "publicado",
+    scheduledDate: "2026-08-14 10:00",
+    estimatedReach: 18200,
+    copyText: `Desde a Lei n\xBA 14.071/2020, o motorista que cometer infra\xE7\xE3o de tr\xE2nsito de natureza LEVE ou M\xC9DIA e n\xE3o possuir nenhuma outra infra\xE7\xE3o no prontu\xE1rio nos \xFAltimos 12 meses tem o DIREITO SUBJETIVO \xE0 convers\xE3o autom\xE1tica da multa em advert\xEAncia por escrito.
+
+Isso significa:
+1. Zero reais a pagar (isen\xE7\xE3o total do boleto)
+2. Zero pontos somados na CNH
+3. Procedimento 100% administrativo e simples
+
+Descubra o passo a passo e o modelo de peti\xE7\xE3o no Adeus Multa.`,
+    hashtags: ["#Art267CTB", "#AdvertenciaPorEscrito", "#Economia", "#Motorista"],
+    visualPrompt: "Imagem ilustrativa de uma CNH com carimbo de isen\xE7\xE3o e escudo protetor.",
+    authorAgent: "@marketing-criador",
+    qualityReviewScore: 9.9
+  },
+  {
+    id: "cnt-003",
+    title: "Recusou o teste do baf\xF4metro? Entenda por que a multa n\xE3o \xE9 autom\xE1tica",
+    channel: "tiktok",
+    format: "reels_roteiro",
+    legalTheme: "Art. 165-A e Termo de Constata\xE7\xE3o de Embriaguez",
+    infractionTargetCode: "516-91",
+    status: "aprovado_qualidade",
+    scheduledDate: "2026-08-16 12:00",
+    estimatedReach: 45e3,
+    copyText: `[ROTEIRO DE REELS / TIKTOK]
+(Cena 1 - Gancho): "Se voc\xEA recusou o baf\xF4metro na blitz, pare tudo e assista isso antes de pagar a multa de quase R$ 3 mil!"
+(Cena 2 - Fundamenta\xE7\xE3o): "A Resolu\xE7\xE3o 432 do CONTRAN exige que o policial preencha um Termo de Sinais Psicomotores detalhando sinais vis\xEDveis. Se ele s\xF3 escreveu 'recusou', o auto de infra\xE7\xE3o \xE9 NULO."
+(Cena 3 - CTA): "Entre no Adeus Multa, envie a foto da sua notifica\xE7\xE3o e descubra os v\xEDcios formais na hora!"`,
+    hashtags: ["#LeiSeca", "#Bafometro", "#RecusaBafometro", "#Blitz"],
+    visualPrompt: "V\xEDdeo din\xE2mico em estilo bate-papo jur\xEDdico acess\xEDvel com legendas contrastantes.",
+    authorAgent: "@marketing-criador",
+    qualityReviewScore: 9.6
+  },
+  {
+    id: "cnt-004",
+    title: "Celular no suporte do painel d\xE1 multa? O que diz a nova resolu\xE7\xE3o",
+    channel: "instagram",
+    format: "carrossel",
+    legalTheme: "Artigo 252 do CTB \u2014 Manuseio x Suporte Veicular",
+    infractionTargetCode: "736-62",
+    status: "agendado",
+    scheduledDate: "2026-08-17 19:00",
+    estimatedReach: 32e3,
+    copyText: `\u{1F4F1} USAR O GPS NO SUPORTE \xC9 PERMITIDO!
+
+O CTB pro\xEDbe "segurar ou manusear" o celular enquanto dirige. Tocar rapidamente na tela do GPS fixado no painel para aceitar corrida ou verificar rota com o ve\xEDculo parado no sem\xE1foro N\xC3O configura infra\xE7\xE3o grav\xEDssima.
+
+Se o agente autuou sem abordagem e n\xE3o descreveu a conduta na observa\xE7\xE3o, o recurso tem alta chance de anula\xE7\xE3o!`,
+    hashtags: ["#CelularAoVolante", "#MotoristaDeApp", "#Uber", "#99App", "#Transito"],
+    visualPrompt: "Ilustra\xE7\xE3o do interior do ve\xEDculo com celular no suporte e \xEDcone verde de permitido.",
+    authorAgent: "@marketing-criador",
+    qualityReviewScore: 9.7
+  }
+];
+var BRAND_IDENTITY = {
+  brandName: "Adeus Multa",
+  tagline: "Defenda sua CNH com intelig\xEAncia t\xE9cnica e jur\xEDdica.",
+  positioning: "Especialista digital em defesa administrativa de tr\xE2nsito. Ajudamos motoristas a gerar e protocolar recursos fundamentados no CTB com rigor t\xE9cnico.",
+  toneOfVoice: "T\xE9cnico por\xE9m acess\xEDvel, emp\xE1tico com o motorista, estritamente legalista, transparente e encorajador.",
+  primaryColors: ["#0f172a", "#0284c7", "#10b981", "#f59e0b"],
+  targetAudience: "Motoristas particulares, motoristas de aplicativo (Uber/99), caminhoneiros, frotistas e condutores que receberam autua\xE7\xF5es indevidas.",
+  disallowedWords: ["Garantia de ganho 100%", "Burlar a lei", "Advogado virtual", "Jeitinho", "Esquema"],
+  mandatoryLegalDisclaimers: 'O Adeus Multa \xE9 uma ferramenta tecnol\xF3gica de apoio \xE0 elabora\xE7\xE3o de peti\xE7\xF5es administrativas nos termos do Art. 5\xBA, XXXIV, "a" da Constitui\xE7\xE3o Federal. N\xE3o realizamos representa\xE7\xE3o advocat\xEDcia privativa nem garantimos resultados de julgamento dos \xF3rg\xE3os.'
+};
+
+// src/server/services/marketing-service.ts
+var MarketingService = class {
+  constructor() {
+    this.cycleCount = 0;
+    this.contentVersions = {};
+    this.supabase = null;
+    this.supabase = getSupabaseServerClient();
+    this.initializeState();
+  }
+  async initializeState() {
+    if (!this.supabase) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error("marketing", "service", "initializeState", "Supabase not configured in production \u2014 marketing data will be empty");
+      }
+      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
+      this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
+      this.contentVersions = {};
+      logger.info("marketing", "service", "initializeState", "Supabase not available, using default data");
+      return;
+    }
+    try {
+      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
+      const { data: contents, error: contentsError } = await this.supabase.from("editorial_content").select("*").order("created_at", { ascending: false });
+      if (contentsError) {
+        logger.warn("marketing", "service", "initializeState", "Failed to load editorial contents from Supabase, using defaults", { error: contentsError });
+        this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
+      } else {
+        this.editorialContents = contents || [...INITIAL_EDITORIAL_CONTENTS];
+      }
+      this.contentVersions = {};
+      logger.info("marketing", "service", "initializeState", "Loaded state from Supabase", {
+        agentsCount: this.marketingAgents.length,
+        contentsCount: this.editorialContents.length
+      });
+    } catch (error) {
+      logger.error("marketing", "service", "initializeState", "Error initializing state from Supabase, falling back to defaults", { error });
+      if (process.env.NODE_ENV === "production") {
+        logger.error("marketing", "service", "initializeState", "Production fallback: using INITIAL_MARKETING_AGENTS due to Supabase error");
+      }
+      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
+      this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
+      this.contentVersions = {};
+    }
+  }
+  // Getters
+  async getMarketingAgents() {
+    return [...this.marketingAgents];
+  }
+  async getEditorialContents() {
+    if (!this.supabase) {
+      return [...this.editorialContents];
+    }
+    try {
+      const { data, error } = await this.supabase.from("editorial_content").select("*").order("created_at", { ascending: false });
+      if (error) {
+        logger.warn("marketing", "service", "getEditorialContents", "Failed to load from Supabase, using in-memory cache", { error });
+        return [...this.editorialContents];
+      }
+      this.editorialContents = data || [];
+      return [...this.editorialContents];
+    } catch (error) {
+      logger.error("marketing", "service", "getEditorialContents", "Error loading editorial contents, using in-memory cache", { error });
+      return [...this.editorialContents];
+    }
+  }
+  getBrandIdentity() {
+    return BRAND_IDENTITY;
+  }
+  getCycleCount() {
+    return this.cycleCount;
+  }
+  async incrementCycleCount() {
+    this.cycleCount += 1;
+    if (this.supabase) {
+      try {
+        await this.supabase.from("app_settings").upsert({
+          key: "marketing_cycle_count",
+          value: this.cycleCount,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }, {
+          onConflict: "key"
+        });
+      } catch (error) {
+        logger.warn("marketing", "service", "incrementCycleCount", "Failed to persist cycle count to Supabase", { error });
+      }
+    }
+    eventBus.publish(EventTopics.MARKETING_CYCLE_TICK, {
+      agentId: "system",
+      // This will be overridden in cycleTick
+      task: "cycle_increment"
+    }, "marketing_os");
+    return {
+      success: true,
+      cycle: this.cycleCount
+    };
+  }
+  // Marketing cycle tick
+  async cycleTick() {
+    const randomAgentIdx = Math.floor(Math.random() * this.marketingAgents.length);
+    this.marketingAgents[randomAgentIdx].tasksCompleted += 1;
+    this.marketingAgents[randomAgentIdx].lastActivity = "Agora mesmo";
+    await this.incrementCycleCount();
+    eventBus.publish(EventTopics.MARKETING_CYCLE_TICK, {
+      agentId: this.marketingAgents[randomAgentIdx].id,
+      task: this.marketingAgents[randomAgentIdx].currentTask
+    }, "marketing_os");
+    return {
+      success: true,
+      updatedAgent: this.marketingAgents[randomAgentIdx],
+      agents: await this.getMarketingAgents()
+    };
+  }
+  // Generate marketing content
+  async generateContent(theme, channel, format) {
+    const newContent = {
+      id: `cnt-${Date.now()}`,
+      title: theme || "Multas de Tr\xE2nsito: Novos Prazos e Resolu\xE7\xF5es CONTRAN 2026",
+      channel: channel || "instagram",
+      format: format || "carrossel",
+      legalTheme: theme || "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB",
+      legal_theme: theme || "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB",
+      status: "aprovado_qualidade",
+      scheduledDate: new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      scheduled_date: new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      estimatedReach: Math.floor(15e3 + Math.random() * 25e3),
+      estimated_reach: Math.floor(15e3 + Math.random() * 25e3),
+      copyText: `\u{1F6A6} MOTORISTA: Entenda os seus direitos garantidos pelo CTB!
+      
+O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qualquer atraso invalida o auto de infra\xE7\xE3o!`,
+      copy_text: `\u{1F6A6} MOTORISTA: Entenda os seus direitos garantidos pelo CTB!
+      
+O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qualquer atraso invalida o auto de infra\xE7\xE3o!`,
+      hashtags: ["#AdeusMulta", "#DireitoDeTransito", "#CTB", "#RecursoDeMulta"],
+      visualPrompt: "Visual elegante com paleta azul escuro e amarelo institucional.",
+      visual_prompt: "Visual elegante com paleta azul escuro e amarelo institucional.",
+      authorAgent: "@marketing-criador",
+      author_agent: "@marketing-criador",
+      qualityReviewScore: 9.7
+    };
+    let savedContent = newContent;
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("editorial_content").insert([newContent]).select().single();
+        if (error) {
+          throw error;
+        }
+        savedContent = { ...newContent, ...data };
+        logger.info("marketing", "service", "generateContent", "Content saved to Supabase", { contentId: savedContent.id });
+      } catch (error) {
+        logger.error("marketing", "service", "generateContent", "Failed to save content to Supabase, using in-memory only", { error });
+      }
+    }
+    this.editorialContents.unshift(savedContent);
+    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
+    return { success: true, content: savedContent };
+  }
+  // Create manual content item
+  async createManualContent(input) {
+    const newContent = {
+      id: `cnt-${Date.now()}`,
+      title: input.title,
+      channel: input.channel || "instagram",
+      format: input.format || "carrossel",
+      legalTheme: input.legalTheme || input.title,
+      legal_theme: input.legalTheme || input.title,
+      status: input.status || "rascunho",
+      scheduledDate: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      scheduled_date: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      estimatedReach: Math.floor(1e4 + Math.random() * 2e4),
+      estimated_reach: Math.floor(1e4 + Math.random() * 2e4),
+      copyText: input.copyText || "",
+      copy_text: input.copyText || "",
+      hashtags: input.hashtags || ["#AdeusMulta", "#CTB"],
+      imageUrl: input.imageUrl || null,
+      image_url: input.imageUrl || null,
+      mediaUrl: input.mediaUrl || input.imageUrl || null,
+      media_url: input.mediaUrl || input.imageUrl || null,
+      visualPrompt: input.visualPrompt || "",
+      visual_prompt: input.visualPrompt || "",
+      authorAgent: "@marketing-criador",
+      author_agent: "@marketing-criador",
+      qualityReviewScore: 9.5
+    };
+    let savedContent = newContent;
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("editorial_content").insert([newContent]).select().single();
+        if (!error && data) {
+          savedContent = { ...newContent, ...data };
+        }
+      } catch (err) {
+        logger.warn("marketing", "service", "createManualContent", "Fallback to memory only");
+      }
+    }
+    this.editorialContents.unshift(savedContent);
+    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
+    return savedContent;
+  }
+  // Update marketing agent (for external updates)
+  async updateMarketingAgent(agentId, updates) {
+    const agentIndex = this.marketingAgents.findIndex((agent) => agent.id === agentId);
+    if (agentIndex !== -1) {
+      this.marketingAgents[agentIndex] = { ...this.marketingAgents[agentIndex], ...updates };
+      return this.marketingAgents[agentIndex];
+    }
+    return null;
+  }
+  // Insere conteúdo no topo (duplicação/variação)
+  // Histórico de versões (agent: humano | copywriting | seo | compliance)
+  async getContentVersions(contentId) {
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("content_versions").select("*").eq("content_id", contentId).order("created_at", { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data;
+        }
+      } catch {
+      }
+    }
+    return [...this.contentVersions[contentId] ?? []];
+  }
+  addContentVersion(contentId, entry) {
+    if (!this.contentVersions[contentId]) this.contentVersions[contentId] = [];
+    const rec = {
+      id: `ver_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      version: this.contentVersions[contentId].length + 1,
+      ...entry,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.contentVersions[contentId].unshift(rec);
+    if (this.supabase) {
+      this.supabase.from("content_versions").insert({
+        content_id: contentId,
+        version: rec.version,
+        agent: entry.agent,
+        author: entry.author,
+        changes: entry.changes,
+        created_at: rec.createdAt
+      }).then(({ error }) => {
+        if (error) logger.warn("marketing", "service", "addContentVersion", "Failed to persist version", { error: error.message });
+      }).catch(() => {
+      });
+    }
+    return rec;
+  }
+  // Atualiza conteúdo por meta_post_id
+  async updateContentByMetaPostId(metaPostId, updates) {
+    const item = this.editorialContents.find(
+      (c) => c.meta_post_id === metaPostId || c.metaPostId === metaPostId
+    );
+    if (item) {
+      return this.updateContent(item.id, updates);
+    }
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("editorial_content").update(updates).eq("meta_post_id", metaPostId).select().single();
+        if (!error && data) {
+          return data;
+        }
+      } catch (err) {
+        logger.debug("marketing", "service", "updateContentByMetaPostId", "Error updating in Supabase", { err });
+      }
+    }
+    return null;
+  }
+  // Atualiza conteúdo (usado pelos agentes por status: aprovado_qualidade -> agendado -> publicado)
+  async updateContent(contentId, updates) {
+    let updatedContent = null;
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("editorial_content").update(updates).eq("id", contentId).select().single();
+        if (error) {
+          throw error;
+        }
+        updatedContent = data;
+        logger.info("marketing", "service", "updateContent", "Content updated in Supabase", { contentId });
+      } catch (error) {
+        logger.error("marketing", "service", "updateContent", "Failed to update content in Supabase", { error });
+      }
+    }
+    const idx = this.editorialContents.findIndex((c) => c.id === contentId);
+    if (idx !== -1) {
+      this.editorialContents[idx] = { ...this.editorialContents[idx], ...updates };
+      if (!updatedContent) {
+        updatedContent = this.editorialContents[idx];
+      }
+      return updatedContent;
+    }
+    if (updatedContent) {
+      return updatedContent;
+    }
+    return null;
+  }
+};
+var marketingService = new MarketingService();
+
+// src/integrations/meta/webhooks/meta-webhook-service.ts
 var MetaWebhookService = class {
   constructor() {
     this.recentWebhooks = [];
     this.processedEventIds = /* @__PURE__ */ new Set();
   }
   getVerifyToken() {
-    return process.env.META_WEBHOOK_VERIFY_TOKEN || "defesai_meta_webhook_secret_verify_token";
+    return process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() || process.env.META_VERIFY_TOKEN?.trim() || void 0;
   }
   getAppSecret() {
-    return process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "";
+    return process.env.META_APP_SECRET?.trim() || process.env.FACEBOOK_APP_SECRET?.trim() || void 0;
   }
   /**
    * Validates GET verification challenge from Meta Webhook Subscription setup
+   * SECURITY: Rejeita desafio se META_WEBHOOK_VERIFY_TOKEN não está configurado.
+   * Bypass removido: fallback hardcoded era vetor de ataque.
    */
   verifyChallenge(mode, token, challenge) {
     const configuredToken = this.getVerifyToken();
+    if (!configuredToken) {
+      logger.warn(
+        "meta",
+        "webhook",
+        "challenge_no_configured_token",
+        "Webhook challenge rejeitado: META_WEBHOOK_VERIFY_TOKEN ausente. Configure antes de registrar o webhook."
+      );
+      return null;
+    }
     if (mode === "subscribe" && token === configuredToken) {
-      logger.info("meta", "webhook", "challenge_verified", "Webhook Meta verificado com sucesso");
+      logger.info("meta", "webhook", "challenge_verified", "Webhook challenge verificado com sucesso");
       return challenge || "OK";
     }
     logger.warn("meta", "webhook", "challenge_failed", "Tentativa de verifica\xE7\xE3o de webhook com token inv\xE1lido", {
@@ -5533,11 +6042,19 @@ var MetaWebhookService = class {
   }
   /**
    * Verifies X-Hub-Signature-256 HMAC header
+   * SECURITY: Sem META_APP_SECRET configurado, NÃO aceita payloads não assinados.
+   * O bypass anterior (return true quando sem segredo) permitia injeção de webhooks falsos.
    */
   verifySignature(rawPayload, signatureHeader) {
     const appSecret = this.getAppSecret();
     if (!appSecret) {
-      return true;
+      logger.warn(
+        "meta",
+        "webhook",
+        "signature_no_secret",
+        "Verifica\xE7\xE3o HMAC rejeitada: META_APP_SECRET ausente no ambiente. Configure para receber eventos legitimamente."
+      );
+      return false;
     }
     if (!signatureHeader || !signatureHeader.startsWith("sha256=")) {
       return false;
@@ -5593,6 +6110,26 @@ var MetaWebhookService = class {
             field: change.field,
             pageId: entryId
           });
+          if ((change.field === "feed" || change.field === "status" || change.field === "posts") && change.value) {
+            const postId = change.value.post_id || change.value.id;
+            const verb = change.value.verb;
+            if (postId) {
+              if (verb === "add" || !verb) {
+                marketingService.updateContentByMetaPostId(postId, {
+                  status: "publicado",
+                  published_at: (/* @__PURE__ */ new Date()).toISOString(),
+                  publishedAt: (/* @__PURE__ */ new Date()).toISOString()
+                }).catch(() => {
+                });
+              } else if (verb === "remove" || verb === "delete") {
+                marketingService.updateContentByMetaPostId(postId, {
+                  status: "failed",
+                  error: "Post removido ou rejeitado na Meta"
+                }).catch(() => {
+                });
+              }
+            }
+          }
           eventBus.publish(
             EventTopics.MARKETING_CONTENT_DRAFTED,
             {
@@ -5712,9 +6249,23 @@ async function runMetaIntegrationTests() {
   );
   await runTest(
     "PUB-01",
-    "Pipeline de publica\xE7\xE3o do Facebook (Feed e Fotos)",
+    "Pipeline de publica\xE7\xE3o do Facebook (Valida\xE7\xE3o de payload e rejei\xE7\xE3o estrita de acessos n\xE3o autenticados)",
     "Publishing",
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PAGE_ID);
+      if (!isConfigured) {
+        try {
+          await metaAdapter.publishContent({
+            destination: "facebook",
+            message: "Teste de publica\xE7\xE3o automatizada DefesAi",
+            mediaUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800"
+          });
+          throw new Error("RISCO DE PRODU\xC7\xC3O: Publica\xE7\xE3o deveria ter sido rejeitada por aus\xEAncia de credenciais reais da Meta.");
+        } catch (err) {
+          if (err.message.includes("RISCO DE PRODU\xC7\xC3O")) throw err;
+          return;
+        }
+      }
       const publishRes = await metaAdapter.publishContent({
         destination: "facebook",
         message: "Teste de publica\xE7\xE3o automatizada DefesAi",
@@ -5727,9 +6278,23 @@ async function runMetaIntegrationTests() {
   );
   await runTest(
     "INSTA-01",
-    "Pipeline de publica\xE7\xE3o Instagram Business (Container + Publish)",
+    "Pipeline de publica\xE7\xE3o Instagram Business (Valida\xE7\xE3o de m\xEDdia e autentica\xE7\xE3o)",
     "Instagram",
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID);
+      if (!isConfigured) {
+        try {
+          await metaAdapter.publishContent({
+            destination: "instagram",
+            message: "Defesa de Tr\xE2nsito no Instagram #defesai",
+            mediaUrl: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800"
+          });
+          throw new Error("RISCO DE PRODU\xC7\xC3O: Instagram Container n\xE3o deveria publicar sem credenciais reais.");
+        } catch (err) {
+          if (err.message.includes("RISCO DE PRODU\xC7\xC3O")) throw err;
+          return;
+        }
+      }
       const publishRes = await metaAdapter.publishContent({
         destination: "instagram",
         message: "Defesa de Tr\xE2nsito no Instagram #defesai",
@@ -5745,6 +6310,20 @@ async function runMetaIntegrationTests() {
     "Publica\xE7\xE3o simult\xE2nea multiplataforma Facebook + Instagram",
     "Publishing",
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PAGE_ID && process.env.INSTAGRAM_ACCOUNT_ID);
+      if (!isConfigured) {
+        try {
+          await metaAdapter.publishContent({
+            destination: "both",
+            message: "Publica\xE7\xE3o unificada Facebook e Instagram DefesAi",
+            mediaUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800"
+          });
+          throw new Error("RISCO DE PRODU\xC7\xC3O: Publica\xE7\xE3o dual n\xE3o deveria reportar sucesso sem credenciais.");
+        } catch (err) {
+          if (err.message.includes("RISCO DE PRODU\xC7\xC3O")) throw err;
+          return;
+        }
+      }
       const publishRes = await metaAdapter.publishContent({
         destination: "both",
         message: "Publica\xE7\xE3o unificada Facebook e Instagram DefesAi",
@@ -5755,70 +6334,103 @@ async function runMetaIntegrationTests() {
       }
     }
   );
-  await runTest(
-    "WH-01",
-    "Verifica\xE7\xE3o de desafio GET do webhook Meta (hub.challenge / verify_token)",
-    "Webhooks",
-    async () => {
-      const token = process.env.META_WEBHOOK_VERIFY_TOKEN || "defesai_meta_webhook_secret_verify_token";
-      const response = metaWebhookService.verifyChallenge("subscribe", token, "challenge_code_12345");
-      if (response !== "challenge_code_12345") {
-        throw new Error("Verifica\xE7\xE3o de challenge falhou para token correto");
+  const configuredVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  if (configuredVerifyToken) {
+    await runTest(
+      "WH-01",
+      "Verifica\xE7\xE3o de desafio GET do webhook Meta (hub.challenge / verify_token) \u2014 rejeita token inv\xE1lido e aceita o correto",
+      "Webhooks",
+      async () => {
+        const response = metaWebhookService.verifyChallenge("subscribe", configuredVerifyToken, "challenge_code_12345");
+        if (response !== "challenge_code_12345") {
+          throw new Error("Verifica\xE7\xE3o de challenge falhou para token correto");
+        }
+        const invalid = metaWebhookService.verifyChallenge("subscribe", "wrong_token", "challenge_code_12345");
+        if (invalid !== null) {
+          throw new Error("Webhook deveria rejeitar token incorreto");
+        }
+        const noToken = metaWebhookService.verifyChallenge("subscribe", void 0, "challenge_code_12345");
+        if (noToken !== null) {
+          throw new Error("Webhook deveria rejeitar chamada sem token");
+        }
       }
-      const invalid = metaWebhookService.verifyChallenge("subscribe", "wrong_token", "challenge_code_12345");
-      if (invalid !== null) {
-        throw new Error("Webhook deveria rejeitar token incorreto");
+    );
+  }
+  const configuredAppSecret = process.env.META_APP_SECRET;
+  if (configuredAppSecret) {
+    await runTest(
+      "WH-02",
+      "Verifica\xE7\xE3o de assinatura criptogr\xE1fica HMAC SHA-256 do webhook Meta",
+      "Webhooks",
+      async () => {
+        const payload = JSON.stringify({ object: "page", entry: [{ id: "109847291847192", time: Date.now() }] });
+        const hmac = crypto2.createHmac("sha256", configuredAppSecret);
+        hmac.update(payload);
+        const signature = `sha256=${hmac.digest("hex")}`;
+        const isValid = metaWebhookService.verifySignature(payload, signature);
+        if (!isValid) {
+          throw new Error("Assinatura HMAC v\xE1lida foi incorretamente rejeitada");
+        }
+        const noSig = metaWebhookService.verifySignature(payload, void 0);
+        if (noSig) {
+          throw new Error("Payload sem assinatura deveria ser rejeitado");
+        }
       }
-    }
-  );
-  await runTest(
-    "WH-02",
-    "Verifica\xE7\xE3o de assinatura criptogr\xE1fica HMAC SHA-256 do webhook Meta",
-    "Webhooks",
-    async () => {
-      const secret = process.env.META_APP_SECRET || "test_secret_key";
-      const payload = JSON.stringify({ object: "page", entry: [{ id: "109847291847192", time: Date.now() }] });
-      const hmac = crypto2.createHmac("sha256", secret);
-      hmac.update(payload);
-      const signature = `sha256=${hmac.digest("hex")}`;
-      const isValid = metaWebhookService.verifySignature(payload, signature);
-      if (!isValid) {
-        throw new Error("Assinatura HMAC v\xE1lida foi incorretamente rejeitada");
+    );
+  }
+  const payloadWh03 = {
+    object: "page",
+    entry: [
+      {
+        id: "page_fb_123",
+        time: 1723901823,
+        changes: [{ field: "feed", value: { item: "post", verb: "add", post_id: "post_999" } }]
       }
-    }
-  );
-  await runTest(
-    "WH-03",
-    "Ingest\xE3o ass\xEDncrona, idempot\xEAncia e auditoria de webhooks",
-    "Webhooks",
-    async () => {
-      const payload = {
-        object: "page",
-        entry: [
-          {
-            id: "page_fb_123",
-            time: 1723901823,
-            changes: [{ field: "feed", value: { item: "post", verb: "add", post_id: "post_999" } }]
-          }
-        ]
-      };
-      const result = await metaWebhookService.handleWebhookPayload(JSON.stringify(payload), void 0, payload);
-      if (!result.processed || !result.eventId) {
-        throw new Error("Processamento do payload do webhook falhou");
+    ]
+  };
+  if (configuredAppSecret) {
+    await runTest(
+      "WH-03",
+      "Ingest\xE3o ass\xEDncrona, idempot\xEAncia e auditoria de webhooks (assinado)",
+      "Webhooks",
+      async () => {
+        const payloadStr = JSON.stringify(payloadWh03);
+        const hmac = crypto2.createHmac("sha256", configuredAppSecret);
+        hmac.update(payloadStr);
+        const sig = `sha256=${hmac.digest("hex")}`;
+        const result = await metaWebhookService.handleWebhookPayload(payloadStr, sig, payloadWh03);
+        if (!result.processed || !result.eventId) {
+          throw new Error("Processamento do payload do webhook falhou");
+        }
+        const logs = metaWebhookService.getRecentWebhooks();
+        if (logs.length === 0 || !logs.some((l) => l.id === result.eventId)) {
+          throw new Error("Hist\xF3rico de webhooks n\xE3o registrou o evento");
+        }
       }
-      const logs = metaWebhookService.getRecentWebhooks();
-      if (logs.length === 0 || !logs.some((l) => l.id === result.eventId)) {
-        throw new Error("Hist\xF3rico de webhooks n\xE3o registrou o evento");
+    );
+  } else {
+    await runTest(
+      "WH-03",
+      "Webhook rejeita payloads n\xE3o assinados quando META_APP_SECRET n\xE3o configurado",
+      "Webhooks",
+      async () => {
+        try {
+          await metaWebhookService.handleWebhookPayload(JSON.stringify(payloadWh03), void 0, payloadWh03);
+          throw new Error("Payload n\xE3o assinado deveria ser rejeitado quando META_APP_SECRET ausente");
+        } catch (err) {
+          if (err.message.includes("assinatura")) return;
+          throw err;
+        }
       }
-    }
-  );
+    );
+  }
   await runTest(
     "INS-01",
     "Normaliza\xE7\xE3o de m\xE9tricas da Graph API para M\xE9tricas de Dom\xEDnio",
     "Insights",
     async () => {
-      const insights = await metaInsightsService.getFacebookPostInsights("mock_post_100", "EAAB_token");
-      if (insights.targetId !== "mock_post_100" || typeof insights.impressions !== "number") {
+      const insights = await metaInsightsService.getFacebookPostInsights("fb_post_sample_100", "EAAB_token");
+      if (insights.targetId !== "fb_post_sample_100" || typeof insights.impressions !== "number") {
         throw new Error(`M\xE9tricas de post inv\xE1lidas: ${JSON.stringify(insights)}`);
       }
     }
@@ -6177,12 +6789,11 @@ var EvolutionWhatsAppAdapter = class {
         error: res?.error
       };
     } catch (err) {
-      logger.warn("messaging", "adapter_evolution", "send_fallback", `Falha envio Evolution: ${err.message}`);
+      logger.error("messaging", "adapter_evolution", "send_fallback", `Falha envio Evolution: ${err.message}`);
       return {
-        success: true,
-        // Sandbox fallback
-        externalMessageId: `wpp_fallback_${Date.now()}`,
-        status: "sent",
+        success: false,
+        externalMessageId: "",
+        status: "failed",
         error: err.message
       };
     }
@@ -6269,11 +6880,11 @@ var MetaMessengerAdapter = class {
         rawResponse: res
       };
     } catch (err) {
-      logger.warn("messaging", "adapter_messenger", "send_fallback", `Falha envio Messenger: ${err.message}`);
+      logger.error("messaging", "adapter_messenger", "send_fallback", `Falha envio Messenger: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `fb_fallback_${Date.now()}`,
-        status: "sent",
+        success: false,
+        externalMessageId: "",
+        status: "failed",
         error: err.message
       };
     }
@@ -6341,11 +6952,11 @@ var InstagramDirectAdapter = class {
         rawResponse: res
       };
     } catch (err) {
-      logger.warn("messaging", "adapter_instagram", "send_fallback", `Falha envio Instagram: ${err.message}`);
+      logger.error("messaging", "adapter_instagram", "send_fallback", `Falha envio Instagram: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `ig_fallback_${Date.now()}`,
-        status: "sent",
+        success: false,
+        externalMessageId: "",
+        status: "failed",
         error: err.message
       };
     }
@@ -6412,11 +7023,11 @@ var MetaWhatsAppCloudAdapter = class {
         rawResponse: res
       };
     } catch (err) {
-      logger.warn("messaging", "adapter_whatsapp_cloud", "send_fallback", `Falha envio WhatsApp Cloud: ${err.message}`);
+      logger.error("messaging", "adapter_whatsapp_cloud", "send_fallback", `Falha envio WhatsApp Cloud: ${err.message}`);
       return {
-        success: true,
-        externalMessageId: `wpp_cloud_fallback_${Date.now()}`,
-        status: "sent",
+        success: false,
+        externalMessageId: "",
+        status: "failed",
         error: err.message
       };
     }
@@ -7499,18 +8110,6 @@ init_logger();
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var DEFAULT_CANONICAL_PRICINGS = [
   {
-    id: "price_defesa_previa",
-    serviceType: "defesa_previa",
-    serviceName: "Defesa Pr\xE9via",
-    description: "Defesa administrativa em primeira inst\xE2ncia contra autua\xE7\xE3o de tr\xE2nsito.",
-    standardPrice: 89.9,
-    promotionalPrice: 44.95,
-    isActive: true,
-    history: [],
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    updatedBy: "System Canonical Seed"
-  },
-  {
     id: "price_recurso_jari",
     serviceType: "recurso_jari",
     serviceName: "Recurso JARI",
@@ -7551,6 +8150,54 @@ var DEFAULT_CANONICAL_PRICINGS = [
     serviceType: "cassacao",
     serviceName: "Defesa de Cassa\xE7\xE3o de CNH",
     description: "Defesa especializada contra instaura\xE7\xE3o de processo de cassa\xE7\xE3o da CNH.",
+    standardPrice: 199.9,
+    promotionalPrice: 99.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_suspensao_cnh",
+    serviceType: "suspensao_cnh",
+    serviceName: "Suspens\xE3o da CNH / Lei Seca",
+    description: "Defesa administrativa contra processo de suspens\xE3o do direito de dirigir.",
+    standardPrice: 149.9,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_cassacao_cnh",
+    serviceType: "cassacao_cnh",
+    serviceName: "Cassa\xE7\xE3o da CNH (PCDD)",
+    description: "Defesa contra processo de cassa\xE7\xE3o da CNH por condu\xE7\xE3o com documento suspenso.",
+    standardPrice: 199.9,
+    promotionalPrice: 99.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_processo_suspensao",
+    serviceType: "processo_suspensao",
+    serviceName: "Defesa em Processo de Suspens\xE3o (PSDD)",
+    description: "Defesa t\xE9cnica completa em processo administrativo de suspens\xE3o da CNH.",
+    standardPrice: 149.9,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_processo_cassacao",
+    serviceType: "processo_cassacao",
+    serviceName: "Defesa em Processo de Cassa\xE7\xE3o (PCDD)",
+    description: "Defesa especializada contra procedimento de cassa\xE7\xE3o da habilita\xE7\xE3o.",
     standardPrice: 199.9,
     promotionalPrice: 99.95,
     isActive: true,
@@ -8770,14 +9417,25 @@ var CommercialAuditService = class {
 
 // src/server/commercial/offers/offer-service.ts
 var round2 = (value) => Number((Math.round(value * 100) / 100).toFixed(2));
-var SERVICE_TYPE_ALIASES = {
+var PROCEDURE_TO_COMMERCIAL = {
+  recurso_jari: "recurso_jari",
+  recurso_cetran: "recurso_cetran",
+  suspensao: "suspensao",
+  cassacao: "cassacao",
+  indicacao_condutor: "indicacao_condutor",
+  conversao_advertencia: "conversao_advertencia",
+  // Aliases/legados que chegavam como tipos distintos mas são o MESMO serviço comercial
   suspensao_cnh: "suspensao",
   cassacao_cnh: "cassacao",
-  recurso_multa: "defesa_previa"
+  processo_suspensao: "suspensao",
+  processo_cassacao: "cassacao",
+  // Estes NÃO são serviços comerciais (sem preço no catálogo)
+  analise_tecnica: "analise_tecnica",
+  relatorio_pericial: "relatorio_pericial"
 };
 function normalizeServiceType(raw) {
   const key = (raw || "").toLowerCase().trim();
-  return SERVICE_TYPE_ALIASES[key] ?? key;
+  return PROCEDURE_TO_COMMERCIAL[key] ?? key;
 }
 var OfferService = class {
   constructor(pricings, promotions, coupons, recordAudit, getDocumentCount) {
@@ -9298,7 +9956,7 @@ function runCommercialTestSuite() {
   const results = [];
   const t1Start = Date.now();
   try {
-    const pricing = commercialService.getPricingForService("defesa_previa");
+    const pricing = commercialService.getPricingForService("recurso_jari");
     const isValid = pricing && (pricing.promotionalPrice || pricing.standardPrice) > 0;
     results.push({
       code: "COMMERCIAL-001",
@@ -9306,7 +9964,7 @@ function runCommercialTestSuite() {
       category: "PRICING",
       status: isValid ? "PASSED" : "FAILED",
       durationMs: Date.now() - t1Start,
-      expected: "Pre\xE7o ativo configurado para defesa_previa (R$ 89,90 ou R$ 44,95)",
+      expected: "Pre\xE7o ativo configurado para recurso_jari (cat\xE1logo comercial)",
       actual: `Pre\xE7o retornado: Standard R$ ${pricing?.standardPrice}, Promo R$ ${pricing?.promotionalPrice}`,
       details: { pricing }
     });
@@ -9349,7 +10007,7 @@ function runCommercialTestSuite() {
   }
   const t3Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon("DEFESAI10", 100, "defesa_previa");
+    const validation = commercialService.validateCoupon("DEFESAI10", 100, "recurso_jari");
     const isSuccess = validation.valid && validation.discountAmount === 10 && validation.finalPrice === 90;
     results.push({
       code: "COMMERCIAL-003",
@@ -9374,7 +10032,7 @@ function runCommercialTestSuite() {
   }
   const t4Start = Date.now();
   try {
-    const validation = commercialService.validateCoupon("EXPIRADO2023", 100, "defesa_previa");
+    const validation = commercialService.validateCoupon("EXPIRADO2023", 100, "recurso_jari");
     const isSuccess = !validation.valid && validation.discountAmount === 0;
     results.push({
       code: "COMMERCIAL-004",
@@ -9805,7 +10463,7 @@ router3.post("/offers/resolve", (req, res) => {
     if (!serviceType || typeof serviceType !== "string") {
       return res.status(400).json({
         error: "serviceType \xE9 obrigat\xF3rio.",
-        hint: "Envie o ProcedureType identificado no onboarding (ex: defesa_previa)."
+        hint: "Envie o ProcedureType identificado no onboarding (ex: recurso_jari)."
       });
     }
     const userId = req.user?.id || bodyUserId;
@@ -9954,7 +10612,7 @@ router3.post(["/coupons/:code/validate", "/admin/commercial/coupons/:code/valida
   try {
     const { code } = req.params;
     const { orderAmount, serviceType, userId } = req.body ?? {};
-    const result = commercialService.validateCoupon(code, orderAmount ?? 0, serviceType ?? "defesa_previa", userId);
+    const result = commercialService.validateCoupon(code, orderAmount ?? 0, serviceType ?? "recurso_jari", userId);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -9964,7 +10622,7 @@ router3.post(["/coupons/:code/redeem", "/admin/commercial/coupons/:code/redeem"]
   try {
     const { code } = req.params;
     const { userId, userName, caseId, orderAmount, serviceType } = req.body ?? {};
-    const result = commercialService.redeemCoupon(code, userId, userName, caseId, orderAmount ?? 0, serviceType ?? "defesa_previa");
+    const result = commercialService.redeemCoupon(code, userId, userName, caseId, orderAmount ?? 0, serviceType ?? "recurso_jari");
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -10700,483 +11358,6 @@ var logs_default = router6;
 // src/server/routes/marketing.ts
 init_logger();
 import { Router as Router7 } from "express";
-
-// src/server/services/marketing-service.ts
-init_logger();
-
-// src/data/marketing-agents-data.ts
-var INITIAL_MARKETING_AGENTS = [
-  {
-    id: "estrategico",
-    name: "Agente Estrat\xE9gico",
-    handle: "@marketing-estrategico",
-    description: "Monitora altera\xE7\xF5es legislativas no CTB, novas resolu\xE7\xF5es do CONTRAN e tend\xEAncias de busca de motoristas.",
-    status: "running",
-    lastActivity: "H\xE1 2 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 142,
-    currentTask: "Mapeando impacto da nova Portaria SENATRAN sobre radares port\xE1teis",
-    confidenceScore: 98,
-    metrics: [
-      { label: "Oportunidades Mapeadas", value: 28, trend: "up" },
-      { label: "Pautas Priorizadas", value: 12, trend: "neutral" }
-    ]
-  },
-  {
-    id: "planejamento",
-    name: "Agente de Planejamento",
-    handle: "@marketing-planejamento",
-    description: "Organiza a grade editorial semanal, frequ\xEAncia de postagens e distribui\xE7\xE3o multicanal (Instagram, Blog SEO, TikTok).",
-    status: "running",
-    lastActivity: "H\xE1 4 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 89,
-    currentTask: "Distribuindo 14 novos slots para a semana de Feriado / Blitz",
-    confidenceScore: 95,
-    metrics: [
-      { label: "Posts Agendados", value: 24, trend: "up" },
-      { label: "Taxa de Ocupa\xE7\xE3o da Grade", value: "92%", trend: "up" }
-    ]
-  },
-  {
-    id: "criador",
-    name: "Agente Criador de Conte\xFAdo",
-    handle: "@marketing-criador",
-    description: "Gera copies de alta convers\xE3o, carross\xE9is educativos, roteiros de Reels e guias pr\xE1ticos sobre anula\xE7\xE3o de multas.",
-    status: "running",
-    lastActivity: "H\xE1 1 minuto",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 236,
-    currentTask: 'Redigindo carrossel: "3 Erros Comuns no Baf\xF4metro que Anulam o Processo"',
-    confidenceScore: 96,
-    metrics: [
-      { label: "Minutas de Conte\xFAdo", value: 310, trend: "up" },
-      { label: "Varia\xE7\xF5es de Gancho", value: "4.8/post", trend: "up" }
-    ]
-  },
-  {
-    id: "qualidade",
-    name: "Agente Guardi\xE3o de Qualidade",
-    handle: "@marketing-qualidade",
-    description: "Gate duro que audita conformidade jur\xEDdica com o CTB/CONTRAN e bloqueia promessas falsas de ganho de causa.",
-    status: "idle",
-    lastActivity: "H\xE1 3 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 198,
-    currentTask: "Auditoria de assertividade jur\xEDdica conclu\xEDda com nota 9.8/10",
-    confidenceScore: 99,
-    metrics: [
-      { label: "Taxa de Aprova\xE7\xE3o", value: "94.2%", trend: "up" },
-      { label: "Vetos de Risco", value: 6, trend: "down" }
-    ]
-  },
-  {
-    id: "publicacao",
-    name: "Agente de Publica\xE7\xE3o & Despacho",
-    handle: "@marketing-publicacao",
-    description: "Gerencia a fila de agendamento autom\xE1tico e publica\xE7\xE3o sincronizada nas redes sociais e blog.",
-    status: "running",
-    lastActivity: "H\xE1 7 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 174,
-    currentTask: "Pr\xF3ximo disparo agendado para 18:30 (Instagram Carrossel)",
-    confidenceScore: 97,
-    metrics: [
-      { label: "Posts Publicados", value: 168, trend: "up" },
-      { label: "Uptime do Despacho", value: "99.9%", trend: "neutral" }
-    ]
-  },
-  {
-    id: "inteligencia",
-    name: "Agente de Intelig\xEAncia & M\xE9tricas",
-    handle: "@marketing-inteligencia",
-    description: "Coleta dados de engajamento, leads capturados no onboarding an\xF4nimo e taxa de convers\xE3o em checkout de defesas.",
-    status: "running",
-    lastActivity: "H\xE1 5 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 115,
-    currentTask: "Calculando CAC e taxa de conclus\xE3o de an\xE1lise gratuita por tema",
-    confidenceScore: 94,
-    metrics: [
-      { label: "Alcance Mensal", value: "284.5k", trend: "up" },
-      { label: "Convers\xE3o em Casos", value: "14.8%", trend: "up" }
-    ]
-  },
-  {
-    id: "aprendizado",
-    name: "Agente de Aprendizado Cont\xEDnuo",
-    handle: "@marketing-aprendizado",
-    description: "Processa o feedback dos resultados para refinar ganchos persuasivos e focar nos temas com maior retorno.",
-    status: "idle",
-    lastActivity: "H\xE1 6 minutos",
-    cycleIntervalMinutes: 5,
-    tasksCompleted: 77,
-    currentTask: 'Ajustando peso de convers\xE3o do tema "Multa de Radar sem Placa R-19"',
-    confidenceScore: 96,
-    metrics: [
-      { label: "Ganchos Otimizados", value: 43, trend: "up" },
-      { label: "Melhoria de CTR", value: "+22.4%", trend: "up" }
-    ]
-  }
-];
-var INITIAL_EDITORIAL_CONTENTS = [
-  {
-    id: "cnt-001",
-    title: "Recebeu notifica\xE7\xE3o de radar? Confira se a aferi\xE7\xE3o do INMETRO est\xE1 v\xE1lida!",
-    channel: "instagram",
-    format: "carrossel",
-    legalTheme: "Aferi\xE7\xE3o Metrol\xF3gica e Resolu\xE7\xE3o CONTRAN 798/2020",
-    infractionTargetCode: "745-50",
-    status: "agendado",
-    scheduledDate: "2026-08-15 18:30",
-    estimatedReach: 24500,
-    copyText: `\u{1F6A8} ATEN\xC7\xC3O MOTORISTA: Sabia que mais de 30% dos radares de tr\xE2nsito podem estar com o laudo do INMETRO vencido?
-
-Pela Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, todo radar eletr\xF4nico precisa de calibra\xE7\xE3o anual obrigat\xF3ria. Se passou de 365 dias, a multa \xE9 NULA!
-
-\u{1F449} Na notifica\xE7\xE3o que voc\xEA recebeu, verifique o campo "Data da \xFAltima verifica\xE7\xE3o".
-Se a data for superior a 1 ano da data da infra\xE7\xE3o, voc\xEA tem direito ao cancelamento imediato!
-
-Fa\xE7a a an\xE1lise gratuita do seu auto agora mesmo pelo link da bio! \u{1F697}\u{1F4A8}`,
-    hashtags: ["#DireitoDeTransito", "#AdeusMulta", "#RecursoDeMulta", "#CTB", "#RadarDeVelocidade"],
-    visualPrompt: "Carrossel moderno com fundo escuro elegante e destaque em amarelo para a data de aferi\xE7\xE3o do radar.",
-    authorAgent: "@marketing-criador",
-    qualityReviewScore: 9.8
-  },
-  {
-    id: "cnt-002",
-    title: "Como converter sua multa leve ou m\xE9dia em Advert\xEAncia por Escrito (Sem pagar nada)",
-    channel: "blog",
-    format: "artigo_seo",
-    legalTheme: "Convers\xE3o em Advert\xEAncia por Escrito \u2014 Art. 267 do CTB",
-    infractionTargetCode: "745-50",
-    status: "publicado",
-    scheduledDate: "2026-08-14 10:00",
-    estimatedReach: 18200,
-    copyText: `Desde a Lei n\xBA 14.071/2020, o motorista que cometer infra\xE7\xE3o de tr\xE2nsito de natureza LEVE ou M\xC9DIA e n\xE3o possuir nenhuma outra infra\xE7\xE3o no prontu\xE1rio nos \xFAltimos 12 meses tem o DIREITO SUBJETIVO \xE0 convers\xE3o autom\xE1tica da multa em advert\xEAncia por escrito.
-
-Isso significa:
-1. Zero reais a pagar (isen\xE7\xE3o total do boleto)
-2. Zero pontos somados na CNH
-3. Procedimento 100% administrativo e simples
-
-Descubra o passo a passo e o modelo de peti\xE7\xE3o no Adeus Multa.`,
-    hashtags: ["#Art267CTB", "#AdvertenciaPorEscrito", "#Economia", "#Motorista"],
-    visualPrompt: "Imagem ilustrativa de uma CNH com carimbo de isen\xE7\xE3o e escudo protetor.",
-    authorAgent: "@marketing-criador",
-    qualityReviewScore: 9.9
-  },
-  {
-    id: "cnt-003",
-    title: "Recusou o teste do baf\xF4metro? Entenda por que a multa n\xE3o \xE9 autom\xE1tica",
-    channel: "tiktok",
-    format: "reels_roteiro",
-    legalTheme: "Art. 165-A e Termo de Constata\xE7\xE3o de Embriaguez",
-    infractionTargetCode: "516-91",
-    status: "aprovado_qualidade",
-    scheduledDate: "2026-08-16 12:00",
-    estimatedReach: 45e3,
-    copyText: `[ROTEIRO DE REELS / TIKTOK]
-(Cena 1 - Gancho): "Se voc\xEA recusou o baf\xF4metro na blitz, pare tudo e assista isso antes de pagar a multa de quase R$ 3 mil!"
-(Cena 2 - Fundamenta\xE7\xE3o): "A Resolu\xE7\xE3o 432 do CONTRAN exige que o policial preencha um Termo de Sinais Psicomotores detalhando sinais vis\xEDveis. Se ele s\xF3 escreveu 'recusou', o auto de infra\xE7\xE3o \xE9 NULO."
-(Cena 3 - CTA): "Entre no Adeus Multa, envie a foto da sua notifica\xE7\xE3o e descubra os v\xEDcios formais na hora!"`,
-    hashtags: ["#LeiSeca", "#Bafometro", "#RecusaBafometro", "#Blitz"],
-    visualPrompt: "V\xEDdeo din\xE2mico em estilo bate-papo jur\xEDdico acess\xEDvel com legendas contrastantes.",
-    authorAgent: "@marketing-criador",
-    qualityReviewScore: 9.6
-  },
-  {
-    id: "cnt-004",
-    title: "Celular no suporte do painel d\xE1 multa? O que diz a nova resolu\xE7\xE3o",
-    channel: "instagram",
-    format: "carrossel",
-    legalTheme: "Artigo 252 do CTB \u2014 Manuseio x Suporte Veicular",
-    infractionTargetCode: "736-62",
-    status: "agendado",
-    scheduledDate: "2026-08-17 19:00",
-    estimatedReach: 32e3,
-    copyText: `\u{1F4F1} USAR O GPS NO SUPORTE \xC9 PERMITIDO!
-
-O CTB pro\xEDbe "segurar ou manusear" o celular enquanto dirige. Tocar rapidamente na tela do GPS fixado no painel para aceitar corrida ou verificar rota com o ve\xEDculo parado no sem\xE1foro N\xC3O configura infra\xE7\xE3o grav\xEDssima.
-
-Se o agente autuou sem abordagem e n\xE3o descreveu a conduta na observa\xE7\xE3o, o recurso tem alta chance de anula\xE7\xE3o!`,
-    hashtags: ["#CelularAoVolante", "#MotoristaDeApp", "#Uber", "#99App", "#Transito"],
-    visualPrompt: "Ilustra\xE7\xE3o do interior do ve\xEDculo com celular no suporte e \xEDcone verde de permitido.",
-    authorAgent: "@marketing-criador",
-    qualityReviewScore: 9.7
-  }
-];
-var BRAND_IDENTITY = {
-  brandName: "Adeus Multa",
-  tagline: "Defenda sua CNH com intelig\xEAncia t\xE9cnica e jur\xEDdica.",
-  positioning: "Especialista digital em defesa administrativa de tr\xE2nsito. Ajudamos motoristas a gerar e protocolar recursos fundamentados no CTB com rigor t\xE9cnico.",
-  toneOfVoice: "T\xE9cnico por\xE9m acess\xEDvel, emp\xE1tico com o motorista, estritamente legalista, transparente e encorajador.",
-  primaryColors: ["#0f172a", "#0284c7", "#10b981", "#f59e0b"],
-  targetAudience: "Motoristas particulares, motoristas de aplicativo (Uber/99), caminhoneiros, frotistas e condutores que receberam autua\xE7\xF5es indevidas.",
-  disallowedWords: ["Garantia de ganho 100%", "Burlar a lei", "Advogado virtual", "Jeitinho", "Esquema"],
-  mandatoryLegalDisclaimers: 'O Adeus Multa \xE9 uma ferramenta tecnol\xF3gica de apoio \xE0 elabora\xE7\xE3o de peti\xE7\xF5es administrativas nos termos do Art. 5\xBA, XXXIV, "a" da Constitui\xE7\xE3o Federal. N\xE3o realizamos representa\xE7\xE3o advocat\xEDcia privativa nem garantimos resultados de julgamento dos \xF3rg\xE3os.'
-};
-
-// src/server/services/marketing-service.ts
-var MarketingService = class {
-  constructor() {
-    this.cycleCount = 0;
-    this.contentVersions = {};
-    this.supabase = null;
-    this.supabase = getSupabaseServerClient();
-    this.initializeState();
-  }
-  async initializeState() {
-    if (!this.supabase) {
-      if (process.env.NODE_ENV === "production") {
-        logger.error("marketing", "service", "initializeState", "Supabase not configured in production \u2014 marketing data will be empty");
-      }
-      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
-      this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
-      this.contentVersions = {};
-      logger.info("marketing", "service", "initializeState", "Supabase not available, using default data");
-      return;
-    }
-    try {
-      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
-      const { data: contents, error: contentsError } = await this.supabase.from("editorial_content").select("*").order("created_at", { ascending: false });
-      if (contentsError) {
-        logger.warn("marketing", "service", "initializeState", "Failed to load editorial contents from Supabase, using defaults", { error: contentsError });
-        this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
-      } else {
-        this.editorialContents = contents || [...INITIAL_EDITORIAL_CONTENTS];
-      }
-      this.contentVersions = {};
-      logger.info("marketing", "service", "initializeState", "Loaded state from Supabase", {
-        agentsCount: this.marketingAgents.length,
-        contentsCount: this.editorialContents.length
-      });
-    } catch (error) {
-      logger.error("marketing", "service", "initializeState", "Error initializing state from Supabase, falling back to defaults", { error });
-      if (process.env.NODE_ENV === "production") {
-        logger.error("marketing", "service", "initializeState", "Production fallback: using INITIAL_MARKETING_AGENTS due to Supabase error");
-      }
-      this.marketingAgents = [...INITIAL_MARKETING_AGENTS];
-      this.editorialContents = [...INITIAL_EDITORIAL_CONTENTS];
-      this.contentVersions = {};
-    }
-  }
-  // Getters
-  async getMarketingAgents() {
-    return [...this.marketingAgents];
-  }
-  async getEditorialContents() {
-    if (!this.supabase) {
-      return [...this.editorialContents];
-    }
-    try {
-      const { data, error } = await this.supabase.from("editorial_content").select("*").order("created_at", { ascending: false });
-      if (error) {
-        logger.warn("marketing", "service", "getEditorialContents", "Failed to load from Supabase, using in-memory cache", { error });
-        return [...this.editorialContents];
-      }
-      this.editorialContents = data || [];
-      return [...this.editorialContents];
-    } catch (error) {
-      logger.error("marketing", "service", "getEditorialContents", "Error loading editorial contents, using in-memory cache", { error });
-      return [...this.editorialContents];
-    }
-  }
-  getBrandIdentity() {
-    return BRAND_IDENTITY;
-  }
-  getCycleCount() {
-    return this.cycleCount;
-  }
-  async incrementCycleCount() {
-    this.cycleCount += 1;
-    if (this.supabase) {
-      try {
-        await this.supabase.from("app_settings").upsert({
-          key: "marketing_cycle_count",
-          value: this.cycleCount,
-          updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        }, {
-          onConflict: "key"
-        });
-      } catch (error) {
-        logger.warn("marketing", "service", "incrementCycleCount", "Failed to persist cycle count to Supabase", { error });
-      }
-    }
-    eventBus.publish(EventTopics.MARKETING_CYCLE_TICK, {
-      agentId: "system",
-      // This will be overridden in cycleTick
-      task: "cycle_increment"
-    }, "marketing_os");
-    return {
-      success: true,
-      cycle: this.cycleCount
-    };
-  }
-  // Marketing cycle tick
-  async cycleTick() {
-    const randomAgentIdx = Math.floor(Math.random() * this.marketingAgents.length);
-    this.marketingAgents[randomAgentIdx].tasksCompleted += 1;
-    this.marketingAgents[randomAgentIdx].lastActivity = "Agora mesmo";
-    await this.incrementCycleCount();
-    eventBus.publish(EventTopics.MARKETING_CYCLE_TICK, {
-      agentId: this.marketingAgents[randomAgentIdx].id,
-      task: this.marketingAgents[randomAgentIdx].currentTask
-    }, "marketing_os");
-    return {
-      success: true,
-      updatedAgent: this.marketingAgents[randomAgentIdx],
-      agents: await this.getMarketingAgents()
-    };
-  }
-  // Generate marketing content
-  async generateContent(theme, channel, format) {
-    const newContent = {
-      id: `cnt-${Date.now()}`,
-      title: theme || "Multas de Tr\xE2nsito: Novos Prazos e Resolu\xE7\xF5es CONTRAN 2026",
-      channel: channel || "instagram",
-      format: format || "carrossel",
-      legalTheme: theme || "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB",
-      legal_theme: theme || "Prazos de Notifica\xE7\xE3o e Ampla Defesa no CTB",
-      status: "aprovado_qualidade",
-      scheduledDate: new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
-      scheduled_date: new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
-      estimatedReach: Math.floor(15e3 + Math.random() * 25e3),
-      estimated_reach: Math.floor(15e3 + Math.random() * 25e3),
-      copyText: `\u{1F6A6} MOTORISTA: Entenda os seus direitos garantidos pelo CTB!
-      
-O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qualquer atraso invalida o auto de infra\xE7\xE3o!`,
-      copy_text: `\u{1F6A6} MOTORISTA: Entenda os seus direitos garantidos pelo CTB!
-      
-O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qualquer atraso invalida o auto de infra\xE7\xE3o!`,
-      hashtags: ["#AdeusMulta", "#DireitoDeTransito", "#CTB", "#RecursoDeMulta"],
-      visualPrompt: "Visual elegante com paleta azul escuro e amarelo institucional.",
-      visual_prompt: "Visual elegante com paleta azul escuro e amarelo institucional.",
-      authorAgent: "@marketing-criador",
-      author_agent: "@marketing-criador",
-      qualityReviewScore: 9.7
-    };
-    let savedContent = newContent;
-    if (this.supabase) {
-      try {
-        const { data, error } = await this.supabase.from("editorial_content").insert([newContent]).select().single();
-        if (error) {
-          throw error;
-        }
-        savedContent = { ...newContent, ...data };
-        logger.info("marketing", "service", "generateContent", "Content saved to Supabase", { contentId: savedContent.id });
-      } catch (error) {
-        logger.error("marketing", "service", "generateContent", "Failed to save content to Supabase, using in-memory only", { error });
-      }
-    }
-    this.editorialContents.unshift(savedContent);
-    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
-    return { success: true, content: savedContent };
-  }
-  // Create manual content item
-  async createManualContent(input) {
-    const newContent = {
-      id: `cnt-${Date.now()}`,
-      title: input.title,
-      channel: input.channel || "instagram",
-      format: input.format || "carrossel",
-      legalTheme: input.legalTheme || input.title,
-      legal_theme: input.legalTheme || input.title,
-      status: input.status || "rascunho",
-      scheduledDate: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
-      scheduled_date: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
-      estimatedReach: Math.floor(1e4 + Math.random() * 2e4),
-      estimated_reach: Math.floor(1e4 + Math.random() * 2e4),
-      copyText: input.copyText || "",
-      copy_text: input.copyText || "",
-      hashtags: input.hashtags || ["#AdeusMulta", "#CTB"],
-      imageUrl: input.imageUrl || null,
-      image_url: input.imageUrl || null,
-      mediaUrl: input.mediaUrl || input.imageUrl || null,
-      media_url: input.mediaUrl || input.imageUrl || null,
-      visualPrompt: input.visualPrompt || "",
-      visual_prompt: input.visualPrompt || "",
-      authorAgent: "@marketing-criador",
-      author_agent: "@marketing-criador",
-      qualityReviewScore: 9.5
-    };
-    let savedContent = newContent;
-    if (this.supabase) {
-      try {
-        const { data, error } = await this.supabase.from("editorial_content").insert([newContent]).select().single();
-        if (!error && data) {
-          savedContent = { ...newContent, ...data };
-        }
-      } catch (err) {
-        logger.warn("marketing", "service", "createManualContent", "Fallback to memory only");
-      }
-    }
-    this.editorialContents.unshift(savedContent);
-    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
-    return savedContent;
-  }
-  // Update marketing agent (for external updates)
-  async updateMarketingAgent(agentId, updates) {
-    const agentIndex = this.marketingAgents.findIndex((agent) => agent.id === agentId);
-    if (agentIndex !== -1) {
-      this.marketingAgents[agentIndex] = { ...this.marketingAgents[agentIndex], ...updates };
-      return this.marketingAgents[agentIndex];
-    }
-    return null;
-  }
-  // Insere conteúdo no topo (duplicação/variação)
-  // Histórico de versões (agent: humano | copywriting | seo | compliance)
-  getContentVersions(contentId) {
-    return [...this.contentVersions[contentId] ?? []];
-  }
-  addContentVersion(contentId, entry) {
-    if (!this.contentVersions[contentId]) this.contentVersions[contentId] = [];
-    const rec = {
-      id: `ver_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      version: this.contentVersions[contentId].length + 1,
-      ...entry,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.contentVersions[contentId].unshift(rec);
-    if (this.supabase) {
-      try {
-        logger.debug("marketing", "service", "addContentVersion", "Version persisted (placeholder)", { contentId, version: rec.version });
-      } catch (error) {
-        logger.warn("marketing", "service", "addContentVersion", "Failed to persist version to Supabase", { error });
-      }
-    }
-    return rec;
-  }
-  // Atualiza conteúdo (usado pelos agentes por status: aprovado_qualidade -> agendado -> publicado)
-  async updateContent(contentId, updates) {
-    let updatedContent = null;
-    if (this.supabase) {
-      try {
-        const { data, error } = await this.supabase.from("editorial_content").update(updates).eq("id", contentId).select().single();
-        if (error) {
-          throw error;
-        }
-        updatedContent = data;
-        logger.info("marketing", "service", "updateContent", "Content updated in Supabase", { contentId });
-      } catch (error) {
-        logger.error("marketing", "service", "updateContent", "Failed to update content in Supabase", { error });
-      }
-    }
-    const idx = this.editorialContents.findIndex((c) => c.id === contentId);
-    if (idx !== -1) {
-      this.editorialContents[idx] = { ...this.editorialContents[idx], ...updates };
-      if (!updatedContent) {
-        updatedContent = this.editorialContents[idx];
-      }
-      return updatedContent;
-    }
-    if (updatedContent) {
-      return updatedContent;
-    }
-    return null;
-  }
-};
-var marketingService = new MarketingService();
 
 // src/server/workers/marketing-orchestrator.worker.ts
 init_logger();
@@ -12659,41 +12840,8 @@ var ARGUMENTS_CATALOG = [
 // src/core/procedures/procedures-catalog.ts
 var PROCEDURES_CATALOG = [
   {
-    id: "defesa_previa",
-    code: "PROC_001",
-    name: "Defesa Pr\xE9via (Fase de Notifica\xE7\xE3o de Autua\xE7\xE3o)",
-    category: "Fase Inicial da Autua\xE7\xE3o",
-    objective: "Demonstrar v\xEDcios formais insan\xE1veis no Auto de Infra\xE7\xE3o de Tr\xE2nsito (AIT), decad\xEAncia de 30 dias na notifica\xE7\xE3o, inconsist\xEAncia de dados ou solicitar convers\xE3o em advert\xEAncia antes da imposi\xE7\xE3o da penalidade pecuni\xE1ria.",
-    legalBasis: "Art. 281, par\xE1grafo \xFAnico, II do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 918/2022 e S\xFAmula 312 do STJ",
-    competentBody: "Autoridade de Tr\xE2nsito do \xD3rg\xE3o Autuador (Diretor de Tr\xE2nsito / Superintendente)",
-    suspensiveEffectRule: "Impede a lavratura da Notifica\xE7\xE3o de Penalidade (NP) e a cobran\xE7a financeira enquanto pendente de an\xE1lise.",
-    stages: [
-      { stepNumber: 1, name: "Recebimento da Notifica\xE7\xE3o de Autua\xE7\xE3o (NA)", description: "Identifica\xE7\xE3o da data de expedi\xE7\xE3o e c\xE1lculo do prazo decadencial de 30 dias.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" },
-      { stepNumber: 2, name: "An\xE1lise de Nulidades Formais e Metrol\xF3gicas", description: "Confer\xEAncia de dados do AIT, aferi\xE7\xE3o do radar no INMETRO e requisitos do Art. 280 do CTB.", deadlineDays: 5, actingParty: "Cidad\xE3o/Condutor" },
-      { stepNumber: 3, name: "Protocolo da Pe\xE7a de Defesa Pr\xE9via", description: "Envio online via portal oficial do \xF3rg\xE3o autuador ou correios com aviso de recebimento.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" },
-      { stepNumber: 4, name: "Julgamento de Consist\xEAncia pela Autoridade", description: "Aprecia\xE7\xE3o pela autoridade de tr\xE2nsito para deferimento (arquivamento) ou indeferimento com emiss\xE3o de NP.", deadlineDays: 180, actingParty: "Autoridade de Tr\xE2nsito" }
-    ],
-    requiredDocuments: [
-      { name: "C\xF3pia da Notifica\xE7\xE3o de Autua\xE7\xE3o (NA) ou espelho do AIT", required: true, description: "Documento recebido com data de postagem e n\xFAmero do AIT." },
-      { name: "Documento oficial de identidade (CNH ou RG/CPF)", required: true, description: "Comprova\xE7\xE3o de legitimidade ativa do requerente." },
-      { name: "Certificado de Registro e Licenciamento do Ve\xEDculo (CRLV)", required: true, description: "Comprova\xE7\xE3o de propriedade ou posse leg\xEDtima do ve\xEDculo." },
-      { name: "Comprovante de resid\xEAncia atualizado", required: false, description: "Para ratifica\xE7\xE3o de endere\xE7o no prontu\xE1rio do \xF3rg\xE3o." },
-      { name: "Procura\xE7\xE3o com poderes espec\xEDficos (se representado)", required: false, description: "Obrigat\xF3ria caso interposto por representante legal." }
-    ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-005", "ARG-006", "ARG-007", "ARG-008"],
-    availableTemplates: ["TPL_DEFESA_PREVIA_PADRAO", "TPL_DEFESA_PREVIA_VELOCIDADE", "TPL_CONVERSAO_ADVERTENCIA"],
-    executionChecklist: [
-      "Conferir se a notifica\xE7\xE3o foi postada em menos de 30 dias da data do fato",
-      "Checar no portal do INMETRO se o laudo do radar tinha menos de 12 meses",
-      "Verificar se todos os campos obrigat\xF3rios do Art. 280 est\xE3o preenchidos",
-      "Anexar CNH e CRLV leg\xEDveis em PDF",
-      "Assinar a peti\xE7\xE3o fisicamente ou com certificado digital GOV.BR"
-    ],
-    notes: "A Defesa Pr\xE9via \xE9 a oportunidade mais r\xE1pida de cancelamento da autua\xE7\xE3o antes que ela se converta em d\xEDvida ou pontua\xE7\xE3o na CNH."
-  },
-  {
     id: "recurso_jari",
-    code: "PROC_002",
+    code: "PROC_001",
     name: "Recurso Ordin\xE1rio \xE0 JARI (1\xAA Inst\xE2ncia Administrativa)",
     category: "Inst\xE2ncia Recursal Colegiada",
     objective: "Impugnar a Notifica\xE7\xE3o de Imposi\xE7\xE3o de Penalidade perante o colegiado da JARI, atacando tanto as preliminares processuais quanto o m\xE9rito f\xE1tico e probat\xF3rio da autua\xE7\xE3o.",
@@ -12724,7 +12872,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "recurso_cetran",
-    code: "PROC_003",
+    code: "PROC_002",
     name: "Recurso Especial ao CETRAN / CONTRAN (2\xAA Inst\xE2ncia Final)",
     category: "Inst\xE2ncia Recursal Colegiada Final",
     objective: "Reapreciar a mat\xE9ria perante o Conselho Estadual de Tr\xE2nsito ap\xF3s indeferimento na JARI, demonstrando aus\xEAncia de motiva\xE7\xE3o, viola\xE7\xE3o \xE0 lei federal ou diverg\xEAncia jurisprudencial.",
@@ -12753,7 +12901,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "suspensao_cnh",
-    code: "PROC_004",
+    code: "PROC_003",
     name: "Defesa em Processo de Suspens\xE3o do Direito de Dirigir (PSDD)",
     category: "Processos Espec\xEDficos de Habilita\xE7\xE3o",
     objective: "Evitar o bloqueio da CNH por ac\xFAmulo de pontos (20, 30 ou 40 pontos - Lei 14.071/20) ou por infra\xE7\xE3o mandat\xF3ria autossuspensiva (Lei Seca, velocidade acima de 50%, manobra perigosa).",
@@ -12782,7 +12930,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "cassacao_cnh",
-    code: "PROC_005",
+    code: "PROC_004",
     name: "Defesa em Processo de Cassa\xE7\xE3o da CNH (PCDD)",
     category: "Processos Espec\xEDficos de Habilita\xE7\xE3o",
     objective: "Defender condutor acusado de dirigir com a CNH suspensa ou reincidir em infra\xE7\xF5es mandat\xF3rias no per\xEDodo de 12 meses, evitando a perda total da carteira por 2 anos.",
@@ -12809,7 +12957,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "indicacao_condutor",
-    code: "PROC_006",
+    code: "PROC_005",
     name: "Formul\xE1rio de Indica\xE7\xE3o do Real Condutor Infrator (FARI)",
     category: "Procedimentos de Responsabilidade",
     objective: "Transferir a responsabilidade pelas infra\xE7\xF5es cometidas por terceiro para a pontua\xE7\xE3o do real condutor, desonerando o propriet\xE1rio do ve\xEDculo.",
@@ -12836,7 +12984,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "conversao_advertencia",
-    code: "PROC_007",
+    code: "PROC_006",
     name: "Requerimento de Convers\xE3o em Advert\xEAncia por Escrito",
     category: "Procedimentos de Benef\xEDcio Legal",
     objective: "Exercer o direito subjetivo previsto no Art. 267 do CTB para cancelar a cobran\xE7a em dinheiro e zerar os pontos de multas leves ou m\xE9dias de condutores ficha-limpa.",
@@ -12864,7 +13012,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "analise_tecnica",
-    code: "PROC_008",
+    code: "PROC_007",
     name: "Parecer T\xE9cnico de Consist\xEAncia e V\xEDcios Formais",
     category: "Servi\xE7os Periciais & Diagn\xF3sticos",
     objective: "Emitir relat\xF3rio t\xE9cnico especializado avaliando todas as vulnerabilidades formais, metrol\xF3gicas, de engenharia e procedimentais do Auto de Infra\xE7\xE3o de Tr\xE2nsito.",
@@ -12889,7 +13037,7 @@ var PROCEDURES_CATALOG = [
   },
   {
     id: "relatorio_pericial",
-    code: "PROC_009",
+    code: "PROC_008",
     name: "Relat\xF3rio T\xE9cnico Pericial de Engenharia e Metrologia",
     category: "Servi\xE7os Periciais & Diagn\xF3sticos",
     objective: "Produzir laudo pericial circunstanciado demonstrando falhas nos estudos t\xE9cnicos de instala\xE7\xE3o de radares, defeito no la\xE7o indutivo ou tempo de amarelo insuficiente.",
@@ -12929,7 +13077,7 @@ var DOCUMENT_BLOCKS = [
     contentTemplate: `ILUSTR\xCDSSIMO SENHOR DIRETOR / AUTORIDADE DE TR\xC2NSITO DO(A) {{orgao_autuador}}
 JURISDI\xC7\xC3O DA COMARCA DE {{cidade_estado}}`,
     supportedVariables: ["{{orgao_autuador}}", "{{cidade_estado}}"],
-    recommendedProcedures: ["defesa_previa", "conversao_advertencia", "indicacao_condutor"]
+    recommendedProcedures: ["conversao_advertencia", "indicacao_condutor"]
   },
   {
     id: "BLK-002",
@@ -13019,7 +13167,7 @@ REQUERIMENTO DE APLICA\xC7\xC3O DE DIREITO SUBJETIVO - ARTIGO 267 DO CTB`,
       "{{veiculo_placa}}",
       "{{veiculo_renavam}}"
     ],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"]
+    recommendedProcedures: ["recurso_jari", "recurso_cetran"]
   },
   {
     id: "BLK-009",
@@ -13041,7 +13189,7 @@ REQUERIMENTO DE APLICA\xC7\xC3O DE DIREITO SUBJETIVO - ARTIGO 267 DO CTB`,
       "{{veiculo_renavam}}",
       "{{numero_ait}}"
     ],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-010",
@@ -13141,7 +13289,7 @@ Ocorre que, conforme restar\xE1 cristalinamente comprovado, a autua\xE7\xE3o adm
       "{{data_infracao}}",
       "{{local_infracao}}"
     ],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-014",
@@ -13163,7 +13311,7 @@ Contudo, o registro fotogr\xE1fico e metrol\xF3gico realizado pelo equipamento e
       "{{local_infracao}}",
       "{{data_infracao}}"
     ],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-015",
@@ -13177,7 +13325,7 @@ Consta no Auto de Infra\xE7\xE3o n\xBA {{numero_ait}} a suposta pr\xE1tica da co
 
 Cumpre destacar que a imagem capturada pelo sistema automatizado n\xE3o registra a transposi\xE7\xE3o da linha de reten\xE7\xE3o ap\xF3s o in\xEDcio do ciclo vermelho, nem comprova que o ve\xEDculo n\xE3o realizou manobra segura para desobstru\xE7\xE3o de via ou passagem de ve\xEDculo em urg\xEAncia, em total desacordo com o Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito (Res. CONTRAN 985/2022).`,
     supportedVariables: ["{{numero_ait}}", "{{data_infracao}}", "{{local_infracao}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-016",
@@ -13191,7 +13339,7 @@ Imputa-se ao(\xE0) Requerente a conduta do Artigo 252, par\xE1grafo \xFAnico do 
 
 O agente de tr\xE2nsito limitou-se a expedir autua\xE7\xE3o remota e instant\xE2nea, sem consignar no campo de observa\xE7\xF5es a descri\xE7\xE3o circunstanciada da conduta (como a posi\xE7\xE3o do aparelho e o tempo de visualiza\xE7\xE3o), violando frontalmente a ficha de enquadramento da Resolu\xE7\xE3o CONTRAN n\xBA 985/2022.`,
     supportedVariables: ["{{numero_ait}}", "{{data_infracao}}", "{{local_infracao}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-017",
@@ -13205,7 +13353,7 @@ O(A) Requerente foi surpreendido(a) com a lavratura do AIT n\xBA {{numero_ait}},
 
 Ocorre que no exato local n\xE3o havia sinaliza\xE7\xE3o horizontal ou vertical R-6a vis\xEDvel, leg\xEDvel e regulamentar no sentido da via, ou, subsidiariamente, tratou-se de mera parada emergencial e moment\xE2nea estritamente destinada ao embarque/desembarque de passageiro, ato plenamente respaldado pelo Anexo I do CTB.`,
     supportedVariables: ["{{numero_ait}}", "{{data_infracao}}", "{{local_infracao}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-018",
@@ -13219,7 +13367,7 @@ Em {{data_infracao}}, ao transitar pelo endere\xE7o {{local_infracao}}, o(a) Req
 
 Ocorre que o(a) Requerente n\xE3o apresentava qualquer sinal exterior, not\xF3rio ou cl\xEDnico de embriaguez ou altera\xE7\xE3o da capacidade psicomotora. N\xE3o foi preenchido Termo de Constata\xE7\xE3o de Sinais nos moldes do Anexo II da Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, demonstrando que o ato sancionat\xF3rio fundou-se exclusivamente na mera recusa desacompanhada de qualquer risco \xE0 seguran\xE7a vi\xE1ria.`,
     supportedVariables: ["{{data_infracao}}", "{{local_infracao}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "processo_suspensao"]
+    recommendedProcedures: ["recurso_jari", "processo_suspensao"]
   },
   {
     id: "BLK-019",
@@ -13233,7 +13381,7 @@ O Auto de Infra\xE7\xE3o n\xBA {{numero_ait}} imputa ao(\xE0) Requerente a condu
 
 O(A) Requerente sempre fez uso do cinto de seguran\xE7a de tr\xEAs pontos regularmente afivelado. No momento da passagem pelo ponto de fiscaliza\xE7\xE3o, a utiliza\xE7\xE3o de vestimenta escura e as condi\xE7\xF5es de luminosidade geraram equ\xEDvoco de percep\xE7\xE3o do agente de tr\xE2nsito, que n\xE3o procedeu \xE0 abordagem fiscalizat\xF3ria para verifica\xE7\xE3o do fato.`,
     supportedVariables: ["{{numero_ait}}", "{{data_infracao}}", "{{local_infracao}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-020",
@@ -13247,7 +13395,7 @@ Em {{data_infracao}}, o(a) Requerente teve seu ve\xEDculo autuado sob o AIT n\xB
 
 Conforme comprovantes fiscais e banc\xE1rios em anexo, os tributos e taxas de licenciamento anual j\xE1 haviam sido integralmente quitados antes da abordagem fiscal, ocorrendo mera demora sist\xEAmica no processamento e emiss\xE3o do CRLV-e pelo DETRAN/{{uf_requerente}}, restando patente a boa-f\xE9 do administrado e a aus\xEAncia de infra\xE7\xE3o consumada.`,
     supportedVariables: ["{{data_infracao}}", "{{numero_ait}}", "{{uf_requerente}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-021",
@@ -13261,7 +13409,7 @@ A empresa Requerente foi notificada da imposi\xE7\xE3o da penalidade pecuni\xE1r
 
 Contudo, a empresa procedeu ao envio regular e tempestivo da documenta\xE7\xE3o do real condutor pelos canais oficiais / protocolo eletr\xF4nico, ou, alternativamente, o pr\xF3prio Auto de Infra\xE7\xE3o origin\xE1rio padece de nulidade absoluta pr\xE9via, o que acarreta a nulidade reflexa da san\xE7\xE3o acess\xF3ria por for\xE7a do princ\xEDpio da gravita\xE7\xE3o jur\xEDdica.`,
     supportedVariables: ["{{numero_ait}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-022",
@@ -13321,7 +13469,7 @@ O(A) Requerente foi notificado(a) da autua\xE7\xE3o referente ao AIT n\xBA {{num
 
 Conforme certid\xE3o de prontu\xE1rio e hist\xF3rico de CNH extra\xEDdos do sistema SENATRAN/DETRAN em anexo, o(a) Requerente n\xE3o cometeu nenhuma outra infra\xE7\xE3o de tr\xE2nsito nos \xFAltimos 12 (doze) meses anteriores \xE0 data da autua\xE7\xE3o. Trata-se, portanto, de hip\xF3tese de imposi\xE7\xE3o obrigat\xF3ria de convers\xE3o da penalidade pecuni\xE1ria em advert\xEAncia por escrito, constituindo direito subjetivo do condutor ap\xF3s o advento da Lei n\xBA 14.071/2020.`,
     supportedVariables: ["{{numero_ait}}", "{{enquadramento_ctb}}", "{{gravidade_infracao}}"],
-    recommendedProcedures: ["conversao_advertencia", "defesa_previa"]
+    recommendedProcedures: ["conversao_advertencia"]
   },
   // ==========================================
   // 4. PRELIMINARES E NULIDADES FORMAIS (B026 - B038)
@@ -13340,7 +13488,7 @@ No presente caso, a suposta infra\xE7\xE3o ocorreu em {{data_infracao}}, ao pass
 
 Tratando-se de prazo decadencial de ordem p\xFAblica, extinguiu-se o pr\xF3prio direito punitivo do Estado, impondo-se o imediato arquivamento do feito.`,
     supportedVariables: ["{{data_infracao}}", "{{data_expedicao}}", "{{dias_decorridos}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"]
+    recommendedProcedures: ["recurso_jari", "recurso_cetran"]
   },
   {
     id: "BLK-027",
@@ -13368,7 +13516,7 @@ O Artigo 280 do C\xF3digo de Tr\xE2nsito Brasileiro disciplina os requisitos for
 
 O Artigo 281, par\xE1grafo \xFAnico, inciso I do CTB \xE9 categ\xF3rico ao determinar que "o auto de infra\xE7\xE3o ser\xE1 arquivado e seu registro julgado insubsistente se considerado inconsistente ou irregular", impondo-se a anula\xE7\xE3o do ato administrativo com base no princ\xEDpio da legalidade estrita.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-029",
@@ -13382,7 +13530,7 @@ O C\xF3digo de Tr\xE2nsito Brasileiro distribui de forma estrita as compet\xEAnc
 
 No caso em tela, a autua\xE7\xE3o foi promovida pelo(a) {{orgao_autuador}} em trecho que refoge \xE0 sua circunscri\xE7\xE3o origin\xE1ria de fiscaliza\xE7\xE3o, inexistindo nos autos prova de conv\xEAnio de delega\xE7\xE3o de compet\xEAncia em vigor na data do fato, violando o princ\xEDpio do juiz natural administrativo e a Lei de Processo Administrativo.`,
     supportedVariables: ["{{orgao_autuador}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-030",
@@ -13422,7 +13570,7 @@ O dever de motiva\xE7\xE3o \xE9 requisito de validade de todo ato administrativo
 
 O(A) Requerente foi autuado(a) m\xFAltiplas vezes no mesmo dia e na mesma avenida/rodovia em um intervalo de poucos minutos/quil\xF4metros. A jurisprud\xEAncia p\xE1tria e a Portaria SENATRAN vedam a aplica\xE7\xE3o cumulativa de san\xE7\xF5es sobre a mesma conduta cont\xEDnua de circula\xE7\xE3o sem interrup\xE7\xE3o de viagem, sob pena de intoler\xE1vel bis in idem e enriquecimento sem causa do Estado.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   // ==========================================
   // 5. ARGUMENTOS TÉCNICOS - VELOCIDADE & RADAR (B039 - B043)
@@ -13439,7 +13587,7 @@ O Artigo 4\xBA, inciso III da Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 estabelece 
 
 Conforme consulta efetuada ao Portal de Servi\xE7os do INMETRO (PSInmetro), o equipamento medidor utilizado na autua\xE7\xE3o encontrava-se na data do fato com seu laudo de aferi\xE7\xE3o metrol\xF3gica vencido ou inexistente. A aus\xEAncia de calibra\xE7\xE3o v\xE1lida retira a presun\xE7\xE3o de veracidade da medi\xE7\xE3o e contamina de nulidade o registro, n\xE3o podendo subsidiar penalidade pecuni\xE1ria ou pontua\xE7\xE3o.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"]
+    recommendedProcedures: ["recurso_jari", "recurso_cetran"]
   },
   {
     id: "BLK-040",
@@ -13453,7 +13601,7 @@ Determina de forma cogente o Artigo 90 do C\xF3digo de Tr\xE2nsito Brasileiro: "
 
 Por sua vez, a Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 estabelece no Artigo 12 e Anexo II a obrigatoriedade da instala\xE7\xE3o pr\xE9via de placa de velocidade regulamentar R-19, em perfeito estado de visibilidade e nas dist\xE2ncias m\xE9tricas fixadas pela engenharia de tr\xE1fego. No local da fiscaliza\xE7\xE3o, a inexist\xEAncia, oculta\xE7\xE3o por vegeta\xE7\xE3o ou dist\xE2ncia incorreta da placa desonera o condutor de responsabilidade infracional.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-041",
@@ -13467,7 +13615,7 @@ Todo instrumento medidor de velocidade possui margem de erro admitida (toler\xE2
 
 No presente caso, procedendo-se ao correto abatimento da toler\xE2ncia obrigat\xF3ria, a velocidade considerada enquadra-se em faixa diversa ou inferior \xE0 constante na notifica\xE7\xE3o, impondo-se a anula\xE7\xE3o ou retifica\xE7\xE3o do enquadramento fiscal.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-042",
@@ -13481,7 +13629,7 @@ A instala\xE7\xE3o e opera\xE7\xE3o de medidores de velocidade do tipo fixo exig
 
 A aus\xEAncia de disponibiliza\xE7\xE3o e juntada do estudo t\xE9cnico v\xE1lido com ART (Anota\xE7\xE3o de Responsabilidade T\xE9cnica) acarreta a nulidade da instala\xE7\xE3o do equipamento fiscalizador e das autua\xE7\xF5es dele decorrentes.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   // ==========================================
   // 6. ARGUMENTOS TÉCNICOS - SEMÁFORO, CELULAR, ESTACIONAMENTO (B044 - B050)
@@ -13498,7 +13646,7 @@ O Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito exige expressamente que
 
 Na imagem disponibilizada pelo \xF3rg\xE3o, n\xE3o \xE9 poss\xEDvel comprovar que o ve\xEDculo iniciou a transposi\xE7\xE3o no sinal vermelho, tendo o ingresso no cruzamento ocorrido ainda sob a fase amarela, situa\xE7\xE3o em que o Art. 208 do CTB n\xE3o autoriza a puni\xE7\xE3o.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-045",
@@ -13512,7 +13660,7 @@ A ficha de enquadramento do c\xF3digo 736-62 da Resolu\xE7\xE3o CONTRAN n\xBA 98
 
 A lavratura desprovida de qualquer relato circunstanciado, sem abordagem policial que pudesse aferir se o aparelho n\xE3o se tratava de outro objeto ou se estava acoplado a suporte de navega\xE7\xE3o GPS veicular legalmente autorizado, desconstitui a presun\xE7\xE3o relativa de veracidade do ato.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   {
     id: "BLK-046",
@@ -13526,7 +13674,7 @@ O Anexo I do C\xF3digo de Tr\xE2nsito Brasileiro estabelece distin\xE7\xE3o cate
 
 O ve\xEDculo do(a) Requerente apenas imobilizou-se momentaneamente pelo tempo estritamente indispens\xE1vel ao desembarque de ocupante, mantendo-se o motor em funcionamento e o condutor ao volante com o pisca-alerta acionado, inexistindo a infra\xE7\xE3o de estacionamento descrita no Art. 181 do CTB.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari"]
+    recommendedProcedures: ["recurso_jari"]
   },
   // ==========================================
   // 7. ARGUMENTOS TÉCNICOS - LEI SECA & RECUSA (B051 - B053)
@@ -13543,7 +13691,7 @@ O Artigo 5\xBA da Resolu\xE7\xE3o CONTRAN n\xBA 432/2013 exige que, na hip\xF3te
 
 A omiss\xE3o na lavratura do Termo de Constata\xE7\xE3o de Sinais impede a presun\xE7\xE3o de embriaguez, tornando a autua\xE7\xE3o manifestamente infundada e violadora do princ\xEDpio da presun\xE7\xE3o de inoc\xEAncia e do direito \xE0 ampla defesa.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "processo_suspensao"]
+    recommendedProcedures: ["recurso_jari", "processo_suspensao"]
   },
   {
     id: "BLK-052",
@@ -13557,7 +13705,7 @@ O ordenamento jur\xEDdico brasileiro consagra o postulado universal de que ningu
 
 A aplica\xE7\xE3o de grav\xEDssima penalidade pecuni\xE1ria e suspensiva fundada estritamente no exerc\xEDcio regular de um direito fundamental, sem qualquer ind\xEDcio ou prova material de embriaguez ou perigo na dire\xE7\xE3o, afigura-se desproporcional e inconstitucional.`,
     supportedVariables: [],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "processo_suspensao"]
+    recommendedProcedures: ["recurso_jari", "processo_suspensao"]
   },
   // ==========================================
   // 8. ARGUMENTOS - SUSPENSÃO E CASSAÇÃO (B054 - B055)
@@ -13608,7 +13756,7 @@ Ante todo o exposto, com fundamento nos preceitos do C\xF3digo de Tr\xE2nsito Br
 3. A EXTIN\xC7\xC3O de qualquer san\xE7\xE3o pecuni\xE1ria correlata bem como a absten\xE7\xE3o de lan\xE7amento de pontos no prontu\xE1rio de CNH do condutor;
 4. Subsidiariamente, na remota hip\xF3tese de n\xE3o acolhimento do arquivamento, a convers\xE3o da autua\xE7\xE3o em Advert\xEAncia por Escrito ex officio (Art. 267 do CTB).`,
     supportedVariables: ["{{numero_ait}}"],
-    recommendedProcedures: ["defesa_previa"]
+    recommendedProcedures: []
   },
   {
     id: "BLK-057",
@@ -13732,7 +13880,6 @@ CNH n\xBA {{cnh_requerente}}`,
       "{{cnh_requerente}}"
     ],
     recommendedProcedures: [
-      "defesa_previa",
       "recurso_jari",
       "recurso_cetran",
       "processo_suspensao",
@@ -13784,65 +13931,12 @@ ASSINATURA DO CONDUTOR INFRATOR INDICADO
 4. C\xF3pia da Notifica\xE7\xE3o de Autua\xE7\xE3o / Notifica\xE7\xE3o de Penalidade do AIT n\xBA {{numero_ait}};
 5. Documentos comprobat\xF3rios dos fatos alegados (fotografias, laudos do INMETRO, comprovantes de pagamento e certid\xF5es).`,
     supportedVariables: ["{{numero_ait}}"],
-    recommendedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran", "processo_suspensao", "processo_cassacao", "indicacao_condutor", "conversao_advertencia"]
+    recommendedProcedures: ["recurso_jari", "recurso_cetran", "processo_suspensao", "processo_cassacao", "indicacao_condutor", "conversao_advertencia"]
   }
 ];
 
 // src/core/templates/templates-catalog.ts
 var TEMPLATES_CATALOG = [
-  // ==========================================
-  // 1. DEFESA PRÉVIA (TPL-01)
-  // ==========================================
-  {
-    id: "TPL_DEFESA_PREVIA",
-    code: "DEFESA_PREVIA_V2026",
-    name: "Peti\xE7\xE3o Padr\xE3o de Defesa Pr\xE9via (Notifica\xE7\xE3o de Autua\xE7\xE3o)",
-    procedureType: "defesa_previa",
-    version: "v2026.1",
-    description: "Peti\xE7\xE3o formal apresentada perante a autoridade executiva de tr\xE2nsito contra a Notifica\xE7\xE3o de Autua\xE7\xE3o, com foco em v\xEDcios de forma do AIT, decad\xEAncia de 30 dias e atipicidade.",
-    fillingRules: [
-      "Identificar o \xF3rg\xE3o autuador e endere\xE7ar \xE0 autoridade executiva competente",
-      "Inserir a qualifica\xE7\xE3o completa do propriet\xE1rio e dados do ve\xEDculo",
-      "Articular preliminares formais (decad\xEAncia do Art. 281 II, erro do AIT) antes do m\xE9rito",
-      "Concluir com requerimento expresso de insubsist\xEAncia e arquivamento definitivo do AIT"
-    ],
-    blockIds: ["BLK-001", "BLK-008", "BLK-013", "BLK-026", "BLK-039", "BLK-056", "BLK-066", "BLK-068"],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-001"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-013"),
-      {
-        id: "BLK_PRELIMINARES_DEFESA",
-        type: "preliminary_arguments",
-        title: "Das Preliminares de Nulidade e Decad\xEAncia",
-        isMandatory: false,
-        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE E V\xCDCIOS FORMAIS
-
-{{bloco_preliminares_formatado}}`,
-        supportedVariables: ["{{bloco_preliminares_formatado}}"]
-      },
-      {
-        id: "BLK_MERITO_DEFESA",
-        type: "merit_arguments",
-        title: "Do M\xE9rito e dos Fundamentos T\xE9cnicos",
-        isMandatory: true,
-        contentTemplate: `III - DO M\xC9RITO E DA ATIPICIDADE DA CONDUTA
-
-{{bloco_merito_formatado}}`,
-        supportedVariables: ["{{bloco_merito_formatado}}"]
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-056"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
-    ].map((b, idx) => ({
-      id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables
-    }))
-  },
   // ==========================================
   // 2. RECURSO À JARI - 1ª INSTÂNCIA (TPL-02)
   // ==========================================
@@ -14665,12 +14759,6 @@ var KNOWLEDGE_GRAPH = INFRACTION_CATALOG.map((inf) => ({
   ctb_article_number: inf.article,
   applicable_procedures: [
     {
-      procedure_id: "defesa_previa",
-      procedure_name: "Defesa Pr\xE9via (Notifica\xE7\xE3o de Autua\xE7\xE3o)",
-      applicable_arguments: inf.recommendedArgumentCodes,
-      template_id: "TPL_DEFESA_PREVIA"
-    },
-    {
       procedure_id: "recurso_jari",
       procedure_name: "Recurso Ordin\xE1rio \xE0 JARI",
       applicable_arguments: inf.recommendedArgumentCodes,
@@ -14895,6 +14983,707 @@ var KnowledgeService = class _KnowledgeService {
 };
 var knowledgeService = KnowledgeService.getInstance();
 
+// src/server/knowledge/embedding-service.ts
+import crypto3 from "crypto";
+init_logger();
+var EmbeddingService = class _EmbeddingService {
+  constructor() {
+    this.cache = /* @__PURE__ */ new Map();
+    this.maxCacheSize = 2e4;
+  }
+  static getInstance() {
+    if (!_EmbeddingService.instance) {
+      _EmbeddingService.instance = new _EmbeddingService();
+    }
+    return _EmbeddingService.instance;
+  }
+  /**
+   * Generates SHA-256 hash of normalized text
+   */
+  hashText(text) {
+    return crypto3.createHash("sha256").update(text.trim().toLowerCase()).digest("hex");
+  }
+  /**
+   * Generate embedding vector for a single text chunk
+   */
+  async generateEmbedding(text, options) {
+    const startTime = Date.now();
+    const correlationId = options?.correlationId || `corr_emb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const normalizedText = text.trim();
+    if (!normalizedText) {
+      throw new Error("N\xE3o \xE9 poss\xEDvel gerar embeddings para texto vazio.");
+    }
+    const textHash = this.hashText(normalizedText);
+    if (!options?.skipCache && this.cache.has(textHash)) {
+      const cached = this.cache.get(textHash);
+      return {
+        embedding: cached.embedding,
+        dimensions: cached.embedding.length,
+        provider: cached.provider,
+        model: cached.model,
+        durationMs: Date.now() - startTime,
+        cached: true
+      };
+    }
+    const nvidiaKey = nvidiaKeyRotator.getNextKey();
+    const nvidiaBaseUrl = configService.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1");
+    const nvidiaEmbeddingModel = configService.get("NVIDIA_EMBEDDING_MODEL", "nvidia/nv-embedqa-e5-v5");
+    const nineRouterKey = configService.get("NINEROUTER_KEY");
+    const nineRouterBaseUrl = configService.get("NINEROUTER_BASE_URL", "https://api.9router.com/v1");
+    const enableFallback = configService.get("AI_ENABLE_FALLBACK", true);
+    let embedding = null;
+    let providerUsed = "DETERMINISTIC_LOCAL";
+    let modelUsed = "defesai-legal-vectorizer-v1";
+    const tryNvidia = !options?.forceProvider || options.forceProvider === "NVIDIA";
+    if (tryNvidia && nvidiaKey && String(nvidiaKey).length > 5) {
+      try {
+        const res = await fetch(`${nvidiaBaseUrl}/embeddings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${nvidiaKey}`
+          },
+          body: JSON.stringify({
+            input: [normalizedText],
+            model: nvidiaEmbeddingModel,
+            input_type: "passage",
+            encoding_format: "float"
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const vec = data.data?.[0]?.embedding;
+          if (Array.isArray(vec) && vec.length > 0) {
+            embedding = vec;
+            providerUsed = "NVIDIA";
+            modelUsed = nvidiaEmbeddingModel;
+            const duration = Date.now() - startTime;
+            metricsService.recordAiRequest("nvidia", duration, true, {
+              tokens: Math.ceil(normalizedText.length / 4)
+            });
+            logger.info("ai", "embedding_service", "generate_embedding", `Embedding gerado via NVIDIA (${nvidiaEmbeddingModel}) em ${duration}ms`, {
+              correlationId,
+              dimensions: vec.length,
+              provider: "nvidia",
+              model: nvidiaEmbeddingModel
+            });
+          }
+        } else {
+          logger.warn("ai", "embedding_service", "generate_embedding", `Falha HTTP NVIDIA (${res.status}): ${res.statusText}`);
+        }
+      } catch (err) {
+        logger.warn("ai", "embedding_service", "generate_embedding", `Erro de conex\xE3o NVIDIA: ${err.message}. Ativando conting\xEAncia.`);
+      }
+    }
+    const try9Router = !embedding && enableFallback || options?.forceProvider === "9ROUTER";
+    if (try9Router && nineRouterKey && String(nineRouterKey).length > 5) {
+      try {
+        const res = await fetch(`${nineRouterBaseUrl}/embeddings`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${nineRouterKey}`
+          },
+          body: JSON.stringify({
+            input: normalizedText,
+            model: "text-embedding-3-large"
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const vec = data.data?.[0]?.embedding;
+          if (Array.isArray(vec) && vec.length > 0) {
+            embedding = vec;
+            providerUsed = "9ROUTER";
+            modelUsed = "text-embedding-3-large";
+            const duration = Date.now() - startTime;
+            metricsService.recordAiRequest("9router", duration, true, {
+              tokens: Math.ceil(normalizedText.length / 4),
+              isFallback: true
+            });
+            logger.info("ai", "embedding_service", "generate_embedding", `Fallback para 9Router bem-sucedido (${vec.length} dimens\xF5es)`, {
+              correlationId,
+              provider: "9router"
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn("ai", "embedding_service", "generate_embedding", `Falha no 9Router: ${err.message}`);
+      }
+    }
+    if (!embedding) {
+      embedding = this.createDeterministicVector(normalizedText, 1024);
+      providerUsed = "DETERMINISTIC_LOCAL";
+      modelUsed = "defesai-legal-vectorizer-v1";
+    }
+    embedding = this.normalizeVector(embedding);
+    this.cache.set(textHash, {
+      embedding,
+      provider: providerUsed,
+      model: modelUsed
+    });
+    if (this.cache.size > this.maxCacheSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    return {
+      embedding,
+      dimensions: embedding.length,
+      provider: providerUsed,
+      model: modelUsed,
+      durationMs: Date.now() - startTime,
+      cached: false
+    };
+  }
+  /**
+   * Batch embedding generation with concurrency control
+   */
+  async generateBatchEmbeddings(texts, options) {
+    const batchSize = options?.batchSize || 10;
+    const results = [];
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const chunkBatch = texts.slice(i, i + batchSize);
+      const batchPromises = chunkBatch.map(
+        (txt) => this.generateEmbedding(txt, { correlationId: options?.correlationId })
+      );
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+      if (options?.onProgress) {
+        options.onProgress(results.length, texts.length);
+      }
+    }
+    return results;
+  }
+  /**
+   * Generates a deterministic high-dimensional embedding based on semantic legal tokens
+   */
+  createDeterministicVector(text, dimensions = 1024) {
+    const vector = new Array(dimensions).fill(0);
+    const words = text.toLowerCase().replace(/[^\w\sáéíóúâêîôûãõç]/g, " ").split(/\s+/).filter((w) => w.length > 1);
+    const legalKeywords = {
+      ctb: 3.5,
+      contran: 3.2,
+      senatran: 3,
+      inmetro: 3,
+      ait: 3,
+      art: 2.8,
+      artigo: 2.8,
+      velocidade: 2.5,
+      radar: 2.5,
+      bafometro: 2.8,
+      etilometro: 2.8,
+      autuacao: 2.6,
+      notificacao: 2.6,
+      prazo: 2.5,
+      decadencia: 3,
+      prescricao: 3,
+      recurso: 2.4,
+      jari: 2.8,
+      cetran: 2.8,
+      advertencia: 2.6,
+      suspensao: 2.9,
+      cassacao: 2.9,
+      nulidade: 3.2,
+      cancelamento: 3,
+      inconsistencia: 3,
+      sinalizacao: 2.5,
+      placa: 2.4,
+      afericao: 2.7,
+      calibracao: 2.8,
+      tolerancia: 2.6
+    };
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const weight = legalKeywords[word] || 1;
+      const h1 = this.fnv1a(word);
+      const h2 = this.fnv1a(word + "_pos_" + i % 5);
+      const h3 = this.fnv1a(word + "_rev");
+      const dim1 = Math.abs(h1) % dimensions;
+      const dim2 = Math.abs(h2) % dimensions;
+      const dim3 = Math.abs(h3) % dimensions;
+      vector[dim1] += 0.8 * weight;
+      vector[dim2] += 0.5 * weight;
+      vector[dim3] += 0.3 * weight;
+      if (i > 0) {
+        const bigram = `${words[i - 1]}_${word}`;
+        const bHash = Math.abs(this.fnv1a(bigram)) % dimensions;
+        vector[bHash] += 1.2 * weight;
+      }
+    }
+    return this.normalizeVector(vector);
+  }
+  /**
+   * Fast 32-bit FNV-1a hash function
+   */
+  fnv1a(str) {
+    let hash = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      hash ^= str.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash;
+  }
+  /**
+   * Normalizes a vector to L2 unit norm
+   */
+  normalizeVector(vec) {
+    const dot = vec.reduce((acc, v) => acc + v * v, 0);
+    const norm = Math.sqrt(dot);
+    if (norm === 0) return vec;
+    return vec.map((v) => v / norm);
+  }
+  /**
+   * Cosine similarity between two unit vectors
+   */
+  cosineSimilarity(a, b) {
+    if (a.length !== b.length) {
+      const minLen = Math.min(a.length, b.length);
+      let dot2 = 0;
+      for (let i = 0; i < minLen; i++) {
+        dot2 += a[i] * b[i];
+      }
+      return Math.max(0, Math.min(1, (dot2 + 1) / 2));
+    }
+    let dot = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+    }
+    return Math.max(0, Math.min(1, (dot + 1) / 2));
+  }
+  /**
+   * Clears the in-memory cache
+   */
+  clearCache() {
+    this.cache.clear();
+  }
+  /**
+   * Returns current cache statistics
+   */
+  getStats() {
+    return {
+      cachedVectorsCount: this.cache.size,
+      maxCacheSize: this.maxCacheSize
+    };
+  }
+};
+var embeddingService = EmbeddingService.getInstance();
+
+// src/server/knowledge/vector-store.ts
+import { createClient as createClient2 } from "@supabase/supabase-js";
+init_logger();
+var VectorStore = class _VectorStore {
+  constructor() {
+    // In-Memory Storage Tables
+    this.sources = /* @__PURE__ */ new Map();
+    this.documents = /* @__PURE__ */ new Map();
+    this.versions = /* @__PURE__ */ new Map();
+    this.chunks = /* @__PURE__ */ new Map();
+    this.embeddings = /* @__PURE__ */ new Map();
+    this.supabaseClient = null;
+    this.initSupabaseClient();
+  }
+  static getInstance() {
+    if (!_VectorStore.instance) {
+      _VectorStore.instance = new _VectorStore();
+    }
+    return _VectorStore.instance;
+  }
+  initSupabaseClient() {
+    const url = configService.get("VITE_SUPABASE_URL");
+    const serviceKey = configService.get("SUPABASE_SERVICE_ROLE_KEY") || configService.get("VITE_SUPABASE_ANON_KEY");
+    if (url && serviceKey && url.startsWith("https://")) {
+      try {
+        this.supabaseClient = createClient2(url, serviceKey);
+        logger.info("supabase", "vector_store", "init", "Supabase Postgres pgvector client conectado.");
+      } catch (err) {
+        logger.warn("supabase", "vector_store", "init", `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
+      }
+    }
+  }
+  // ==========================================
+  // UPSERT OPERATIONS (SOURCES & DOCUMENTS)
+  // ==========================================
+  async upsertSource(source) {
+    this.sources.set(source.id, {
+      ...source,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (this.supabaseClient) {
+      try {
+        await this.supabaseClient.from("knowledge_sources").upsert({
+          id: source.id,
+          name: source.name,
+          source_type: source.sourceType,
+          authority: source.authority,
+          description: source.description,
+          url: source.url,
+          jurisdiction: source.jurisdiction,
+          is_active: source.isActive,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      } catch {
+      }
+    }
+  }
+  async upsertDocument(doc) {
+    this.documents.set(doc.id, {
+      ...doc,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (this.supabaseClient) {
+      try {
+        await this.supabaseClient.from("knowledge_documents").upsert({
+          id: doc.id,
+          source_id: doc.sourceId,
+          title: doc.title,
+          document_type: doc.documentType,
+          description: doc.description,
+          jurisdiction: doc.jurisdiction,
+          status: doc.status,
+          current_version_id: doc.currentVersionId,
+          metadata: doc.metadata,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      } catch {
+      }
+    }
+  }
+  async upsertVersion(ver) {
+    this.versions.set(ver.id, ver);
+    if (this.supabaseClient) {
+      try {
+        await this.supabaseClient.from("knowledge_document_versions").upsert({
+          id: ver.id,
+          document_id: ver.documentId,
+          version: ver.version,
+          content: ver.content,
+          content_hash: ver.contentHash,
+          source_url: ver.sourceUrl,
+          published_at: ver.publishedAt,
+          metadata: ver.metadata
+        });
+      } catch {
+      }
+    }
+  }
+  async upsertChunks(chunksList) {
+    for (const chunk of chunksList) {
+      this.chunks.set(chunk.id, chunk);
+    }
+    if (this.supabaseClient && chunksList.length > 0) {
+      try {
+        const rows = chunksList.map((c) => ({
+          id: c.id,
+          document_version_id: c.documentVersionId,
+          document_id: c.documentId,
+          source_id: c.sourceId,
+          chunk_index: c.chunkIndex,
+          content: c.content,
+          content_hash: c.contentHash,
+          token_count: c.tokenCount,
+          heading: c.heading,
+          article_number: c.articleNumber,
+          section_name: c.sectionName,
+          jurisdiction: c.jurisdiction,
+          document_type: c.documentType,
+          metadata: c.metadata
+        }));
+        await this.supabaseClient.from("knowledge_chunks").upsert(rows);
+      } catch {
+      }
+    }
+  }
+  async upsertEmbeddings(embeddingsList) {
+    for (const emb of embeddingsList) {
+      this.embeddings.set(emb.chunkId, emb);
+    }
+    if (this.supabaseClient && embeddingsList.length > 0) {
+      try {
+        const rows = embeddingsList.map((e) => ({
+          id: e.id,
+          chunk_id: e.chunkId,
+          provider: e.provider,
+          model: e.model,
+          dimensions: e.dimensions,
+          embedding: JSON.stringify(e.embedding)
+        }));
+        await this.supabaseClient.from("knowledge_embeddings").upsert(rows);
+      } catch {
+      }
+    }
+  }
+  // ==========================================
+  // VECTOR SEARCH & SIMILARITY MATCHING
+  // ==========================================
+  async searchVectors(queryEmbedding, options) {
+    const topK = options?.topK || 20;
+    const threshold = options?.threshold ?? 0.35;
+    if (this.supabaseClient) {
+      try {
+        const { data, error } = await this.supabaseClient.rpc("match_knowledge_chunks", {
+          query_embedding: JSON.stringify(queryEmbedding),
+          match_threshold: threshold,
+          match_count: topK,
+          filter_source_id: options?.filterSourceId || null,
+          filter_document_type: options?.filterDocumentType || null,
+          filter_jurisdiction: options?.filterJurisdiction || null
+        });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map((item) => ({
+            chunkId: item.chunk_id,
+            documentId: item.document_id,
+            documentTitle: item.document_title,
+            documentType: item.document_type,
+            version: item.version,
+            sourceId: item.source_id,
+            sourceName: item.source_name,
+            authority: item.authority,
+            heading: item.heading,
+            articleNumber: item.article_number,
+            content: item.content,
+            similarity: item.similarity,
+            rerankScore: item.similarity,
+            tokenCount: Math.ceil(item.content.length / 4),
+            provenance: {
+              source: item.source_name,
+              document: item.document_title,
+              version: item.version,
+              article: item.article_number,
+              hash: item.metadata?.contentHash || "pg_vector_indexed"
+            },
+            metadata: item.metadata || {}
+          }));
+        }
+      } catch (err) {
+        logger.warn("supabase", "vector_store", "search", `Fallback para motor vetorial em mem\xF3ria: ${err.message}`);
+      }
+    }
+    const matches = [];
+    for (const [chunkId, chunk] of this.chunks.entries()) {
+      const emb = this.embeddings.get(chunkId);
+      if (!emb) continue;
+      if (options?.filterSourceId && chunk.sourceId !== options.filterSourceId) continue;
+      if (options?.filterDocumentType && chunk.documentType !== options.filterDocumentType) continue;
+      if (options?.filterJurisdiction && chunk.jurisdiction !== options.filterJurisdiction) continue;
+      const sim = embeddingService.cosineSimilarity(queryEmbedding, emb.embedding);
+      if (sim >= threshold) {
+        matches.push({ chunk, embedding: emb, similarity: sim });
+      }
+    }
+    matches.sort((a, b) => b.similarity - a.similarity);
+    const topMatches = matches.slice(0, topK);
+    return topMatches.map(({ chunk, similarity }) => {
+      const doc = this.documents.get(chunk.documentId);
+      const source = this.sources.get(chunk.sourceId);
+      const version = this.versions.get(chunk.documentVersionId);
+      return {
+        chunkId: chunk.id,
+        documentId: chunk.documentId,
+        documentTitle: doc?.title || chunk.metadata?.docTitle || "Documento DefesAi",
+        documentType: chunk.documentType,
+        version: version?.version || "v1.0",
+        sourceId: chunk.sourceId,
+        sourceName: source?.name || "Base Can\xF4nica DefesAi",
+        authority: source?.authority || "SENATRAN/CONTRAN",
+        heading: chunk.heading,
+        articleNumber: chunk.articleNumber,
+        sectionName: chunk.sectionName,
+        content: chunk.content,
+        similarity,
+        rerankScore: similarity,
+        tokenCount: chunk.tokenCount,
+        provenance: {
+          source: source?.name || "Base Can\xF4nica",
+          document: doc?.title || chunk.heading || "CTB",
+          version: version?.version || "v1.0",
+          article: chunk.articleNumber,
+          url: source?.url,
+          hash: chunk.contentHash
+        },
+        metadata: chunk.metadata
+      };
+    });
+  }
+  // ==========================================
+  // GETTERS & UTILITIES
+  // ==========================================
+  getSource(id) {
+    return this.sources.get(id);
+  }
+  getDocument(id) {
+    return this.documents.get(id);
+  }
+  getVersion(id) {
+    return this.versions.get(id);
+  }
+  getChunk(id) {
+    return this.chunks.get(id);
+  }
+  getAllSources() {
+    return Array.from(this.sources.values());
+  }
+  getAllDocuments() {
+    return Array.from(this.documents.values());
+  }
+  getAllChunks() {
+    return Array.from(this.chunks.values());
+  }
+  getStats() {
+    return {
+      sourcesCount: this.sources.size,
+      documentsCount: this.documents.size,
+      versionsCount: this.versions.size,
+      chunksCount: this.chunks.size,
+      embeddingsCount: this.embeddings.size,
+      isSupabaseConnected: Boolean(this.supabaseClient)
+    };
+  }
+  clear() {
+    this.sources.clear();
+    this.documents.clear();
+    this.versions.clear();
+    this.chunks.clear();
+    this.embeddings.clear();
+  }
+};
+var vectorStore = VectorStore.getInstance();
+
+// src/server/knowledge/reranker-service.ts
+var RerankerService = class _RerankerService {
+  constructor() {
+  }
+  static getInstance() {
+    if (!_RerankerService.instance) {
+      _RerankerService.instance = new _RerankerService();
+    }
+    return _RerankerService.instance;
+  }
+  /**
+   * Authority Tier multipliers
+   */
+  getAuthorityWeight(authority, documentType) {
+    const authUpper = (authority || "").toUpperCase();
+    const typeUpper = (documentType || "").toUpperCase();
+    if (authUpper.includes("CONSTITUI\xC7\xC3O") || typeUpper.includes("CONSTITUCIONAL")) return 1.25;
+    if (authUpper.includes("CONGRESSO") || typeUpper.includes("LEI") || authUpper.includes("PRESID\xCANCIA")) return 1.2;
+    if (authUpper.includes("STJ") || authUpper.includes("STF") || typeUpper.includes("ACORDAO")) return 1.18;
+    if (authUpper.includes("CONTRAN") || typeUpper.includes("RESOLUCAO")) return 1.15;
+    if (authUpper.includes("INMETRO") || authUpper.includes("SENATRAN") || typeUpper.includes("PORTARIA")) return 1.12;
+    if (authUpper.includes("CETRAN") || authUpper.includes("JARI")) return 1.08;
+    return 1;
+  }
+  /**
+   * Calculates lexical match score based on query keywords and exact statutory references
+   */
+  calculateLexicalScore(query, result) {
+    const cleanQuery = query.toLowerCase();
+    const content = (result.content + " " + (result.heading || "") + " " + (result.articleNumber || "")).toLowerCase();
+    const queryTokens = cleanQuery.replace(/[^\w\sáéíóúâêîôûãõç\.\-]/g, " ").split(/\s+/).filter((t) => t.length > 2);
+    if (queryTokens.length === 0) return 0.5;
+    let matches = 0;
+    let exactStatuteMatch = false;
+    if (result.articleNumber) {
+      const artClean = result.articleNumber.toLowerCase().replace(/[^0-9]/g, "");
+      if (artClean && cleanQuery.includes(artClean)) {
+        exactStatuteMatch = true;
+      }
+    }
+    for (const token of queryTokens) {
+      if (content.includes(token)) {
+        matches++;
+      }
+    }
+    let lexicalScore = matches / queryTokens.length;
+    if (exactStatuteMatch) {
+      lexicalScore = Math.min(1, lexicalScore + 0.35);
+    }
+    return Math.min(1, lexicalScore);
+  }
+  /**
+   * Reranks search results using dense vector similarity, lexical scoring, and legal authority weighting
+   */
+  rerank(query, results, topN = 5) {
+    if (results.length === 0) return [];
+    const scoredResults = results.map((item) => {
+      const vectorScore = item.similarity;
+      const lexicalScore = this.calculateLexicalScore(query, item);
+      const authorityMultiplier = this.getAuthorityWeight(item.authority, item.documentType);
+      const combinedScore = (vectorScore * 0.45 + lexicalScore * 0.35 + (authorityMultiplier - 1)) * authorityMultiplier;
+      const finalScore = Number(Math.max(0, Math.min(1, combinedScore)).toFixed(4));
+      return {
+        ...item,
+        rerankScore: finalScore
+      };
+    });
+    scoredResults.sort((a, b) => b.rerankScore - a.rerankScore);
+    return scoredResults.slice(0, topN);
+  }
+};
+var rerankerService = RerankerService.getInstance();
+
+// src/server/knowledge/search-service.ts
+init_logger();
+var SearchService = class _SearchService {
+  constructor() {
+  }
+  static getInstance() {
+    if (!_SearchService.instance) {
+      _SearchService.instance = new _SearchService();
+    }
+    return _SearchService.instance;
+  }
+  /**
+   * Search knowledge base using semantic vector retrieval + hybrid legal reranking
+   */
+  async searchKnowledge(query, options) {
+    const startTime = Date.now();
+    const correlationId = options?.correlationId || `corr_srch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const topK = options?.topK || 20;
+    const topN = options?.topN || 5;
+    const enableReranking = options?.enableReranking ?? true;
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return [];
+    try {
+      const queryEmbResult = await embeddingService.generateEmbedding(cleanQuery, {
+        correlationId
+      });
+      const vectorResults = await vectorStore.searchVectors(queryEmbResult.embedding, {
+        topK,
+        threshold: options?.threshold ?? 0.3,
+        filterSourceId: options?.filterSourceId,
+        filterDocumentType: options?.filterDocumentType,
+        filterJurisdiction: options?.filterJurisdiction
+      });
+      let filteredResults = vectorResults;
+      if (options?.filterAuthority) {
+        filteredResults = filteredResults.filter(
+          (r) => r.authority.toLowerCase().includes(options.filterAuthority.toLowerCase())
+        );
+      }
+      const finalResults = enableReranking ? rerankerService.rerank(cleanQuery, filteredResults, topN) : filteredResults.slice(0, topN);
+      const durationMs = Date.now() - startTime;
+      metricsService.recordRequest(durationMs, true);
+      logger.info("ai", "search_service", "search_knowledge", `Busca sem\xE2ntica executada em ${durationMs}ms (${finalResults.length} resultados)`, {
+        correlationId,
+        query: cleanQuery.substring(0, 80),
+        matchesCount: finalResults.length,
+        durationMs,
+        provider: queryEmbResult.provider === "DETERMINISTIC_LOCAL" ? "internal" : queryEmbResult.provider.toLowerCase()
+      });
+      return finalResults;
+    } catch (err) {
+      const durationMs = Date.now() - startTime;
+      logger.error("ai", "search_service", "search_knowledge", `Erro na busca sem\xE2ntica: ${err.message}`, {
+        correlationId,
+        durationMs,
+        error: err.message
+      });
+      throw err;
+    }
+  }
+};
+var searchService = SearchService.getInstance();
+
 // src/server/workers/agents/estrategico-agent.worker.ts
 var EstrategicoAgent = class {
   constructor() {
@@ -15000,31 +15789,18 @@ var EstrategicoAgent = class {
   async analyzeSearchTrendsReal() {
     try {
       logger.debug("marketing", "agents", "estrategico", "Analyzing search trends using real data sources");
-      logger.debug("marketing", "agents", "estrategico", "Analyzing search trends (placeholder for real API integration)");
-      if (process.env.NODE_ENV === "production") {
-        logger.warn("marketing", "agents", "estrategico", "Production mode \u2014 returning empty trends (no real search API configured)");
+      const infractions = knowledgeService.getAllInfractions();
+      if (!infractions || infractions.length === 0) {
         return [];
       }
-      return [
-        {
-          topic: "Radares Port\xE1teis",
-          trend: "increasing",
-          volumeChange: "+25%",
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        },
-        {
-          topic: "Notifica\xE7\xE3o de Infra\xE7\xF5es",
-          trend: "stable",
-          volumeChange: "+5%",
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        },
-        {
-          topic: "Recursos de Multas",
-          trend: "increasing",
-          volumeChange: "+18%",
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ];
+      return infractions.slice(0, 5).map((inf) => ({
+        topic: inf.description || inf.code,
+        article: inf.article,
+        infractionCode: inf.code,
+        severity: inf.severity,
+        fineAmount: inf.fineAmount,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      }));
     } catch (error) {
       logger.warn("marketing", "agents", "estrategico", "Error analyzing search trends, returning empty array", { error });
       return [];
@@ -15159,51 +15935,23 @@ var EstrategicoAgent = class {
       const currentTimestamp = (/* @__PURE__ */ new Date()).toISOString();
       const updates = {
         checkedAt: currentTimestamp,
-        updatesAvailable: process.env.NODE_ENV === "production" ? false : Math.random() > 0.7,
-        // 30% chance in dev only
+        updatesAvailable: false,
         updateTypes: [],
         details: []
       };
-      if (updates.updatesAvailable) {
-        const possibleUpdates = [
-          { type: "CTB_ARTICLE", description: "Atualiza\xE7\xE3o de artigo do CTB sobre limites de velocidade" },
-          { type: "RESOLUTION", description: "Nova resolu\xE7\xE3o do CONTRAN sobre radares port\xE1teis" },
-          { type: "ORDINANCE", description: "Nova ordem do DETRAN sobre sinaliza\xE7\xE3o" },
-          { type: "ARGUMENT", description: "Novo argumento jur\xEDdico para recursos de multa" }
-        ];
-        const numUpdates = Math.floor(Math.random() * 3) + 1;
-        const selectedUpdates = [];
-        for (let i = 0; i < numUpdates; i++) {
-          const randomIndex = Math.floor(Math.random() * possibleUpdates.length);
-          selectedUpdates.push(possibleUpdates[randomIndex]);
-        }
-        updates.updateTypes = selectedUpdates.map((u) => u.type);
-        updates.details = selectedUpdates.map((u) => u.description);
-        logger.info("marketing", "agents", "estrategico", `Detectadas ${selectedUpdates.length} atualiza\xE7\xF5es dispon\xEDveis para a base de conhecimento`);
-        for (const update of selectedUpdates) {
-          logger.info("marketing", "agents", "estrategico", `Processando atualiza\xE7\xE3o: ${update.description}`);
-          const updatePayload = {
-            sourceId: "official-government-source",
-            sourceName: "Fontes Oficiais do Governo",
-            authority: "DENATRAN",
-            sourceType: "official_gazette",
-            jurisdiction: "federal",
-            documentId: `update-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            title: update.description,
-            documentType: "legal_update",
-            description: `Atualiza\xE7\xE3o autom\xE1tica detectada: ${update.description}`,
-            content: `[CONTE\xDADO DA ATUALIZA\xC7\xC3O SERIA AQUI EM IMPLEMENTA\xC7\xC3O REAL]`,
-            publishedAt: (/* @__PURE__ */ new Date()).toISOString(),
-            metadata: {
-              updateType: update.type,
-              detectionMethod: "automated_check",
-              checkedAt: (/* @__PURE__ */ new Date()).toISOString()
-            }
-          };
-          logger.debug("marketing", "agents", "estrategico", `Would trigger ingestion service with payload for: ${update.description}`);
-        }
+      let articles = [];
+      try {
+        articles = await searchService.searchKnowledge("tr\xE2nsito legisla\xE7\xE3o multas");
+      } catch {
+        articles = [];
+      }
+      if (articles.length > 0) {
+        updates.updatesAvailable = true;
+        updates.updateTypes = ["CTB_ARTICLE", "CONTRAN_RESOLUTION"];
+        updates.details = [`${articles.length} artigos e resolu\xE7\xF5es ativos na base de conhecimento pericial`];
+        logger.debug("marketing", "agents", "estrategico", `Base de conhecimento verificada: ${articles.length} artigos indexados`);
       } else {
-        logger.debug("marketing", "agents", "estrategico", "Nenhuma atualiza\xE7\xE3o dispon\xEDvel detectada neste momento");
+        logger.debug("marketing", "agents", "estrategico", "Nenhuma atualiza\xE7\xE3o pendente detectada na base de conhecimento");
       }
       return updates;
     } catch (error) {
@@ -15521,9 +16269,9 @@ var ComfyUIMarketing = class {
   buildImageWorkflow(request) {
     const baseWorkflow = {
       "1": {
-        "class_type": "LoadCheckpoint",
+        "class_type": "CheckpointLoaderSimple",
         "inputs": {
-          "ckpt_name": "flux1-dev.safetensors"
+          "ckpt_name": "v1-5-pruned-emaonly.safetensors"
         }
       },
       "2": {
@@ -15581,80 +16329,14 @@ var ComfyUIMarketing = class {
     return baseWorkflow;
   }
   /**
-   * Build video workflow based on request type
+   * Build video workflow based on request type.
+   * REQUIRES: GPU, Wan2.2 diffusion model, VHS_VideoCombine node.
+   * Current environment: CPU-only, no video models → throws explicit error.
    */
-  buildVideoWorkflow(request) {
-    const baseWorkflow = {
-      "1": {
-        "class_type": "LoadDiffusionModel",
-        "inputs": {
-          "unet_name": "wan2.2_i2v_480p_14B_bf16.safetensors"
-        }
-      },
-      "2": {
-        "class_type": "LoadCLIP",
-        "inputs": {
-          "clip_name": "umt5-xxl-enc-fp8_e4m3fn.safetensors"
-        }
-      },
-      "3": {
-        "class_type": "LoadVAE",
-        "inputs": {
-          "vae_name": "wan_2.2_vae.safetensors"
-        }
-      },
-      "4": {
-        "class_type": "CLIPTextEncode",
-        "inputs": {
-          "text": this.buildVideoPrompt(request),
-          "clip": ["2", 0]
-        }
-      },
-      "5": {
-        "class_type": "EmptySD3LatentImage",
-        "inputs": {
-          "width": 832,
-          "height": 480,
-          "batch_size": this.getFrameCount(request.duration || "5s")
-        }
-      },
-      "6": {
-        "class_type": "KSampler",
-        "inputs": {
-          "seed": Math.floor(Math.random() * 1e6),
-          "steps": 30,
-          "cfg": 6,
-          "sampler_name": "euler",
-          "scheduler": "normal",
-          "denoise": 1,
-          "model": ["1", 0],
-          "positive": ["4", 0],
-          "negative": ["4", 0],
-          // Using same for negative in this example
-          "latent_image": ["5", 0]
-        }
-      },
-      "7": {
-        "class_type": "VAEDecode",
-        "inputs": {
-          "samples": ["6", 0],
-          "vae": ["3", 0]
-        }
-      },
-      "8": {
-        "class_type": "VHS_VideoCombine",
-        "inputs": {
-          "frame_rate": 16,
-          "loop_count": 0,
-          "filename_prefix": `marketing_video_${request.type}_${Date.now()}`,
-          "format": "video/h264-mp4",
-          "pingpong": false,
-          "save_output": true,
-          "images": ["7", 0]
-        }
-      }
-    };
-    return baseWorkflow;
+  buildVideoWorkflow(_request) {
+    throw new Error(
+      "ComfyUI video generation unavailable: requires GPU + Wan2.2 model + VHS_VideoCombine node. Current environment is CPU-only with no video models installed."
+    );
   }
   /**
    * Build image prompt based on request
@@ -15836,7 +16518,7 @@ var ComfyUIMarketing = class {
   }
 };
 var comfyuiMarketing = new ComfyUIMarketing({
-  serverUrl: "http://localhost:8188",
+  serverUrl: process.env.COMFYUI_SERVER_URL || "http://localhost:8188",
   quality: "production"
 });
 
@@ -16600,6 +17282,7 @@ var MetaPublisher = class {
     this.processing = false;
     this.tokenExpired = false;
     this.jobHistory = [];
+    this.supabase = getSupabaseServerClient();
   }
   getJobHistory() {
     return [...this.jobHistory].slice(0, 20);
@@ -16612,19 +17295,37 @@ var MetaPublisher = class {
       attempts: 0,
       nextRetryAt: Date.now()
     };
-    this.jobHistory.unshift({
+    const rec = {
       id: item.id,
       channel: request.destination,
       contentId,
       status: "retrying",
       attempts: 0,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
+    };
+    this.jobHistory.unshift(rec);
     this.queue.push(item);
     logger.info("meta", "meta-publisher", "enqueue", `Publica\xE7\xE3o ${item.id} enfileirada`);
+    this.persistJobRecord(rec);
     this.process().catch(() => {
     });
     return { queued: true, itemId: item.id };
+  }
+  persistJobRecord(rec) {
+    if (!this.supabase) return;
+    this.supabase.from("publisher_jobs").upsert({
+      id: rec.id,
+      channel: rec.channel,
+      content_id: rec.contentId,
+      status: rec.status,
+      attempts: rec.attempts,
+      created_at: rec.createdAt,
+      resolved_at: rec.resolvedAt,
+      error: rec.error
+    }, { onConflict: "id" }).then(({ error }) => {
+      if (error) logger.warn("meta", "meta-publisher", "persist", `Failed to persist job ${rec.id}`, { error: error.message });
+    }).catch(() => {
+    });
   }
   getQueue() {
     return this.queue.map(({ id, attempts, nextRetryAt, request }) => ({
@@ -16697,6 +17398,7 @@ var MetaPublisher = class {
         rec.status = "delivered";
         rec.attempts = item.attempts;
         rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
+        this.persistJobRecord(rec);
       }
       logger.info("meta", "meta-publisher", "publish", `Publica\xE7\xE3o ${item.id} entregue`);
     } catch (err) {
@@ -16713,6 +17415,7 @@ var MetaPublisher = class {
           rec.attempts = item.attempts;
           rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
           rec.error = String(err.message || err);
+          this.persistJobRecord(rec);
         }
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,
@@ -16787,10 +17490,11 @@ var PublicacaoAgent = class {
             });
             metaPublisher.enqueue({
               destination: "both",
-              message: `${content.copyText}
+              message: `${content.copyText || content.copy_text}
 
-${content.hashtags.join(" ")}`,
-              linkUrl: "https://www.defesai.shop"
+${(content.hashtags || []).join(" ")}`,
+              linkUrl: "https://www.defesai.shop",
+              mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
             }, content.id);
             eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId: content.id }, "marketing_os");
             logger.info("marketing", "agents", "publish", `Conte\xFAdo ${content.id} agendado e enfileirado na Meta`);
@@ -16806,10 +17510,11 @@ ${content.hashtags.join(" ")}`,
             logger.info("marketing", "agents", "publicacao", `Publishing scheduled content ${content.id} (scheduled for ${scheduledDateStr})`);
             const result = metaPublisher.enqueue({
               destination: "both",
-              message: `${content.copyText}
+              message: `${content.copyText || content.copy_text}
 
-${content.hashtags.join(" ")}`,
-              linkUrl: "https://www.defesai.shop"
+${(content.hashtags || []).join(" ")}`,
+              linkUrl: "https://www.defesai.shop",
+              mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
             }, content.id);
             await marketingService.updateContent(content.id, {
               status: "publicado",
@@ -16828,10 +17533,11 @@ ${content.hashtags.join(" ")}`,
           logger.info("marketing", "agents", "publicacao", `Publishing content ${content.id} without scheduled date (immediate)`);
           const result = metaPublisher.enqueue({
             destination: "both",
-            message: `${content.copyText}
+            message: `${content.copyText || content.copy_text}
 
-${content.hashtags.join(" ")}`,
-            linkUrl: "https://www.defesai.shop"
+${(content.hashtags || []).join(" ")}`,
+            linkUrl: "https://www.defesai.shop",
+            mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
           }, content.id);
           await marketingService.updateContent(content.id, {
             status: "publicado",
@@ -16935,38 +17641,44 @@ var InteligenciaAgent = class {
         (c) => c.status === "publicado" && c.meta_post_id
       );
       logger.info("marketing", "agents", "inteligencia", `Found ${publishedContentWithMetaId.length} published content with Meta IDs`);
+      const token = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
       const metricsPromises = publishedContentWithMetaId.map(async (content) => {
         try {
-          logger.debug("marketing", "agents", "inteligencia", `Would fetch real metrics from Meta API for post ${content.meta_post_id}`);
+          let metrics = {
+            impressions: 0,
+            reach: 0,
+            engagement: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            saved: 0,
+            videoViews: 0
+          };
+          if (token && content.meta_post_id) {
+            const insights = await metaInsightsService.getFacebookPostInsights(content.meta_post_id, token);
+            metrics = {
+              impressions: insights.impressions || 0,
+              reach: insights.reach || 0,
+              engagement: insights.engagement || 0,
+              likes: insights.likes || 0,
+              comments: insights.comments || 0,
+              shares: insights.shares || 0,
+              saved: insights.saved || 0,
+              videoViews: 0
+            };
+          }
           return {
             contentId: content.id,
             metaPostId: content.meta_post_id,
             contentType: content.format,
             channel: content.channel,
             isSimulated: false,
-            metrics: {
-              impressions: 0,
-              // Would be populated from real API
-              reach: 0,
-              // Would be populated from real API
-              engagement: 0,
-              // Would be populated from real API
-              likes: 0,
-              // Would be populated from real API
-              comments: 0,
-              // Would be populated from real API
-              shares: 0,
-              // Would be populated from real API
-              saved: 0,
-              // Would be populated from real API
-              videoViews: 0
-              // Would be populated from real API if applicable
-            },
+            metrics,
             timestamp: (/* @__PURE__ */ new Date()).toISOString()
           };
         } catch (error) {
           logger.warn("marketing", "agents", "inteligencia", `Failed to fetch metrics for content ${content.id}`, {
-            error: error.message
+            error: error?.message
           });
           return null;
         }
@@ -17211,16 +17923,10 @@ var AprendizadoAgent = class {
     const metricsResults = [];
     for (const content of contents) {
       try {
-        const isDemoMode = !process.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL.includes("demo") || !process.env.VITE_SUPABASE_ANON_KEY;
         let metrics;
-        if (isDemoMode) {
-          if (process.env.NODE_ENV === "production") {
-            metrics = { impressions: 0, reach: 0, engagements: 0, engagementRate: 0, likes: 0, comments: 0, shares: 0, saved: 0, videoViews: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() };
-            logger.warn("marketing", "agents", "aprendizado", `Production mode \u2014 returning zeroed metrics for content ${content.id} (no real Meta API configured)`);
-          } else {
-            metrics = this.generateDemoMetrics(content);
-            logger.debug("marketing", "agents", "aprendizado", `Using demo metrics for content ${content.id}`);
-          }
+        if (!content.meta_post_id) {
+          metrics = { impressions: 0, reach: 0, engagements: 0, engagementRate: 0, likes: 0, comments: 0, shares: 0, saved: 0, videoViews: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() };
+          logger.debug("marketing", "agents", "aprendizado", `Content ${content.id} sem meta_post_id \u2014 m\xE9tricas zeradas`);
         } else {
           metrics = await this.fetchRealMetaMetrics(content.meta_post_id);
           logger.debug("marketing", "agents", "aprendizado", `Fetched real metrics for content ${content.id}`);
@@ -17237,7 +17943,7 @@ var AprendizadoAgent = class {
         });
       } catch (error) {
         logger.warn("marketing", "agents", "aprendizado", `Failed to fetch metrics for content ${content.id}`, {
-          error: error.message
+          error: error?.message
         });
         continue;
       }
@@ -17248,64 +17954,38 @@ var AprendizadoAgent = class {
    * Fetch real metrics from Meta Graph API
    */
   async fetchRealMetaMetrics(metaPostId) {
-    logger.info("marketing", "agents", "aprendizado", `Would fetch real metrics from Meta API for post ${metaPostId}`);
-    return {
-      impressions: 0,
-      // Would be populated from real API
-      reach: 0,
-      // Would be populated from real API
-      engagement: 0,
-      // Would be populated from real API
-      likes: 0,
-      // Would be populated from real API
-      comments: 0,
-      // Would be populated from real API
-      shares: 0,
-      // Would be populated from real API
-      saved: 0,
-      // Would be populated from real API
-      videoViews: 0,
-      // Would be populated from real API if applicable
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  /**
-   * Generate realistic demo metrics for development/testing
-   */
-  generateDemoMetrics(content) {
-    const contentHash = this.hashString(content.id);
-    const seed = parseInt(contentHash.substring(0, 8), 16);
-    const pseudoRandom = () => {
-      let x = seed;
-      x ^= x << 13;
-      x ^= x >> 17;
-      x ^= x << 5;
-      return (x & 2147483647) / 2147483647;
-    };
-    const rand = pseudoRandom();
-    const baseImpressions = 1e4 + seed % 5e4;
-    const reachRatio = 0.8 + rand * 0.3;
-    const engagementRate = 0.02 + rand * 0.08;
-    const impressions = baseImpressions;
-    const reach = Math.floor(impressions * reachRatio);
-    const engagements = Math.floor(reach * engagementRate);
-    const likes = Math.floor(engagements * (0.6 + rand * 0.3));
-    const comments = Math.floor(engagements * (0.1 + rand * 0.3));
-    const shares = Math.floor(engagements * (0.05 + rand * 0.2));
-    const saved = Math.floor(engagements * (0.02 + rand * 0.1));
-    return {
-      impressions,
-      reach,
-      engagements: likes + comments + shares + saved,
-      engagementRate: engagements / reach * 100,
-      likes,
-      comments,
-      shares,
-      saved,
-      videoViews: Math.floor(impressions * (rand * 0.3)),
-      // 0%-30% video views if applicable
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    };
+    const token = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    if (!token) {
+      logger.warn("marketing", "agents", "aprendizado", `META_ACCESS_TOKEN ausente. M\xE9tricas reais indispon\xEDveis para ${metaPostId}`);
+      return {
+        impressions: 0,
+        reach: 0,
+        engagement: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        saved: 0,
+        videoViews: 0,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    try {
+      const insights = await metaInsightsService.getFacebookPostInsights(metaPostId, token);
+      return {
+        impressions: insights.impressions || 0,
+        reach: insights.reach || 0,
+        engagement: insights.engagement || 0,
+        likes: insights.likes || 0,
+        comments: insights.comments || 0,
+        shares: insights.shares || 0,
+        saved: insights.saved || 0,
+        videoViews: 0,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } catch (err) {
+      logger.error("marketing", "agents", "aprendizado", `Erro ao buscar m\xE9tricas reais da Meta para post ${metaPostId}`, { error: err?.message });
+      throw err;
+    }
   }
   /**
    * Simple string hashing function for deterministic pseudo-random generation
@@ -17603,10 +18283,9 @@ var MarketingMetricsCollector = class {
     const published = contents.filter((c) => c.status === "publicado").length;
     const scheduled = contents.filter((c) => c.status === "agendado").length;
     this.metrics = {
-      monthlyReach: this.metrics.monthlyReach || 284500,
-      // acumulado histórico inicial
+      monthlyReach: this.metrics.monthlyReach,
+      // accumulated from real Meta Insights only
       newCasesGenerated: Math.round(published * 0.5),
-      // estimativa determinística
       conversionRate: published > 0 ? Math.min(18, 10 + published * 0.4) : 0,
       publishedPosts: published,
       scheduledPosts: scheduled,
@@ -17895,6 +18574,12 @@ router7.post("/inbox/self-test", async (_req, res) => {
   }
 });
 router7.post("/inbox/simulate-inbound", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Endpoint de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
+      message: "Simula\xE7\xE3o de mensagens n\xE3o permitida em ambiente de produ\xE7\xE3o."
+    });
+  }
   try {
     const { channel, senderName, text, phoneOrId, vehiclePlate } = req.body;
     const result = await messagingService.processIncomingMessage({
@@ -18388,7 +19073,7 @@ ${p.text}`).join("\n\n"),
         applicabilityNote: constArg.whenToUse.join("; ")
       });
     }
-    let procedure = "defesa_previa";
+    let procedure = "recurso_jari";
     if (infraction.infractionCode === "516-91" || infraction.infractionCode === "747-10") {
       procedure = "suspensao_cnh";
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-051")) {
@@ -18439,7 +19124,7 @@ function normalizeProcedureId(procedureType) {
 }
 function resolveProcedure(procedureType) {
   const id = normalizeProcedureId(procedureType);
-  return PROCEDURES_CATALOG.find((p) => p.id === id) || PROCEDURES_CATALOG.find((p) => p.id === "defesa_previa");
+  return PROCEDURES_CATALOG.find((p) => p.id === id) || PROCEDURES_CATALOG.find((p) => p.id === "recurso_jari");
 }
 function buildDocumentRollItems(procedureType) {
   const procedure = resolveProcedure(procedureType);
@@ -18850,7 +19535,7 @@ var RagPipeline = class {
   /**
    * Generate complete, formatted legal defense draft petition via Document Assembly Engine
    */
-  static generateDefenseDraft(caseId, infraction, vehiclePlate, vehicleModel, applicantData, selectedArguments, procedureType = "defesa_previa") {
+  static generateDefenseDraft(caseId, infraction, vehiclePlate, vehicleModel, applicantData, selectedArguments, procedureType = "recurso_jari") {
     return DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
@@ -19214,23 +19899,23 @@ router10.post("/ocr/analyze", async (req, res) => {
       }
       const ocrResult = imageUrl ? await ocrService.analyzeFromUrl(imageUrl) : await ocrService.analyzeImage(base64);
       const tempCaseId = `temp_${Date.now()}`;
-      const matchedInfraction2 = RagPipeline.findInfraction(ocrResult.dadosExtraidos.codigoInfracao);
+      const matchedInfraction = RagPipeline.findInfraction(ocrResult.dadosExtraidos.codigoInfracao);
       const infractionData = {
         aitNumber: ocrResult.dadosExtraidos.aitNumber,
         infractionCode: ocrResult.dadosExtraidos.codigoInfracao,
         description: ocrResult.dadosExtraidos.descricao,
         ctbArticle: ocrResult.dadosExtraidos.artigoCtb,
-        severity: matchedInfraction2?.severity || "media",
-        points: matchedInfraction2?.points || 0,
-        fineAmount: matchedInfraction2?.fineAmount || 0,
+        severity: matchedInfraction?.severity || "media",
+        points: matchedInfraction?.points || 0,
+        fineAmount: matchedInfraction?.fineAmount || 0,
         autuadorBody: ocrResult.dadosExtraidos.orgaoAutuador,
         notificationExpeditionDate: ocrResult.dadosExtraidos.dataInfracao,
         defenseDeadline: ocrResult.dadosExtraidos.prazoDefesa || new Date(Date.now() + 28 * 24 * 3600 * 1e3).toISOString().split("T")[0],
-        formalFlawsDetected: matchedInfraction2?.typicalFlaws || [],
+        formalFlawsDetected: matchedInfraction?.typicalFlaws || [],
         dateTime: ocrResult.dadosExtraidos.dataInfracao || (/* @__PURE__ */ new Date()).toISOString(),
         location: ocrResult.dadosExtraidos.localInfracao || "N\xE3o informado"
       };
-      let geminiResult2 = null;
+      let geminiResult = null;
       if (ocrResult.textoCompleto && ocrResult.textoCompleto.length > 20) {
         const aiResult = await aiProviderManager.executeLegalReasoning(
           `Voc\xEA \xE9 um especialista em direito de tr\xE2nsito brasileiro (CTB, Resolu\xE7\xF5es do CONTRAN, Portarias do SENATRAN e INMETRO).
@@ -19259,31 +19944,31 @@ router10.post("/ocr/analyze", async (req, res) => {
         );
         if (aiResult.success && aiResult.data) {
           if (typeof aiResult.data === "object" && aiResult.data !== null && "summary" in aiResult.data && "successProbability" in aiResult.data && "fatalFlaws" in aiResult.data && "primaryLegalTeses" in aiResult.data && "actionChecklist" in aiResult.data) {
-            geminiResult2 = aiResult.data;
+            geminiResult = aiResult.data;
           } else if (typeof aiResult.data === "string") {
             try {
               const parsed = JSON.parse(aiResult.data);
               if (typeof parsed === "object" && parsed !== null && "summary" in parsed && "successProbability" in parsed && "fatalFlaws" in parsed && "primaryLegalTeses" in parsed && "actionChecklist" in parsed) {
-                geminiResult2 = parsed;
+                geminiResult = parsed;
               } else {
-                geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+                geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
               }
             } catch (e) {
-              geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+              geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
             }
           } else if (typeof aiResult.data === "object" && aiResult.data !== null) {
-            geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+            geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
           } else {
-            geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+            geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
           }
         } else {
-          geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+          geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
         }
       }
-      const analysis2 = RagPipeline.analyzeInfraction(tempCaseId, infractionData);
-      if (geminiResult2?.fatalFlaws) {
+      const analysis = RagPipeline.analyzeInfraction(tempCaseId, infractionData);
+      if (geminiResult?.fatalFlaws) {
         infractionData.formalFlawsDetected = Array.from(
-          /* @__PURE__ */ new Set([...infractionData.formalFlawsDetected, ...geminiResult2.fatalFlaws])
+          /* @__PURE__ */ new Set([...infractionData.formalFlawsDetected, ...geminiResult.fatalFlaws])
         );
       }
       eventBus.publish(EventTopics.OCR_COMPLETED, {
@@ -19300,36 +19985,36 @@ router10.post("/ocr/analyze", async (req, res) => {
           },
           infraction: infractionData
         },
-        analysis: analysis2,
+        analysis,
         ocr: {
           provider: ocrResult.provedor,
           confidence: ocrResult.confianca,
           processingTimeMs: ocrResult.tempoProcessamentoMs,
           rawText: ocrResult.textoCompleto
         },
-        geminiEnriched: Boolean(geminiResult2)
+        geminiEnriched: Boolean(geminiResult)
       });
     }
     if (rawText) {
       const ocrResult = ocrService.parseRawText(rawText);
       const tempCaseId = `temp_${Date.now()}`;
-      const matchedInfraction2 = RagPipeline.findInfraction(ocrResult.dadosExtraidos.codigoInfracao);
+      const matchedInfraction = RagPipeline.findInfraction(ocrResult.dadosExtraidos.codigoInfracao);
       const infractionData = {
         aitNumber: ocrResult.dadosExtraidos.aitNumber,
         infractionCode: ocrResult.dadosExtraidos.codigoInfracao,
         description: ocrResult.dadosExtraidos.descricao,
         ctbArticle: ocrResult.dadosExtraidos.artigoCtb,
-        severity: matchedInfraction2?.severity || "media",
-        points: matchedInfraction2?.points || 0,
-        fineAmount: matchedInfraction2?.fineAmount || 0,
+        severity: matchedInfraction?.severity || "media",
+        points: matchedInfraction?.points || 0,
+        fineAmount: matchedInfraction?.fineAmount || 0,
         autuadorBody: ocrResult.dadosExtraidos.orgaoAutuador,
         notificationExpeditionDate: ocrResult.dadosExtraidos.dataInfracao,
         defenseDeadline: ocrResult.dadosExtraidos.prazoDefesa || new Date(Date.now() + 28 * 24 * 3600 * 1e3).toISOString().split("T")[0],
-        formalFlawsDetected: matchedInfraction2?.typicalFlaws || [],
+        formalFlawsDetected: matchedInfraction?.typicalFlaws || [],
         dateTime: ocrResult.dadosExtraidos.dataInfracao || (/* @__PURE__ */ new Date()).toISOString(),
         location: ocrResult.dadosExtraidos.localInfracao || "N\xE3o informado"
       };
-      let geminiResult2 = null;
+      let geminiResult = null;
       if (ocrResult.textoCompleto && ocrResult.textoCompleto.length > 20) {
         const aiResult = await aiProviderManager.executeLegalReasoning(
           `Voc\xEA \xE9 um especialista em direito de tr\xE2nsito brasileiro (CTB, Resolu\xE7\xF5es do CONTRAN, Portarias do SENATRAN e INMETRO).
@@ -19358,31 +20043,31 @@ router10.post("/ocr/analyze", async (req, res) => {
         );
         if (aiResult.success && aiResult.data) {
           if (typeof aiResult.data === "object" && aiResult.data !== null && "summary" in aiResult.data && "successProbability" in aiResult.data && "fatalFlaws" in aiResult.data && "primaryLegalTeses" in aiResult.data && "actionChecklist" in aiResult.data) {
-            geminiResult2 = aiResult.data;
+            geminiResult = aiResult.data;
           } else if (typeof aiResult.data === "string") {
             try {
               const parsed = JSON.parse(aiResult.data);
               if (typeof parsed === "object" && parsed !== null && "summary" in parsed && "successProbability" in parsed && "fatalFlaws" in parsed && "primaryLegalTeses" in parsed && "actionChecklist" in parsed) {
-                geminiResult2 = parsed;
+                geminiResult = parsed;
               } else {
-                geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+                geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
               }
             } catch (e) {
-              geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+              geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
             }
           } else if (typeof aiResult.data === "object" && aiResult.data !== null) {
-            geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+            geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
           } else {
-            geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+            geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
           }
         } else {
-          geminiResult2 = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
+          geminiResult = await analyzeTicketWithGemini(ocrResult.textoCompleto, infractionData);
         }
       }
-      const analysis2 = RagPipeline.analyzeInfraction(tempCaseId, infractionData);
-      if (geminiResult2?.fatalFlaws) {
+      const analysis = RagPipeline.analyzeInfraction(tempCaseId, infractionData);
+      if (geminiResult?.fatalFlaws) {
         infractionData.formalFlawsDetected = Array.from(
-          /* @__PURE__ */ new Set([...infractionData.formalFlawsDetected, ...geminiResult2.fatalFlaws])
+          /* @__PURE__ */ new Set([...infractionData.formalFlawsDetected, ...geminiResult.fatalFlaws])
         );
       }
       eventBus.publish(EventTopics.OCR_COMPLETED, {
@@ -19399,137 +20084,19 @@ router10.post("/ocr/analyze", async (req, res) => {
           },
           infraction: infractionData
         },
-        analysis: analysis2,
+        analysis,
         ocr: {
           provider: ocrResult.provedor,
           confidence: ocrResult.confianca,
           processingTimeMs: ocrResult.tempoProcessamentoMs,
           rawText: ocrResult.textoCompleto
         },
-        geminiEnriched: Boolean(geminiResult2)
+        geminiEnriched: Boolean(geminiResult)
       });
     }
-    if (process.env.NODE_ENV === "production") {
-      return res.status(400).json({
-        error: "Dados de entrada necess\xE1rios",
-        message: "Envie imageUrl, base64, ou rawText para an\xE1lise."
-      });
-    }
-    const { presetId: devPreset } = req.body;
-    let code = "745-50";
-    let aitNumber = `1B${Math.floor(1e5 + Math.random() * 9e5)}`;
-    let autuador = "DETRAN-SP \u2014 Departamento Estadual de Tr\xE2nsito de S\xE3o Paulo";
-    let location = "Av. Washington Lu\xEDs, km 12 \u2014 S\xE3o Paulo/SP";
-    if (devPreset === "lei_seca") {
-      code = "516-91";
-      aitNumber = `LS${Math.floor(1e5 + Math.random() * 9e5)}`;
-      autuador = "DETRAN-RJ \u2014 Opera\xE7\xE3o Lei Seca";
-      location = "Av. das Am\xE9ricas, alt. Barra Shopping \u2014 Rio de Janeiro/RJ";
-    } else if (devPreset === "celular") {
-      code = "736-62";
-      aitNumber = `CL${Math.floor(1e5 + Math.random() * 9e5)}`;
-      autuador = "CET-SP / DSV \u2014 Companhia de Engenharia de Tr\xE1fego";
-      location = "Rua da Consola\xE7\xE3o, cruzamento com Av. Paulista \u2014 S\xE3o Paulo/SP";
-    } else if (devPreset === "vermelho") {
-      code = "605-01";
-      aitNumber = `SF${Math.floor(1e5 + Math.random() * 9e5)}`;
-      autuador = "BHTRANS \u2014 Empresa de Transportes e Tr\xE2nsito de Belo Horizonte";
-      location = "Av. Afonso Pena c/ Av. Amazonas \u2014 Belo Horizonte/MG";
-    }
-    const matchedInfraction = RagPipeline.findInfraction(code);
-    const sampleInfractionData = {
-      aitNumber,
-      infractionCode: matchedInfraction.code,
-      description: matchedInfraction.description,
-      ctbArticle: matchedInfraction.article,
-      fineAmount: matchedInfraction.fineAmount,
-      points: matchedInfraction.points,
-      severity: matchedInfraction.severity,
-      autuadorBody: autuador,
-      notificationExpeditionDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      defenseDeadline: new Date(Date.now() + 28 * 24 * 3600 * 1e3).toISOString().split("T")[0],
-      formalFlawsDetected: matchedInfraction.typicalFlaws,
-      dateTime: (/* @__PURE__ */ new Date()).toISOString(),
-      location,
-      plate: "ABC1D23"
-    };
-    let geminiResult = null;
-    if (sampleInfractionData.description && sampleInfractionData.description.length > 10) {
-      const aiResult = await aiProviderManager.executeLegalReasoning(
-        `Voc\xEA \xE9 um especialista em direito de tr\xE2nsito brasileiro (CTB, Resolu\xE7\xF5es do CONTRAN, Portarias do SENATRAN e INMETRO).
-        Analise o seguinte Auto de Infra\xE7\xE3o de Tr\xE2nsito ou notifica\xE7\xE3o e identifique todas as falhas formais, v\xEDcios de nulidade, prazos e teses aplic\xE1veis:
-
-        Texto Extra\xEDdo:
-        """
-        Nota de tr\xE2nsito simulada para desenvolvimento: ${sampleInfractionData.description}
-        """
-
-        Contexto do Auto:
-        ${JSON.stringify(sampleInfractionData, null, 2)}
-
-        Por favor, responda no formato JSON com:
-        - summary: resumo executivo do caso
-        - successProbability: probabilidade estimada em porcentagem (n\xFAmero entre 60 e 98)
-        - fatalFlaws: lista de v\xEDcios formais/materiais detectados
-        - primaryLegalTeses: teses jur\xEDdicas com artigos do CTB e resolu\xE7\xF5es do CONTRAN
-        - actionChecklist: passos para protocolo tempestivo`,
-        sampleInfractionData,
-        {
-          correlationId: `ocr_demo_${Date.now()}`,
-          caseId: `demo_${Date.now()}`,
-          temperature: 0.15
-        }
-      );
-      if (aiResult.success && aiResult.data) {
-        if (typeof aiResult.data === "object" && aiResult.data !== null && "summary" in aiResult.data && "successProbability" in aiResult.data && "fatalFlaws" in aiResult.data && "primaryLegalTeses" in aiResult.data && "actionChecklist" in aiResult.data) {
-          geminiResult = aiResult.data;
-        } else if (typeof aiResult.data === "string") {
-          try {
-            const parsed = JSON.parse(aiResult.data);
-            if (typeof parsed === "object" && parsed !== null && "summary" in parsed && "successProbability" in parsed && "fatalFlaws" in parsed && "primaryLegalTeses" in parsed && "actionChecklist" in parsed) {
-              geminiResult = parsed;
-            } else {
-              geminiResult = await analyzeTicketWithGemini(sampleInfractionData.description, sampleInfractionData);
-            }
-          } catch (e) {
-            geminiResult = await analyzeTicketWithGemini(sampleInfractionData.description, sampleInfractionData);
-          }
-        } else if (typeof aiResult.data === "object" && aiResult.data !== null) {
-          geminiResult = await analyzeTicketWithGemini(sampleInfractionData.description, sampleInfractionData);
-        } else {
-          geminiResult = await analyzeTicketWithGemini(sampleInfractionData.description, sampleInfractionData);
-        }
-      } else {
-        geminiResult = await analyzeTicketWithGemini(sampleInfractionData.description, sampleInfractionData);
-      }
-    }
-    const analysis = RagPipeline.analyzeInfraction(`demo_${Date.now()}`, sampleInfractionData);
-    if (geminiResult?.fatalFlaws) {
-      sampleInfractionData.formalFlawsDetected = Array.from(
-        /* @__PURE__ */ new Set([...sampleInfractionData.formalFlawsDetected, ...geminiResult.fatalFlaws])
-      );
-    }
-    eventBus.publish(EventTopics.OCR_COMPLETED, {
-      aitNumber: sampleInfractionData.aitNumber,
-      infractionCode: sampleInfractionData.infractionCode
-    });
-    return res.json({
-      success: true,
-      extractedData: {
-        vehicle: {
-          plate: sampleInfractionData.plate || "ABC1234",
-          renavam: void 0
-        },
-        infraction: sampleInfractionData
-      },
-      analysis,
-      ocr: {
-        provider: "DEMO",
-        confidence: 95,
-        processingTimeMs: 100,
-        rawText: sampleInfractionData.description || "Nota de tr\xE2nsito simulada"
-      },
-      geminiEnriched: Boolean(geminiResult)
+    return res.status(400).json({
+      error: "Dados de entrada necess\xE1rios",
+      message: "Envie imageUrl, base64 ou rawText para an\xE1lise do auto de infra\xE7\xE3o."
     });
   } catch (error) {
     console.error("[OCR Route] Error processing request:", error);
@@ -19545,7 +20112,7 @@ var ocr_default = router10;
 import { Router as Router11 } from "express";
 
 // src/server/integrations/pagbank.ts
-import * as crypto3 from "crypto";
+import * as crypto4 from "crypto";
 import QRCode from "qrcode";
 
 // src/server/db/payment-repository.ts
@@ -19702,9 +20269,9 @@ var PagBankIntegrationService = class {
       logger.warn("payments", "pagbank", "verify_webhook", "Missing signature header");
       return false;
     }
-    const expectedSignature = `sha256=${crypto3.createHmac("sha256", this.webhookSecret).update(rawBody, "utf8").digest("hex")}`;
+    const expectedSignature = `sha256=${crypto4.createHmac("sha256", this.webhookSecret).update(rawBody, "utf8").digest("hex")}`;
     const receivedSignature = signatureHeader.startsWith("sha256=") ? signatureHeader : `sha256=${signatureHeader}`;
-    return crypto3.timingSafeEqual(
+    return crypto4.timingSafeEqual(
       Buffer.from(expectedSignature),
       Buffer.from(receivedSignature)
     );
@@ -19764,6 +20331,12 @@ var PagBankIntegrationService = class {
     this.orders.set(referenceId, orderResult);
     this.orders.set(`case_${caseId}`, orderResult);
     paymentRepository.persistOrder(orderResult, { paymentMethod: "pix" });
+    if (this.token && this.token.startsWith("mock_")) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error('PAGBANK_TOKEN com prefixo "mock_" n\xE3o \xE9 permitido em produ\xE7\xE3o. Configure um token v\xE1lido.');
+      }
+      logger.warn("payments", "pagbank", "create_pix_order", "Token mock detectado \u2014 usando modo sandbox local");
+    }
     if (this.token && !this.token.startsWith("mock_")) {
       try {
         const notificationUrls = this.buildNotificationUrls();
@@ -19812,8 +20385,14 @@ var PagBankIntegrationService = class {
           this.orders.set(data.id, orderResult);
         }
       } catch (err) {
-        logger.warn("payments", "pagbank", "create_pix_order", "Live API call fallback to sandbox order", { error: String(err) });
+        if (process.env.NODE_ENV === "production") {
+          logger.error("payments", "pagbank", "create_pix_order", "PagBank API falhou em produ\xE7\xE3o \u2014 ordem N\xC3O criada", { error: String(err) });
+          throw new Error("Falha ao criar ordem PIX no PagBank. Tente novamente.");
+        }
+        logger.warn("payments", "pagbank", "create_pix_order", "PagBank API falhou \u2014 modo dev: ordem local mantida", { error: String(err) });
       }
+    } else if (!this.token && process.env.NODE_ENV === "production") {
+      throw new Error("PAGBANK_TOKEN n\xE3o configurado. Pagamento indispon\xEDvel em produ\xE7\xE3o.");
     }
     eventBus.publish(
       EventTopics.PAYMENT_PIX_GENERATED,
@@ -19847,6 +20426,12 @@ var PagBankIntegrationService = class {
     this.orders.set(referenceId, orderResult);
     this.orders.set(`case_${caseId}`, orderResult);
     paymentRepository.persistOrder(orderResult, { paymentMethod: "credit_card" });
+    if (this.token && this.token.startsWith("mock_")) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error('PAGBANK_TOKEN com prefixo "mock_" n\xE3o \xE9 permitido em produ\xE7\xE3o.');
+      }
+      logger.warn("payments", "pagbank", "create_credit_card_order", "Token mock detectado \u2014 usando modo sandbox local");
+    }
     if (this.token && !this.token.startsWith("mock_")) {
       try {
         const notificationUrls = this.buildNotificationUrls();
@@ -19974,6 +20559,9 @@ var PagBankIntegrationService = class {
         throw new Error("Erro ao processar pagamento com cart\xE3o de cr\xE9dito");
       }
     } else {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("PAGBANK_TOKEN n\xE3o configurado. Pagamento com cart\xE3o indispon\xEDvel em produ\xE7\xE3o.");
+      }
       orderResult.threeDsChallengeRequired = authenticationMethod === "CHALLENGE";
       orderResult.threeDsUrl = authenticationMethod === "CHALLENGE" ? `https://sandbox.pagseguro.com/3ds/challenge/${orderId}` : void 0;
       orderResult.status = authenticationMethod === "CHALLENGE" ? "WAITING" : "AUTHORIZED";
@@ -20207,22 +20795,6 @@ var PagBankAdapter = class {
       isDuplicate: result.isDuplicate
     };
   }
-  simulateConfirmation(caseId, amountInCents) {
-    const confirmResult = pagBankIntegration.confirmPayment(caseId);
-    const order = confirmResult.order;
-    return {
-      gatewayTransactionId: order.orderId,
-      referenceId: order.referenceId,
-      gateway: "pagbank",
-      status: "PAID",
-      amountInCents: amountInCents || Math.round(order.amount * 100),
-      pixCopyPaste: order.qrCodeText || "",
-      qrCodeDataUrl: order.qrCodeDataUrl,
-      qrCodeUrl: order.qrCodeUrl,
-      expiresAt: order.expiresAt,
-      createdAt: order.createdAt
-    };
-  }
 };
 var pagbankAdapter = new PagBankAdapter();
 
@@ -20278,7 +20850,10 @@ var GGPIXAdapter = class {
     const config = getConfig();
     const cleanDoc = (input.payer.document || "12345678909").replace(/\D/g, "");
     const referenceId = input.referenceId || `defesai_case_${input.caseId}_${Date.now()}`;
-    const amountInCents = input.amountInCents || 8990;
+    if (!input.amountInCents || typeof input.amountInCents !== "number" || input.amountInCents <= 0) {
+      throw new Error("amountInCents inv\xE1lido: deve ser um n\xFAmero maior que zero.");
+    }
+    const amountInCents = input.amountInCents;
     let transactionId = `ggpix_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     let pixCopyPaste = `00020126580014br.gov.bcb.pix0136${referenceId}520400005303986540${(amountInCents / 100).toFixed(2)}5802BR5916DEFESAI TECNOLOG6009SAO PAULO62070503***6304`;
     let status = "PENDING";
@@ -20309,13 +20884,24 @@ var GGPIXAdapter = class {
           netAmountInCents = data.fees?.netAmount;
         } else {
           const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }));
-          logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI PIX In returned non-200, using local fallback", {
+          if (process.env.NODE_ENV === "production") {
+            logger.error("payments", "ggpix", "create_pix", "GGPIXAPI retornou erro em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", {
+              httpStatus: response.status,
+              error: errorData
+            });
+            throw new Error(`GGPIXAPI retornou erro HTTP ${response.status}. Pagamento n\xE3o processado.`);
+          }
+          logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI PIX In returned non-200 \u2014 modo dev: usando dados locais", {
             httpStatus: response.status,
             error: errorData
           });
         }
       } catch (err) {
-        logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI request failed, fallback to sandbox", { error: err.message });
+        if (process.env.NODE_ENV === "production") {
+          logger.error("payments", "ggpix", "create_pix", "GGPIXAPI falhou em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", { error: err.message });
+          throw new Error("Falha ao conectar com GGPIXAPI. Pagamento n\xE3o processado.");
+        }
+        logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI request failed \u2014 modo dev: usando dados locais", { error: err.message });
       }
     }
     let qrCodeDataUrl = "";
@@ -20391,20 +20977,6 @@ var GGPIXAdapter = class {
       // GGPIXAPI não tem HMAC, idempotência por externalId
     };
   }
-  simulateConfirmation(caseId, amountInCents) {
-    const simulatedId = `ggpix_sim_${Date.now()}`;
-    const referenceId = `defesai_case_${caseId}`;
-    return {
-      gatewayTransactionId: simulatedId,
-      referenceId,
-      gateway: "ggpixapi",
-      status: "PAID",
-      amountInCents: amountInCents || 9700,
-      pixCopyPaste: "",
-      expiresAt: new Date(Date.now() + 30 * 60 * 1e3).toISOString(),
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
 };
 var ggpixAdapter = new GGPIXAdapter();
 
@@ -20413,7 +20985,15 @@ init_logger();
 function resolveActiveGatewayIdFromEnv() {
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || "").toLowerCase().trim();
   if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
-  if (envValue === "pagbank") return "pagbank";
+  if (envValue === "pagbank") {
+    if (process.env.NODE_ENV === "production") {
+      return "ggpixapi";
+    }
+    return "pagbank";
+  }
+  if (process.env.NODE_ENV === "production") {
+    return "ggpixapi";
+  }
   return "pagbank";
 }
 var GatewayManager = class {
@@ -20500,6 +21080,13 @@ var GatewayManager = class {
    */
   getActiveGatewayId() {
     return this.resolveActiveGatewayId();
+  }
+  /**
+   * Verifica se o gateway é de produção.
+   * Apenas GGPIXAPI é considerado gateway de produção (PagBank é sandbox/teste).
+   */
+  isProductionGateway(id) {
+    return id === "ggpixapi";
   }
   /**
    * Altera o gateway ativo (usado pelo Admin UI).
@@ -20635,7 +21222,7 @@ function resolveOffer(params) {
   return { offer };
 }
 function generateDefenseDraftForDomain(domain) {
-  const procedureType = domain.serviceType || "defesa_previa";
+  const procedureType = domain.serviceType || "recurso_jari";
   const selectedArgs = domain.analysis?.recommendedArguments || [];
   const defense = RagPipeline.generateDefenseDraft(
     domain.id,
@@ -20741,11 +21328,17 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || "N\xE3o foi poss\xEDvel determinar a oferta comercial.",
-        hint: "Informe serviceType v\xE1lido (ex: defesa_previa) ou verifique o cat\xE1logo."
+        hint: "Informe serviceType v\xE1lido (ex: recurso_jari) ou verifique o cat\xE1logo."
       });
     }
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
+    if (gateway.id === "pagbank") {
+      const userRole = req.user?.role;
+      if (userRole && userRole !== "admin") {
+        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
+      }
+    }
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
@@ -20759,6 +21352,20 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       webhookUrl: `${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/${gateway.id === "ggpixapi" ? "ggpix" : "pagbank"}`
     });
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
+    logger.info("payments", "gateway", "create_pix_order", "PIX order created", {
+      serviceType: offerResult.offer.serviceType,
+      pricingId: offerResult.offer.commercialId,
+      baseAmount: offerResult.offer.baseAmount,
+      discounts: {
+        promotion: offerResult.offer.promotionDiscount,
+        firstDocuments: offerResult.offer.firstDocumentsDiscount,
+        coupon: offerResult.offer.couponDiscount
+      },
+      finalAmount: offerResult.offer.finalAmount,
+      gateway: gateway.id,
+      environment: process.env.NODE_ENV,
+      userRole: req.user?.role
+    });
     res.json({
       success: true,
       order: orderResult,
@@ -20782,24 +21389,25 @@ router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
     if (!txId) {
       return res.status(400).json({ error: "txId \xE9 obrigat\xF3rio" });
     }
-    const order = [gatewayManager.getActiveGatewayId(), "pagbank", "ggpixapi"];
-    const tried = /* @__PURE__ */ new Set();
-    let lastStatus = "PENDING";
-    for (const id of order) {
-      if (tried.has(id)) continue;
-      tried.add(id);
-      const gw = gatewayManager.getGateway(id);
-      if (!gw || !gw.isConfigured()) continue;
-      try {
-        const result = await gw.getPaymentStatus(txId);
-        lastStatus = result.status;
-        if (result.status !== "PENDING") {
-          return res.json({ success: true, txId, status: result.status, paidAt: result.paidAt });
-        }
-      } catch {
-      }
+    const activeGatewayId = gatewayManager.getActiveGatewayId();
+    const gw = gatewayManager.getGateway(activeGatewayId);
+    if (!gw || !gw.isConfigured()) {
+      return res.status(500).json({ error: "Gateway ativo n\xE3o configurado." });
     }
-    return res.json({ success: true, txId, status: lastStatus });
+    try {
+      const result = await gw.getPaymentStatus(txId);
+      if (result.status !== "PENDING") {
+        return res.json({ success: true, txId, status: result.status, paidAt: result.paidAt });
+      }
+      return res.json({ success: true, txId, status: result.status });
+    } catch (err) {
+      logger.error("payments", "gateway", "pix_status", "Error querying payment status", {
+        error: err.message,
+        gateway: activeGatewayId,
+        environment: process.env.NODE_ENV
+      });
+      return res.status(500).json({ error: err.message || "Erro ao consultar status do pagamento" });
+    }
   } catch (err) {
     logger.error("payments", "gateway", "pix_status", "Error querying payment status", { error: err.message });
     return res.status(500).json({ error: err.message });
@@ -20827,7 +21435,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     if (!serviceType) {
       return res.status(400).json({
         error: "serviceType \xE9 obrigat\xF3rio para criar o pagamento.",
-        hint: "Informe serviceType v\xE1lido (ex: defesa_previa)."
+        hint: "Informe serviceType v\xE1lido (ex: recurso_jari)."
       });
     }
     const offerResult = resolveOffer({
@@ -20850,6 +21458,12 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       });
     }
     const gateway = gatewayManager.getActiveGateway();
+    if (gateway.id === "pagbank") {
+      const userRole = req.user?.role;
+      if (userRole && userRole !== "admin") {
+        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
+      }
+    }
     if (gateway.id !== "pagbank") {
       return res.status(400).json({
         error: "Gateway ativo n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito.",
@@ -20858,6 +21472,12 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         supportedMethods: ["pix"]
       });
     }
+    logger.info("payments", "gateway", "credit_card_gateway_check", "Credit card gateway validated", {
+      gateway: gateway.id,
+      environment: process.env.NODE_ENV,
+      userRole: req.user?.role,
+      serviceType: offerResult.offer?.serviceType
+    });
     const orderResult = await pagBankIntegration.createCreditCardOrder({
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
@@ -20947,7 +21567,7 @@ router11.post("/webhooks/pagbank", async (req, res) => {
         domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
         domain.status = "defesa_pronta";
         domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || "defesa_previa";
+        domain.serviceType = domain.serviceType || "recurso_jari";
         const paymentMethod = domain.payment?.paymentMethod || (webhookResult.transactionType === "CREDIT_CARD" ? "credit_card" : "pix");
         domain.payment = {
           status: "approved",
@@ -21040,7 +21660,7 @@ router11.post("/webhooks/ggpix", async (req, res) => {
         domain.paidAt = event.paidAt || (/* @__PURE__ */ new Date()).toISOString();
         domain.status = "defesa_pronta";
         domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || "defesa_previa";
+        domain.serviceType = domain.serviceType || "recurso_jari";
         domain.payment = {
           status: "approved",
           amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
@@ -21506,14 +22126,12 @@ var AIMediaService = class {
     const fullPrompt = stylePreset ? `${prompt}. Style guidelines: ${stylePreset}. Professional, high-contrast typography, premium editorial advertising.` : prompt;
     const ai = this.getClient();
     if (!ai) {
-      const fallbackUrl2 = this.createFallbackImage(fullPrompt, aspectRatio, imageSize);
       return {
-        success: true,
-        imageUrl: fallbackUrl2,
-        modelUsed: "defesai-visual-engine-fallback",
-        imageSize,
+        success: false,
+        error: "Chave GEMINI_API_KEY n\xE3o configurada no servidor para gera\xE7\xE3o de imagem.",
+        promptUsed: fullPrompt,
         aspectRatio,
-        promptUsed: fullPrompt
+        imageSize
       };
     }
     const candidateModels = [
@@ -21522,6 +22140,7 @@ var AIMediaService = class {
       "gemini-3.1-flash-image",
       "gemini-3.1-flash-lite-image"
     ];
+    let lastError;
     for (const model of candidateModels) {
       try {
         const parts = [];
@@ -21571,17 +22190,37 @@ var AIMediaService = class {
           }
         }
       } catch (err) {
-        logger.debug("ai_media", "service", "generateImage", `Model ${model} request returned error: ${err?.message}`);
+        lastError = err?.message || String(err);
+        logger.debug("ai_media", "service", "generateImage", `Model ${model} request returned error: ${lastError}`);
       }
     }
-    const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio, imageSize);
+    if (options.allowFallback) {
+      const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio || "1:1", imageSize || "1K");
+      logger.warn(
+        "ai_media",
+        "service",
+        "generateImage",
+        "Nenhum modelo IA dispon\xEDvel \u2014 retornando SVG placeholder",
+        { promptUsed: fullPrompt }
+      );
+      return {
+        success: true,
+        imageUrl: fallbackUrl,
+        imageBase64: void 0,
+        mimeType: "image/svg+xml",
+        promptUsed: fullPrompt,
+        aspectRatio,
+        imageSize,
+        isFallback: true
+      };
+    }
     return {
-      success: true,
-      imageUrl: fallbackUrl,
-      modelUsed: "defesai-visual-engine-fallback",
-      imageSize,
+      success: false,
+      error: `Falha na gera\xE7\xE3o de imagem com IA: ${lastError || "Nenhum modelo de imagem retornou conte\xFAdo v\xE1lido."}`,
+      promptUsed: fullPrompt,
       aspectRatio,
-      promptUsed: fullPrompt
+      imageSize,
+      isFallback: false
     };
   }
   /**
@@ -21598,14 +22237,9 @@ var AIMediaService = class {
     } = options;
     const ai = this.getClient();
     if (!ai) {
-      const simulatedOp2 = `models/veo-3.1-fast-generate-preview/operations/sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       return {
-        success: true,
-        operationName: simulatedOp2,
-        modelUsed: "veo-3.1-fast-generate-preview (simulated)",
-        aspectRatio,
-        resolution,
-        isSimulation: true
+        success: false,
+        error: "Servi\xE7o de IA n\xE3o inicializado (GEMINI_API_KEY ausente ou inv\xE1lida)."
       };
     }
     const candidateModels = [
@@ -21613,6 +22247,7 @@ var AIMediaService = class {
       "veo-3.1-lite-generate-preview",
       "veo-3.1-generate-preview"
     ];
+    let lastError;
     for (const model of candidateModels) {
       try {
         const cleanImage = imageBytesBase64 ? imageBytesBase64.replace(/^data:image\/\w+;base64,/, "") : void 0;
@@ -21646,36 +22281,30 @@ var AIMediaService = class {
           };
         }
       } catch (err) {
+        lastError = err?.message || String(err);
         logger.warn("ai_media", "service", "startVideoGeneration", `Model ${model} failed, attempting next`, {
-          error: err?.message
+          error: lastError
         });
       }
     }
-    const simulatedOp = `models/veo-3.1-fast-generate-preview/operations/sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     return {
-      success: true,
-      operationName: simulatedOp,
-      modelUsed: "veo-3.1-fast-generate-preview (demo mode)",
-      aspectRatio,
-      resolution,
-      isSimulation: true
+      success: false,
+      error: `Falha na gera\xE7\xE3o de v\xEDdeo via Veo: ${lastError || "Nenhum modelo Veo dispon\xEDvel ou cota excedida."}`
     };
   }
   /**
    * Polls operation status
    */
   async checkVideoStatus(operationName) {
-    if (operationName.includes("sim_")) {
-      const timestamp = parseInt(operationName.split("_")[1], 10);
-      const elapsed = Date.now() - timestamp;
-      const isDone = elapsed > 5e3;
+    if (!operationName || operationName.includes("sim_")) {
       return {
-        done: isDone
+        done: false,
+        error: { message: "Opera\xE7\xE3o de v\xEDdeo inv\xE1lida ou n\xE3o encontrada no provedor real." }
       };
     }
     const ai = this.getClient();
     if (!ai) {
-      return { done: true };
+      return { done: false, error: { message: "Cliente de IA indispon\xEDvel." } };
     }
     try {
       const op = new GenerateVideosOperation();
@@ -21962,12 +22591,17 @@ router13.post(["/video-download", "/marketing/video-download"], async (req, res)
       return;
     }
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || operationName.includes("sim_")) {
-      res.json({
-        success: true,
-        isSimulation: true,
-        message: "V\xEDdeo animado com sucesso pela engine Veo 3.1.",
-        videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    if (!apiKey) {
+      res.status(503).json({
+        success: false,
+        error: "Chave GEMINI_API_KEY n\xE3o configurada no servidor para download do v\xEDdeo."
+      });
+      return;
+    }
+    if (operationName.includes("sim_")) {
+      res.status(400).json({
+        success: false,
+        error: "Identificador de opera\xE7\xE3o simulada inv\xE1lido para gera\xE7\xE3o real de v\xEDdeo."
       });
       return;
     }
@@ -22424,6 +23058,32 @@ var PushNotificationService = class {
     });
   }
   /**
+   * Send push notification by user email (resolves device token automatically)
+   */
+  async sendPushToUser(userEmail, notification) {
+    if (!userEmail) {
+      return { success: false, errors: ["Email do destinat\xE1rio \xE9 obrigat\xF3rio para envio de push."] };
+    }
+    const subscriptions = notificationService.getSubscriptions(userEmail);
+    const token = subscriptions[0]?.fcmToken || subscriptions[0]?.endpoint;
+    if (!token) {
+      logger.warn("push", "push-service", "send_push_to_user", "Nenhum device token encontrado para o email", { userEmail });
+      return { success: false, errors: ["Nenhum dispositivo registrado para push notifications (user sem subscription)."] };
+    }
+    return this.sendToDevice({
+      token,
+      notification: {
+        title: notification.title,
+        body: notification.body,
+        url: notification.url,
+        tag: notification.tag,
+        icon: "/icons/icon-192.png",
+        ...notification.image ? { image: notification.image } : {}
+      },
+      data: notification.data || {}
+    });
+  }
+  /**
    * Get VAPID public key for frontend subscription
    */
   getVapidPublicKey() {
@@ -22431,6 +23091,226 @@ var PushNotificationService = class {
   }
 };
 var pushService = new PushNotificationService();
+
+// src/server/services/email-service.ts
+init_logger();
+function defenseReadyTemplate(data) {
+  const infractionRows = data.infractions.map(
+    (inf) => `
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-family:monospace;color:#dc2626;font-weight:600">${inf.code}</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#374151">${inf.description}</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;color:#059669">R$ ${inf.fineAmount.toFixed(2)}</td>
+      </tr>`
+  ).join("");
+  const totalValue = data.infractions.reduce((sum, inf) => sum + inf.fineAmount, 0);
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <div style="max-width:600px;margin:0 auto;padding:32px 16px">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#071D41 0%,#1a3a8a 100%);border-radius:12px 12px 0 0;padding:32px;text-align:center">
+      <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700">\u{1F6E1}\uFE0F DefesAi</h1>
+      <p style="color:#93c5fd;margin:8px 0 0;font-size:14px">Sua defesa est\xE1 pronta</p>
+    </div>
+
+    <!-- Body -->
+    <div style="background:#ffffff;padding:32px;border-radius:0 0 12px 12px;border:1px solid #e5e7eb;border-top:none">
+      <p style="color:#374151;font-size:16px;margin:0 0 16px">Ol\xE1 <strong>${data.userName}</strong>,</p>
+
+      <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 24px">
+        Identificamos <strong>${data.infractions.length} infra\xE7\xE3o(\xF5es)</strong> no seu caso <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px">#${data.caseId}</code>
+        com valor total de <strong style="color:#059669">R$ ${totalValue.toFixed(2)}</strong>.
+      </p>
+
+      <!-- Infractions Table -->
+      <table style="width:100%;border-collapse:collapse;margin:0 0 24px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <thead>
+          <tr style="background:#f9fafb">
+            <th style="padding:12px 16px;text-align:left;font-size:13px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">C\xF3digo</th>
+            <th style="padding:12px 16px;text-align:left;font-size:13px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">Descri\xE7\xE3o</th>
+            <th style="padding:12px 16px;text-align:right;font-size:13px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb">Valor</th>
+          </tr>
+        </thead>
+        <tbody>${infractionRows}</tbody>
+      </table>
+
+      <!-- CTA Button -->
+      <div style="text-align:center;margin:32px 0">
+        <a href="${data.defenseUrl}" style="display:inline-block;background:linear-gradient(135deg,#071D41,#1a3a8a);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;letter-spacing:0.5px">
+          Ver Minuta Jur\xEDdica
+        </a>
+      </div>
+
+      <p style="color:#6b7280;font-size:13px;line-height:1.5;margin:0;text-align:center">
+        Esta minuta foi gerada por IA especializada em direito de tr\xE2nsito.<br>
+        Recomendamos revis\xE3o por um advogado antes do envio ao DETRAN.
+      </p>
+    </div>
+
+<!-- Footer -->
+     <div style="padding:24px 16px;text-align:center">
+       <p style="color:#9ca3af;font-size:12px;margin:0">
+         DefesAi \u2014 Defesa de Infra\xE7\xF5es de Tr\xE2nsito com IA<br>
+         <a href="https://www.defesai.shop" style="color:#6b7280">www.defesai.shop</a>
+       </p>
+     </div>
+  </div>
+</body>
+</html>`;
+}
+function paymentConfirmationTemplate(data) {
+  const methodLabel = data.paymentMethod === "pix" ? "PIX" : "Cart\xE3o de Cr\xE9dito";
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <div style="max-width:600px;margin:0 auto;padding:32px 16px">
+    <div style="background:linear-gradient(135deg,#059669 0%,#047857 100%);border-radius:12px 12px 0 0;padding:32px;text-align:center">
+      <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700">\u2705 Pagamento Confirmado</h1>
+    </div>
+
+    <div style="background:#ffffff;padding:32px;border-radius:0 0 12px 12px;border:1px solid #e5e7eb;border-top:none">
+      <p style="color:#374151;font-size:16px;margin:0 0 16px">Ol\xE1 <strong>${data.userName}</strong>,</p>
+
+      <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 24px">
+        Seu pagamento foi confirmado com sucesso!
+      </p>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:0 0 24px">
+        <table style="width:100%;font-size:14px">
+          <tr><td style="color:#6b7280;padding:4px 0">Caso:</td><td style="text-align:right;font-weight:600;color:#374151">#${data.caseId}</td></tr>
+          <tr><td style="color:#6b7280;padding:4px 0">Valor:</td><td style="text-align:right;font-weight:700;color:#059669;font-size:18px">R$ ${data.amount.toFixed(2)}</td></tr>
+          <tr><td style="color:#6b7280;padding:4px 0">M\xE9todo:</td><td style="text-align:right;font-weight:600;color:#374151">${methodLabel}</td></tr>
+          <tr><td style="color:#6b7280;padding:4px 0">Transa\xE7\xE3o:</td><td style="text-align:right;font-family:monospace;font-size:12px;color:#6b7280">${data.transactionId}</td></tr>
+        </table>
+      </div>
+
+      <p style="color:#374151;font-size:14px;line-height:1.6;margin:0">
+        Nossa equipe j\xE1 est\xE1 processando sua minuta jur\xEDdica. Voc\xEA receber\xE1 um novo email quando estiver pronta.
+      </p>
+    </div>
+
+<div style="padding:24px 16px;text-align:center">
+       <p style="color:#9ca3af;font-size:12px;margin:0">
+         DefesAi \u2014 Defesa de Infra\xE7\xF5es de Tr\xE2nsito com IA<br>
+         <a href="https://www.defesai.shop" style="color:#6b7280">www.defesai.shop</a>
+       </p>
+     </div>
+  </div>
+</body>
+</html>`;
+}
+var EmailService = class {
+  constructor() {
+    this.baseUrl = "https://api.resend.com";
+    this.apiKey = process.env.RESEND_API_KEY || "";
+    this.fromEmail = process.env.EMAIL_FROM_ADDRESS || "noreply@www.defesai.shop";
+    this.fromName = process.env.EMAIL_FROM_NAME || "DefesAi";
+  }
+  get isConfigured() {
+    return Boolean(this.apiKey && !this.apiKey.startsWith("PLACEHOLDER"));
+  }
+  /**
+   * Send a raw email via Resend API
+   */
+  async send(params) {
+    if (!this.isConfigured) {
+      logger.warn("email", "email-service", "send", "Email service not configured \u2014 skipping send", {
+        to: Array.isArray(params.to) ? params.to.join(", ") : params.to,
+        subject: params.subject
+      });
+      return { success: false, error: "Email service not configured. Set RESEND_API_KEY." };
+    }
+    try {
+      const to = Array.isArray(params.to) ? params.to : [params.to];
+      const body = {
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to,
+        subject: params.subject,
+        html: params.html
+      };
+      if (params.text) body.text = params.text;
+      if (params.replyTo) body.reply_to = params.replyTo;
+      if (params.tags) body.tags = params.tags;
+      const response = await fetch(`${this.baseUrl}/emails`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData.message || `Resend API error ${response.status}`;
+        logger.error("email", "email-service", "send", "Resend API error", { error: errMsg });
+        return { success: false, error: errMsg };
+      }
+      const data = await response.json();
+      logger.info("email", "email-service", "send", "Email sent successfully", {
+        messageId: data.id,
+        to: to.join(", "),
+        subject: params.subject
+      });
+      return { success: true, messageId: data.id };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("email", "email-service", "send", "Email send failed", { error: errMsg });
+      return { success: false, error: errMsg };
+    }
+  }
+  /**
+   * Send "defense ready" notification
+   */
+  async sendDefenseReady(data) {
+    const totalValue = data.infractions.reduce((sum, inf) => sum + inf.fineAmount, 0);
+    const html = defenseReadyTemplate(data);
+    if (!data.userName.includes("@")) {
+      return { success: false, error: "E-mail do usu\xE1rio inv\xE1lido para notifica\xE7\xE3o de defesa pronta." };
+    }
+    return this.send({
+      to: data.userName,
+      subject: `\u{1F6E1}\uFE0F Sua defesa est\xE1 pronta \u2014 ${data.infractions.length} infra\xE7\xE3o(\xF5es) \u2014 R$ ${totalValue.toFixed(2)}`,
+      html,
+      tags: [
+        { name: "category", value: "defense-ready" },
+        { name: "case_id", value: data.caseId }
+      ]
+    });
+  }
+  /**
+   * Send payment confirmation
+   */
+  async sendPaymentConfirmation(data) {
+    const html = paymentConfirmationTemplate(data);
+    if (!data.userName.includes("@")) {
+      return { success: false, error: "E-mail do usu\xE1rio inv\xE1lido para confirma\xE7\xE3o de pagamento." };
+    }
+    return this.send({
+      to: data.userName,
+      subject: `\u2705 Pagamento confirmado \u2014 Caso #${data.caseId}`,
+      html,
+      tags: [
+        { name: "category", value: "payment-confirmation" },
+        { name: "case_id", value: data.caseId }
+      ]
+    });
+  }
+  /**
+   * Send a generic notification email
+   */
+  async sendNotification(to, subject, body, options) {
+    return this.send({
+      to,
+      subject,
+      html: `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;color:#374151;line-height:1.6">${body}</body></html>`,
+      replyTo: options?.replyTo
+    });
+  }
+};
+var emailService = new EmailService();
 
 // src/server/routes/notifications.ts
 var router14 = Router14();
@@ -22543,7 +23423,13 @@ router14.post("/send-push", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/send-test", async (req, res) => {
+router14.post("/send-test", requireAdmin, async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Endpoint de teste indispon\xEDvel em produ\xE7\xE3o",
+      message: "Envio de notifica\xE7\xF5es de teste n\xE3o permitido em ambiente de produ\xE7\xE3o."
+    });
+  }
   try {
     const { title, body, userEmail, fcmToken } = req.body;
     const notification = notificationService.broadcastCaseStatusChange({
@@ -22582,58 +23468,140 @@ router14.get("/vapid-key", (req, res) => {
   const vapidKey = pushService.getVapidPublicKey();
   res.json({ vapidKey });
 });
-router14.post("/push", authenticateToken, (req, res) => {
+router14.post("/push", authenticateToken, async (req, res) => {
+  try {
+    const { title, body, caseId, userEmail } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ error: "title e body s\xE3o obrigat\xF3rios." });
+    }
+    const pushResult = await pushService.sendPushToUser(userEmail || req.user?.email || "", {
+      title,
+      body,
+      data: { caseId, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+    });
+    if (!pushResult.success) {
+      return res.status(503).json({
+        success: false,
+        error: pushResult.error || pushResult.errors?.[0] || "Servi\xE7o de Push Notification indispon\xEDvel ou n\xE3o configurado."
+      });
+    }
+    res.json({
+      success: true,
+      deliveredAt: (/* @__PURE__ */ new Date()).toISOString(),
+      channel: "WebPush / ServiceWorker",
+      messageId: pushResult.messageId,
+      payload: { title, body, caseId }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao enviar push notification" });
+  }
+});
+router14.post("/email", authenticateToken, async (req, res) => {
+  try {
+    const { email, caseId, subject, body: emailBody } = req.body;
+    const targetEmail = email || req.user?.email;
+    if (!targetEmail) {
+      return res.status(400).json({ error: "Endere\xE7o de email do destinat\xE1rio \xE9 obrigat\xF3rio." });
+    }
+    const result = await emailService.sendNotification(
+      targetEmail,
+      subject || `DefesAi: Atualiza\xE7\xE3o do Caso #${caseId || "Geral"}`,
+      emailBody || "Sua notifica\xE7\xE3o foi processada pela plataforma DefesAi."
+    );
+    if (!result.success) {
+      return res.status(503).json({
+        success: false,
+        error: result.error || "Servi\xE7o de email indispon\xEDvel. Verifique as credenciais da Resend."
+      });
+    }
+    res.json({
+      success: true,
+      recipient: targetEmail,
+      messageId: result.messageId,
+      sentAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao enviar email" });
+  }
+});
+router14.post("/whatsapp/send", requireAdmin, async (req, res) => {
+  try {
+    const { phone, eventType, caseId, customText } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: "N\xFAmero de telefone \xE9 obrigat\xF3rio." });
+    }
+    let messageText = customText || "";
+    if (!messageText) {
+      if (eventType === "triagem_concluida") {
+        messageText = `\u{1F697} *Adeus Multa Informa*: Seu diagn\xF3stico pericial est\xE1 pronto! Identificamos alta probabilidade de deferimento por falha de aferi\xE7\xE3o do radar (Res. 798 CONTRAN). Acesse seu painel para visualizar o parecer.`;
+      } else if (eventType === "pagamento_confirmado") {
+        messageText = `\u2705 *Pagamento Confirmado!* Sua minuta jur\xEDdica oficial para o caso ${caseId || "DET2026"} j\xE1 foi gerada e est\xE1 liberada para download e assinatura.`;
+      } else if (eventType === "alerta_prazo") {
+        messageText = `\u26A0\uFE0F *Alerta de Prazo*: Faltam poucos dias para o t\xE9rmino do prazo de defesa pr\xE9via da sua notifica\xE7\xE3o. Protocole hoje mesmo para garantir efeito suspensivo.`;
+      } else {
+        messageText = `\u{1F4CB} *Status do Recurso*: Seu protocolo junto ao \xF3rg\xE3o autuador foi atualizado. Acesse seu painel no Adeus Multa para acompanhar.`;
+      }
+    }
+    const result = await whatsappService.sendText({
+      to: phone.replace(/\D/g, ""),
+      message: messageText
+    });
+    if (!result.success) {
+      return res.status(503).json({
+        success: false,
+        error: result.error || "Falha ao enviar WhatsApp via Evolution API. Verifique as credenciais da inst\xE2ncia."
+      });
+    }
+    res.json({
+      success: true,
+      phone,
+      eventType,
+      caseId,
+      messageId: result.messageId,
+      status: "ENTREGUE",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      messagePayload: messageText
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao enviar mensagem WhatsApp" });
+  }
+});
+router14.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
-      error: "Servi\xE7o de push notification n\xE3o configurado",
-      message: "Configure FCM/VAPID para push notifications."
+      error: "Endpoint de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
+      message: "Simula\xE7\xE3o de WhatsApp n\xE3o permitida em ambiente de produ\xE7\xE3o."
     });
   }
-  const { title, body, caseId } = req.body;
-  res.json({
-    success: true,
-    deliveredAt: (/* @__PURE__ */ new Date()).toISOString(),
-    channel: "WebPush / ServiceWorker",
-    payload: { title, body, caseId }
-  });
-});
-router14.post("/email", authenticateToken, (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(501).json({
-      error: "Servi\xE7o de email n\xE3o configurado",
-      message: "Configure SMTP/Resend para envio de emails."
-    });
+  try {
+    const { phone, eventType, caseId, customText } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: "N\xFAmero de telefone \xE9 obrigat\xF3rio." });
+    }
+    let messageText = customText || "";
+    if (!messageText) {
+      switch (eventType) {
+        case "case_ready":
+          messageText = `\u{1F6E1}\uFE0F Sua defesa est\xE1 pronta! Caso #${caseId || "N/A"}. Acesse para visualizar.`;
+          break;
+        case "status_update":
+          messageText = `\u{1F4CB} O status do caso #${caseId || "N/A"} foi atualizado. Consulte na plataforma.`;
+          break;
+        case "payment_confirmed":
+          messageText = `\u2705 Pagamento confirmado! Caso #${caseId || "N/A"} em processamento.`;
+          break;
+        default:
+          messageText = `\u{1F514} DefesAi: Voc\xEA tem uma nueva atualiza\xE7\xE3o. Acesse a plataforma.`;
+      }
+    }
+    const result = await whatsappService.sendText({ to: phone.replace(/\D/g, ""), message: messageText });
+    if (!result.success) {
+      return res.status(503).json({ success: false, error: result.error || "Falha ao enviar WhatsApp." });
+    }
+    res.json({ success: true, sentAt: (/* @__PURE__ */ new Date()).toISOString(), channel: "whatsapp", phone, messageId: result.messageId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao simular envio WhatsApp" });
   }
-  const { email, caseId, template } = req.body;
-  res.json({
-    success: true,
-    recipient: email || "fariasnetto01@gmail.com",
-    template: template || "DEFESA_GERADA_COM_SUCESSO",
-    status: "SENT (250 OK)",
-    sentAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
-});
-router14.post("/whatsapp/simulate", requireAdmin, (req, res) => {
-  const { phone, eventType, caseId } = req.body;
-  let messageText = "";
-  if (eventType === "triagem_concluida") {
-    messageText = `\u{1F697} *Adeus Multa Informa*: Seu diagn\xF3stico pericial est\xE1 pronto! Identificamos 94% de probabilidade de deferimento por falha de aferi\xE7\xE3o do radar (Res. 798 CONTRAN). Acesse seu painel para visualizar o parecer.`;
-  } else if (eventType === "pagamento_confirmado") {
-    messageText = `\u2705 *Pagamento Confirmado!* Sua minuta jur\xEDdica oficial para o caso ${caseId || "DET2026"} j\xE1 foi gerada e est\xE1 liberada para download e assinatura.`;
-  } else if (eventType === "alerta_prazo") {
-    messageText = `\u26A0\uFE0F *Alerta de Prazo*: Faltam poucos dias para o t\xE9rmino do prazo de defesa pr\xE9via da sua notifica\xE7\xE3o. Protocole hoje mesmo para garantir efeito suspensivo.`;
-  } else {
-    messageText = `\u{1F4CB} *Status do Recurso*: Seu protocolo junto ao \xF3rg\xE3o autuador foi atualizado. Acesse seu painel no Adeus Multa para acompanhar.`;
-  }
-  res.json({
-    success: true,
-    phone: phone || "(11) 98765-4321",
-    eventType,
-    caseId,
-    status: "ENTREGUE (200 OK)",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    messagePayload: messageText
-  });
 });
 var notifications_default = router14;
 
@@ -22734,7 +23702,7 @@ router16.post("/cases", authenticateToken, (req, res) => {
           cityState: "S\xE3o Paulo/SP"
         },
         domainData.analysis?.recommendedArguments || [],
-        domainData.serviceType || "defesa_previa"
+        domainData.serviceType || "recurso_jari"
       );
     }
     const row = CanonicalMapper.domainToRow(domainData);
@@ -22880,7 +23848,7 @@ var USER_SITUATIONS = [
     title: "Multa de Tr\xE2nsito",
     subtitle: "Radar, celular ao volante, sinal vermelho, estacionamento, rod\xEDzio ou infra\xE7\xF5es gerais.",
     badge: "An\xE1lise Gratuita",
-    mappedProcedure: "defesa_previa"
+    mappedProcedure: "recurso_jari"
   },
   {
     id: "conversao_advertencia",
@@ -22921,7 +23889,7 @@ var USER_PROCESS_STAGES = [
     title: "Recebi a primeira notifica\xE7\xE3o (Sem boleto)",
     subtitle: "Notifica\xE7\xE3o de Autua\xE7\xE3o (NA). Prazo aberto para Defesa Pr\xE9via antes da aplica\xE7\xE3o de penalidade.",
     badge: "Fase Inicial \u2022 Defesa Pr\xE9via",
-    mappedProcedure: "defesa_previa"
+    mappedProcedure: "recurso_jari"
   },
   {
     id: "notificacao_penalidade",
@@ -22956,7 +23924,7 @@ var USER_PROCESS_STAGES = [
     title: "N\xE3o tenho certeza da fase",
     subtitle: "Vamos identificar a melhor estrat\xE9gia jur\xEDdica pelo n\xFAmero do auto e pelo \xF3rg\xE3o autuador.",
     badge: "Diagn\xF3stico Autom\xE1tico",
-    mappedProcedure: "defesa_previa"
+    mappedProcedure: "recurso_jari"
   }
 ];
 var RULES_MATRIX = {
@@ -23197,7 +24165,7 @@ router20.get("/governance/law-enforcement-verify", (req, res) => {
       autoInfracao: c.infraction?.aitNumber,
       placa: c.vehicle?.plate,
       orgaoAutuador: c.infraction?.autuadorBody,
-      instanciaAtual: c.serviceType === "defesa_previa" ? "Defesa Pr\xE9via" : "JARI / Processo Administrativo",
+      instanciaAtual: c.serviceType === "recurso_jari" ? "Defesa Pr\xE9via" : "JARI / Processo Administrativo",
       dataProtocolo: c.protocolInfo?.submissionDate || c.createdAt,
       hashAutenticidade: "sha256:" + Buffer.from(c.id + c.infraction?.aitNumber).toString("hex").substring(0, 32),
       orientacaoAgente: "Condutor com efeito suspensivo regular ativo. Vedada imposi\xE7\xE3o de restri\xE7\xE3o de licenciamento ou bloqueio de CNH at\xE9 tr\xE2nsito em julgado administrativo."
@@ -23602,7 +24570,7 @@ Assinatura do Requerente`,
     const defenseDoc = {
       id: "doc_" + Math.random().toString(36).substring(2, 9),
       caseId: caseData.id,
-      tipoDefesa: caseData.tipoServico || caseData.serviceType || "defesa_previa",
+      tipoDefesa: caseData.tipoServico || caseData.serviceType || "recurso_jari",
       titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || "N/A"}`,
       orgaoDestinatario: infraction.orgaoAutuador || infraction.autuadorBody,
       autorNome: infraction.nomeCondutor || "Condutor / Requerente",

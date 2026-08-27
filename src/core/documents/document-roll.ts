@@ -38,12 +38,12 @@ export function normalizeProcedureId(procedureType?: ProcedureType | string): st
   return LEGACY_PROCEDURE_ALIASES[raw] || raw;
 }
 
-/** Resolve o procedimento, caindo em defesa_previa quando ausente/inválido. */
+/** Resolve o procedimento, caindo em recurso_jari quando ausente/inválido. */
 function resolveProcedure(procedureType?: ProcedureType | string) {
   const id = normalizeProcedureId(procedureType);
   return (
     PROCEDURES_CATALOG.find((p) => p.id === id) ||
-    PROCEDURES_CATALOG.find((p) => p.id === 'defesa_previa')!
+    PROCEDURES_CATALOG.find((p) => p.id === 'recurso_jari')!
   );
 }
 

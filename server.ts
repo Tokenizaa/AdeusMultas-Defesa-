@@ -29,6 +29,7 @@ import ocrRoutes from './src/server/routes/ocr';
 import paymentsRoutes from './src/server/routes/payments';
 import notificationsRoutes from './src/server/routes/notifications';
 import knowledgeRoutes from './src/server/routes/knowledge';
+import marketingAutomationRoutes from './src/server/routes/marketing-automation';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
 import { commercialService } from './src/server/commercial/commercial-service';
@@ -38,6 +39,7 @@ import { aiProviderManager } from './src/server/observability/ai-provider-manage
 import { metaIntegration } from './src/server/integrations/meta';
 import { marketingOrchestrator } from './src/server/workers/marketing-orchestrator.worker';
 import { marketingMetricsCollector } from './src/server/workers/marketing-metrics.worker';
+import { startMetaTokenRenewal } from './src/server/workers/meta-token-renewal.worker';
 import healthRoutes from './src/server/routes/health';
 import { logger } from './src/server/observability/logger';
 
@@ -258,9 +260,10 @@ async function startServer() {
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api', notificationsRoutes);
-  app.use('/api/knowledge', knowledgeRoutes);
-  app.use('/api/health', healthRoutes);
-  app.use('/api', healthRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
+app.use('/api/marketing/automation', marketingAutomationRoutes);
+app.use('/api/health', healthRoutes);
+app.use('/api', healthRoutes);
 
   // Meta Status Direct Fallback Route for UI Compatibility
   app.get(['/api/meta/status', '/api/marketing/meta/status'], (req, res) => {
@@ -298,19 +301,19 @@ async function startServer() {
 
     const baseRules = {
       situations: [
-        { id: 'multa_transito', title: 'Multa de Trânsito', mappedProcedure: 'defesa_previa', requiresStageSelection: true },
+        { id: 'multa_transito', title: 'Multa de Trânsito', mappedProcedure: 'recurso_jari', requiresStageSelection: true },
         { id: 'conversao_advertencia', title: 'Conversão em Advertência (Art. 267 CTB)', mappedProcedure: 'conversao_advertencia', inferredStage: 'conversao_advertencia', requiresStageSelection: false },
         { id: 'indicacao_condutor', title: 'Indicação de Real Condutor', mappedProcedure: 'indicacao_condutor', inferredStage: 'primeira_notificacao', requiresStageSelection: false },
         { id: 'suspensao_cnh', title: 'Suspensão da CNH / Lei Seca', mappedProcedure: 'suspensao_cnh', requiresStageSelection: true },
         { id: 'cassacao_cnh', title: 'Cassação da CNH', mappedProcedure: 'cassacao_cnh', requiresStageSelection: true }
       ],
       stages: [
-        { id: 'primeira_notificacao', title: 'Notificação de Autuação (Defesa Prévia)', mappedProcedure: 'defesa_previa' },
+        { id: 'primeira_notificacao', title: 'Notificação de Autuação (Defesa Prévia)', mappedProcedure: 'recurso_jari' },
         { id: 'notificacao_penalidade', title: 'Notificação de Penalidade (JARI)', mappedProcedure: 'recurso_jari' },
         { id: 'defesa_negada', title: 'Defesa Prévia Indeferida (JARI)', mappedProcedure: 'recurso_jari' },
         { id: 'recurso_jari_negado', title: 'Recurso JARI Indeferido (CETRAN)', mappedProcedure: 'recurso_cetran' },
         { id: 'conversao_advertencia', title: 'Conversão em Advertência (Art. 267)', mappedProcedure: 'conversao_advertencia' },
-        { id: 'nao_tenho_certeza', title: 'Não Tenho Certeza', mappedProcedure: 'defesa_previa' }
+        { id: 'nao_tenho_certeza', title: 'Não Tenho Certeza', mappedProcedure: 'recurso_jari' }
       ],
       phase1CoreFields: ['aitNumber', 'plate', 'autuadorBody'],
       phase2QualificationFields: ['applicantName', 'applicantCpf', 'applicantCnh', 'applicantEmail', 'applicantPhone', 'addressStreet', 'addressNumber', 'addressNeighborhood', 'addressZipCode', 'addressCityState'],
@@ -1060,7 +1063,7 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
       const defenseDoc = {
         id: 'doc_' + Math.random().toString(36).substring(2, 9),
         caseId: caseData.id,
-        tipoDefesa: caseData.tipoServico || 'defesa_previa',
+        tipoDefesa: caseData.tipoServico || 'recurso_jari',
         titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao}`,
         orgaoDestinatario: infraction.orgaoAutuador,
         autorNome: infraction.nomeCondutor || 'Condutor / Requerente',
@@ -1189,6 +1192,7 @@ app.get('/api/audit/logs', (req, res) => {
     try {
       marketingOrchestrator.start();
       marketingMetricsCollector.collect().catch(() => {});
+      startMetaTokenRenewal();
     } catch (workerErr) {
       // Silently ignore worker init errors in dev; workers are optional
     }

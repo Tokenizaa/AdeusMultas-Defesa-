@@ -88,9 +88,9 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
       const res = await fetch('/api/ocr/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+body: JSON.stringify({
           rawText: `Arquivo de Notificação: ${file.name}`,
-          serviceType: 'defesa_previa',
+          serviceType: '',
         }),
       });
       const data = await res.json();
