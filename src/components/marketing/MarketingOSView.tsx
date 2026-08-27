@@ -85,12 +85,12 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 export const MarketingOSView: React.FC = () => {
-  const { queryParams, navigate } = useRouter();
+  const { queryParams, params, navigate } = useRouter();
   const [activeView, setActiveView] = useState<ViewKey>('dashboard');
   useEffect(() => {
-    const view = queryParams.view as ViewKey || 'dashboard';
+    const view = (params.view || queryParams.view) as ViewKey || 'dashboard';
     setActiveView(view);
-  }, [queryParams.view]);
+  }, [params.view, queryParams.view]);
 
   const {
     agents,

@@ -166,6 +166,9 @@ function AppContent() {
     } else if (currentPath === '/admin/marketing') {
       title = 'Marketing OS (7 Agentes)';
       subtitle = 'Campanhas autônomas de aquisição e nutrição de condutores';
+    } else if (currentPath === '/admin/marketing/prospecting') {
+      title = 'Prospecção B2B Autônoma';
+      subtitle = 'Motor automático de prospecção via WhatsApp';
     } else if (currentPath === '/admin/settings') {
       title = 'Configurações da Plataforma (Settings)';
       subtitle = 'Gestão centralizada de variáveis operacionais e credenciais criptográficas';
@@ -234,15 +237,7 @@ function AppContent() {
         {currentPath === '/admin/audit' && <AdminAuditView />}
 
         {/* Commercial Management Hub with Sub-Tabs */}
-        {currentPath === '/admin/commercial' && <CommercialHubView initialTab="overview" />}
-        {currentPath === '/admin/commercial/prices' && <CommercialHubView initialTab="prices" />}
-        {currentPath === '/admin/commercial/promotions' && <CommercialHubView initialTab="promotions" />}
-        {currentPath === '/admin/commercial/coupons' && <CommercialHubView initialTab="coupons" />}
-        {currentPath === '/admin/commercial/bonuses' && <CommercialHubView initialTab="bonuses" />}
-        {currentPath === '/admin/commercial/referrals' && <CommercialHubView initialTab="referrals" />}
-        {currentPath === '/admin/commercial/commissions' && <CommercialHubView initialTab="commissions" />}
-        {currentPath === '/admin/commercial/settings' && <CommercialHubView initialTab="settings" />}
-        {currentPath === '/admin/commercial/tests' && <CommercialHubView initialTab="tests" />}
+        {currentPath.startsWith('/admin/commercial') && <CommercialHubView />}
 
         {/* PWA Mobile & Desktop Install Prompt */}
         <PWAInstallBanner />

@@ -126,6 +126,16 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         ],
       },
       {
+        title: 'Crescimento & Aquisição',
+        items: [
+          {
+            label: 'Prospecção B2B Autônoma',
+            path: '/admin/marketing/prospecting',
+            icon: Target,
+          },
+        ],
+      },
+      {
         title: 'Gestão Comercial (Hub)',
         items: [
           {

@@ -35,22 +35,40 @@ type TabKey =
   | 'settings'
   | 'tests';
 
+const VALID_TABS: TabKey[] = [
+  'overview',
+  'prices',
+  'promotions',
+  'coupons',
+  'bonuses',
+  'referrals',
+  'commissions',
+  'settings',
+  'tests',
+];
+
+const getTabFromPath = (path: string, queryParams: Record<string, string>): TabKey => {
+  const section = queryParams.section;
+  if (section && VALID_TABS.includes(section as TabKey)) {
+    return section as TabKey;
+  }
+  const segments = path.split('/').filter(Boolean);
+  const last = segments[segments.length - 1];
+  if (VALID_TABS.includes(last as TabKey)) {
+    return last as TabKey;
+  }
+  return 'overview';
+};
+
 export const CommercialHubView: React.FC = () => {
-  const { queryParams, navigate } = useRouter();
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const { queryParams, navigate, currentPath } = useRouter();
+  const [activeTab, setActiveTab] = useState<TabKey>(() => getTabFromPath(currentPath, queryParams));
   useEffect(() => {
-    const section = queryParams.section as TabKey || 'overview';
-    setActiveTab(section);
-  }, [queryParams.section]);
+    setActiveTab(getTabFromPath(currentPath, queryParams));
+  }, [currentPath, queryParams.section]);
 
   const [metrics, setMetrics] = useState<CommercialOverviewMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (queryParams.section) {
-      setActiveTab(queryParams.section as TabKey);
-    }
-  }, [queryParams.section]);
 
   const fetchOverview = async () => {
     setLoading(true);
