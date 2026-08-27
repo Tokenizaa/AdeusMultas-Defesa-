@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shield, Lock, Scale, ExternalLink, FileCheck, CheckCircle2 } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
+import { AdeusMultasLogo } from '../brand/AdeusMultasLogo';
 
 export const PrivateFooter: React.FC = () => {
   const { navigate } = useRouter();
@@ -12,14 +13,7 @@ export const PrivateFooter: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 pb-8 border-b border-orange-500/60">
           {/* Coluna 1: Identidade do Serviço */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center font-extrabold text-2xl tracking-tighter text-white font-sans">
-                <span>Defe</span>
-                <span className="text-orange-500">s</span>
-                <span className="text-[#168821]">Ai</span>
-              </div>
-              <span className="text-slate-300 font-bold text-sm">| Adeus Multa</span>
-            </div>
+            <AdeusMultasLogo variant="compact" theme="dark" iconSize="md" />
             <p className="text-[#C2D9FF] text-sm leading-relaxed">
               Plataforma de inteligência jurídica para geração determinística de defesas e recursos de trânsito em conformidade com o Código de Trânsito Brasileiro (CTB) e Resoluções do CONTRAN.
             </p>

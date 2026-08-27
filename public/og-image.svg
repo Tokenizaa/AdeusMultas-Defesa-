@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="ogBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#051530" />
+      <stop offset="45%" stop-color="#071D41" />
+      <stop offset="100%" stop-color="#0C2F6B" />
+    </linearGradient>
+
+    <!-- Radial Subtle Glow -->
+    <radialGradient id="ogRadial" cx="70%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#155BCB" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#071D41" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Gold Gradient -->
+    <linearGradient id="ogGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD027" />
+      <stop offset="50%" stop-color="#FF9E1B" />
+      <stop offset="100%" stop-color="#FF6B35" />
+    </linearGradient>
+
+    <!-- Orange Gradient -->
+    <linearGradient id="ogOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7A00" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+
+    <!-- Shadow for Card/Badge -->
+    <filter id="ogShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+
+    <filter id="ogGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#FFD027" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="1200" height="630" fill="url(#ogBg)" />
+  <rect width="1200" height="630" fill="url(#ogRadial)" />
+
+  <!-- Decorative Subtle Grid / Modern Tech Lines -->
+  <g opacity="0.06" stroke="#FFFFFF" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105" />
+    <line x1="0" y1="210" x2="1200" y2="210" />
+    <line x1="0" y1="315" x2="1200" y2="315" />
+    <line x1="0" y1="420" x2="1200" y2="420" />
+    <line x1="0" y1="525" x2="1200" y2="525" />
+    <line x1="200" y1="0" x2="200" y2="630" />
+    <line x1="400" y1="0" x2="400" y2="630" />
+    <line x1="600" y1="0" x2="600" y2="630" />
+    <line x1="800" y1="0" x2="800" y2="630" />
+    <line x1="1000" y1="0" x2="1000" y2="630" />
+  </g>
+
+  <!-- Top Accent Bar -->
+  <rect x="0" y="0" width="1200" height="8" fill="url(#ogGold)" />
+
+  <!-- LEFT COLUMN: BRANDING & CONTENT -->
+  <g transform="translate(90, 85)">
+    <!-- Top Pill / Institution Badge -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="280" height="36" rx="18" fill="#0E2A5C" stroke="#1E458A" stroke-width="1.5" />
+      <circle cx="18" cy="18" r="5" fill="#FFD027" />
+      <text x="32" y="23" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="800" fill="#E2E8F0" letter-spacing="0.14em">
+        PLATAFORMA PERICIAL
+      </text>
+    </g>
+
+    <!-- Main Title "Adeus Multas" -->
+    <g transform="translate(0, 82)">
+      <text font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="76" font-weight="900" letter-spacing="-0.04em">
+        <tspan x="0" y="0" fill="#FFFFFF">Adeus</tspan>
+        <tspan dx="16" fill="url(#ogOrange)">Multas</tspan>
+      </text>
+    </g>
+
+    <!-- High Impact Tagline -->
+    <g transform="translate(0, 165)">
+      <text font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="700" fill="#F8FAFC" letter-spacing="-0.01em">
+        Defesa Pericial de Multas &amp; Recursos de CNH
+      </text>
+    </g>
+
+    <!-- Descriptive Subtitle -->
+    <g transform="translate(0, 215)">
+      <text font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="19" font-weight="400" fill="#94A3B8" width="580">
+        <tspan x="0" y="0">Análise técnica automatizada de autuações de trânsito,</tspan>
+        <tspan x="0" y="28">geração determinística de defesas e conformidade com</tspan>
+        <tspan x="0" y="56">o Código de Trânsito Brasileiro e Resoluções CONTRAN.</tspan>
+      </text>
+    </g>
+
+    <!-- Feature Pillars Badges -->
+    <g transform="translate(0, 340)">
+      <!-- Badge 1 -->
+      <g transform="translate(0, 0)">
+        <rect x="0" y="0" width="180" height="46" rx="10" fill="#0C2550" stroke="#1D4ED8" stroke-width="1.2" />
+        <text x="90" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="middle">
+          ⚖️ Defesa Prévia &amp; JARI
+        </text>
+      </g>
+      <!-- Badge 2 -->
+      <g transform="translate(192, 0)">
+        <rect x="0" y="0" width="180" height="46" rx="10" fill="#0C2550" stroke="#1D4ED8" stroke-width="1.2" />
+        <text x="90" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="middle">
+          📜 Art. 267 Advertência
+        </text>
+      </g>
+      <!-- Badge 3 -->
+      <g transform="translate(384, 0)">
+        <rect x="0" y="0" width="180" height="46" rx="10" fill="#0C2550" stroke="#1D4ED8" stroke-width="1.2" />
+        <text x="90" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="middle">
+          🛡️ Recurso CETRAN
+        </text>
+      </g>
+    </g>
+
+    <!-- Bottom URL & Security Trust Lock -->
+    <g transform="translate(0, 422)">
+      <text font-family="'JetBrains Mono', monospace, sans-serif" font-size="16" font-weight="700" fill="#38BDF8">
+        https://defesai.shop
+      </text>
+      <text x="240" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#64748B">
+        • Sistema de Defesa Autônoma
+      </text>
+    </g>
+  </g>
+
+  <!-- RIGHT COLUMN: OFFICIAL EMBLEM & HERO SHIELD -->
+  <g transform="translate(860, 290)" filter="url(#ogShadow)">
+    <!-- Glowing Outer Aura -->
+    <circle cx="0" cy="0" r="190" fill="#155BCB" opacity="0.18" />
+
+    <!-- Big Shield Background -->
+    <path d="M0 -150 L140 -80 C140 90 60 160 0 190 C-60 160 -140 90 -140 -80 Z" 
+          fill="#071D41" 
+          stroke="url(#ogGold)" 
+          stroke-width="8" 
+          stroke-linejoin="round" />
+
+    <!-- Inner Shield Gradient Layer -->
+    <path d="M0 -130 L120 -70 C120 75 50 135 0 160 C-50 135 -120 75 -120 -70 Z" 
+          fill="#0C326F" 
+          opacity="0.6" />
+
+    <!-- Scales of Justice Symbol -->
+    <g filter="url(#ogGlow)">
+      <!-- Central Pillar -->
+      <line x1="0" y1="-70" x2="0" y2="70" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" />
+      <!-- Base of Pillar -->
+      <path d="M-36 70 L36 70" stroke="url(#ogGold)" stroke-width="10" stroke-linecap="round" />
+      <!-- Scales Crossbeam -->
+      <line x1="-65" y1="-30" x2="65" y2="-30" stroke="url(#ogGold)" stroke-width="8" stroke-linecap="round" />
+      <!-- Top Crown / Sparkle -->
+      <polygon points="0,-85 10,-70 0,-55 -10,-70" fill="#FFD027" />
+
+      <!-- Left Pan -->
+      <line x1="-55" y1="-30" x2="-75" y2="10" stroke="#CBD5E1" stroke-width="3" />
+      <line x1="-55" y1="-30" x2="-35" y2="10" stroke="#CBD5E1" stroke-width="3" />
+      <path d="M-85 10 Q-55 40 -25 10 Z" fill="url(#ogGold)" />
+
+      <!-- Right Pan -->
+      <line x1="55" y1="-30" x2="35" y2="10" stroke="#CBD5E1" stroke-width="3" />
+      <line x1="55" y1="-30" x2="75" y2="10" stroke="#CBD5E1" stroke-width="3" />
+      <path d="M25 10 Q55 40 85 10 Z" fill="url(#ogGold)" />
+    </g>
+
+    <!-- Bottom Shield Badge -->
+    <g transform="translate(0, 115)">
+      <rect x="-65" y="-14" width="130" height="28" rx="14" fill="#FF9E1B" />
+      <text x="0" y="5" font-family="'JetBrains Mono', monospace, sans-serif" font-size="12" font-weight="900" fill="#071D41" text-anchor="middle" letter-spacing="0.1em">
+        CONTRAN
+      </text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="amEmblemBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071D41" />
+      <stop offset="50%" stop-color="#0C326F" />
+      <stop offset="100%" stop-color="#155BCB" />
+    </linearGradient>
+    <linearGradient id="amEmblemGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD027" />
+      <stop offset="50%" stop-color="#FF9E1B" />
+      <stop offset="100%" stop-color="#FF6B35" />
+    </linearGradient>
+    <filter id="amEmblemGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#071D41" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Container -->
+  <rect width="512" height="512" rx="112" fill="url(#amEmblemBg)" />
+
+  <!-- Outer Golden Shield Structure -->
+  <g transform="translate(0, 0)" filter="url(#amEmblemGlow)">
+    <path d="M256 64 L416 128 C416 304 336 392 256 448 C176 392 96 304 96 128 Z" 
+          fill="#071D41" 
+          stroke="url(#amEmblemGold)" 
+          stroke-width="12" 
+          stroke-linejoin="round" />
+
+    <!-- Inner Shield Depth -->
+    <path d="M256 88 L392 142 C392 290 324 366 256 416 C188 366 120 290 120 142 Z" 
+          fill="#0C326F" 
+          opacity="0.5" />
+
+    <!-- Justice Scales & Precision Pillar -->
+    <!-- Center Pillar -->
+    <line x1="256" y1="160" x2="256" y2="330" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" />
+    <!-- Center Base -->
+    <path d="M210 330 L302 330" stroke="url(#amEmblemGold)" stroke-width="14" stroke-linecap="round" />
+    <!-- Scales Beam -->
+    <line x1="170" y1="210" x2="342" y2="210" stroke="url(#amEmblemGold)" stroke-width="12" stroke-linecap="round" />
+    <!-- Top Sparkle -->
+    <polygon points="256,140 270,160 256,180 242,160" fill="#FFD027" />
+
+    <!-- Left Scales Pan -->
+    <line x1="184" y1="210" x2="154" y2="260" stroke="#E2E8F0" stroke-width="5" />
+    <line x1="184" y1="210" x2="214" y2="260" stroke="#E2E8F0" stroke-width="5" />
+    <path d="M142 260 Q184 300 226 260 Z" fill="url(#amEmblemGold)" />
+
+    <!-- Right Scales Pan -->
+    <line x1="328" y1="210" x2="298" y2="260" stroke="#E2E8F0" stroke-width="5" />
+    <line x1="328" y1="210" x2="358" y2="260" stroke="#E2E8F0" stroke-width="5" />
+    <path d="M286 260 Q328 300 370 260 Z" fill="url(#amEmblemGold)" />
+  </g>
+</svg>

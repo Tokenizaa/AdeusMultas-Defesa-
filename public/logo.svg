@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 96" width="440" height="96" fill="none">
+  <defs>
+    <linearGradient id="amShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071D41" />
+      <stop offset="60%" stop-color="#0C326F" />
+      <stop offset="100%" stop-color="#155BCB" />
+    </linearGradient>
+    <linearGradient id="amGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD027" />
+      <stop offset="50%" stop-color="#FF9E1B" />
+      <stop offset="100%" stop-color="#FF6B35" />
+    </linearGradient>
+    <linearGradient id="amOrangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7A00" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+    <filter id="amShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#071D41" flood-opacity="0.18" />
+    </filter>
+  </defs>
+
+  <!-- EMBLEM ICON -->
+  <g transform="translate(6, 6)" filter="url(#amShadow)">
+    <!-- Outer Shield Background -->
+    <path d="M42 4 L76 18 C76 58 58 76 42 84 C26 76 8 58 8 18 Z" fill="url(#amShieldGrad)" />
+    <!-- Golden Border Line -->
+    <path d="M42 4 L76 18 C76 58 58 76 42 84 C26 76 8 58 8 18 Z" fill="none" stroke="url(#amGoldGrad)" stroke-width="2.5" stroke-linejoin="round" />
+    
+    <!-- Shield Inner Bevel -->
+    <path d="M42 10 L70 22 C70 54 54 70 42 77 C30 70 14 54 14 22 Z" fill="#071D41" opacity="0.6" />
+
+    <!-- Legal Justice & Traffic Scales Icon Inside Shield -->
+    <!-- Scales Beam -->
+    <line x1="26" y1="36" x2="58" y2="36" stroke="url(#amGoldGrad)" stroke-width="2.8" stroke-linecap="round" />
+    <!-- Center Pillar -->
+    <line x1="42" y1="24" x2="42" y2="60" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" />
+    <!-- Center Pillar Base -->
+    <path d="M33 60 L51 60" stroke="url(#amGoldGrad)" stroke-width="3" stroke-linecap="round" />
+    <!-- Center Spark / Diamond -->
+    <polygon points="42,20 45,24 42,28 39,24" fill="#FFD027" />
+
+    <!-- Left Pan -->
+    <line x1="29" y1="36" x2="23" y2="47" stroke="#E2E8F0" stroke-width="1.4" />
+    <line x1="29" y1="36" x2="35" y2="47" stroke="#E2E8F0" stroke-width="1.4" />
+    <path d="M20 47 Q29 55 38 47 Z" fill="url(#amGoldGrad)" />
+
+    <!-- Right Pan -->
+    <line x1="55" y1="36" x2="49" y2="47" stroke="#E2E8F0" stroke-width="1.4" />
+    <line x1="55" y1="36" x2="61" y2="47" stroke="#E2E8F0" stroke-width="1.4" />
+    <path d="M46 47 Q55 55 64 47 Z" fill="url(#amGoldGrad)" />
+  </g>
+
+  <!-- LOGO TYPOGRAPHY -->
+  <g transform="translate(102, 10)">
+    <!-- "Adeus Multas" -->
+    <text x="0" y="44" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="900" letter-spacing="-0.03em">
+      <tspan fill="#071D41">Adeus</tspan>
+      <tspan dx="8" fill="url(#amOrangeGrad)">Multas</tspan>
+    </text>
+
+    <!-- Subtitle / Brand Descriptor -->
+    <text x="2" y="66" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#475569" letter-spacing="0.18em">
+      DEFESA PERICIAL DE MULTAS &amp; CNH
+    </text>
+
+    <!-- CTB Compliance Badge -->
+    <g transform="translate(290, 18)">
+      <rect x="0" y="0" width="44" height="20" rx="4" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1" />
+      <text x="22" y="14" font-family="'JetBrains Mono', monospace, sans-serif" font-size="10" font-weight="800" fill="#0F172A" text-anchor="middle">
+        CTB
+      </text>
+    </g>
+  </g>
+</svg>

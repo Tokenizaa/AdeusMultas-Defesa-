@@ -1,6 +1,6 @@
 {
   "name": "Remix Adeus Multa 2",
-  "description": "Plataforma inteligente de geração e gestão de defesas administrativas de trânsito e recursos de infrações.",
+  "description": "Plataforma inteligente de análise pericial, geração de defesas técnicas e recursos de multas de trânsito fundamentados no CTB e CONTRAN.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

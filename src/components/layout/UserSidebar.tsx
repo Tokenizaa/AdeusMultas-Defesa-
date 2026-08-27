@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
+import { AdeusMultasLogo } from '../brand/AdeusMultasLogo';
 
 interface UserSidebarProps {
   activeCaseCount?: number;
@@ -116,20 +117,9 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ activeCaseCount = 0, o
       <div className="p-4 border-b border-[#E6E6E6] bg-slate-50/50">
         <div
           onClick={() => handleClick('/dashboard')}
-          className="flex items-center gap-2.5 cursor-pointer group"
+          className="flex items-center cursor-pointer group"
         >
-          <div className="w-8 h-8 rounded-xl bg-[#155BCB] flex items-center justify-center font-bold text-white shadow-xs group-hover:scale-105 transition-transform text-sm">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-[#071D41] tracking-tight text-base">DefesAi</span>
-              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-blue-100 text-[#155BCB] border border-blue-200 font-mono">
-                Cidadão
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 font-mono">Portal do Condutor</p>
-          </div>
+          <AdeusMultasLogo variant="compact" iconSize="md" />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { RouterProvider, useRouter } from './core/router/RouterContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import { api } from './lib/api/client';
 import { CASES_CHANGED_EVENT } from './context/casesEvents';
+import { useSEO } from './core/meta/SEO';
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
@@ -54,6 +55,9 @@ import { CaseDomain } from './types';
 function AppContent() {
   const { currentPath, activeArea, params, navigate } = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
+
+  // Sincronização e controle dinâmico de metadados Open Graph e SEO
+  useSEO(undefined, currentPath);
 
   const [cases, setCases] = useState<CaseDomain[]>([]);
   const [activeCase, setActiveCase] = useState<CaseDomain | null>(null);
