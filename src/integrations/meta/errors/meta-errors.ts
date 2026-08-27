@@ -104,3 +104,15 @@ export class MetaTemporaryApiError extends MetaIntegrationError {
     super(message, 'META_TEMPORARY_API_ERROR', 503, details);
   }
 }
+
+export class MetaConfigurationError extends MetaIntegrationError {
+  constructor(message = 'Configurações de integração da Meta ausentes ou incompletas no servidor.', details?: any) {
+    super(message, 'META_CONFIGURATION_ERROR', 500, details);
+  }
+}
+
+export class MetaAuthenticationRequiredError extends MetaIntegrationError {
+  constructor(message = 'Autenticação da Meta necessária. Conecte sua conta antes de prosseguir.', details?: any) {
+    super(message, 'META_AUTHENTICATION_REQUIRED', 401, details);
+  }
+}

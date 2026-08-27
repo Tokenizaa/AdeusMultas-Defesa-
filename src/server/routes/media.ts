@@ -105,13 +105,18 @@ router.post(['/video-download', '/marketing/video-download'], async (req, res) =
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || operationName.includes('sim_')) {
-      // In demo/dev mode without live external video, return simulation response
-      res.json({
-        success: true,
-        isSimulation: true,
-        message: 'Vídeo animado com sucesso pela engine Veo 3.1.',
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    if (!apiKey) {
+      res.status(503).json({
+        success: false,
+        error: 'Chave GEMINI_API_KEY não configurada no servidor para download do vídeo.',
+      });
+      return;
+    }
+
+    if (operationName.includes('sim_')) {
+      res.status(400).json({
+        success: false,
+        error: 'Identificador de operação simulada inválido para geração real de vídeo.',
       });
       return;
     }

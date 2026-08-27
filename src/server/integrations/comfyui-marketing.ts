@@ -484,6 +484,10 @@ export class ComfyUIMarketing {
 
 // Export singleton instance
 export const comfyuiMarketing = new ComfyUIMarketing({
-  serverUrl: 'http://localhost:8188',
+  serverUrl: process.env.COMFYUI_SERVER_URL || 'http://localhost:8188',
   quality: 'production'
 });
+
+export const isComfyUIAvailable = async (): Promise<boolean> => {
+  return await comfyuiMarketing.testConnection();
+};

@@ -12,6 +12,7 @@ import { metaPublishingService } from '../publishing/meta-publishing-service';
 import { metaInsightsService } from '../insights/meta-insights-service';
 import { metaWebhookService } from '../webhooks/meta-webhook-service';
 import { metaRepository } from '../../../server/db/meta-repository';
+import { MetaAuthenticationRequiredError } from '../errors/meta-errors';
 import {
   MetaConnectionSafeDTO,
   MetaConnectionEntity,
@@ -308,16 +309,24 @@ export class MetaAdapter {
    */
   public async publishContent(params: MetaPublishParams): Promise<MetaPublishResponse> {
     if (!this.activeConnection || this.activeConnection.pages.length === 0) {
-      // If disconnected, connect sandbox state
-      await this.connectWithToken('EAAB_sandbox_fallback_token');
+      const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+      const pageId = process.env.META_PAGE_ID;
+      const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+      if (systemToken && pageId) {
+        await this.connectWithToken(systemToken, pageId, igId);
+      } else {
+        throw new MetaAuthenticationRequiredError(
+          'Nenhuma conexão ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth.'
+        );
+      }
     }
 
     const conn = this.activeConnection!;
     const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
     const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
 
-    if (!page) {
-      throw new Error('Nenhuma página do Facebook configurada para publicação.');
+    if (!page || !page.accessToken) {
+      throw new MetaAuthenticationRequiredError('Nenhuma página do Facebook configurada com token de acesso para publicação.');
     }
 
     return metaPublishingService.publish(
@@ -334,7 +343,10 @@ export class MetaAdapter {
    * Fetches insights for a post or account
    */
   public async getInsights(query: MetaInsightsQuery): Promise<MetaDomainMetrics> {
-    const token = this.activeConnection?.userAccessToken || 'EAAB_token';
+    const token = this.activeConnection?.userAccessToken || process.env.META_ACCESS_TOKEN;
+    if (!token) {
+      throw new MetaAuthenticationRequiredError('Token da Meta ausente para consulta de métricas e insights.');
+    }
     return metaInsightsService.query(query, token);
   }
 

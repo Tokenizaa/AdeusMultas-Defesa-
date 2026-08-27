@@ -144,12 +144,29 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
     }
   );
 
-  // 5. Facebook Publishing Pipeline
+  // 5. Facebook Publishing Pipeline (Enforces Auth and Payload Validation)
   await runTest(
     'PUB-01',
-    'Pipeline de publicação do Facebook (Feed e Fotos)',
+    'Pipeline de publicação do Facebook (Validação de payload e rejeição estrita de acessos não autenticados)',
     'Publishing',
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PAGE_ID);
+      if (!isConfigured) {
+        // Must reject with MetaAuthenticationRequiredError or MetaIntegrationError
+        try {
+          await metaAdapter.publishContent({
+            destination: 'facebook',
+            message: 'Teste de publicação automatizada DefesAi',
+            mediaUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800',
+          });
+          throw new Error('RISCO DE PRODUÇÃO: Publicação deveria ter sido rejeitada por ausência de credenciais reais da Meta.');
+        } catch (err: any) {
+          if (err.message.includes('RISCO DE PRODUÇÃO')) throw err;
+          // Expected rejection
+          return;
+        }
+      }
+
       const publishRes = await metaAdapter.publishContent({
         destination: 'facebook',
         message: 'Teste de publicação automatizada DefesAi',
@@ -164,9 +181,24 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
   // 6. Instagram 2-step Container Publishing Pipeline
   await runTest(
     'INSTA-01',
-    'Pipeline de publicação Instagram Business (Container + Publish)',
+    'Pipeline de publicação Instagram Business (Validação de mídia e autenticação)',
     'Instagram',
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID);
+      if (!isConfigured) {
+        try {
+          await metaAdapter.publishContent({
+            destination: 'instagram',
+            message: 'Defesa de Trânsito no Instagram #defesai',
+            mediaUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800',
+          });
+          throw new Error('RISCO DE PRODUÇÃO: Instagram Container não deveria publicar sem credenciais reais.');
+        } catch (err: any) {
+          if (err.message.includes('RISCO DE PRODUÇÃO')) throw err;
+          return;
+        }
+      }
+
       const publishRes = await metaAdapter.publishContent({
         destination: 'instagram',
         message: 'Defesa de Trânsito no Instagram #defesai',
@@ -184,6 +216,21 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
     'Publicação simultânea multiplataforma Facebook + Instagram',
     'Publishing',
     async () => {
+      const isConfigured = Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PAGE_ID && process.env.INSTAGRAM_ACCOUNT_ID);
+      if (!isConfigured) {
+        try {
+          await metaAdapter.publishContent({
+            destination: 'both',
+            message: 'Publicação unificada Facebook e Instagram DefesAi',
+            mediaUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800',
+          });
+          throw new Error('RISCO DE PRODUÇÃO: Publicação dual não deveria reportar sucesso sem credenciais.');
+        } catch (err: any) {
+          if (err.message.includes('RISCO DE PRODUÇÃO')) throw err;
+          return;
+        }
+      }
+
       const publishRes = await metaAdapter.publishContent({
         destination: 'both',
         message: 'Publicação unificada Facebook e Instagram DefesAi',
@@ -266,8 +313,8 @@ export async function runMetaIntegrationTests(): Promise<MetaTestSuiteReport> {
     'Normalização de métricas da Graph API para Métricas de Domínio',
     'Insights',
     async () => {
-      const insights = await metaInsightsService.getFacebookPostInsights('mock_post_100', 'EAAB_token');
-      if (insights.targetId !== 'mock_post_100' || typeof insights.impressions !== 'number') {
+      const insights = await metaInsightsService.getFacebookPostInsights('fb_post_sample_100', 'EAAB_token');
+      if (insights.targetId !== 'fb_post_sample_100' || typeof insights.impressions !== 'number') {
         throw new Error(`Métricas de post inválidas: ${JSON.stringify(insights)}`);
       }
     }

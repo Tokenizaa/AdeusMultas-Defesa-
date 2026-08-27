@@ -95,15 +95,8 @@ export class MetaAuthService {
     }
 
     if (!appId || !appSecret) {
-      logger.warn('meta', 'auth', 'unconfigured_credentials', 'META_APP_ID / META_APP_SECRET ausentes. Operando em modo de contingência.');
-      // When credentials are not yet configured in production environment, return sandbox-safe exchange token
-      const expiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
-      return {
-        accessToken: `EAAB_simulated_${Date.now()}`,
-        tokenType: 'bearer',
-        expiresInSeconds: 60 * 24 * 60 * 60,
-        expiresAt: expiry,
-      };
+      logger.error('meta', 'auth', 'unconfigured_credentials', 'META_APP_ID / META_APP_SECRET ausentes no ambiente.');
+      throw new MetaOAuthInvalidCodeError('Credenciais Meta OAuth (META_APP_ID / META_APP_SECRET) não configuradas no servidor.');
     }
 
     try {
@@ -173,15 +166,15 @@ export class MetaAuthService {
 
     if (!appId || !appSecret) {
       return {
-        appId: 'mock_app_id',
-        type: 'USER',
-        application: 'DefesAi Legal Tech',
-        dataAccessExpiresAt: Date.now() + 5184000000,
-        expiresAt: Date.now() + 5184000000,
-        isValid: true,
-        issuedAt: Date.now(),
-        scopes: REQUIRED_META_SCOPES,
-        userId: 'usr_meta_debug',
+        appId: '',
+        type: 'UNKNOWN',
+        application: '',
+        dataAccessExpiresAt: 0,
+        expiresAt: 0,
+        isValid: false,
+        issuedAt: 0,
+        scopes: [],
+        userId: '',
       };
     }
 

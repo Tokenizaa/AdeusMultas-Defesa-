@@ -35,21 +35,3 @@ export async function getPagBankOrderStatus(orderId: string): Promise<PagBankOrd
   }
   return res.json();
 }
-
-export async function simulatePagBankConfirmation(caseId: string): Promise<{
-  success: boolean;
-  message: string;
-  case: CaseDomain;
-  order: PagBankOrderResponse;
-}> {
-  const res = await fetch('/api/payments/pix/simulate-confirm', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ caseId }),
-  });
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || 'Falha na confirmação do pagamento');
-  }
-  return res.json();
-}

@@ -201,7 +201,4 @@ export interface PaymentGateway {
 
   /** Processa webhook bruto e retorna evento normalizado. */
   processWebhook(rawBody: string, headers: Record<string, string | undefined>, body: unknown): NormalizedWebhookEvent;
-
-  /** Confirme pagamento (sandbox/simulação). */
-  simulateConfirmation(caseId: string, amountInCents?: number): GatewayPixResult;
 }

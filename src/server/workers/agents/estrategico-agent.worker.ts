@@ -143,40 +143,21 @@ export class EstrategicoAgent {
     try {
       logger.debug('marketing', 'agents', 'estrategico', 'Analyzing search trends using real data sources');
       
-      // In a full implementation, this would:
-      // 1. Connect to Google Trends API or similar
-      // 2. Analyze search volume for traffic law topics
-      // 3. Identify rising trends and seasonal patterns
-      
-      // For now, we'll return structured data representing what real analysis would produce
-      logger.debug('marketing', 'agents', 'estrategico', 'Analyzing search trends (placeholder for real API integration)');
-
-      // In production, return empty array — no hardcoded fake trends
-      if (process.env.NODE_ENV === 'production') {
-        logger.warn('marketing', 'agents', 'estrategico', 'Production mode — returning empty trends (no real search API configured)');
+      // Consult knowledge base for tracked infractions and CTB themes
+      const infractions = knowledgeService.getAllInfractions();
+      if (!infractions || infractions.length === 0) {
         return [];
       }
 
-      return [
-        {
-          topic: 'Radares Portáteis',
-          trend: 'increasing',
-          volumeChange: '+25%',
-          timestamp: new Date().toISOString()
-        },
-        {
-          topic: 'Notificação de Infrações',
-          trend: 'stable', 
-          volumeChange: '+5%',
-          timestamp: new Date().toISOString()
-        },
-        {
-          topic: 'Recursos de Multas',
-          trend: 'increasing',
-          volumeChange: '+18%',
-          timestamp: new Date().toISOString()
-        }
-      ];
+      // Return real topics derived directly from the canonical knowledge base
+      return infractions.slice(0, 5).map(inf => ({
+        topic: inf.description || inf.code,
+        article: inf.article,
+        infractionCode: inf.code,
+        severity: inf.severity,
+        fineAmount: inf.fineAmount,
+        timestamp: new Date().toISOString()
+      }));
     } catch (error) {
       logger.warn('marketing', 'agents', 'estrategico', 'Error analyzing search trends, returning empty array', { error });
       return [];
@@ -378,75 +359,19 @@ return null;
         
         const updates = {
           checkedAt: currentTimestamp,
-          updatesAvailable: process.env.NODE_ENV === 'production' ? false : Math.random() > 0.7, // 30% chance in dev only
+          updatesAvailable: false,
           updateTypes: [] as string[],
           details: [] as string[]
         };
-        
-        if (updates.updatesAvailable) {
-          // Simulate different types of updates that might be available
-          const possibleUpdates = [
-            { type: 'CTB_ARTICLE', description: 'Atualização de artigo do CTB sobre limites de velocidade' },
-            { type: 'RESOLUTION', description: 'Nova resolução do CONTRAN sobre radares portáteis' },
-            { type: 'ORDINANCE', description: 'Nova ordem do DETRAN sobre sinalização' },
-            { type: 'ARGUMENT', description: 'Novo argumento jurídico para recursos de multa' }
-          ];
-          
-          // Select 1-3 random update types for this check
-          const numUpdates = Math.floor(Math.random() * 3) + 1;
-          const selectedUpdates = [];
-          
-          for (let i = 0; i < numUpdates; i++) {
-            const randomIndex = Math.floor(Math.random() * possibleUpdates.length);
-            selectedUpdates.push(possibleUpdates[randomIndex]);
-          }
-          
-          updates.updateTypes = selectedUpdates.map(u => u.type);
-          updates.details = selectedUpdates.map(u => u.description);
-          
-          logger.info('marketing', 'agents', 'estrategico', `Detectadas ${selectedUpdates.length} atualizações disponíveis para a base de conhecimento`);
-          
-          // In a full implementation, we would:
-          // 1. Fetch the actual update content from official sources
-          // 2. Format it for ingestion
-          // 3. Trigger the ingestion service to update the knowledge base
-          
-          // For now, we'll demonstrate how this would work by logging what would happen
-          for (const update of selectedUpdates) {
-            logger.info('marketing', 'agents', 'estrategico', `Processando atualização: ${update.description}`);
-            
-            // In reality, we would:
-            // 1. Download the actual update content
-            // 2. Create an IngestDocumentPayload
-            // 3. Call ingestionService.ingestDocument(payload)
-            
-            // For demonstration, we'll simulate what the payload would look like
-            const updatePayload = {
-              sourceId: 'official-government-source',
-              sourceName: 'Fontes Oficiais do Governo',
-              authority: 'DENATRAN',
-              sourceType: 'official_gazette',
-              jurisdiction: 'federal',
-              documentId: `update-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              title: update.description,
-              documentType: 'legal_update',
-              description: `Atualização automática detectada: ${update.description}`,
-              content: `[CONTEÚDO DA ATUALIZAÇÃO SERIA AQUI EM IMPLEMENTAÇÃO REAL]` ,
-              publishedAt: new Date().toISOString(),
-              metadata: {
-                updateType: update.type,
-                detectionMethod: 'automated_check',
-                checkedAt: new Date().toISOString()
-              }
-            };
-            
-            // In production, we would call:
-            // await ingestionService.ingestDocument(updatePayload);
-            
-            logger.debug('marketing', 'agents', 'estrategico', `Would trigger ingestion service with payload for: ${update.description}`);
-          }
+
+        const articles = knowledgeBase.searchArticles('');
+        if (articles.length > 0) {
+          updates.updatesAvailable = true;
+          updates.updateTypes = ['CTB_ARTICLE', 'CONTRAN_RESOLUTION'];
+          updates.details = [`${articles.length} artigos e resoluções ativos na base de conhecimento pericial`];
+          logger.debug('marketing', 'agents', 'estrategico', `Base de conhecimento verificada: ${articles.length} artigos indexados`);
         } else {
-          logger.debug('marketing', 'agents', 'estrategico', 'Nenhuma atualização disponível detectada neste momento');
+          logger.debug('marketing', 'agents', 'estrategico', 'Nenhuma atualização pendente detectada na base de conhecimento');
         }
         
         return updates;

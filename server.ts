@@ -27,6 +27,7 @@ import agentsRoutes from './src/server/routes/agents';
 import whatsappRoutes from './src/server/routes/whatsapp';
 import ocrRoutes from './src/server/routes/ocr';
 import paymentsRoutes from './src/server/routes/payments';
+import notificationsRoutes from './src/server/routes/notifications';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
@@ -255,6 +256,8 @@ async function startServer() {
   app.use('/api/ocr', ocrRoutes);
   app.use('/api', ocrRoutes);
   app.use('/api/payments', paymentsRoutes);
+  app.use('/api/notifications', notificationsRoutes);
+  app.use('/api', notificationsRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/health', healthRoutes);
   app.use('/api', healthRoutes);
@@ -474,29 +477,6 @@ async function startServer() {
 
     auditLogsStore.unshift(auditEntry);
     res.json({ success: true, auditEntry });
-  });
-
-  // POST Push Notification Simulation
-  app.post('/api/notifications/push', (req, res) => {
-    const { title, body, caseId } = req.body;
-    res.json({
-      success: true,
-      deliveredAt: new Date().toISOString(),
-      channel: 'WebPush / ServiceWorker',
-      payload: { title, body, caseId }
-    });
-  });
-
-  // POST Email Digest Simulation
-  app.post('/api/notifications/email', (req, res) => {
-    const { email, caseId, template } = req.body;
-    res.json({
-      success: true,
-      recipient: email || 'fariasnetto01@gmail.com',
-      template: template || 'DEFESA_GERADA_COM_SUCESSO',
-      status: 'SENT (250 OK)',
-      sentAt: new Date().toISOString()
-    });
   });
 
   // POST Offline Batch Sync
@@ -1145,104 +1125,6 @@ Instruções:
       console.error('Error in chat consultant:', err);
       res.status(500).json({ error: 'Erro ao responder consulta', details: err.message });
     }
-  });
-
-  // POST WhatsApp Notification Simulator
-  app.post('/api/notifications/whatsapp/simulate', (req, res) => {
-    const { phone, eventType, caseId } = req.body;
-    let messageText = '';
-
-    if (eventType === 'triagem_concluida') {
-      messageText = `🚗 *Adeus Multa Informa*: Seu diagnóstico pericial está pronto! Identificamos 94% de probabilidade de deferimento por falha de aferição do radar (Res. 798 CONTRAN). Acesse seu painel para visualizar o parecer.`;
-    } else if (eventType === 'pagamento_confirmado') {
-      messageText = `✅ *Pagamento Confirmado!* Sua minuta jurídica oficial para o caso ${caseId || 'DET2026'} já foi gerada e está liberada para download e assinatura.`;
-    } else if (eventType === 'alerta_prazo') {
-      messageText = `⚠️ *Alerta de Prazo*: Faltam poucos dias para o término do prazo de defesa prévia da sua notificação. Protocole hoje mesmo para garantir efeito suspensivo.`;
-    } else {
-      messageText = `📋 *Status do Recurso*: Seu protocolo junto ao órgão autuador foi atualizado. Acesse seu painel no Adeus Multa para acompanhar.`;
-    }
-
-    const payload = {
-      success: true,
-      phone: phone || '(11) 98765-4321',
-      eventType,
-      caseId,
-      status: 'ENTREGUE (200 OK)',
-      timestamp: new Date().toISOString(),
-      messagePayload: messageText
-    };
-
-    auditLogsStore.unshift({
-      id: 'aud_wa_' + Math.random().toString(36).substring(2, 9),
-      timestamp: new Date().toISOString(),
-      acao: 'WHATSAPP_NOTIFICATION_DISPATCH',
-      entidade: 'notification',
-      entidadeId: caseId || 'notif_wa',
-      usuario: 'EvolutionAPI Simulator',
-      ipHash: 'wa_gateway',
-      dadosModificados: { eventType, phone },
-      hashIntegridade: 'sha256:' + Math.random().toString(36).substring(2, 15)
-    });
-
-    res.json(payload);
-  });
-
-  // POST Payments - PIX PagBank integration simulation
-  app.post('/api/payments/pix', (req, res) => {
-    const { caseId, valor = 97.00, cpf } = req.body;
-    const txId = 'pix_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
-    
-    // Generate valid EMV-like payload string
-    const copiaECola = `00020126580014br.gov.bcb.pix0136adeusmulta-${txId}520400005303986540${valor.toFixed(2)}5802BR5915ADEUS MULTA LTDA6009SAO PAULO62070503***6304E8F2`;
-    
-    res.json({
-      success: true,
-      txId,
-      valor,
-      caseId,
-      status: 'pending',
-      pixQrCode: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(copiaECola)}`,
-      pixCopiaECola: copiaECola,
-      expiresAt: new Date(Date.now() + 3600000 * 2).toISOString()
-    });
-  });
-
-  // POST Payment Webhook confirmation simulation
-  app.post('/api/payments/confirm', (req, res) => {
-    const { caseId, txId } = req.body;
-    const row = casesStore.get(caseId);
-    if (!row) {
-      return res.status(404).json({ error: 'Caso não encontrado' });
-    }
-
-    const domainCase = CanonicalMapper.toDomain(row);
-    domainCase.statusPagamento = 'pago';
-    domainCase.stageAtual = Math.max(domainCase.stageAtual, 3);
-    domainCase.status = 'defesa_pronta';
-    domainCase.atualizadoEm = new Date().toISOString();
-    domainCase.historicoTimeline.push({
-      data: new Date().toISOString(),
-      titulo: 'Pagamento Confirmado via PIX',
-      descricao: `Compensação de R$ 97,00 autorizada. Minuta de defesa liberada para edição e download.`,
-      responsavel: 'PagBank Gateway',
-      status: 'defesa_pronta'
-    });
-
-    casesStore.set(caseId, CanonicalMapper.toRow(domainCase));
-
-    auditLogsStore.unshift({
-      id: 'aud_' + Math.random().toString(36).substring(2, 9),
-      timestamp: new Date().toISOString(),
-      acao: 'PAYMENT_CONFIRMED',
-      entidade: 'payment',
-      entidadeId: txId || caseId,
-      usuario: domainCase.userEmail || 'system',
-      ipHash: 'webhook_pagbank',
-      dadosModificados: { valor: domainCase.valorPago, status: 'pago' },
-      hashIntegridade: 'sha256:' + Math.random().toString(36).substring(2, 15)
-    });
-
-    res.json({ success: true, case: domainCase });
   });
 
   // GET Audit Logs

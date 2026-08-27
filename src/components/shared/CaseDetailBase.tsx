@@ -203,13 +203,12 @@ export const CaseDetailBase: React.FC<CaseDetailBaseProps> = ({
     try {
       setIsSimulatingPayment(true);
       setActionSuccess(null);
-      await api.post(`/api/payments/pix/${caseId}/simulate-pay`, {});
-      setActionSuccess('success');
-      // Refresh case data after payment simulation
+      // Refresh real case data and status from server
       const updatedCase = await api.get<CaseDomain>(`/api/cases/${caseId}`);
       setCaseData(updatedCase);
+      setActionSuccess('success');
     } catch (err: any) {
-      console.error('Error simulating payment:', err);
+      console.error('Error refreshing case data:', err);
       setActionSuccess('error');
     } finally {
       setIsSimulatingPayment(false);

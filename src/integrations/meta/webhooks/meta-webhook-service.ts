@@ -7,6 +7,7 @@
 import crypto from 'crypto';
 import { logger } from '../../../server/observability/logger';
 import { eventBus, EventTopics } from '../../../core/events/topics';
+import { marketingService } from '../../../server/services/marketing-service';
 import { MetaWebhookEventRecord } from '../types';
 import { MetaWebhookSignatureInvalidError } from '../errors/meta-errors';
 
@@ -126,6 +127,26 @@ export class MetaWebhookService {
             field: change.field,
             pageId: entryId,
           });
+
+          // Se for evento de feed ou status com post_id, atualizar estado do conteúdo
+          if ((change.field === 'feed' || change.field === 'status' || change.field === 'posts') && change.value) {
+            const postId = change.value.post_id || change.value.id;
+            const verb = change.value.verb;
+            if (postId) {
+              if (verb === 'add' || !verb) {
+                marketingService.updateContentByMetaPostId(postId, {
+                  status: 'publicado',
+                  published_at: new Date().toISOString(),
+                  publishedAt: new Date().toISOString(),
+                }).catch(() => {});
+              } else if (verb === 'remove' || verb === 'delete') {
+                marketingService.updateContentByMetaPostId(postId, {
+                  status: 'failed',
+                  error: 'Post removido ou rejeitado na Meta',
+                }).catch(() => {});
+              }
+            }
+          }
 
           // Dispatch to core EventBus
           eventBus.publish(

@@ -276,23 +276,6 @@ export class GGPIXAdapter implements PaymentGateway {
       isDuplicate: false, // GGPIXAPI não tem HMAC, idempotência por externalId
     };
   }
-
-  simulateConfirmation(caseId: string, amountInCents?: number): GatewayPixResult {
-    // Para sandbox/testing: simula uma confirmação de pagamento
-    const simulatedId = `ggpix_sim_${Date.now()}`;
-    const referenceId = `defesai_case_${caseId}`;
-
-    return {
-      gatewayTransactionId: simulatedId,
-      referenceId,
-      gateway: 'ggpixapi',
-      status: 'PAID',
-      amountInCents: amountInCents || 9700,
-      pixCopyPaste: '',
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-  }
 }
 
 export const ggpixAdapter = new GGPIXAdapter();

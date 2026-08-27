@@ -329,6 +329,32 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
     return rec;
   }
 
+  // Atualiza conteúdo por meta_post_id
+  async updateContentByMetaPostId(metaPostId: string, updates: Partial<any>) {
+    const item = this.editorialContents.find(
+      (c) => c.meta_post_id === metaPostId || c.metaPostId === metaPostId
+    );
+    if (item) {
+      return this.updateContent(item.id, updates);
+    }
+    if (this.supabase) {
+      try {
+        const { data, error } = await (this.supabase as any)
+          .from('editorial_content')
+          .update(updates)
+          .eq('meta_post_id', metaPostId)
+          .select()
+          .single();
+        if (!error && data) {
+          return data;
+        }
+      } catch (err) {
+        logger.debug('marketing', 'service', 'updateContentByMetaPostId', 'Error updating in Supabase', { err });
+      }
+    }
+    return null;
+  }
+
   // Atualiza conteúdo (usado pelos agentes por status: aprovado_qualidade -> agendado -> publicado)
   async updateContent(contentId: string, updates: Partial<any>) {
     // Update in Supabase first

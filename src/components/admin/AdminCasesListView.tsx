@@ -24,24 +24,11 @@ export const AdminCasesListView: React.FC<AdminCasesListViewProps> = ({
     navigate(`/admin/cases/${c.id}`);
   };
 
-  const handleSimulatePayment = async (caseId: string) => {
-    try {
-      await fetch(`/api/payments/pix/${caseId}/simulate-pay`, {
-        method: 'POST',
-      });
-      if (onRefreshCases) onRefreshCases();
-    } catch (err) {
-      console.error('Error simulating payment:', err);
-    }
-  };
-
   return (
     <CasesTable
       cases={cases}
       onSelectCase={handleSelectCaseWithNavigation}
-      onRefreshCases={onRefreshCases}
       variant="admin"
-      simulatePayment={handleSimulatePayment}
       showFilters={true}
       showStats={false}
       showNewCaseButton={false}

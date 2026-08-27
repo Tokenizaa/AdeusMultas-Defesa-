@@ -64,15 +64,12 @@ export class AIMediaService {
 
     const ai = this.getClient();
     if (!ai) {
-      // Return high-fidelity generated graphic fallback
-      const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio, imageSize);
       return {
-        success: true,
-        imageUrl: fallbackUrl,
-        modelUsed: 'defesai-visual-engine-fallback',
-        imageSize,
-        aspectRatio,
+        success: false,
+        error: 'Chave GEMINI_API_KEY não configurada no servidor para geração de imagem.',
         promptUsed: fullPrompt,
+        aspectRatio,
+        imageSize,
       };
     }
 
@@ -82,6 +79,8 @@ export class AIMediaService {
       'gemini-3.1-flash-image',
       'gemini-3.1-flash-lite-image',
     ];
+
+    let lastError: string | undefined;
 
     for (const model of candidateModels) {
       try {
@@ -135,19 +134,17 @@ export class AIMediaService {
           }
         }
       } catch (err: any) {
-        logger.debug('ai_media', 'service', 'generateImage', `Model ${model} request returned error: ${err?.message}`);
+        lastError = err?.message || String(err);
+        logger.debug('ai_media', 'service', 'generateImage', `Model ${model} request returned error: ${lastError}`);
       }
     }
 
-    // If API failed due to quota/keys, use high-fidelity visual generator fallback
-    const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio, imageSize);
     return {
-      success: true,
-      imageUrl: fallbackUrl,
-      modelUsed: 'defesai-visual-engine-fallback',
-      imageSize,
-      aspectRatio,
+      success: false,
+      error: `Falha na geração de imagem com IA: ${lastError || 'Nenhum modelo de imagem retornou conteúdo válido.'}`,
       promptUsed: fullPrompt,
+      aspectRatio,
+      imageSize,
     };
   }
 
@@ -161,7 +158,6 @@ export class AIMediaService {
     modelUsed?: string;
     aspectRatio?: string;
     resolution?: string;
-    isSimulation?: boolean;
     error?: string;
   }> {
     const {
@@ -174,15 +170,9 @@ export class AIMediaService {
 
     const ai = this.getClient();
     if (!ai) {
-      // Local simulation operation for testing/dev environments
-      const simulatedOp = `models/veo-3.1-fast-generate-preview/operations/sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       return {
-        success: true,
-        operationName: simulatedOp,
-        modelUsed: 'veo-3.1-fast-generate-preview (simulated)',
-        aspectRatio,
-        resolution,
-        isSimulation: true,
+        success: false,
+        error: 'Serviço de IA não inicializado (GEMINI_API_KEY ausente ou inválida).',
       };
     }
 
@@ -191,6 +181,8 @@ export class AIMediaService {
       'veo-3.1-lite-generate-preview',
       'veo-3.1-generate-preview',
     ];
+
+    let lastError: string | undefined;
 
     for (const model of candidateModels) {
       try {
@@ -228,21 +220,16 @@ export class AIMediaService {
           };
         }
       } catch (err: any) {
+        lastError = err?.message || String(err);
         logger.warn('ai_media', 'service', 'startVideoGeneration', `Model ${model} failed, attempting next`, {
-          error: err?.message,
+          error: lastError,
         });
       }
     }
 
-    // Fallback simulation if Veo preview endpoint unavailable
-    const simulatedOp = `models/veo-3.1-fast-generate-preview/operations/sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     return {
-      success: true,
-      operationName: simulatedOp,
-      modelUsed: 'veo-3.1-fast-generate-preview (demo mode)',
-      aspectRatio,
-      resolution,
-      isSimulation: true,
+      success: false,
+      error: `Falha na geração de vídeo via Veo: ${lastError || 'Nenhum modelo Veo disponível ou cota excedida.'}`,
     };
   }
 
@@ -254,19 +241,16 @@ export class AIMediaService {
     error?: any;
     videoUri?: string;
   }> {
-    if (operationName.includes('sim_')) {
-      // Simulation mode completes in ~6 seconds
-      const timestamp = parseInt(operationName.split('_')[1], 10);
-      const elapsed = Date.now() - timestamp;
-      const isDone = elapsed > 5000;
+    if (!operationName || operationName.includes('sim_')) {
       return {
-        done: isDone,
+        done: false,
+        error: { message: 'Operação de vídeo inválida ou não encontrada no provedor real.' },
       };
     }
 
     const ai = this.getClient();
     if (!ai) {
-      return { done: true };
+      return { done: false, error: { message: 'Cliente de IA indisponível.' } };
     }
 
     try {

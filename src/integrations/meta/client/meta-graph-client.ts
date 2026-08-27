@@ -12,6 +12,7 @@ import {
   MetaInsufficientPermissionsError,
   MetaRateLimitError,
   MetaTemporaryApiError,
+  MetaAuthenticationRequiredError,
 } from '../errors/meta-errors';
 
 export interface MetaGraphRequestOptions {
@@ -93,41 +94,6 @@ export class MetaGraphClient {
       params,
       retries = 2,
     } = options;
-
-    // Development & Test Probe Mode: If token is a test/sandbox token or mock post, simulate valid Graph API response
-    if (
-      endpoint.startsWith('mock_') ||
-      endpoint.includes('mock_') ||
-      (accessToken &&
-        (accessToken.startsWith('EAAB_sandbox') ||
-          accessToken.startsWith('EAAB_simulated') ||
-          accessToken.startsWith('mock_') ||
-          accessToken === 'PROTECTED_SERVER_TOKEN'))
-    ) {
-      if (endpoint.includes('/photos') || endpoint.includes('/feed') || endpoint.includes('/media_publish')) {
-        return { id: `fb_post_${Date.now()}`, post_id: `fb_post_${Date.now()}` } as unknown as T;
-      }
-      if (endpoint.includes('/media')) {
-        return { id: `ig_container_${Date.now()}`, status_code: 'FINISHED', status: 'FINISHED' } as unknown as T;
-      }
-      if (endpoint.includes('/insights')) {
-        return {
-          data: [
-            { name: 'post_impressions', values: [{ value: 1250 }] },
-            { name: 'post_engaged_users', values: [{ value: 340 }] },
-            { name: 'post_reactions_by_type_total', values: [{ value: { like: 85, love: 45 } }] },
-            { name: 'impressions', values: [{ value: 1420 }] },
-            { name: 'reach', values: [{ value: 980 }] },
-            { name: 'engagement', values: [{ value: 210 }] },
-            { name: 'saved', values: [{ value: 38 }] },
-          ],
-        } as unknown as T;
-      }
-      if (endpoint.startsWith('ig_container_') || endpoint.startsWith('17841')) {
-        return { id: endpoint, status_code: 'FINISHED', status: 'FINISHED' } as unknown as T;
-      }
-      return { success: true, id: `meta_${Date.now()}` } as unknown as T;
-    }
 
     let attempt = 0;
     const maxAttempts = retries + 1;

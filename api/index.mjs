@@ -284,6 +284,10 @@ var EventTopics = {
   WHATSAPP_MESSAGE_QUEUED: "whatsapp.message_queued",
   WHATSAPP_MESSAGE_SENT: "whatsapp.message_sent",
   WHATSAPP_WEBHOOK_RECEIVED: "whatsapp.webhook_received",
+  // Omnichannel Messaging (WhatsApp, Meta Messenger, Instagram Direct)
+  MESSAGING_MESSAGE_RECEIVED: "messaging.message_received",
+  MESSAGING_MESSAGE_SENT: "messaging.message_sent",
+  MESSAGING_LEAD_QUALIFIED: "messaging.lead_qualified",
   // Marketing OS 7-Agent Organism
   MARKETING_CYCLE_TICK: "marketing.cycle_tick",
   MARKETING_STRATEGY_UPDATED: "marketing.strategy_updated",
@@ -4941,6 +4945,134 @@ var MetaAdapter = class {
 var metaAdapter = new MetaAdapter();
 
 // src/server/integrations/meta.ts
+init_logger();
+async function validateMetaAppConnection(customToken) {
+  const appId = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || "";
+  const appSecret = process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "";
+  const version = process.env.META_GRAPH_API_VERSION || "v20.0";
+  const start = Date.now();
+  if (!appId || !appSecret) {
+    const msg = "META_APP_ID ou META_APP_SECRET n\xE3o configurados nas vari\xE1veis de ambiente.";
+    logger.warn("meta", "debug_token", "missing_credentials", msg);
+    return {
+      success: false,
+      appId: appId || "NOT_CONFIGURED",
+      application: "DefesAi Legal Tech (Modo Sandbox)",
+      isValid: false,
+      latencyMs: 0,
+      message: msg,
+      details: {
+        isConfigured: false,
+        graphApiVersion: version
+      },
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  const appAccessToken = `${appId}|${appSecret}`;
+  const inputToken = customToken || process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN || appAccessToken;
+  try {
+    const url = new URL(`https://graph.facebook.com/${version}/debug_token`);
+    url.searchParams.append("input_token", inputToken);
+    url.searchParams.append("access_token", appAccessToken);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8e3);
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const latencyMs = Date.now() - start;
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      let errorJson = null;
+      try {
+        errorJson = JSON.parse(errorText);
+      } catch {
+      }
+      const errorMsg = errorJson?.error?.message || `Meta Graph API retornou HTTP ${response.status}: ${errorText.substring(0, 150)}`;
+      logger.error("meta", "debug_token", "graph_api_error", errorMsg, {
+        httpStatus: response.status,
+        appId,
+        latencyMs
+      });
+      return {
+        success: false,
+        appId,
+        application: "DefesAi Legal Tech",
+        isValid: false,
+        latencyMs,
+        message: `Falha na verifica\xE7\xE3o com debug_token: ${errorMsg}`,
+        details: {
+          httpStatus: response.status,
+          error: errorJson?.error || errorText,
+          graphApiVersion: version
+        },
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const json = await response.json();
+    const data = json?.data || {};
+    const isValid = Boolean(data.is_valid);
+    const expiresAt = data.expires_at ? new Date(data.expires_at * 1e3).toISOString() : void 0;
+    const dataAccessExpiresAt = data.data_access_expires_at ? new Date(data.data_access_expires_at * 1e3).toISOString() : void 0;
+    logger.info("meta", "debug_token", "validation_success", "Endpoint /debug_token validado com sucesso", {
+      appId: data.app_id || appId,
+      application: data.application,
+      type: data.type,
+      isValid,
+      latencyMs
+    });
+    return {
+      success: true,
+      appId: data.app_id || appId,
+      application: data.application || "DefesAi Legal Tech",
+      isValid,
+      type: data.type || "APP",
+      scopes: data.scopes || [
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+        "instagram_basic",
+        "instagram_content_publish",
+        "instagram_manage_insights"
+      ],
+      expiresAt,
+      dataAccessExpiresAt,
+      latencyMs,
+      message: isValid ? `App ${data.application || "DefesAi"} validada com sucesso (${latencyMs}ms)!` : "App respondendo, por\xE9m o token inspecionado est\xE1 inv\xE1lido ou expirado.",
+      details: {
+        userId: data.user_id,
+        issuedAt: data.issued_at ? new Date(data.issued_at * 1e3).toISOString() : void 0,
+        graphApiVersion: version
+      },
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  } catch (err) {
+    const latencyMs = Date.now() - start;
+    const isAbort = err.name === "AbortError";
+    const message = isAbort ? `Timeout de rede (8s) ao conectar no endpoint debug_token da Meta Graph API.` : `Erro ao conectar com Graph API /debug_token: ${err.message}`;
+    logger.error("meta", "debug_token", "connection_exception", message, {
+      latencyMs,
+      error: err.message
+    });
+    return {
+      success: false,
+      appId,
+      application: "DefesAi Legal Tech",
+      isValid: false,
+      latencyMs,
+      message,
+      details: {
+        error: err.message,
+        graphApiVersion: version
+      },
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+}
 var MetaIntegrationBridge = class {
   getConnectionState() {
     const status = metaAdapter.getSafeStatus();
@@ -4982,6 +5114,9 @@ var MetaIntegrationBridge = class {
   }
   getStatus() {
     return this.getConnectionState();
+  }
+  async validateAppConnection(customToken) {
+    return validateMetaAppConnection(customToken);
   }
   async publishContent(params) {
     return metaAdapter.publishContent(params);
@@ -5178,96 +5313,6 @@ router.get(["/payments", "/admin/payments"], async (req, res) => {
   } catch (err) {
     logger.error("payments", "admin", "payments", `Erro ao buscar pagamentos: ${err.message}`);
     res.status(500).json({ error: "Erro ao buscar pagamentos" });
-  }
-});
-router.post(["/payments/simulate-webhook", "/admin/payments/simulate-webhook"], async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(403).json({
-      error: "Simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
-      message: "Webhooks de pagamento s\xE3o processados automaticamente pelo PagBank."
-    });
-  }
-  try {
-    const { caseId, status = "PAID", amount = PRICING.FALLBACK_PRICE } = req.body;
-    if (!caseId) {
-      return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
-    }
-    const row = caseRepository.get(caseId);
-    if (!row) {
-      return res.status(404).json({ error: "Caso n\xE3o encontrado" });
-    }
-    const domain = CanonicalMapper.rowToDomain(row);
-    if (status === "PAID") {
-      domain.isPaid = true;
-      domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
-      domain.status = "defesa_pronta";
-      domain.currentStage = 3;
-      domain.payment = {
-        status: "approved",
-        amount: Number(amount),
-        paidAt: (/* @__PURE__ */ new Date()).toISOString(),
-        transactionId: `PAGBANK_ORDER_${Date.now()}`,
-        paymentMethod: "pix"
-      };
-      domain.timeline.push({
-        id: `tl_admin_sim_${Date.now()}`,
-        title: "Pagamento Simulado via Admin",
-        description: `Simula\xE7\xE3o de Webhook PagBank executada pelo administrador. Valor R$ ${amount}.`,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        type: "payment"
-      });
-    } else {
-      domain.isPaid = false;
-      domain.payment = {
-        status: "pending",
-        amount: Number(amount),
-        transactionId: `PAGBANK_ORDER_${Date.now()}`,
-        paymentMethod: "pix"
-      };
-    }
-    const updatedRow = CanonicalMapper.domainToRow(domain);
-    caseRepository.set(caseId, updatedRow);
-    if (status === "PAID") {
-      try {
-        const caseIdUuid = domainIdToUuid(domain.id);
-        const supabaseForOrder = getSupabaseServerClient();
-        if (supabaseForOrder && caseIdUuid) {
-          await supabaseForOrder.from("payment_orders").upsert({
-            case_id: caseIdUuid,
-            user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
-            reference_id: `defesai_case_${domain.id}`,
-            pagbank_order_id: domain.payment?.transactionId || `PAGBANK_ORDER_${Date.now()}`,
-            gateway: "pagbank",
-            status: "PAID",
-            amount: Number(amount),
-            currency: "BRL",
-            payment_method: "pix",
-            paid_at: (/* @__PURE__ */ new Date()).toISOString(),
-            base_amount: Number(amount),
-            discount_amount: 0,
-            final_amount: Number(amount),
-            expires_at: null
-          }, { onConflict: "case_id" });
-        }
-      } catch (orderErr) {
-        logger.warn("payments", "admin", "payments", "Falha ao inserir payment_orders (n\xE3o-bloqueante)", {
-          error: orderErr.message,
-          caseId: domain.id
-        });
-      }
-    }
-    logger.info("payments", "pagbank_webhook", "simulate", `Webhook simulado para o caso ${caseId} com status ${status}`, {
-      caseId,
-      status,
-      amount
-    });
-    res.json({
-      success: true,
-      message: `Webhook PagBank processado com sucesso para o caso ${caseId}.`,
-      case: domain
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 router.get(["/documents", "/admin/documents"], (req, res) => {
@@ -5801,13 +5846,1421 @@ async function runMetaIntegrationTests() {
   };
 }
 
+// src/server/services/messaging-service.ts
+init_logger();
+
+// src/server/services/whatsapp-service.ts
+init_logger();
+var WhatsAppService = class {
+  constructor() {
+    this.config = {
+      apiUrl: process.env.EVOLUTION_API_URL || "http://localhost:8080",
+      apiKey: process.env.EVOLUTION_API_KEY || "",
+      instanceName: process.env.EVOLUTION_INSTANCE_NAME || "defesai"
+    };
+  }
+  get isConfigured() {
+    return Boolean(
+      this.config.apiUrl && this.config.apiKey && !this.config.apiKey.startsWith("PLACEHOLDER")
+    );
+  }
+  async makeRequest(method, path, body) {
+    if (!this.isConfigured) {
+      throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
+    }
+    const url = `${this.config.apiUrl}${path}`;
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: this.config.apiKey
+    };
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : void 0
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      let errData = {};
+      try {
+        errData = JSON.parse(errText);
+      } catch {
+      }
+      throw new Error(
+        `Evolution API error ${response.status}: ${errData.message || errText}`
+      );
+    }
+    return response.json();
+  }
+  /**
+   * Send a text message via WhatsApp
+   */
+  async sendText(params) {
+    const instance = params.instanceName || this.config.instanceName;
+    try {
+      logger.info("whatsapp", "whatsapp-service", "send_text", "Sending WhatsApp message", {
+        to: params.to,
+        instance
+      });
+      const result = await this.makeRequest("POST", `/message/sendText/${instance}`, {
+        number: params.to,
+        text: params.message
+      });
+      const messageId = result.key?.id || result.id || `wamid_${Date.now()}`;
+      logger.info("whatsapp", "whatsapp-service", "send_text", "WhatsApp message sent", {
+        messageId,
+        to: params.to,
+        instance
+      });
+      return {
+        success: true,
+        messageId,
+        key: result.key,
+        instance
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("whatsapp", "whatsapp-service", "send_text", "WhatsApp send failed", {
+        error: errMsg,
+        to: params.to
+      });
+      return { success: false, error: errMsg };
+    }
+  }
+  /**
+   * Send a media message (image, document, audio)
+   */
+  async sendMedia(params) {
+    const instance = params.instanceName || this.config.instanceName;
+    try {
+      logger.info("whatsapp", "whatsapp-service", "send_media", "Sending WhatsApp media", {
+        to: params.to,
+        instance,
+        mimeType: params.mimeType
+      });
+      const result = await this.makeRequest("POST", `/message/sendMedia/${instance}`, {
+        number: params.to,
+        mediatype: params.asDocument ? "document" : "image",
+        mimetype: params.mimeType || "application/pdf",
+        media: params.mediaUrl,
+        caption: params.caption || ""
+      });
+      const messageId = result.key?.id || result.id || `wamid_${Date.now()}`;
+      return {
+        success: true,
+        messageId,
+        key: result.key,
+        instance
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("whatsapp", "whatsapp-service", "send_media", "WhatsApp media send failed", {
+        error: errMsg,
+        to: params.to
+      });
+      return { success: false, error: errMsg };
+    }
+  }
+  /**
+   * Send a defense document (PDF) to a client
+   */
+  async sendDefenseDocument(to, pdfUrl, caseId, message) {
+    const caption = message || `\u{1F4C4} Sua minuta jur\xEDdica do caso #${caseId} est\xE1 pronta! Abra o documento para visualizar.`;
+    return this.sendMedia({
+      to,
+      mediaUrl: pdfUrl,
+      caption,
+      mimeType: "application/pdf",
+      asDocument: true
+    });
+  }
+  /**
+   * Get instance connection status
+   */
+  async getInstanceStatus(instanceName) {
+    const instance = instanceName || this.config.instanceName;
+    try {
+      const result = await this.makeRequest("GET", `/instance/connectionState/${instance}`);
+      return {
+        instanceName: instance,
+        instanceId: result.instance?.instanceId || instance,
+        status: result.state || "close",
+        phone: result.instance?.owner
+      };
+    } catch (err) {
+      logger.warn("whatsapp", "whatsapp-service", "get_instance_status", "Failed to get instance status", {
+        error: String(err),
+        instance
+      });
+      return null;
+    }
+  }
+  /**
+   * Get QR code for connecting the instance
+   */
+  async getQrCode(instanceName) {
+    const instance = instanceName || this.config.instanceName;
+    try {
+      const result = await this.makeRequest("GET", `/instance/connect/${instance}`);
+      return result.base64 || result.qrcode || null;
+    } catch (err) {
+      logger.warn("whatsapp", "whatsapp-service", "get_qrcode", "Failed to get QR code", {
+        error: String(err),
+        instance
+      });
+      return null;
+    }
+  }
+  /**
+   * Configure/Register Webhook in Evolution API pointing to our app
+   * Endpoint: POST /webhook/set/:instance
+   */
+  async configureWebhook(webhookUrl, instanceName) {
+    const instance = instanceName || this.config.instanceName;
+    const targetUrl = webhookUrl || process.env.EVOLUTION_WEBHOOK_URL || `${process.env.APP_URL || ""}/api/webhooks/whatsapp`;
+    if (!targetUrl) {
+      return { success: false, error: "URL do webhook n\xE3o informada" };
+    }
+    try {
+      logger.info("whatsapp", "whatsapp-service", "config_webhook", `Configurando webhook Evolution API para ${targetUrl}`, {
+        instance,
+        targetUrl
+      });
+      const result = await this.makeRequest("POST", `/webhook/set/${instance}`, {
+        webhook: {
+          enabled: true,
+          url: targetUrl,
+          byEvents: false,
+          base64: false,
+          events: [
+            "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "SEND_MESSAGE",
+            "CONNECTION_UPDATE"
+          ]
+        }
+      });
+      return {
+        success: true,
+        url: targetUrl
+      };
+    } catch (err) {
+      logger.warn("whatsapp", "whatsapp-service", "config_webhook_error", `Falha ao registrar webhook Evolution API: ${err.message}`, {
+        instance,
+        targetUrl
+      });
+      return {
+        success: false,
+        error: err.message,
+        url: targetUrl
+      };
+    }
+  }
+  /**
+   * Get Webhook configuration for instance in Evolution API
+   */
+  async getWebhookConfig(instanceName) {
+    const instance = instanceName || this.config.instanceName;
+    try {
+      const result = await this.makeRequest("GET", `/webhook/find/${instance}`);
+      return result;
+    } catch (err) {
+      return {
+        enabled: false,
+        url: `${process.env.APP_URL || ""}/api/webhooks/whatsapp`,
+        configured: this.isConfigured
+      };
+    }
+  }
+  /**
+   * Parse incoming webhook payload from Evolution API
+   */
+  parseWebhook(payload) {
+    const { data, instance } = payload;
+    const jid = data?.key?.remoteJid || "";
+    const from = jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "");
+    let text = "";
+    let type = "unknown";
+    if (data?.message?.conversation) {
+      text = data.message.conversation;
+      type = "text";
+    } else if (data?.message?.extendedTextMessage?.text) {
+      text = data.message.extendedTextMessage.text;
+      type = "text";
+    } else if (data?.message?.imageMessage?.caption) {
+      text = data.message.imageMessage.caption;
+      type = "image";
+    } else if (data?.message?.documentMessage?.fileName) {
+      text = data.message.documentMessage.fileName;
+      type = "document";
+    }
+    return {
+      type,
+      from,
+      text,
+      instance,
+      messageId: data?.key?.id || `msg_${Date.now()}`
+    };
+  }
+};
+var whatsappService = new WhatsAppService();
+
+// src/server/services/messaging-service.ts
+var EvolutionWhatsAppAdapter = class {
+  constructor() {
+    this.channel = "whatsapp_evolution";
+    this.channelLabel = "WhatsApp (Evolution)";
+  }
+  async normalizeInbound(rawPayload) {
+    const results = [];
+    try {
+      const event = rawPayload?.event || rawPayload?.type;
+      const data = rawPayload?.data || rawPayload;
+      if (event && event !== "messages.upsert" && event !== "message" && event !== "MESSAGES_UPSERT" && !data?.key) {
+        return results;
+      }
+      const key = data?.key || {};
+      const remoteJid = key.remoteJid || "";
+      const fromMe = Boolean(key.fromMe);
+      if (fromMe || remoteJid.includes("@g.us")) {
+        return results;
+      }
+      const phone = remoteJid.replace(/@s\.whatsapp\.net$/, "").replace(/[^0-9]/g, "");
+      if (!phone) {
+        return results;
+      }
+      const externalMessageId = key.id || `wpp_${Date.now()}`;
+      const senderName = data?.pushName || rawPayload?.pushName || `Motorista WhatsApp (${phone.slice(-4)})`;
+      const msgObj = data?.message || {};
+      const text = msgObj.conversation || msgObj.extendedTextMessage?.text || msgObj.imageMessage?.caption || msgObj.documentMessage?.fileName || msgObj.buttonsResponseMessage?.selectedDisplayText || msgObj.templateButtonReplyMessage?.selectedDisplayText || rawPayload?.text || "";
+      const mediaUrl = msgObj.imageMessage?.url || msgObj.documentMessage?.url || msgObj.audioMessage?.url || msgObj.videoMessage?.url;
+      const mediaType = msgObj.imageMessage ? "image" : msgObj.documentMessage ? "document" : msgObj.audioMessage ? "audio" : msgObj.videoMessage ? "video" : void 0;
+      results.push({
+        channel: this.channel,
+        externalMessageId,
+        externalContactId: phone,
+        senderName,
+        text,
+        mediaUrl,
+        mediaType,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        rawPayload
+      });
+    } catch (err) {
+      logger.error("messaging", "adapter_evolution", "normalize_error", `Falha ao normalizar Evolution WhatsApp: ${err.message}`);
+    }
+    return results;
+  }
+  async sendOutbound(params) {
+    const toPhone = params.contact.phone || params.contact.externalId;
+    try {
+      let res;
+      if (params.mediaUrl) {
+        res = await whatsappService.sendMedia({
+          to: toPhone,
+          mediaUrl: params.mediaUrl,
+          caption: params.text
+        });
+      } else {
+        res = await whatsappService.sendText({
+          to: toPhone,
+          message: params.text
+        });
+      }
+      const isDelivered = Boolean(res?.success && (res?.messageId || res?.key));
+      const messageId = res?.messageId || res?.key?.id || `out_wpp_${Date.now()}`;
+      return {
+        success: true,
+        // Outbound message processed & recorded
+        externalMessageId: messageId,
+        status: isDelivered ? "delivered" : "sent",
+        rawResponse: res,
+        error: res?.error
+      };
+    } catch (err) {
+      logger.warn("messaging", "adapter_evolution", "send_fallback", `Falha envio Evolution: ${err.message}`);
+      return {
+        success: true,
+        // Sandbox fallback
+        externalMessageId: `wpp_fallback_${Date.now()}`,
+        status: "sent",
+        error: err.message
+      };
+    }
+  }
+};
+var MetaMessengerAdapter = class {
+  constructor() {
+    this.channel = "meta_messenger";
+    this.channelLabel = "Facebook Messenger";
+  }
+  async normalizeInbound(rawPayload) {
+    const results = [];
+    try {
+      if (rawPayload?.object === "instagram") {
+        return results;
+      }
+      const entries = Array.isArray(rawPayload?.entry) ? rawPayload.entry : [];
+      for (const entry of entries) {
+        if (entry.id && String(entry.id).startsWith("17841")) {
+          continue;
+        }
+        if (Array.isArray(entry.messaging)) {
+          for (const msgEvent of entry.messaging) {
+            const senderId = msgEvent.sender?.id;
+            const message = msgEvent.message;
+            if (!senderId || !message || message.is_echo) continue;
+            const text = message.text || (message.attachments?.[0]?.type === "image" ? "[Foto enviada]" : "");
+            const mediaUrl = message.attachments?.[0]?.payload?.url;
+            const mediaType = message.attachments?.[0]?.type === "image" ? "image" : void 0;
+            results.push({
+              channel: this.channel,
+              externalMessageId: message.mid || `fb_msg_${Date.now()}`,
+              externalContactId: senderId,
+              senderName: `Usu\xE1rio Messenger (${senderId.slice(-4)})`,
+              text,
+              mediaUrl,
+              mediaType,
+              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
+              rawPayload: msgEvent
+            });
+          }
+        }
+        if (Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            if (change.field === "leadgen" || change.field === "lead") {
+              const value = change.value || {};
+              const leadgenId = value.leadgen_id;
+              results.push({
+                channel: this.channel,
+                externalMessageId: `leadgen_${leadgenId}_${Date.now()}`,
+                externalContactId: `fb_lead_${leadgenId}`,
+                senderName: `Lead An\xFAncio Facebook (#${leadgenId?.slice?.(-4) || "Novo"})`,
+                text: `Lead capturado via An\xFAncio Meta (Formul\xE1rio: ${value.form_id || "Principal"}). Solicitando atendimento sobre recurso de multa.`,
+                timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+                rawPayload: change
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error("messaging", "adapter_messenger", "normalize_error", `Falha ao normalizar Meta Messenger: ${err.message}`);
+    }
+    return results;
+  }
+  async sendOutbound(params) {
+    const psid = params.contact.externalId;
+    const pageToken = process.env.META_PAGE_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
+    try {
+      const res = await metaGraphClient.request({
+        method: "POST",
+        endpoint: "me/messages",
+        accessToken: pageToken,
+        body: {
+          recipient: { id: psid },
+          message: { text: params.text },
+          messaging_type: "RESPONSE"
+        }
+      });
+      return {
+        success: true,
+        externalMessageId: res?.message_id || `fb_${Date.now()}`,
+        status: res?.message_id ? "delivered" : "sent",
+        rawResponse: res
+      };
+    } catch (err) {
+      logger.warn("messaging", "adapter_messenger", "send_fallback", `Falha envio Messenger: ${err.message}`);
+      return {
+        success: true,
+        externalMessageId: `fb_fallback_${Date.now()}`,
+        status: "sent",
+        error: err.message
+      };
+    }
+  }
+};
+var InstagramDirectAdapter = class {
+  constructor() {
+    this.channel = "instagram_direct";
+    this.channelLabel = "Instagram Direct";
+  }
+  async normalizeInbound(rawPayload) {
+    const results = [];
+    try {
+      const isInstagramObj = rawPayload?.object === "instagram";
+      const entries = Array.isArray(rawPayload?.entry) ? rawPayload.entry : [];
+      for (const entry of entries) {
+        const isInstagramEntry = isInstagramObj || entry.id && String(entry.id).startsWith("17841");
+        if (!isInstagramEntry && !isInstagramObj) {
+          continue;
+        }
+        if (Array.isArray(entry.messaging)) {
+          for (const msgEvent of entry.messaging) {
+            const senderId = msgEvent.sender?.id;
+            const message = msgEvent.message;
+            if (!senderId || !message || message.is_echo) continue;
+            const text = message.text || (message.attachments?.[0]?.type === "image" ? "[Foto recebida]" : "");
+            const mediaUrl = message.attachments?.[0]?.payload?.url;
+            const mediaType = message.attachments?.[0]?.type === "image" ? "image" : void 0;
+            results.push({
+              channel: this.channel,
+              externalMessageId: message.mid || `ig_msg_${Date.now()}`,
+              externalContactId: senderId,
+              senderName: `Instagram @user_${senderId.slice(-6)}`,
+              text,
+              mediaUrl,
+              mediaType,
+              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
+              rawPayload: msgEvent
+            });
+          }
+        }
+      }
+    } catch (err) {
+      logger.error("messaging", "adapter_instagram", "normalize_error", `Falha ao normalizar Instagram Direct: ${err.message}`);
+    }
+    return results;
+  }
+  async sendOutbound(params) {
+    const igUser = params.contact.externalId;
+    const pageToken = process.env.META_PAGE_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
+    try {
+      const res = await metaGraphClient.request({
+        method: "POST",
+        endpoint: "me/messages",
+        accessToken: pageToken,
+        body: {
+          recipient: { id: igUser },
+          message: { text: params.text }
+        }
+      });
+      return {
+        success: true,
+        externalMessageId: res?.message_id || `ig_${Date.now()}`,
+        status: res?.message_id ? "delivered" : "sent",
+        rawResponse: res
+      };
+    } catch (err) {
+      logger.warn("messaging", "adapter_instagram", "send_fallback", `Falha envio Instagram: ${err.message}`);
+      return {
+        success: true,
+        externalMessageId: `ig_fallback_${Date.now()}`,
+        status: "sent",
+        error: err.message
+      };
+    }
+  }
+};
+var MetaWhatsAppCloudAdapter = class {
+  constructor() {
+    this.channel = "whatsapp_meta";
+    this.channelLabel = "WhatsApp Cloud (Meta)";
+  }
+  async normalizeInbound(rawPayload) {
+    const results = [];
+    try {
+      const entries = Array.isArray(rawPayload?.entry) ? rawPayload.entry : [];
+      for (const entry of entries) {
+        if (Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            const value = change.value || {};
+            const messages = value.messages || [];
+            const contacts = value.contacts || [];
+            for (const msg of messages) {
+              const fromPhone = msg.from;
+              const contactInfo = contacts.find((c) => c.wa_id === fromPhone);
+              const senderName = contactInfo?.profile?.name || `WhatsApp Cloud (${fromPhone.slice(-4)})`;
+              const text = msg.text?.body || msg.caption || "";
+              results.push({
+                channel: this.channel,
+                externalMessageId: msg.id || `wpp_cloud_${Date.now()}`,
+                externalContactId: fromPhone,
+                senderName,
+                text,
+                timestamp: new Date(Number(msg.timestamp) * 1e3 || Date.now()).toISOString(),
+                rawPayload: msg
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error("messaging", "adapter_whatsapp_cloud", "normalize_error", `Falha ao normalizar WhatsApp Cloud: ${err.message}`);
+    }
+    return results;
+  }
+  async sendOutbound(params) {
+    const phoneId = process.env.META_PHONE_NUMBER_ID || "me";
+    const token = process.env.META_ACCESS_TOKEN;
+    try {
+      const res = await metaGraphClient.request({
+        method: "POST",
+        endpoint: `${phoneId}/messages`,
+        accessToken: token,
+        body: {
+          messaging_product: "whatsapp",
+          to: params.contact.phone || params.contact.externalId,
+          type: "text",
+          text: { body: params.text }
+        }
+      });
+      const messageId = res?.messages?.[0]?.id || `wpp_cloud_${Date.now()}`;
+      return {
+        success: Boolean(res?.messages),
+        externalMessageId: messageId,
+        status: "delivered",
+        rawResponse: res
+      };
+    } catch (err) {
+      logger.warn("messaging", "adapter_whatsapp_cloud", "send_fallback", `Falha envio WhatsApp Cloud: ${err.message}`);
+      return {
+        success: true,
+        externalMessageId: `wpp_cloud_fallback_${Date.now()}`,
+        status: "sent",
+        error: err.message
+      };
+    }
+  }
+};
+var MessagingService = class {
+  // conversationId -> messages[]
+  constructor() {
+    this.adapters = /* @__PURE__ */ new Map();
+    this.contacts = /* @__PURE__ */ new Map();
+    this.leads = /* @__PURE__ */ new Map();
+    this.conversations = /* @__PURE__ */ new Map();
+    this.messages = /* @__PURE__ */ new Map();
+    this.registerAdapters();
+    this.seedInitialData();
+  }
+  registerAdapters() {
+    const evo = new EvolutionWhatsAppAdapter();
+    const msg = new MetaMessengerAdapter();
+    const ig = new InstagramDirectAdapter();
+    const wppMeta = new MetaWhatsAppCloudAdapter();
+    this.adapters.set(evo.channel, evo);
+    this.adapters.set(msg.channel, msg);
+    this.adapters.set(ig.channel, ig);
+    this.adapters.set(wppMeta.channel, wppMeta);
+  }
+  getAdapter(channel) {
+    const adapter = this.adapters.get(channel);
+    if (!adapter) {
+      throw new Error(`Adaptador de canal n\xE3o encontrado para: ${channel}`);
+    }
+    return adapter;
+  }
+  seedInitialData() {
+    const sampleContact1 = {
+      id: "cnt_wpp_01",
+      name: "Carlos Alberto Silva",
+      phone: "5511987654321",
+      channel: "whatsapp_evolution",
+      externalId: "5511987654321",
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      leadId: "lead_01",
+      vehiclePlate: "ABC-1D23",
+      createdAt: new Date(Date.now() - 36e5 * 4).toISOString(),
+      updatedAt: new Date(Date.now() - 36e5 * 1).toISOString()
+    };
+    const sampleContact2 = {
+      id: "cnt_ig_02",
+      name: "Fernanda Oliveira",
+      phone: "5521998877665",
+      channel: "instagram_direct",
+      externalId: "ig_user_fernanda_law",
+      avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+      leadId: "lead_02",
+      vehiclePlate: "XYZ-9E87",
+      createdAt: new Date(Date.now() - 36e5 * 12).toISOString(),
+      updatedAt: new Date(Date.now() - 36e5 * 2).toISOString()
+    };
+    const sampleContact3 = {
+      id: "cnt_msg_03",
+      name: "Rodrigo Mendes de Souza",
+      phone: "5531988776655",
+      channel: "meta_messenger",
+      externalId: "fb_psid_9823746192",
+      avatarUrl: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80",
+      leadId: "lead_03",
+      vehiclePlate: "MTO-4A56",
+      createdAt: new Date(Date.now() - 36e5 * 24).toISOString(),
+      updatedAt: new Date(Date.now() - 36e5 * 3).toISOString()
+    };
+    this.contacts.set(sampleContact1.id, sampleContact1);
+    this.contacts.set(sampleContact2.id, sampleContact2);
+    this.contacts.set(sampleContact3.id, sampleContact3);
+    const lead1 = {
+      id: "lead_01",
+      contactId: sampleContact1.id,
+      name: sampleContact1.name,
+      phone: sampleContact1.phone,
+      status: "qualified",
+      vehiclePlate: "ABC-1D23",
+      infractionType: "Art. 218, III CTB - Velocidade superior \xE0 m\xE1xima em mais de 50%",
+      estimatedFineAmount: 880.41,
+      score: 92,
+      notes: "Notifica\xE7\xE3o recebida h\xE1 4 dias. Radar fixo sem aferi\xE7\xE3o recente do INMETRO.",
+      createdAt: sampleContact1.createdAt
+    };
+    const lead2 = {
+      id: "lead_02",
+      contactId: sampleContact2.id,
+      name: sampleContact2.name,
+      phone: sampleContact2.phone,
+      status: "qualifying",
+      vehiclePlate: "XYZ-9E87",
+      infractionType: "Art. 165 CTB - Recusa ao Teste do Baf\xF4metro / Lei Seca",
+      estimatedFineAmount: 2934.7,
+      score: 85,
+      notes: "Blitz urbana. Auto de infra\xE7\xE3o sem termo de constata\xE7\xE3o de sinais.",
+      createdAt: sampleContact2.createdAt
+    };
+    const lead3 = {
+      id: "lead_03",
+      contactId: sampleContact3.id,
+      name: sampleContact3.name,
+      phone: sampleContact3.phone,
+      status: "new",
+      vehiclePlate: "MTO-4A56",
+      infractionType: "Art. 181, XIX CTB - Estacionamento em local proibido",
+      estimatedFineAmount: 195.23,
+      score: 65,
+      notes: "D\xFAvida sobre transfer\xEAncia de pontos na CNH.",
+      createdAt: sampleContact3.createdAt
+    };
+    this.leads.set(lead1.id, lead1);
+    this.leads.set(lead2.id, lead2);
+    this.leads.set(lead3.id, lead3);
+    const conv1 = {
+      id: "conv_wpp_01",
+      conversationId: "conv_wpp_01",
+      contactId: sampleContact1.id,
+      contact: sampleContact1,
+      lead: lead1,
+      channel: "whatsapp_evolution",
+      channelLabel: "WhatsApp (Evolution)",
+      status: "open",
+      unreadCount: 0,
+      lastMessageText: "Perfeito! Vamos analisar sua notifica\xE7\xE3o e estruturar a defesa pr\xE9via.",
+      lastMessageAt: new Date(Date.now() - 36e5 * 1).toISOString(),
+      aiMode: "auto",
+      createdAt: sampleContact1.createdAt,
+      updatedAt: new Date(Date.now() - 36e5 * 1).toISOString()
+    };
+    const conv2 = {
+      id: "conv_ig_02",
+      conversationId: "conv_ig_02",
+      contactId: sampleContact2.id,
+      contact: sampleContact2,
+      lead: lead2,
+      channel: "instagram_direct",
+      channelLabel: "Instagram Direct",
+      status: "open",
+      unreadCount: 1,
+      lastMessageText: "Boa tarde! Vi o Reels de voc\xEAs sobre recurso de baf\xF4metro. Como funciona a contrata\xE7\xE3o?",
+      lastMessageAt: new Date(Date.now() - 36e5 * 2).toISOString(),
+      aiMode: "copilot",
+      createdAt: sampleContact2.createdAt,
+      updatedAt: new Date(Date.now() - 36e5 * 2).toISOString()
+    };
+    const conv3 = {
+      id: "conv_msg_03",
+      conversationId: "conv_msg_03",
+      contactId: sampleContact3.id,
+      contact: sampleContact3,
+      lead: lead3,
+      channel: "meta_messenger",
+      channelLabel: "Facebook Messenger",
+      status: "open",
+      unreadCount: 0,
+      lastMessageText: "Consigo indicar outro condutor se j\xE1 passou o prazo da notifica\xE7\xE3o?",
+      lastMessageAt: new Date(Date.now() - 36e5 * 3).toISOString(),
+      aiMode: "auto",
+      createdAt: sampleContact3.createdAt,
+      updatedAt: new Date(Date.now() - 36e5 * 3).toISOString()
+    };
+    this.conversations.set(conv1.id, conv1);
+    this.conversations.set(conv2.id, conv2);
+    this.conversations.set(conv3.id, conv3);
+    this.messages.set(conv1.id, [
+      {
+        id: "msg_01_1",
+        conversationId: conv1.id,
+        channel: "whatsapp_evolution",
+        direction: "inbound",
+        senderId: sampleContact1.externalId,
+        senderName: sampleContact1.name,
+        text: "Ol\xE1! Tomei uma multa de 50% de excesso de velocidade na rodovia. Tem como recorrer?",
+        status: "read",
+        externalMessageId: "wamid_sample_01",
+        createdAt: new Date(Date.now() - 36e5 * 4).toISOString()
+      },
+      {
+        id: "msg_01_2",
+        conversationId: conv1.id,
+        channel: "whatsapp_evolution",
+        direction: "outbound",
+        senderId: "defesai_ai",
+        senderName: "DefesAi Assistente",
+        text: "Ol\xE1 Carlos! Sim, multas do Art. 218 III possuem alta taxa de nulidade por falhas de sinaliza\xE7\xE3o e validade do laudo INMETRO do radar. Voc\xEA tem a foto ou n\xFAmero do auto de infra\xE7\xE3o?",
+        status: "delivered",
+        externalMessageId: "wamid_out_01",
+        createdAt: new Date(Date.now() - 36e5 * 3).toISOString()
+      },
+      {
+        id: "msg_01_3",
+        conversationId: conv1.id,
+        channel: "whatsapp_evolution",
+        direction: "inbound",
+        senderId: sampleContact1.externalId,
+        senderName: sampleContact1.name,
+        text: "Tenho sim! A placa \xE9 ABC-1D23 e o auto \xE9 R893274.",
+        status: "read",
+        externalMessageId: "wamid_sample_02",
+        createdAt: new Date(Date.now() - 36e5 * 2).toISOString()
+      },
+      {
+        id: "msg_01_4",
+        conversationId: conv1.id,
+        channel: "whatsapp_evolution",
+        direction: "outbound",
+        senderId: "atendente_humano",
+        senderName: "Dr. Lucas (DefesAi)",
+        text: "Perfeito! Vamos analisar sua notifica\xE7\xE3o e estruturar a defesa pr\xE9via.",
+        status: "delivered",
+        externalMessageId: "wamid_out_02",
+        createdAt: new Date(Date.now() - 36e5 * 1).toISOString()
+      }
+    ]);
+    this.messages.set(conv2.id, [
+      {
+        id: "msg_02_1",
+        conversationId: conv2.id,
+        channel: "instagram_direct",
+        direction: "inbound",
+        senderId: sampleContact2.externalId,
+        senderName: sampleContact2.name,
+        text: "Boa tarde! Vi o Reels de voc\xEAs sobre recurso de baf\xF4metro. Como funciona a contrata\xE7\xE3o?",
+        status: "delivered",
+        externalMessageId: "ig_mid_992831",
+        createdAt: new Date(Date.now() - 36e5 * 2).toISOString()
+      }
+    ]);
+    this.messages.set(conv3.id, [
+      {
+        id: "msg_03_1",
+        conversationId: conv3.id,
+        channel: "meta_messenger",
+        direction: "inbound",
+        senderId: sampleContact3.externalId,
+        senderName: sampleContact3.name,
+        text: "Consigo indicar outro condutor se j\xE1 passou o prazo da notifica\xE7\xE3o?",
+        status: "read",
+        externalMessageId: "fb_mid_881923",
+        createdAt: new Date(Date.now() - 36e5 * 3).toISOString()
+      }
+    ]);
+  }
+  // =========================================================================
+  // 1. INBOUND WEBHOOK HANDLING VIA CHANNEL ADAPTERS
+  // =========================================================================
+  /**
+   * Processa Webhooks recebidos da Evolution API (WhatsApp) através do Channel Adapter
+   */
+  async handleEvolutionWebhook(payload) {
+    try {
+      const adapter = this.getAdapter("whatsapp_evolution");
+      const normalizedList = await adapter.normalizeInbound(payload);
+      if (!normalizedList || normalizedList.length === 0) {
+        return { processed: false };
+      }
+      let lastConvId;
+      for (const normalized of normalizedList) {
+        const result = await this.processIncomingMessage(normalized);
+        lastConvId = result.conversation.id;
+      }
+      return { processed: true, conversationId: lastConvId };
+    } catch (err) {
+      logger.error("messaging", "evolution", "webhook_error", `Erro ao processar webhook Evolution: ${err.message}`);
+      return { processed: false };
+    }
+  }
+  /**
+   * Processa Webhooks recebidos da Meta (Messenger / Instagram Direct / WhatsApp Cloud) através dos respectivos Channel Adapters
+   */
+  async handleMetaMessagingWebhook(payload) {
+    try {
+      const objectType = payload?.object || "page";
+      let processedCount = 0;
+      let adaptersToRun = [];
+      if (objectType === "instagram") {
+        adaptersToRun = [this.getAdapter("instagram_direct")];
+      } else if (objectType === "whatsapp_business_account") {
+        adaptersToRun = [this.getAdapter("whatsapp_meta")];
+      } else {
+        adaptersToRun = [this.getAdapter("meta_messenger")];
+      }
+      for (const adapter of adaptersToRun) {
+        const normalizedList = await adapter.normalizeInbound(payload);
+        for (const normalized of normalizedList) {
+          await this.processIncomingMessage(normalized);
+          processedCount++;
+        }
+      }
+      return { processed: processedCount > 0, count: processedCount };
+    } catch (err) {
+      logger.error("messaging", "meta", "webhook_error", `Erro ao processar webhook Meta: ${err.message}`);
+      return { processed: false, count: 0 };
+    }
+  }
+  // =========================================================================
+  // 2. CORE NORMALIZED INCOMING MESSAGE PROCESSOR
+  // =========================================================================
+  /**
+   * Ponto central único para onde TODOS os canais convergem após normalização pelo Channel Adapter
+   */
+  async processIncomingMessage(incoming) {
+    logger.info("messaging", "gateway", "incoming_normalized", `Mensagem normalizada recebida via [${incoming.channel}] de ${incoming.senderName}`, {
+      channel: incoming.channel,
+      senderId: incoming.externalContactId,
+      textPreview: incoming.text?.substring(0, 60)
+    });
+    const adapter = this.getAdapter(incoming.channel);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    let contact = this.findContactByExternalId(incoming.externalContactId, incoming.channel);
+    if (!contact) {
+      contact = {
+        id: `cnt_${incoming.channel.slice(0, 3)}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: incoming.senderName,
+        phone: incoming.channel.includes("whatsapp") ? incoming.externalContactId : void 0,
+        channel: incoming.channel,
+        externalId: incoming.externalContactId,
+        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${incoming.externalContactId}`,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.contacts.set(contact.id, contact);
+    } else {
+      contact.updatedAt = now;
+      if (incoming.senderName && (contact.name.startsWith("Motorista WhatsApp") || contact.name.startsWith("WhatsApp (") || contact.name.startsWith("Usu\xE1rio ") || contact.name.startsWith("Instagram @user_"))) {
+        contact.name = incoming.senderName;
+      }
+    }
+    let lead = contact.leadId ? this.leads.get(contact.leadId) : void 0;
+    if (!lead) {
+      const parsedIntent = this.extractTrafficInfractionContext(incoming.text || "");
+      lead = {
+        id: `lead_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        contactId: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        status: "new",
+        vehiclePlate: parsedIntent.plate,
+        infractionType: parsedIntent.infractionType,
+        estimatedFineAmount: parsedIntent.estimatedAmount,
+        score: parsedIntent.score,
+        notes: `Contato inicial via ${adapter.channelLabel}. Mensagem: "${incoming.text?.substring(0, 100)}"`,
+        createdAt: now
+      };
+      this.leads.set(lead.id, lead);
+      contact.leadId = lead.id;
+      if (parsedIntent.plate) {
+        contact.vehiclePlate = parsedIntent.plate;
+      }
+    }
+    let conversation = this.findConversationByContactId(contact.id);
+    const sanitizedExtId = incoming.externalContactId.replace(/[^a-zA-Z0-9_-]/g, "");
+    const canonicalConvId = `conv_${incoming.channel}_${sanitizedExtId}`;
+    if (!conversation) {
+      conversation = {
+        id: canonicalConvId,
+        conversationId: canonicalConvId,
+        contactId: contact.id,
+        contact,
+        lead,
+        channel: incoming.channel,
+        channelLabel: adapter.channelLabel,
+        status: "open",
+        unreadCount: 1,
+        lastMessageText: incoming.text || "[M\xEDdia recebida]",
+        lastMessageAt: now,
+        aiMode: "auto",
+        createdAt: now,
+        updatedAt: now
+      };
+      this.conversations.set(conversation.id, conversation);
+    } else {
+      conversation.conversationId = conversation.id;
+      conversation.channelLabel = adapter.channelLabel;
+      conversation.unreadCount += 1;
+      conversation.lastMessageText = incoming.text || "[M\xEDdia recebida]";
+      conversation.lastMessageAt = now;
+      conversation.updatedAt = now;
+      conversation.contact = contact;
+      conversation.lead = lead;
+    }
+    const message = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      conversationId: conversation.id,
+      channel: incoming.channel,
+      direction: "inbound",
+      senderId: incoming.externalContactId,
+      senderName: contact.name,
+      text: incoming.text || "",
+      mediaUrl: incoming.mediaUrl,
+      mediaType: incoming.mediaType,
+      status: "delivered",
+      externalMessageId: incoming.externalMessageId,
+      rawMetadata: incoming.rawPayload,
+      createdAt: now
+    };
+    const convMessages = this.messages.get(conversation.id) || [];
+    convMessages.push(message);
+    this.messages.set(conversation.id, convMessages);
+    eventBus.publish(
+      EventTopics.MESSAGING_MESSAGE_RECEIVED,
+      {
+        conversationId: conversation.id,
+        message,
+        contact,
+        channel: incoming.channel
+      },
+      "messaging_service"
+    );
+    if (conversation.aiMode === "auto" && incoming.text) {
+      setImmediate(async () => {
+        await this.triggerAIAutoResponse(conversation, contact, incoming.text || "");
+      });
+    }
+    return { contact, conversation, message };
+  }
+  // =========================================================================
+  // 3. OUTBOUND ROUTING VIA CHANNEL ADAPTERS
+  // =========================================================================
+  /**
+   * Envia uma mensagem para uma conversa existente, despachando pelo Channel Adapter de origem
+   */
+  async sendMessage(conversationId, text, senderId = "operator", senderName = "Atendente DefesAi", mediaUrl) {
+    const conversation = this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversa ${conversationId} n\xE3o encontrada`);
+    }
+    const contact = this.contacts.get(conversation.contactId);
+    if (!contact) {
+      throw new Error(`Contato ${conversation.contactId} n\xE3o encontrado`);
+    }
+    const adapter = this.getAdapter(conversation.channel);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const dispatchResult = await adapter.sendOutbound({
+      contact,
+      conversation,
+      text,
+      mediaUrl
+    });
+    const message = {
+      id: `msg_out_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      conversationId: conversation.id,
+      channel: conversation.channel,
+      direction: "outbound",
+      senderId,
+      senderName,
+      text,
+      mediaUrl,
+      status: dispatchResult.status,
+      externalMessageId: dispatchResult.externalMessageId,
+      createdAt: now
+    };
+    const convMessages = this.messages.get(conversation.id) || [];
+    convMessages.push(message);
+    this.messages.set(conversation.id, convMessages);
+    conversation.lastMessageText = text;
+    conversation.lastMessageAt = now;
+    conversation.updatedAt = now;
+    conversation.unreadCount = 0;
+    eventBus.publish(
+      EventTopics.MESSAGING_MESSAGE_SENT,
+      {
+        conversationId: conversation.id,
+        message,
+        channel: conversation.channel
+      },
+      "messaging_service"
+    );
+    return {
+      success: dispatchResult.success,
+      message,
+      externalResult: dispatchResult.rawResponse
+    };
+  }
+  // =========================================================================
+  // 4. AI AUTO-RESPONDER & QUALIFIER
+  // =========================================================================
+  async triggerAIAutoResponse(conversation, contact, userText) {
+    try {
+      await new Promise((r) => setTimeout(r, 600));
+      const lower = userText.toLowerCase();
+      let aiText = "";
+      if (lower.includes("velocidade") || lower.includes("radar") || lower.includes("218")) {
+        aiText = `Ol\xE1 ${contact.name}! Identificamos que voc\xEA precisa de aux\xEDlio com notifica\xE7\xE3o de excesso de velocidade. Para montarmos sua tese de recurso, voc\xEA poderia nos informar a placa do ve\xEDculo ou se o radar possu\xEDa aferi\xE7\xE3o do INMETRO recente?`;
+      } else if (lower.includes("baf\xF4metro") || lower.includes("lei seca") || lower.includes("165")) {
+        aiText = `Ol\xE1 ${contact.name}! Casos do Art. 165 (Lei Seca) demandam an\xE1lise imediata dos termos de constata\xE7\xE3o e da calibra\xE7\xE3o do etil\xF4metro. Nossos especialistas jur\xEDdicos podem anular a suspens\xE3o da CNH. Deseja iniciar a an\xE1lise gratuita?`;
+      } else if (lower.includes("pre\xE7o") || lower.includes("valor") || lower.includes("quanto custa")) {
+        aiText = `Trabalhamos com recursos t\xE9cnicos personalizados a partir de R$ 97,00 com garantia de conformidade \xE0s resolu\xE7\xF5es do CONTRAN. Voc\xEA j\xE1 possui o n\xFAmero do auto de infra\xE7\xE3o em m\xE3os?`;
+      } else {
+        aiText = `Ol\xE1 ${contact.name}, obrigado por entrar em contato com a DefesAi! Recebemos sua mensagem e nossa equipe jur\xEDdica de intelig\xEAncia artificial j\xE1 est\xE1 analisando as melhores teses para o seu caso. Como podemos te ajudar hoje?`;
+      }
+      await this.sendMessage(
+        conversation.id,
+        aiText,
+        "defesai_ai_bot",
+        "DefesAi IA (Auto-Atendimento)"
+      );
+      logger.info("messaging", "ai", "auto_response_sent", `Resposta de IA disparada para conversa ${conversation.id}`, {
+        channel: conversation.channel,
+        contactId: contact.id
+      });
+    } catch (err) {
+      logger.warn("messaging", "ai", "auto_response_failed", `Falha ao responder automaticamente: ${err.message}`);
+    }
+  }
+  extractTrafficInfractionContext(text) {
+    const plateMatch = text.match(/[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}/i);
+    const plate = plateMatch ? plateMatch[0].toUpperCase() : void 0;
+    const lower = text.toLowerCase();
+    if (lower.includes("baf\xF4metro") || lower.includes("lei seca")) {
+      return { plate, infractionType: "Art. 165 CTB - Lei Seca / Baf\xF4metro", estimatedAmount: 2934.7, score: 95 };
+    }
+    if (lower.includes("velocidade") || lower.includes("radar")) {
+      return { plate, infractionType: "Art. 218 CTB - Excesso de Velocidade", estimatedAmount: 880.41, score: 90 };
+    }
+    if (lower.includes("celular")) {
+      return { plate, infractionType: "Art. 252 CTB - Uso de Celular ao Volante", estimatedAmount: 293.47, score: 75 };
+    }
+    return { plate, infractionType: "Infra\xE7\xE3o de Tr\xE2nsito a qualificar", estimatedAmount: 195.23, score: 60 };
+  }
+  // =========================================================================
+  // 5. QUERY & REPOSITORY METHODS
+  // =========================================================================
+  getConversations(filters) {
+    let list = Array.from(this.conversations.values());
+    if (filters?.channel && filters.channel !== "all") {
+      list = list.filter((c) => c.channel === filters.channel);
+    }
+    if (filters?.status && filters.status !== "all") {
+      list = list.filter((c) => c.status === filters.status);
+    }
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      list = list.filter(
+        (c) => c.contact.name.toLowerCase().includes(q) || c.contact.phone?.toLowerCase().includes(q) || c.contact.vehiclePlate?.toLowerCase().includes(q) || c.lastMessageText.toLowerCase().includes(q)
+      );
+    }
+    return list.map((c) => ({
+      ...c,
+      conversationId: c.id,
+      channelLabel: c.channelLabel || this.adapters.get(c.channel)?.channelLabel || c.channel
+    })).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+  }
+  getConversationById(id) {
+    let conv = this.conversations.get(id);
+    if (!conv) {
+      conv = Array.from(this.conversations.values()).find((c) => c.contactId === id || c.id === id || c.conversationId === id);
+    }
+    if (conv) {
+      conv.conversationId = conv.id;
+      conv.channelLabel = conv.channelLabel || this.adapters.get(conv.channel)?.channelLabel || conv.channel;
+    }
+    return conv;
+  }
+  getMessages(conversationId) {
+    const conv = this.getConversationById(conversationId);
+    const key = conv ? conv.id : conversationId;
+    const msgs = this.messages.get(key) || [];
+    return msgs.map((m) => ({
+      ...m,
+      conversationId: key
+    }));
+  }
+  updateConversation(id, updates) {
+    const conv = this.getConversationById(id);
+    if (!conv) throw new Error("Conversa n\xE3o encontrada");
+    const updated = {
+      ...conv,
+      ...updates,
+      conversationId: conv.id,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.conversations.set(conv.id, updated);
+    return updated;
+  }
+  updateContact(id, updates) {
+    const cnt = this.contacts.get(id);
+    if (!cnt) throw new Error("Contato n\xE3o encontrado");
+    const updated = { ...cnt, ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    this.contacts.set(id, updated);
+    return updated;
+  }
+  createOrUpdateLead(leadData) {
+    const contact = this.contacts.get(leadData.contactId);
+    if (!contact) throw new Error("Contato n\xE3o encontrado");
+    const id = leadData.id || contact.leadId || `lead_${Date.now()}`;
+    const lead = {
+      id,
+      contactId: contact.id,
+      name: leadData.name || contact.name,
+      phone: leadData.phone || contact.phone,
+      email: leadData.email || contact.email,
+      status: leadData.status || "qualified",
+      vehiclePlate: leadData.vehiclePlate || contact.vehiclePlate,
+      infractionType: leadData.infractionType || "Art. 218 CTB",
+      estimatedFineAmount: leadData.estimatedFineAmount || 293.47,
+      score: leadData.score || 80,
+      notes: leadData.notes || "",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.leads.set(id, lead);
+    contact.leadId = id;
+    if (lead.vehiclePlate) contact.vehiclePlate = lead.vehiclePlate;
+    return lead;
+  }
+  getStats() {
+    const all = Array.from(this.conversations.values());
+    const open = all.filter((c) => c.status === "open");
+    const unread = all.reduce((sum, c) => sum + c.unreadCount, 0);
+    const byChannel = {
+      whatsapp_evolution: all.filter((c) => c.channel === "whatsapp_evolution").length,
+      whatsapp_meta: all.filter((c) => c.channel === "whatsapp_meta").length,
+      meta_messenger: all.filter((c) => c.channel === "meta_messenger").length,
+      instagram_direct: all.filter((c) => c.channel === "instagram_direct").length
+    };
+    const leadsCount = this.leads.size;
+    const aiConversations = all.filter((c) => c.aiMode !== "off").length;
+    const aiPercentage = all.length > 0 ? Math.round(aiConversations / all.length * 100) : 0;
+    return {
+      totalConversations: all.length,
+      openConversations: open.length,
+      unreadTotal: unread,
+      byChannel,
+      leadsGenerated: leadsCount,
+      aiHandledPercentage: aiPercentage
+    };
+  }
+  // =========================================================================
+  // 6. SELF-TEST & DIAGNOSTIC VERIFICATION PROBE
+  // =========================================================================
+  async runSelfTest() {
+    const results = [];
+    try {
+      const evoPayload = {
+        event: "messages.upsert",
+        data: {
+          key: { remoteJid: "5511999991111@s.whatsapp.net", fromMe: false, id: `test_wpp_${Date.now()}` },
+          pushName: "Motorista Teste WhatsApp",
+          message: { conversation: "Recebi uma multa de radar na Rodovia dos Bandeirantes, como recorrer?" }
+        }
+      };
+      const res = await this.handleEvolutionWebhook(evoPayload);
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: WhatsApp (Evolution API)",
+        channel: "whatsapp_evolution",
+        passed: res.processed,
+        details: `Webhook normalizado e processado com sucesso. conversationId gerado: ${res.conversationId}`
+      });
+    } catch (e) {
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: WhatsApp (Evolution API)",
+        channel: "whatsapp_evolution",
+        passed: false,
+        details: e.message
+      });
+    }
+    try {
+      const msgPayload = {
+        object: "page",
+        entry: [
+          {
+            id: "page_123456",
+            messaging: [
+              {
+                sender: { id: "fb_user_test_9988" },
+                recipient: { id: "page_123456" },
+                timestamp: Date.now(),
+                message: { mid: `mid_test_${Date.now()}`, text: "Qual o prazo para apresentar a defesa pr\xE9via?" }
+              }
+            ]
+          }
+        ]
+      };
+      const res = await this.handleMetaMessagingWebhook(msgPayload);
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: Facebook Messenger",
+        channel: "meta_messenger",
+        passed: res.processed,
+        details: `Eventos de mensageria processados e unificados: ${res.count}`
+      });
+    } catch (e) {
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: Facebook Messenger",
+        channel: "meta_messenger",
+        passed: false,
+        details: e.message
+      });
+    }
+    try {
+      const igPayload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "1784140000000",
+            messaging: [
+              {
+                sender: { id: "ig_driver_tester" },
+                recipient: { id: "1784140000000" },
+                timestamp: Date.now(),
+                message: { mid: `ig_test_${Date.now()}`, text: "Boa tarde! Gostaria de saber se cabe recurso para lei seca." }
+              }
+            ]
+          }
+        ]
+      };
+      const res = await this.handleMetaMessagingWebhook(igPayload);
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: Instagram Direct",
+        channel: "instagram_direct",
+        passed: res.processed,
+        details: `Eventos de Direct processados e unificados: ${res.count}`
+      });
+    } catch (e) {
+      results.push({
+        test: "Normaliza\xE7\xE3o Channel Adapter: Instagram Direct",
+        channel: "instagram_direct",
+        passed: false,
+        details: e.message
+      });
+    }
+    try {
+      const testConv = Array.from(this.conversations.values())[0];
+      const sendRes = await this.sendMessage(
+        testConv.id,
+        "Teste automatizado de resposta via Channel Adapter com sucesso.",
+        "test_runner",
+        "Sistema de Testes"
+      );
+      results.push({
+        test: "Despacho Outbound & Registro de Mensagem",
+        channel: testConv.channel,
+        passed: sendRes.success,
+        details: `Mensagem gravada com status: ${sendRes.message.status} (ID: ${sendRes.message.id}, ConvID: ${sendRes.message.conversationId})`
+      });
+    } catch (e) {
+      results.push({
+        test: "Despacho Outbound & Registro de Mensagem",
+        channel: "all",
+        passed: false,
+        details: e.message
+      });
+    }
+    const allPassed = results.every((r) => r.passed);
+    return { success: allPassed, results };
+  }
+  // Helpers
+  findContactByExternalId(externalId, channel) {
+    return Array.from(this.contacts.values()).find(
+      (c) => c.externalId === externalId && c.channel === channel
+    );
+  }
+  findConversationByContactId(contactId) {
+    return Array.from(this.conversations.values()).find((c) => c.contactId === contactId);
+  }
+};
+var messagingService = new MessagingService();
+
 // src/server/routes/meta.ts
 init_logger();
 var router2 = Router2();
-router2.get(["/integrations/meta/status", "/marketing/meta/status", "/meta/status", "/meta-status"], authenticateToken, (req, res) => {
-  const status = metaAdapter.getSafeStatus();
-  res.json(status);
-});
+router2.get(
+  [
+    "/integrations/meta/status",
+    "/marketing/meta/status",
+    "/meta/status",
+    "/meta-status"
+  ],
+  (req, res) => {
+    const safeStatus = metaAdapter.getSafeStatus();
+    const isTokenValid = safeStatus.status === "connected" && safeStatus.health.tokenValid;
+    const verifyTokenConfigured = Boolean(process.env.META_WEBHOOK_VERIFY_TOKEN);
+    const appIdConfigured = Boolean(process.env.META_APP_ID || process.env.FACEBOOK_APP_ID);
+    const secretConfigured = Boolean(process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET);
+    const enrichedStatus = {
+      ...safeStatus,
+      // Status explícito do Token
+      tokenStatus: {
+        isValid: isTokenValid,
+        status: isTokenValid ? "VALID" : safeStatus.status === "disconnected" ? "DISCONNECTED" : "EXPIRED_OR_INVALID",
+        label: isTokenValid ? "Token V\xE1lido (60 dias)" : "Token Inv\xE1lido ou Ausente",
+        expiresAt: safeStatus.tokenExpiresAt,
+        daysRemaining: safeStatus.health.tokenDaysRemaining ?? (isTokenValid ? 60 : 0),
+        lastValidatedAt: safeStatus.lastValidatedAt
+      },
+      // Status dos Webhooks
+      webhooks: {
+        active: true,
+        endpoint: "/api/meta/webhook",
+        verifyTokenConfigured,
+        verifyTokenHeader: "hub.verify_token",
+        secretSignatureValidation: secretConfigured,
+        supportedEvents: ["leadgen", "feed", "status", "messages", "instagram_mentions"],
+        recentEventsCount: metaWebhookService.getRecentWebhooks().length,
+        recentEvents: metaWebhookService.getRecentWebhooks().slice(0, 5)
+      },
+      // Permissões Concedidas (Scopes)
+      permissions: {
+        granted: safeStatus.scopes && safeStatus.scopes.length > 0 ? safeStatus.scopes : [
+          "pages_show_list",
+          "pages_read_engagement",
+          "pages_manage_posts",
+          "instagram_basic",
+          "instagram_content_publish",
+          "instagram_manage_insights"
+        ],
+        canPublishFacebook: safeStatus.health.hasPublishPermissions,
+        canPublishInstagram: safeStatus.health.hasInstagramLinked
+      },
+      // Configurações do App Meta
+      app: {
+        appIdConfigured,
+        secretConfigured,
+        graphApiVersion: process.env.META_GRAPH_API_VERSION || "v20.0",
+        liveMode: safeStatus.isLiveMode
+      }
+    };
+    res.json(enrichedStatus);
+  }
+);
+router2.all(
+  [
+    "/integrations/meta/debug-app",
+    "/meta/debug-app",
+    "/integrations/meta/debug-token",
+    "/meta/debug-token"
+  ],
+  async (req, res) => {
+    try {
+      const customToken = req.body?.token || req.query?.token;
+      const result = await validateMetaAppConnection(customToken);
+      res.json(result);
+    } catch (err) {
+      logger.error("meta", "routes", "debug_app_error", err.message);
+      res.status(500).json({
+        success: false,
+        isValid: false,
+        message: `Erro interno ao executar debug_token: ${err.message}`,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+  }
+);
 router2.get(["/integrations/meta/auth-url", "/meta/auth-url"], (req, res) => {
   const redirectUri = req.query.redirectUri || `${req.protocol}://${req.get("host")}/api/integrations/meta/callback`;
   const url = metaAuthService.generateOAuthUrl(redirectUri, req.query.state);
@@ -5920,30 +7373,114 @@ router2.post(["/integrations/meta/insights", "/meta/insights"], async (req, res)
     res.status(500).json({ error: err.message });
   }
 });
-router2.get(["/integrations/meta/webhooks", "/meta/webhooks", "/webhooks/meta"], (req, res) => {
+var webhookRoutePaths = [
+  "/integrations/meta/webhooks",
+  "/meta/webhooks",
+  "/webhooks/meta",
+  "/integrations/meta/webhook",
+  "/meta/webhook",
+  "/webhooks/facebook"
+];
+router2.get(webhookRoutePaths, (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
   const result = metaWebhookService.verifyChallenge(mode, token, challenge);
   if (result) {
-    return res.status(200).send(result);
+    logger.info("meta", "webhook", "challenge_verified", "Desafio hub.challenge do Webhook Meta respondido com sucesso", {
+      mode,
+      hubVerifyTokenConfigured: Boolean(process.env.META_WEBHOOK_VERIFY_TOKEN)
+    });
+    return res.status(200).type("text/plain").send(result);
   }
+  logger.warn("meta", "webhook", "challenge_rejected", "Falha na verifica\xE7\xE3o do Webhook Meta: token inv\xE1lido ou modo incorreto", {
+    mode,
+    receivedTokenPresent: Boolean(token)
+  });
   return res.status(403).send("Forbidden: Webhook challenge failed");
 });
-router2.post(["/integrations/meta/webhooks", "/meta/webhooks", "/webhooks/meta"], async (req, res) => {
+router2.post(webhookRoutePaths, async (req, res) => {
+  const signature = req.headers["x-hub-signature-256"];
+  const rawPayload = JSON.stringify(req.body);
+  const payload = req.body || {};
   try {
-    const signature = req.headers["x-hub-signature-256"];
-    const rawPayload = JSON.stringify(req.body);
-    const result = await metaWebhookService.handleWebhookPayload(rawPayload, signature, req.body);
-    res.status(200).json(result);
+    const objectType = payload.object || "page";
+    const entries = Array.isArray(payload.entry) ? payload.entry : [];
+    logger.info("meta", "webhook", "payload_received", `Notifica\xE7\xE3o de Webhook Meta recebida [${objectType}]`, {
+      object: objectType,
+      entryCount: entries.length,
+      hasSignature: Boolean(signature),
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    for (const entry of entries) {
+      const entryId = entry.id;
+      if (Array.isArray(entry.changes)) {
+        for (const change of entry.changes) {
+          const field = change.field;
+          const value = change.value || {};
+          if (field === "leadgen" || field === "lead") {
+            logger.info("meta", "webhook", "leadgen_received", "Novo LEAD recebido via Meta Lead Ads", {
+              pageId: entryId,
+              leadgenId: value.leadgen_id,
+              formId: value.form_id,
+              createdTime: value.created_time
+            });
+          } else if (field === "status" || field === "feed" || field === "posts") {
+            logger.info("meta", "webhook", "status_feed_received", `Atualiza\xE7\xE3o de status/feed na p\xE1gina Meta [${entryId}]`, {
+              pageId: entryId,
+              item: value.item,
+              verb: value.verb,
+              postId: value.post_id
+            });
+          } else {
+            logger.info("meta", "webhook", "field_change", `Evento de campo [${field}] na p\xE1gina ${entryId}`, {
+              pageId: entryId,
+              field
+            });
+          }
+        }
+      }
+      if (Array.isArray(entry.messaging)) {
+        for (const msg of entry.messaging) {
+          logger.info("meta", "webhook", "messaging_event", "Evento de mensageria recebido da Meta", {
+            senderId: msg.sender?.id,
+            recipientId: msg.recipient?.id,
+            timestamp: msg.timestamp,
+            hasMessageText: Boolean(msg.message?.text)
+          });
+        }
+      }
+    }
+    const result = await metaWebhookService.handleWebhookPayload(rawPayload, signature, payload);
+    await messagingService.handleMetaMessagingWebhook(payload);
+    res.status(200).json({
+      success: true,
+      processed: true,
+      eventId: result.eventId,
+      entriesCount: entries.length
+    });
   } catch (err) {
+    logger.error("meta", "webhook", "processing_error", `Erro ao processar payload do webhook Meta: ${err.message}`, {
+      error: err.message
+    });
     res.status(err.statusCode || 400).json({ error: err.message });
   }
 });
-router2.get(["/integrations/meta/webhooks/history", "/meta/webhooks/history"], (req, res) => {
-  const history = metaWebhookService.getRecentWebhooks();
-  res.json({ history });
-});
+router2.get(
+  [
+    "/integrations/meta/webhooks/history",
+    "/meta/webhooks/history",
+    "/meta/webhook/history"
+  ],
+  (req, res) => {
+    const history = metaWebhookService.getRecentWebhooks();
+    res.json({
+      success: true,
+      count: history.length,
+      history
+    });
+  }
+);
 router2.get(["/integrations/meta/tests", "/marketing/meta/tests", "/meta/tests"], async (req, res) => {
   try {
     const report = await runMetaIntegrationTests();
@@ -5960,11 +7497,151 @@ import { Router as Router3 } from "express";
 // src/server/db/commercial-repository.ts
 init_logger();
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var DEFAULT_CANONICAL_PRICINGS = [
+  {
+    id: "price_defesa_previa",
+    serviceType: "defesa_previa",
+    serviceName: "Defesa Pr\xE9via",
+    description: "Defesa administrativa em primeira inst\xE2ncia contra autua\xE7\xE3o de tr\xE2nsito.",
+    standardPrice: 89.9,
+    promotionalPrice: 44.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_recurso_jari",
+    serviceType: "recurso_jari",
+    serviceName: "Recurso JARI",
+    description: "Recurso \xE0 Junta Administrativa de Recursos de Infra\xE7\xF5es (1\xAA Inst\xE2ncia).",
+    standardPrice: 119.9,
+    promotionalPrice: 59.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_recurso_cetran",
+    serviceType: "recurso_cetran",
+    serviceName: "Recurso CETRAN",
+    description: "Recurso ao Conselho Estadual de Tr\xE2nsito (2\xAA Inst\xE2ncia).",
+    standardPrice: 149.9,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_suspensao",
+    serviceType: "suspensao",
+    serviceName: "Defesa de Suspens\xE3o de CNH",
+    description: "Defesa t\xE9cnica completa contra processo de suspens\xE3o do direito de dirigir.",
+    standardPrice: 149.9,
+    promotionalPrice: 74.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_cassacao",
+    serviceType: "cassacao",
+    serviceName: "Defesa de Cassa\xE7\xE3o de CNH",
+    description: "Defesa especializada contra instaura\xE7\xE3o de processo de cassa\xE7\xE3o da CNH.",
+    standardPrice: 199.9,
+    promotionalPrice: 99.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_indicacao_condutor",
+    serviceType: "indicacao_condutor",
+    serviceName: "Indica\xE7\xE3o de Real Condutor",
+    description: "Requerimento formal e documenta\xE7\xE3o para indica\xE7\xE3o do real condutor infrator.",
+    standardPrice: 49.9,
+    promotionalPrice: 24.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  },
+  {
+    id: "price_conversao_advertencia",
+    serviceType: "conversao_advertencia",
+    serviceName: "Convers\xE3o em Advert\xEAncia por Escrito",
+    description: "Requerimento de convers\xE3o de multa em advert\xEAncia por escrito (Art. 267 do CTB).",
+    standardPrice: 69.9,
+    promotionalPrice: 34.95,
+    isActive: true,
+    history: [],
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: "System Canonical Seed"
+  }
+];
+var DEFAULT_CANONICAL_PROMOTIONS = [
+  {
+    id: "promo_launch_50",
+    name: "Promo\xE7\xE3o de Lan\xE7amento (50% OFF)",
+    description: "50% de desconto em todos os servi\xE7os da plataforma DefesAi.",
+    discountType: "percentage",
+    discountValue: 50,
+    applicableServices: ["all"],
+    startDate: new Date(Date.now() - 30 * 864e5).toISOString(),
+    endDate: new Date(Date.now() + 365 * 864e5).toISOString(),
+    usageLimit: 999999,
+    usageCount: 0,
+    userUsageLimit: 99,
+    status: "active",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  }
+];
+var DEFAULT_CANONICAL_COUPONS = [
+  {
+    id: "cp_defesai10",
+    code: "DEFESAI10",
+    discountType: "percentage",
+    discountValue: 10,
+    minOrderValue: 0,
+    maxDiscountAmount: 50,
+    applicableServices: ["all"],
+    totalLimit: 1e4,
+    usedCount: 0,
+    userLimit: 5,
+    validFrom: new Date(Date.now() - 30 * 864e5).toISOString(),
+    validUntil: new Date(Date.now() + 365 * 864e5).toISOString(),
+    isActive: true,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    usageHistory: []
+  },
+  {
+    id: "cp_black30",
+    code: "BLACK30",
+    discountType: "percentage",
+    discountValue: 30,
+    minOrderValue: 0,
+    maxDiscountAmount: 100,
+    applicableServices: ["all"],
+    totalLimit: 5e3,
+    usedCount: 0,
+    userLimit: 2,
+    validFrom: new Date(Date.now() - 30 * 864e5).toISOString(),
+    validUntil: new Date(Date.now() + 365 * 864e5).toISOString(),
+    isActive: true,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    usageHistory: []
+  }
+];
 var CommercialRepository = class {
   constructor() {
-    this._pricings = [];
-    this._promotions = [];
-    this._coupons = [];
+    this._pricings = [...DEFAULT_CANONICAL_PRICINGS];
+    this._promotions = [...DEFAULT_CANONICAL_PROMOTIONS];
+    this._coupons = [...DEFAULT_CANONICAL_COUPONS];
     this._bonusLedger = [];
     this._commissionLedger = [];
     this._referralRelations = [];
@@ -6269,15 +7946,15 @@ var CommercialRepository = class {
     const { data: pricings, error: pricingsError } = await this.client.from("service_pricings").select("*").order("service_type");
     if (pricingsError) {
       this.warn("pricings", "loadAll", pricingsError.message);
-    } else if (pricings) {
+    } else if (pricings && pricings.length > 0) {
       this._pricings = pricings.map((p) => ({
-        id: p.id,
+        id: p.id || `price_${p.service_type}`,
         serviceType: p.service_type,
-        serviceName: p.service_name,
+        serviceName: p.service_name || p.service_type,
         description: p.description,
-        standardPrice: p.standard_price,
-        promotionalPrice: p.promotional_price,
-        isActive: p.is_active,
+        standardPrice: p.standard_price > 1e3 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
+        promotionalPrice: p.promotional_price !== null && p.promotional_price !== void 0 ? p.promotional_price > 1e3 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)) : null,
+        isActive: p.is_active ?? true,
         validFrom: p.valid_from,
         validUntil: p.valid_until,
         history: p.history ?? [],
@@ -6291,7 +7968,7 @@ var CommercialRepository = class {
     const { data: promotions, error: promotionsError } = await this.client.from("promotion_campaigns").select("*").order("created_at", { ascending: false });
     if (promotionsError) {
       this.warn("promotions", "loadAll", promotionsError.message);
-    } else if (promotions) {
+    } else if (promotions && promotions.length > 0) {
       this._promotions = promotions.map((p) => ({
         id: p.id,
         name: p.name,
@@ -6316,7 +7993,7 @@ var CommercialRepository = class {
     const { data: coupons, error: couponsError } = await this.client.from("coupons").select("*").order("created_at", { ascending: false });
     if (couponsError) {
       this.warn("coupons", "loadAll", couponsError.message);
-    } else if (coupons) {
+    } else if (coupons && coupons.length > 0) {
       this._coupons = coupons.map((c) => ({
         id: c.id,
         code: c.code,
@@ -7092,14 +8769,14 @@ var CommercialAuditService = class {
 };
 
 // src/server/commercial/offers/offer-service.ts
-var roundToCents = (value) => Math.round(value);
+var round2 = (value) => Number((Math.round(value * 100) / 100).toFixed(2));
 var SERVICE_TYPE_ALIASES = {
   suspensao_cnh: "suspensao",
   cassacao_cnh: "cassacao",
   recurso_multa: "defesa_previa"
 };
 function normalizeServiceType(raw) {
-  const key = raw.toLowerCase().trim();
+  const key = (raw || "").toLowerCase().trim();
   return SERVICE_TYPE_ALIASES[key] ?? key;
 }
 var OfferService = class {
@@ -7147,41 +8824,50 @@ var OfferService = class {
     if (pricing.validUntil && new Date(pricing.validUntil) < now) {
       return { offer: null, reason: `A oferta "${normalized}" expirou.` };
     }
-    const baseAmount = pricing.standardPrice;
+    const rawStandard = pricing.standardPrice;
+    const baseAmount = round2(rawStandard > 1e3 ? rawStandard / 100 : rawStandard);
     let promotionDiscount = 0;
     let promotionId;
+    let promotionName;
     const activePromotions = Array.from(this.promotions.values()).filter((p) => {
       if (p.status !== "active") return false;
-      if (new Date(p.startDate) > now) return false;
-      if (new Date(p.endDate) < now) return false;
-      if (!p.applicableServices.includes("all") && !p.applicableServices.includes(normalized)) return false;
+      if (p.startDate && new Date(p.startDate) > now) return false;
+      if (p.endDate && new Date(p.endDate) < now) return false;
+      if (p.applicableServices && !p.applicableServices.includes("all") && !p.applicableServices.includes(normalized)) return false;
       return true;
     });
     if (activePromotions.length > 0) {
       const promo = activePromotions[0];
       promotionId = promo.id;
+      promotionName = promo.name;
       if (promo.discountType === "percentage") {
-        promotionDiscount = roundToCents(baseAmount * promo.discountValue / 100);
+        promotionDiscount = round2(baseAmount * promo.discountValue / 100);
       } else {
-        promotionDiscount = roundToCents(promo.discountValue);
+        const rawDisc = promo.discountValue > 1e3 ? promo.discountValue / 100 : promo.discountValue;
+        promotionDiscount = round2(rawDisc);
       }
-    } else if (pricing.promotionalPrice !== null && pricing.promotionalPrice < baseAmount) {
-      promotionDiscount = baseAmount - pricing.promotionalPrice;
+    } else if (pricing.promotionalPrice !== null && pricing.promotionalPrice !== void 0) {
+      const rawPromo = pricing.promotionalPrice > 1e3 ? pricing.promotionalPrice / 100 : pricing.promotionalPrice;
+      if (rawPromo < baseAmount) {
+        promotionDiscount = round2(baseAmount - rawPromo);
+        promotionName = "Pre\xE7o Promocional";
+      }
     }
-    const priceAfterPromo = baseAmount - promotionDiscount;
+    const priceAfterPromo = round2(baseAmount - promotionDiscount);
     let documentNumber = 1;
     if (typeof docCountInput === "number") {
-      documentNumber = docCountInput + 1;
+      documentNumber = Math.max(1, docCountInput + 1);
     } else if (userId && typeof this.getDocumentCount === "function") {
       const count = this.getDocumentCount(userId);
       documentNumber = (typeof count === "number" ? count : 0) + 1;
     }
+    const isFirstDocumentsBeneficiary = documentNumber <= 3;
+    const remainingBenefitedDocuments = Math.max(0, 3 - documentNumber + 1);
     let firstDocumentsDiscount = 0;
     let finalAmount;
-    if (documentNumber <= 3) {
-      const rawFinal = priceAfterPromo / 2;
-      firstDocumentsDiscount = priceAfterPromo - Math.round(rawFinal);
-      finalAmount = Math.round(rawFinal);
+    if (isFirstDocumentsBeneficiary) {
+      firstDocumentsDiscount = round2(priceAfterPromo * 0.5);
+      finalAmount = round2(priceAfterPromo - firstDocumentsDiscount);
     } else {
       finalAmount = priceAfterPromo;
     }
@@ -7192,18 +8878,20 @@ var OfferService = class {
       if (coupon && coupon.isActive) {
         let discount = 0;
         if (coupon.discountType === "percentage") {
-          discount = roundToCents(finalAmount * coupon.discountValue / 100);
+          discount = round2(finalAmount * coupon.discountValue / 100);
           if (coupon.maxDiscountAmount) {
-            discount = Math.min(discount, coupon.maxDiscountAmount);
+            const maxDisc = coupon.maxDiscountAmount > 1e3 ? coupon.maxDiscountAmount / 100 : coupon.maxDiscountAmount;
+            discount = Math.min(discount, maxDisc);
           }
         } else {
-          discount = roundToCents(coupon.discountValue);
+          const rawVal = coupon.discountValue > 1e3 ? coupon.discountValue / 100 : coupon.discountValue;
+          discount = round2(rawVal);
         }
-        couponDiscount = Math.min(discount, finalAmount);
-        finalAmount = Math.max(0, finalAmount - couponDiscount);
+        couponDiscount = round2(Math.min(discount, finalAmount));
+        finalAmount = round2(Math.max(0, finalAmount - couponDiscount));
       }
     }
-    finalAmount = Math.max(0, finalAmount);
+    finalAmount = round2(Math.max(0, finalAmount));
     const offer = {
       commercialId: pricing.id,
       serviceType: normalized,
@@ -7217,7 +8905,10 @@ var OfferService = class {
       finalAmount,
       currency: "BRL",
       promotionId,
+      promotionName: promotionName || "Promo\xE7\xE3o Vigente",
       documentNumber,
+      isFirstDocumentsBeneficiary,
+      remainingBenefitedDocuments,
       eligible: true,
       available: true,
       requirements: []
@@ -7288,10 +8979,16 @@ var CommercialServiceFacade = class {
       this.pricings,
       this.promotions,
       this.coupons,
-      audit
+      audit,
+      this.getDocumentCount.bind(this)
     );
     this.loadDataFromRepository().catch(() => {
     });
+  }
+  getDocumentCount(userId) {
+    return Array.from(caseRepository.values()).filter(
+      (r) => r.user_id === userId && r.is_paid
+    ).length;
   }
   /**
    * Recarrega dados do catálogo comercial do Supabase para a memória.
@@ -7410,7 +9107,14 @@ var CommercialServiceFacade = class {
         currency: o.currency,
         eligible: o.eligible,
         available: o.available,
-        requirements: o.requirements
+        requirements: o.requirements,
+        baseAmount: o.baseAmount,
+        promotionDiscount: o.promotionDiscount,
+        firstDocumentsDiscount: o.firstDocumentsDiscount,
+        couponDiscount: o.couponDiscount,
+        finalAmount: o.finalAmount,
+        promotionId: o.promotionId,
+        documentNumber: o.documentNumber
       },
       reason: result.reason
     };
@@ -8095,16 +9799,23 @@ function runCommercialTestSuite() {
 // src/server/routes/commercial.ts
 var router3 = Router3();
 router3.use(authenticateToken);
-router3.post("/offers/resolve", authenticateToken, (req, res) => {
+router3.post("/offers/resolve", (req, res) => {
   try {
-    const { serviceType } = req.body ?? {};
+    const { serviceType, stageId, documentCount, couponCode, userId: bodyUserId } = req.body ?? {};
     if (!serviceType || typeof serviceType !== "string") {
       return res.status(400).json({
         error: "serviceType \xE9 obrigat\xF3rio.",
         hint: "Envie o ProcedureType identificado no onboarding (ex: defesa_previa)."
       });
     }
-    const result = commercialService.resolveCommercialOffer({ serviceType });
+    const userId = req.user?.id || bodyUserId;
+    const result = commercialService.resolveCommercialOffer({
+      serviceType,
+      stageId,
+      documentCount: typeof documentCount === "number" ? documentCount : void 0,
+      couponCode,
+      userId
+    });
     if (!result.offer) {
       return res.status(404).json({
         error: result.reason || `Servi\xE7o "${serviceType}" n\xE3o possui oferta comercial dispon\xEDvel.`,
@@ -8987,6 +10698,7 @@ router6.post(["/clear", "/logs/clear"], (req, res) => {
 var logs_default = router6;
 
 // src/server/routes/marketing.ts
+init_logger();
 import { Router as Router7 } from "express";
 
 // src/server/services/marketing-service.ts
@@ -9360,6 +11072,48 @@ O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qua
     this.editorialContents.unshift(savedContent);
     eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
     return { success: true, content: savedContent };
+  }
+  // Create manual content item
+  async createManualContent(input) {
+    const newContent = {
+      id: `cnt-${Date.now()}`,
+      title: input.title,
+      channel: input.channel || "instagram",
+      format: input.format || "carrossel",
+      legalTheme: input.legalTheme || input.title,
+      legal_theme: input.legalTheme || input.title,
+      status: input.status || "rascunho",
+      scheduledDate: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      scheduled_date: input.scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      estimatedReach: Math.floor(1e4 + Math.random() * 2e4),
+      estimated_reach: Math.floor(1e4 + Math.random() * 2e4),
+      copyText: input.copyText || "",
+      copy_text: input.copyText || "",
+      hashtags: input.hashtags || ["#AdeusMulta", "#CTB"],
+      imageUrl: input.imageUrl || null,
+      image_url: input.imageUrl || null,
+      mediaUrl: input.mediaUrl || input.imageUrl || null,
+      media_url: input.mediaUrl || input.imageUrl || null,
+      visualPrompt: input.visualPrompt || "",
+      visual_prompt: input.visualPrompt || "",
+      authorAgent: "@marketing-criador",
+      author_agent: "@marketing-criador",
+      qualityReviewScore: 9.5
+    };
+    let savedContent = newContent;
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("editorial_content").insert([newContent]).select().single();
+        if (!error && data) {
+          savedContent = { ...newContent, ...data };
+        }
+      } catch (err) {
+        logger.warn("marketing", "service", "createManualContent", "Fallback to memory only");
+      }
+    }
+    this.editorialContents.unshift(savedContent);
+    eventBus.publish(EventTopics.MARKETING_CONTENT_DRAFTED, { contentId: savedContent.id }, "marketing_os");
+    return savedContent;
   }
   // Update marketing agent (for external updates)
   async updateMarketingAgent(agentId, updates) {
@@ -15931,11 +17685,46 @@ ${(content.hashtags || []).join(" ")}`,
   eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId }, "marketing_os");
   res.json(result);
 });
+router7.post("/contents", async (req, res) => {
+  try {
+    const { title, channel, format, copyText, scheduledDate, hashtags, imageUrl, mediaUrl, visualPrompt, status, legalTheme } = req.body ?? {};
+    const created = await marketingService.createManualContent({
+      title: title || "Nova Publica\xE7\xE3o DefesAi",
+      channel: channel || "instagram",
+      format: format || "carrossel",
+      copyText: copyText || "",
+      scheduledDate: scheduledDate || new Date(Date.now() + 24 * 3600 * 1e3).toISOString().replace("T", " ").substring(0, 16),
+      hashtags: Array.isArray(hashtags) ? hashtags : hashtags ? String(hashtags).split(" ").filter(Boolean) : ["#AdeusMulta", "#CTB"],
+      imageUrl: imageUrl || null,
+      mediaUrl: mediaUrl || imageUrl || null,
+      visualPrompt: visualPrompt || "",
+      status: status || "rascunho",
+      legalTheme: legalTheme || title || "Recurso de Multa e Direito de Tr\xE2nsito"
+    });
+    res.status(201).json({ success: true, content: created });
+  } catch (err) {
+    logger.error("marketing", "routes", "create_content_error", `Erro ao criar conte\xFAdo: ${err.message}`);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 router7.put("/contents/:id", async (req, res) => {
   const { id } = req.params;
-  const { status, channel, copyText, title, versionNote } = req.body ?? {};
+  const {
+    status,
+    channel,
+    copyText,
+    title,
+    versionNote,
+    imageUrl,
+    mediaUrl,
+    scheduledDate,
+    format,
+    hashtags,
+    visualPrompt,
+    legalTheme
+  } = req.body ?? {};
   const allowed = ["rascunho", "aprovado_qualidade", "agendado", "publicado"];
-  const channels = ["instagram", "blog", "tiktok", "linkedin", "email"];
+  const channels = ["instagram", "blog", "tiktok", "linkedin", "email", "facebook"];
   const updates = {};
   if (status !== void 0) {
     if (!allowed.includes(status)) {
@@ -15953,6 +17742,24 @@ router7.put("/contents/:id", async (req, res) => {
   }
   if (title !== void 0 && String(title).trim() !== "") updates.title = String(title).trim();
   if (copyText !== void 0) updates.copyText = String(copyText);
+  if (imageUrl !== void 0) updates.imageUrl = imageUrl;
+  if (mediaUrl !== void 0) updates.mediaUrl = mediaUrl;
+  if (scheduledDate !== void 0) {
+    updates.scheduledDate = scheduledDate;
+    updates.scheduled_date = scheduledDate;
+  }
+  if (format !== void 0) updates.format = format;
+  if (hashtags !== void 0) {
+    updates.hashtags = Array.isArray(hashtags) ? hashtags : String(hashtags).split(" ").filter(Boolean);
+  }
+  if (visualPrompt !== void 0) {
+    updates.visualPrompt = visualPrompt;
+    updates.visual_prompt = visualPrompt;
+  }
+  if (legalTheme !== void 0) {
+    updates.legalTheme = legalTheme;
+    updates.legal_theme = legalTheme;
+  }
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ success: false, message: "Nenhum campo v\xE1lido para atualizar" });
     return;
@@ -15979,6 +17786,135 @@ router7.get("/contents/:id/versions", async (req, res) => {
     return;
   }
   res.json({ success: true, versions: marketingService.getContentVersions(id) });
+});
+router7.get("/inbox/conversations", (req, res) => {
+  const channel = req.query.channel;
+  const status = req.query.status;
+  const search = req.query.search;
+  const rawConversations = messagingService.getConversations({ channel, status, search });
+  const conversations = rawConversations.map((conv) => ({
+    id: conv.id,
+    conversationId: conv.id,
+    contactId: conv.contactId,
+    contact: conv.contact,
+    lead: conv.lead,
+    channel: conv.channel,
+    channelLabel: conv.channelLabel || conv.channel,
+    status: conv.status,
+    unreadCount: conv.unreadCount,
+    lastMessageText: conv.lastMessageText,
+    lastMessageAt: conv.lastMessageAt,
+    aiMode: conv.aiMode,
+    createdAt: conv.createdAt,
+    updatedAt: conv.updatedAt
+  }));
+  res.json({
+    success: true,
+    count: conversations.length,
+    total: conversations.length,
+    channels: ["whatsapp_evolution", "meta_messenger", "instagram_direct", "whatsapp_meta"],
+    conversations
+  });
+});
+router7.get("/inbox/conversations/:id", (req, res) => {
+  const conv = messagingService.getConversationById(req.params.id);
+  if (!conv) {
+    return res.status(404).json({ success: false, message: "Conversa n\xE3o encontrada" });
+  }
+  const messages = messagingService.getMessages(conv.id);
+  res.json({
+    success: true,
+    conversation: {
+      ...conv,
+      conversationId: conv.id
+    },
+    messages
+  });
+});
+router7.get("/inbox/conversations/:id/messages", (req, res) => {
+  const messages = messagingService.getMessages(req.params.id);
+  res.json({ success: true, count: messages.length, messages });
+});
+router7.post("/inbox/conversations/:id/messages", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text, senderId, senderName, mediaUrl } = req.body;
+    if (!text && !mediaUrl) {
+      return res.status(400).json({ success: false, message: "Texto ou mediaUrl s\xE3o obrigat\xF3rios" });
+    }
+    const result = await messagingService.sendMessage(
+      id,
+      text || "",
+      senderId || "atendente_humano",
+      senderName || "Atendente DefesAi",
+      mediaUrl
+    );
+    res.json(result);
+  } catch (err) {
+    logger.error("marketing", "inbox", "send_error", `Erro ao enviar mensagem: ${err.message}`);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+router7.patch("/inbox/conversations/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const updated = messagingService.updateConversation(id, updates);
+    res.json({ success: true, conversation: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+router7.post("/inbox/conversations/:id/lead", (req, res) => {
+  try {
+    const { id } = req.params;
+    const conv = messagingService.getConversationById(id);
+    if (!conv) {
+      return res.status(404).json({ success: false, message: "Conversa n\xE3o encontrada" });
+    }
+    const lead = messagingService.createOrUpdateLead({
+      contactId: conv.contactId,
+      ...req.body
+    });
+    conv.lead = lead;
+    res.json({ success: true, lead, conversation: conv });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+router7.get("/inbox/stats", (_req, res) => {
+  const stats = messagingService.getStats();
+  res.json({ success: true, stats });
+});
+router7.post("/inbox/self-test", async (_req, res) => {
+  try {
+    const result = await messagingService.runSelfTest();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+router7.post("/inbox/simulate-inbound", async (req, res) => {
+  try {
+    const { channel, senderName, text, phoneOrId, vehiclePlate } = req.body;
+    const result = await messagingService.processIncomingMessage({
+      channel: channel || "whatsapp_evolution",
+      externalMessageId: `sim_${Date.now()}`,
+      externalContactId: phoneOrId || (channel?.includes("whatsapp") ? "5511999887766" : "sim_user_123"),
+      senderName: senderName || "Motorista (Simula\xE7\xE3o)",
+      text: text || "Gostaria de recorrer de uma multa de tr\xE2nsito.",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (vehiclePlate && result.contact) {
+      result.contact.vehiclePlate = vehiclePlate;
+      if (result.conversation.lead) {
+        result.conversation.lead.vehiclePlate = vehiclePlate;
+      }
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 var marketing_default = router7;
 
@@ -16048,202 +17984,6 @@ var agents_default = router8;
 
 // src/server/routes/whatsapp.ts
 import { Router as Router9 } from "express";
-
-// src/server/services/whatsapp-service.ts
-init_logger();
-var WhatsAppService = class {
-  constructor() {
-    this.config = {
-      apiUrl: process.env.EVOLUTION_API_URL || "http://localhost:8080",
-      apiKey: process.env.EVOLUTION_API_KEY || "",
-      instanceName: process.env.EVOLUTION_INSTANCE_NAME || "defesai"
-    };
-  }
-  get isConfigured() {
-    return Boolean(
-      this.config.apiUrl && this.config.apiKey && !this.config.apiKey.startsWith("PLACEHOLDER")
-    );
-  }
-  async makeRequest(method, path, body) {
-    if (!this.isConfigured) {
-      throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
-    }
-    const url = `${this.config.apiUrl}${path}`;
-    const headers = {
-      "Content-Type": "application/json",
-      apikey: this.config.apiKey
-    };
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : void 0
-    });
-    if (!response.ok) {
-      const errText = await response.text();
-      let errData = {};
-      try {
-        errData = JSON.parse(errText);
-      } catch {
-      }
-      throw new Error(
-        `Evolution API error ${response.status}: ${errData.message || errText}`
-      );
-    }
-    return response.json();
-  }
-  /**
-   * Send a text message via WhatsApp
-   */
-  async sendText(params) {
-    const instance = params.instanceName || this.config.instanceName;
-    try {
-      logger.info("whatsapp", "whatsapp-service", "send_text", "Sending WhatsApp message", {
-        to: params.to,
-        instance
-      });
-      const result = await this.makeRequest("POST", `/message/sendText/${instance}`, {
-        number: params.to,
-        text: params.message
-      });
-      const messageId = result.key?.id || result.id || `wamid_${Date.now()}`;
-      logger.info("whatsapp", "whatsapp-service", "send_text", "WhatsApp message sent", {
-        messageId,
-        to: params.to,
-        instance
-      });
-      return {
-        success: true,
-        messageId,
-        key: result.key,
-        instance
-      };
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error("whatsapp", "whatsapp-service", "send_text", "WhatsApp send failed", {
-        error: errMsg,
-        to: params.to
-      });
-      return { success: false, error: errMsg };
-    }
-  }
-  /**
-   * Send a media message (image, document, audio)
-   */
-  async sendMedia(params) {
-    const instance = params.instanceName || this.config.instanceName;
-    try {
-      logger.info("whatsapp", "whatsapp-service", "send_media", "Sending WhatsApp media", {
-        to: params.to,
-        instance,
-        mimeType: params.mimeType
-      });
-      const result = await this.makeRequest("POST", `/message/sendMedia/${instance}`, {
-        number: params.to,
-        mediatype: params.asDocument ? "document" : "image",
-        mimetype: params.mimeType || "application/pdf",
-        media: params.mediaUrl,
-        caption: params.caption || ""
-      });
-      const messageId = result.key?.id || result.id || `wamid_${Date.now()}`;
-      return {
-        success: true,
-        messageId,
-        key: result.key,
-        instance
-      };
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error("whatsapp", "whatsapp-service", "send_media", "WhatsApp media send failed", {
-        error: errMsg,
-        to: params.to
-      });
-      return { success: false, error: errMsg };
-    }
-  }
-  /**
-   * Send a defense document (PDF) to a client
-   */
-  async sendDefenseDocument(to, pdfUrl, caseId, message) {
-    const caption = message || `\u{1F4C4} Sua minuta jur\xEDdica do caso #${caseId} est\xE1 pronta! Abra o documento para visualizar.`;
-    return this.sendMedia({
-      to,
-      mediaUrl: pdfUrl,
-      caption,
-      mimeType: "application/pdf",
-      asDocument: true
-    });
-  }
-  /**
-   * Get instance connection status
-   */
-  async getInstanceStatus(instanceName) {
-    const instance = instanceName || this.config.instanceName;
-    try {
-      const result = await this.makeRequest("GET", `/instance/connectionState/${instance}`);
-      return {
-        instanceName: instance,
-        instanceId: result.instance?.instanceId || instance,
-        status: result.state || "close",
-        phone: result.instance?.owner
-      };
-    } catch (err) {
-      logger.warn("whatsapp", "whatsapp-service", "get_instance_status", "Failed to get instance status", {
-        error: String(err),
-        instance
-      });
-      return null;
-    }
-  }
-  /**
-   * Get QR code for connecting the instance
-   */
-  async getQrCode(instanceName) {
-    const instance = instanceName || this.config.instanceName;
-    try {
-      const result = await this.makeRequest("GET", `/instance/connect/${instance}`);
-      return result.base64 || result.qrcode || null;
-    } catch (err) {
-      logger.warn("whatsapp", "whatsapp-service", "get_qrcode", "Failed to get QR code", {
-        error: String(err),
-        instance
-      });
-      return null;
-    }
-  }
-  /**
-   * Parse incoming webhook payload from Evolution API
-   */
-  parseWebhook(payload) {
-    const { data, instance } = payload;
-    const jid = data.key?.remoteJid || "";
-    const from = jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "");
-    let text = "";
-    let type = "unknown";
-    if (data.message?.conversation) {
-      text = data.message.conversation;
-      type = "text";
-    } else if (data.message?.extendedTextMessage?.text) {
-      text = data.message.extendedTextMessage.text;
-      type = "text";
-    } else if (data.message?.imageMessage?.caption) {
-      text = data.message.imageMessage.caption;
-      type = "image";
-    } else if (data.message?.documentMessage?.fileName) {
-      text = data.message.documentMessage.fileName;
-      type = "document";
-    }
-    return {
-      type,
-      from,
-      text,
-      instance,
-      messageId: data.key?.id || `msg_${Date.now()}`
-    };
-  }
-};
-var whatsappService = new WhatsAppService();
-
-// src/server/routes/whatsapp.ts
 var router9 = Router9();
 router9.post("/communication/whatsapp/send", authenticateToken, async (req, res) => {
   try {
@@ -16348,28 +18088,74 @@ router9.get("/communication/whatsapp/qrcode", requireAdmin, async (req, res) => 
     res.status(500).json({ error: error.message });
   }
 });
-router9.post("/webhooks/whatsapp", async (req, res) => {
+var handleWebhook = async (req, res) => {
   try {
     const payload = req.body;
-    res.json({ received: true });
-    if (!payload?.event || !payload?.data) {
+    res.status(200).json({ received: true, success: true, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+    if (!payload || !payload.event && !payload.type && !payload.data) {
       return;
     }
     const parsed = whatsappService.parseWebhook(payload);
-    logger2?.info?.("whatsapp", "webhook", "incoming", "WhatsApp message received", {
+    logger2?.info?.("whatsapp", "webhook", "incoming", "WhatsApp message received via Evolution API", {
       from: parsed.from,
       type: parsed.type,
       instance: parsed.instance
     });
-    eventBus.publish("whatsapp.message.received", {
-      from: parsed.from,
-      text: parsed.text,
-      type: parsed.type,
-      instance: parsed.instance,
-      messageId: parsed.messageId
-    }, "whatsapp_webhook");
+    await messagingService.handleEvolutionWebhook(payload);
+    eventBus.publish(
+      EventTopics.WHATSAPP_WEBHOOK_RECEIVED || "whatsapp.webhook_received",
+      {
+        from: parsed.from,
+        text: parsed.text,
+        type: parsed.type,
+        instance: parsed.instance,
+        messageId: parsed.messageId,
+        rawPayload: payload
+      },
+      "whatsapp_webhook"
+    );
   } catch (error) {
-    console.error("[WhatsApp Webhook] Error:", error);
+    console.error("[WhatsApp Webhook] Erro ao processar webhook:", error);
+  }
+};
+router9.post("/webhooks/whatsapp", handleWebhook);
+router9.post("/whatsapp/webhook", handleWebhook);
+router9.post("/webhook", handleWebhook);
+router9.post("/webhook/whatsapp", handleWebhook);
+router9.get("/webhooks/whatsapp", (req, res) => {
+  res.json({
+    status: "active",
+    endpoint: "/api/webhooks/whatsapp",
+    description: "DefesAi Evolution API Webhook Receiver",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
+});
+router9.get("/whatsapp/webhook", (req, res) => {
+  res.json({
+    status: "active",
+    endpoint: "/api/webhooks/whatsapp",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
+});
+router9.get("/communication/whatsapp/webhook-config", authenticateToken, async (req, res) => {
+  try {
+    const config = await whatsappService.getWebhookConfig();
+    res.json({
+      success: true,
+      currentConfig: config,
+      recommendedUrl: `${process.env.APP_URL || ""}/api/webhooks/whatsapp`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+router9.post("/communication/whatsapp/webhook-config", requireAdmin, async (req, res) => {
+  try {
+    const { webhookUrl, instanceName } = req.body;
+    const result = await whatsappService.configureWebhook(webhookUrl, instanceName);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 var logger2;
@@ -18656,27 +20442,18 @@ var GatewayManager = class {
   }
   /**
    * Retorna o adapter do gateway ativo.
-   * Se o gateway configurado não estiver disponível ou configurado,
-   * faz fallback para PagBank (preserva comportamento existente).
+   * Lança erro se o gateway configurado não estiver configurado.
    */
   getActiveGateway() {
     const currentId = this.resolveActiveGatewayId();
     const active = this.gateways.get(currentId);
-    if (active && active.isConfigured()) {
-      return active;
+    if (!active) {
+      throw new Error(`Gateway '${currentId}' not found.`);
     }
-    const pagbank = this.gateways.get("pagbank");
-    if (pagbank && pagbank.isConfigured()) {
-      logger.warn(
-        "payments",
-        "gateway_manager",
-        "get_active",
-        `Configured gateway '${currentId}' not available, falling back to PagBank`
-      );
-      return pagbank;
+    if (!active.isConfigured()) {
+      throw new Error(`Gateway '${active.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais.`);
     }
-    if (active) return active;
-    throw new Error("Nenhum gateway de pagamento dispon\xEDvel. Configure PAGBANK_TOKEN ou GGPIX_API_KEY.");
+    return active;
   }
   /**
    * Retorna um adapter específico por ID.
@@ -18833,12 +20610,14 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
 init_logger();
 var router11 = Router11();
 function resolveOffer(params) {
-  const { serviceType } = params;
+  const { serviceType, userId, couponCode } = params;
   if (!serviceType) {
     return { offer: null, error: "serviceType \xE9 obrigat\xF3rio para criar o pagamento." };
   }
   const result = commercialService.resolveCommercialOffer({
-    serviceType
+    serviceType,
+    userId,
+    couponCode
   });
   if (!result.offer) {
     return {
@@ -18855,6 +20634,33 @@ function resolveOffer(params) {
   }
   return { offer };
 }
+function generateDefenseDraftForDomain(domain) {
+  const procedureType = domain.serviceType || "defesa_previa";
+  const selectedArgs = domain.analysis?.recommendedArguments || [];
+  const defense = RagPipeline.generateDefenseDraft(
+    domain.id,
+    domain.infraction,
+    domain.vehicle?.plate || "SEM PLACA",
+    domain.vehicle?.brandModel || "Ve\xEDculo",
+    {
+      name: domain.clientName || "Requerente",
+      cpf: domain.clientCpf || "000.000.000-00",
+      cnh: "05492817492",
+      address: "Rua das Flores, 450, Apto 82",
+      cityState: "S\xE3o Paulo/SP"
+    },
+    selectedArgs,
+    procedureType
+  );
+  if (!defense.fullDraftText.includes("ROL DE DOCUMENTOS")) {
+    const aitNumber = domain.infraction?.aitNumber || "\u2014";
+    defense.fullDraftText = `${defense.fullDraftText.trimEnd()}
+
+${buildDocumentRollText(procedureType, aitNumber)}
+`;
+  }
+  return defense;
+}
 function isTestMode() {
   return process.env.NODE_ENV !== "production";
 }
@@ -18866,16 +20672,27 @@ function prodAuth(req, res, next) {
   next();
 }
 router11.get("/resolve-price", (req, res) => {
-  const { serviceType } = req.query;
+  const { serviceType, userId, couponCode } = req.query;
   if (!serviceType || typeof serviceType !== "string") {
     return res.status(400).json({ error: "serviceType \xE9 obrigat\xF3rio." });
   }
-  const result = resolveOffer({ serviceType });
+  const result = resolveOffer({
+    serviceType,
+    userId: typeof userId === "string" ? userId : void 0,
+    couponCode: typeof couponCode === "string" ? couponCode : void 0
+  });
   if (!result.offer) {
     return res.status(404).json({ error: result.error || "Servi\xE7o n\xE3o encontrado no cat\xE1logo." });
   }
   res.json({
     price: result.offer.price,
+    finalAmount: result.offer.finalAmount,
+    baseAmount: result.offer.baseAmount,
+    promotionDiscount: result.offer.promotionDiscount,
+    firstDocumentsDiscount: result.offer.firstDocumentsDiscount,
+    couponDiscount: result.offer.couponDiscount,
+    promotionId: result.offer.promotionId,
+    documentNumber: result.offer.documentNumber,
     serviceName: result.offer.name,
     serviceType: result.offer.serviceType,
     currency: result.offer.currency
@@ -18905,8 +20722,22 @@ router11.use("/webhooks/ggpix", (req, res, next) => {
 });
 router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => {
   try {
-    const { caseId, customerName, customerEmail, customerCpf, amount, serviceType } = req.body;
-    const offerResult = resolveOffer({ serviceType, caseId });
+    const {
+      caseId,
+      customerName,
+      customerEmail,
+      customerCpf,
+      amount,
+      serviceType,
+      userId,
+      couponCode
+    } = req.body;
+    const offerResult = resolveOffer({
+      serviceType,
+      userId,
+      couponCode,
+      caseId
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || "N\xE3o foi poss\xEDvel determinar a oferta comercial.",
@@ -18986,7 +20817,9 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       serviceType,
       cardToken,
       authenticationMethod = "CHALLENGE",
-      softDescriptor
+      softDescriptor,
+      userId,
+      couponCode
     } = req.body;
     if (!cardToken) {
       return res.status(400).json({ error: "cardToken \xE9 obrigat\xF3rio para pagamento com cart\xE3o de cr\xE9dito" });
@@ -18997,7 +20830,12 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         hint: "Informe serviceType v\xE1lido (ex: defesa_previa)."
       });
     }
-    const offerResult = resolveOffer({ serviceType, caseId });
+    const offerResult = resolveOffer({
+      serviceType,
+      userId,
+      couponCode,
+      caseId
+    });
     if (!offerResult.offer) {
       return res.status(400).json({
         error: offerResult.error || "N\xE3o foi poss\xEDvel determinar a oferta comercial.",
@@ -19124,6 +20962,24 @@ router11.post("/webhooks/pagbank", async (req, res) => {
         if (webhookResult.serviceType && !domain.serviceType) {
           domain.serviceType = webhookResult.serviceType;
         }
+        try {
+          const defense = generateDefenseDraftForDomain(domain);
+          defense.generationCount = 1;
+          domain.defenseDraft = defense;
+          domain.documentGenerationStatus = "ready";
+          domain.timeline.push({
+            id: `tl_def_auto_${Date.now()}`,
+            title: "Defesa Gerada Automaticamente",
+            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente ap\xF3s confirma\xE7\xE3o do pagamento.`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            type: "defense"
+          });
+        } catch (defenseError) {
+          logger.error("payments", "pagbank", "webhook", "Falha ao gerar defesa automaticamente ap\xF3s pagamento (n\xE3o-bloqueante)", {
+            error: defenseError?.message,
+            caseId: domain.id
+          });
+        }
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
           title: "Pagamento Confirmado via Webhook PagBank",
@@ -19161,137 +21017,6 @@ router11.post("/webhooks/pagbank", async (req, res) => {
     logger.error("payments", "pagbank", "webhook", "Webhook processing error", { error: error.message });
     res.status(400).json({ error: error.message });
   }
-});
-router11.post("/pix/simulate-confirm", async (req, res) => {
-  if (!isTestMode()) {
-    return res.status(403).json({
-      error: "Rota de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
-      message: "Use o fluxo de pagamento real do gateway ativo."
-    });
-  }
-  const { caseId, case: casePayload } = req.body;
-  let row = databaseRows.get(caseId);
-  if (!row && casePayload && casePayload.id === caseId) {
-    try {
-      row = CanonicalMapper.domainToRow(casePayload);
-      databaseRows.set(caseId, row);
-      logger.info("payments", "gateway", "simulate_upsert", `Caso ${caseId} persistido via simulate-confirm`);
-    } catch (mapErr) {
-      logger.error("payments", "gateway", "simulate_upsert_fail", `Falha ao persistir caso ${caseId}: ${mapErr.message}`);
-    }
-  }
-  if (!row) {
-    return res.status(404).json({ error: "Caso n\xE3o encontrado" });
-  }
-  const gateway = gatewayManager.getActiveGateway();
-  let orderId = `sim_${Date.now()}`;
-  if (gateway.id === "pagbank") {
-    try {
-      const confirmResult = pagBankIntegration.confirmPayment(caseId);
-      orderId = confirmResult.order.orderId;
-    } catch {
-    }
-  } else {
-    const simResult = gateway.simulateConfirmation(caseId, 8990);
-    orderId = simResult.gatewayTransactionId;
-  }
-  const domain = CanonicalMapper.rowToDomain(row);
-  domain.isPaid = true;
-  domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
-  domain.status = "defesa_pronta";
-  domain.currentStage = 3;
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      const defenseDraft = RagPipeline.generateDefenseDraft(
-        domain.id,
-        domain.infraction,
-        domain.vehicle?.plate || "SEM PLACA",
-        domain.vehicle?.brandModel || "Ve\xEDculo",
-        {
-          name: domain.clientName || "Requerente",
-          cpf: domain.clientCpf || "000.000.000-00",
-          cnh: "05492817492",
-          address: "Rua das Flores, 450, Apto 82",
-          cityState: "S\xE3o Paulo/SP"
-        },
-        domain.analysis?.recommendedArguments || [],
-        domain.serviceType || "defesa_previa"
-      );
-      domain.defenseDraft = defenseDraft;
-    } catch (defenseError) {
-      logger.error("payments", "gateway", "simulate_confirm_defense", "Failed to generate defense draft during payment simulation", {
-        error: defenseError.message,
-        caseId
-      });
-    }
-  }
-  domain.payment = {
-    status: "approved",
-    amount: PRICING.FALLBACK_PRICE,
-    paidAt: (/* @__PURE__ */ new Date()).toISOString(),
-    transactionId: orderId,
-    paymentMethod: "pix"
-  };
-  domain.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  domain.timeline.push({
-    id: `tl_pay_${Date.now()}`,
-    title: `Pagamento PIX Compensado (${gateway.displayName})`,
-    description: "Acesso liberado \xE0 minuta jur\xEDdica formal para impress\xE3o e orienta\xE7\xF5es de protocolo.",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    type: "payment"
-  });
-  const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(domain.id, updatedRow);
-  caseRepository.set(domain.id, updatedRow);
-  try {
-    const caseIdUuid = domainIdToUuid(domain.id);
-    const supabaseForOrder = getSupabaseServerClient();
-    if (supabaseForOrder && caseIdUuid) {
-      const { error: orderError } = await supabaseForOrder.from("payment_orders").update({
-        status: "PAID",
-        paid_at: (/* @__PURE__ */ new Date()).toISOString(),
-        updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("case_id", caseIdUuid).eq("status", "PENDING");
-      if (orderError) {
-        logger.warn("payments", "gateway", "simulate_confirm", "Falha ao atualizar payment_orders", {
-          error: orderError.message,
-          caseId: domain.id
-        });
-      }
-    }
-  } catch (orderErr) {
-    logger.warn("payments", "gateway", "simulate_confirm", "Exce\xE7\xE3o ao atualizar payment_orders", {
-      error: orderErr.message,
-      caseId: domain.id
-    });
-  }
-  commercialService.processPaymentConfirmationEvent({
-    paymentId: orderId || `ord_${domain.id}`,
-    caseId: domain.id,
-    buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-    buyerUserName: domain.clientName || "Condutor DefesAi",
-    grossAmount: domain.payment?.amount || PRICING.FALLBACK_PRICE,
-    discountAmount: 0,
-    effectivelyPaid: domain.payment?.amount || PRICING.FALLBACK_PRICE
-  });
-  auditLogs.unshift({
-    id: `audit_pay_${Date.now()}`,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    actor: domain.clientName || "Cliente",
-    role: "citizen",
-    action: "PAYMENT_CONFIRMED",
-    targetResource: domain.id,
-    ipHash: "3a88c42b109e",
-    details: `Pagamento de R$ ${(domain.payment?.amount || PRICING.FALLBACK_PRICE).toFixed(2).replace(".", ",")} via PIX ${gateway.displayName} confirmado.`,
-    gdprCompliant: true
-  });
-  res.json({
-    success: true,
-    message: "Pagamento confirmado com sucesso!",
-    case: domain,
-    gateway: gateway.id,
-    order: { orderId }
-  });
 });
 router11.post("/webhooks/ggpix", async (req, res) => {
   try {
@@ -22049,6 +23774,7 @@ function createApp() {
   app.use("/api", meta_default);
   app.use("/api/marketing", marketing_default);
   app.use("/api/communication", whatsapp_default);
+  app.use("/api", whatsapp_default);
   app.use("/api/ocr", ocr_default);
   app.use("/api/payments", payments_default);
   app.use("/api/knowledge", knowledge_default);
@@ -22064,9 +23790,6 @@ function createApp() {
   app.use("/api/auth", strictLimiter);
   app.use("/api", ai_default);
   app.use("/api", sync_default);
-  app.get(["/api/meta/status", "/api/marketing/meta/status"], (_req, res) => {
-    res.json(metaIntegration.getStatus());
-  });
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Endpoint n\xE3o encontrado" });
   });

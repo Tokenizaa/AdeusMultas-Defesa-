@@ -77,17 +77,13 @@ export const AdminPaymentsView: React.FC = () => {
     fetchPayments();
   }, []);
 
-  const handleSimulateWebhook = async (caseId: string) => {
+  const handleCheckStatus = async (caseId: string) => {
     try {
       setIsSimulating(true);
-      const res = await fetch('/api/admin/payments/simulate-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseId, status: 'PAID', amount: PRICING.DEFAULT_PRICE }),
-      });
+      const res = await fetch(`/api/payments/pix/status/${encodeURIComponent(caseId)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao simular');
-      setActionNotice(`Webhook PagBank processado com sucesso para o caso #${caseId}`);
+      if (!res.ok) throw new Error(data.error || 'Erro ao consultar gateway');
+      setActionNotice(`Status da transação para o caso #${caseId}: ${data.status || 'PENDING'}`);
       fetchPayments();
       setTimeout(() => setActionNotice(null), 4000);
     } catch (err: any) {
@@ -285,13 +281,13 @@ export const AdminPaymentsView: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           {!isPaid && (
                             <button
-                              onClick={() => handleSimulateWebhook(p.caseId)}
+                              onClick={() => handleCheckStatus(p.caseId)}
                               disabled={isSimulating}
-                              className="px-2 py-1 bg-emerald-600/80 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Simular Webhook PagBank"
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Consultar status no gateway"
                             >
-                              <Zap className="w-3 h-3" />
-                              <span>Simular Webhook</span>
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Verificar Status</span>
                             </button>
                           )}
                           <button

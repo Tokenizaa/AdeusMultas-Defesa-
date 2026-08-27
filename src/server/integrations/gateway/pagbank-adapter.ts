@@ -172,24 +172,6 @@ export class PagBankAdapter implements PaymentGateway {
       isDuplicate: result.isDuplicate,
     };
   }
-
-  simulateConfirmation(caseId: string, amountInCents?: number): GatewayPixResult {
-    const confirmResult = pagBankIntegration.confirmPayment(caseId);
-
-    const order = confirmResult.order;
-    return {
-      gatewayTransactionId: order.orderId,
-      referenceId: order.referenceId,
-      gateway: 'pagbank',
-      status: 'PAID',
-      amountInCents: amountInCents || Math.round(order.amount * 100),
-      pixCopyPaste: order.qrCodeText || '',
-      qrCodeDataUrl: order.qrCodeDataUrl,
-      qrCodeUrl: order.qrCodeUrl,
-      expiresAt: order.expiresAt,
-      createdAt: order.createdAt,
-    };
-  }
 }
 
 export const pagbankAdapter = new PagBankAdapter();

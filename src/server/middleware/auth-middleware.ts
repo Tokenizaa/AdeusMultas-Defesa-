@@ -101,8 +101,8 @@ export async function authenticateToken(
       }
     }
 
-    // 4. Default fallback when Supabase is not configured or in dev/preview
-    if (!supabase || process.env.NODE_ENV !== 'production') {
+    // 4. Default fallback ONLY in non-production local development when Supabase is not configured
+    if (process.env.NODE_ENV !== 'production' && !supabase) {
       req.user = {
         id: 'usr_admin_defesai',
         email: 'admin@www.defesai.shop',
@@ -112,7 +112,7 @@ export async function authenticateToken(
       return next();
     }
 
-    // 5. Unauthenticated guest in production with Supabase
+    // 5. Unauthenticated guest in production
     req.user = undefined;
     return next();
   } catch (err: any) {

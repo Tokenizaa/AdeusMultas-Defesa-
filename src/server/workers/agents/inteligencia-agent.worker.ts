@@ -1,6 +1,7 @@
 import { logger } from '../../../server/observability/logger';
 import { eventBus, EventTopics } from '../../../core/events/topics';
 import { marketingService } from '../../services/marketing-service';
+import { metaInsightsService } from '../../../integrations/meta/insights/meta-insights-service';
 
 
 /**
@@ -82,46 +83,48 @@ export class InteligenciaAgent {
       
       logger.info('marketing', 'agents', 'inteligencia', `Found ${publishedContentWithMetaId.length} published content with Meta IDs`);
       
+      const token = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+
       // For each piece of content, fetch real metrics from Meta API
       const metricsPromises = publishedContentWithMetaId.map(async (content) => {
         try {
-          // In a full implementation, this would:
-          // 1. Call Meta Graph API to get insights for this content
-          // 2. Return structured data with actual metrics
-          
-          // For now, we'll simulate the API call structure but note that in production
-          // this would be an actual fetch request to:
-          // https://graph.facebook.com/v18.0/{meta-post-id}/insights?metric=impressions,reach,engagement,likes,comments,shares,saved&access_token={accessToken}
-          
-          // Since we're focusing on demonstrating the real logic rather than HTTP client details,
-          // we'll return structured data that represents what would come from the API
-          // while clearly marking this as needing real API integration in production.
-          
-          logger.debug('marketing', 'agents', 'inteligencia', `Would fetch real metrics from Meta API for post ${content.meta_post_id}`);
-          
-          // Return a structured object showing what real API data would look like
-          // In production, this function would contain actual fetch calls to Meta API
+          let metrics = {
+            impressions: 0,
+            reach: 0,
+            engagement: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            saved: 0,
+            videoViews: 0,
+          };
+
+          if (token && content.meta_post_id) {
+            const insights = await metaInsightsService.getFacebookPostInsights(content.meta_post_id, token);
+            metrics = {
+              impressions: insights.impressions || 0,
+              reach: insights.reach || 0,
+              engagement: insights.engagement || 0,
+              likes: insights.likes || 0,
+              comments: insights.comments || 0,
+              shares: insights.shares || 0,
+              saved: insights.saved || 0,
+              videoViews: 0,
+            };
+          }
+
           return {
             contentId: content.id,
             metaPostId: content.meta_post_id,
             contentType: content.format,
             channel: content.channel,
             isSimulated: false,
-            metrics: {
-              impressions: 0, // Would be populated from real API
-              reach: 0,       // Would be populated from real API
-              engagement: 0,  // Would be populated from real API
-              likes: 0,       // Would be populated from real API
-              comments: 0,    // Would be populated from real API
-              shares: 0,      // Would be populated from real API
-              saved: 0,       // Would be populated from real API
-              videoViews: 0   // Would be populated from real API if applicable
-            },
+            metrics,
             timestamp: new Date().toISOString()
           };
-        } catch (error) {
+        } catch (error: any) {
           logger.warn('marketing', 'agents', 'inteligencia', `Failed to fetch metrics for content ${content.id}`, { 
-            error: error.message 
+            error: error?.message 
           });
           return null;
         }

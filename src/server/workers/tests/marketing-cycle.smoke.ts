@@ -29,7 +29,7 @@ async function main() {
   assert.strictEqual(statusAfter.cycleCount, a1.success ? a1.cycle : a2.cycle, 'ciclo nao duplicado: status=' + statusAfter.cycleCount + ' a1=' + a1.cycle + ' a2=' + a2.cycle);
 
   // Fila publica conteúdo e status avança p/ publicado
-  const contents = marketingService.getEditorialContents();
+  const contents = await marketingService.getEditorialContents();
   assert.ok(contents.some((c) => c.status === 'publicado'), 'ao menos um conteúdo publicado no pipeline');
   const queueState = metaPublisher.getQueue();
   assert.ok(Array.isArray(queueState), 'fila de publicação acessível');

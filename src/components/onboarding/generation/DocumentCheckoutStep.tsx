@@ -122,9 +122,6 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     return () => { active = false; };
   }, [serviceType, couponCode]);
 
-  // Simulação só aparece para admin E quando o servidor confirma modo de teste
-  const canSimulate = isAdmin && testMode;
-
   // Preço efetivo: breakdown (finalAmount) > catálogo > PIX response > documentData > fallback 89.90
   const effectivePrice: number =
     resolvedBreakdown?.finalAmount
@@ -302,33 +299,6 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         return;
       }
       await finalizeAfterPayment();
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSimulatePayment = async () => {
-    setIsProcessing(true);
-    setPayError(null);
-    try {
-      // Envia o payload canônico completo: o simulate-confirm faz upsert
-      // server-side caso /api/cases não tenha conseguido persistir (auth em dev).
-      const casePayload = buildCasePayload();
-      try { await persistCase(); } catch { /* upsert cobre no servidor */ }
-
-      const res = await fetch('/api/payments/pix/simulate-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseId: casePayload.id, case: casePayload }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Falha ao simular pagamento (HTTP ${res.status})`);
-      }
-      onPaymentSuccess(casePayload);
-    } catch (err: any) {
-      console.error('Error simulating payment:', err);
-      setPayError(err?.message || 'Não foi possível simular o pagamento. Tente novamente.');
     } finally {
       setIsProcessing(false);
     }
@@ -582,48 +552,25 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                     </div>
                   </div>
                 )}
-                {canSimulate ? (
-                  /* MODO DE TESTE: ação única — simula o pagamento e libera a defesa */
-                  <button
-                    type="button"
-                    id="btn-simulate-payment"
-                    onClick={handleSimulatePayment}
-                    disabled={isProcessing}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        <span>Aprovando pagamento (simulado)...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>Simular Pagamento &amp; Emitir Defesa</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    id="btn-confirm-payment-pix"
-                    onClick={handleVerifyPayment}
-                    disabled={!pixData || isProcessing}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        <span>Verificando pagamento no banco...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-4 h-4" />
-                        <span>Já paguei — Verificar e Emitir Defesa</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  id="btn-confirm-payment-pix"
+                  onClick={handleVerifyPayment}
+                  disabled={!pixData || isProcessing}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      <span>Verificando pagamento no banco...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      <span>Já paguei — Verificar e Emitir Defesa</span>
+                    </>
+                  )}
+                </button>
 
                 <div className="flex items-center justify-center gap-1 text-[10px] text-slate-400 font-mono">
                   <Lock className="w-3 h-3 text-emerald-600" />

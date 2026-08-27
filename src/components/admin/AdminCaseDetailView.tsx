@@ -126,18 +126,16 @@ export const AdminCaseDetailView: React.FC = () => {
         <div className="flex items-center gap-2">
           {!isPaid && (
             <button
-              onClick={handleSimulatePayment}
+              onClick={() => handleSimulatePayment(caseData.id)}
               disabled={isSimulatingPayment}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>{isSimulatingPayment ? 'Processando...' : 'Simular Webhook PagBank'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${isSimulatingPayment ? 'animate-spin' : ''}`} />
+              <span>{isSimulatingPayment ? 'Verificando...' : 'Verificar Status Gateway'}</span>
             </button>
           )}
           <button
             onClick={() => {
-              // For now, let's just call the payment simulation which already refetches
-              // But only if we're not already simulating payment
               if (!isSimulatingPayment) {
                 handleSimulatePayment(caseData.id);
               }
@@ -497,12 +495,12 @@ export const AdminCaseDetailView: React.FC = () => {
                 Caso o cliente tenha pago via PIX e o webhook do PagBank tenha sofrido atraso na rede, você pode forçar a reconciliação imediata.
               </p>
               <button
-                onClick={handleSimulatePayment}
+                onClick={() => handleSimulatePayment(caseData.id)}
                 disabled={isSimulatingPayment}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <Zap className="w-4 h-4" />
-                <span>{isSimulatingPayment ? 'Processando...' : 'Reconciliar e Aprovar Pagamento'}</span>
+                <RefreshCw className={`w-4 h-4 ${isSimulatingPayment ? 'animate-spin' : ''}`} />
+                <span>{isSimulatingPayment ? 'Processando...' : 'Reconciliar e Atualizar Caso'}</span>
               </button>
             </div>
           </div>

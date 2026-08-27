@@ -276,20 +276,25 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   };
 
-  const handleSimulatePayment = async () => {
+  const handleVerifyPayment = async () => {
     setIsProcessing(true);
     try {
-      const res = await fetch('/api/payments/pix/simulate-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseId: currentCase.id }),
-      });
+      const txId = pixData?.txId || currentCase.id;
+      const res = await fetch(`/api/payments/pix/status/${encodeURIComponent(txId)}`);
       const data = await res.json();
-      if (data.success) {
-        onPaymentSuccess(data.case);
+      if (data.success && data.status === 'PAID') {
+        const paidCase: CaseDomain = {
+          ...currentCase,
+          isPaid: true,
+          paidAt: new Date().toISOString(),
+          status: 'defesa_pronta',
+        };
+        onPaymentSuccess(paidCase);
+      } else {
+        alert('Pagamento ainda não confirmado pelo banco. Aguarde alguns instantes e tente novamente.');
       }
     } catch (err) {
-      console.error('Error confirming simulated payment:', err);
+      console.error('Error verifying payment:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -592,29 +597,29 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </div>
               </div>
 
-              {/* Action Buttons: Live Simulator */}
+              {/* Action Buttons: Real Verification */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
-                  id="simulate-pix-success-button"
-                  onClick={handleSimulatePayment}
+                  id="btn-verify-pix-payment"
+                  onClick={handleVerifyPayment}
                   disabled={isProcessing}
-                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg transition-all shadow-xs shadow-orange-200 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 uppercase tracking-tight"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg transition-all shadow-xs shadow-emerald-200 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 uppercase tracking-tight"
                 >
                   {isProcessing ? (
                     <>
                       <Clock className="w-3.5 h-3.5 animate-spin" />
-                      <span>Confirmando PagBank...</span>
+                      <span>Verificando no Banco...</span>
                     </>
                   ) : (
                     <>
                       <Zap className="w-3.5 h-3.5" />
-                      <span>Simular Pagamento PIX Aprovado</span>
+                      <span>Já Paguei — Verificar Pagamento</span>
                     </>
                   )}
                 </button>
                 <p className="text-sm text-center text-slate-400 font-mono">
-                  Liberação instantânea com idempotência e comissões automáticas.
+                  Liberação automática assim que o webhook bancário for confirmado.
                 </p>
               </div>
             </div>

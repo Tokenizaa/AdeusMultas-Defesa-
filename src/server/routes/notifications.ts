@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { notificationService } from '../services/notification-service';
 import { pushService } from '../services/push-service';
+import { emailService } from '../services/email-service';
+import { whatsAppService } from '../services/whatsapp-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
@@ -191,68 +193,127 @@ router.get('/vapid-key', (req, res) => {
 });
 
 // ============================================================================
-// Notification Simulators (dev only — production requires FCM/SMTP/EvolutionAPI)
+// Real Notification Delivery Routes
 // ============================================================================
 
-// POST /api/notifications/push — Push Notification Simulation
-router.post('/push', authenticateToken, (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(501).json({
-      error: 'Serviço de push notification não configurado',
-      message: 'Configure FCM/VAPID para push notifications.',
+// POST /api/notifications/push — Push Notification Delivery
+router.post('/push', authenticateToken, async (req, res) => {
+  try {
+    const { title, body, caseId, userEmail } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ error: 'title e body são obrigatórios.' });
+    }
+
+    const pushResult = await pushService.sendPushToUser(userEmail || req.user?.email || '', {
+      title,
+      body,
+      data: { caseId, timestamp: new Date().toISOString() },
     });
+
+    if (!pushResult.success) {
+      return res.status(503).json({
+        success: false,
+        error: pushResult.error || 'Serviço de Push Notification indisponível ou não configurado.',
+      });
+    }
+
+    res.json({
+      success: true,
+      deliveredAt: new Date().toISOString(),
+      channel: 'WebPush / ServiceWorker',
+      messageId: pushResult.messageId,
+      payload: { title, body, caseId },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao enviar push notification' });
   }
-  const { title, body, caseId } = req.body;
-  res.json({
-    success: true,
-    deliveredAt: new Date().toISOString(),
-    channel: 'WebPush / ServiceWorker',
-    payload: { title, body, caseId },
-  });
 });
 
-// POST /api/notifications/email — Email Digest Simulation
-router.post('/email', authenticateToken, (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(501).json({
-      error: 'Serviço de email não configurado',
-      message: 'Configure SMTP/Resend para envio de emails.',
+// POST /api/notifications/email — Email Delivery via Resend
+router.post('/email', authenticateToken, async (req, res) => {
+  try {
+    const { email, caseId, subject, body: emailBody } = req.body;
+    const targetEmail = email || req.user?.email;
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'Endereço de email do destinatário é obrigatório.' });
+    }
+
+    const result = await emailService.sendNotification(
+      targetEmail,
+      subject || `DefesAi: Atualização do Caso #${caseId || 'Geral'}`,
+      emailBody || 'Sua notificação foi processada pela plataforma DefesAi.'
+    );
+
+    if (!result.success) {
+      return res.status(503).json({
+        success: false,
+        error: result.error || 'Serviço de email indisponível. Verifique as credenciais da Resend.',
+      });
+    }
+
+    res.json({
+      success: true,
+      recipient: targetEmail,
+      messageId: result.messageId,
+      sentAt: new Date().toISOString(),
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao enviar email' });
   }
-  const { email, caseId, template } = req.body;
-  res.json({
-    success: true,
-    recipient: email || 'fariasnetto01@gmail.com',
-    template: template || 'DEFESA_GERADA_COM_SUCESSO',
-    status: 'SENT (250 OK)',
-    sentAt: new Date().toISOString(),
-  });
 });
 
-// POST /api/notifications/whatsapp/simulate — WhatsApp Notification Simulator
-router.post('/whatsapp/simulate', requireAdmin, (req, res) => {
-  const { phone, eventType, caseId } = req.body;
-  let messageText = '';
+// POST /api/notifications/whatsapp/send — WhatsApp Notification via Evolution API
+router.post('/whatsapp/send', requireAdmin, async (req, res) => {
+  try {
+    const { phone, eventType, caseId, customText } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Número de telefone é obrigatório.' });
+    }
 
-  if (eventType === 'triagem_concluida') {
-    messageText = `🚗 *Adeus Multa Informa*: Seu diagnóstico pericial está pronto! Identificamos 94% de probabilidade de deferimento por falha de aferição do radar (Res. 798 CONTRAN). Acesse seu painel para visualizar o parecer.`;
-  } else if (eventType === 'pagamento_confirmado') {
-    messageText = `✅ *Pagamento Confirmado!* Sua minuta jurídica oficial para o caso ${caseId || 'DET2026'} já foi gerada e está liberada para download e assinatura.`;
-  } else if (eventType === 'alerta_prazo') {
-    messageText = `⚠️ *Alerta de Prazo*: Faltam poucos dias para o término do prazo de defesa prévia da sua notificação. Protocole hoje mesmo para garantir efeito suspensivo.`;
-  } else {
-    messageText = `📋 *Status do Recurso*: Seu protocolo junto ao órgão autuador foi atualizado. Acesse seu painel no Adeus Multa para acompanhar.`;
+    let messageText = customText || '';
+    if (!messageText) {
+      if (eventType === 'triagem_concluida') {
+        messageText = `🚗 *Adeus Multa Informa*: Seu diagnóstico pericial está pronto! Identificamos alta probabilidade de deferimento por falha de aferição do radar (Res. 798 CONTRAN). Acesse seu painel para visualizar o parecer.`;
+      } else if (eventType === 'pagamento_confirmado') {
+        messageText = `✅ *Pagamento Confirmado!* Sua minuta jurídica oficial para o caso ${caseId || 'DET2026'} já foi gerada e está liberada para download e assinatura.`;
+      } else if (eventType === 'alerta_prazo') {
+        messageText = `⚠️ *Alerta de Prazo*: Faltam poucos dias para o término do prazo de defesa prévia da sua notificação. Protocole hoje mesmo para garantir efeito suspensivo.`;
+      } else {
+        messageText = `📋 *Status do Recurso*: Seu protocolo junto ao órgão autuador foi atualizado. Acesse seu painel no Adeus Multa para acompanhar.`;
+      }
+    }
+
+    const result = await whatsAppService.sendText({
+      to: phone.replace(/\D/g, ''),
+      message: messageText,
+    });
+
+    if (!result.success) {
+      return res.status(503).json({
+        success: false,
+        error: result.error || 'Falha ao enviar WhatsApp via Evolution API. Verifique as credenciais da instância.',
+      });
+    }
+
+    res.json({
+      success: true,
+      phone,
+      eventType,
+      caseId,
+      messageId: result.messageId,
+      status: 'ENTREGUE',
+      timestamp: new Date().toISOString(),
+      messagePayload: messageText,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao enviar mensagem WhatsApp' });
   }
+});
 
-  res.json({
-    success: true,
-    phone: phone || '(11) 98765-4321',
-    eventType,
-    caseId,
-    status: 'ENTREGUE (200 OK)',
-    timestamp: new Date().toISOString(),
-    messagePayload: messageText,
-  });
+// Alias for backwards compatibility with legacy callers, routing to real WhatsApp sender
+router.post('/whatsapp/simulate', requireAdmin, async (req, res, next) => {
+  req.url = '/whatsapp/send';
+  router.handle(req, res, next);
 });
 
 export default router;
