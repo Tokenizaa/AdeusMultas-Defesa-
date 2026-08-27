@@ -301,12 +301,18 @@ class WhatsAppService {
         targetUrl,
       });
 
+      const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
+
       const result = await this.makeRequest<any>('POST', `/webhook/set/${instance}`, {
         webhook: {
           enabled: true,
           url: targetUrl,
           byEvents: false,
           base64: false,
+          // Envia o segredo de validacao de origem como custom header
+          // (suportado pela Evolution API v2; exigido pelo receiver quando
+          // EVOLUTION_WEBHOOK_SECRET estiver setado). Nunca loga o valor.
+          ...(webhookSecret ? { headers: { 'X-Webhook-Secret': webhookSecret } } : {}),
           events: [
             'MESSAGES_UPSERT',
             'MESSAGES_UPDATE',

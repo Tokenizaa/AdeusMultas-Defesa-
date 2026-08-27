@@ -920,28 +920,14 @@ var ConfigService = class {
       // =========================================================================
       // 8. NOTIFICAÇÕES & ALERTA DE PRAZOS
       // =========================================================================
-      {
-        key: "NOTIF_WHATSAPP_API_URL",
-        name: "Evolution API Endpoint",
-        category: "notifications",
-        type: "string",
-        description: "URL base da inst\xE2ncia Evolution API para entrega de mensagens via WhatsApp",
-        defaultValue: "https://whatsapp.www.defesai.shop",
-        isSecret: false,
-        isRequired: false,
-        isEditable: true
-      },
-      {
-        key: "NOTIF_WHATSAPP_API_KEY",
-        name: "Evolution API Key",
-        category: "notifications",
-        type: "secret",
-        description: "Token de autentica\xE7\xE3o da inst\xE2ncia do WhatsApp Evolution API",
-        defaultValue: "",
-        isSecret: true,
-        isRequired: false,
-        isEditable: true
-      },
+      // OBS(2026-08-27): As chaves NOTIF_WHATSAPP_API_URL / NOTIF_WHATSAPP_API_KEY
+      // foram REMOVIDAS por serem órfãs. A integração WhatsApp é feita de forma
+      // canônica pelo WhatsAppService (src/server/services/whatsapp-service.ts),
+      // que lê diretamente as env vars EVOLUTION_API_URL / EVOLUTION_API_KEY /
+      // EVOLUTION_INSTANCE_NAME (fonte única de verdade). Nenhum consumidor
+      // lia as chaves NOTIF_WHATSAPP_* (grep provou zero usos além das
+      // definições de catálogo). Mantidas: ENABLE_WHATSAPP_SIMULATOR (fluxo de
+      // simulação) e NOTIF_ALERT_DEADLINE_DAYS_BEFORE / NOTIF_ENABLE_SMS_FALLBACK.
       {
         key: "NOTIF_ALERT_DEADLINE_DAYS_BEFORE",
         name: "Alerta Preventivo de Prazo (Dias antes)",

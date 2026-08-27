@@ -240,19 +240,22 @@ async function startServer() {
   // Mount Modular API Routes First
   app.use('/api/admin/commercial', commercialRoutes);
   app.use('/api/commercial', commercialRoutes);
+  // Admin router has GLOBAL requireAdmin (router.use) — mount ONLY at /api/admin,
+  // mirroring app.ts. Dual-mounting adminRoutes at /api blocks ALL subsequent
+  // /api routes (webhook, health, marketing-automation) with 401 (Evolution webhook
+  // cannot authenticate). See src/server/app.ts comment.
   app.use('/api/admin', adminRoutes);
-  app.use('/api', adminRoutes);
   app.use('/api/integrations', metaRoutes);
   app.use('/api', metaRoutes);
+  // Routers below have GLOBAL requireAdmin (router.use) — mount ONLY at their
+  // specific prefix, mirroring app.ts. Dual-mounting them at /api blocks ALL
+  // subsequent /api routes (webhook, health, marketing-automation) with 401,
+  // since router.use() runs for every request entering the router.
   app.use('/api/monitoring', monitoringRoutes);
-  app.use('/api', monitoringRoutes);
   app.use('/api/settings', settingsRoutes);
-  app.use('/api', settingsRoutes);
   app.use('/api/logs', logsRoutes);
-  app.use('/api', logsRoutes);
   app.use('/api/marketing', marketingRoutes);
   app.use('/api/agents', agentsRoutes);
-  app.use('/api', agentsRoutes);
   app.use('/api/communication', whatsappRoutes);
   app.use('/api', whatsappRoutes);
   app.use('/api/ocr', ocrRoutes);
