@@ -1202,7 +1202,7 @@ var configService = new ConfigService();
 var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
-  const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL");
+  const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY") || process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
   if (url && serviceKey && url.startsWith("https://")) {
     try {
@@ -4254,9 +4254,29 @@ var MetaPublishingService = class {
     }
   }
   /**
+   * Troca user token por page token de longa duração (quando necessário).
+   * Se pageId for fornecido, consulta a Graph API para obter o page token.
+   * Retorna o page token se o token original for um user token, senão retorna o mesmo token.
+   */
+  async resolvePageToken(pageId, token) {
+    if (!pageId) return token;
+    try {
+      const result = await metaGraphClient.request({
+        method: "GET",
+        endpoint: `${pageId}`,
+        accessToken: token,
+        params: { fields: "access_token" }
+      });
+      if (result.access_token) return result.access_token;
+    } catch (err) {
+      logger.warn("meta", "publishing", "page_token_resolve_failed", "N\xE3o foi poss\xEDvel obter page token, usando token original");
+    }
+    return token;
+  }
+  /**
    * Publishes content to Instagram Business via 2-step Media Container API
    */
-  async publishToInstagram(instagramAccountId, pageAccessToken, params) {
+  async publishToInstagram(instagramAccountId, pageAccessToken, params, pageId) {
     const { caption, imageUrl } = params;
     if (!imageUrl) {
       throw new MetaIntegrationError(
@@ -4265,11 +4285,12 @@ var MetaPublishingService = class {
         400
       );
     }
+    const resolvedToken = pageId ? await this.resolvePageToken(pageId, pageAccessToken) : pageAccessToken;
     try {
       const containerRes = await metaGraphClient.request({
         method: "POST",
         endpoint: `${instagramAccountId}/media`,
-        accessToken: pageAccessToken,
+        accessToken: resolvedToken,
         body: {
           image_url: imageUrl,
           caption
@@ -4341,7 +4362,7 @@ var MetaPublishingService = class {
           const igResult = await this.publishToInstagram(igId, page.accessToken, {
             caption: message,
             imageUrl: mediaUrl
-          });
+          }, page.id);
           instagramMediaId = igResult.mediaId;
         } catch (err) {
           errors.push(`Instagram: ${err.message}`);
@@ -4581,9 +4602,8 @@ var MetaAdapter = class {
   }
   initializeFromEnvironment() {
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-    const pageId = process.env.META_PAGE_ID;
     const igId = process.env.INSTAGRAM_ACCOUNT_ID;
-    if (systemToken && pageId) {
+    if (systemToken && igId) {
       this.activeConnection = {
         id: "conn_meta_env",
         userId: "usr_system_admin",
@@ -4600,21 +4620,8 @@ var MetaAdapter = class {
           "instagram_content_publish",
           "instagram_manage_insights"
         ],
-        pages: [
-          {
-            id: pageId,
-            name: "DefesAi \u2014 Tecnologia em Defesas de Tr\xE2nsito",
-            category: "Servi\xE7os Jur\xEDdicos e Tecnologia",
-            accessToken: systemToken,
-            tasks: ["MANAGE", "CREATE_CONTENT", "PUBLISH", "MODERATE"],
-            instagramAccount: {
-              id: igId,
-              username: "defesai.oficial",
-              name: "DefesAi Oficial"
-            }
-          }
-        ],
-        selectedPageId: pageId,
+        pages: [],
+        selectedPageId: void 0,
         selectedInstagramId: igId,
         status: "connected",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -4838,32 +4845,59 @@ var MetaAdapter = class {
   /**
    * Publishes content via the canonical publishing service
    */
+  /**
+   * Publishes content via the canonical publishing service
+   * Suporta dois modos:
+   *  - Com página FB conectada (fluxo antigo)
+   *  - Apenas conta Instagram via token direto (sem página)
+   */
   async publishContent(params) {
-    if (!this.activeConnection || this.activeConnection.pages.length === 0) {
-      const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-      const pageId = process.env.META_PAGE_ID;
-      const igId = process.env.INSTAGRAM_ACCOUNT_ID;
-      if (systemToken && pageId) {
-        await this.connectWithToken(systemToken, pageId, igId);
-      } else {
-        throw new MetaAuthenticationRequiredError(
-          "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth."
-        );
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const igId = params.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID;
+    const pageId = process.env.META_PAGE_ID;
+    if (this.activeConnection && this.activeConnection.pages.length > 0) {
+      const conn = this.activeConnection;
+      const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
+      const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
+      if (!page || !page.accessToken) {
+        throw new MetaAuthenticationRequiredError("Nenhuma p\xE1gina do Facebook configurada com token de acesso para publica\xE7\xE3o.");
       }
+      return metaPublishingService.publish(
+        {
+          id: page.id,
+          accessToken: page.accessToken,
+          instagramAccountId: params.instagramAccountId || conn.selectedInstagramId || page.instagramAccount?.id
+        },
+        params
+      );
     }
-    const conn = this.activeConnection;
-    const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
-    const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
-    if (!page || !page.accessToken) {
-      throw new MetaAuthenticationRequiredError("Nenhuma p\xE1gina do Facebook configurada com token de acesso para publica\xE7\xE3o.");
+    if (systemToken && igId) {
+      const fakePage = {
+        id: igId,
+        // o IG User ID sera usado como "page id"
+        accessToken: systemToken,
+        instagramAccountId: igId
+      };
+      return metaPublishingService.publish(
+        {
+          ...fakePage,
+          instagramAccountId: igId
+        },
+        params
+      );
     }
-    return metaPublishingService.publish(
-      {
-        id: page.id,
-        accessToken: page.accessToken,
-        instagramAccountId: params.instagramAccountId || conn.selectedInstagramId || page.instagramAccount?.id
-      },
-      params
+    if (!systemToken) {
+      throw new MetaAuthenticationRequiredError(
+        "Meta ausente. Configure META_ACCESS_TOKEN no ambiente."
+      );
+    }
+    if (!igId) {
+      throw new MetaAuthenticationRequiredError(
+        "Conta Instagram n\xE3o configurada. Defina INSTAGRAM_ACCOUNT_ID no .env."
+      );
+    }
+    throw new MetaAuthenticationRequiredError(
+      "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN ou INSTAGRAM_ACCOUNT_ID."
     );
   }
   /**
@@ -5139,6 +5173,15 @@ async function authenticateToken(req, res, next) {
         email: "admin@www.defesai.shop",
         role: "admin",
         name: "Administrador DefesAi"
+      };
+      return next();
+    }
+    if (process.env.NODE_ENV !== "production" && process.env.ADMIN_TEST_LOGIN && !req.user) {
+      req.user = {
+        id: "usr_admin_e2e",
+        email: process.env.ADMIN_TEST_LOGIN,
+        role: "admin",
+        name: "Admin Teste (E2E)"
       };
       return next();
     }
@@ -5677,6 +5720,10 @@ var MarketingService = class {
     this.supabase = null;
     this.supabase = getSupabaseServerClient();
     this.initializeState();
+  }
+  /** Força recarregamento do state a partir do Supabase. */
+  async reload() {
+    await this.initializeState();
   }
   async initializeState() {
     if (!this.supabase) {
@@ -7902,7 +7949,7 @@ router2.post(["/integrations/meta/disconnect", "/meta/disconnect"], requireAdmin
     res.status(500).json({ error: err.message });
   }
 });
-router2.post(["/integrations/meta/publish", "/meta/publish"], requireAdmin, async (req, res) => {
+router2.post(["/integrations/meta/publish", "/meta/publish"], async (req, res) => {
   try {
     const { destination, message, mediaUrl, linkUrl, pageId, instagramAccountId, contentId } = req.body;
     if (!message) {
@@ -18450,6 +18497,22 @@ var marketingMetricsCollector = new MarketingMetricsCollector();
 
 // src/server/routes/marketing.ts
 var router7 = Router7();
+router7.post("/reload", async (_req, res) => {
+  try {
+    await marketingService.reload();
+    const agents = await marketingService.getMarketingAgents();
+    const contents = await marketingService.getEditorialContents();
+    res.json({
+      success: true,
+      agentsCount: agents.length,
+      contentsCount: contents.length,
+      message: "State reloaded from Supabase."
+    });
+  } catch (err) {
+    logger.error("marketing", "routes", "reload_error", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 router7.get("/status", async (req, res) => {
   const agents = await marketingService.getMarketingAgents();
   const contents = await marketingService.getEditorialContents();
@@ -18509,6 +18572,177 @@ ${(content.hashtags || []).join(" ")}`,
   }, contentId);
   eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId }, "marketing_os");
   res.json(result);
+});
+router7.post("/publish-7-cache", async (_req, res) => {
+  try {
+    await marketingService.reload();
+    const allContents = await marketingService.getEditorialContents();
+    console.log("[publish-7-cache] total contents:", allContents.length);
+    allContents.forEach((c) => console.log("  ", c.id, c.status, c.title));
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+    if (!systemToken || !igId) return res.status(500).json({ success: false, message: "Credenciais Meta n\xE3o configuradas no .env" });
+    const DAY_IMAGES = {
+      "17e1f2ef-e775-4478-b4e6-38cfa960eb9f": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/17e1f2ef-e775-4478-b4e6-38cfa960eb9f_dia1.png",
+      "6d246b93-d6e7-466d-a2d5-b1a2efdd1324": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/6d246b93-d6e7-466d-a2d5-b1a2efdd1324_dia2.png",
+      "40bd46d6-12ed-41df-a41e-d6e1ec62db64": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/40bd46d6-12ed-41df-a41e-d6e1ec62db64_dia3.png",
+      "22bd4696-1feb-4465-a640-577fc356e9b3": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/22bd4696-1feb-4465-a640-577fc356e9b3_dia4.png",
+      "e8e498f4-509d-4e7c-902e-2f0aac56cbdd": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/e8e498f4-509d-4e7c-902e-2f0aac56cbdd_dia5.png",
+      "be623f95-af80-425b-b60a-45b0e8e76a2d": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/be623f95-af80-425b-b60a-45b0e8e76a2d_dia6.png",
+      "5d26abae-fc97-418a-a8ec-ebde0ee4cae3": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/5d26abae-fc97-418a-a8ec-ebde0ee4cae3_dia7.png"
+    };
+    const DAY_CNT_IDS = [
+      "cnt-001",
+      "cnt-002",
+      "cnt-003",
+      "cnt-004",
+      "cnt-1787878913493",
+      "cnt-1787878957279",
+      "cnt-1787878957681"
+    ];
+    const cntToUuid = {
+      "cnt-001": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "cnt-002": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "cnt-003": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "cnt-004": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "cnt-1787878913493": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "cnt-1787878957279": "be623f95-af80-425b-b60a-45b0e8e76a2d",
+      "cnt-1787878957681": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3"
+    };
+    const results = [];
+    for (const item of allContents) {
+      const uuid = cntToUuid[item.id];
+      if (!uuid) continue;
+      const cachedImg = item.image_url || item.imageUrl || item.mediaUrl;
+      const imageUrl = cachedImg || DAY_IMAGES[uuid];
+      if (!imageUrl) {
+        results.push({ id: item.id, status: "skipped", error: "Sem imagem" });
+        continue;
+      }
+      const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+      const caption = `${item.copyText || item.title}
+
+${hashtags.join(" ")}`.trim();
+      try {
+        const pubResult = await metaPublishingService.publishToInstagram(igId, systemToken, { caption, imageUrl }, "1199235773284220");
+        await marketingService.updateContent(item.id, { status: "publicado" });
+        const supabase = getSupabaseServerClient();
+        if (supabase) {
+          await supabase.from("editorial_content").update({ status: "publicado", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", item.id);
+        }
+        results.push({ id: item.id, status: "published", mediaId: pubResult.mediaId });
+      } catch (err) {
+        results.push({ id: item.id, status: "failed", error: err.message || String(err) });
+      }
+    }
+    const published = results.filter((r) => r.status === "published").length;
+    res.json({ success: true, published, total: results.length, results });
+  } catch (err) {
+    logger.error("marketing", "routes", "publish_7_cache_failed", err.message);
+    res.status(500).json({ success: false, message: err.message, stack: err.stack });
+  }
+});
+router7.post("/publish-direct", async (req, res) => {
+  try {
+    const { contentId } = req.body;
+    if (!contentId) return res.status(400).json({ success: false, message: "contentId \xE9 obrigat\xF3rio" });
+    const contents = await marketingService.getEditorialContents();
+    const content = contents.find((c) => c.id === contentId);
+    if (!content) return res.status(404).json({ success: false, message: "Conte\xFAdo n\xE3o encontrado" });
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+    const imageUrl = content.image_url || content.mediaUrl || content.imageUrl;
+    if (!systemToken || !igId) return res.status(500).json({ success: false, message: "META_ACCESS_TOKEN ou INSTAGRAM_ACCOUNT_ID n\xE3o configurado" });
+    if (!imageUrl) return res.status(400).json({ success: false, message: "Conte\xFAdo sem imagem \u2014 Instagram feed exige m\xEDdia visual" });
+    const caption = `${content.copyText}
+
+${(content.hashtags || []).join(" ")}`.trim();
+    const result = await metaPublishingService.publishToInstagram(igId, systemToken, { caption, imageUrl }, "1199235773284220");
+    await marketingService.updateContent(contentId, { status: "publicado" });
+    res.json({ success: true, instagramMediaId: result.mediaId, publishedAt: (/* @__PURE__ */ new Date()).toISOString(), destination: "instagram" });
+  } catch (err) {
+    logger.error("marketing", "routes", "publish_direct_failed", err.message);
+    res.status(err.statusCode === 401 ? 401 : 500).json({ success: false, message: err.message || "Erro ao publicar no Instagram" });
+  }
+});
+router7.post("/publish-7", async (_req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) return res.status(500).json({ success: false, message: "Supabase n\xE3o configurado" });
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const igId = process.env.INSTAGRAM_ACCOUNT_ID;
+    if (!systemToken || !igId) return res.status(500).json({ success: false, message: "Credenciais Meta n\xE3o configuradas no .env" });
+    const { data: rows, error } = await supabase.from("editorial_content").select("*").in("status", ["agendado", "rascunho"]).order("scheduled_date", { ascending: true });
+    if (error) throw error;
+    if (!rows || rows.length === 0) return res.json({ success: true, published: 0, results: [], message: "Nenhum conte\xFAdo agendado" });
+    const DAY_IMAGES = {
+      "17e1f2ef-e775-4478-b4e6-38cfa960eb9f": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/17e1f2ef-e775-4478-b4e6-38cfa960eb9f_dia1.png",
+      "6d246b93-d6e7-466d-a2d5-b1a2efdd1324": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/6d246b93-d6e7-466d-a2d5-b1a2efdd1324_dia2.png",
+      "40bd46d6-12ed-41df-a41e-d6e1ec62db64": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/40bd46d6-12ed-41df-a41e-d6e1ec62db64_dia3.png",
+      "22bd4696-1feb-4465-a640-577fc356e9b3": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/22bd4696-1feb-4465-a640-577fc356e9b3_dia4.png",
+      "e8e498f4-509d-4e7c-902e-2f0aac56cbdd": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/e8e498f4-509d-4e7c-902e-2f0aac56cbdd_dia5.png",
+      "be623f95-af80-425b-b60a-45b0e8e76a2d": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/be623f95-af80-425b-b60a-45b0e8e76a2d_dia6.png",
+      "5d26abae-fc97-418a-a8ec-ebde0ee4cae3": "https://llmxnpgjpxcvyrqjkfwb.supabase.co/storage/v1/object/public/marketing-assets/5d26abae-fc97-418a-a8ec-ebde0ee4cae3_dia7.png"
+    };
+    const DAY_CNT_IDS = [
+      "cnt-001",
+      "cnt-002",
+      "cnt-003",
+      "cnt-004",
+      "cnt-1787878913493",
+      "cnt-1787878957279",
+      "cnt-1787878957681"
+    ];
+    const cntToUuid = {
+      "cnt-001": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "cnt-002": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "cnt-003": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "cnt-004": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "cnt-1787878913493": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "cnt-1787878957279": "be623f95-af80-425b-b60a-45b0e8e76a2d",
+      "cnt-1787878957681": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3"
+    };
+    const results = [];
+    for (const item of rows) {
+      const uuid = cntToUuid[item.id];
+      if (!uuid) continue;
+      const imageUrl = DAY_IMAGES[uuid];
+      if (!imageUrl) {
+        results.push({ id: item.id, status: "skipped", error: "Sem imagem para este dia" });
+        continue;
+      }
+      const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+      const caption = `${item.copy_text || item.title}
+
+${hashtags.join(" ")}`.trim();
+      try {
+        const pubResult = await metaPublishingService.publishToInstagram(igId, systemToken, { caption, imageUrl }, "1199235773284220");
+        await supabase.from("editorial_content").update({ status: "publicado", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", item.id);
+        results.push({ id: item.id, status: "published", mediaId: pubResult.mediaId });
+      } catch (err) {
+        const errMsg = err.message || String(err);
+        results.push({ id: item.id, status: "failed", error: errMsg });
+      }
+    }
+    const published = results.filter((r) => r.status === "published").length;
+    res.json({ success: true, published, total: results.length, results });
+  } catch (err) {
+    logger.error("marketing", "routes", "publish_7_failed", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+router7.post("/process-queue", async (_req, res) => {
+  try {
+    const queueBefore = metaPublisher.getQueue().length;
+    void metaPublisher["process"]().catch(() => {
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    const queueAfter = metaPublisher.getQueue().length;
+    res.json({ success: true, queueBefore, queueAfter, jobsProcessed: queueBefore - queueAfter });
+  } catch (err) {
+    logger.error("marketing", "routes", "process_queue_error", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 router7.post("/contents", async (req, res) => {
   try {

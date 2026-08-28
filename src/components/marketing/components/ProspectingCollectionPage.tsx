@@ -78,7 +78,7 @@ export const ProspectingCollectionPage: React.FC = () => {
     setScrapeResult(null);
 
     try {
-      setExecutionPhase('Executando varredura e extraindo telefones...');
+      setExecutionPhase('Executando varredura incremental no Google Maps...');
       const res = await authFetch('/api/marketing/automation/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,6 +92,11 @@ export const ProspectingCollectionPage: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setScrapeResult(data);
+        setExecutionPhase('Varredura concluída! Persistindo leads no banco...');
+
+        // Disparar evento global para que a página de Leads recarregue os dados do banco
+        window.dispatchEvent(new CustomEvent('marketing:leads:invalidate'));
+
         setExecutionPhase('Varredura concluída com sucesso!');
       } else {
         alert(data.error || 'Falha ao executar raspagem.');
@@ -282,7 +287,7 @@ export const ProspectingCollectionPage: React.FC = () => {
             </div>
 
             {/* 4 Stat Boxes */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
               <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3.5 text-center">
                 <span className="text-[11px] text-slate-400 font-mono">ENCONTRADOS</span>
                 <div className="text-xl font-black text-white mt-1">{scrapeResult.totalFound || 0}</div>
@@ -290,6 +295,10 @@ export const ProspectingCollectionPage: React.FC = () => {
               <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3.5 text-center">
                 <span className="text-[11px] text-emerald-400 font-mono">INSERIDOS</span>
                 <div className="text-xl font-black text-emerald-400 mt-1">{scrapeResult.inserted || 0}</div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3.5 text-center">
+                <span className="text-[11px] text-teal-400 font-mono">PREENCHIDOS</span>
+                <div className="text-xl font-black text-teal-400 mt-1">{scrapeResult.filled || 0}</div>
               </div>
               <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3.5 text-center">
                 <span className="text-[11px] text-amber-400 font-mono">DUPLICADOS</span>

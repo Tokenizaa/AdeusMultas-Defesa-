@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { marketingAutomationWorker } from '../services/marketing-automation/worker';
 import { supabaseAdmin } from '../../scraper-prospecting/supabase';
 import { runScrape } from '../../scraper-prospecting/persister';
+import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
 
 const router = Router();
@@ -454,21 +455,38 @@ router.get('/health', async (_req, res) => {
 });
 
 router.get('/queue', async (_req, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('marketing_automation_queue')
-      .select('*, lead_campaign:marketing_lead_campaigns(lead:marketing_leads(*), campaign:marketing_campaigns(*))')
-      .order('scheduled_at', { ascending: true })
-      .limit(50);
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('marketing_automation_queue')
+        .select('*, lead_campaign:marketing_lead_campaigns(lead:marketing_leads(*), campaign:marketing_campaigns(*))')
+        .order('scheduled_at', { ascending: true })
+        .limit(50);
 
-    if (error) throw error;
-    res.json(data || []);
-  } catch (err) {
-    res.status(500).json({ error: 'Falha ao buscar fila', message: (err as Error).message });
-  }
-});
+      if (error) throw error;
+      res.json(data || []);
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao buscar fila', message: (err as Error).message });
+    }
+  });
 
-router.post('/scrape', async (req, res) => {
+  router.get('/collection-runs/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { data, error } = await supabaseAdmin
+        .from('collection_runs')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return res.status(404).json({ error: 'Execução não encontrada' });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Falha ao buscar execução', message: (err as Error).message });
+    }
+  });
+
+  router.post('/scrape', async (req, res) => {
   try {
     const { queries = [], cities = [], limitPerQuery = 10 } = req.body || {};
 
@@ -481,20 +499,97 @@ router.post('/scrape', async (req, res) => {
 
     const result = await runScrape(config);
 
+    // Buscar o último collection_run para retornar o ID
+    const { data: lastRun } = await supabaseAdmin
+      .from('collection_runs')
+      .select('id, status, results_found, new_leads, duplicates, rejected')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single();
+
     res.json({
       success: true,
       source: result.source,
       query: result.query,
+      location: result.location,
       totalFound: result.totalFound,
       inserted: result.inserted,
+      filled: result.filled,
       duplicates: result.duplicates,
+      completeDuplicates: result.completeDuplicates,
       rejected: result.rejected,
       errors: result.errors,
       leads: result.leads,
+      collection_run_id: lastRun?.id || null,
+      collection_run_status: lastRun?.status || 'unknown',
+      metrics: {
+        results_found: result.totalFound,
+        new_leads: result.inserted,
+        filled: result.filled,
+        duplicates: result.duplicates,
+        complete_duplicates: result.completeDuplicates,
+        rejected: result.rejected,
+        errors: result.errors.length,
+      },
     });
   } catch (err) {
     console.error('Erro no endpoint /scrape:', err);
     res.status(500).json({ error: 'Falha ao executar scraper', message: (err as Error).message });
+  }
+});
+
+router.get('/export/:collectionRunId?', async (req, res) => {
+  try {
+    const { collectionRunId } = req.params;
+    const runId = collectionRunId || 'latest';
+
+    let query = supabaseAdmin
+      .from('marketing_leads')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (runId !== 'latest') {
+      query = query.eq('collection_run_id', runId);
+    }
+
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+
+    let runRow: any = null;
+    if (runId !== 'latest') {
+      const { data: run } = await supabaseAdmin
+        .from('collection_runs')
+        .select('*')
+        .eq('id', runId)
+        .maybeSingle();
+      runRow = run;
+    } else {
+      const { data: latest } = await supabaseAdmin
+        .from('collection_runs')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      runRow = latest;
+    }
+
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      collectionRunId: runId !== 'latest' ? runId : runRow?.id,
+      searchTerm: runRow?.queries ? (Array.isArray(runRow.queries) ? runRow.queries.join(', ') : String(runRow.queries)) : undefined,
+      location: runRow ? [runRow.cities, runRow.states].filter(Boolean).flat().join(', ') : undefined,
+      totalFound: runRow?.results_found ?? (leads || []).length,
+      totalProcessed: (leads || []).length,
+      duplicates: runRow?.duplicates ?? 0,
+      errors: (runRow?.errors ? (Array.isArray(runRow.errors) ? runRow.errors.length : 1) : 0),
+    });
+
+    const filename = `leads-${runId === 'latest' ? 'latest' : runId}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error('Erro no endpoint /export:', err);
+    res.status(500).json({ error: 'Falha ao gerar XLSX', message: (err as Error).message });
   }
 });
 

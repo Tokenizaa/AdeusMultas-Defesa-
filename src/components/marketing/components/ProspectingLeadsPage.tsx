@@ -96,6 +96,16 @@ export const ProspectingLeadsPage: React.FC = () => {
       .catch(() => {});
   }, [authFetch]);
 
+  // Ouvir evento de invalidação disparado pela página de Coleta após raspagem
+  useEffect(() => {
+    const handler = () => {
+      setPage(1);
+      fetchLeads();
+    };
+    window.addEventListener('marketing:leads:invalidate', handler);
+    return () => window.removeEventListener('marketing:leads:invalidate', handler);
+  }, [fetchLeads]);
+
   // Debounced search / filter trigger
   useEffect(() => {
     const handler = setTimeout(() => {

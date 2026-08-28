@@ -34,6 +34,7 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedContactFilter, setSelectedContactFilter] = useState<string>('all');
   const [pageSize, setPageSize] = useState<number>(20);
   const [page, setPage] = useState<number>(0);
@@ -48,6 +49,17 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
       }
     });
     return Array.from(citiesSet).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+
+  // Extract distinct sources for dropdown (dinâmico, não hardcoded)
+  const distinctSources = useMemo(() => {
+    const sourcesSet = new Set<string>();
+    leads.forEach((l) => {
+      if (l.source && l.source.trim()) {
+        sourcesSet.add(l.source.trim());
+      }
+    });
+    return Array.from(sourcesSet).sort((a, b) => a.localeCompare(b));
   }, [leads]);
 
   // Filtering Logic
@@ -75,6 +87,11 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
         if (l.city !== selectedCity) return false;
       }
 
+      // 3b. Source (dinâmico a partir das fontes presentes)
+      if (selectedSource !== 'all') {
+        if (l.source !== selectedSource) return false;
+      }
+
       // 4. Contact filter
       if (selectedContactFilter === 'has_whatsapp') {
         if (!l.whatsapp && !l.phone) return false;
@@ -86,12 +103,12 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
 
       return true;
     });
-  }, [leads, search, selectedType, selectedCity, selectedContactFilter]);
+  }, [leads, search, selectedType, selectedCity, selectedSource, selectedContactFilter]);
 
   // Reset to page 0 whenever filters change
   useEffect(() => {
     setPage(0);
-  }, [search, selectedType, selectedCity, selectedContactFilter, pageSize]);
+  }, [search, selectedType, selectedCity, selectedSource, selectedContactFilter, pageSize]);
 
   // Pagination Math
   const totalLeads = filteredLeads.length;
@@ -146,7 +163,8 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
             >
               <option value="all">Todos os Segmentos</option>
               <option value="despachante">Despachante de Trânsito</option>
-              <option value="advogado">Advogado de Trânsito</option>
+              <option value="advogado_transito">Advogado de Trânsito</option>
+              <option value="advogado">Advogado (legado)</option>
             </select>
 
             {/* City */}
@@ -159,6 +177,20 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
               {distinctCities.map((city) => (
                 <option key={city} value={city}>
                   {city}
+                </option>
+              ))}
+            </select>
+
+            {/* Source */}
+            <select
+              value={selectedSource}
+              onChange={(e) => setSelectedSource(e.target.value)}
+              className="px-3 py-2.5 bg-slate-950/70 border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-orange-500 cursor-pointer"
+            >
+              <option value="all">Todas as Fontes</option>
+              {distinctSources.map((source) => (
+                <option key={source} value={source}>
+                  {source}
                 </option>
               ))}
             </select>
@@ -280,7 +312,7 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
               ) : (
                 paginatedLeads.map((lead) => {
                   const isDespachante = lead.lead_type === 'despachante';
-                  const isAdvogado = lead.lead_type === 'advogado';
+                  const isAdvogado = lead.lead_type === 'advogado' || lead.lead_type === 'advogado_transito';
                   const rawPhone = lead.whatsapp || lead.phone || '';
                   const digitsOnly = rawPhone.replace(/\D/g, '');
                   const waNumber = digitsOnly.length <= 11 && !digitsOnly.startsWith('55') ? `55${digitsOnly}` : digitsOnly;

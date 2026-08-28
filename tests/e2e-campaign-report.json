@@ -1,0 +1,329 @@
+{
+  "generatedAt": "2026-08-27T22:15:09.427Z",
+  "campaignId": "5aa24990-27d6-4874-bd72-e7baa67d0124",
+  "campaignName": "Campanha Inaugural — Adeus Multas",
+  "totalDays": 7,
+  "contents": [
+    {
+      "id": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "title": "Apresentação do Adeus Multas",
+      "status": "rascunho"
+    },
+    {
+      "id": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "title": "5 erros que podem prejudicar sua defesa de multa",
+      "status": "rascunho"
+    },
+    {
+      "id": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "title": "Recebeu uma multa? O que fazer primeiro?",
+      "status": "rascunho"
+    },
+    {
+      "id": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "title": "Mito ou verdade: toda multa precisa ser paga imediatamente?",
+      "status": "rascunho"
+    },
+    {
+      "id": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "title": "Checklist para analisar uma notificação de trânsito",
+      "status": "rascunho"
+    },
+    {
+      "id": "75675133-82cf-4044-b85e-05c672d3e48a",
+      "title": "3 pontos que merecem atenção antes de aceitar uma penalidade",
+      "status": "rascunho"
+    },
+    {
+      "id": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3",
+      "title": "Recebeu uma multa? Veja como o Adeus Multas pode ajudar",
+      "status": "rascunho"
+    }
+  ],
+  "mediaResults": [
+    {
+      "contentId": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "day": 1,
+      "engine": "google_genai_error",
+      "generation_status": "failed",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/imagen-3.0-generate-002 is not found for API version v1beta, or is not supported for predict. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}}"
+    },
+    {
+      "contentId": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "day": 2,
+      "engine": "google_genai_error",
+      "generation_status": "failed",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/imagen-3.0-generate-002 is not found for API version v1beta, or is not supported for predict. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}}"
+    },
+    {
+      "contentId": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "day": 3,
+      "engine": "google_genai_veo_pending",
+      "generation_status": "blocked",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "Veo requer generateVideos() + polling. Consulte ai-media-service.ts."
+    },
+    {
+      "contentId": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "day": 4,
+      "engine": "google_genai_error",
+      "generation_status": "failed",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/imagen-3.0-generate-002 is not found for API version v1beta, or is not supported for predict. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}}"
+    },
+    {
+      "contentId": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "day": 5,
+      "engine": "google_genai_error",
+      "generation_status": "failed",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/imagen-3.0-generate-002 is not found for API version v1beta, or is not supported for predict. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}}"
+    },
+    {
+      "contentId": "75675133-82cf-4044-b85e-05c672d3e48a",
+      "day": 6,
+      "engine": "google_genai_veo_pending",
+      "generation_status": "blocked",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "Veo requer generateVideos() + polling. Consulte ai-media-service.ts."
+    },
+    {
+      "contentId": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3",
+      "day": 7,
+      "engine": "google_genai_error",
+      "generation_status": "failed",
+      "assetId": null,
+      "assetUrl": null,
+      "mimeType": null,
+      "width": null,
+      "height": null,
+      "durationSecs": null,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/imagen-3.0-generate-002 is not found for API version v1beta, or is not supported for predict. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}}"
+    }
+  ],
+  "metaStatus": {
+    "connected": true,
+    "detail": "Conectado",
+    "pageId": "1199235773284220"
+  },
+  "publicationResults": [
+    {
+      "day": 1,
+      "contentId": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 2,
+      "contentId": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 3,
+      "contentId": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 4,
+      "contentId": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 5,
+      "contentId": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 6,
+      "contentId": "75675133-82cf-4044-b85e-05c672d3e48a",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    },
+    {
+      "day": 7,
+      "contentId": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3",
+      "channel": "instagram",
+      "enqueued": false,
+      "jobId": null,
+      "metaPostId": null,
+      "status": "API_ERROR",
+      "detail": "HTTP 401: {\"error\":\"Não autorizado. Faça login como administrador.\"}"
+    }
+  ],
+  "traceability": {
+    "campaignCount": 1,
+    "contentCount": 7,
+    "versionCount": 14,
+    "jobCount": 0,
+    "statusDistribution": {
+      "agendado": 7
+    }
+  },
+  "reportRows": [
+    {
+      "dia": 1,
+      "formato": "feed,story",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "FALHOU",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "17e1f2ef-e775-4478-b4e6-38cfa960eb9f",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 2,
+      "formato": "carousel",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "FALHOU",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "6d246b93-d6e7-466d-a2d5-b1a2efdd1324",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 3,
+      "formato": "reels",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "BLOQUEADO",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "40bd46d6-12ed-41df-a41e-d6e1ec62db64",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 4,
+      "formato": "feed",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "FALHOU",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "22bd4696-1feb-4465-a640-577fc356e9b3",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 5,
+      "formato": "carousel,story",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "FALHOU",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "e8e498f4-509d-4e7c-902e-2f0aac56cbdd",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 6,
+      "formato": "reels",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "BLOQUEADO",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "75675133-82cf-4044-b85e-05c672d3e48a",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    },
+    {
+      "dia": 7,
+      "formato": "feed,story",
+      "canal": "facebook+instagram",
+      "copy": "PASSOU",
+      "midia": "FALHOU",
+      "storage": "BLOQUEADO",
+      "aprovacao": "BLOQUEADO",
+      "agendamento": "PASSOU",
+      "publicacao": "FALHOU",
+      "contentId": "5d26abae-fc97-418a-a8ec-ebde0ee4cae3",
+      "assetUrl": null,
+      "metaStatus": "API_ERROR",
+      "metaPostId": null
+    }
+  ]
+}

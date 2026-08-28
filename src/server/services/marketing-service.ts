@@ -21,6 +21,11 @@ export class MarketingService {
     this.initializeState();
   }
 
+  /** Força recarregamento do state a partir do Supabase. */
+  public async reload(): Promise<void> {
+    await this.initializeState();
+  }
+
   private async initializeState() {
     // If Supabase is not available, use default values from data files
     if (!this.supabase) {

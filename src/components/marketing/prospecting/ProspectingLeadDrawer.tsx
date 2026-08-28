@@ -38,7 +38,8 @@ export const ProspectingLeadDrawer: React.FC<ProspectingLeadDrawerProps> = ({
   };
 
   const isDespachante = lead.lead_type === 'despachante';
-  const isAdvogado = lead.lead_type === 'advogado';
+  // O banco grava `advogado_transito` para advogados de trânsito; `advogado` é o valor legado.
+  const isAdvogado = lead.lead_type === 'advogado' || lead.lead_type === 'advogado_transito';
 
   // Format WhatsApp Link
   const rawPhone = lead.whatsapp || lead.phone || '';

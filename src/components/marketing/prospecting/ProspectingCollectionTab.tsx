@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Bot,
   Search,
@@ -15,10 +15,11 @@ import {
   Zap,
   Globe2,
   Cpu,
+  Download,
 } from 'lucide-react';
 
 interface ProspectingCollectionTabProps {
-  onScrape: (queries: string[], cities: string[], limit: number) => Promise<void>;
+  onScrape: (queries: string[], cities: string[], limit: number) => Promise<{ collection_run_id?: string }>;
   isLoading: boolean;
   scrapeResult: any;
 }
@@ -55,16 +56,68 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
   const [useCustomQuery, setUseCustomQuery] = useState<boolean>(false);
   const [city, setCity] = useState<string>('São Paulo');
   const [limit, setLimit] = useState<number>(10);
+  const [collectionRunId, setCollectionRunId] = useState<string | null>(null);
+  const [freshCount, setFreshCount] = useState<number>(0);
+  const [collectionStatus, setCollectionStatus] = useState<string | null>(null);
+
+  const pollRef = useRef<number | null>(null);
+
+  const startPolling = (runId: string) => {
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    setCollectionRunId(runId);
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/marketing/automation/leads?source=google_maps&pageSize=1`);
+        if (res.ok) {
+          const data = await res.json();
+          const total = data.total || (Array.isArray(data.data) ? data.data.length : 0);
+          setFreshCount(total);
+        }
+        const runRes = await fetch(`/api/marketing/automation/collection-runs/${runId}`);
+        if (runRes.ok) {
+          const run = await runRes.json();
+          setCollectionStatus(run.status);
+          if (run.status === 'completed' || run.status === 'error' || run.status === 'cancelled') {
+            if (pollRef.current) window.clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+        }
+      } catch {
+        // poll silently
+      }
+    }, 3000) as unknown as number;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scrapeResult?.collection_run_id) {
+      startPolling(scrapeResult.collection_run_id);
+      setFreshCount(scrapeResult.inserted || 0);
+      setCollectionStatus(scrapeResult.collection_run_status || 'completed');
+    }
+  }, [scrapeResult]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalQuery = useCustomQuery && customQuery.trim() ? customQuery.trim() : selectedQuery;
     const finalCity = city.trim() ? city.trim() : 'São Paulo';
-    await onScrape([finalQuery], [finalCity], limit);
+    const result = await onScrape([finalQuery], [finalCity], limit);
+    const runId = result?.collection_run_id as string | undefined;
+    if (runId) startPolling(runId);
   };
 
   const setPresetCity = (c: string) => {
     setCity(c);
+  };
+
+  const downloadXlsx = () => {
+    if (!collectionRunId) return;
+    window.open(`/api/marketing/automation/export/${collectionRunId}`, '_blank');
   };
 
   return (
@@ -188,11 +241,12 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
           </div>
 
           {/* Execution Progress Banner (When Loading) */}
-          {isLoading && (
+          {(isLoading || collectionStatus === 'running') && (
             <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 space-y-2 animate-pulse">
               <div className="flex items-center gap-2 text-orange-400 text-xs font-bold">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Executando varredura automatizada...</span>
+                {collectionStatus && <span className="ml-2 text-slate-400 font-mono">({collectionStatus})</span>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-300 font-mono">
                 <div className="flex items-center gap-1.5">
@@ -208,11 +262,26 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
                   <span>3. Deduplicação Supabase</span>
                 </div>
               </div>
+              <div className="text-[11px] text-slate-400 font-mono">
+                Leads processados (banco): {freshCount}
+              </div>
             </div>
           )}
 
           {/* Trigger Button */}
-          <div className="pt-2 flex items-center justify-end">
+          <div className="pt-2 flex items-center justify-between">
+            <div>
+              {collectionRunId && collectionStatus !== 'running' && (
+                <button
+                  type="button"
+                  onClick={downloadXlsx}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar XLSX</span>
+                </button>
+              )}
+            </div>
             <button
               type="submit"
               disabled={isLoading}
@@ -252,7 +321,7 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
             <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
               <div className="text-[11px] font-bold text-blue-300">Total Encontrados</div>
               <div className="text-2xl font-extrabold text-blue-400 font-mono mt-1">
-                {scrapeResult.totalFound || 0}
+                {collectionStatus === 'running' ? freshCount : (scrapeResult.totalFound || 0)}
               </div>
             </div>
 
@@ -261,6 +330,14 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
               <div className="text-[11px] font-bold text-emerald-300">Inseridos no Banco</div>
               <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
                 {scrapeResult.inserted || 0}
+              </div>
+            </div>
+
+            {/* Preenchidos (fill-gap) */}
+            <div className="p-3.5 bg-teal-500/10 border border-teal-500/20 rounded-xl">
+              <div className="text-[11px] font-bold text-teal-300">Preenchidos (Vazios Atualizados)</div>
+              <div className="text-2xl font-extrabold text-teal-400 font-mono mt-1">
+                {scrapeResult.filled || 0}
               </div>
             </div>
 
@@ -280,6 +357,12 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
               </div>
             </div>
           </div>
+
+          {collectionRunId && (
+            <div className="text-[11px] text-slate-500 font-mono">
+              ID da execução: {collectionRunId}
+            </div>
+          )}
         </div>
       )}
 
@@ -308,4 +391,3 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
     </div>
   );
 };
-

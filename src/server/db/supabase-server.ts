@@ -31,7 +31,9 @@ function ensureClient(): SupabaseClient<Database> | null {
   // Prefer process.env (sempre atualizado) sobre configService (pode ter cache stale)
   const url =
     process.env.VITE_SUPABASE_URL ||
-    configService.get('VITE_SUPABASE_URL');
+    configService.get('VITE_SUPABASE_URL') ||
+    process.env.SUPABASE_URL ||
+    configService.get('SUPABASE_URL');
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY') ||
