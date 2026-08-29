@@ -231,6 +231,9 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
   }
 
   // Create manual content item
+  // Status validation is enforced at DB level via CHECK constraint on editorial_content.status
+  // (7 values: rascunho, em_revisao, aprovado_qualidade, reprovado_qualidade, agendado, publicado, arquivado)
+  // See migration: 20260829130001_align_content_status_checks.sql
   async createManualContent(input: {
     title: string;
     channel: string;
@@ -241,7 +244,7 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
     imageUrl?: string | null;
     mediaUrl?: string | null;
     visualPrompt?: string;
-    status?: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado';
+    status?: 'rascunho' | 'em_revisao' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado' | 'arquivado';
     legalTheme?: string;
   }) {
     const newContent: any = {
