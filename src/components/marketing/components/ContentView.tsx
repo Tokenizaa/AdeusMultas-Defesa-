@@ -37,6 +37,15 @@ const COLUMNS: {
     dropClass: 'border-amber-300 bg-amber-50/30',
   },
   {
+    id: 'reprovado_qualidade',
+    label: 'Reprovado',
+    sublabel: 'Bloqueado pelo gate de qualidade',
+    icon: MessageSquareWarning,
+    headerClass: 'bg-red-50/80 border-red-200 text-red-900',
+    badgeClass: 'bg-red-100 text-red-800 border-red-300',
+    dropClass: 'border-red-300 bg-red-50/30',
+  },
+  {
     id: 'agendado',
     label: 'Agendado',
     sublabel: 'Programado no calendário',
@@ -86,6 +95,7 @@ const FORMATS = [
 const STATUS_LABEL: Record<string, string> = {
   rascunho: 'Rascunho',
   aprovado_qualidade: 'Aprovado',
+  reprovado_qualidade: 'Reprovado',
   agendado: 'Agendado',
   publicado: 'Publicado',
 };
@@ -93,6 +103,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_PILL: Record<string, string> = {
   rascunho: 'bg-slate-100 text-slate-700',
   aprovado_qualidade: 'bg-amber-50 text-amber-700 border border-amber-200',
+  reprovado_qualidade: 'bg-red-50 text-red-700 border border-red-200',
   agendado: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   publicado: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
 };
@@ -125,6 +136,7 @@ export const ContentView: React.FC<{
       all: contents.length,
       rascunho: contents.filter((c) => c.status === 'rascunho').length,
       aprovado_qualidade: contents.filter((c) => c.status === 'aprovado_qualidade').length,
+      reprovado_qualidade: contents.filter((c) => c.status === 'reprovado_qualidade').length,
       agendado: contents.filter((c) => c.status === 'agendado').length,
       publicado: contents.filter((c) => c.status === 'publicado').length,
     }),
@@ -265,6 +277,7 @@ export const ContentView: React.FC<{
           { id: 'all', label: `Todos (${counts.all})` },
           { id: 'rascunho', label: `Rascunho (${counts.rascunho})` },
           { id: 'aprovado_qualidade', label: `Aprovados (${counts.aprovado_qualidade})` },
+          { id: 'reprovado_qualidade', label: `Reprovados (${counts.reprovado_qualidade})` },
           { id: 'agendado', label: `Agendados (${counts.agendado})` },
           { id: 'publicado', label: `Publicados (${counts.publicado})` },
         ].map((t) => (

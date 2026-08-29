@@ -5,6 +5,8 @@ import { MetaPublishRequest, MetaPublishResult } from '../../types';
 import { metaAdapter } from '../../integrations/meta/adapters/meta-adapter';
 import { MetaAuthenticationRequiredError } from '../../integrations/meta/errors/meta-errors';
 import { getSupabaseServerClient } from '../db/supabase-server';
+import { validateImageQuality } from '../services/image-quality.service';
+import type { ImageQualityResult } from '../services/image-quality.service';
 
 /**
  * MetaPublisher — Production delivery queue with retry and token health awareness.
@@ -23,11 +25,24 @@ export interface PublisherJobRecord {
   id: string;
   channel: string;
   contentId?: string;
-  status: 'delivered' | 'retrying' | 'failed';
+  status: 'delivered' | 'retrying' | 'failed' | 'rejected';
   attempts: number;
   createdAt: string;
   resolvedAt?: string;
   error?: string;
+}
+
+export interface EnqueueResult {
+  queued: boolean;
+  itemId: string;
+  /** true quando a peça foi REJEITADA pelo gate de qualidade */
+  rejected?: boolean;
+  /** Motivos da rejeição (ex. resolution_too_low, blurred) */
+  reasons?: string[];
+  /** Resultado completo do gate (quando mediaUrl presente) */
+  quality?: ImageQualityResult;
+  /** id do PublisherJobRecord persistido quando rejeitada (rastreio) */
+  jobId?: string;
 }
 
 const MAX_ATTEMPTS = 3;
@@ -44,7 +59,79 @@ export class MetaPublisher {
     return [...this.jobHistory].slice(0, 20);
   }
 
-  enqueue(request: MetaPublishRequest, contentId?: string): { queued: boolean; itemId: string } {
+  async enqueue(request: MetaPublishRequest, contentId?: string): Promise<EnqueueResult> {
+    // GATE DE QUALIDADE — bloqueia peça reprovada antes de enfileirar.
+    // failureKind 'quality' (resolução/borrão) => NÃO enfileira.
+    // failureKind 'fetch'/'decode' (falha de infraestrutura) => publica como antes (fail-open).
+    if (request.mediaUrl) {
+      const gate = await validateImageQuality({ imageUrl: request.mediaUrl });
+      if (!gate.pass && gate.failureKind === 'quality') {
+        logger.error('meta', 'meta-publisher', 'enqueue_rejected',
+          `Publicação ${contentId ?? ''} rejeitada: imagem reprovou no gate de qualidade`, {
+            reasons: gate.reasons,
+            score: gate.score,
+            metrics: gate.metrics,
+            mediaUrl: request.mediaUrl,
+          });
+
+        // RASTREIO (W1): job persistido como 'rejected' + evento + status de saída no conteúdo.
+        // NUNCA deixar a peça em 'agendado' após rejeição — sem estado de saída o worker
+        // re-processa a peça eternamente a cada ciclo.
+        const rec: PublisherJobRecord = {
+          id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          channel: request.destination,
+          contentId,
+          status: 'rejected',
+          attempts: 0,
+          createdAt: new Date().toISOString(),
+          resolvedAt: new Date().toISOString(),
+          error: `Quality gate: ${gate.reasons.join(', ')}`,
+        };
+        this.jobHistory.unshift(rec);
+        this.persistJobRecord(rec);
+
+        if (contentId) {
+          // Estado de saída + trilha (B1b/W1) em UMA chamada — remove a semi-race da
+          // chamada dupla e grava rejected_at. rejection_reason/rejected_at exigem a
+          // migration 20260829000001_add_editorial_content_rejection_tracking aplicada.
+          const reasons = gate.reasons.join(', ');
+          marketingService
+            .updateContent(contentId, {
+              status: 'reprovado_qualidade',
+              rejection_reason: reasons,
+              rejected_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })
+            .catch((err: unknown) =>
+              logger.warn('meta', 'meta-publisher', 'enqueue_rejected_status',
+                `Falha ao marcar ${contentId} como reprovado_qualidade`, { error: String(err) })
+            );
+        }
+
+        eventBus.publish(
+          EventTopics.MARKETING_CONTENT_REJECTED,
+          {
+            contentId,
+            reasons: gate.reasons,
+            score: gate.score,
+            metrics: gate.metrics,
+            mediaUrl: request.mediaUrl,
+            jobId: rec.id,
+          },
+          'meta_publisher'
+        );
+
+        return { queued: false, itemId: '', rejected: true, reasons: gate.reasons, quality: gate, jobId: rec.id };
+      }
+      if (!gate.pass) {
+        logger.warn('meta', 'meta-publisher', 'enqueue_quality_skip',
+          `Imagem de ${contentId ?? ''} não pôde ser avaliada (${gate.reasons.join(',')}) — publicando sem bloqueio`, {
+            reasons: gate.reasons,
+            mediaUrl: request.mediaUrl,
+          });
+      }
+    }
+
     const item: QueueItem = {
       id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       request,

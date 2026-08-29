@@ -42,7 +42,7 @@ async function main() {
     }
 
     const message = `${content.copyText}\n\n${(content.hashtags || []).join(' ')}`.trim();
-    const result = metaPublisher.enqueue(
+    const result = await metaPublisher.enqueue(
       {
         destination: 'instagram',
         message,
@@ -54,6 +54,10 @@ async function main() {
     );
 
     results.push({ id: content.id, ...result });
+    if (result.rejected) {
+      console.log(`     [REJEITADO pelo gate de qualidade] ${content.title.substring(0, 40)}... => ${(result.reasons || []).join(', ')}`);
+      continue;
+    }
     console.log(`     [${result.queued ? 'OK ' : 'FAIL'}] ${content.title.substring(0, 40)}... => ${result.itemId}`);
     await sleep(300); // 300ms entre enqueues
   }

@@ -240,7 +240,7 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
     imageUrl?: string | null;
     mediaUrl?: string | null;
     visualPrompt?: string;
-    status?: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
+    status?: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado';
     legalTheme?: string;
   }) {
     const newContent: any = {

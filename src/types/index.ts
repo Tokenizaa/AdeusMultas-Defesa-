@@ -357,7 +357,7 @@ export interface EditorialContentItem {
   format: 'carrossel' | 'artigo_seo' | 'reels_roteiro' | 'infografico' | 'newsletter' | 'post_imagem' | 'story' | string;
   legalTheme?: string;
   infractionTargetCode?: string;
-  status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
+  status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado';
   scheduledDate: string;
   estimatedReach: number;
   copyText: string;

@@ -84,7 +84,7 @@ router.post('/publish', async (req, res) => {
     res.status(404).json({ success: false, message: 'Conteúdo não encontrado' });
     return;
   }
-  const result = metaPublisher.enqueue({
+  const result = await metaPublisher.enqueue({
     destination: destination || 'both',
     message: `${content.copyText}\n\n${(content.hashtags || []).join(' ')}`,
     linkUrl: 'https://www.defesai.shop',
@@ -340,7 +340,7 @@ router.put('/contents/:id', async (req, res) => {
     legalTheme,
   } = req.body ?? {};
   
-  const allowed = ['rascunho', 'aprovado_qualidade', 'agendado', 'publicado'];
+  const allowed = ['rascunho', 'aprovado_qualidade', 'reprovado_qualidade', 'agendado', 'publicado'];
   const channels = ['instagram', 'blog', 'tiktok', 'linkedin', 'email', 'facebook'];
   const updates: Record<string, unknown> = {};
 

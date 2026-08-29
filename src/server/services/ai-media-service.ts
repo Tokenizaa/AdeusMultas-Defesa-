@@ -1,5 +1,7 @@
 import { GoogleGenAI, GenerateVideosOperation } from '@google/genai';
 import { logger } from '../observability/logger';
+import { validateImageQuality } from './image-quality.service';
+import type { ImageQualityResult } from './image-quality.service';
 
 export interface GenerateImageOptions {
   prompt: string;
@@ -52,6 +54,8 @@ export class AIMediaService {
     error?: string;
     /** true quando a saída é SVG placeholder (nenhum modelo IA respondeu) */
     isFallback?: boolean;
+    /** Gate de qualidade da imagem gerada (undefined p/ fallback SVG). NÃO bloqueia retorno — só sinaliza. */
+    quality?: ImageQualityResult;
   }> {
     const {
       prompt,
@@ -124,6 +128,22 @@ export class AIMediaService {
                 aspectRatio,
                 imageSize,
               });
+
+              // GATE DE QUALIDADE — validação local pós-geração; NÃO segura o retorno, só sinaliza
+              const quality: ImageQualityResult | undefined =
+                mime.startsWith('image/') && mime !== 'image/svg+xml'
+                  ? await validateImageQuality({ buffer: Buffer.from(base64, 'base64') })
+                  : undefined;
+
+              if (quality && !quality.pass && quality.failureKind === 'quality') {
+                logger.error('ai_media', 'service', 'generateImage_quality',
+                  `Imagem gerada reprovou no gate de qualidade (${model})`, {
+                    reasons: quality.reasons,
+                    metrics: quality.metrics,
+                    score: quality.score,
+                  });
+              }
+
               return {
                 success: true,
                 imageUrl,
@@ -133,6 +153,7 @@ export class AIMediaService {
                 imageSize,
                 aspectRatio,
                 promptUsed: fullPrompt,
+                quality,
               };
             }
           }

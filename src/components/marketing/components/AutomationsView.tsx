@@ -16,6 +16,7 @@ const JOB_STATUS: Record<PublisherJobRecord['status'], { label: string; dot: str
   delivered: { label: 'Entregue', dot: 'bg-emerald-500', icon: CheckCircle2 },
   retrying: { label: 'Fila', dot: 'bg-amber-500', icon: Clock },
   failed: { label: 'Falhou', dot: 'bg-rose-500', icon: AlertCircle },
+  rejected: { label: 'Rejeitada', dot: 'bg-red-500', icon: AlertCircle },
 };
 
 export const AutomationsView: React.FC<{
