@@ -197,6 +197,7 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
       authorAgent: '@marketing-criador',
       author_agent: '@marketing-criador',
       qualityReviewScore: 9.7,
+      audience: 'B2C',
     };
 
     // Save to Supabase
@@ -267,6 +268,7 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
       authorAgent: '@marketing-criador',
       author_agent: '@marketing-criador',
       qualityReviewScore: 9.5,
+      audience: 'B2C',
     };
 
     let savedContent = newContent;
