@@ -3,6 +3,12 @@ import { logger } from '../observability/logger';
 import { validateImageQuality } from './image-quality.service';
 import type { ImageQualityResult } from './image-quality.service';
 
+// Mocks de placeholder (SVG) só são permitidos fora de produção quando
+// explicitamente habilitados via DEV_ALLOW_MOCKS. Em produção, falham com erro.
+// Lazy (não constante de módulo) para que env seja observado no momento da chamada.
+const mocksAllowed = () =>
+  process.env.NODE_ENV !== 'production' && process.env.DEV_ALLOW_MOCKS === 'true';
+
 export interface GenerateImageOptions {
   prompt: string;
   imageSize?: '1K' | '2K' | '4K';
@@ -164,8 +170,12 @@ export class AIMediaService {
       }
     }
 
-    // Fallback SVG placeholder quando IA indisponível E caller explícito permitiu
+    // Fallback SVG placeholder quando IA indisponível E caller explícito permitiu.
+    // Só em dev (DEV_ALLOW_MOCKS). Em produção, nunca devolver mock: falha explícita.
     if (options.allowFallback) {
+      if (!mocksAllowed()) {
+        throw new Error('Geração de imagem indisponível: mocks (SVG placeholder) desabilitados em produção. Configure GEMINI_API_KEY.');
+      }
       const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio || '1:1', imageSize || '1K');
       logger.warn('ai_media', 'service', 'generateImage',
         'Nenhum modelo IA disponível — retornando SVG placeholder', { promptUsed: fullPrompt });
