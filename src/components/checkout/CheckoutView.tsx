@@ -328,8 +328,76 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setCreditCardError(error);
   };
 
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const handleSimulatePayment = async (gateway: 'pagbank' | 'ggpixapi' = 'pagbank') => {
+    try {
+      setIsSimulating(true);
+      const res = await fetch('/api/payments/simulate-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseId: currentCase.id,
+          amount: finalAmount || 89.90,
+          paymentMethod,
+          gateway,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.case) {
+        onPaymentSuccess(data.case);
+      } else {
+        alert(data.error || 'Erro ao simular pagamento.');
+      }
+    } catch (err: any) {
+      console.error('Error simulating payment:', err);
+      alert('Erro de conexão ao simular pagamento.');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
+      {/* Admin Testing Facilitator Toolbar */}
+      {isAdmin && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-bold font-mono text-amber-400 uppercase tracking-wider">
+                Ferramentas de Teste — Admin & Sandbox Gateway
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-amber-400/80 bg-amber-500/20 px-2 py-0.5 rounded">
+              Ambiente Seguro
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              id="btn-admin-simulate-payment"
+              onClick={() => handleSimulatePayment('pagbank')}
+              disabled={isSimulating}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>{isSimulating ? 'Simulando...' : '⚡ Simular Pagamento Aprovado (PagBank Sandbox)'}</span>
+            </button>
+            <button
+              type="button"
+              id="btn-admin-simulate-ggpix"
+              onClick={() => handleSimulatePayment('ggpixapi')}
+              disabled={isSimulating}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <QrCode className="w-3.5 h-3.5 text-orange-400" />
+              <span>Simular Pagamento (GGPIXAPI)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onBackToOnboarding}
         className="text-sm font-semibold text-slate-500 hover:text-orange-600 flex items-center gap-1.5 cursor-pointer transition-colors"

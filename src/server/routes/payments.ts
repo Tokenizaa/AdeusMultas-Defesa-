@@ -12,6 +12,7 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { buildDocumentRollText } from '../../core/documents/document-roll';
+import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';
@@ -619,9 +620,281 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
   }
 });
 
-// Simulate confirm for local testing / instant preview — gateway-agnostic
-// Gate único de teste: bloqueado em produção, liberado em dev/E2E (sem exigência
-// de role admin — o servidor de dev/E2E roda sem Supabase e o bypass é citizen).
+// ============================================================================
+// Simulate confirm for local testing / instant preview & Admin Simulation
+// ============================================================================
+router.post('/simulate-payment', async (req: Request, res: Response) => {
+  try {
+    const { caseId, amount, paymentMethod = 'pix', gateway = 'pagbank' } = req.body;
+    if (!caseId) {
+      return res.status(400).json({ error: 'caseId é obrigatório para simulação de pagamento' });
+    }
+
+    let row = databaseRows.get(caseId);
+    let domain: CaseDomain;
+
+    if (row) {
+      domain = CanonicalMapper.rowToDomain(row);
+    } else {
+      // Fallback domain if case not yet persisted
+      domain = {
+        id: caseId,
+        title: 'Recurso JARI - Auto TEST-123456',
+        serviceType: 'recurso_jari',
+        isPaid: false,
+        isAnonymous: true,
+        currentStage: 1,
+        status: 'analisado',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        clientName: 'Condutor Teste',
+        clientEmail: 'teste@defesai.com.br',
+        clientCpf: '12345678909',
+        applicant: {
+          applicantName: 'Condutor Teste',
+          applicantCpf: '123.456.789-09',
+          applicantCnh: '12345678900',
+          cnhCategory: 'B',
+          applicantPhone: '(11) 98765-4321',
+          applicantEmail: 'teste@defesai.com.br',
+          addressStreet: 'Av. Paulista',
+          addressNumber: '1000',
+          addressNeighborhood: 'Bela Vista',
+          addressZipCode: '01310-100',
+          addressCityState: 'São Paulo - SP',
+        },
+        infraction: {
+          aitNumber: 'TEST-123456',
+          autuadorBody: 'DETRAN-SP',
+          ctbArticle: 'Art. 218, I do CTB',
+          description: 'Transitar em velocidade superior à máxima permitida em até 20%',
+          severity: 'media',
+          points: 4,
+          fineAmount: 130.16,
+          location: 'Av. Paulista, 1000 - São Paulo/SP',
+          dateTime: new Date().toISOString(),
+        } as any,
+        vehicle: {
+          plate: 'ABC1D23',
+          brandModel: 'VW GOL 1.0',
+        },
+        timeline: [],
+      };
+    }
+
+    const effectiveAmount = typeof amount === 'number' && amount > 0 ? amount : 89.90;
+
+    domain.isPaid = true;
+    domain.paidAt = new Date().toISOString();
+    domain.status = 'defesa_pronta';
+    domain.currentStage = 3;
+    domain.serviceType = domain.serviceType || 'recurso_jari';
+    domain.payment = {
+      status: 'approved',
+      amount: effectiveAmount,
+      paidAt: new Date().toISOString(),
+      transactionId: `sim_${gateway}_${Date.now()}`,
+      paymentMethod: paymentMethod === 'credit_card' ? 'credit_card' : 'pix',
+    };
+
+    if (!domain.applicant) {
+      domain.applicant = {
+        applicantName: domain.clientName || 'Condutor Requerente',
+        applicantCpf: domain.clientCpf || '123.456.789-09',
+        applicantCnh: '12345678900',
+        cnhCategory: 'B',
+        applicantPhone: domain.clientPhone || '(11) 98765-4321',
+        applicantEmail: domain.clientEmail || 'contato@defesai.com.br',
+        addressStreet: 'Av. Paulista',
+        addressNumber: '1000',
+        addressNeighborhood: 'Bela Vista',
+        addressZipCode: '01310-100',
+        addressCityState: 'São Paulo - SP',
+      };
+    }
+
+    try {
+      const defense = generateDefenseDraftForDomain(domain);
+      if (defense) {
+        defense.generationCount = 1;
+        domain.defenseDraft = defense;
+        domain.documentGenerationStatus = 'ready';
+      }
+
+      domain.timeline.push({
+        id: `tl_def_sim_${Date.now()}`,
+        title: 'Defesa Gerada Automaticamente (Simulação)',
+        description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação de pagamento simulado.`,
+        timestamp: new Date().toISOString(),
+        type: 'defense',
+      });
+    } catch (defErr: any) {
+      logger.warn('payments', 'simulation', 'defense_generation', 'Defense draft generation warning', {
+        error: defErr?.message,
+        caseId,
+      });
+    }
+
+    domain.timeline.push({
+      id: `tl_sim_${Date.now()}`,
+      title: `Pagamento Aprovado (${gateway.toUpperCase()} Simulação / Admin)`,
+      description: `Pagamento de R$ ${effectiveAmount.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} simulado com sucesso.`,
+      timestamp: new Date().toISOString(),
+      type: 'payment',
+    });
+
+    const updatedRow = CanonicalMapper.domainToRow(domain);
+    databaseRows.set(caseId, updatedRow);
+    caseRepository.set(caseId, updatedRow);
+
+    // Upsert em payment_orders
+    try {
+      const caseIdUuid = domainIdToUuid(domain.id);
+      const supabaseForOrder = getSupabaseServerClient();
+      if (supabaseForOrder && caseIdUuid) {
+        await (supabaseForOrder.from('payment_orders') as any).upsert({
+          case_id: caseIdUuid,
+          user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+          reference_id: `defesai_case_${domain.id}`,
+          pagbank_order_id: `sim_${gateway}_${domain.id}`,
+          gateway,
+          status: 'PAID',
+          amount: effectiveAmount,
+          currency: 'BRL',
+          payment_method: paymentMethod,
+          paid_at: new Date().toISOString(),
+          base_amount: effectiveAmount,
+          discount_amount: 0,
+          final_amount: effectiveAmount,
+          expires_at: null,
+        }, { onConflict: 'case_id' });
+      }
+    } catch (orderErr: any) {
+      logger.warn('payments', 'simulation', 'order_insert', 'Non-blocking order insert issue', {
+        error: orderErr?.message,
+      });
+    }
+
+    auditLogs.unshift({
+      id: `audit_sim_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: 'Admin / Sandbox',
+      role: 'admin',
+      action: 'PAYMENT_CONFIRMED',
+      targetResource: domain.id,
+      ipHash: '127.0.0.1',
+      details: `Pagamento simulado de R$ ${effectiveAmount.toFixed(2).replace('.', ',')} para o caso #${domain.id}.`,
+      gdprCompliant: true,
+    });
+
+    eventBus.publish(EventTopics.PAYMENT_CONFIRMED, {
+      caseId: domain.id,
+      amount: effectiveAmount,
+      gateway,
+      paymentMethod,
+    }, 'payment_engine');
+
+    res.json({
+      success: true,
+      message: 'Pagamento simulado com sucesso!',
+      case: domain,
+      defenseDraft: domain.defenseDraft,
+    });
+  } catch (err: any) {
+    logger.error('payments', 'simulation', 'error', 'Error simulating payment', { error: err.message });
+    res.status(500).json({ error: err.message || 'Erro ao simular pagamento' });
+  }
+});
+
+// Alias for backwards compatibility with test scripts
+router.post('/simulate-confirm', async (req: Request, res: Response) => {
+  const { caseId } = req.body;
+  if (!caseId) {
+    return res.status(400).json({ error: 'caseId é obrigatório' });
+  }
+  const row = databaseRows.get(caseId);
+  if (!row) {
+    return res.status(404).json({ error: 'Caso não encontrado' });
+  }
+  const domain = CanonicalMapper.rowToDomain(row);
+  domain.isPaid = true;
+  domain.paidAt = new Date().toISOString();
+  domain.status = 'defesa_pronta';
+  domain.currentStage = 3;
+  domain.payment = {
+    status: 'approved',
+    amount: 89.90,
+    paidAt: new Date().toISOString(),
+    paymentMethod: 'pix',
+  };
+  try {
+    domain.defenseDraft = generateDefenseDraftForDomain(domain);
+  } catch {}
+  const updatedRow = CanonicalMapper.domainToRow(domain);
+  databaseRows.set(caseId, updatedRow);
+  res.json({ success: true, case: domain });
+});
+
+// Admin Sandbox Webhook Trigger
+router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
+  try {
+    const { gateway = 'pagbank', eventType = 'PAID', caseId, amount = 89.90 } = req.body;
+    if (!caseId) {
+      return res.status(400).json({ error: 'caseId é obrigatório' });
+    }
+
+    let payload: any;
+    let path: string;
+    let headers: Record<string, string> = {};
+
+    if (gateway === 'pagbank') {
+      path = '/webhooks/pagbank';
+      payload = {
+        id: `evt_sim_${Date.now()}`,
+        reference_id: `defesai_case_${caseId}`,
+        created_at: new Date().toISOString(),
+        charges: [
+          {
+            id: `ch_sim_${Date.now()}`,
+            reference_id: `defesai_case_${caseId}`,
+            status: eventType === 'PAID' ? 'PAID' : 'CANCELED',
+            created_at: new Date().toISOString(),
+            paid_at: eventType === 'PAID' ? new Date().toISOString() : undefined,
+            amount: { value: Math.round(amount * 100), currency: 'BRL' },
+            payment_method: { type: 'PIX' },
+          },
+        ],
+      };
+      // In dev/sandbox mode or direct call
+      headers['x-hub-signature-256'] = 'sha256=sandbox_dev_signature';
+    } else {
+      path = '/webhooks/ggpix';
+      payload = {
+        transactionId: `ggpix_tx_sim_${Date.now()}`,
+        externalId: `defesai_case_${caseId}`,
+        status: eventType === 'PAID' ? 'COMPLETE' : 'CANCELED',
+        type: 'PIX_IN',
+        amount,
+        netAmount: amount * 0.98,
+        gatewayFee: amount * 0.02,
+        paidAt: eventType === 'PAID' ? new Date().toISOString() : undefined,
+      };
+      headers['x-forwarded-for'] = '127.0.0.1';
+    }
+
+    const rawBody = JSON.stringify(payload);
+    const result = processGatewayWebhook(path, rawBody, headers, payload);
+
+    res.json({
+      success: true,
+      message: `Webhook sandbox disparado para ${gateway.toUpperCase()}`,
+      result,
+    });
+  } catch (err: any) {
+    logger.error('payments', 'sandbox', 'webhook_trigger', 'Error triggering sandbox webhook', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ============================================================================
 // GGPIXAPI Webhook — gateway-agnostic via processGatewayWebhook()

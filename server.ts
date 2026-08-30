@@ -30,6 +30,7 @@ import paymentsRoutes from './src/server/routes/payments';
 import notificationsRoutes from './src/server/routes/notifications';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import marketingAutomationRoutes from './src/server/routes/marketing-automation';
+import e2eTestsRoutes from './src/server/routes/e2e-tests';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
 import { commercialService } from './src/server/commercial/commercial-service';
@@ -254,6 +255,7 @@ async function startServer() {
    app.use('/api/notifications', notificationsRoutes);
    app.use('/api/knowledge', knowledgeRoutes);
    app.use('/api/health', healthRoutes);
+   app.use('/api', e2eTestsRoutes);
    app.use('/api', healthRoutes);
 
   // Meta Status Direct Fallback Route for UI Compatibility

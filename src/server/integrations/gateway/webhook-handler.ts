@@ -130,8 +130,29 @@ export function processGatewayWebhook(
       signatureValid: true, // Assinatura validada pelo adapter
     };
   } catch (err: any) {
+    const errorMsg = err?.message || '';
+    const isSignatureError =
+      errorMsg.includes('Assinatura') ||
+      errorMsg.includes('signature') ||
+      errorMsg.includes('HMAC') ||
+      errorMsg.includes('inválida') ||
+      errorMsg.includes('ausente') ||
+      errorMsg.includes('obrigatório');
+
+    if (isSignatureError) {
+      logger.warn('payments', 'webhook_handler', 'signature_invalid', `Invalid webhook signature for ${gatewayId}`, {
+        error: errorMsg,
+        path: requestPath,
+      });
+      return {
+        event: null as any,
+        gatewayId,
+        signatureValid: false,
+      };
+    }
+
     logger.error('payments', 'webhook_handler', 'process', `Webhook processing failed for ${gatewayId}`, {
-      error: err.message,
+      error: errorMsg,
       path: requestPath,
     });
     return null;

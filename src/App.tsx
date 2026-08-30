@@ -45,6 +45,9 @@ import { AdminAiGatewayView } from './components/admin/AdminAiGatewayView';
 import { AdminIntegrationsView } from './components/admin/AdminIntegrationsView';
 import { AdminSettingsView } from './components/admin/AdminSettingsView';
 import { AdminMonitoringView } from './components/admin/AdminMonitoringView';
+import { AdminE2ETestsView } from './components/admin/AdminE2ETestsView';
+import { AdminE2ERunDetailView } from './components/admin/AdminE2ERunDetailView';
+import { AdminIntegrityTestView } from './components/admin/AdminIntegrityTestView';
 
 // Commercial Admin Central Hub
 import { CommercialHubView } from './components/commercial/CommercialHubView';
@@ -198,6 +201,12 @@ function AppContent() {
     } else if (currentPath === '/admin/audit') {
       title = 'Auditoria & LGPD';
       subtitle = 'Trilha de eventos imutável com mascaramento criptográfico';
+    } else if (currentPath === '/admin/e2e-tests' || currentPath.startsWith('/admin/e2e-tests/')) {
+      title = 'Central de Testes E2E (Playwright)';
+      subtitle = 'Suítes automatizadas por serviço, usuários persistentes e validação de documentos';
+    } else if (currentPath === '/admin/integrity-tests') {
+      title = 'Auditoria de Marca-d’Água (QA)';
+      subtitle = 'Validador determinístico de fidelidade de dados e isolamento de contexto';
     } else if (currentPath === '/admin/commercial') {
       title = 'Visão Geral Comercial & Economia';
       subtitle = 'Monitoramento de receita (GMV), conversões e indicadores';
@@ -253,6 +262,11 @@ function AppContent() {
         {currentPath === '/admin/logs' && <AdminAuditView />}
         {currentPath === '/admin/monitoring' && <AdminMonitoringView />}
         {currentPath === '/admin/audit' && <AdminAuditView />}
+        {currentPath === '/admin/e2e-tests' && <AdminE2ETestsView />}
+        {currentPath.startsWith('/admin/e2e-tests/runs/') && (
+          <AdminE2ERunDetailView runId={currentPath.replace('/admin/e2e-tests/runs/', '')} />
+        )}
+        {currentPath === '/admin/integrity-tests' && <AdminIntegrityTestView />}
 
         {/* Commercial Management Hub with Sub-Tabs */}
         {currentPath === '/admin/commercial' && <CommercialHubView initialTab="overview" />}

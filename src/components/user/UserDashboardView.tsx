@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Calendar,
   Building,
+  TestTube2,
 } from 'lucide-react';
 import { CaseDomain } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
@@ -34,8 +35,28 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
   const estimatedSavedValue = readyCases * 293.47;
   const estimatedPointsSaved = readyCases * 5;
 
-return (
+  const isTestUser = user?.email?.includes('@e2e.local') || user?.name?.startsWith('Teste ');
+
+  return (
     <div className="space-y-6">
+      {/* Test User Badge if active */}
+      {isTestUser && (
+        <div className="bg-orange-950/80 border border-orange-700/80 p-4 rounded-xl flex items-center justify-between text-orange-200 font-mono text-xs">
+          <div className="flex items-center gap-2.5">
+            <TestTube2 className="w-5 h-5 text-orange-400 shrink-0" />
+            <div>
+              <span className="font-bold text-orange-300">Usuário de Teste E2E Persistente:</span> {user?.name} ({user?.email})
+              <p className="text-2xs text-orange-400/80">
+                Os casos vinculados a esta conta foram criados pelas suítes automatizadas Playwright com validação de marca-d'água.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded bg-orange-900/60 border border-orange-700 font-bold shrink-0">
+            SENHA: E2E@2026Teste
+          </span>
+        </div>
+      )}
+
       {/* Driver Welcome Hero & Primary CTA */}
       <div className="p-6 bg-[#071D41] text-white rounded-xl shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b-4 border-[#155BCB]">
         <div className="space-y-2 max-w-xl">

@@ -8,28 +8,12 @@ import 'dotenv/config';
 import { processGatewayWebhook } from '../../src/server/integrations/gateway/webhook-handler';
 import { gatewayManager } from '../../src/server/integrations/gateway/gateway-manager';
 
-// Register mock adapters at module level (before any tests run)
-const mockPagBankAdapter = {
-  id: 'pagbank' as const,
-  displayName: 'PagBank (PIX + Cartão)',
-  isConfigured: () => true,
-  createPix: vi.fn(),
-  getPaymentStatus: vi.fn(),
-  processWebhook: vi.fn(),
-};
+import { pagbankAdapter } from '../../src/server/integrations/gateway/pagbank-adapter';
+import { ggpixAdapter } from '../../src/server/integrations/gateway/ggpix-adapter';
 
-const mockGGPIXAdapter = {
-  id: 'ggpixapi' as const,
-  displayName: 'GGPIXAPI (PIX)',
-  isConfigured: () => true,
-  createPix: vi.fn(),
-  getPaymentStatus: vi.fn(),
-  processWebhook: vi.fn(),
-};
-
-// Register mock adapters at module level (before any tests)
-gatewayManager.registerGateway(mockPagBankAdapter as any);
-gatewayManager.registerGateway(mockGGPIXAdapter as any);
+// Register real adapters at module level
+gatewayManager.registerGateway(pagbankAdapter);
+gatewayManager.registerGateway(ggpixAdapter);
 
 describe('FASE 6 — Webhook Security', () => {
   const PAGBANK_SECRET = process.env.PAGBANK_WEBHOOK_SECRET || 'test_secret';
@@ -250,23 +234,8 @@ describe('FASE 6 — Webhook Security', () => {
 
 describe('FASE 6 — Gateway Detection', () => {
   beforeAll(() => {
-    // Register mock adapters for gateway detection tests
-    gatewayManager.registerGateway({
-      id: 'pagbank' as any,
-      displayName: 'PagBank (PIX + Cartão)',
-      isConfigured: () => true,
-      createPix: vi.fn(),
-      getPaymentStatus: vi.fn(),
-      processWebhook: vi.fn(),
-    });
-    gatewayManager.registerGateway({
-      id: 'ggpixapi' as any,
-      displayName: 'GGPIXAPI (PIX)',
-      isConfigured: () => true,
-      createPix: vi.fn(),
-      getPaymentStatus: vi.fn(),
-      processWebhook: vi.fn(),
-    });
+    gatewayManager.registerGateway(pagbankAdapter);
+    gatewayManager.registerGateway(ggpixAdapter);
   });
 
   it('deve detectar PagBank por path', () => {
