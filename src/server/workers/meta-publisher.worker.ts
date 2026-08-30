@@ -20,6 +20,8 @@ interface QueueItem {
   contentId?: string;
   attempts: number;
   nextRetryAt: number;
+  /** Original enqueue timestamp (preservado para jobs recuperados do DB no restart) */
+  createdAt?: string;
 }
 
 export interface PublisherJobRecord {
@@ -73,7 +75,9 @@ export class MetaPublisher {
   public async loadPendingJobs(): Promise<void> {
     if (!this.supabase) return;
     try {
-      const { data, error } = await this.supabase
+      // publisher_jobs não está nos tipos gerados do Database => cast `any` (mesmo padrão
+      // do persistJobRecord baseline).
+      const { data, error } = await (this.supabase as any)
         .from('publisher_jobs')
         .select('*')
         .in('status', ['pending', 'retry'])
@@ -91,6 +95,7 @@ export class MetaPublisher {
         contentId: row.content_id,
         attempts: row.attempt_count,
         nextRetryAt: row.scheduled_at ? new Date(row.scheduled_at).getTime() : Date.now(),
+        createdAt: row.created_at,
       }));
     } catch (err: any) {
       logger.warn('meta', 'meta-publisher', 'load_pending',
@@ -301,7 +306,9 @@ export class MetaPublisher {
 
       // Fila persistente: consulta publisher_jobs por jobs pendentes devidos
       const now = new Date().toISOString();
-      const { data: jobs, error } = await this.supabase
+      // publisher_jobs não está nos tipos gerados do Database => cast `any` (mesmo padrão
+      // do persistJobRecord baseline). jobs vira any: job_payload/content_id/etc. resolvem.
+      const { data: jobs, error } = await (this.supabase as any)
         .from('publisher_jobs')
         .select('*')
         .in('status', ['pending', 'retry'])
@@ -321,6 +328,7 @@ export class MetaPublisher {
           contentId: job.content_id,
           attempts: job.attempt_count,
           nextRetryAt: job.scheduled_at ? new Date(job.scheduled_at).getTime() : Date.now(),
+          createdAt: job.created_at,
         };
 
         // Sync fila em memória (remove o job que será processado do cache)
@@ -347,7 +355,8 @@ export class MetaPublisher {
         contentId: item.contentId,
         status: 'retrying',
         attempts: item.attempts,
-        createdAt: new Date().toISOString(),
+        // Preserva o created_at original do job recuperado do DB (não o horário de delivery)
+        createdAt: item.createdAt || new Date().toISOString(),
         payload: item.request,
         scheduledAt: new Date(item.nextRetryAt).toISOString(),
       };

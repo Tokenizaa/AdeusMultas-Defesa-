@@ -159,6 +159,33 @@ async function main() {
     check('restart => destination preservada', queue[0]?.destination === 'instagram', JSON.stringify(queue));
     check('restart => attempts restaurado', queue[0]?.attempts === 0, JSON.stringify(queue));
 
+    // ── Teste 3: job recuperado do DB preserva created_at original (não o de delivery) ──
+    const ORIGINAL_CREATED_AT = '2026-01-01T00:00:00.000Z';
+    mockStore.publisher_jobs = [
+      {
+        id: 'restart-created-at-id',
+        content_id: 'test-content-id-3',
+        channel: 'instagram',
+        destination: 'instagram',
+        status: 'pending',
+        attempt_count: 0,
+        max_attempts: 3,
+        scheduled_at: new Date().toISOString(),
+        job_payload: { destination: 'instagram', message: 'CreatedAt test' },
+        created_at: ORIGINAL_CREATED_AT,
+        updated_at: ORIGINAL_CREATED_AT,
+      },
+    ];
+
+    const createdAtPub = new MetaPublisher(mockSupabase);
+    await createdAtPub.loadPendingJobs();
+    // publishContent stub lança (não-auth) => deliver() cai no retry => findOrCreateRec usa item.createdAt
+    await (createdAtPub as any).process();
+
+    const createdAtRec = createdAtPub.getJobHistory().find((r) => r.id === 'restart-created-at-id');
+    check('recuperado => created_at original preservado', createdAtRec?.createdAt === ORIGINAL_CREATED_AT, JSON.stringify(createdAtRec));
+    check('recuperado => status segue retrying (pending no DB)', createdAtRec?.status === 'retrying', JSON.stringify(createdAtRec));
+
     console.log(`\n${failures === 0 ? 'TODOS OS TESTES PASSARAM' : `${failures} ASSERT(S) FALHARAM`}`);
     process.exitCode = failures === 0 ? 0 : 1;
   } finally {
