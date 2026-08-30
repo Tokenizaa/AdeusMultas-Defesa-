@@ -144,7 +144,9 @@ router.get('/communication/whatsapp/qrcode', requireAdmin, async (_req, res) => 
  */
 const handleWebhook = async (req: any, res: any) => {
   try {
-    // 1. Validação de autenticidade / origem (X-Webhook-Secret)
+    // 1. Validação de autenticidade / origem (X-Webhook-Secret).
+    // `sha256=<hmac>` é deferido pelo gate 1 para o gate 1b (HMAC) decidir —
+    // comparar hex vs segredo puro jamais casaria e mataria o HMAC antes de rodar.
     const authDecision = authorizeEvolutionWebhook(req.headers);
     if (authDecision.ok === false) {
       const reason = authDecision.reason;
@@ -155,38 +157,32 @@ const handleWebhook = async (req: any, res: any) => {
         'Rejeitando webhook Evolution API por falha de autenticação',
         { reason }
       );
-      // Sem segredo configurado em produção = erro de configuração do operador (503),
-      // não uma origem inválida (401).
-      const status = reason === 'missing-secret' ? 503 : 401;
-      return res.status(status).json({
+      return res.status(401).json({
         error: 'Unauthorized webhook source',
         reason,
       });
     }
 
-    // 1b. Verificação ADICIONAL via HMAC-SHA-256 (anti-spoofing criptográfico).
-    // Aplicada quando o remetente envia `X-Webhook-Secret: sha256=<hmac>` do
-    // body bruto. Remetentes legados (header = segredo puro, gate 1 acima)
-    // continuam válidos — mudança aditiva, sem quebra de fluxo existente.
+    // 1b. Verificação HMAC-SHA-256 (anti-spoofing criptográfico).
+    // Headers no formato `sha256=<hmac>` são assinaturas do body bruto: com o
+    // segredo definido, a assinatura é OBRIGATÓRIA — verifica ou rejeita (rawBody
+    // ausente = impossível verificar = rejeita, 401). Remetentes legados (header =
+    // segredo puro, gate 1 acima) continuam válidos — mudança aditiva.
     const webhookSecret = resolveWebhookSecret();
-    const rawBody = (req as any).rawBody;
-    const sigHeader = Array.isArray(req.headers['x-webhook-secret'])
-      ? req.headers['x-webhook-secret'][0]
-      : req.headers['x-webhook-secret'];
-    if (
-      webhookSecret &&
-      rawBody &&
-      sigHeader?.startsWith('sha256=') &&
-      !verifyEvolutionSignature(rawBody, sigHeader, webhookSecret)
-    ) {
-      logger.warn(
-        'whatsapp',
-        'whatsapp_webhook',
-        'hmac_rejected',
-        'Rejeitando webhook Evolution API por assinatura HMAC inválida',
-        {}
-      );
-      return res.status(401).json({ error: 'Invalid signature' });
+    const sigHeaderRaw = req.headers['x-webhook-secret'];
+    const sigHeader = Array.isArray(sigHeaderRaw) ? sigHeaderRaw[0] : sigHeaderRaw;
+    if (webhookSecret && sigHeader?.startsWith('sha256=')) {
+      const rawBody = (req as any).rawBody;
+      if (!rawBody || !verifyEvolutionSignature(rawBody, sigHeader, webhookSecret)) {
+        logger.warn(
+          'whatsapp',
+          'whatsapp_webhook',
+          'hmac_rejected',
+          'Rejeitando webhook Evolution API por assinatura HMAC inválida',
+          {}
+        );
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
     }
 
     // 2. Responde 200 OK imediatamente para evitar retries da Evolution API

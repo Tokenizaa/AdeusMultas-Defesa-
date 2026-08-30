@@ -18,14 +18,15 @@
  *     comparacao timing-safe (constante em tempo).
  *
  * RETROCOMPATIBILIDADE (decisao de design — aditiva, sem quebrar fluxo atual):
- *   - Se `EVOLUTION_WEBHOOK_SECRET` NAO estiver setado:
- *       - Fora de producao -> modo `disabled`: aceita o webhook sem validacao
- *         (preserva comportamento atual em dev / testes / simulate-inbound).
- *       - Em producao (`NODE_ENV=production`) -> modo `rejected` com reason
- *         `missing-secret`: endpoint publico NAO aceita payloads forjados quando
- *         o operador esqueceu de configurar o segredo. O route responde 503
- *         (erro de configuracao) ate o segredo ser definido.
- *   - Se estiver setado -> modo ativo: payload sem header valido recebe 401.
+ *   - Se `EVOLUTION_WEBHOOK_SECRET` NAO estiver setado -> modo `disabled`:
+ *     aceita o webhook sem validacao (comportamento original preservado em
+ *     dev, testes / simulate-inbound e producao sem segredo).
+ *   - Se estiver setado -> modo ativo:
+ *       - Header `sha256=<hmac>` (assinatura HMAC do body bruto): DEFERE a
+ *         decisao para o gate HMAC do route (gate 1b), que verifica a
+ *         assinatura sobre os bytes brutos.
+ *       - Header = segredo puro (remetente legado): comparacao timing-safe.
+ *       - Header ausente ou segredo puro errado -> 401.
  *     401/403 sao codigos NON-RETRYABLE na Evolution API (nao ha risco de
  *     loop de retries infinitos ao rejeitar origem invalida).
  *
@@ -44,7 +45,7 @@ export const EVOLUTION_WEBHOOK_SECRET_ENV = 'EVOLUTION_WEBHOOK_SECRET';
 export type WebhookAuthDecision =
   | { ok: true; mode: 'disabled' }
   | { ok: true; mode: 'validated' }
-  | { ok: false; mode: 'rejected'; reason: 'missing-header' | 'invalid-secret' | 'missing-secret' };
+  | { ok: false; mode: 'rejected'; reason: 'missing-header' | 'invalid-secret' };
 
 /**
  * Comparacao constante-em-tempo de duas strings via hash SHA-256 + timingSafeEqual.
@@ -72,9 +73,10 @@ function extractHeader(
 
 /**
  * Autoriza o webhook de entrada da Evolution API.
- * - Sem segredo em env + fora de producao -> { ok: true, mode: 'disabled' } (retrocompativel dev).
- * - Sem segredo em env + producao         -> { ok: false, mode: 'rejected', reason: 'missing-secret' }.
- * - Com segredo + header ok   -> { ok: true, mode: 'validated' }.
+ * - Sem segredo em env -> { ok: true, mode: 'disabled' } (retrocompativel — inclusive em producao).
+ * - Com segredo + header `sha256=<hmac>` -> { ok: true, mode: 'validated' }
+ *   (defere para o gate HMAC do route — gate 1b — que decide a autenticidade).
+ * - Com segredo + header = segredo puro (remetente legado) -> valida via secureCompare.
  * - Com segredo + header ausente/errado -> { ok: false, mode: 'rejected' }.
  */
 export function authorizeEvolutionWebhook(
@@ -82,15 +84,19 @@ export function authorizeEvolutionWebhook(
 ): WebhookAuthDecision {
   const secret = resolveWebhookSecret();
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      return { ok: false, mode: 'rejected', reason: 'missing-secret' };
-    }
     return { ok: true, mode: 'disabled' };
   }
 
   const provided = extractHeader(headers, EVOLUTION_WEBHOOK_SECRET_HEADER);
   if (!provided) {
     return { ok: false, mode: 'rejected', reason: 'missing-header' };
+  }
+
+  // Assinatura HMAC (`sha256=<hex>`): nao comparar com o segredo puro — o
+  // secureCompare abaixo jamais casaria (hex != segredo) e mataria o gate HMAC
+  // antes de rodar. DEFERE: o gate 1b do route verifica a assinatura.
+  if (provided.startsWith('sha256=')) {
+    return { ok: true, mode: 'validated' };
   }
 
   return secureCompare(provided, secret)
