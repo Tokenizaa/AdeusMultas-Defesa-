@@ -13,7 +13,7 @@ import { NormalizedIncomingMessage } from '../../types/messaging';
 
 async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-async function cleanupTestData(client: any, conversationId: string) {
+async function cleanupTestData(client: any, conversationId: string, testExternalId?: string) {
   // Clean up test data in reverse FK order
   if (client) {
     try {
@@ -22,28 +22,43 @@ async function cleanupTestData(client: any, conversationId: string) {
     try {
       await client.from('messaging_conversations').delete().eq('id', conversationId);
     } catch {}
-    try {
-      await client.from('messaging_contacts').delete().eq('channel', 'test_channel');
-    } catch {}
+    if (testExternalId) {
+      try {
+        await client.from('messaging_contacts').delete().eq('external_id', testExternalId);
+      } catch {}
+    }
   }
 }
 
 async function runTest() {
   console.log('🧪 Iniciando teste de persistência/restart do Inbox B2C...\n');
+  process.stdout.write('🧪 Iniciando teste de persistência/restart do Inbox B2C...\n');
   
   const client = getSupabaseServerClient();
+  console.log('🔗 Supabase client:', client ? 'conectado' : 'NÃO CONECTADO');
+  process.stdout.write('🔗 Supabase client: ' + (client ? 'conectado' : 'NÃO CONECTADO') + '\n');
+  
+  if (!client) {
+    console.error('❌ Supabase client não disponível - teste requer banco');
+    return false;
+  }
+  
   const testConversationId = `test_conv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   
   try {
     // ===== PASSO 1: Criar primeira instância e popular dados =====
     console.log('📦 Passo 1: Criando primeira instância e populando dados...');
+    process.stdout.write('📦 Passo 1: Criando primeira instância...\n');
     const service1 = new MessagingService();
+    console.log('   ✅ Instância criada');
     
     // Aguardar hidratação inicial (se houver dados existentes)
     await sleep(500);
+    console.log('   🔄 Hidratação inicial concluída');
+    process.stdout.write('   🔄 Hidratação inicial concluída\n');
     
     // Simular mensagem inbound para criar contato + conversa + mensagem
-    const testExternalId = process.env.WHATSAPP_TEST_PHONE || `5551994096322`;
+    const testExternalId = `${process.env.WHATSAPP_TEST_PHONE || '5551994096322'}_${Date.now()}`;
     const incoming: NormalizedIncomingMessage = {
       channel: 'whatsapp_evolution',
       externalMessageId: `test_msg_${Date.now()}`,
@@ -59,6 +74,8 @@ async function runTest() {
       conversationId: result.conversation.id,
       messageId: result.message.id,
     });
+    console.log('   📝 Conversation mapId:', result.conversation.id);
+    console.log('   📝 Contact mapId:', result.contact.id);
     
     // Enviar resposta outbound
     const sendResult = await service1.sendMessage(
@@ -70,7 +87,8 @@ async function runTest() {
     console.log('   ✅ Resposta enviada:', sendResult.message.id);
     
     // Aguardar persistência assíncrona completar
-    await sleep(800);
+    await sleep(1000);
+    console.log('   ⏱️ Aguardado persistência assíncrona');
     
     // Verificar se dados estão no banco
     console.log('\n🔍 Passo 2: Verificando persistência no Supabase...');
@@ -128,9 +146,9 @@ async function runTest() {
       throw new Error(`Esperava >=2 mensagens, recuperou ${messages2.length}`);
     }
     
-    // Verificar ordem e conteúdo
-    const inbound = messages2.find(m => m.direction === 'inbound');
-    const outbound = messages2.find(m => m.direction === 'outbound');
+    // Verificar ordem e conteúdo - filtrar apenas mensagens do nosso teste
+    const inbound = messages2.find(m => m.direction === 'inbound' && m.text?.includes('Teste de persistência'));
+    const outbound = messages2.find(m => m.direction === 'outbound' && m.text?.includes('Resposta de teste'));
     
     if (!inbound || !inbound.text?.includes('Teste de persistência')) {
       throw new Error('Mensagem inbound não recuperada corretamente');
@@ -170,7 +188,7 @@ async function runTest() {
     
     // ===== LIMPEZA =====
     console.log('\n🧹 Passo 6: Limpeza de dados de teste...');
-    await cleanupTestData(client, convDbId);
+    await cleanupTestData(client, convDbId, testExternalId);
     console.log('   ✅ Dados de teste removidos');
     
     // ===== SUCESSO =====
@@ -188,10 +206,7 @@ async function runTest() {
     
     // Tentar limpeza mesmo em caso de erro
     try {
-      const convs = await client!.from('messaging_conversations').select('id').eq('channel', 'test_channel');
-      for (const c of convs || []) {
-        await cleanupTestData(client, c.id);
-      }
+      await cleanupTestData(client, convDbId, testExternalId);
     } catch {}
     
     return false;
