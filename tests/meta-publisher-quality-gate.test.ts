@@ -112,12 +112,13 @@ async function main() {
     JSON.stringify(failOpenRes)
   );
   // Sem creds Meta no ambiente, isConnected()=false => enqueue cai no ramo "Meta desconectada"
-  // (queued:false). itemId 'pub_...' non-empty prova que o fluxo normal construiu o item
+  // (queued:false). itemId non-empty prova que o fluxo normal construiu o item
   // (linha 86) — ou seja, o gate NÃO abortou o enqueue.
   check(
     'fetch quebrado => enqueue PROSSEGUIU até o fluxo normal (item construído, sem rejected)',
     failOpenRes.queued === false &&
-      failOpenRes.itemId.startsWith('pub_') &&
+      typeof failOpenRes.itemId === 'string' &&
+      failOpenRes.itemId.length > 0 &&
       failOpenRes.rejected !== true,
     JSON.stringify(failOpenRes)
   );

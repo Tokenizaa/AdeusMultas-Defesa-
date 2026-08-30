@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { logger } from '../observability/logger';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { marketingService } from '../services/marketing-service';
@@ -30,6 +31,10 @@ export interface PublisherJobRecord {
   createdAt: string;
   resolvedAt?: string;
   error?: string;
+  /** Publish request payload stored in publisher_jobs.job_payload for restart recovery */
+  payload?: MetaPublishRequest;
+  /** ISO timestamp for next retry attempt (maps to publisher_jobs.scheduled_at) */
+  scheduledAt?: string;
 }
 
 export interface EnqueueResult {
@@ -53,7 +58,45 @@ export class MetaPublisher {
   private processing = false;
   private tokenExpired = false;
   private jobHistory: PublisherJobRecord[] = [];
-  private supabase = getSupabaseServerClient();
+  private supabase: ReturnType<typeof getSupabaseServerClient>;
+
+  constructor(supabase?: ReturnType<typeof getSupabaseServerClient>) {
+    this.supabase = supabase ?? getSupabaseServerClient();
+    this.loadPendingJobs();
+  }
+
+  /**
+   * Carrega jobs pendentes do publisher_jobs (restart survival).
+   * Chamado no construtor; também pode ser chamado explicitamente
+   * (ex: testes) para garantir carregamento síncrono.
+   */
+  public async loadPendingJobs(): Promise<void> {
+    if (!this.supabase) return;
+    try {
+      const { data, error } = await this.supabase
+        .from('publisher_jobs')
+        .select('*')
+        .in('status', ['pending', 'retry'])
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        logger.warn('meta', 'meta-publisher', 'load_pending',
+          `Failed to load pending jobs: ${(error as any).message}`, { error });
+        return;
+      }
+
+      this.queue = (data || []).map((row: any) => ({
+        id: row.id,
+        request: row.job_payload as MetaPublishRequest,
+        contentId: row.content_id,
+        attempts: row.attempt_count,
+        nextRetryAt: row.scheduled_at ? new Date(row.scheduled_at).getTime() : Date.now(),
+      }));
+    } catch (err: any) {
+      logger.warn('meta', 'meta-publisher', 'load_pending',
+        `Error loading pending jobs: ${err.message}`, { error: err });
+    }
+  }
 
   getJobHistory(): PublisherJobRecord[] {
     return [...this.jobHistory].slice(0, 20);
@@ -78,7 +121,7 @@ export class MetaPublisher {
         // NUNCA deixar a peça em 'agendado' após rejeição — sem estado de saída o worker
         // re-processa a peça eternamente a cada ciclo.
         const rec: PublisherJobRecord = {
-          id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          id: randomUUID(),
           channel: request.destination,
           contentId,
           status: 'rejected',
@@ -86,6 +129,8 @@ export class MetaPublisher {
           createdAt: new Date().toISOString(),
           resolvedAt: new Date().toISOString(),
           error: `Quality gate: ${gate.reasons.join(', ')}`,
+          payload: request,
+          scheduledAt: new Date().toISOString(),
         };
         this.jobHistory.unshift(rec);
         this.persistJobRecord(rec);
@@ -133,7 +178,7 @@ export class MetaPublisher {
     }
 
     const item: QueueItem = {
-      id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: randomUUID(),
       request,
       contentId,
       attempts: 0,
@@ -150,6 +195,8 @@ export class MetaPublisher {
         createdAt: new Date().toISOString(),
         resolvedAt: new Date().toISOString(),
         error: 'Nenhuma conexão ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth.',
+        payload: request,
+        scheduledAt: new Date().toISOString(),
       };
       this.jobHistory.unshift(rec);
       this.persistJobRecord(rec);
@@ -164,36 +211,60 @@ export class MetaPublisher {
       status: 'retrying',
       attempts: 0,
       createdAt: new Date().toISOString(),
+      payload: request,
+      scheduledAt: new Date().toISOString(),
     };
     this.jobHistory.unshift(rec);
     this.queue.push(item);
     logger.info('meta', 'meta-publisher', 'enqueue', `Publicação ${item.id} enfileirada`);
 
-    // Persist job record to Supabase
-    this.persistJobRecord(rec);
+    // Persist job record to Supabase — fila persistente (restart survival).
+    // await garante que o INSERT chegue ao publisher_jobs antes do process() consultar.
+    await this.persistJobRecord(rec);
 
     this.process().catch(() => {});
     return { queued: true, itemId: item.id };
   }
 
-  private persistJobRecord(rec: PublisherJobRecord): void {
-    if (!this.supabase) return;
-    (this.supabase as any)
+  /**
+   * Única via de escrita em publisher_jobs. Mapeia status da aplicação
+   * ('retrying'/'delivered'/'rejected'/'failed') para o CHECK constraint da
+   * tabela ('pending'/'published'/'blocked'/'failed') e usa as colunas reais
+   * do schema (attempt_count, error_detail, job_payload, scheduled_at).
+   */
+  private persistJobRecord(rec: PublisherJobRecord): Promise<void> {
+    if (!this.supabase) return Promise.resolve();
+
+    const statusMap: Record<string, string> = {
+      retrying: 'pending',
+      delivered: 'published',
+      rejected: 'blocked',
+      failed: 'failed',
+    };
+    const dbStatus = statusMap[rec.status] || rec.status;
+
+    return (this.supabase as any)
       .from('publisher_jobs')
       .upsert({
         id: rec.id,
         channel: rec.channel,
         content_id: rec.contentId,
-        status: rec.status,
-        attempts: rec.attempts,
+        destination: rec.payload?.destination || rec.channel,
+        status: dbStatus,
+        attempt_count: rec.attempts,
+        scheduled_at: rec.scheduledAt || rec.createdAt,
+        published_at: rec.resolvedAt,
+        job_payload: rec.payload,
+        error_detail: rec.error,
         created_at: rec.createdAt,
-        resolved_at: rec.resolvedAt,
-        error: rec.error,
+        updated_at: new Date().toISOString(),
       }, { onConflict: 'id' })
       .then(({ error }: any) => {
         if (error) logger.warn('meta', 'meta-publisher', 'persist', `Failed to persist job ${rec.id}`, { error: error.message });
       })
-      .catch(() => {});
+      .catch((err: any) => {
+        logger.warn('meta', 'meta-publisher', 'persist', `Error persisting job ${rec.id}: ${err?.message || err}`);
+      });
   }
 
   getQueue() {
@@ -214,14 +285,48 @@ export class MetaPublisher {
     if (this.processing) return;
     this.processing = true;
     try {
-      while (true) {
-        const now = Date.now();
-        const idx = this.queue.findIndex((q) => q.nextRetryAt <= now);
-        if (idx === -1) break;
-        const item = this.queue[idx];
-        this.queue.splice(idx, 1);
+      if (!this.supabase) {
+        // Fallback: fila em memória (backward compat quando sem Supabase)
+        while (true) {
+          const now = Date.now();
+          const idx = this.queue.findIndex((q) => q.nextRetryAt <= now);
+          if (idx === -1) break;
+          const item = this.queue[idx];
+          this.queue.splice(idx, 1);
+          await this.deliver(item);
+          if (this.queue.length === 0) break;
+        }
+        return;
+      }
+
+      // Fila persistente: consulta publisher_jobs por jobs pendentes devidos
+      const now = new Date().toISOString();
+      const { data: jobs, error } = await this.supabase
+        .from('publisher_jobs')
+        .select('*')
+        .in('status', ['pending', 'retry'])
+        .lte('scheduled_at', now)
+        .order('scheduled_at', { ascending: true })
+        .limit(30);
+
+      if (error) {
+        logger.warn('meta', 'meta-publisher', 'process', `Failed to query pending jobs: ${(error as any).message}`, { error });
+        return;
+      }
+
+      for (const job of jobs || []) {
+        const item: QueueItem = {
+          id: job.id,
+          request: job.job_payload as MetaPublishRequest,
+          contentId: job.content_id,
+          attempts: job.attempt_count,
+          nextRetryAt: job.scheduled_at ? new Date(job.scheduled_at).getTime() : Date.now(),
+        };
+
+        // Sync fila em memória (remove o job que será processado do cache)
+        this.queue = this.queue.filter((q) => q.id !== item.id);
+
         await this.deliver(item);
-        if (this.queue.length === 0) break;
       }
     } finally {
       this.processing = false;
@@ -230,6 +335,26 @@ export class MetaPublisher {
 
   private async deliver(item: QueueItem): Promise<void> {
     item.attempts += 1;
+
+    // rec sempre disponível: recupera do jobHistory (enqueue) ou cria a partir
+    // do item (job carregado do publisher_jobs em restart — loadPendingJobs não povoa jobHistory)
+    const findOrCreateRec = (): PublisherJobRecord => {
+      const existing = this.jobHistory.find((j) => j.id === item.id);
+      if (existing) return existing;
+      const created: PublisherJobRecord = {
+        id: item.id,
+        channel: item.request.destination,
+        contentId: item.contentId,
+        status: 'retrying',
+        attempts: item.attempts,
+        createdAt: new Date().toISOString(),
+        payload: item.request,
+        scheduledAt: new Date(item.nextRetryAt).toISOString(),
+      };
+      this.jobHistory.unshift(created);
+      return created;
+    };
+
     try {
       if (this.tokenExpired) {
         this.tokenExpired = false;
@@ -272,13 +397,11 @@ export class MetaPublisher {
         marketingService.updateContent(item.contentId, { status: 'publicado' });
       }
 
-      const rec = this.jobHistory.find((j) => j.id === item.id);
-      if (rec) {
-        rec.status = 'delivered';
-        rec.attempts = item.attempts;
-        rec.resolvedAt = new Date().toISOString();
-        this.persistJobRecord(rec);
-      }
+      const rec = findOrCreateRec();
+      rec.status = 'delivered';
+      rec.attempts = item.attempts;
+      rec.resolvedAt = new Date().toISOString();
+      void this.persistJobRecord(rec);
 
       logger.info('meta', 'meta-publisher', 'publish', `Publicação ${item.id} entregue`);
     } catch (err: any) {
@@ -289,14 +412,12 @@ export class MetaPublisher {
         String(err?.message || err).includes('Token da Meta ausente');
 
       if (isAuthError) {
-        const rec = this.jobHistory.find((j) => j.id === item.id);
-        if (rec) {
-          rec.status = 'failed';
-          rec.attempts = item.attempts;
-          rec.resolvedAt = new Date().toISOString();
-          rec.error = err.message || 'Nenhuma conexão ativa com a Meta';
-          this.persistJobRecord(rec);
-        }
+        const rec = findOrCreateRec();
+        rec.status = 'failed';
+        rec.attempts = item.attempts;
+        rec.resolvedAt = new Date().toISOString();
+        rec.error = err.message || 'Nenhuma conexão ativa com a Meta';
+        void this.persistJobRecord(rec);
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,
           {
@@ -320,15 +441,21 @@ export class MetaPublisher {
         logger.warn('meta', 'meta-publisher', 'retry', `Tentativa ${item.attempts}/${MAX_ATTEMPTS} para ${item.id}`, {
           message: String(err),
         });
+        // Persiste estado de retry na fila persistente (scheduled_at futuro
+        // garante que o process() só o re-picka no horário agendado).
+        const rec = findOrCreateRec();
+        rec.attempts = item.attempts;
+        rec.status = 'retrying';
+        rec.error = String(err.message || err);
+        rec.scheduledAt = new Date(item.nextRetryAt).toISOString();
+        void this.persistJobRecord(rec);
       } else {
-        const rec = this.jobHistory.find((j) => j.id === item.id);
-        if (rec) {
-          rec.status = 'failed';
-          rec.attempts = item.attempts;
-          rec.resolvedAt = new Date().toISOString();
-          rec.error = String(err.message || err);
-          this.persistJobRecord(rec);
-        }
+        const rec = findOrCreateRec();
+        rec.status = 'failed';
+        rec.attempts = item.attempts;
+        rec.resolvedAt = new Date().toISOString();
+        rec.error = String(err.message || err);
+        void this.persistJobRecord(rec);
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,
           {
