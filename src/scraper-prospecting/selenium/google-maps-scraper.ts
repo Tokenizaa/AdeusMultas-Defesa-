@@ -1,43 +1,9 @@
 import { RawLead, ScrapeResult, QueryScrapeResult, ScrapedForKey } from '../types';
 import { SeleniumSession } from './session';
 import { Key, WebElement } from 'selenium-webdriver';
+import { extractCleanPhone, cleanPhoneFromTel } from '../normalizer';
+import { buildSeenKeys, isSeen, stillNeedsScroll } from '../seen-filter';
 import { logger } from '../logger';
-
-/**
- * Regex de telefone brasileiro: captura apenas o trecho do número (match[0]),
- * não a linha inteira. Aceita: +55, DDD entre parênteses separado por espaço/cifrão,
- * 4-5 dígitos + 4 dígitos.
- */
-const BR_PHONE_RE = /(?:\+?55[\s-]?)?(?:\(?(\d{2})\)?[\s-]?)?(\d{4,5}[\s-]?\d{4})/;
-
-/** Extrai o telefone limpo (apenas dígitos com DDD) de um texto arbitrário. */
-function extractCleanPhone(text: string | null | undefined): string | null {
-  if (!text) return null;
-  const match = text.match(BR_PHONE_RE);
-  if (!match) return null;
-  let digits = match[0].replace(/\D/g, '');
-  // Remove prefixo internacional 55 que precede o DDD (+5551... -> 51...)
-  if (digits.length >= 13 && digits.startsWith('55')) {
-    digits = digits.slice(2);
-  }
-  if (digits.length >= 10 && digits.length <= 11) {
-    return digits;
-  }
-  return null;
-}
-
-/** Limpa um href tel: (ex: tel:+555140666564) para dígitos com DDD. */
-function cleanPhoneFromTel(href: string | null | undefined): string | null {
-  if (!href) return null;
-  let digits = href.replace(/\D/g, '');
-  if (digits.length >= 12 && digits.startsWith('55')) {
-    digits = digits.slice(2);
-  }
-  if (digits.length >= 10 && digits.length <= 11) {
-    return digits;
-  }
-  return null;
-}
 
 /**
  * Deriva CEP, UF e cidade de um endereço brasileiro completo.
@@ -295,7 +261,9 @@ export class GoogleMapsSeleniumScraper {
       if (phone) {
         detail.phone = phone;
       } else {
-        // Fallback: procurar telefone no texto do painel
+        // Fallback: procurar telefone no texto do painel. NUNCA grava texto bruto
+        // (ex. "Aberto · Fecha 18:00 · (51) 4066-6564") — extractCleanPhone devolve
+        // apenas dígitos 10-11 válidos, ou null (BUG 2).
         const panelText = (await driver.executeScript(
           `const m = document.querySelector('div[role="main"]') || document.body; return m ? m.innerText.slice(0, 5000) : '';`,
         ).catch(() => '')) as string;
@@ -500,7 +468,11 @@ export class GoogleMapsSeleniumScraper {
       // Abrir o card provoca re-render do feed (invalida os WebElements anteriores).
       // Por isso os cards são re-consultados a cada iteração, em vez de manter um array fixo.
       let i = 0;
+      let extraScrollRounds = 0;
       const maxIterations = 200;
+      // Teto de rounds extras de scroll: quando o pool visível se esgota em duplicatas
+      // conhecidas (BUG 3), avançar além da primeira página SEM loop infinito.
+      const maxExtraScrollRounds = 3;
       while (i < maxIterations) {
         if (requiredNew > 0 && result.leads.length >= requiredNew) {
           logger.info('Limite maxResults atingido, parando abertura de cards', {
@@ -512,7 +484,21 @@ export class GoogleMapsSeleniumScraper {
 
         const cards = await driver.findElements({ css: `${feedSelector} a[href*="/maps/place/"]` });
         if (i >= cards.length) {
-          // Não há mais cards novos no DOM
+          // Pool visível esgotado: tentar carregar mais resultados (scroll extra)
+          // para descobrir negócios NOVOS além dos já vistos.
+          if (stillNeedsScroll(result.leads.length, requiredNew, extraScrollRounds, maxExtraScrollRounds)) {
+            const loaded = await this.getPlaceLinkCount(feedSelector);
+            const more = await this.scrollUntilNoNewItems(
+              feedSelector,
+              requiredNew - result.leads.length,
+              loaded,
+            );
+            if (more.newCount === 0) {
+              break; // scroll não carregou nada novo; não insistir
+            }
+            extraScrollRounds += 1;
+            continue; // re-consultar cards (re-render) e seguir do índice onde parou
+          }
           break;
         }
         const cardEl = cards[i];
@@ -533,12 +519,9 @@ export class GoogleMapsSeleniumScraper {
           }
           seenInThisQuery.add(lead.sourceUrl);
 
-          const phoneKey = (lead.phone || '').replace(/\D/g, '');
-          const webKey = (lead.website || '').toLowerCase().trim();
-          const emailKey = (lead.email || '').toLowerCase().trim();
-          const compositeKey = [lead.sourceUrl, phoneKey, webKey, emailKey].filter(Boolean).join('|');
-
-          if (compositeKey && seenKeys.has(compositeKey)) {
+          // Skip intra-execucao (seenKeys carregado do banco em formato canônico,
+          // mesmas chaves de loadExistingScrapedKeys -> BUG 3: não re-coletar o já visto)
+          if (isSeen(seenKeys, lead.sourceUrl, lead.phone, lead.website, lead.email)) {
             duplicatesThisQuery += 1;
             i += 1;
             continue;
@@ -547,8 +530,14 @@ export class GoogleMapsSeleniumScraper {
           // 2. É um lead novo: abrir o card de detalhe para enriquecer
           const enriched = await this.enrichFromDetail(cardEl, lead, searchUrl);
 
-          if (compositeKey) {
-            seenKeys.add(compositeKey);
+          // Registrar chaves canônicas (url + campo composto) p/ skip na própria run e nas próximas
+          for (const key of buildSeenKeys(
+            enriched.sourceUrl,
+            enriched.phone,
+            enriched.website,
+            enriched.email,
+          )) {
+            seenKeys.add(key);
           }
 
           result.leads.push(enriched);

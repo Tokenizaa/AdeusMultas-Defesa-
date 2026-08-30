@@ -7,6 +7,7 @@ export type ProcedureType =
   | 'cassacao_cnh'
   | 'processo_suspensao'
   | 'processo_cassacao'
+  | 'defesa_previa'
   | 'analise_tecnica'
   | 'relatorio_pericial';
 

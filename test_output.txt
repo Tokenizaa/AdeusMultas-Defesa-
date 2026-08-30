@@ -1,0 +1,15 @@
+
+=== Integração: MetaPublisher.enqueue x gate de qualidade ===
+16:04:28 [ERROR][meta:meta-publisher] Publicação  rejeitada: imagem reprovou no gate de qualidade 
+  [PASS] peça hard-fail => queued:false
+  [PASS] peça hard-fail => rejected:true
+  [PASS] peça hard-fail => reasons contém resolution_too_low
+  [PASS] peça hard-fail => NÃO adicionada à fila
+  [PASS] rejeição => 1 job persistido com status rejected + error = motivos
+  [PASS] rejeição => jobId devolvido no resultado
+16:04:28 [WARN][meta:meta-publisher] Imagem de  não pôde ser avaliada (fetch_failed) — publicando sem bloqueio
+  [PASS] fetch quebrado => rejected ausente (gate não bloqueou)
+  [PASS] fetch quebrado => enqueue PROSSEGUIU até o fluxo normal (item construído, sem rejected)
+  [PASS] peça OK => queued:true
+
+TODOS OS TESTES PASSARAM

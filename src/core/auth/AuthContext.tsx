@@ -9,6 +9,20 @@ import {
   saveStoredUser,
 } from '../../lib/supabase';
 
+// Fetch user role from backend API (avoids direct user_profiles query which hits RLS)
+async function fetchUserRoleFromBackend(userId: string): Promise<UserRole | undefined> {
+  try {
+    const res = await fetch(`/api/auth/me`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.role as UserRole;
+    }
+  } catch {
+    // Fallback handled by caller
+  }
+  return undefined;
+}
+
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginWithFacebook: () => Promise<{ success: boolean; error?: string }>;
@@ -32,26 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isSupabaseConfigured && supabase) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-             // Get role from user_profiles table for accuracy, fallback to user_metadata
-             let roleFromProfile: UserRole | undefined;
-             if (isSupabaseConfigured && supabase) {
-               try {
-                 const { data: profileData, error: profileError } = await supabase
-                   .from('user_profiles')
-                   .select('role')
-                   .eq('user_id', session.user.id)
-                   .single();
-                 if (!profileError && profileData?.role) {
-                   roleFromProfile = profileData.role as UserRole;
-                 }
-               } catch (profileErr) {
-                 // Ignore profile fetch errors, fall back to user_metadata
-                 console.warn('Failed to fetch user profile for role:', profileErr);
-}
-}
-                
-                const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
+if (session?.user) {
+        // Get role from backend API (avoids RLS on user_profiles)
+        const roleFromProfile = await fetchUserRoleFromBackend(session.user.id);
+        
+        const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
              const authUser: AuthUser = {
                id: session.user.id,
                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
@@ -70,27 +69,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            }
 
           // Subscribe to Supabase auth events
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
           if (session?.user) {
-               // Get role from user_profiles table for accuracy, fallback to user_metadata
-               let roleFromProfile: UserRole | undefined;
-               if (isSupabaseConfigured && supabase) {
-                 try {
-                   const { data: profileData, error: profileError } = await supabase
-                     .from('user_profiles')
-                     .select('role')
-                     .eq('user_id', session.user.id)
-                     .single();
-                 if (!profileError && profileData?.role) {
-                   roleFromProfile = profileData.role as UserRole;
-                 }
-                 } catch (profileErr) {
-                   // Ignore profile fetch errors, fall back to user_metadata
-                   console.warn('Failed to fetch user profile for role:', profileErr);
-                 }
-               }
-               
-const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
+            // Get role from backend API (avoids RLS on user_profiles)
+            const roleFromProfile = await fetchUserRoleFromBackend(session.user.id);
+            
+            const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
                const authUser: AuthUser = {
                  id: session.user.id,
                  name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
@@ -148,23 +132,8 @@ const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole))
           console.warn('Supabase login failed, trying local fallback:', error.message);
           // Fall through to local fallback instead of failing hard
         } else if (data.user) {
-           // Get role from user_profiles table for accuracy, fallback to user_metadata
-           let roleFromProfile: UserRole | undefined;
-           if (isSupabaseConfigured && supabase) {
-             try {
-               const { data: profileData, error: profileError } = await supabase
-                 .from('user_profiles')
-                 .select('role')
-                 .eq('user_id', data.user.id)
-                 .single();
-               if (!profileError && profileData?.role) {
-                 roleFromProfile = profileData.role as UserRole;
-               }
-             } catch (profileErr) {
-               // Ignore profile fetch errors, fall back to user_metadata
-               console.warn('Failed to fetch user profile for role:', profileErr);
-             }
-           }
+           // Get role from backend API (avoids RLS on user_profiles)
+           const roleFromProfile = await fetchUserRoleFromBackend(data.user.id);
            
            const role = (roleFromProfile ?? (data.user.user_metadata?.role as UserRole)) ?? 'citizen';
            const authUser: AuthUser = {

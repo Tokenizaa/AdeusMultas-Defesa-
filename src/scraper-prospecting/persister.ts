@@ -1,6 +1,8 @@
 import { Lead, RawLead, ScrapeResult, QueryScrapeResult, SearchConfig, ScrapedForKey } from './types';
 import { supabaseAdmin } from './supabase';
 import { classifyLead } from './classifier';
+import { normalizePhone } from './normalizer';
+import { buildSeenKeys } from './seen-filter';
 import { logger } from './logger';
 import { SeleniumSession } from './selenium/session';
 import { GoogleMapsSeleniumScraper } from './selenium/google-maps-scraper';
@@ -88,11 +90,15 @@ async function findExistingByUrl(url: string): Promise<DbRow | null> {
 }
 
 function buildLead(raw: RawLead, leadType: 'despachante' | 'advogado_transito', source: string, scrapedFor: ScrapedForKey | null, collectionRunId: string | null): Lead {
+  // Normalização ÚNICA e consistente de telefone (normalizer.normalizePhone):
+  // remove +55/55 e zero inicial de DDD. phone (exibição) e phone_normalized (índice
+  // único de dedup) derivam da MESMA função -> dedup confiável entre execuções.
+  const phone = normalizePhone(raw.phone) || null;
   return {
     name: raw.name,
     category: raw.category || null,
-    phone: raw.phone || null,
-    phone_normalized: raw.phone?.replace(/\D/g, '') || null,
+    phone,
+    phone_normalized: phone,
     whatsapp: raw.whatsapp || null,
     email: raw.email || null,
     website: raw.website || null,
@@ -154,6 +160,7 @@ export async function persistLeads(
         source: lead.source,
         source_url: lead.sourceUrl,
         scraped_at: lead.scraped_at,
+        audience: 'B2B',
         // jsonb: gravar como objeto, sem JSON.stringify duplo
         scraped_for: scrapedFor ?? null,
         collection_run_id: collectionRunId,
@@ -261,18 +268,15 @@ async function loadExistingScrapedKeys(): Promise<Set<string>> {
     }
 
     for (const row of (data || []) as any[]) {
-      // Chave principal: source_url
-      if (row.source_url) {
-        seenKeys.add(`url:${row.source_url}`);
-      }
-
-      // Chave composta: phone|website|email (para dedup cross-campo)
-      const phone = row.phone_normalized || '';
-      const website = (row.website || '').toLowerCase().trim();
-      const email = (row.email || '').toLowerCase().trim();
-      const composite = [phone, website, email].filter(Boolean).join('|');
-      if (composite) {
-        seenKeys.add(`id:${composite}`);
+      // Mesmo formato de chave usado pelo scraper (seen-filter.buildSeenKeys):
+      // `url:<source_url>` e `id:<phone_normalized>|<website>|<email>`
+      for (const key of buildSeenKeys(
+        row.source_url || undefined,
+        row.phone_normalized || undefined,
+        row.website || undefined,
+        row.email || undefined,
+      )) {
+        seenKeys.add(key);
       }
     }
 

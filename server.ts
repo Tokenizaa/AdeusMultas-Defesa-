@@ -238,32 +238,23 @@ async function startServer() {
   }
 
   // Mount Modular API Routes First
-  app.use('/api/admin/commercial', commercialRoutes);
-  app.use('/api/commercial', commercialRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api', adminRoutes);
-  app.use('/api/integrations', metaRoutes);
-  app.use('/api', metaRoutes);
-  app.use('/api/monitoring', monitoringRoutes);
-  app.use('/api', monitoringRoutes);
-  app.use('/api/settings', settingsRoutes);
-  app.use('/api', settingsRoutes);
-  app.use('/api/logs', logsRoutes);
-  app.use('/api', logsRoutes);
-  app.use('/api/marketing', marketingRoutes);
-  app.use('/api/agents', agentsRoutes);
-  app.use('/api', agentsRoutes);
-  app.use('/api/communication', whatsappRoutes);
-  app.use('/api', whatsappRoutes);
-  app.use('/api/ocr', ocrRoutes);
-  app.use('/api', ocrRoutes);
-  app.use('/api/payments', paymentsRoutes);
-  app.use('/api/notifications', notificationsRoutes);
-  app.use('/api', notificationsRoutes);
-app.use('/api/knowledge', knowledgeRoutes);
-app.use('/api/marketing/automation', marketingAutomationRoutes);
-app.use('/api/health', healthRoutes);
-app.use('/api', healthRoutes);
+   app.use('/api/admin/commercial', commercialRoutes);
+   app.use('/api/commercial', commercialRoutes);
+   app.use('/api/admin', adminRoutes);
+   app.use('/api/integrations', metaRoutes);
+   app.use('/api/monitoring', monitoringRoutes);
+   app.use('/api/settings', settingsRoutes);
+   app.use('/api/logs', logsRoutes);
+   app.use('/api/marketing/automation', marketingAutomationRoutes);
+   app.use('/api/marketing', marketingRoutes);
+   app.use('/api/agents', agentsRoutes);
+   app.use('/api/communication/whatsapp', whatsappRoutes);
+   app.use('/api/ocr', ocrRoutes);
+   app.use('/api/payments', paymentsRoutes);
+   app.use('/api/notifications', notificationsRoutes);
+   app.use('/api/knowledge', knowledgeRoutes);
+   app.use('/api/health', healthRoutes);
+   app.use('/api', healthRoutes);
 
   // Meta Status Direct Fallback Route for UI Compatibility
   app.get(['/api/meta/status', '/api/marketing/meta/status'], (req, res) => {

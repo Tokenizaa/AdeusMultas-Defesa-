@@ -3,6 +3,13 @@ import { InfractionCategory, calculateConsideredSpeed } from '../../core/onboard
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 import { generateRandomAIT } from '../../utils/test-data-generator';
 
+// DEV-ONLY GUARD: test data must never contaminate production.
+function assertDevOnly(): void {
+  if (!import.meta.env.DEV) {
+    throw new Error('Test data only available in dev');
+  }
+}
+
 /**
  * testFillData — dados de teste 🧪 COERENTES com a categoria de infração selecionada.
  *
@@ -61,6 +68,7 @@ export function buildCoherentTestInfraction(
   category: InfractionCategory,
   current: InfractionData,
 ): InfractionData {
+  assertDevOnly();
   // Base neutra: identificadores e metadados sempre válidos, independentes da categoria.
   const neutral = {
     aitNumber: generateRandomAIT(),
@@ -194,6 +202,7 @@ export function buildCoherentTestInfraction(
  * seleção humana de infração (código/artigo/descrição) nem velocidades.
  */
 export function buildNeutralTestIdentification(current: InfractionData): InfractionData {
+  assertDevOnly();
   return {
     ...current,
     aitNumber: generateRandomAIT(),

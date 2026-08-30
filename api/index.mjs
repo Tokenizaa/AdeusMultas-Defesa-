@@ -42,6 +42,7 @@ var EventTopics = {
   MARKETING_CONTENT_DRAFTED: "marketing.content_drafted",
   MARKETING_QUALITY_APPROVED: "marketing.quality_approved",
   MARKETING_CONTENT_PUBLISHED: "marketing.content_published",
+  MARKETING_CONTENT_REJECTED: "marketing.content_rejected",
   MARKETING_METRICS_COLLECTED: "marketing.metrics_collected",
   MARKETING_LEARNING_UPDATE: "marketing.learning_update",
   MARKETING_KNOWLEDGE_BASE_UPDATED: "marketing.knowledge_base_updated",
@@ -1203,8 +1204,19 @@ var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
   const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY") || process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
+  const serviceKey = serviceRoleKey || anonKey;
   if (url && serviceKey && url.startsWith("https://")) {
+    if (!serviceRoleKey) {
+      logger.error(
+        "supabase",
+        "db_server",
+        "init",
+        "SUPABASE_SERVICE_ROLE_KEY ausente: client do servidor usando chave anon. RLS deny-all (14 tabelas internas) bloquear\xE1 opera\xE7\xF5es do backend. Configure SUPABASE_SERVICE_ROLE_KEY no .env.",
+        { status: "fallback" }
+      );
+    }
     try {
       clientInstance = createClient(url, serviceKey);
       logger.info("supabase", "db_server", "init", "Supabase server client conectado.");
@@ -1630,15 +1642,15 @@ var CanonicalMapper = class _CanonicalMapper {
       vehicle_year: vehicle.year || infraction.anoModelo,
       vehicle_color: vehicle.color || infraction.cor,
       ait_number: infraction.aitNumber || infraction.autoInfracao || "SEM_AIT",
-      infraction_code: infraction.infractionCode || infraction.codigoInfracao || "745-50",
-      infraction_description: infraction.description || infraction.descricaoInfracao || "Infra\xE7\xE3o de Tr\xE2nsito",
-      ctb_article: infraction.ctbArticle || infraction.enquadramentoLegal || "Art. 218 do CTB",
+      infraction_code: infraction.infractionCode || infraction.codigoInfracao,
+      infraction_description: infraction.description || infraction.descricaoInfracao || "",
+      ctb_article: infraction.ctbArticle || infraction.enquadramentoLegal,
       severity: infraction.severity || (infraction.gravidade ? String(infraction.gravidade).toLowerCase() : "grave"),
       points: Number(infraction.points || infraction.pontos || 0),
       fine_amount: Number(infraction.fineAmount || infraction.valorOriginal || 0),
-      autuador_body: infraction.autuadorBody || infraction.orgaoAutuador || "DETRAN",
+      autuador_body: infraction.autuadorBody ?? infraction.orgaoAutuador,
       date_time: infraction.dateTime || infraction.dataHoraInfracao || (/* @__PURE__ */ new Date()).toISOString(),
-      location: infraction.location || infraction.localInfracao || "Via P\xFAblica",
+      location: infraction.location || infraction.localInfracao || "",
       speed_limit: infraction.speedLimit || infraction.velocidadePermitida,
       measured_speed: infraction.measuredSpeed || infraction.velocidadeMedida,
       considered_speed: infraction.consideredSpeed || infraction.velocidadeConsiderada,
@@ -3606,7 +3618,7 @@ var AdminQueryService = class {
       paidAt: row.paid_at,
       externalId: `PAGBANK_TX_${(row.case_id || "").substring(0, 10).toUpperCase()}`,
       infractionCode: "745-50",
-      organ: "DETRAN"
+      organ: "N\xE3o informado"
     }));
     const totalCount = count ?? payments.length;
     const totalVolume = payments.filter((p) => p.status === "PAID").reduce((acc, p) => acc + p.amount, 0);
@@ -3644,7 +3656,7 @@ var AdminQueryService = class {
         paidAt: isPaid ? c.paidAt || c.updatedAt || (/* @__PURE__ */ new Date()).toISOString() : null,
         externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
         infractionCode: c.infraction?.infractionCode || "745-50",
-        organ: c.infraction?.autuadorBody || "DETRAN"
+        organ: c.infraction?.autuadorBody ?? "\xD3RG\xC3O N\xC3O INFORMADO"
       };
     });
     const totalCount = allPayments.length;
@@ -3681,12 +3693,12 @@ var AdminQueryService = class {
         id: `doc_${c.id}`,
         caseId: c.id,
         title: c.title || `Peti\xE7\xE3o Auto ${c.infraction?.aitNumber || c.id}`,
-        clientName: c.clientName || "Condutor DefesAi",
-        clientCpf: c.clientCpf || "000.000.000-00",
-        aitNumber: c.infraction?.aitNumber || "1B892014",
-        infractionCode: c.infraction?.infractionCode || "745-50",
-        infractionDescription: c.infraction?.description || "Excesso de velocidade",
-        organ: c.infraction?.autuadorBody || "DETRAN-SP",
+        clientName: c.clientName || "N\xE3o informado",
+        clientCpf: c.clientCpf || "N\xE3o informado",
+        aitNumber: c.infraction?.aitNumber || "N\xE3o informado",
+        infractionCode: c.infraction?.infractionCode || "N\xE3o informado",
+        infractionDescription: c.infraction?.description || "N\xE3o informado",
+        organ: c.infraction?.autuadorBody ?? "\xD3RG\xC3O N\xC3O INFORMADO",
         procedureType: c.serviceType || "recurso_jari",
         procedureLabel: c.serviceType === "conversao_advertencia" ? "Convers\xE3o em Advert\xEAncia (Art. 267 CTB)" : c.serviceType === "recurso_jari" ? "Recurso JARI (1\xAA Inst\xE2ncia)" : "Defesa Pr\xE9via (Autua\xE7\xE3o)",
         status: hasDraft ? c.isPaid ? "LIBERADO_PAGO" : "GERADO_PREVIEW" : "PENDENTE_DADOS",
@@ -5319,12 +5331,12 @@ router.get(["/documents", "/admin/documents"], (req, res) => {
       id: `doc_${c.id}`,
       caseId: c.id,
       title: c.title || `Peti\xE7\xE3o Auto ${c.infraction?.aitNumber || c.id}`,
-      clientName: c.clientName || "Condutor DefesAi",
-      clientCpf: c.clientCpf || "000.000.000-00",
-      aitNumber: c.infraction?.aitNumber || "1B892014",
-      infractionCode: c.infraction?.infractionCode || "745-50",
-      infractionDescription: c.infraction?.description || "Excesso de velocidade",
-      organ: c.infraction?.autuadorBody || "DETRAN-SP",
+      clientName: c.clientName || "N\xE3o informado",
+      clientCpf: c.clientCpf || "N\xE3o informado",
+      aitNumber: c.infraction?.aitNumber || "N\xE3o informado",
+      infractionCode: c.infraction?.infractionCode || "N\xE3o informado",
+      infractionDescription: c.infraction?.description || "N\xE3o informado",
+      organ: c.infraction?.autuadorBody ?? "\xD3RG\xC3O N\xC3O INFORMADO",
       procedureType: c.serviceType || "recurso_jari",
       procedureLabel: c.serviceType === "conversao_advertencia" ? "Convers\xE3o em Advert\xEAncia (Art. 267 CTB)" : c.serviceType === "recurso_jari" ? "Recurso JARI (1\xAA Inst\xE2ncia)" : "Defesa Pr\xE9via (Autua\xE7\xE3o)",
       status: hasDraft ? c.isPaid ? "LIBERADO_PAGO" : "GERADO_PREVIEW" : "PENDENTE_DADOS",
@@ -5853,7 +5865,8 @@ O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qua
       visual_prompt: "Visual elegante com paleta azul escuro e amarelo institucional.",
       authorAgent: "@marketing-criador",
       author_agent: "@marketing-criador",
-      qualityReviewScore: 9.7
+      qualityReviewScore: 9.7,
+      audience: "B2C"
     };
     let savedContent = newContent;
     if (this.supabase) {
@@ -5873,6 +5886,9 @@ O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qua
     return { success: true, content: savedContent };
   }
   // Create manual content item
+  // Status validation is enforced at DB level via CHECK constraint on editorial_content.status
+  // (7 values: rascunho, em_revisao, aprovado_qualidade, reprovado_qualidade, agendado, publicado, arquivado)
+  // See migration: 20260829130001_align_content_status_checks.sql
   async createManualContent(input) {
     const newContent = {
       id: `cnt-${Date.now()}`,
@@ -5897,7 +5913,8 @@ O prazo m\xE1ximo para expedi\xE7\xE3o da notifica\xE7\xE3o \xE9 de 30 dias. Qua
       visual_prompt: input.visualPrompt || "",
       authorAgent: "@marketing-criador",
       author_agent: "@marketing-criador",
-      qualityReviewScore: 9.5
+      qualityReviewScore: 9.5,
+      audience: "B2C"
     };
     let savedContent = newContent;
     if (this.supabase) {
@@ -6731,6 +6748,107 @@ var WhatsAppService = class {
 };
 var whatsappService = new WhatsAppService();
 
+// src/server/services/prospecting-responder.ts
+function normalizeBrPhone(input) {
+  if (!input) return "";
+  let digits = String(input).replace(/\D/g, "");
+  if (/^55\d{10,11}$/.test(digits)) {
+    digits = digits.slice(2);
+  }
+  return digits;
+}
+var ACTIVE_LC_STATUSES = ["queued", "sent", "delivered", "paused"];
+var RESPONDED_OR_BEYOND = ["responded", "converted", "exhausted"];
+async function persistProspectingResponse(incoming, client = getSupabaseServerClient()) {
+  const none = { matched: false, messageInserted: false, statusUpdated: false };
+  if (!client) return none;
+  const inboundPhone = normalizeBrPhone(incoming.externalContactId);
+  if (!inboundPhone) return none;
+  try {
+    const { data: leads } = await client.from("marketing_leads").select("id, phone, whatsapp").limit(50);
+    const lead = (leads || []).find(
+      (l) => normalizeBrPhone(l.phone) === inboundPhone || normalizeBrPhone(l.whatsapp) === inboundPhone
+    );
+    if (!lead) return none;
+    const { data: lc } = await client.from("marketing_lead_campaigns").select("id, campaign_id, lead_id, status").eq("lead_id", lead.id).in("status", ACTIVE_LC_STATUSES).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    if (!lc) return none;
+    const externalId = incoming.externalMessageId;
+    let alreadyPersisted = false;
+    if (externalId) {
+      const { data: existing } = await client.from("marketing_messages").select("id").eq("lead_id", lead.id).eq("external_id", externalId).maybeSingle();
+      alreadyPersisted = Boolean(existing);
+    }
+    let inserted = false;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    if (!alreadyPersisted) {
+      const { error: insError } = await client.from("marketing_messages").insert({
+        lead_id: lead.id,
+        campaign_id: lc.campaign_id,
+        lead_campaign_id: lc.id,
+        direction: "inbound",
+        text: incoming.text || "",
+        channel: incoming.channel || "whatsapp_evolution",
+        status: "delivered",
+        external_id: externalId || null,
+        sent_at: incoming.timestamp || now
+      });
+      if (insError) {
+        logger.warn("messaging", "prospecting", "insert_error", `Falha ao inserir mensagem inbound de prospec\xE7\xE3o: ${insError.message}`);
+        return { matched: true, messageInserted: false, statusUpdated: false };
+      }
+      inserted = true;
+    }
+    let statusUpdated = false;
+    if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
+      await client.from("marketing_lead_campaigns").update({ status: "responded", updated_at: now }).eq("id", lc.id);
+      statusUpdated = true;
+    }
+    logger.info("messaging", "prospecting", "responded", `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || "whatsapp_evolution"})`);
+    return { matched: true, messageInserted: inserted, statusUpdated };
+  } catch (err) {
+    logger.warn("messaging", "prospecting", "responder_error", `Falha ao persistir resposta de prospec\xE7\xE3o: ${err.message}`);
+    return none;
+  }
+}
+
+// src/server/services/whatsapp-journey-router.ts
+var singletonRouter = {
+  async resolveJourney(incoming) {
+    const start = Date.now();
+    const client = getSupabaseServerClient();
+    if (!client) {
+      logger.warn("messaging", "journey_router", "no_client", "Supabase client unavailable \u2014 defaulting to B2C_AUTO");
+      return "B2C_AUTO";
+    }
+    const phone = normalizeBrPhone(incoming.externalContactId);
+    if (!phone) {
+      logger.debug("messaging", "journey_router", "no_phone", "Empty normalized phone \u2014 defaulting to B2C_AUTO");
+      return "B2C_AUTO";
+    }
+    try {
+      const { data: lead, error } = await client.from("marketing_leads").select("id, lead_type, audience").eq("phone_normalized", phone).eq("audience", "B2B").maybeSingle();
+      if (error) {
+        logger.error("messaging", "journey_router", "query_error", `Supabase query failed: ${error.message}`);
+        return "B2C_AUTO";
+      }
+      const journey = lead ? "B2B_RELATIONSHIP" : "B2C_AUTO";
+      const duration = Date.now() - start;
+      logger.debug("messaging", "journey_router", "resolved", `Journey resolved`, {
+        phone: phone.slice(-4).padStart(4, "*"),
+        // log last 4 digits only
+        journey,
+        durationMs: duration,
+        leadId: lead?.id
+      });
+      return journey;
+    } catch (err) {
+      logger.error("messaging", "journey_router", "unexpected_error", `Unexpected error: ${err.message}`);
+      return "B2C_AUTO";
+    }
+  }
+};
+var whatsappJourneyRouter = singletonRouter;
+
 // src/server/services/messaging-service.ts
 var EvolutionWhatsAppAdapter = class {
   constructor() {
@@ -7049,15 +7167,28 @@ var MetaWhatsAppCloudAdapter = class {
   }
 };
 var MessagingService = class {
-  // conversationId -> messages[]
+  // mapId (conv_*) -> uuid da linha
   constructor() {
     this.adapters = /* @__PURE__ */ new Map();
     this.contacts = /* @__PURE__ */ new Map();
     this.leads = /* @__PURE__ */ new Map();
     this.conversations = /* @__PURE__ */ new Map();
     this.messages = /* @__PURE__ */ new Map();
+    // conversationId -> messages[]
+    // --- Persistência Supabase (source of truth de longo prazo) ---
+    // Mapas em memória continuam servindo leituras síncronas (contrato frontend intacto);
+    // toda mutação é espelhada nas tabelas messaging_* e, no boot, os Mapas são
+    // re-hidratados do banco (restart preserva histórico).
+    // Falhas de DB são logadas e engolidas (zero regressão in-process).
+    this.supabase = null;
+    this.contactDbIds = /* @__PURE__ */ new Map();
+    // mapId (cnt_*) -> uuid da linha
+    this.convDbIds = /* @__PURE__ */ new Map();
     this.registerAdapters();
     this.seedInitialData();
+    this.hydrateFromDatabase().catch((err) => {
+      logger.error("messaging", "persist", "hydrate_unhandled", `Falha n\xE3o tratada na hidrata\xE7\xE3o: ${err?.message ?? String(err)}`);
+    });
   }
   registerAdapters() {
     const evo = new EvolutionWhatsAppAdapter();
@@ -7444,6 +7575,9 @@ var MessagingService = class {
     const convMessages = this.messages.get(conversation.id) || [];
     convMessages.push(message);
     this.messages.set(conversation.id, convMessages);
+    await persistProspectingResponse(incoming);
+    const journey = await whatsappJourneyRouter.resolveJourney(incoming);
+    conversation.metadata = { ...conversation.metadata, journeyType: journey };
     eventBus.publish(
       EventTopics.MESSAGING_MESSAGE_RECEIVED,
       {
@@ -7454,11 +7588,14 @@ var MessagingService = class {
       },
       "messaging_service"
     );
-    if (conversation.aiMode === "auto" && incoming.text) {
+    if (conversation.aiMode === "auto" && incoming.text && journey === "B2C_AUTO") {
       setImmediate(async () => {
         await this.triggerAIAutoResponse(conversation, contact, incoming.text || "");
       });
     }
+    await this.persistContact(contact);
+    await this.persistConversation(conversation);
+    await this.persistMessage(message);
     return { contact, conversation, message };
   }
   // =========================================================================
@@ -7504,6 +7641,8 @@ var MessagingService = class {
     conversation.lastMessageAt = now;
     conversation.updatedAt = now;
     conversation.unreadCount = 0;
+    await this.persistMessage(message);
+    await this.persistConversation(conversation);
     eventBus.publish(
       EventTopics.MESSAGING_MESSAGE_SENT,
       {
@@ -7618,6 +7757,7 @@ var MessagingService = class {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.conversations.set(conv.id, updated);
+    void this.persistConversation(updated);
     return updated;
   }
   updateContact(id, updates) {
@@ -7625,6 +7765,7 @@ var MessagingService = class {
     if (!cnt) throw new Error("Contato n\xE3o encontrado");
     const updated = { ...cnt, ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.contacts.set(id, updated);
+    void this.persistContact(updated);
     return updated;
   }
   createOrUpdateLead(leadData) {
@@ -7648,6 +7789,17 @@ var MessagingService = class {
     this.leads.set(id, lead);
     contact.leadId = id;
     if (lead.vehiclePlate) contact.vehiclePlate = lead.vehiclePlate;
+    const conv = this.findConversationByContactId(contact.id);
+    if (conv) {
+      const withLead = {
+        ...conv,
+        lead,
+        metadata: { ...conv.metadata || {}, lead }
+      };
+      this.conversations.set(conv.id, withLead);
+      void this.persistConversation(withLead);
+    }
+    void this.persistContact(contact);
     return lead;
   }
   getStats() {
@@ -7790,7 +7942,234 @@ var MessagingService = class {
     const allPassed = results.every((r) => r.passed);
     return { success: allPassed, results };
   }
+  // =========================================================================
+  // 7. SUPABASE PERSISTENCE LAYER (source of truth) — hybrid cache pattern
+  // =========================================================================
+  // Mapas em memória permanecem como cache de leitura síncrona (frontend contract
+  // intacto). Toda mutação é espelhada aqui e o estado é re-hidratado no boot.
+  // Todos os métodos abaixo engolem erros — falha de DB NÃO degrada o inbox.
+  get db() {
+    if (!this.supabase) this.supabase = getSupabaseServerClient();
+    return this.supabase;
+  }
+  async hydrateFromDatabase() {
+    const client = this.db;
+    if (!client) {
+      logger.warn("messaging", "persist", "hydrate_skip", "Supabase client ausente \u2014 inbox permanecer\xE1 em mem\xF3ria apenas");
+      return;
+    }
+    try {
+      const { data: contactRows, error: cErr } = await client.from("messaging_contacts").select("*");
+      if (cErr) throw cErr;
+      if (Array.isArray(contactRows)) {
+        for (const row of contactRows) {
+          const contact = this.mapContactRow(row);
+          this.contacts.set(contact.id, contact);
+          this.contactDbIds.set(contact.id, row.id);
+        }
+      }
+      const { data: convRows, error: vErr } = await client.from("messaging_conversations").select("*");
+      if (vErr) throw vErr;
+      if (Array.isArray(convRows)) {
+        for (const row of convRows) {
+          const { conv, lead } = this.mapConversationRow(row);
+          if (lead && lead.id) this.leads.set(lead.id, lead);
+          this.conversations.set(conv.id, conv);
+          this.convDbIds.set(conv.id, row.id);
+        }
+      }
+      const { data: msgRows, error: mErr } = await client.from("messaging_messages").select("*").order("created_at", { ascending: true });
+      if (mErr) throw mErr;
+      if (Array.isArray(msgRows)) {
+        const byConv = /* @__PURE__ */ new Map();
+        for (const row of msgRows) {
+          const convUuid = row.conversation_id;
+          let convKey = this.convDbIdsFromUuid(convUuid);
+          if (!convKey) convKey = convUuid;
+          (byConv.get(convKey) || byConv.set(convKey, []).get(convKey)).push(row);
+        }
+        for (const [key, rows] of byConv) {
+          const existing = this.messages.get(key) || [];
+          const merged = [...rows.map((r) => this.mapMessageRow(r, key)), ...existing];
+          const dedup = new Map(merged.map((m) => [m.id, m]));
+          this.messages.set(
+            key,
+            Array.from(dedup.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          );
+        }
+      }
+      logger.info("messaging", "persist", "hydrate_done", "Inbox hidratado do Supabase", {
+        contacts: this.contacts.size,
+        conversations: this.conversations.size,
+        leads: this.leads.size,
+        messages: msgRows?.length ?? 0
+      });
+    } catch (err) {
+      logger.error("messaging", "persist", "hydrate_failed", `Falha na hidrata\xE7\xE3o do inbox: ${err?.message ?? String(err)}`);
+    }
+  }
+  async persistContact(contact) {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const { data, error } = await client.from("messaging_contacts").upsert(this.contactToRow(contact), { onConflict: "channel,external_id" }).select("id").single();
+      if (error) throw error;
+      if (data?.id) this.contactDbIds.set(contact.id, data.id);
+    } catch (err) {
+      logger.error("messaging", "persist", "contact_failed", `Falha ao persistir contato ${contact.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+  async persistConversation(conversation) {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const contactUuid = this.contactDbIds.get(conversation.contactId);
+      if (!contactUuid) return;
+      const { data, error } = await client.from("messaging_conversations").upsert(this.conversationToRow(conversation, contactUuid), { onConflict: "contact_id,channel" }).select("id").single();
+      if (error) throw error;
+      if (data?.id) this.convDbIds.set(conversation.id, data.id);
+    } catch (err) {
+      logger.error("messaging", "persist", "conversation_failed", `Falha ao persistir conversa ${conversation.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+  async persistMessage(message) {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const convUuid = this.convDbIds.get(message.conversationId);
+      if (!convUuid) return;
+      await client.from("messaging_messages").insert(this.messageToRow(message, convUuid));
+    } catch (err) {
+      logger.error("messaging", "persist", "message_failed", `Falha ao persistir mensagem ${message.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+  // --- row <-> memory mappings ---
+  // O id legado do Map (cnt_wpp_01, conv_wpp_01, msg_01_1) é preservado via
+  // metadata.mapId. Leads embutidos em conversations.metadata.lead.
+  contactToRow(c) {
+    return {
+      name: c.name,
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+      channel: c.channel,
+      external_id: c.externalId,
+      avatar_url: c.avatarUrl ?? null,
+      vehicle_plate: c.vehiclePlate ?? null,
+      metadata: { mapId: c.id, ...c.leadId ? { leadId: c.leadId } : {} },
+      updated_at: c.updatedAt
+    };
+  }
+  mapContactRow(row) {
+    const meta = row.metadata || {};
+    return {
+      id: meta.mapId || row.id,
+      name: row.name,
+      phone: row.phone ?? void 0,
+      email: row.email ?? void 0,
+      channel: row.channel,
+      externalId: row.external_id,
+      avatarUrl: row.avatar_url ?? void 0,
+      leadId: meta.leadId,
+      vehiclePlate: row.vehicle_plate ?? void 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+  conversationToRow(c, contactUuid) {
+    const metadata = {
+      ...c.metadata || {},
+      mapId: c.id,
+      contactMapId: c.contactId
+    };
+    if (c.lead) metadata.lead = c.lead;
+    return {
+      contact_id: contactUuid,
+      channel: c.channel,
+      channel_label: c.channelLabel ?? null,
+      status: c.status,
+      unread_count: c.unreadCount,
+      last_message_text: c.lastMessageText,
+      last_message_at: c.lastMessageAt,
+      ai_mode: c.aiMode,
+      metadata,
+      updated_at: c.updatedAt
+    };
+  }
+  mapConversationRow(row) {
+    const meta = row.metadata || {};
+    const mapId = meta.mapId || row.id;
+    const contactMapId = meta.contactMapId || row.contact_id;
+    const contact = this.contacts.get(contactMapId);
+    const safeContact = contact ?? {
+      id: contactMapId,
+      name: "Contato (sem mapa local)",
+      channel: row.channel,
+      externalId: "",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+    const lead = meta.lead ? meta.lead : void 0;
+    const conv = {
+      id: mapId,
+      conversationId: mapId,
+      contactId: contactMapId,
+      contact: safeContact,
+      lead,
+      channel: row.channel,
+      channelLabel: row.channel_label ?? void 0,
+      status: row.status,
+      unreadCount: row.unread_count,
+      lastMessageText: row.last_message_text ?? "",
+      lastMessageAt: row.last_message_at ?? row.created_at,
+      aiMode: row.ai_mode,
+      metadata: meta,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+    return { conv, lead };
+  }
+  messageToRow(m, convUuid) {
+    return {
+      conversation_id: convUuid,
+      channel: m.channel,
+      direction: m.direction,
+      sender_id: m.senderId,
+      sender_name: m.senderName,
+      text: m.text ?? null,
+      media_url: m.mediaUrl ?? null,
+      media_type: m.mediaType ?? null,
+      status: m.status,
+      external_message_id: m.externalMessageId ?? null,
+      raw_metadata: m.rawMetadata ?? null,
+      metadata: { mapId: m.id },
+      created_at: m.createdAt
+    };
+  }
+  mapMessageRow(row, conversationId) {
+    const meta = row.metadata || {};
+    return {
+      id: meta.mapId || row.id,
+      conversationId,
+      channel: row.channel,
+      direction: row.direction,
+      senderId: row.sender_id,
+      senderName: row.sender_name,
+      text: row.text ?? "",
+      mediaUrl: row.media_url ?? void 0,
+      mediaType: row.media_type ?? void 0,
+      status: row.status,
+      externalMessageId: row.external_message_id ?? void 0,
+      rawMetadata: row.raw_metadata ?? void 0,
+      createdAt: row.created_at
+    };
+  }
+  convDbIdsFromUuid(uuid) {
+    const entry = Array.from(this.convDbIds.entries()).find(([, v]) => v === uuid);
+    return entry ? entry[0] : void 0;
+  }
+  // =========================================================================
   // Helpers
+  // =========================================================================
   findContactByExternalId(externalId, channel) {
     return Array.from(this.contacts.values()).find(
       (c) => c.externalId === externalId && c.channel === channel
@@ -9441,6 +9820,10 @@ var PROCEDURE_TO_COMMERCIAL = {
   cassacao_cnh: "cassacao",
   processo_suspensao: "suspensao",
   processo_cassacao: "cassacao",
+  // Defesa Prévia (NA, Art. 281 CTB) é procedimento DISTINTO do Recurso JARI
+  // (Art. 285 CTB, contra NIP). NÃO possui oferta comercial própria ainda —
+  // é tratado como serviço sem preço (servicesWithoutCommercialOffer).
+  // Defesa Prévia não entra no Record: normalizeServiceType retorna intacta via ?? key.
   // Estes NÃO são serviços comerciais (sem preço no catálogo)
   analise_tecnica: "analise_tecnica",
   relatorio_pericial: "relatorio_pericial"
@@ -9464,6 +9847,7 @@ var OfferService = class {
     }
     const normalized = normalizeServiceType(serviceType);
     const servicesWithoutCommercialOffer = [
+      "defesa_previa",
       "analise_tecnica",
       "geracao_documento",
       "relatorio_pericial"
@@ -10855,6 +11239,9 @@ var alertsService = new AlertsService();
 
 // src/server/routes/monitoring.ts
 var router4 = Router4();
+router4.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "monitoring", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
 router4.use(authenticateToken, requireAdmin);
 router4.get(["/health", "/monitoring/health"], async (req, res) => {
   try {
@@ -11229,6 +11616,9 @@ var settingsService = new SettingsService();
 
 // src/server/routes/settings.ts
 var router5 = Router5();
+router5.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "settings", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
 router5.use(authenticateToken, requireAdmin);
 router5.get(["/", "/settings"], async (req, res) => {
   try {
@@ -11317,6 +11707,9 @@ var settings_default = router5;
 // src/server/routes/logs.ts
 import { Router as Router6 } from "express";
 var router6 = Router6();
+router6.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "logs", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
 router6.use(authenticateToken, requireAdmin);
 router6.get(["/", "/logs"], (req, res) => {
   const {
@@ -13062,6 +13455,94 @@ var PROCEDURES_CATALOG = [
       "Conferir hist\xF3rico de aprova\xE7\xE3o de modelo pelo INMETRO"
     ],
     notes: "Documento de n\xEDvel pericial frequentemente determinante para revers\xE3o de multas de radar e sem\xE1foro."
+  },
+  // ==========================================
+  // ALIASES DOCUMENTAIS (PROC_009/PROC_010) — Defesa Prévia (NA) e variantes
+  // de processo de suspensão/cassação. O template de suspensão/cassação é
+  // compartilhado; estas entradas garantem que os identificadores legados
+  // ('suspensao_cnh'/'cassacao_cnh') e os canônicos de processo coexistam.
+  // ==========================================
+  {
+    id: "defesa_previa",
+    code: "PROC_009",
+    name: "Defesa Pr\xE9via \xE0 Notifica\xE7\xE3o de Autua\xE7\xE3o (Art. 281 CTB)",
+    category: "Inst\xE2ncia Administrativa Inicial",
+    objective: "Apresentar defesa pr\xE9via contra a Notifica\xE7\xE3o de Autua\xE7\xE3o (NA), fase inicial anterior \xE0 aplica\xE7\xE3o da penalidade, atacando v\xEDcios formais, materiais e metrol\xF3gicos do Auto de Infra\xE7\xE3o de Tr\xE2nsito.",
+    legalBasis: "Art. 281, Par\xE1grafo \xDAnico do CTB",
+    competentBody: "Autoridade de Tr\xE2nsito do \xD3rg\xE3o Autuador",
+    suspensiveEffectRule: "Defesa pr\xE9via n\xE3o suspende o prazo de imposi\xE7\xE3o da penalidade, mas permite o saneamento do auto.",
+    stages: [
+      { stepNumber: 1, name: "Recebimento da Notifica\xE7\xE3o de Autua\xE7\xE3o (NA)", description: "Ci\xEAncia da autua\xE7\xE3o sem imposi\xE7\xE3o de penalidade, com prazo para defesa pr\xE9via.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" },
+      { stepNumber: 2, name: "Elabora\xE7\xE3o da Defesa Pr\xE9via", description: "Argui\xE7\xE3o de nulidades formais e m\xE9rito antes do julgamento da penalidade.", deadlineDays: 15, actingParty: "Cidad\xE3o/Condutor" },
+      { stepNumber: 3, name: "Protocolo da Defesa Pr\xE9via", description: "Apresenta\xE7\xE3o perante o \xF3rg\xE3o autuador, que decidir\xE1 pela manuten\xE7\xE3o ou cancelamento do auto.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" }
+    ],
+    requiredDocuments: [
+      { name: "C\xF3pia da Notifica\xE7\xE3o de Autua\xE7\xE3o (NA)", required: true, description: "Documento que d\xE1 ci\xEAncia da autua\xE7\xE3o." },
+      { name: "C\xF3pia da CNH do requerente", required: true, description: "Documento de habilita\xE7\xE3o do condutor." },
+      { name: "C\xF3pia do CRLV do ve\xEDculo autuado", required: true, description: "Documento do ve\xEDculo." }
+    ],
+    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004"],
+    availableTemplates: ["TPL_DEFESA_PREVIA"],
+    executionChecklist: [
+      "Verificar a tempestividade da apresenta\xE7\xE3o perante a NA",
+      "Arg\xFCir v\xEDcios formais da autua\xE7\xE3o e falhas metrol\xF3gicas",
+      "Solicitar o cancelamento do auto antes da imposi\xE7\xE3o de penalidade"
+    ],
+    notes: "A Defesa Pr\xE9via (Art. 281 CTB) \xE9 fase DISTINTA do Recurso \xE0 JARI (Art. 285 CTB, contra a NIP). Esta ProcedureType separa conceitualmente as duas fases."
+  },
+  {
+    id: "processo_suspensao",
+    code: "PROC_010",
+    name: "Defesa em Processo de Suspens\xE3o do Direito de Dirigir (PSDD)",
+    category: "Processos Espec\xEDficos de Habilita\xE7\xE3o",
+    objective: "Variante can\xF4nica do Processo de Suspens\xE3o (PSDD). Defesa t\xE9cnica contra a Notifica\xE7\xE3o de Instaura\xE7\xE3o de Processo de Suspens\xE3o da CNH por pontos ou infra\xE7\xE3o autossuspensiva.",
+    legalBasis: "Art. 261 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 723/2018 e Resolu\xE7\xE3o n\xBA 844/2021",
+    competentBody: "DETRAN de registro da CNH do condutor (Comiss\xE3o Especial de Julgamento de Habilita\xE7\xE3o)",
+    suspensiveEffectRule: "O condutor pode continuar dirigindo enquanto o processo administrativo de suspens\xE3o n\xE3o transitar em julgado.",
+    stages: [
+      { stepNumber: 1, name: "Instaura\xE7\xE3o da Notifica\xE7\xE3o do PSDD", description: "DETRAN abre processo espec\xEDfico de suspens\xE3o da habilita\xE7\xE3o.", deadlineDays: 30, actingParty: "Autoridade de Tr\xE2nsito" },
+      { stepNumber: 2, name: "Elabora\xE7\xE3o de Defesa T\xE9cnica do PSDD", description: "Impugna\xE7\xE3o das multas componentes e v\xEDcios de instaura\xE7\xE3o.", deadlineDays: 15, actingParty: "Cidad\xE3o/Condutor" },
+      { stepNumber: 3, name: "Interposi\xE7\xE3o de Recursos em 1\xAA e 2\xAA Inst\xE2ncias", description: "Recurso \xE0 JARI de Habilita\xE7\xE3o e posterior ao CETRAN se necess\xE1rio.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" }
+    ],
+    requiredDocuments: [
+      { name: "Notifica\xE7\xE3o de Instaura\xE7\xE3o do Processo de Suspens\xE3o (PSDD)", required: true, description: "Documento que informa a contagem de pontos ou o artigo autossuspensivo." },
+      { name: "C\xF3pia da CNH e RG/CPF", required: true, description: "Identifica\xE7\xE3o do condutor com prontu\xE1rio." },
+      { name: "Extrato consolidado de pontua\xE7\xE3o do DETRAN", required: true, description: "Hist\xF3rico de infra\xE7\xF5es nos \xFAltimos 12 meses." }
+    ],
+    applicableGrounds: ["ARG-007", "ARG-010", "ARG-011", "ARG-003", "ARG-001", "ARG-005"],
+    availableTemplates: ["TPL_PSDD_SUSPENSAO"],
+    executionChecklist: [
+      "Verificar se as multas componentes transitaram em julgado regularmente",
+      "Checar se o condutor exerce atividade remunerada (EAR) para regra ben\xE9fica de 40 pontos",
+      "Alegar prescri\xE7\xE3o intercorrente caso o processo tenha ficado parado por mais de 3 anos"
+    ],
+    notes: `Alias can\xF4nico de 'suspensao_cnh' para o processo de suspens\xE3o (PSDD).`
+  },
+  {
+    id: "processo_cassacao",
+    code: "PROC_011",
+    name: "Defesa em Processo de Cassa\xE7\xE3o da CNH (PCDD)",
+    category: "Processos Espec\xEDficos de Habilita\xE7\xE3o",
+    objective: "Variante can\xF4nica do Processo de Cassa\xE7\xE3o (PCDD). Defesa t\xE9cnica contra a perda total da CNH por dirigir com habilita\xE7\xE3o suspensa ou reincid\xEAncia em infra\xE7\xF5es mandat\xF3rias.",
+    legalBasis: "Art. 263 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 723/2018",
+    competentBody: "Diretoria de Habilita\xE7\xE3o do DETRAN Estadual",
+    suspensiveEffectRule: "Garante o pleno exerc\xEDcio da condu\xE7\xE3o at\xE9 a decis\xE3o irrecorr\xEDvel na esfera administrativa.",
+    stages: [
+      { stepNumber: 1, name: "Notifica\xE7\xE3o de Instaura\xE7\xE3o do PCDD", description: "Ci\xEAncia do processo que visa cassar o documento por 2 anos.", deadlineDays: 30, actingParty: "Autoridade de Tr\xE2nsito" },
+      { stepNumber: 2, name: "Apresenta\xE7\xE3o de Defesa Administrativa", description: "Demonstra\xE7\xE3o de n\xE3o dire\xE7\xE3o no momento da autua\xE7\xE3o ou nulidade do PSDD pr\xE9vio.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" },
+      { stepNumber: 3, name: "Recursos \xE0 JARI e CETRAN", description: "Apresenta\xE7\xE3o de provas f\xE1ticas e testemunhais.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" }
+    ],
+    requiredDocuments: [
+      { name: "Notifica\xE7\xE3o de Instaura\xE7\xE3o de Cassa\xE7\xE3o", required: true, description: "Notifica\xE7\xE3o inicial do processo." },
+      { name: "C\xF3pia da CNH e comprovante de endere\xE7o", required: true, description: "Dados do condutor." }
+    ],
+    applicableGrounds: ["ARG-007", "ARG-005", "ARG-003"],
+    availableTemplates: ["TPL_PCDD_CASSACAO"],
+    executionChecklist: [
+      "Verificar se houve abordagem presencial do condutor com CNH suspensa",
+      "Checar a validade do processo de suspens\xE3o anterior"
+    ],
+    notes: `Alias can\xF4nico de 'cassacao_cnh' para o processo de cassa\xE7\xE3o (PCDD).`
   }
 ];
 
@@ -13938,6 +14419,80 @@ ASSINATURA DO CONDUTOR INFRATOR INDICADO
 ];
 
 // src/core/templates/templates-catalog.ts
+function buildSuspensaoBlocks() {
+  return [
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-004"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-010"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-022"),
+    {
+      id: "BLK_PRELIMINARES_PSDD",
+      type: "preliminary_arguments",
+      title: "Das Preliminares: Falta de Tr\xE2nsito em Julgado e Prescri\xE7\xE3o",
+      isMandatory: true,
+      contentTemplate: `II - DAS PRELIMINARES EXTINTIVAS DO PROCESSO DE SUSPENS\xC3O
+
+{{bloco_preliminares_formatado}}`,
+      supportedVariables: ["{{bloco_preliminares_formatado}}"]
+    },
+    {
+      id: "BLK_MERITO_PSDD",
+      type: "merit_arguments",
+      title: "Do M\xE9rito: Retroatividade dos 40 Pontos e Insubsist\xEAncia das Infra\xE7\xF5es",
+      isMandatory: true,
+      contentTemplate: `III - DO M\xC9RITO: APLICA\xC7\xC3O DO NOVO LIMITE LEGAL DA LEI 14.071/2020
+
+{{bloco_merito_formatado}}`,
+      supportedVariables: ["{{bloco_merito_formatado}}"]
+    },
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-059"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
+  ].map((b, idx) => ({
+    id: b.id,
+    type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+    title: b.title,
+    isMandatory: true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables
+  }));
+}
+function buildCassacaoBlocks() {
+  return [
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-005"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-011"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-023"),
+    {
+      id: "BLK_PRELIMINARES_PCDD",
+      type: "preliminary_arguments",
+      title: "Das Preliminares: Nulidade do Processo de Suspens\xE3o Anterior",
+      isMandatory: true,
+      contentTemplate: `II - DAS PRELIMINARES DE NULIDADE DO PROCESSO ANTECEDENTE
+
+{{bloco_preliminares_formatado}}`,
+      supportedVariables: ["{{bloco_preliminares_formatado}}"]
+    },
+    {
+      id: "BLK_MERITO_PCDD",
+      type: "merit_arguments",
+      title: "Do M\xE9rito: Inocorr\xEAncia de Dire\xE7\xE3o pelo Requerente e Aus\xEAncia de Flagrante",
+      isMandatory: true,
+      contentTemplate: `III - DO M\xC9RITO: INOCORR\xCANCIA DE DIRE\xC7\xC3O PESSOAL PELO CONDUTOR SUSPENSO
+
+{{bloco_merito_formatado}}`,
+      supportedVariables: ["{{bloco_merito_formatado}}"]
+    },
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-060"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
+    DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
+  ].map((b, idx) => ({
+    id: b.id,
+    type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+    title: b.title,
+    isMandatory: true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables
+  }));
+}
 var TEMPLATES_CATALOG = [
   // ==========================================
   // 2. RECURSO À JARI - 1ª INSTÂNCIA (TPL-02)
@@ -14083,41 +14638,7 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Demonstrar aus\xEAncia de tr\xE2nsito em julgado das multas componentes ou prescri\xE7\xE3o"
     ],
     blockIds: ["BLK-004", "BLK-010", "BLK-022", "BLK-042", "BLK-043", "BLK-059", "BLK-066", "BLK-068"],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-004"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-010"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-022"),
-      {
-        id: "BLK_PRELIMINARES_PSDD",
-        type: "preliminary_arguments",
-        title: "Das Preliminares: Falta de Tr\xE2nsito em Julgado e Prescri\xE7\xE3o",
-        isMandatory: true,
-        contentTemplate: `II - DAS PRELIMINARES EXTINTIVAS DO PROCESSO DE SUSPENS\xC3O
-
-{{bloco_preliminares_formatado}}`,
-        supportedVariables: ["{{bloco_preliminares_formatado}}"]
-      },
-      {
-        id: "BLK_MERITO_PSDD",
-        type: "merit_arguments",
-        title: "Do M\xE9rito: Retroatividade dos 40 Pontos e Insubsist\xEAncia das Infra\xE7\xF5es",
-        isMandatory: true,
-        contentTemplate: `III - DO M\xC9RITO: APLICA\xC7\xC3O DO NOVO LIMITE LEGAL DA LEI 14.071/2020
-
-{{bloco_merito_formatado}}`,
-        supportedVariables: ["{{bloco_merito_formatado}}"]
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-059"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
-    ].map((b, idx) => ({
-      id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables
-    }))
+    blocks: buildSuspensaoBlocks()
   },
   // ==========================================
   // 5. CASSAÇÃO DA CNH - PCDD (TPL-05)
@@ -14136,41 +14657,7 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Juntar prova de que o ve\xEDculo estava na posse/condu\xE7\xE3o de terceiro habilitado"
     ],
     blockIds: ["BLK-005", "BLK-011", "BLK-023", "BLK-045", "BLK-046", "BLK-060", "BLK-066", "BLK-068"],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-005"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-011"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-023"),
-      {
-        id: "BLK_PRELIMINARES_PCDD",
-        type: "preliminary_arguments",
-        title: "Das Preliminares: Nulidade do Processo de Suspens\xE3o Anterior",
-        isMandatory: true,
-        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE DO PROCESSO ANTECEDENTE
-
-{{bloco_preliminares_formatado}}`,
-        supportedVariables: ["{{bloco_preliminares_formatado}}"]
-      },
-      {
-        id: "BLK_MERITO_PCDD",
-        type: "merit_arguments",
-        title: "Do M\xE9rito: Inocorr\xEAncia de Dire\xE7\xE3o pelo Requerente e Aus\xEAncia de Flagrante",
-        isMandatory: true,
-        contentTemplate: `III - DO M\xC9RITO: INOCORR\xCANCIA DE DIRE\xC7\xC3O PESSOAL PELO CONDUTOR SUSPENSO
-
-{{bloco_merito_formatado}}`,
-        supportedVariables: ["{{bloco_merito_formatado}}"]
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-060"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
-    ].map((b, idx) => ({
-      id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables
-    }))
+    blocks: buildCassacaoBlocks()
   },
   // ==========================================
   // 6. INDICAÇÃO DE REAL CONDUTOR - FICI (TPL-06)
@@ -14249,6 +14736,92 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
       contentTemplate: b.contentTemplate,
       supportedVariables: b.supportedVariables
     }))
+  },
+  // ==========================================
+  // 8. DEFESA PRÉVIA À NA (TPL-08)
+  // ==========================================
+  {
+    id: "TPL_DEFESA_PREVIA",
+    code: "DEFESA_PREVIA_V2026",
+    name: "Defesa Pr\xE9via \xE0 Notifica\xE7\xE3o de Autua\xE7\xE3o (Art. 281 CTB)",
+    procedureType: "defesa_previa",
+    version: "v2026.1",
+    description: "Pe\xE7a de defesa pr\xE9via contra a Notifica\xE7\xE3o de Autua\xE7\xE3o (NA), fase inicial anterior \xE0 imposi\xE7\xE3o de penalidade, atacando v\xEDcios formais e materiais do AIT.",
+    fillingRules: [
+      "Endere\xE7ar \xE0 autoridade de tr\xE2nsito do \xF3rg\xE3o autuador",
+      "Informar o n\xFAmero do AIT e a Notifica\xE7\xE3o de Autua\xE7\xE3o",
+      "Articular preliminares de nulidade e m\xE9rito probat\xF3rio antes da penalidade"
+    ],
+    blockIds: ["BLK-002", "BLK-008", "BLK-013", "BLK-039", "BLK-057", "BLK-066", "BLK-068"],
+    blocks: [
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-002"),
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
+      {
+        id: "BLK_FATOS_DEFESA_PREVIA",
+        type: "facts_narrative",
+        title: "Da Autua\xE7\xE3o e dos Fatos",
+        isMandatory: true,
+        contentTemplate: `I - DA AUTUA\xC7\xC3O E DOS FATOS
+
+O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora impugnar a Notifica\xE7\xE3o de Autua\xE7\xE3o referente ao AIT n\xBA {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa \xE0 suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}"), com fundamento em v\xEDcios formais e materiais que ensejam o cancelamento do auto antes da imposi\xE7\xE3o de qualquer penalidade.`,
+        supportedVariables: ["{{numero_ait}}", "{{orgao_autuador}}", "{{data_infracao}}", "{{enquadramento_ctb}}", "{{descricao_infracao}}"]
+      },
+      {
+        id: "BLK_PRELIMINARES_DEFESA_PREVIA",
+        type: "preliminary_arguments",
+        title: "Das Preliminares de Nulidade",
+        isMandatory: true,
+        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE
+
+{{bloco_preliminares_formatado}}`,
+        supportedVariables: ["{{bloco_preliminares_formatado}}"]
+      },
+      {
+        id: "BLK_MERITO_DEFESA_PREVIA",
+        type: "merit_arguments",
+        title: "Do M\xE9rito",
+        isMandatory: true,
+        contentTemplate: `III - DO M\xC9RITO
+
+{{bloco_merito_formatado}}`,
+        supportedVariables: ["{{bloco_merito_formatado}}"]
+      },
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-057"),
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
+    ].map((b, idx) => ({
+      id: b.id,
+      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+      title: b.title,
+      isMandatory: true,
+      contentTemplate: b.contentTemplate,
+      supportedVariables: b.supportedVariables
+    }))
+  },
+  // ==========================================
+  // 9. SUSPENSÃO / CASSAÇÃO — ALIAS LEGADOS (mesmos blocos de PROCESSO_*)
+  // ==========================================
+  {
+    id: "TPL_SUSPENSAO_CNH",
+    code: "DEFESA_PSDD_SUSPENSAO_ALIAS_V2026",
+    name: "Defesa em Processo de Suspens\xE3o do Direito de Dirigir (PSDD)",
+    procedureType: "suspensao_cnh",
+    version: "v2026.1",
+    description: "Alias legado de suspensao_cnh: mesma pe\xE7a de defesa do processo de suspens\xE3o da CNH (PSDD).",
+    fillingRules: ["Endere\xE7ar \xE0 Comiss\xE3o de Processos de Suspens\xE3o do DETRAN", "Indicar o n\xFAmero do PSDD"],
+    blockIds: ["BLK-004", "BLK-010", "BLK-022", "BLK-042", "BLK-043", "BLK-059", "BLK-066", "BLK-068"],
+    blocks: buildSuspensaoBlocks()
+  },
+  {
+    id: "TPL_CASSACAO_CNH",
+    code: "DEFESA_PCDD_CASSACAO_ALIAS_V2026",
+    name: "Defesa T\xE9cnica em Processo de Cassa\xE7\xE3o da CNH (PCDD)",
+    procedureType: "cassacao_cnh",
+    version: "v2026.1",
+    description: "Alias legado de cassacao_cnh: mesma pe\xE7a de defesa do processo de cassa\xE7\xE3o da CNH (PCDD).",
+    fillingRules: ["Endere\xE7ar \xE0 Coordena\xE7\xE3o de Processos de Cassa\xE7\xE3o do DETRAN", "Indicar o n\xFAmero do PCDD"],
+    blockIds: ["BLK-005", "BLK-011", "BLK-023", "BLK-045", "BLK-046", "BLK-060", "BLK-066", "BLK-068"],
+    blocks: buildCassacaoBlocks()
   }
 ];
 
@@ -16744,11 +17317,11 @@ var ProviderRouter = class {
 // src/server/media/job-queue.ts
 import { randomUUID } from "crypto";
 var MediaJobQueue = class {
-  constructor(router24) {
+  constructor(router25) {
     this.jobs = /* @__PURE__ */ new Map();
     this.activeJobsCount = 0;
     this.cancelledJobIds = /* @__PURE__ */ new Set();
-    this.router = router24;
+    this.router = router25;
     const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
     this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
   }
@@ -17424,22 +17997,299 @@ var QualidadeAgent = class {
 var qualidadeAgent = new QualidadeAgent();
 
 // src/server/workers/meta-publisher.worker.ts
+import { randomUUID as randomUUID2 } from "crypto";
+
+// src/server/services/image-quality.service.ts
+import sharp from "sharp";
+var DEFAULT_OPTIONS = {
+  minDimension: 500,
+  minSharpness: 100,
+  fetchTimeoutMs: 4e3,
+  maxBytes: 20 * 1024 * 1024,
+  analysisSize: 384
+};
+var OCR_AVAILABLE = false;
+var EMPTY_METRICS = { width: 0, height: 0, luminance: 0, sharpness: 0, contrast: 0 };
+async function validateImageQuality(input, options = {}) {
+  const cfg = { ...DEFAULT_OPTIONS, ...options };
+  let buffer = input.buffer;
+  if (!buffer && input.imageUrl) {
+    if (input.imageUrl.startsWith("data:")) {
+      const dataBuf = dataUrlToBuffer(input.imageUrl);
+      if (dataBuf) {
+        buffer = dataBuf;
+      } else {
+        return {
+          pass: true,
+          score: 100,
+          reasons: ["data_url_skipped"],
+          metrics: EMPTY_METRICS,
+          ocrAvailable: OCR_AVAILABLE,
+          failureKind: null
+        };
+      }
+    } else {
+      const dl = await downloadImage(input.imageUrl, cfg.fetchTimeoutMs, cfg.maxBytes);
+      if (!dl.ok) {
+        return {
+          pass: false,
+          score: 0,
+          reasons: ["fetch_failed"],
+          metrics: EMPTY_METRICS,
+          ocrAvailable: OCR_AVAILABLE,
+          failureKind: "fetch"
+        };
+      }
+      buffer = dl.buffer;
+    }
+  }
+  if (!buffer) {
+    return {
+      pass: false,
+      score: 0,
+      reasons: ["no_input"],
+      metrics: EMPTY_METRICS,
+      ocrAvailable: OCR_AVAILABLE,
+      failureKind: "fetch"
+    };
+  }
+  let metadata;
+  try {
+    metadata = await sharp(buffer).metadata();
+  } catch {
+    return {
+      pass: false,
+      score: 0,
+      reasons: ["decode_failed"],
+      metrics: EMPTY_METRICS,
+      ocrAvailable: OCR_AVAILABLE,
+      failureKind: "decode"
+    };
+  }
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  const metrics = await analyzePixels(buffer, cfg.analysisSize, width, height);
+  const reasons = [];
+  const resTooLow = width < cfg.minDimension || height < cfg.minDimension;
+  const blurred = metrics.sharpness < cfg.minSharpness;
+  if (resTooLow) reasons.push("resolution_too_low");
+  if (blurred) reasons.push("blurred");
+  let score = 100;
+  if (resTooLow) score -= 40;
+  if (blurred) score -= 30;
+  score = Math.max(0, score);
+  return {
+    pass: reasons.length === 0,
+    score,
+    reasons,
+    metrics,
+    ocrAvailable: OCR_AVAILABLE,
+    failureKind: reasons.length > 0 ? "quality" : null
+  };
+}
+async function analyzePixels(buffer, analysisSize, width, height) {
+  try {
+    let pipeline = sharp(buffer);
+    if (width > analysisSize || height > analysisSize) {
+      pipeline = pipeline.resize(analysisSize, analysisSize, {
+        fit: "inside",
+        withoutEnlargement: true
+      });
+    }
+    const { data, info } = await pipeline.greyscale().raw().toBuffer({ resolveWithObject: true });
+    const w = info.width;
+    const h = info.height;
+    const gray = new Float64Array(data);
+    const n = gray.length;
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += gray[i];
+    const luminance = n > 0 ? sum / n : 0;
+    let sumSq = 0;
+    for (let i = 0; i < n; i++) {
+      const d = gray[i] - luminance;
+      sumSq += d * d;
+    }
+    const contrast = n > 0 ? Math.sqrt(sumSq / n) : 0;
+    let lapSum = 0;
+    let lapSumSq = 0;
+    let lapCount = 0;
+    for (let y = 1; y < h - 1; y++) {
+      const row = y * w;
+      for (let x = 1; x < w - 1; x++) {
+        const i = row + x;
+        const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
+        lapSum += lap;
+        lapSumSq += lap * lap;
+        lapCount++;
+      }
+    }
+    const lapMean = lapCount > 0 ? lapSum / lapCount : 0;
+    const sharpness = lapCount > 0 ? lapSumSq / lapCount - lapMean * lapMean : 0;
+    return { width, height, luminance: Math.round(luminance), sharpness: Math.round(sharpness), contrast: Math.round(contrast) };
+  } catch {
+    return { width, height, luminance: 0, sharpness: 0, contrast: 0 };
+  }
+}
+function dataUrlToBuffer(url) {
+  const comma = url.indexOf(",");
+  if (comma === -1) return null;
+  const header = url.slice(5, comma);
+  const payload = url.slice(comma + 1);
+  try {
+    if (/;base64$/i.test(header)) {
+      return Buffer.from(payload, "base64");
+    }
+    return Buffer.from(decodeURIComponent(payload), "utf8");
+  } catch {
+    return null;
+  }
+}
+async function downloadImage(url, timeoutMs, maxBytes) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return { ok: false };
+    const declared = Number(res.headers.get("content-length") || 0);
+    if (declared > maxBytes) return { ok: false };
+    const ab = await res.arrayBuffer();
+    if (ab.byteLength > maxBytes) return { ok: false };
+    return { ok: true, buffer: Buffer.from(ab) };
+  } catch {
+    return { ok: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// src/server/workers/meta-publisher.worker.ts
 var MAX_ATTEMPTS = 3;
 var RETRY_BASE_MS = 60 * 1e3;
 var MetaPublisher = class {
-  constructor() {
+  constructor(supabase) {
     this.queue = [];
     this.processing = false;
     this.tokenExpired = false;
     this.jobHistory = [];
-    this.supabase = getSupabaseServerClient();
+    this.supabase = supabase ?? getSupabaseServerClient();
+    this.loadPendingJobs();
+  }
+  /**
+   * Carrega jobs pendentes do publisher_jobs (restart survival).
+   * Chamado no construtor; também pode ser chamado explicitamente
+   * (ex: testes) para garantir carregamento síncrono.
+   */
+  async loadPendingJobs() {
+    if (!this.supabase) return;
+    try {
+      const { data, error } = await this.supabase.from("publisher_jobs").select("*").in("status", ["pending", "retry"]).order("created_at", { ascending: true });
+      if (error) {
+        logger.warn(
+          "meta",
+          "meta-publisher",
+          "load_pending",
+          `Failed to load pending jobs: ${error.message}`,
+          { error }
+        );
+        return;
+      }
+      this.queue = (data || []).map((row) => ({
+        id: row.id,
+        request: row.job_payload,
+        contentId: row.content_id,
+        attempts: row.attempt_count,
+        nextRetryAt: row.scheduled_at ? new Date(row.scheduled_at).getTime() : Date.now(),
+        createdAt: row.created_at
+      }));
+    } catch (err) {
+      logger.warn(
+        "meta",
+        "meta-publisher",
+        "load_pending",
+        `Error loading pending jobs: ${err.message}`,
+        { error: err }
+      );
+    }
   }
   getJobHistory() {
     return [...this.jobHistory].slice(0, 20);
   }
-  enqueue(request, contentId) {
+  async enqueue(request, contentId) {
+    if (request.mediaUrl) {
+      const gate = await validateImageQuality({ imageUrl: request.mediaUrl });
+      if (!gate.pass && gate.failureKind === "quality") {
+        logger.error(
+          "meta",
+          "meta-publisher",
+          "enqueue_rejected",
+          `Publica\xE7\xE3o ${contentId ?? ""} rejeitada: imagem reprovou no gate de qualidade`,
+          {
+            reasons: gate.reasons,
+            score: gate.score,
+            metrics: gate.metrics,
+            mediaUrl: request.mediaUrl
+          }
+        );
+        const rec2 = {
+          id: randomUUID2(),
+          channel: request.destination,
+          contentId,
+          status: "rejected",
+          attempts: 0,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          resolvedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          error: `Quality gate: ${gate.reasons.join(", ")}`,
+          payload: request,
+          scheduledAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        this.jobHistory.unshift(rec2);
+        this.persistJobRecord(rec2);
+        if (contentId) {
+          const reasons = gate.reasons.join(", ");
+          marketingService.updateContent(contentId, {
+            status: "reprovado_qualidade",
+            rejection_reason: reasons,
+            rejected_at: (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }).catch(
+            (err) => logger.warn(
+              "meta",
+              "meta-publisher",
+              "enqueue_rejected_status",
+              `Falha ao marcar ${contentId} como reprovado_qualidade`,
+              { error: String(err) }
+            )
+          );
+        }
+        eventBus.publish(
+          EventTopics.MARKETING_CONTENT_REJECTED,
+          {
+            contentId,
+            reasons: gate.reasons,
+            score: gate.score,
+            metrics: gate.metrics,
+            mediaUrl: request.mediaUrl,
+            jobId: rec2.id
+          },
+          "meta_publisher"
+        );
+        return { queued: false, itemId: "", rejected: true, reasons: gate.reasons, quality: gate, jobId: rec2.id };
+      }
+      if (!gate.pass) {
+        logger.warn(
+          "meta",
+          "meta-publisher",
+          "enqueue_quality_skip",
+          `Imagem de ${contentId ?? ""} n\xE3o p\xF4de ser avaliada (${gate.reasons.join(",")}) \u2014 publicando sem bloqueio`,
+          {
+            reasons: gate.reasons,
+            mediaUrl: request.mediaUrl
+          }
+        );
+      }
+    }
     const item = {
-      id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: randomUUID2(),
       request,
       contentId,
       attempts: 0,
@@ -17454,7 +18304,9 @@ var MetaPublisher = class {
         attempts: 0,
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         resolvedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        error: "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth."
+        error: "Nenhuma conex\xE3o ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth.",
+        payload: request,
+        scheduledAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       this.jobHistory.unshift(rec2);
       this.persistJobRecord(rec2);
@@ -17467,30 +18319,50 @@ var MetaPublisher = class {
       contentId,
       status: "retrying",
       attempts: 0,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      payload: request,
+      scheduledAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.jobHistory.unshift(rec);
     this.queue.push(item);
     logger.info("meta", "meta-publisher", "enqueue", `Publica\xE7\xE3o ${item.id} enfileirada`);
-    this.persistJobRecord(rec);
+    await this.persistJobRecord(rec);
     this.process().catch(() => {
     });
     return { queued: true, itemId: item.id };
   }
+  /**
+   * Única via de escrita em publisher_jobs. Mapeia status da aplicação
+   * ('retrying'/'delivered'/'rejected'/'failed') para o CHECK constraint da
+   * tabela ('pending'/'published'/'blocked'/'failed') e usa as colunas reais
+   * do schema (attempt_count, error_detail, job_payload, scheduled_at).
+   */
   persistJobRecord(rec) {
-    if (!this.supabase) return;
-    this.supabase.from("publisher_jobs").upsert({
+    if (!this.supabase) return Promise.resolve();
+    const statusMap = {
+      retrying: "pending",
+      delivered: "published",
+      rejected: "blocked",
+      failed: "failed"
+    };
+    const dbStatus = statusMap[rec.status] || rec.status;
+    return this.supabase.from("publisher_jobs").upsert({
       id: rec.id,
       channel: rec.channel,
       content_id: rec.contentId,
-      status: rec.status,
-      attempts: rec.attempts,
+      destination: rec.payload?.destination || rec.channel,
+      status: dbStatus,
+      attempt_count: rec.attempts,
+      scheduled_at: rec.scheduledAt || rec.createdAt,
+      published_at: rec.resolvedAt,
+      job_payload: rec.payload,
+      error_detail: rec.error,
       created_at: rec.createdAt,
-      resolved_at: rec.resolvedAt,
-      error: rec.error
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
     }, { onConflict: "id" }).then(({ error }) => {
       if (error) logger.warn("meta", "meta-publisher", "persist", `Failed to persist job ${rec.id}`, { error: error.message });
-    }).catch(() => {
+    }).catch((err) => {
+      logger.warn("meta", "meta-publisher", "persist", `Error persisting job ${rec.id}: ${err?.message || err}`);
     });
   }
   getQueue() {
@@ -17509,14 +18381,35 @@ var MetaPublisher = class {
     if (this.processing) return;
     this.processing = true;
     try {
-      while (true) {
-        const now = Date.now();
-        const idx = this.queue.findIndex((q) => q.nextRetryAt <= now);
-        if (idx === -1) break;
-        const item = this.queue[idx];
-        this.queue.splice(idx, 1);
+      if (!this.supabase) {
+        while (true) {
+          const now2 = Date.now();
+          const idx = this.queue.findIndex((q) => q.nextRetryAt <= now2);
+          if (idx === -1) break;
+          const item = this.queue[idx];
+          this.queue.splice(idx, 1);
+          await this.deliver(item);
+          if (this.queue.length === 0) break;
+        }
+        return;
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const { data: jobs, error } = await this.supabase.from("publisher_jobs").select("*").in("status", ["pending", "retry"]).lte("scheduled_at", now).order("scheduled_at", { ascending: true }).limit(30);
+      if (error) {
+        logger.warn("meta", "meta-publisher", "process", `Failed to query pending jobs: ${error.message}`, { error });
+        return;
+      }
+      for (const job of jobs || []) {
+        const item = {
+          id: job.id,
+          request: job.job_payload,
+          contentId: job.content_id,
+          attempts: job.attempt_count,
+          nextRetryAt: job.scheduled_at ? new Date(job.scheduled_at).getTime() : Date.now(),
+          createdAt: job.created_at
+        };
+        this.queue = this.queue.filter((q) => q.id !== item.id);
         await this.deliver(item);
-        if (this.queue.length === 0) break;
       }
     } finally {
       this.processing = false;
@@ -17524,6 +18417,23 @@ var MetaPublisher = class {
   }
   async deliver(item) {
     item.attempts += 1;
+    const findOrCreateRec = () => {
+      const existing = this.jobHistory.find((j) => j.id === item.id);
+      if (existing) return existing;
+      const created = {
+        id: item.id,
+        channel: item.request.destination,
+        contentId: item.contentId,
+        status: "retrying",
+        attempts: item.attempts,
+        // Preserva o created_at original do job recuperado do DB (não o horário de delivery)
+        createdAt: item.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+        payload: item.request,
+        scheduledAt: new Date(item.nextRetryAt).toISOString()
+      };
+      this.jobHistory.unshift(created);
+      return created;
+    };
     try {
       if (this.tokenExpired) {
         this.tokenExpired = false;
@@ -17559,25 +18469,21 @@ var MetaPublisher = class {
       if (item.contentId) {
         marketingService.updateContent(item.contentId, { status: "publicado" });
       }
-      const rec = this.jobHistory.find((j) => j.id === item.id);
-      if (rec) {
-        rec.status = "delivered";
-        rec.attempts = item.attempts;
-        rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
-        this.persistJobRecord(rec);
-      }
+      const rec = findOrCreateRec();
+      rec.status = "delivered";
+      rec.attempts = item.attempts;
+      rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
+      void this.persistJobRecord(rec);
       logger.info("meta", "meta-publisher", "publish", `Publica\xE7\xE3o ${item.id} entregue`);
     } catch (err) {
       const isAuthError = err instanceof MetaAuthenticationRequiredError || err?.name === "MetaAuthenticationRequiredError" || String(err?.message || err).includes("Nenhuma conex\xE3o ativa com a Meta") || String(err?.message || err).includes("Token da Meta ausente");
       if (isAuthError) {
-        const rec = this.jobHistory.find((j) => j.id === item.id);
-        if (rec) {
-          rec.status = "failed";
-          rec.attempts = item.attempts;
-          rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
-          rec.error = err.message || "Nenhuma conex\xE3o ativa com a Meta";
-          this.persistJobRecord(rec);
-        }
+        const rec = findOrCreateRec();
+        rec.status = "failed";
+        rec.attempts = item.attempts;
+        rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
+        rec.error = err.message || "Nenhuma conex\xE3o ativa com a Meta";
+        void this.persistJobRecord(rec);
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,
           {
@@ -17600,15 +18506,19 @@ var MetaPublisher = class {
         logger.warn("meta", "meta-publisher", "retry", `Tentativa ${item.attempts}/${MAX_ATTEMPTS} para ${item.id}`, {
           message: String(err)
         });
+        const rec = findOrCreateRec();
+        rec.attempts = item.attempts;
+        rec.status = "retrying";
+        rec.error = String(err.message || err);
+        rec.scheduledAt = new Date(item.nextRetryAt).toISOString();
+        void this.persistJobRecord(rec);
       } else {
-        const rec = this.jobHistory.find((j) => j.id === item.id);
-        if (rec) {
-          rec.status = "failed";
-          rec.attempts = item.attempts;
-          rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
-          rec.error = String(err.message || err);
-          this.persistJobRecord(rec);
-        }
+        const rec = findOrCreateRec();
+        rec.status = "failed";
+        rec.attempts = item.attempts;
+        rec.resolvedAt = (/* @__PURE__ */ new Date()).toISOString();
+        rec.error = String(err.message || err);
+        void this.persistJobRecord(rec);
         eventBus.publish(
           EventTopics.MARKETING_CONTENT_PUBLISHED,
           {
@@ -17680,11 +18590,7 @@ var PublicacaoAgent = class {
           const scheduledDate = new Date(scheduledDateStr);
           if (scheduledDate <= now) {
             logger.info("marketing", "agents", "publicacao", `Processing content ${content.id} scheduled for ${scheduledDateStr}`);
-            await marketingService.updateContent(content.id, {
-              status: "agendado",
-              updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-            });
-            metaPublisher.enqueue({
+            const enqueueResult = await metaPublisher.enqueue({
               destination: "both",
               message: `${content.copyText || content.copy_text}
 
@@ -17692,6 +18598,14 @@ ${(content.hashtags || []).join(" ")}`,
               linkUrl: "https://www.defesai.shop",
               mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
             }, content.id);
+            if (enqueueResult.rejected) {
+              logger.error("marketing", "agents", "publicacao", `Conte\xFAdo ${content.id} rejeitado pelo gate de qualidade: ${(enqueueResult.reasons || []).join(", ")}`);
+              continue;
+            }
+            await marketingService.updateContent(content.id, {
+              status: "agendado",
+              updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+            });
             eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId: content.id }, "marketing_os");
             logger.info("marketing", "agents", "publish", `Conte\xFAdo ${content.id} agendado e enfileirado na Meta`);
           }
@@ -17704,7 +18618,7 @@ ${(content.hashtags || []).join(" ")}`,
           const scheduledDate = new Date(scheduledDateStr);
           if (scheduledDate <= now) {
             logger.info("marketing", "agents", "publicacao", `Publishing scheduled content ${content.id} (scheduled for ${scheduledDateStr})`);
-            const result = metaPublisher.enqueue({
+            const result = await metaPublisher.enqueue({
               destination: "both",
               message: `${content.copyText || content.copy_text}
 
@@ -17712,6 +18626,10 @@ ${(content.hashtags || []).join(" ")}`,
               linkUrl: "https://www.defesai.shop",
               mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
             }, content.id);
+            if (result.rejected) {
+              logger.error("marketing", "agents", "publicacao", `Conte\xFAdo ${content.id} N\xC3O publicado (gate de qualidade): ${(result.reasons || []).join(", ")}`);
+              continue;
+            }
             await marketingService.updateContent(content.id, {
               status: "publicado",
               publishedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -17727,7 +18645,7 @@ ${(content.hashtags || []).join(" ")}`,
           }
         } else {
           logger.info("marketing", "agents", "publicacao", `Publishing content ${content.id} without scheduled date (immediate)`);
-          const result = metaPublisher.enqueue({
+          const result = await metaPublisher.enqueue({
             destination: "both",
             message: `${content.copyText || content.copy_text}
 
@@ -17735,6 +18653,10 @@ ${(content.hashtags || []).join(" ")}`,
             linkUrl: "https://www.defesai.shop",
             mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || void 0
           }, content.id);
+          if (result.rejected) {
+            logger.error("marketing", "agents", "publicacao", `Conte\xFAdo ${content.id} N\xC3O publicado (gate de qualidade): ${(result.reasons || []).join(", ")}`);
+            continue;
+          }
           await marketingService.updateContent(content.id, {
             status: "publicado",
             publishedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -18513,7 +19435,7 @@ router7.post("/reload", async (_req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-router7.get("/status", async (req, res) => {
+router7.get("/status", async (_req, res) => {
   const agents = await marketingService.getMarketingAgents();
   const contents = await marketingService.getEditorialContents();
   const metrics = marketingMetricsCollector.getMetrics();
@@ -18563,7 +19485,7 @@ router7.post("/publish", async (req, res) => {
     res.status(404).json({ success: false, message: "Conte\xFAdo n\xE3o encontrado" });
     return;
   }
-  const result = metaPublisher.enqueue({
+  const result = await metaPublisher.enqueue({
     destination: destination || "both",
     message: `${content.copyText}
 
@@ -18782,7 +19704,7 @@ router7.put("/contents/:id", async (req, res) => {
     visualPrompt,
     legalTheme
   } = req.body ?? {};
-  const allowed = ["rascunho", "aprovado_qualidade", "agendado", "publicado"];
+  const allowed = ["rascunho", "aprovado_qualidade", "reprovado_qualidade", "agendado", "publicado"];
   const channels = ["instagram", "blog", "tiktok", "linkedin", "email", "facebook"];
   const updates = {};
   if (status !== void 0) {
@@ -18986,6 +19908,9 @@ var marketing_default = router7;
 // src/server/routes/agents.ts
 import { Router as Router8 } from "express";
 var router8 = Router8();
+router8.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "agents", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
 router8.use(authenticateToken, requireAdmin);
 router8.get(["/registry", "/agents/registry"], (req, res) => {
   res.json({
@@ -19051,7 +19976,7 @@ var agents_default = router8;
 import { Router as Router9 } from "express";
 
 // src/server/shared/webhook/evolution-webhook-auth.ts
-import { createHash as createHash2, timingSafeEqual } from "node:crypto";
+import { createHash as createHash2, createHmac, timingSafeEqual } from "node:crypto";
 var EVOLUTION_WEBHOOK_SECRET_HEADER = "x-webhook-secret";
 var EVOLUTION_WEBHOOK_SECRET_ENV = "EVOLUTION_WEBHOOK_SECRET";
 function secureCompare(a, b) {
@@ -19076,7 +20001,26 @@ function authorizeEvolutionWebhook(headers) {
   if (!provided) {
     return { ok: false, mode: "rejected", reason: "missing-header" };
   }
+  if (provided.startsWith("sha256=")) {
+    return { ok: true, mode: "validated" };
+  }
   return secureCompare(provided, secret) ? { ok: true, mode: "validated" } : { ok: false, mode: "rejected", reason: "invalid-secret" };
+}
+function verifyEvolutionSignature(rawPayload, signatureHeader, secret) {
+  if (!signatureHeader || !signatureHeader.startsWith("sha256=")) {
+    return false;
+  }
+  const expected = Buffer.from(signatureHeader.slice("sha256=".length), "hex");
+  if (expected.length === 0) {
+    return false;
+  }
+  const hmac = createHmac("sha256", secret);
+  hmac.update(typeof rawPayload === "string" ? rawPayload : rawPayload.toString("utf8"));
+  const calculated = hmac.digest();
+  if (expected.length !== calculated.length) {
+    return false;
+  }
+  return timingSafeEqual(expected, calculated);
 }
 
 // src/server/routes/whatsapp.ts
@@ -19193,6 +20137,22 @@ var handleWebhook = async (req, res) => {
         reason
       });
     }
+    const webhookSecret = resolveWebhookSecret();
+    const sigHeaderRaw = req.headers["x-webhook-secret"];
+    const sigHeader = Array.isArray(sigHeaderRaw) ? sigHeaderRaw[0] : sigHeaderRaw;
+    if (webhookSecret && sigHeader?.startsWith("sha256=")) {
+      const rawBody = req.rawBody;
+      if (!rawBody || !verifyEvolutionSignature(rawBody, sigHeader, webhookSecret)) {
+        logger.warn(
+          "whatsapp",
+          "whatsapp_webhook",
+          "hmac_rejected",
+          "Rejeitando webhook Evolution API por assinatura HMAC inv\xE1lida",
+          {}
+        );
+        return res.status(401).json({ error: "Invalid signature" });
+      }
+    }
     res.status(200).json({ received: true, success: true, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
     const payload = req.body;
     if (!payload || !payload.event && !payload.type && !payload.data) {
@@ -19294,7 +20254,8 @@ var EXPERT_RULES = [
     description: "Verifica se o medidor eletr\xF4nico de velocidade possui laudo de aferi\xE7\xE3o do INMETRO emitido h\xE1 mais de 12 meses.",
     category: "metrologia_engenharia",
     evaluate: (ctx) => {
-      const isSpeed = ctx.infractionCode.startsWith("74") || ctx.infractionCode === "745-50" || ctx.infractionCode === "746-30" || ctx.infractionCode === "747-10";
+      const code = ctx.infractionCode || "";
+      const isSpeed = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10";
       if (isSpeed) {
         if (ctx.radarCalibrationDate && ctx.infractionDate) {
           const infDate = new Date(ctx.infractionDate);
@@ -19332,8 +20293,9 @@ var EXPERT_RULES = [
     description: "Identifica se a infra\xE7\xE3o \xE9 de gravidade leve ou m\xE9dia e se o condutor cumpre os requisitos de n\xE3o reincid\xEAncia.",
     category: "direito_material",
     evaluate: (ctx) => {
-      const cat = INFRACTION_CATALOG.find((i) => i.code === ctx.infractionCode || i.code.replace("-", "") === ctx.infractionCode.replace("-", ""));
-      const isLightOrMedium = cat ? cat.severity === "leve" || cat.severity === "media" : ctx.infractionCode === "745-50" || ctx.infractionCode === "735-80";
+      const code = ctx.infractionCode || "";
+      const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace("-", "") === code.replace("-", ""));
+      const isLightOrMedium = cat ? cat.severity === "leve" || cat.severity === "media" : code === "745-50" || code === "735-80";
       const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false || ctx.hasPreviousInfractionsLast12Months === void 0;
       if (isLightOrMedium && isCleanRecord) {
         return {
@@ -19356,7 +20318,8 @@ var EXPERT_RULES = [
     description: "Valida autua\xE7\xF5es por recusa ao baf\xF4metro (Art. 165-A) desprovidas do formul\xE1rio do Anexo II da Resolu\xE7\xE3o 432.",
     category: "direito_formal",
     evaluate: (ctx) => {
-      if (ctx.infractionCode === "516-91" || ctx.infractionCode === "516-92" || ctx.infractionCode.includes("516")) {
+      const code = ctx.infractionCode || "";
+      if (code === "516-91" || code === "516-92" || code.includes("516")) {
         return {
           ruleId: "RULE_LEI_SECA_TERMO_432",
           title: "Aus\xEAncia ou Defeito no Termo de Constata\xE7\xE3o de Sinais (Res. 432/13)",
@@ -19418,6 +20381,9 @@ var ExpertRuleEngine = class {
    * Evaluates an infraction against the entire catalog of deterministic rules
    */
   static evaluate(caseId, infraction) {
+    if (!infraction.autuadorBody) {
+      throw new Error("autuadorBody obrigat\xF3rio para avalia\xE7\xE3o do motor de regras");
+    }
     const context = {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
@@ -19511,7 +20477,7 @@ ${p.text}`).join("\n\n"),
       detectedInconsistencies,
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
-      competentBody: infraction.autuadorBody || "DETRAN / JARI",
+      competentBody: infraction.autuadorBody,
       procedureDeadline: infraction.defenseDeadline || deadlineStr,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.`,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -19529,7 +20495,11 @@ function normalizeProcedureId(procedureType) {
 }
 function resolveProcedure(procedureType) {
   const id = normalizeProcedureId(procedureType);
-  return PROCEDURES_CATALOG.find((p) => p.id === id) || PROCEDURES_CATALOG.find((p) => p.id === "recurso_jari");
+  const procedure = PROCEDURES_CATALOG.find((p) => p.id === id);
+  if (!procedure) {
+    throw new Error(`Procedimento n\xE3o suportado para rol de documentos: ${id}`);
+  }
+  return procedure;
 }
 function buildDocumentRollItems(procedureType) {
   const procedure = resolveProcedure(procedureType);
@@ -19559,8 +20529,14 @@ var DocumentAssemblyEngine = class {
    * Executes the full deterministic document assembly pipeline (Zero AI Dependency)
    */
   static assemble(payload) {
-    const procedure = PROCEDURES_CATALOG.find((p) => p.id === payload.procedureType) || PROCEDURES_CATALOG[0];
-    const template = TEMPLATES_CATALOG.find((t) => t.procedureType === payload.procedureType) || TEMPLATES_CATALOG[0];
+    const procedure = PROCEDURES_CATALOG.find((p) => p.id === payload.procedureType);
+    if (!procedure) {
+      throw new Error(`Procedimento n\xE3o suportado: ${payload.procedureType}`);
+    }
+    const template = TEMPLATES_CATALOG.find((t) => t.procedureType === payload.procedureType);
+    if (!template) {
+      throw new Error(`Template n\xE3o dispon\xEDvel para procedimento: ${payload.procedureType}`);
+    }
     const activeArgIds = payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0 ? payload.selectedArgumentIds : procedure.applicableGrounds;
     const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
     const preliminaryArgs = matchedArguments.filter(
@@ -19585,74 +20561,81 @@ ${p.text}`).join("\n\n");
 
 ${body}`;
     }).join("\n\n------------------------------------------------------------\n\n");
-    const autuador = payload.infraction.autuadorBody || "DETRAN / JARI";
-    const cityStateParts = (payload.applicant.cityState || "S\xE3o Paulo/SP").split("/");
-    const city = cityStateParts[0]?.trim() || "S\xE3o Paulo";
-    const uf = cityStateParts[1]?.trim() || "SP";
+    if (!payload.infraction.autuadorBody) {
+      throw new Error("autuadorBody obrigat\xF3rio para gera\xE7\xE3o da minuta");
+    }
+    if (!payload.applicant.cityState) {
+      throw new Error("cityState obrigat\xF3rio para gera\xE7\xE3o da minuta");
+    }
+    const autuador = payload.infraction.autuadorBody;
+    const cityStateParts = payload.applicant.cityState.split("/");
+    const city = cityStateParts[0]?.trim();
+    const uf = cityStateParts[1]?.trim();
     const dateFormatted = (/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR", {
       day: "numeric",
       month: "long",
       year: "numeric"
     });
-    const speedMeasured = payload.speeds?.measured ?? (payload.infraction.speedMeasured || 78);
-    const speedLimit = payload.speeds?.limit ?? (payload.infraction.speedLimit || 60);
-    const speedConsidered = payload.speeds?.considered ?? (payload.infraction.speedConsidered || 71);
-    const aitNumber = payload.infraction.aitNumber || "AIT-1234567";
-    const ctbArticle = payload.infraction.ctbArticle || "Art. 218, I do CTB";
-    const infractionDesc = payload.infraction.description || "Transitar em velocidade superior \xE0 m\xE1xima permitida em at\xE9 20%";
-    const infractionLocation = payload.infraction.location || "Av. Principal, n\xBA 1000 - Centro";
-    const infractionDate = payload.dates?.infractionDate || payload.infraction.dateTime || "10/02/2026";
-    const expeditionDate = payload.dates?.expeditionDate || "25/02/2026";
-    const daysElapsed = payload.dates?.daysElapsed || 42;
-    const psddNumber = payload.processNumbers?.psddNumber || `PSDD-${aitNumber.replace(/\D/g, "") || "883921"}/2026`;
-    const pcddNumber = payload.processNumbers?.pcddNumber || `PCDD-${aitNumber.replace(/\D/g, "") || "994102"}/2026`;
-    const suspMonths = payload.processNumbers?.suspensionMonths || 6;
+    const str = (v) => v === void 0 || v === null ? "" : String(v);
+    const speedMeasured = payload.speeds?.measured ?? payload.infraction.speedMeasured;
+    const speedLimit = payload.speeds?.limit ?? payload.infraction.speedLimit;
+    const speedConsidered = payload.speeds?.considered ?? payload.infraction.speedConsidered;
+    const aitNumber = payload.infraction.aitNumber || "";
+    const ctbArticle = payload.infraction.ctbArticle || "";
+    const infractionDesc = payload.infraction.description || "";
+    const infractionLocation = payload.infraction.location || "";
+    const infractionDate = payload.dates?.infractionDate || payload.infraction.dateTime || "";
+    const expeditionDate = payload.dates?.expeditionDate || "";
+    const daysElapsed = payload.dates?.daysElapsed;
+    const psddNumber = payload.processNumbers?.psddNumber || "";
+    const pcddNumber = payload.processNumbers?.pcddNumber || "";
+    const suspMonths = payload.processNumbers?.suspensionMonths;
     const variableMap = {
       // Standard Variables
       "{{orgao_autuador}}": autuador.toUpperCase(),
-      "{{cidade_estado}}": payload.applicant.cityState || "S\xE3o Paulo/SP",
+      "{{cidade_estado}}": payload.applicant.cityState,
       "{{cidade_requerente}}": city,
       "{{uf_requerente}}": uf,
-      "{{nome_requerente}}": payload.applicant.name || "NOME DO REQUERENTE",
-      "{{cpf_requerente}}": payload.applicant.cpf || "000.000.000-00",
-      "{{rg_requerente}}": payload.applicant.rg || "00.000.000-0",
-      "{{cnh_requerente}}": payload.applicant.cnh || "00000000000",
-      "{{categoria_cnh}}": payload.applicant.category || "B",
-      "{{endereco_requerente}}": payload.applicant.address || "Rua das Flores, 123",
-      "{{veiculo_modelo}}": payload.vehicle.model || "Ve\xEDculo Automotor",
-      "{{veiculo_placa}}": (payload.vehicle.plate || "ABC-1234").toUpperCase(),
-      "{{veiculo_renavam}}": payload.vehicle.renavam || "00000000000",
+      "{{nome_requerente}}": payload.applicant.name || "",
+      "{{cpf_requerente}}": payload.applicant.cpf || "",
+      "{{rg_requerente}}": payload.applicant.rg || "",
+      "{{cnh_requerente}}": payload.applicant.cnh || "",
+      "{{categoria_cnh}}": payload.applicant.category || "",
+      "{{endereco_requerente}}": payload.applicant.address || "",
+      "{{veiculo_modelo}}": payload.vehicle.model || "",
+      "{{veiculo_placa}}": (payload.vehicle.plate || "").toUpperCase(),
+      "{{veiculo_renavam}}": payload.vehicle.renavam || "",
       "{{numero_ait}}": aitNumber,
       "{{data_infracao}}": infractionDate,
       "{{enquadramento_ctb}}": ctbArticle,
       "{{descricao_infracao}}": infractionDesc,
       "{{local_infracao}}": infractionLocation,
-      "{{gravidade_infracao}}": (payload.infraction.severity || "m\xE9dia").toUpperCase(),
+      "{{gravidade_infracao}}": str(payload.infraction.severity).toUpperCase(),
       "{{artigo_ctb}}": ctbArticle,
-      "{{velocidade_medida}}": `${speedMeasured}`,
-      "{{velocidade_considerada}}": `${speedConsidered}`,
-      "{{velocidade_limite}}": `${speedLimit}`,
+      "{{velocidade_medida}}": str(speedMeasured),
+      "{{velocidade_considerada}}": str(speedConsidered),
+      "{{velocidade_limite}}": str(speedLimit),
       "{{data_expedicao}}": expeditionDate,
-      "{{dias_decorridos}}": `${daysElapsed}`,
-      "{{data_interposicao_recurso}}": payload.dates?.appealFilingDate || "01/03/2026",
+      "{{dias_decorridos}}": str(daysElapsed),
+      "{{data_interposicao_recurso}}": payload.dates?.appealFilingDate || "",
       "{{data_atual}}": dateFormatted,
       "{{numero_processo_psdd}}": psddNumber,
       "{{numero_processo_pcdd}}": pcddNumber,
-      "{{tempo_suspensao_meses}}": `${suspMonths}`,
+      "{{tempo_suspensao_meses}}": str(suspMonths),
       "{{data_peticao}}": dateFormatted,
       // Nominated Driver (FICI)
-      "{{condutor_indicado_nome}}": payload.nominatedDriver?.name || "NOME DO CONDUTOR INFRATOR",
-      "{{condutor_indicado_cpf}}": payload.nominatedDriver?.cpf || "111.222.333-44",
-      "{{condutor_indicado_rg}}": payload.nominatedDriver?.rg || "11.222.333-4",
-      "{{condutor_indicado_cnh}}": payload.nominatedDriver?.cnh || "11223344556",
-      "{{condutor_indicado_categoria}}": payload.nominatedDriver?.category || "B",
-      "{{condutor_indicado_uf}}": payload.nominatedDriver?.uf || uf,
-      "{{condutor_indicado_endereco}}": payload.nominatedDriver?.address || "Av. dos Estados, 456",
-      "{{condutor_indicado_cidade}}": payload.nominatedDriver?.city || city,
+      "{{condutor_indicado_nome}}": payload.nominatedDriver?.name || "",
+      "{{condutor_indicado_cpf}}": payload.nominatedDriver?.cpf || "",
+      "{{condutor_indicado_rg}}": payload.nominatedDriver?.rg || "",
+      "{{condutor_indicado_cnh}}": payload.nominatedDriver?.cnh || "",
+      "{{condutor_indicado_categoria}}": payload.nominatedDriver?.category || "",
+      "{{condutor_indicado_uf}}": payload.nominatedDriver?.uf || "",
+      "{{condutor_indicado_endereco}}": payload.nominatedDriver?.address || "",
+      "{{condutor_indicado_cidade}}": payload.nominatedDriver?.city || "",
       // Company (PJ)
-      "{{nome_empresa}}": payload.company?.name || "EMPRESA LTDA",
-      "{{cnpj_empresa}}": payload.company?.cnpj || "00.000.000/0001-00",
-      "{{endereco_empresa}}": payload.company?.address || "Av. Empresarial, 100",
+      "{{nome_empresa}}": payload.company?.name || "",
+      "{{cnpj_empresa}}": payload.company?.cnpj || "",
+      "{{endereco_empresa}}": payload.company?.address || "",
       "{{cidade_empresa}}": payload.company?.city || city,
       "{{uf_empresa}}": payload.company?.uf || uf,
       "{{nome_representante}}": payload.company?.representativeName || payload.applicant.name,
@@ -19661,12 +20644,12 @@ ${body}`;
       "{{bloco_preliminares_formatado}}": formattedPreliminaries || "Inexistem preliminares de nulidade formal arguidas nesta oportunidade.",
       "{{bloco_merito_formatado}}": formattedMerit || "Demonstrada nos autos a manifesta atipicidade e insubsist\xEAncia da autua\xE7\xE3o fiscal.",
       // Direct Shorthand Aliases (User Request Phase 4.1)
-      "{{nome}}": payload.applicant.name || "REQUERENTE",
-      "{{placa}}": (payload.vehicle.plate || "ABC-1234").toUpperCase(),
+      "{{nome}}": payload.applicant.name || "",
+      "{{placa}}": (payload.vehicle.plate || "").toUpperCase(),
       "{{auto_infracao}}": aitNumber,
       "{{orgao}}": autuador.toUpperCase(),
-      "{{cpf}}": payload.applicant.cpf || "000.000.000-00",
-      "{{cnh}}": payload.applicant.cnh || "00000000000",
+      "{{cpf}}": payload.applicant.cpf || "",
+      "{{cnh}}": payload.applicant.cnh || "",
       "{{fundamentacao}}": formattedMerit || "Fundamenta\xE7\xE3o t\xE9cnica e legal pautada no C\xF3digo de Tr\xE2nsito Brasileiro.",
       "{{argumentos}}": `${formattedPreliminaries ? `${formattedPreliminaries}
 
@@ -19860,6 +20843,23 @@ var ORGANS_DB = [
     jariStructure: "Colegiados JARI DER-SP"
   }
 ];
+function resolveProtocolInfo(autuadorAbbreviation) {
+  const organ = ORGANS_DB.find((o) => o.abbreviation === autuadorAbbreviation);
+  if (!organ) return null;
+  return {
+    competentBody: organ.jariStructure,
+    recommendedMethod: "portal_online",
+    portalUrl: organ.onlinePortalUrl,
+    physicalAddress: organ.physicalAddress,
+    instructionsText: `Protocolo via ${organ.onlinePortalUrl} ou presencial em ${organ.physicalAddress}`,
+    deadlineDate: calculateDeadline(organ.standardDeadlineDays)
+  };
+}
+function calculateDeadline(days) {
+  const date = /* @__PURE__ */ new Date();
+  date.setDate(date.getDate() + days);
+  return date.toLocaleDateString("pt-BR");
+}
 
 // src/core/rag/rag-pipeline.ts
 var RagPipeline = class {
@@ -19871,7 +20871,7 @@ var RagPipeline = class {
     return INFRACTION_CATALOG.find((item) => {
       const itemCodeClean = item.code.replace(/[^0-9]/g, "");
       return itemCodeClean.includes(clean) || clean.includes(itemCodeClean);
-    }) || INFRACTION_CATALOG[0];
+    });
   }
   /**
    * Retrieve RAG context including matched legal grounds, potential nullities and organ info
@@ -19912,13 +20912,13 @@ var RagPipeline = class {
     ];
     const organMatch = ORGANS_DB.find(
       (o) => o.abbreviation.toLowerCase() === (infraction?.orgaoAutuador || "").toLowerCase() || o.name.toLowerCase().includes((infraction?.orgaoAutuador || "").toLowerCase())
-    ) || ORGANS_DB[0];
-    const organInfo = {
+    );
+    const organInfo = organMatch ? {
       nome: organMatch.name,
       portalUrl: organMatch.onlinePortalUrl,
       enderecoFisico: organMatch.physicalAddress,
       prazoDias: organMatch.standardDeadlineDays
-    };
+    } : void 0;
     return {
       matchedTeses: matchedTeses.length > 0 ? matchedTeses : [
         {
@@ -19941,18 +20941,19 @@ var RagPipeline = class {
    * Generate complete, formatted legal defense draft petition via Document Assembly Engine
    */
   static generateDefenseDraft(caseId, infraction, vehiclePlate, vehicleModel, applicantData, selectedArguments, procedureType = "recurso_jari") {
-    return DocumentAssemblyEngine.assemble({
+    const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
+    const draft = DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
       infraction,
       vehicle: {
         plate: vehiclePlate,
-        model: vehicleModel,
-        renavam: "12345678900"
+        model: vehicleModel
       },
       applicant: applicantData,
       selectedArgumentIds: selectedArguments.map((a) => a.id)
     });
+    return { ...draft, protocolInfo };
   }
 };
 
@@ -21622,17 +22623,22 @@ function resolveOffer(params) {
 function generateDefenseDraftForDomain(domain) {
   const procedureType = domain.serviceType || "recurso_jari";
   const selectedArgs = domain.analysis?.recommendedArguments || [];
+  const a = domain.applicant;
+  if (!a || !a.applicantName || !a.applicantCpf || !a.applicantCnh || !a.addressStreet || !a.addressCityState) {
+    throw new Error("Dados de qualifica\xE7\xE3o do requerente ausentes. N\xE3o \xE9 poss\xEDvel gerar a pe\xE7a sem os dados reais.");
+  }
   const defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle?.plate || "SEM PLACA",
     domain.vehicle?.brandModel || "Ve\xEDculo",
     {
-      name: domain.clientName || "Requerente",
-      cpf: domain.clientCpf || "000.000.000-00",
-      cnh: "05492817492",
-      address: "Rua das Flores, 450, Apto 82",
-      cityState: "S\xE3o Paulo/SP"
+      name: a.applicantName,
+      cpf: a.applicantCpf,
+      rg: a.applicantRg,
+      cnh: a.applicantCnh,
+      address: `${a.addressStreet}, ${a.addressNumber || ""}`,
+      cityState: a.addressCityState
     },
     selectedArgs,
     procedureType
@@ -22492,6 +23498,7 @@ import { Router as Router13 } from "express";
 
 // src/server/services/ai-media-service.ts
 import { GoogleGenAI as GoogleGenAI3, GenerateVideosOperation } from "@google/genai";
+var mocksAllowed = () => process.env.NODE_ENV !== "production" && process.env.DEV_ALLOW_MOCKS === "true";
 var AIMediaService = class {
   getClient() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -22573,6 +23580,20 @@ var AIMediaService = class {
                 aspectRatio,
                 imageSize
               });
+              const quality = mime.startsWith("image/") && mime !== "image/svg+xml" ? await validateImageQuality({ buffer: Buffer.from(base64, "base64") }) : void 0;
+              if (quality && !quality.pass && quality.failureKind === "quality") {
+                logger.error(
+                  "ai_media",
+                  "service",
+                  "generateImage_quality",
+                  `Imagem gerada reprovou no gate de qualidade (${model})`,
+                  {
+                    reasons: quality.reasons,
+                    metrics: quality.metrics,
+                    score: quality.score
+                  }
+                );
+              }
               return {
                 success: true,
                 imageUrl,
@@ -22581,7 +23602,8 @@ var AIMediaService = class {
                 modelUsed: model,
                 imageSize,
                 aspectRatio,
-                promptUsed: fullPrompt
+                promptUsed: fullPrompt,
+                quality
               };
             }
           }
@@ -22592,6 +23614,9 @@ var AIMediaService = class {
       }
     }
     if (options.allowFallback) {
+      if (!mocksAllowed()) {
+        throw new Error("Gera\xE7\xE3o de imagem indispon\xEDvel: mocks (SVG placeholder) desabilitados em produ\xE7\xE3o. Configure GEMINI_API_KEY.");
+      }
       const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio || "1:1", imageSize || "1K");
       logger.warn(
         "ai_media",
@@ -22922,6 +23947,9 @@ var aiMediaService = new AIMediaService();
 // src/server/routes/media.ts
 import { GenerateVideosOperation as GenerateVideosOperation2, GoogleGenAI as GoogleGenAI4 } from "@google/genai";
 var router13 = Router13();
+router13.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "media", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
 router13.use(authenticateToken, requireAdmin);
 router13.get("/hardware", (req, res) => {
   try {
@@ -24252,23 +25280,6 @@ router16.post("/cases", authenticateToken, (req, res) => {
     if (!domainData.analysis && domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
-    if (!domainData.defenseDraft && domainData.infraction) {
-      domainData.defenseDraft = RagPipeline.generateDefenseDraft(
-        domainData.id,
-        domainData.infraction,
-        domainData.vehicle?.plate || "SEM PLACA",
-        domainData.vehicle?.brandModel || "Ve\xEDculo",
-        {
-          name: domainData.clientName || "Requerente",
-          cpf: domainData.clientCpf || "000.000.000-00",
-          cnh: "00000000000",
-          address: "Endere\xE7o residencial",
-          cityState: "S\xE3o Paulo/SP"
-        },
-        domainData.analysis?.recommendedArguments || [],
-        domainData.serviceType || "recurso_jari"
-      );
-    }
     const row = CanonicalMapper.domainToRow(domainData);
     databaseRows.set(row.id, row);
     eventBus.publish(EventTopics.CASE_CREATED, { caseId: domainData.id, isAnonymous: domainData.isAnonymous }, "case_engine");
@@ -24342,18 +25353,33 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   const selectedArgs = LEGAL_ARGUMENTS.filter(
     (a) => selectedArgumentIds?.includes(a.id)
   );
+  const b = applicantData;
+  const resolvedApplicant = b && (b.name !== void 0 || b.applicantName !== void 0) ? {
+    name: b.name || b.applicantName || "",
+    cpf: b.cpf || b.applicantCpf || "",
+    rg: b.rg || b.applicantRg,
+    cnh: b.cnh || b.applicantCnh || "",
+    category: b.category || b.cnhCategory,
+    address: b.address || (b.addressStreet ? `${b.addressStreet}, ${b.addressNumber || ""}` : ""),
+    cityState: b.cityState || b.addressCityState || ""
+  } : domain.applicant ? {
+    name: domain.applicant.applicantName,
+    cpf: domain.applicant.applicantCpf,
+    rg: domain.applicant.applicantRg,
+    cnh: domain.applicant.applicantCnh,
+    category: domain.applicant.cnhCategory,
+    address: `${domain.applicant.addressStreet}, ${domain.applicant.addressNumber || ""}`,
+    cityState: domain.applicant.addressCityState
+  } : void 0;
+  if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
+    return res.status(400).json({ error: "Dados de qualifica\xE7\xE3o do requerente incompletos. Preencha os dados complementares antes de gerar a defesa." });
+  }
   let defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle.plate,
     domain.vehicle.brandModel,
-    applicantData || {
-      name: domain.clientName,
-      cpf: domain.clientCpf || "000.000.000-00",
-      cnh: "05492817492",
-      address: "Rua das Flores, 450, Apto 82",
-      cityState: "S\xE3o Paulo/SP"
-    },
+    resolvedApplicant,
     selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
     procedureType || domain.serviceType
   );
@@ -24362,7 +25388,7 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   }
   const enrichedGemini = await enrichDefenseWithGemini({
     infraction: domain.infraction,
-    applicant: applicantData,
+    applicant: resolvedApplicant,
     arguments: selectedArgs,
     procedure: procedureType
   });
@@ -24453,7 +25479,11 @@ var USER_PROCESS_STAGES = [
     title: "Recebi a primeira notifica\xE7\xE3o (Sem boleto)",
     subtitle: "Notifica\xE7\xE3o de Autua\xE7\xE3o (NA). Prazo aberto para Defesa Pr\xE9via antes da aplica\xE7\xE3o de penalidade.",
     badge: "Fase Inicial \u2022 Defesa Pr\xE9via",
-    mappedProcedure: "recurso_jari"
+    mappedProcedure: "defesa_previa"
+    // NOTA ARQUITETURAL: 'primeira_notificacao' (Notificação de Autuação, fase NA)
+    // mapeia para 'defesa_previa' (Art. 281 CTB) — fase DISTINTA do Recurso JARI
+    // (Art. 285 CTB, contra a NIP). O template TPL_DEFESA_PREVIA não usa epígrafe
+    // de "Recurso Ordinário". Ver ADR / rules-matrix para a separação conceitual.
   },
   {
     id: "notificacao_penalidade",
@@ -24969,14 +25999,16 @@ router22.post("/ai/generate-defense", async (req, res) => {
     const ragContext = RagPipeline.retrieveContext(infraction);
     const ai = getGeminiClient();
     let generatedText = "";
+    const orgaoAutuador = infraction.orgaoAutuador || infraction.autuadorBody || "\xD3RG\xC3O N\xC3O INFORMADO";
+    const municipioUf = infraction.municipioUf || infraction.cityState || "CIDADE/UF N\xC3O INFORMADA";
     if (ai) {
       try {
         const prompt = `Voc\xEA \xE9 o mais prestigiado especialista em Direito de Tr\xE2nsito Administrativo do Brasil.
 Elabore uma pe\xE7a jur\xEDdica de DEFESA PR\xC9VIA / RECURSO ADMINISTRATIVO impec\xE1vel, formal e t\xE9cnica contra o auto de infra\xE7\xE3o n\xBA ${infraction.autoInfracao || infraction.aitNumber}.
 
 DADOS DO PROCESSO:
-- Requerente: ${infraction.nomeCondutor || "Condutor / Propriet\xE1rio"}
-- CPF: ${infraction.cpfCondutor || "000.000.000-00"} | CNH: ${infraction.cnhNumero || "00000000000"}
+- Requerente: ${infraction.nomeCondutor || "N\xC3O INFORMADO"}
+- CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"} | CNH: ${infraction.cnhNumero || "N\xC3O INFORMADO"}
 - Ve\xEDculo: Placa ${infraction.placa} / ${infraction.ufVeiculo} (${infraction.marcaModelo || "Ve\xEDculo Automotor"})
 - \xD3rg\xE3o Autuador: ${infraction.orgaoAutuador}
 - Infra\xE7\xE3o: ${infraction.codigoInfracao || infraction.infractionCode} - ${infraction.descricaoInfracao || infraction.description}
@@ -25020,7 +26052,7 @@ Redija em portugu\xEAs jur\xEDdico formal culto, com excelente fundamenta\xE7\xE
       }
     }
     if (!generatedText) {
-      generatedText = `ILUSTR\xCDSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRA\xC7\xD5ES - JARI DO ${(infraction.orgaoAutuador || "DETRAN").toUpperCase()}
+      generatedText = `ILUSTR\xCDSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRA\xC7\xD5ES - JARI DO ${orgaoAutuador.toUpperCase()}
 
 REFER\xCANCIA: AUTO DE INFRA\xC7\xC3O N\xBA ${infraction.autoInfracao || infraction.aitNumber || "N/A"}
 PLACA DO VE\xCDCULO: ${infraction.placa || "N/A"} / ${infraction.ufVeiculo || ""}
@@ -25055,18 +26087,18 @@ d) A anula\xE7\xE3o de quaisquer pontos lan\xE7ados no prontu\xE1rio do Requeren
 Termos em que,
 Pede e Espera Deferimento.
 
-${infraction.municipioUf || "S\xE3o Paulo - SP"}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
+${municipioUf}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
 
 ________________________________________________
 ${(infraction.nomeCondutor || "REQUERENTE").toUpperCase()}
-CPF: ${infraction.cpfCondutor || "000.000.000-00"}`;
+CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}`;
     }
     const blocks = [
       {
         id: "blk_1",
         titulo: "Endere\xE7amento e Cabe\xE7alho",
         categoria: "cabecalho",
-        conteudo: `ILUSTR\xCDSSIMO SENHOR DIRETOR / PRESIDENTE DA JARI DO ${(infraction.orgaoAutuador || "DETRAN").toUpperCase()}`,
+        conteudo: `ILUSTR\xCDSSIMO SENHOR DIRETOR / PRESIDENTE DA JARI DO ${orgaoAutuador.toUpperCase()}`,
         ativo: true,
         editavel: true
       },
@@ -25074,7 +26106,7 @@ CPF: ${infraction.cpfCondutor || "000.000.000-00"}`;
         id: "blk_2",
         titulo: "Qualifica\xE7\xE3o do Condutor e Ve\xEDculo",
         categoria: "cabecalho",
-        conteudo: `${(infraction.nomeCondutor || "CONDUTOR / PROPRIET\xC1RIO").toUpperCase()}, CPF: ${infraction.cpfCondutor || "000.000.000-00"}, CNH: ${infraction.cnhNumero || "00000000000"}, propriet\xE1rio do ve\xEDculo Placa ${infraction.placa || "N/A"}, vem apresentar DEFESA ADMINISTRATIVA.`,
+        conteudo: `${(infraction.nomeCondutor || "CONDUTOR / PROPRIET\xC1RIO").toUpperCase()}, CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}, CNH: ${infraction.cnhNumero || "N\xC3O INFORMADO"}, propriet\xE1rio do ve\xEDculo Placa ${infraction.placa || "N/A"}, vem apresentar DEFESA ADMINISTRATIVA.`,
         ativo: true,
         editavel: true
       },
@@ -25123,7 +26155,7 @@ CPF: ${infraction.cpfCondutor || "000.000.000-00"}`;
         titulo: "Fecho e Assinatura",
         categoria: "fecho",
         conteudo: `Pede Deferimento.
-${infraction.municipioUf || "Brasil"}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
+${municipioUf || "Brasil"}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
 
 _____________________________________
 Assinatura do Requerente`,
@@ -25136,11 +26168,11 @@ Assinatura do Requerente`,
       caseId: caseData.id,
       tipoDefesa: caseData.tipoServico || caseData.serviceType || "recurso_jari",
       titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || "N/A"}`,
-      orgaoDestinatario: infraction.orgaoAutuador || infraction.autuadorBody,
+      orgaoDestinatario: orgaoAutuador,
       autorNome: infraction.nomeCondutor || "Condutor / Requerente",
       autorCpf: infraction.cpfCondutor || "",
       autorCnh: infraction.cnhNumero || "",
-      autorEndereco: infraction.municipioUf || "S\xE3o Paulo - SP",
+      autorEndereco: municipioUf,
       textoCompleto: generatedText,
       blocos: blocks,
       geradoEm: (/* @__PURE__ */ new Date()).toISOString(),
@@ -25230,6 +26262,41 @@ router23.post("/sync/offline-batch", authenticateToken, (req, res) => {
 });
 var sync_default = router23;
 
+// src/server/routes/auth.ts
+import { Router as Router24 } from "express";
+var router24 = Router24();
+router24.get("/me", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: "N\xE3o autenticado" });
+    }
+    let roleFromProfile;
+    const supabase = getSupabaseServerClient();
+    if (supabase && user.id) {
+      try {
+        const { data: profileData, error: profileError } = await supabase.from("user_profiles").select("role").eq("user_id", user.id).single();
+        if (!profileError && profileData?.role) {
+          roleFromProfile = profileData.role;
+        }
+      } catch (profileErr) {
+        logger.warn("auth", "routes", "profile_fetch_fail", `Falha ao buscar perfil: ${profileErr}`);
+      }
+    }
+    const role = roleFromProfile || user.role || "citizen";
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role
+    });
+  } catch (err) {
+    logger.error("auth", "routes", "me_error", err.message);
+    res.status(500).json({ error: "Erro ao buscar usu\xE1rio" });
+  }
+});
+var auth_default = router24;
+
 // src/server/app.ts
 var databaseRows = caseRepository;
 var auditLogs = [];
@@ -25292,7 +26359,14 @@ function createApp() {
   );
   app.use(corsMiddleware);
   app.use(globalLimiter);
-  app.use(express.json({ limit: "10mb" }));
+  app.use(
+    express.json({
+      limit: "10mb",
+      verify: (req, _res, buf) => {
+        req.rawBody = buf.toString("utf8");
+      }
+    })
+  );
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use("/api/admin", admin_default);
   app.use("/api/admin/commercial", commercial_default);
@@ -25311,6 +26385,7 @@ function createApp() {
   app.use("/api/payments", payments_default);
   app.use("/api/knowledge", knowledge_default);
   app.use("/api/notifications", notifications_default);
+  app.use("/api/auth", auth_default);
   app.use("/api", health_default);
   app.use("/api", cases_default);
   app.use("/api", audit_default);

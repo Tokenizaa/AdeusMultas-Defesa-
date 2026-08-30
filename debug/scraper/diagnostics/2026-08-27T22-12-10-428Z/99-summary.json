@@ -1,0 +1,27 @@
+{
+  "searchUrl": "https://www.google.com/maps/search/despachante%20de%20tr%C3%A2nsito%20S%C3%A3o%20Paulo?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDgyNC4w",
+  "query": "despachante de trânsito",
+  "city": "São Paulo",
+  "scrollsExecuted": 2,
+  "initialAnchors": 8,
+  "finalAnchors": 8,
+  "totalNewLoaded": 0,
+  "scrollBreakdown": [
+    {
+      "scroll": 1,
+      "anchorsBefore": 8,
+      "anchorsAfter": 8,
+      "delta": 0,
+      "stopped": "sem_novidade"
+    },
+    {
+      "scroll": 2,
+      "anchorsBefore": 8,
+      "anchorsAfter": 8,
+      "delta": 0,
+      "stopped": "sem_novidade"
+    }
+  ],
+  "feedExists": true,
+  "articleCount": 0
+}

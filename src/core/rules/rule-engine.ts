@@ -52,7 +52,8 @@ export const EXPERT_RULES: RuleModel[] = [
     description: 'Verifica se o medidor eletrônico de velocidade possui laudo de aferição do INMETRO emitido há mais de 12 meses.',
     category: 'metrologia_engenharia',
     evaluate: (ctx) => {
-      const isSpeed = ctx.infractionCode.startsWith('74') || ctx.infractionCode === '745-50' || ctx.infractionCode === '746-30' || ctx.infractionCode === '747-10';
+      const code = ctx.infractionCode || '';
+      const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
       if (isSpeed) {
         if (ctx.radarCalibrationDate && ctx.infractionDate) {
           const infDate = new Date(ctx.infractionDate);
@@ -92,8 +93,9 @@ export const EXPERT_RULES: RuleModel[] = [
     description: 'Identifica se a infração é de gravidade leve ou média e se o condutor cumpre os requisitos de não reincidência.',
     category: 'direito_material',
     evaluate: (ctx) => {
-      const cat = INFRACTION_CATALOG.find((i) => i.code === ctx.infractionCode || i.code.replace('-', '') === ctx.infractionCode.replace('-', ''));
-      const isLightOrMedium = cat ? (cat.severity === 'leve' || cat.severity === 'media') : (ctx.infractionCode === '745-50' || ctx.infractionCode === '735-80');
+      const code = ctx.infractionCode || '';
+      const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace('-', '') === code.replace('-', ''));
+      const isLightOrMedium = cat ? (cat.severity === 'leve' || cat.severity === 'media') : (code === '745-50' || code === '735-80');
       const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false || ctx.hasPreviousInfractionsLast12Months === undefined;
 
       if (isLightOrMedium && isCleanRecord) {
@@ -118,7 +120,8 @@ export const EXPERT_RULES: RuleModel[] = [
     description: 'Valida autuações por recusa ao bafômetro (Art. 165-A) desprovidas do formulário do Anexo II da Resolução 432.',
     category: 'direito_formal',
     evaluate: (ctx) => {
-      if (ctx.infractionCode === '516-91' || ctx.infractionCode === '516-92' || ctx.infractionCode.includes('516')) {
+      const code = ctx.infractionCode || '';
+      if (code === '516-91' || code === '516-92' || code.includes('516')) {
         return {
           ruleId: 'RULE_LEI_SECA_TERMO_432',
           title: 'Ausência ou Defeito no Termo de Constatação de Sinais (Res. 432/13)',
@@ -183,6 +186,9 @@ export class ExpertRuleEngine {
    * Evaluates an infraction against the entire catalog of deterministic rules
    */
   public static evaluate(caseId: string, infraction: InfractionData): CaseAnalysis {
+    if (!infraction.autuadorBody) {
+      throw new Error('autuadorBody obrigatório para avaliação do motor de regras');
+    }
     const context: RuleEvaluationContext = {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
@@ -289,7 +295,7 @@ export class ExpertRuleEngine {
       detectedInconsistencies,
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
-      competentBody: infraction.autuadorBody || 'DETRAN / JARI',
+      competentBody: infraction.autuadorBody,
       procedureDeadline: infraction.defenseDeadline || deadlineStr,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.`,
       createdAt: new Date().toISOString(),

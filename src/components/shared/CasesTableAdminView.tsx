@@ -71,7 +71,7 @@ export const CasesTableAdminView: React.FC<CasesTableAdminViewProps> = ({
                   {c.infraction.description || 'Infração de trânsito'}
                 </td>
                 <td className="py-3 px-4 text-slate-400">
-                  {c.infraction.autuadorBody || 'DETRAN'}
+                  {c.infraction.autuadorBody || 'Não informado'}
                 </td>
                 <td className="py-3 px-4">
                   {c.payment?.status === 'approved' ? (

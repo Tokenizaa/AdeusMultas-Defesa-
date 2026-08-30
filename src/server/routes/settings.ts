@@ -7,7 +7,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
-// Protect ALL settings routes with authenticateToken and requireAdmin
+// Public health check - no auth required
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'settings', timestamp: new Date().toISOString() });
+});
+
+// Protected admin routes
 router.use(authenticateToken, requireAdmin);
 
 // Centralized Settings & Secret Management Endpoints

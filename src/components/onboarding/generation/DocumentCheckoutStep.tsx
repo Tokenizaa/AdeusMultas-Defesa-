@@ -331,7 +331,7 @@ return {
               Liberação da Petição & Checklist de Protocolo
             </h1>
             <p className="text-xs text-slate-600 mt-1">
-              Gere sua minuta jurídica formal com 52 blocos do CTB/CONTRAN, pronta para impressão e protocolo perante {infractionData.autuadorBody || 'o órgão autuador'}.
+              Gere sua minuta jurídica formal com 52 blocos do CTB/CONTRAN, pronta para impressão e protocolo perante o órgão autuador informado no onboarding.
             </p>
 
             <div className="mt-4 border-t border-slate-200 pt-3 space-y-2 text-xs">

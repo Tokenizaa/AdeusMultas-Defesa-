@@ -204,7 +204,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         </div>
         <div className="space-y-3">
           <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão Julgador</span>
-          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.autuadorBody || 'DETRAN-SP'}</p>
+          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.autuadorBody || '— não informado —'}</p>
           <p className="text-base text-slate-500">Instância: Defesa Administrativa</p>
         </div>
         <div className="space-y-3">

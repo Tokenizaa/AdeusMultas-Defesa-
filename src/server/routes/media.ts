@@ -9,7 +9,12 @@ import { mediaGenerationService } from '../media';
 
 const router = Router();
 
-// All media routes require admin authentication
+// Public health check - no auth required
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'media', timestamp: new Date().toISOString() });
+});
+
+// Protected admin routes
 router.use(authenticateToken, requireAdmin);
 
 /**

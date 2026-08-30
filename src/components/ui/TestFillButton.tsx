@@ -13,7 +13,7 @@ export const TestFillButton: React.FC<TestFillButtonProps> = ({
   className = '',
   isAdmin = false,
 }) => {
-  if (!isAdmin) {
+  if (!isAdmin || !import.meta.env.DEV) {
     return null;
   }
 

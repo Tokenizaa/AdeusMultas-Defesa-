@@ -26,18 +26,41 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
       selectedArgumentIds?.includes(a.id)
     );
 
+    // Dados de qualificação do requerente DEVEM vir do onboarding real (body ou
+    // domain.applicant). NUNCA fabricar CNH/cidade. FAIL CLOSED: ausentes → erro.
+    const b = applicantData as any;
+    const resolvedApplicant = (b && (b.name !== undefined || b.applicantName !== undefined))
+      ? {
+          name: b.name || b.applicantName || '',
+          cpf: b.cpf || b.applicantCpf || '',
+          rg: b.rg || b.applicantRg,
+          cnh: b.cnh || b.applicantCnh || '',
+          category: b.category || b.cnhCategory,
+          address: b.address || (b.addressStreet ? `${b.addressStreet}, ${b.addressNumber || ''}` : ''),
+          cityState: b.cityState || b.addressCityState || '',
+        }
+      : domain.applicant
+        ? {
+            name: domain.applicant.applicantName,
+            cpf: domain.applicant.applicantCpf,
+            rg: domain.applicant.applicantRg,
+            cnh: domain.applicant.applicantCnh,
+            category: domain.applicant.cnhCategory,
+            address: `${domain.applicant.addressStreet}, ${domain.applicant.addressNumber || ''}`,
+            cityState: domain.applicant.addressCityState,
+          }
+        : undefined;
+
+    if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
+      return res.status(400).json({ error: 'Dados de qualificação do requerente incompletos. Preencha os dados complementares antes de gerar a defesa.' });
+    }
+
     let defense = RagPipeline.generateDefenseDraft(
       domain.id,
       domain.infraction,
       domain.vehicle.plate,
       domain.vehicle.brandModel,
-      applicantData || {
-        name: domain.clientName,
-        cpf: domain.clientCpf || '000.000.000-00',
-        cnh: '05492817492',
-        address: 'Rua das Flores, 450, Apto 82',
-        cityState: 'São Paulo/SP',
-      },
+      resolvedApplicant,
       selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
       procedureType || domain.serviceType
     );

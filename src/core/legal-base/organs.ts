@@ -4,6 +4,7 @@
  */
 
 import { OrganModel } from '../domain/knowledge-schema';
+import { SubmissionInstructions } from '../../types';
 
 export const ORGANS_DB: OrganModel[] = [
   {
@@ -96,3 +97,27 @@ export const ORGANS_DB: OrganModel[] = [
     jariStructure: 'Colegiados JARI DER-SP',
   },
 ];
+
+/**
+ * Resolves protocol information for a given autuador abbreviation.
+ * Returns structured submission instructions including competent body, portal URL,
+ * physical address, and calculated deadline.
+ */
+export function resolveProtocolInfo(autuadorAbbreviation: string): SubmissionInstructions | null {
+  const organ = ORGANS_DB.find((o) => o.abbreviation === autuadorAbbreviation);
+  if (!organ) return null;
+  return {
+    competentBody: organ.jariStructure,
+    recommendedMethod: 'portal_online',
+    portalUrl: organ.onlinePortalUrl,
+    physicalAddress: organ.physicalAddress,
+    instructionsText: `Protocolo via ${organ.onlinePortalUrl} ou presencial em ${organ.physicalAddress}`,
+    deadlineDate: calculateDeadline(organ.standardDeadlineDays),
+  };
+}
+
+function calculateDeadline(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toLocaleDateString('pt-BR');
+}

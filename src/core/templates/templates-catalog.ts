@@ -12,6 +12,82 @@ export interface ExtendedDocumentTemplateModel extends DocumentTemplateModel {
   blockIds: string[];
 }
 
+/**
+ * Blocos da Defesa em Processo de Suspensão (PSDD), compartilhados entre
+ * 'processo_suspensao' e o alias legado 'suspensao_cnh' (mesmo documento).
+ */
+function buildSuspensaoBlocks() {
+  return [
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-004')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-010')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-022')!,
+    {
+      id: 'BLK_PRELIMINARES_PSDD',
+      type: 'preliminary_arguments',
+      title: 'Das Preliminares: Falta de Trânsito em Julgado e Prescrição',
+      isMandatory: true,
+      contentTemplate: `II - DAS PRELIMINARES EXTINTIVAS DO PROCESSO DE SUSPENSÃO\n\n{{bloco_preliminares_formatado}}`,
+      supportedVariables: ['{{bloco_preliminares_formatado}}'],
+    },
+    {
+      id: 'BLK_MERITO_PSDD',
+      type: 'merit_arguments',
+      title: 'Do Mérito: Retroatividade dos 40 Pontos e Insubsistência das Infrações',
+      isMandatory: true,
+      contentTemplate: `III - DO MÉRITO: APLICAÇÃO DO NOVO LIMITE LEGAL DA LEI 14.071/2020\n\n{{bloco_merito_formatado}}`,
+      supportedVariables: ['{{bloco_merito_formatado}}'],
+    },
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-059')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
+  ].map((b, idx) => ({
+    id: b.id,
+    type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+    title: b.title,
+    isMandatory: true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables,
+  }));
+}
+
+/**
+ * Blocos da Defesa em Processo de Cassação (PCDD), compartilhados entre
+ * 'processo_cassacao' e o alias legado 'cassacao_cnh' (mesmo documento).
+ */
+function buildCassacaoBlocks() {
+  return [
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-005')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-011')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-023')!,
+    {
+      id: 'BLK_PRELIMINARES_PCDD',
+      type: 'preliminary_arguments',
+      title: 'Das Preliminares: Nulidade do Processo de Suspensão Anterior',
+      isMandatory: true,
+      contentTemplate: `II - DAS PRELIMINARES DE NULIDADE DO PROCESSO ANTECEDENTE\n\n{{bloco_preliminares_formatado}}`,
+      supportedVariables: ['{{bloco_preliminares_formatado}}'],
+    },
+    {
+      id: 'BLK_MERITO_PCDD',
+      type: 'merit_arguments',
+      title: 'Do Mérito: Inocorrência de Direção pelo Requerente e Ausência de Flagrante',
+      isMandatory: true,
+      contentTemplate: `III - DO MÉRITO: INOCORRÊNCIA DE DIREÇÃO PESSOAL PELO CONDUTOR SUSPENSO\n\n{{bloco_merito_formatado}}`,
+      supportedVariables: ['{{bloco_merito_formatado}}'],
+    },
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-060')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+    DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
+  ].map((b, idx) => ({
+    id: b.id,
+    type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+    title: b.title,
+    isMandatory: true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables,
+  }));
+}
+
 export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
   // ==========================================
   // 2. RECURSO À JARI - 1ª INSTÂNCIA (TPL-02)
@@ -143,37 +219,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Demonstrar ausência de trânsito em julgado das multas componentes ou prescrição',
     ],
     blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066', 'BLK-068'],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-004')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-010')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-022')!,
-      {
-        id: 'BLK_PRELIMINARES_PSDD',
-        type: 'preliminary_arguments',
-        title: 'Das Preliminares: Falta de Trânsito em Julgado e Prescrição',
-        isMandatory: true,
-        contentTemplate: `II - DAS PRELIMINARES EXTINTIVAS DO PROCESSO DE SUSPENSÃO\n\n{{bloco_preliminares_formatado}}`,
-        supportedVariables: ['{{bloco_preliminares_formatado}}'],
-      },
-      {
-        id: 'BLK_MERITO_PSDD',
-        type: 'merit_arguments',
-        title: 'Do Mérito: Retroatividade dos 40 Pontos e Insubsistência das Infrações',
-        isMandatory: true,
-        contentTemplate: `III - DO MÉRITO: APLICAÇÃO DO NOVO LIMITE LEGAL DA LEI 14.071/2020\n\n{{bloco_merito_formatado}}`,
-        supportedVariables: ['{{bloco_merito_formatado}}'],
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-059')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
-    ].map((b, idx) => ({
-      id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables,
-    })),
+    blocks: buildSuspensaoBlocks(),
   },
 
   // ==========================================
@@ -193,37 +239,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Juntar prova de que o veículo estava na posse/condução de terceiro habilitado',
     ],
     blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066', 'BLK-068'],
-    blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-005')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-011')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-023')!,
-      {
-        id: 'BLK_PRELIMINARES_PCDD',
-        type: 'preliminary_arguments',
-        title: 'Das Preliminares: Nulidade do Processo de Suspensão Anterior',
-        isMandatory: true,
-        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE DO PROCESSO ANTECEDENTE\n\n{{bloco_preliminares_formatado}}`,
-        supportedVariables: ['{{bloco_preliminares_formatado}}'],
-      },
-      {
-        id: 'BLK_MERITO_PCDD',
-        type: 'merit_arguments',
-        title: 'Do Mérito: Inocorrência de Direção pelo Requerente e Ausência de Flagrante',
-        isMandatory: true,
-        contentTemplate: `III - DO MÉRITO: INOCORRÊNCIA DE DIREÇÃO PESSOAL PELO CONDUTOR SUSPENSO\n\n{{bloco_merito_formatado}}`,
-        supportedVariables: ['{{bloco_merito_formatado}}'],
-      },
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-060')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
-    ].map((b, idx) => ({
-      id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
-      title: b.title,
-      isMandatory: true,
-      contentTemplate: b.contentTemplate,
-      supportedVariables: b.supportedVariables,
-    })),
+    blocks: buildCassacaoBlocks(),
   },
 
   // ==========================================
@@ -300,5 +316,87 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       contentTemplate: b.contentTemplate,
       supportedVariables: b.supportedVariables,
     })),
+  },
+
+  // ==========================================
+  // 8. DEFESA PRÉVIA À NA (TPL-08)
+  // ==========================================
+  {
+    id: 'TPL_DEFESA_PREVIA',
+    code: 'DEFESA_PREVIA_V2026',
+    name: 'Defesa Prévia à Notificação de Autuação (Art. 281 CTB)',
+    procedureType: 'defesa_previa',
+    version: 'v2026.1',
+    description: 'Peça de defesa prévia contra a Notificação de Autuação (NA), fase inicial anterior à imposição de penalidade, atacando vícios formais e materiais do AIT.',
+    fillingRules: [
+      'Endereçar à autoridade de trânsito do órgão autuador',
+      'Informar o número do AIT e a Notificação de Autuação',
+      'Articular preliminares de nulidade e mérito probatório antes da penalidade',
+    ],
+    blockIds: ['BLK-002', 'BLK-008', 'BLK-013', 'BLK-039', 'BLK-057', 'BLK-066', 'BLK-068'],
+    blocks: [
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-002')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
+      {
+        id: 'BLK_FATOS_DEFESA_PREVIA',
+        type: 'facts_narrative',
+        title: 'Da Autuação e dos Fatos',
+        isMandatory: true,
+        contentTemplate: `I - DA AUTUAÇÃO E DOS FATOS\n\nO(A) Requerente, em sede de DEFESA PRÉVIA, vem perante a autoridade autuadora impugnar a Notificação de Autuação referente ao AIT nº {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa à suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}"), com fundamento em vícios formais e materiais que ensejam o cancelamento do auto antes da imposição de qualquer penalidade.`,
+        supportedVariables: ['{{numero_ait}}', '{{orgao_autuador}}', '{{data_infracao}}', '{{enquadramento_ctb}}', '{{descricao_infracao}}'],
+      },
+      {
+        id: 'BLK_PRELIMINARES_DEFESA_PREVIA',
+        type: 'preliminary_arguments',
+        title: 'Das Preliminares de Nulidade',
+        isMandatory: true,
+        contentTemplate: `II - DAS PRELIMINARES DE NULIDADE\n\n{{bloco_preliminares_formatado}}`,
+        supportedVariables: ['{{bloco_preliminares_formatado}}'],
+      },
+      {
+        id: 'BLK_MERITO_DEFESA_PREVIA',
+        type: 'merit_arguments',
+        title: 'Do Mérito',
+        isMandatory: true,
+        contentTemplate: `III - DO MÉRITO\n\n{{bloco_merito_formatado}}`,
+        supportedVariables: ['{{bloco_merito_formatado}}'],
+      },
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-057')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
+    ].map((b, idx) => ({
+      id: b.id,
+      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+      title: b.title,
+      isMandatory: true,
+      contentTemplate: b.contentTemplate,
+      supportedVariables: b.supportedVariables,
+    })),
+  },
+
+  // ==========================================
+  // 9. SUSPENSÃO / CASSAÇÃO — ALIAS LEGADOS (mesmos blocos de PROCESSO_*)
+  // ==========================================
+  {
+    id: 'TPL_SUSPENSAO_CNH',
+    code: 'DEFESA_PSDD_SUSPENSAO_ALIAS_V2026',
+    name: 'Defesa em Processo de Suspensão do Direito de Dirigir (PSDD)',
+    procedureType: 'suspensao_cnh',
+    version: 'v2026.1',
+    description: 'Alias legado de suspensao_cnh: mesma peça de defesa do processo de suspensão da CNH (PSDD).',
+    fillingRules: ['Endereçar à Comissão de Processos de Suspensão do DETRAN', 'Indicar o número do PSDD'],
+    blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066', 'BLK-068'],
+    blocks: buildSuspensaoBlocks(),
+  },
+  {
+    id: 'TPL_CASSACAO_CNH',
+    code: 'DEFESA_PCDD_CASSACAO_ALIAS_V2026',
+    name: 'Defesa Técnica em Processo de Cassação da CNH (PCDD)',
+    procedureType: 'cassacao_cnh',
+    version: 'v2026.1',
+    description: 'Alias legado de cassacao_cnh: mesma peça de defesa do processo de cassação da CNH (PCDD).',
+    fillingRules: ['Endereçar à Coordenação de Processos de Cassação do DETRAN', 'Indicar o número do PCDD'],
+    blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066', 'BLK-068'],
+    blocks: buildCassacaoBlocks(),
   },
 ];

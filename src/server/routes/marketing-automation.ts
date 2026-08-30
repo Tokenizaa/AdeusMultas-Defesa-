@@ -121,31 +121,112 @@ router.get('/campaigns', async (_req, res) => {
   }
 });
 
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 router.post('/campaigns', async (req, res) => {
   try {
-    const { name, description, lead_type, target_cities, steps, max_contacts, min_interval_hours, status } = req.body;
+    const { 
+      name, 
+      description, 
+      audience,
+      lead_type, 
+      target_cities, 
+      steps, 
+      max_contacts, 
+      min_interval_hours, 
+      status,
+      image_url,
+      visual_prompt
+    } = req.body;
+
+    // Validate required fields
+    const errors: string[] = [];
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      errors.push('name é obrigatório');
+    }
+
+    if (!audience || !['B2C', 'B2B'].includes(audience)) {
+      errors.push('audience é obrigatório e deve ser "B2C" ou "B2B"');
+    }
+
+    if (audience === 'B2B') {
+      if (!lead_type || !['despachante', 'advogado_transito'].includes(lead_type)) {
+        errors.push('lead_type é obrigatório para B2B e deve ser "despachante" ou "advogado_transito"');
+      }
+
+      if (!target_cities || !Array.isArray(target_cities) || target_cities.length === 0) {
+        errors.push('target_cities é obrigatório para B2B e deve ser array não vazio');
+      }
+
+      if (!steps || !Array.isArray(steps) || steps.length === 0) {
+        errors.push('steps é obrigatório para B2B e deve ser array não vazio');
+      }
+    }
+
+    // Validate image_url or visual_prompt (at least one required)
+    const hasImageUrl = image_url && typeof image_url === 'string' && image_url.trim().length > 0;
+    const hasVisualPrompt = visual_prompt && typeof visual_prompt === 'string' && visual_prompt.trim().length > 0;
+
+    if (hasImageUrl && !isValidUrl(image_url)) {
+      errors.push('image_url deve ser uma URL válida');
+    }
+
+    if (!hasImageUrl && !hasVisualPrompt) {
+      errors.push('image_url ou visual_prompt é obrigatório (pelo menos um)');
+    }
+
+    if (max_contacts !== undefined && (typeof max_contacts !== 'number' || max_contacts < 1 || max_contacts > 100)) {
+      errors.push('max_contacts deve ser número entre 1 e 100');
+    }
+
+    if (min_interval_hours !== undefined && (typeof min_interval_hours !== 'number' || min_interval_hours < 1 || min_interval_hours > 720)) {
+      errors.push('min_interval_hours deve ser número entre 1 e 720');
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validação falhou', details: errors });
+    }
+
+    const insertData: any = {
+      name: name.trim(),
+      description: description?.trim() || null,
+      audience,
+      lead_type: lead_type || 'despachante',
+      target_cities: target_cities || [],
+      steps: steps && steps.length > 0 ? steps : [
+        { step: 1, delay_hours: 0, message: 'Olá {nome}, tudo bem? Sou da DefesAi. Ajudamos a automatizar recursos e análises de CNH.' },
+        { step: 2, delay_hours: 48, message: 'Oi {nome}, conseguiu avaliar nossa proposta para despachantes em {cidade}?' },
+        { step: 3, delay_hours: 96, message: '{nome}, última mensagem: caso queira testar nossa IA para defesa de multas, estamos à disposição!' }
+      ],
+      max_contacts: max_contacts || 3,
+      min_interval_hours: min_interval_hours || 48,
+      status: status || 'active',
+    };
+
+    if (hasImageUrl) insertData.image_url = image_url.trim();
+    if (hasVisualPrompt) insertData.visual_prompt = visual_prompt.trim();
 
     const { data, error } = await supabaseAdmin
       .from('marketing_campaigns')
-      .insert({
-        name,
-        description: description || null,
-        lead_type: lead_type || 'despachante',
-        target_cities: target_cities || [],
-        steps: steps && steps.length > 0 ? steps : [
-          { step: 1, delay_hours: 0, message: 'Olá {nome}, tudo bem? Sou da DefesAi. Ajudamos a automatizar recursos e análises de CNH.' },
-          { step: 2, delay_hours: 48, message: 'Oi {nome}, conseguiu avaliar nossa proposta para despachantes em {cidade}?' },
-          { step: 3, delay_hours: 96, message: '{nome}, última mensagem: caso queira testar nossa IA para defesa de multas, estamos à disposição!' }
-        ],
-        max_contacts: max_contacts || 3,
-        min_interval_hours: min_interval_hours || 48,
-        status: status || 'active',
-      })
+      .insert(insertData)
       .select()
       .single();
 
-    if (error) throw error;
-    res.json(data);
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'Campanha duplicada', message: 'Já existe campanha com este nome e lead_type' });
+      }
+      throw error;
+    }
+    res.status(201).json(data);
   } catch (err) {
     res.status(500).json({ error: 'Falha ao criar campanha', message: (err as Error).message });
   }
@@ -192,12 +273,16 @@ router.post('/campaigns/:id/start', async (req, res) => {
       return res.status(404).json({ error: 'Campanha não encontrada' });
     }
 
-    const { data: leads, error: leadsError } = await supabaseAdmin
+    // Filter leads by lead_type, audience, and phone_normalized
+    const leadQuery = supabaseAdmin
       .from('marketing_leads')
       .select('*')
       .eq('lead_type', campaign.lead_type)
-      .not('phone', 'is', null)
+      .eq('audience', campaign.audience)
+      .not('phone_normalized', 'is', null)
       .limit(limit);
+
+    const { data: leads, error: leadsError } = await leadQuery;
 
     if (leadsError) throw leadsError;
 
@@ -209,7 +294,22 @@ router.post('/campaigns/:id/start', async (req, res) => {
     const existingLeadIds = new Set((existingLinks || []).map((l: any) => l.lead_id));
     const newLeads = (leads || []).filter((l: any) => !existingLeadIds.has(l.id));
 
-    const leadCampaigns = newLeads.map((lead: any) => ({
+    // Respect max_contacts - limit total lead_campaigns for this campaign
+    const maxContacts = campaign.max_contacts || 3;
+    const existingCount = existingLeadIds.size;
+    const remainingSlots = Math.max(0, maxContacts - existingCount);
+    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
+
+    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
+      return res.json({ 
+        success: true, 
+        enqueued: 0, 
+        campaign: campaign.name,
+        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
+      });
+    }
+
+    const leadCampaigns = leadsToEnqueue.map((lead: any) => ({
       lead_id: lead.id,
       campaign_id: id,
       status: 'queued',
@@ -225,7 +325,7 @@ router.post('/campaigns/:id/start', async (req, res) => {
       if (lcError) throw lcError;
     }
 
-    const queues = newLeads.map((lead: any) => ({
+    const queues = leadsToEnqueue.map((lead: any) => ({
       lead_campaign_id: (leadCampaigns.find((lc: any) => lc.lead_id === lead.id) as any)?.id,
       action: 'send_message',
       scheduled_at: new Date().toISOString(),
@@ -240,7 +340,12 @@ router.post('/campaigns/:id/start', async (req, res) => {
       if (qError) throw qError;
     }
 
-    res.json({ success: true, enqueued: queues.length, campaign: campaign.name });
+    res.json({ 
+      success: true, 
+      enqueued: queues.length, 
+      campaign: campaign.name,
+      remainingSlots: remainingSlots - queues.length
+    });
   } catch (err) {
     res.status(500).json({ error: 'Falha ao iniciar campanha', message: (err as Error).message });
   }

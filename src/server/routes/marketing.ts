@@ -30,7 +30,8 @@ router.post('/reload', async (_req, res) => {
 });
 
 // Marketing OS (7 Autonomous Agents Organism) — estado REAL do orquestrador
-router.get('/status', async (req, res) => {
+// PUBLIC: health/metrics endpoint — no auth required
+router.get('/status', async (_req, res) => {
   const agents = await marketingService.getMarketingAgents();
   const contents = await marketingService.getEditorialContents();
   const metrics = marketingMetricsCollector.getMetrics();

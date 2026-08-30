@@ -89,7 +89,7 @@ interface ContentRow {
   format: string;
   legal_theme: string;
   infraction_target_code?: string;
-  status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
+  status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado';
   scheduled_date?: string;
   estimated_reach: number;
   copy_text: string;

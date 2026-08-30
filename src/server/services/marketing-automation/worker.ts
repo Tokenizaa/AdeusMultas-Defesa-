@@ -1,11 +1,15 @@
 import { supabaseAdmin } from '../../../scraper-prospecting/supabase';
 import { whatsappService } from '../whatsapp-service';
 import { logger } from '../../../scraper-prospecting/logger';
+import {
+  loadAutomationState,
+  updateAutomationState,
+  recordSuccessfulSend,
+  resolveEffectiveStatus,
+  AutomationStatus,
+} from './state';
 
 const POLL_INTERVAL_MS = 10_000;
-const STATE_ID = '00000000-0000-0000-0000-000000000001';
-
-type AutomationStatus = 'RUNNING' | 'PAUSED' | 'STOPPED' | 'ERROR';
 
 export class MarketingAutomationWorker {
   private static instance: MarketingAutomationWorker | null = null;
@@ -60,13 +64,31 @@ export class MarketingAutomationWorker {
     return { success: true };
   }
 
-  async getStatus(): Promise<{ status: AutomationStatus; lastError?: string | null; lastProcessedAt?: string | null; processedCount: number }> {
+  async getStatus(): Promise<{
+    status: AutomationStatus;
+    lastError?: string | null;
+    lastProcessedAt?: string | null;
+    processedCount: number;
+    timerAlive: boolean;
+  }> {
     const state = await this.loadState();
+
+    // Honestidade: DB pode dizer RUNNING com worker morto (não iniciado no boot /
+    // processo reiniciado). Reporta STOPPED e corrige o DB — NUNCA auto-inicia.
+    const effective = resolveEffectiveStatus(state.status, this.timer !== null, state.last_error);
+    if (effective !== state.status) {
+      logger.warn(`Worker morto detectado (DB=${state.status}, timer inativo). Estado corrigido para ${effective}.`, {
+        module: 'worker',
+      });
+      await this.updateState(effective);
+    }
+
     return {
-      status: state.status as AutomationStatus,
+      status: effective,
       lastError: state.last_error,
       lastProcessedAt: state.last_processed_at,
       processedCount: state.processed_count,
+      timerAlive: this.timer !== null,
     };
   }
 
@@ -174,6 +196,11 @@ export class MarketingAutomationWorker {
 
     const messageId = result.messageId || `wamid_${Date.now()}`;
 
+    // processed_count conta APENAS envios reais bem-sucedidos (não ticks).
+    if (result.success) {
+      await this.recordSend();
+    }
+
     await supabaseAdmin.from('marketing_messages').insert({
       lead_id: lead.id,
       campaign_id: campaign.id,
@@ -186,6 +213,14 @@ export class MarketingAutomationWorker {
       external_status: result as any,
       sent_at: new Date().toISOString(),
     });
+
+    // Guard: não rebaixar status 'responded' → 'sent' para leads B2B_RELATIONSHIP
+    // (ADR-013: cadence preserva 'responded' após resposta do parceiro)
+    const RESPONDED_OR_BEYOND = ['responded', 'converted', 'exhausted'];
+    if (RESPONDED_OR_BEYOND.includes(lc.status)) {
+      logger.info(`Lead campaign ${lc.id} status=${lc.status} — skipping downgrade to sent/exhausted`, { module: 'worker', operation: 'handleSendMessage' });
+      return;
+    }
 
     const nextStep = stepIndex + 1;
     const isLastStep = nextStep >= steps.length;
@@ -274,56 +309,60 @@ export class MarketingAutomationWorker {
       .replace(/\{cidade\}/gi, lead.city || '');
   }
 
-  private async loadState(): Promise<{ status: AutomationStatus; last_error?: string | null; last_processed_at?: string | null; processed_count: number }> {
-    const { data } = await supabaseAdmin
-      .from('marketing_automation_state')
-      .select('*')
-      .eq('id', STATE_ID)
-      .single();
-
-    return {
-      status: (data?.status || 'STOPPED') as AutomationStatus,
-      last_error: data?.last_error,
-      last_processed_at: data?.last_processed_at,
-      processed_count: data?.processed_count || 0,
-    };
+  private async loadState() {
+    return loadAutomationState(supabaseAdmin);
   }
 
   private async updateState(status: AutomationStatus, lastError?: string): Promise<void> {
-    const updates: any = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
+    return updateAutomationState(supabaseAdmin, status, lastError);
+  }
 
-    if (status === 'RUNNING') {
-      updates.last_processed_at = new Date().toISOString();
-      updates.processed_count = (await this.loadState()).processed_count + 1;
-    }
-
-    if (lastError) {
-      updates.last_error = lastError;
-    }
-
-    await supabaseAdmin
-      .from('marketing_automation_state')
-      .upsert({ id: STATE_ID, ...updates });
+  private async recordSend(): Promise<void> {
+    await recordSuccessfulSend(supabaseAdmin);
   }
 
   private async getNextActions(): Promise<any[]> {
+    // BUG FIX (P0, auditoria-marketingos §11-9): o filtro anterior usava
+    // `.lt('attempts', 'max_attempts')`, que compara `attempts < 'max_attempts'`
+    // (literal string) no PostgREST — erro de cast integer/text → query sempre
+    // falhava → o worker retornava [] e a fila nunca drenava.
+    // PostgREST/supabase-js não compara coluna-vs-coluna; resolve no cliente
+    // lendo o `max_attempts` de cada linha (coluna NOT NULL da própria tabela).
     const { data, error } = await supabaseAdmin
       .from('marketing_automation_queue')
-      .select('*')
+      .select('*, lead_campaign:marketing_lead_campaigns(campaign:marketing_campaigns(max_contacts))')
       .lte('scheduled_at', new Date().toISOString())
-      .lt('attempts', 'max_attempts')
       .order('scheduled_at', { ascending: true })
-      .limit(10);
+      .limit(30);
 
     if (error) {
       logger.error(`queue_error: ${error.message}`, { module: 'worker' });
       return [];
     }
 
-    return data || [];
+    const due = (data || []).filter(
+      (job) => (job.attempts ?? 0) < (job.max_attempts ?? 3)
+    );
+
+    // Respect max_contacts per campaign: count active lead_campaigns for each campaign
+    // and filter out jobs that would exceed the limit
+    const campaignContactCounts = new Map<string, number>();
+    
+    for (const job of due) {
+      const campaign = job.lead_campaign?.campaign;
+      if (campaign?.id) {
+        const currentCount = campaignContactCounts.get(campaign.id) || 0;
+        const maxContacts = campaign.max_contacts || 3;
+        
+        if (currentCount >= maxContacts) {
+          // Skip this job - campaign has reached max_contacts
+          continue;
+        }
+        campaignContactCounts.set(campaign.id, currentCount + 1);
+      }
+    }
+
+    return due.slice(0, 10);
   }
 }
 

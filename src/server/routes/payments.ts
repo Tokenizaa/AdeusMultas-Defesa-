@@ -106,17 +106,27 @@ function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseD
   const procedureType = domain.serviceType || 'recurso_jari';
   const selectedArgs = domain.analysis?.recommendedArguments || [];
 
+  // FAIL CLOSED: a peça paga usa APENAS os dados reais de qualificação do
+  // onboarding (domain.applicant). Ausente/incompleto → erro, NUNCA fabricar
+  // CNH/cidade/CPF. O webhook captura esse erro (não-bloqueante) e mantém o
+  // pagamento confirmado sem peça fabricada.
+  const a = domain.applicant;
+  if (!a || !a.applicantName || !a.applicantCpf || !a.applicantCnh || !a.addressStreet || !a.addressCityState) {
+    throw new Error('Dados de qualificação do requerente ausentes. Não é possível gerar a peça sem os dados reais.');
+  }
+
   const defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle?.plate || 'SEM PLACA',
     domain.vehicle?.brandModel || 'Veículo',
     {
-      name: domain.clientName || 'Requerente',
-      cpf: domain.clientCpf || '000.000.000-00',
-      cnh: '05492817492',
-      address: 'Rua das Flores, 450, Apto 82',
-      cityState: 'São Paulo/SP',
+      name: a.applicantName,
+      cpf: a.applicantCpf,
+      rg: a.applicantRg,
+      cnh: a.applicantCnh,
+      address: `${a.addressStreet}, ${a.addressNumber || ''}`,
+      cityState: a.addressCityState,
     },
     selectedArgs,
     procedureType
