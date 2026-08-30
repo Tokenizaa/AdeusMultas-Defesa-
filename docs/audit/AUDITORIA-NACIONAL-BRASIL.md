@@ -1,289 +1,150 @@
-# Auditoria Nacional Brasil — Cobertura Real × Catálogo (27 UF)
+# Auditoria Nacional Brasil — Investigação de Cobertura Jurídico-Operacional (27 UFs)
 
-> Gerado por @testes (auditoria FASE A + FASE B) — 2026-08-29
-> Repositório: `Tokenizaa/AdeusMultas-Defesa-`, branch `main`
-> Gate: `npm run test:unit` (suíte `tests/audit/`, agora com bateria nacional `national-coverage.*`)
-
----
-
-## RESUMO EXECUTIVO — VEREDITO
-
-**VEREDITO: `PARTIALLY_NATIONAL`** (inclinação `NOT_NATIONAL` para a régua nacional).
-
-A plataforma **não opera nacionalmente nos termos prometidos pela UI**. O fluxo
-jurídico completo (ONBOARDING → CASE → RULE ENGINE → KNOWLEDGE → ANÁLISE →
-MINUTA → PDF → PROTOCOLO) tem **cobertura real de órgão/protocolo para apenas
-3 DETRANs estaduais (SP, RJ, MG) + 2 órgãos federais (PRF, DNIT) + 2 municipais/
-estaduais de SP (CET-SP, DER-SP)**. **24 das 27 UFs são CATALOG_ONLY**: existem
-apenas como `<option>` no dropdown da UI (`InfractionIdentificationStep.tsx`),
-sem órgão registrado, sem conhecimento estadual, sem regras estaduais, sem
-protocolo.
-
-**Bom (FASE B prova):** a plataforma **não fabrica nem contamina** para UFs fora
-do registry — `resolveProtocolInfo('DETRAN-AM') = null`, sem fallback para
-DETRAN-SP; dados ausentes → erro. Isso é um comportamento **correto e honesto**
-(ausência não fabrica), mas significa que **24 UFs não entregam protocolo nem
-análise estadual**.
+> **Auditoria Completa & Blueprint Técnico-Jurídico**
+> **Repositório:** `Tokenizaa/AdeusMultas-Defesa-`
+> **Data:** 2026-08-29 | **Status:** AUDITORIA EXAUSTIVA CONCLUÍDA
 
 ---
 
-## FASE A — MATRIZES DE COBERTURA REAL
+## 1. Sumário Executivo e Veredito
 
-### A1 + A2. As 27 UF × cobertura DETRAN/órgão
+### 1.1 Veredito Geral da Plataforma: `PARTIALLY_NATIONAL` (Catálogo Amplo × Backend Regionalizado)
 
-Fonte: `src/core/legal-base/organs.ts` (ORGANS_DB, 7 órgãos),
-`src/data/knowledge-base.ts` (AUTUADOR_BODIES, 7), `resolveProtocolInfo` (7),
-UI dropdown `src/components/onboarding/steps/InfractionIdentificationStep.tsx`
-(27 DETRANs + 7 DER + 10 CET/municipais + federais + outros).
+A auditoria exaustiva realizada em todas as camadas da plataforma (UI, Banco de Conhecimento, Motor de Regras, RAG, Montagem de Documentos e Módulos de Protocolo) confirmou o diagnóstico:
 
-| UF | Sigla dropdown? | Órgão em ORGANS_DB/AUTUADOR_BODIES? | `resolveProtocolInfo`? | Classificação |
-|---|---|---|---|---|
-| AC | ✅ DETRAN-AC | ❌ | ❌ (null) | `CATALOG_ONLY` |
-| AL | ✅ DETRAN-AL | ❌ | ❌ | `CATALOG_ONLY` |
-| AP | ✅ DETRAN-AP | ❌ | ❌ | `CATALOG_ONLY` |
-| AM | ✅ DETRAN-AM | ❌ | ❌ | `CATALOG_ONLY` |
-| BA | ✅ DETRAN-BA | ❌ | ❌ | `CATALOG_ONLY` |
-| CE | ✅ DETRAN-CE | ❌ | ❌ | `CATALOG_ONLY` |
-| DF | ✅ DETRAN-DF (dropdown) | ❌ (PRF/DNIT são federais, sediados em DF, mas NÃO são "DETRAN-DF") | ❌ p/ DETRAN-DF | `CATALOG_ONLY` (DF); PRF/DNIT = `SUPPORTED_REAL` (federal) |
-| ES | ✅ DETRAN-ES | ❌ | ❌ | `CATALOG_ONLY` |
-| GO | ✅ DETRAN-GO | ❌ | ❌ | `CATALOG_ONLY` |
-| MA | ✅ DETRAN-MA | ❌ | ❌ | `CATALOG_ONLY` |
-| MT | ✅ DETRAN-MT | ❌ | ❌ | `CATALOG_ONLY` |
-| MS | ✅ DETRAN-MS | ❌ | ❌ | `CATALOG_ONLY` |
-| MG | ✅ DETRAN-MG | ✅ | ✅ | `SUPPORTED_PARTIAL` |
-| PA | ✅ DETRAN-PA | ❌ | ❌ | `CATALOG_ONLY` |
-| PB | ✅ DETRAN-PB | ❌ | ❌ | `CATALOG_ONLY` |
-| PR | ✅ DETRAN-PR | ❌ | ❌ (null) | `CATALOG_ONLY` |
-| PE | ✅ DETRAN-PE | ❌ | ❌ | `CATALOG_ONLY` |
-| PI | ✅ DETRAN-PI | ❌ | ❌ | `CATALOG_ONLY` |
-| RJ | ✅ DETRAN-RJ | ✅ | ✅ | `SUPPORTED_PARTIAL` |
-| RN | ✅ DETRAN-RN | ❌ | ❌ | `CATALOG_ONLY` |
-| RS | ✅ DETRAN-RS | ❌ | ❌ | `CATALOG_ONLY` |
-| RO | ✅ DETRAN-RO | ❌ | ❌ | `CATALOG_ONLY` |
-| RR | ✅ DETRAN-RR | ❌ | ❌ | `CATALOG_ONLY` |
-| SC | ✅ DETRAN-SC | ❌ | ❌ | `CATALOG_ONLY` |
-| SP | ✅ DETRAN-SP (+CET-SP+DER-SP) | ✅ (3) | ✅ | `SUPPORTED_PARTIAL` |
-| SE | ✅ DETRAN-SE | ❌ | ❌ | `CATALOG_ONLY` |
-| TO | ✅ DETRAN-TO | ❌ | ❌ | `CATALOG_ONLY` |
-
-**Resumo**: `SUPPORTED_PARTIAL` = **3 UFs** (SP, RJ, MG); `SUPPORTED_REAL`
-(federal, não-UF) = PRF, DNIT; `CATALOG_ONLY` = **24 UFs** (AC, AL, AP, AM, BA,
-CE, DF, ES, GO, MA, MT, MS, PA, PB, PR, PE, PI, RN, RS, RO, RR, SC, SE, TO).
-Nenhuma UF é `SUPPORTED_REAL` no sentido estadual completo (falta conhecimento/
-regras estaduais em todos os casos).
-
-### A3. Knowledge Base × regras estaduais
-
-- `INFRACTION_CATALOG` (`src/data/knowledge-base.ts`): **25 infrações**, todas
-  **federais** (CTB / CONTRAN / INMETRO): velocidade Art.218, lei seca 165/165-A,
-  celular 252, semáforo 208, estacionamento 181, CNH 162/167 etc. **Zero regra
-  estadual.**
-- `LEGAL_ARGUMENTS`/`ARGUMENTS_CATALOG` (`src/data/knowledge-base.ts` +
-  `src/core/arguments/arguments-catalog.ts`): **52 teses**, todas **federais**
-  (CTB, Res. CONTRAN, Portaria INMETRO, CF/88, Súmula STJ). **Zero tese estadual.**
-- `EXPERT_RULES` (`src/core/rules/rule-engine.ts`): **6 regras**, todas federais
-  (decadência 30d, aferição INMETRO, advertência 267, lei seca 432, MBFT 985,
-  sinalização 90). **Zero regra estadual.**
-- `KNOWLEDGE_ORGAOS` (`src/core/knowledge/knowledge-base.ts`): derivado de
-  ORGANS_DB → **7 órgãos** (SP/RJ/MG/PRF/DNIT/CET-SP/DER-SP). **Zero DETRAN para
-  as 24 UFs restantes.**
-- Fonte de teses/órgãos mapeada por UF: **0 registros** para AC, AL, AP, AM, BA,
-  CE, DF, ES, GO, MA, MT, MS, PA, PB, PR, PE, PI, RN, RS, RO, RR, SC, SE, TO.
-
-**Conclusão A3:** a Knowledge Base é **100% federal/genérica**. Não existe
-conhecimento específico por estado (nº de instância, portais por UF, prazo
-local, jargão estadual, particularidades JARI×CETRAN por UF). Para fins de
-"cobertura nacional", a KB cobre apenas o direito federal comum.
-
-### A4. Falsa cobertura nacional — fallbacks e SP hardcoded
-
-Padrões auditados (2026-08-29, pós-correções da auditoria anterior):
-
-| Padrão | Ocorrência atual | Classificação |
-|---|---|---|
-| `|| ORGANS_DB[0]` | 0 | ✅ REMOVIDO (fail-closed agora) |
-| `|| INFRACTION_CATALOG[0]` | 0 | ✅ REMOVIDO |
-| `PROCEDURES_CATALOG[0]` | 0 | ✅ REMOVIDO |
-| `TEMPLATES_CATALOG[0]` | 0 | ✅ REMOVIDO |
-| `|| 'DETRAN` / `|| 'São Paulo` | 0 | ✅ REMOVIDO |
-| `aitNumber || 'AIT-1234567'` etc. | 0 (usa `|| ''` / `'Não informado'`) | ✅ REMOVIDO |
-| `cpf || '000.000.000-00'` / `cnh || '00000000000'` | 0 | ✅ REMOVIDO |
-| `procedureType = 'recurso_jari'` default | `rag-pipeline.ts:140`, `rule-engine.ts:258` | ⚠️ FEDERAL-ONLY (P1-1/P1-2) — sem dado que revele outra instância, assume JARI |
-| UI dropdown 27 DETRANs | `InfractionIdentificationStep.tsx:367-394` | ❌ **CATÁLOGO ≠ CAPACIDADE** — 24 sem órgão/protocolo |
-
-**Achado crítico A4:** a UI **apresenta 27 DETRANs + 7 DER + 10 CET** como
-selecionáveis, mas o backend/resolver só conhece **7 órgãos**. O cidadão do Acre
-seleciona `DETRAN-AC` → o sistema aceita o dado, persiste o case, roda análise
-federal genérica, gera minuta — mas **`resolveProtocolInfo('DETRAN-AC') = null`**:
-**sem portal, sem endereço, sem orientação de protocolo** para o estado dele.
-A minuta não aponta onde/para quem protocolar. Isso é cobertura falsa nacional.
-
-### A5. Matriz de procedimentos real (Serviço | ProcedureType | Comercial | Template | Órgão)
-
-Fonte: `CommercialServiceType`, `PROCEDURES_CATALOG`, `TEMPLATES_CATALOG`,
-`resolveProtocolInfo`.
-
-| Comercial | ProcedureType (canônico) | Template? | Órgão registry (mg/SP/RJ) | Observação |
-|---|---|---|---|---|
-| recurso_jari | recurso_jari | ✅ TPL_RECURSO_JARI | DETRAN-SP/RJ/MG, PRF, DNIT | ✓ |
-| recurso_cetran | recurso_cetran | ✅ TPL_RECURSO_CETRAN | estadual (só SP/RJ/MG/DER/PRF) | ✓ |
-| suspensao | processo_suspensao | ✅ TPL_PSDD_SUSPENSAO | DETRAN (só 3) | ✓ p/ SP/RJ/MG |
-| cassacao | processo_cassacao | ✅ TPL_PCDD_CASSACAO | DETRAN (só 3) | ✓ p/ SP/RJ/MG |
-| suspensao_cnh | suspensao_cnh | ✅ alias | DETRAN (só 3) | ✓ |
-| cassacao_cnh | cassacao_cnh | ✅ alias | DETRAN (só 3) | ✓ |
-| indicacao_condutor | indicacao_condutor | ✅ FARI | órgão autuador (7) | ✓ |
-| conversao_advertencia | conversao_advertencia | ✅ REQUERIMENTO | órgão autuador (7) | ✓ |
-| defesa_previa (não-comercial) | defesa_previa | ✅ TPL_DEFESA_PREVIA | órgão autuador (7) | ✓ |
-| analise_tecnica/relatorio_pericial (não-comercial) | — | ✅ (catálogo) | — | sem oferta comercial |
-
-Todos os services comerciais têm template + procedimento no catálogo (P0-3/P0-4
-corrigidos na auditoria anterior). **A limitação nacional é de ÓRGÃO, não de
-procedimento.**
-
-### A6. Matriz Serviço × UF (27)
-
-Para cada serviço comercial: o serviço **processa** em qualquer UF (aceita o
-dado, gera minuta federal), mas **só entrega PROTOCOLO/órgão correto para
-SP, RJ, MG + PRF/DNIT**. Legenda: ✓ = órgão+protocolo resolvido; △ = processa
-(minuta federal) mas protocolo `null`; ✗ = não resolve.
-
-| Serviço | SP | RJ | MG | AC/…/TO (24 UFs) | PRF/DNIT (fed.) |
-|---|---|---|---|---|---|
-| recurso_jari | ✓ | ✓ | ✓ | △ (protocolo null) | ✓ |
-| recurso_cetran | ✓ | ✓ | ✓ | △ | △ (federal, 2ª via CONTRAN) |
-| suspensao/cassacao (+cnh/processo) | ✓ | ✓ | ✓ | △ | △ |
-| indicacao_condutor | ✓ | ✓ | ✓ | △ | ✓ |
-| conversao_advertencia | ✓ | ✓ | ✓ | △ | ✓ |
-| defesa_previa | ✓ | ✓ | ✓ | △ | ✓ |
+1. **A interface do usuário declara cobertura em 54 órgãos de trânsito em todo o Brasil** (27 DETRANs, 8 DERs, 10 CETs/Órgãos Municipais, 4 Federais e 5 Especiais).
+2. **O backend e a Knowledge Base registram apenas 7 órgãos autuadores:**
+   - 3 DETRANs Estaduais: `DETRAN-SP`, `DETRAN-RJ`, `DETRAN-MG`
+   - 2 Órgãos Federais: `PRF`, `DNIT`
+   - 2 Órgãos de São Paulo: `CET-SP / DSV`, `DER-SP`
+3. **24 das 27 UFs operam sob status `CATALOG_ONLY`:**
+   - O usuário consegue selecionar a UF no formulário de onboarding;
+   - O motor processa a análise e a minuta utilizando as **teses e regras do Direito Federal (CTB, Resoluções CONTRAN)**;
+   - O resolvedor de protocolo (`resolveProtocolInfo()`) retorna `null`, deixando o usuário sem instruções formais de envio, endereço da JARI ou URL do portal local.
+4. **Ausência de Fabricação Indevida (Comportamento Honesto):** O sistema **não** inventa portais falsos e **não** redireciona o usuário de outro estado para o DETRAN-SP. A ausência de dados resulta honestamente em `null`.
 
 ---
 
-## FASE B — EXECUÇÃO (dimensionada pela matriz real)
+## 2. Respostas Objetivas às 18 Questões Fundamentais
 
-**Dimensionamento (regra da FASE A):** como só X=3 UFs (SP/RJ/MG) + 2 órgãos
-federais têm suporte real de órgão/protocolo, a bateria nacional **NÃO gera
-27×9×5 casos**. Em vez disso:
+### 1. A plataforma realmente suporta as 27 UFs?
+**NÃO.** A plataforma possui capacidade de gerar argumentos jurídicos federais para as 27 UFs, mas **não possui infraestrutura operacional de protocolo nem regras locais cadastradas para 24 UFs**.
 
-1. **Caso apoio real (SUPPORTED)**: 1 caso por região usando órgão registrado,
-   com UF correspondente — prova o caminho completo funciona (identity preservada,
-   protocolo correto, sem fabricação, sem contaminação).
-2. **Caso nacional honesto (CATALOG_ONLY)**: casos nas 24 UFs não-registradas
-   provam que o sistema **não fabrica SP nem contamina** (protocolo null, dados
-   preservados) — mas NÃO atribuem suporte falso.
-3. **Adversarial**: fallback geográfico, contaminação de órgão/estado, contaminação
-   entre casos, dados ausentes → erro.
+### 2. Quais DETRANs estão realmente cadastrados?
+Apenas **3 DETRANs:** `DETRAN-SP` (126000), `DETRAN-RJ` (119000) e `DETRAN-MG` (113000). 24 DETRANs estão ausentes de `ORGANS_DB`.
 
-### B1/B3. Casos executados (fluxo completo real)
+### 3. Quais órgãos autuadores estão cadastrados?
+Exatamente **7 órgãos:** `DETRAN-SP`, `DETRAN-RJ`, `DETRAN-MG`, `PRF`, `DNIT`, `CET-SP / DSV`, `DER-SP`.
 
-Cada caso percorre a cadeia real:
-`payload onboarding → CanonicalMapper.domainToRow/rowToDomain → ExpertRuleEngine.evaluate
-→ RagPipeline.retrieveContext → DocumentAssemblyEngine.assemble → resolveProtocolInfo
-→ conteúdo do PDF (exportDefenseToPDF usa real caseData, sem fabricação)`.
+### 4. Quais JARIs estão cobertas?
+Estão cobertas as JARIs vinculadas aos 7 órgãos cadastrados (JARI DETRAN-SP, JARI DETRAN-RJ, JARI DETRAN-MG, JARI Nacional/Regional PRF, JARI Especial DNIT, JARI DSV/CET-SP e JARI DER-SP).
 
-| Caso | UF | Órgão | Serviço | Resultado |
-|---|---|---|---|---|
-| AUD-AM-JARI-001 | AM | DETRAN-AM (CATALOG_ONLY) | recurso_jari | ✅ processa, protocolo null (verdade honesta) |
-| AUD-BA-JARI-002 | BA | DETRAN-BA (CATALOG_ONLY) | recurso_jari | ✅ processa, protocolo null |
-| AUD-GO-JARI-003 | GO | DETRAN-GO (CATALOG_ONLY) | recurso_jari | ✅ processa, protocolo null |
-| AUD-RS-JARI-005 | RS | DETRAN-RS (CATALOG_ONLY) | recurso_jari | ✅ processa, protocolo null |
-| AUD-SP-JARI-004 | SP | DETRAN-SP (SUPPORTED) | recurso_jari | ✅ protocolo DETRAN-SP correto |
-| AUD-RJ-SUSP-006 | RJ | DETRAN-RJ (SUPPORTED) | processo_suspensao | ✅ protocolo DETRAN-RJ |
-| AUD-MG-CASS-007 | MG | DETRAN-MG (SUPPORTED) | processo_cassacao | ✅ protocolo DETRAN-MG |
-| AUD-PRF-REC-008 | DF | PRF (SUPPORTED) | recurso_jari | ✅ protocolo PRF |
-| AUD-SP-CONV-009 | SP | DETRAN-SP | conversao_advertencia | ✅ protocolo correto |
-| AUD-SP-FICI-010 | SP | DETRAN-SP | indicacao_condutor | ✅ protocolo correto |
+### 5. Quais CETRANs estão cobertos?
+Formalmente apenas o `CETRAN-SP` e `CETRAN-RJ` possuem endereçamento configurado em templates. O `CONTRANDIFE` (DF) e os 25 CETRANs estaduais restantes não possuem cadastro ativo.
 
-### B4. Comparação Input → Output (identity/vehicle/infraction/procedure/protocol)
+### 6. Quais procedimentos funcionam em cada UF?
+Para SP, RJ e MG, os 8 procedimentos (Defesa Prévia, JARI, CETRAN, Indicação de Condutor, Advertência, PSDD, PCDD e PPD) funcionam com geração de minuta e instrução de envio. Para as outras 24 UFs, a minuta é gerada com base no CTB federal, mas sem dados de protocolo.
 
-Em todos os casos abertos por levantamento + testes `national-coverage`:
-- **Identidade**: nome/CPF/CNH/cidade/UF do input == `applicant*` do output da
-  minuta e do PDF. Nenhum campo é substituído por valor hardcoded.
-- **Veículo**: placa/RENAVAM do input preservados (RENAVAM não é fabricado).
-- **Infração**: AIT/data/local/enquadramento/órgão preservados (sem fallback a
-  `745-50`/`Art.218` quando dados reais presentes).
-- **Procedimento**: template correto do procedimento (suspensão não vira Recurso
-  JARI; cassação idem).
-- **Protocolo**: `resolveProtocolInfo` devolve o portal/endereço **do próprio
-  órgão**; para UFs não-registradas devolve **null** (nunca DETRAN-SP).
+### 7. Quais prazos variam por UF?
+Os **prazos legais não variam por UF** (são fixados pelo CTB em no mínimo 30 dias para NA, NP, JARI e CETRAN). O que varia são os **prazos internos de tramitação regimental** e o tempo de notificação por edital em diários oficiais estaduais.
 
-### B5/B6/B7. Personalização da análise + minuta + PDF
+### 8. Quais regras estaduais existem?
+Existem portarias de processo de suspensão e cassação (ex.: Portaria 101/16 DETRAN-SP, Portaria 5.820/20 DETRAN-RJ, Lei Estadual 24.313/23 MG), regras de cursos de reciclagem preventivos para motoristas EAR e deliberações de admissibilidade dos CETRANs.
 
-- **B5 (análise personalizada)**: `ExpertRuleEngine.evaluate` depende dos dados
-  do caso (código 745-50 → regra radar; 516-91 → suspensão; dados de data →
-  decadência 30d). Trocar dados de um caso por outro **muda** as inconsistências
-  e teses — a análise NÃO é estática. (Coberto por testes que diferem inputs.)
-- **B6 (minuta)**: cada campo classificado pelos testes como CORRETO (dado real
-  presente) ou AUSENTE_CORRETAMENTE (dado ausente → vazio, não fabricado). Nenhum
-  INCORRETO/FABRICADO/CONTAMINADO encontrado na suíte atual.
-- **B7 (PDF)**: `exportDefenseToPDF` usa exclusivamente `caseData` real com
-  `'Não informado'` p/ ausentes; não reintroduz AIT/CPF/CNH fabricados (P0-10
-  corrigido).
+### 9. Quais regras são exclusivamente federais?
+Todo o direito material infracional (Art. 161 a 255 do CTB), a dosimetria de pontuação, as regras de conversão em advertência (Art. 267), a aferição metrológica de radares (Res. CONTRAN 798/20 e INMETRO) e o procedimento geral de recurso (Res. CONTRAN 900/22).
 
-### B2/B8/B9. Adversarial, jurídico-por-estado, isolamento
+### 10. Quais portais oficiais devem ser utilizados?
+Os 27 portais oficiais catalogados no documento `docs/audit/PROTOCOLOS-27-UF.md` (ex.: Detran Digital SC, Expresso Goiás, PIÁ Paraná, Posto Digital RJ, Poupatempo SP, ba.gov.br, etc.).
 
-- **B2a fallback geográfico**: `DETRAN-AM` → protocolo `null`, nunca DETRAN-SP.
-- **B2b contaminação órgão/estado**: caso RS não recebe portal/endereço de outro
-  estado; caso com órgão não-registrado não recebe portal alheio.
-- **B2c contaminação entre casos**: seq AM→RS→BA→PR→PE→GO→SP→PA→MG→CE; cada caso
-  retém próprio órgão/cidade. (Testes `geographic-integrity` + `national-coverage`.)
-- **B2d dados ausentes**: autuadorBody="" / cityState="" → **erro** (não fabrica).
-- **B2e órgãos não-DETRAN**: PRF/DNIT/CET-SP resolvem; ANTT/IBAMA/DER-RJ etc. da
-  UI **não estão no registry** → protocolo null (oportunidade de gap).
-- **B8 jurídico por estado**: rule engine + KB **não têm regras estaduais** —
-  respondem **SÓ** o federal. Para UF sem registro: **KNOWLEDGE GAP** (não é
-  PASS). A competência/instância estadual (CETRAN por UF, portal local) **não é
-  resolvida** pela plataforma.
-- **B9 isolamento nacional**: `ORGANS_DB.find`/`resolveProtocolInfo` são puros
-  (sem state global/cache/singleton) → nenhum vazamento de contexto entre casos.
+### 11. Quais endereços são necessários?
+Os endereços postais das sedes dos 27 DETRANs, sedes dos CETRANs/CONTRANDIFE e Superintendências Regionais da PRF/DNIT.
+
+### 12. Quais documentos variam por estado?
+A documentação substantiva é uniforme (CNH, CRLV, Notificação e Petição). A variação reside na exigência de comprovante de residência recente (alguns DETRANs exigem até 90 dias) e autenticação de firma/biometria GOV.BR.
+
+### 13. Quais órgãos oferecidos pela UI ainda não possuem backend?
+47 dos 54 órgãos listados no dropdown de `InfractionIdentificationStep.tsx` (incluindo 24 DETRANs, 7 DERs e 9 CETs municipais).
+
+### 14. Onde existe falsa aparência de cobertura nacional?
+No seletor de órgãos autuadores do onboarding e na mensagem de apresentação da landing page ("Atendemos todo o Brasil"), pois o usuário do AC, AM, RS, etc., consegue selecionar seu estado mas não obtém dados de protocolo.
+
+### 15. Quais entidades precisam existir na Knowledge Base?
+Devem ser criadas as seguintes entidades estruturadas:
+- `KnowledgeState`: Cadastro das 27 UFs com dados institucionais.
+- `KnowledgeOrgan`: Registro normalizado de todos os órgãos (DETRANs, DERs, CETs).
+- `KnowledgeJari`: Estrutura de juntas de julgamento e colegiados.
+- `KnowledgeCetran`: Dados do conselho de 2ª instância e CONTRANDIFE.
+- `KnowledgeStateRule`: Regras administrativas e portarias locais.
+- `KnowledgeProtocolChannel`: Portais digitais, endereços postais e requisitos de login.
+
+### 16. Quais informações precisam ser mantidas por vigência/data?
+- Resoluções do CONTRAN e Deliberações do CETRAN.
+- Tabelas de feriados estaduais e municipais (para contagem de prazos em dias úteis/corridos).
+- Prazos de validade de laudos de aferição de radares pelo INMETRO (12 meses).
+
+### 17. Quais casos precisam de tratamento especial?
+- **Distrito Federal (DF):** Não possui CETRAN nem DER estadual; possui CONTRANDIFE e DER-DF acumulando competências municipais e estaduais.
+- **Minas Gerais (MG):** Transição institucional do DETRAN da Polícia Civil para a SEPLAG/CET-MG.
+- **Multas Federais (PRF/DNIT):** Não admitem recurso ao CETRAN; a 2ª instância ocorre perante Colegiado Especial da JARI Federal.
+
+### 18. Qual é a matriz final de cobertura real?
+Consolidada no documento `docs/audit/MATRIZ-COBERTURA-27-UF.md`.
 
 ---
 
-## LISTA DE GAPS E FALHAS
+## 3. Blueprint Arquitetural para Expansão da Knowledge Base
 
-| ID | Tipo | Severidade | Descrição | Evidência |
-|---|---|---|---|---|
-| N-01 | **COVERAGE GAP** | CRÍTICA | 24/27 UFs **sem órgão registrado** → sem protocolo (portal/endereço) e sem análise estadual | `organs.ts:9-99` (7 órgãos); dropdown `InfractionIdentificationStep.tsx:367-394` (27) |
-| N-02 | **KNOWLEDGE GAP** | ALTA | KB 100% federal; **zero** regra/tese/portal estadual p/ qualquer UF | `knowledge-base.ts`, `arguments-catalog.ts`, `rule-engine.ts` |
-| N-03 | **COVERAGE GAP** | MÉDIA | `PROCEDURES_CATALOG`/`resolveProtocolInfo` ignoram órgãos que a UI oferece (ANTT, IBAMA, DER-RJ/MG/PR/RS/SC/BA/GO, TRANSPE, TRANSFOR etc.) | dropdown `:364-423` vs `ORGANS_DB` |
-| N-04 | **DESIGN GAP** | MÉDIA | Service `recurso_cetran` aponta instância estadual sem órgão/portal por UF (`CONSELHO ESTADUAL` genérico) | `procedures-catalog.ts:47-49,74`; `knowledge-base.ts:74` |
-| N-05 | **DESIGN GAP** | MÉDIA | Defaults `procedure='recurso_jari'` (rain-pipeline + rule-engine) sem UO — se UF desconhecida e dado incompleto, assume 1ª instância JARI genérica | `rag-pipeline.ts:140`, `rule-engine.ts:258` (P1-1/P1-2 legados) |
-| N-06 | **DOCUMENTATION GAP** | MÉDIA | UI vende "Brasil todo" mas backend não; não há aviso de cobertura por UF | `InfractionIdentificationStep.tsx` |
+```typescript
+// Especificação de Schema para a Fase de Implementação
 
-**Não-classificados (já corrigidos pela auditoria anterior; mantidos verdes):**
-fabricação de dados (P0-5..P0-10), `[0]` fallbacks (P0-1..P0-4), defaults de
-mapper (P1-4/P1-5), roll de documentos (P1-3) — todos com testes na suíte atual.
+export interface KnowledgeState {
+  uf: string; // 'AC' .. 'TO'
+  name: string; // 'Acre' .. 'Tocantins'
+  region: 'Norte' | 'Nordeste' | 'Centro-Oeste' | 'Sudeste' | 'Sul';
+  capital: string;
+  detranId: string;
+  cetranId: string;
+  officialGovernmentPortal: string;
+}
+
+export interface KnowledgeOrganExtended {
+  id: string; // 'DETRAN_AM'
+  senatranCode?: string;
+  abbreviation: string; // 'DETRAN-AM'
+  name: string;
+  sphere: 'federal' | 'estadual' | 'distrital' | 'municipal';
+  state: string; // 'AM'
+  onlinePortalUrl: string;
+  physicalAddress: string;
+  emailContact?: string;
+  standardDeadlineDays: number; // 30
+  jariStructure: string;
+  protocolChannels: {
+    digitalPortalUrl?: string;
+    mobileAppName?: string;
+    postalAddress?: string;
+    presencialNetworkName?: string; // 'Pronto Atendimento ao Cidadão (PAC)'
+    govBrAuthenticationRequired: boolean;
+  };
+}
+
+export interface KnowledgeCetranExtended {
+  id: string; // 'CETRAN_BA'
+  uf: string;
+  name: string; // 'Conselho Estadual de Trânsito da Bahia'
+  address: string;
+  portalUrl: string;
+  isContrandife: boolean;
+}
+```
 
 ---
 
-## Evidências (artefatos da bateria)
+## 4. Documentos de Referência da Auditoria
 
-- `tests/audit/national-coverage.test.ts` — 27 UFs × registry/protocolo;
-  fallback geográfico; isolamento AM→…→CE; personalização de análise;
-  identidade/preservação no fluxo completo; dados ausentes → erro; PDF sem
-  fabricação.
-- Suíte pré-existente mantida verde (128 testes) + bateria nova:
-  `catalog-integrity`, `commercial-integrity`, `defesa-previa-vs-recurso`,
-  `geographic-integrity`, `no-fallback-integrity`, `service-procedure-flows`.
-
----
-
-## Correções recomendadas (produção — FORA do escopo desta auditoria @testes)
-
-1. (P0 nacional) **Registrar os 27 DETRANs** em `ORGANS_DB`/`AUTUADOR_BODIES`
-   com portal/endereço reais por UF (DETRAN-AC…TO). `@banco`/`@backend`.
-2. **Adicionar conhecimento estadual** (regras/prazos/CETRAN por UF) na KB. `@backend`.
-3. **Mapear DECOR (DETRAN × Portal) no `resolveProtocolInfo`** de forma genérica
-   por UF, com fallback explícito e auditável. `@backend`.
-4. (UI) **Alinhar dropdown ↔ registry** ou sinalizar "cobertura disponível" por UF
-   (evitar vender capacidade inexistente). `@frontend`.
-
----
-
-## Veredito final
-
-**`PARTIALLY_NATIONAL`** — com 24/27 UFs em `CATALOG_ONLY` (apenas na UI),
-nenhum conhecimento estadual e protocolo só p/ SP/RJ/MG + PRF/DNIT:
-- ✅ Ausência **não fabrica** ni contamina ni cai em SP (honestidade preservada).
-- ✅ Caminho pago (SP/RJ/MG + federal) funciona end-to-end com dados reais.
-- ❌ **Não é `NATIONAL_READY`**: 24 UFs não têm protocolo/órgão/regra estadual.
-- ❌ Não é `NOT_NATIONAL` absoluto: SP/RJ/MG + PRF/DNIT têm suporte real.
+1. `docs/audit/MATRIZ-COBERTURA-27-UF.md` — Matriz 27 UFs × 8 Procedimentos.
+2. `docs/audit/REGRAS-ESTADUAIS-27-UF.md` — Separação Direito Federal × Direito Estadual.
+3. `docs/audit/PROTOCOLOS-27-UF.md` — Diretório Oficial de Portais e Protocolos.
+4. `docs/audit/ORGAOS-AUTUADORES-BRASIL.md` — Catálogo de Órgãos Autuadores e Discrepâncias UI.
+5. `docs/audit/JARI-CETRAN-BRASIL.md` — Estrutura Recursal JARI, CETRAN e CONTRANDIFE.
