@@ -3,11 +3,14 @@
  * DefesAi — Helper para Validação de Documentos e Marcas-d'Água E2E
  */
 
+import { register } from 'tsconfig-paths';
+register({ baseUrl: '.', paths: { '@/*': ['./src/*'] } });
+
 import { expect } from '@playwright/test';
 import { TestCaseScenario } from '../fixtures/case.factory';
-import { DocumentAssemblyEngine } from '../../src/core/documents/document-assembly-engine';
-import { mapCaseToAnalysisInput, mapAnalysisToDocumentInput, auditWatermarkIntegrity } from '../../src/lib/mappers/case-mappers';
-import { CaseDomain } from '../../src/types';
+import { DocumentAssemblyEngine } from '../../../src/core/documents/document-assembly-engine';
+import { mapCaseToAnalysisInput, mapAnalysisToDocumentInput, auditWatermarkIntegrity } from '../../../src/lib/mappers/case-mappers';
+import { CaseDomain } from '../../../src/types';
 
 export function executeDeterministicE2EVerification(scenario: TestCaseScenario) {
   const testCaseDomain: CaseDomain = {
