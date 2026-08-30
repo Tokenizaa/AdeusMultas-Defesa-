@@ -141,6 +141,16 @@ export class RagPipeline {
     procedureType: ProcedureType = 'recurso_jari'
   ): DefenseDraft & { protocolInfo?: SubmissionInstructions } {
     const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
+    
+    // Calculate days elapsed for decadence rule
+    let daysElapsed: number | undefined;
+    if (infraction.dateTime && infraction.notificationExpeditionDate) {
+      const infDate = new Date(infraction.dateTime);
+      const expDate = new Date(infraction.notificationExpeditionDate);
+      const diffTime = expDate.getTime() - infDate.getTime();
+      daysElapsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    
     const draft = DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
@@ -151,6 +161,18 @@ export class RagPipeline {
       },
       applicant: applicantData,
       selectedArgumentIds: selectedArguments.map((a) => a.id),
+      dates: {
+        infractionDate: infraction.dateTime,
+        expeditionDate: infraction.notificationExpeditionDate,
+        notificationDate: infraction.notificationExpeditionDate,
+        appealFilingDate: infraction.defenseDeadline,
+        daysElapsed,
+      },
+      speeds: {
+        measured: infraction.measuredSpeed,
+        considered: infraction.consideredSpeed,
+        limit: infraction.speedLimit,
+      },
     });
     return { ...draft, protocolInfo };
   }

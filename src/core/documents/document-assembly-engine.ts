@@ -142,6 +142,17 @@ export class DocumentAssemblyEngine {
       throw new Error('cityState obrigatório para geração da minuta');
     }
     const autuador = payload.infraction.autuadorBody;
+    
+    // Extract UF from autuadorBody for CETRAN/PSDD templates when cityState lacks UF
+    // Format: DETRAN-SP, CET-SP, DER-RJ, PRF, DNIT, etc.
+    let ufFromAutuador = '';
+    const autuadorMatch = autuador.match(/(?:DETRAN|CET|DER|BHTRANS|SPTRANS|TRANSALVADOR|TRANSPE|TRANSFOR|PMT)-([A-Z]{2})/i);
+    if (autuadorMatch) {
+      ufFromAutuador = autuadorMatch[1].toUpperCase();
+    } else if (['PRF', 'DNIT', 'ANTT', 'IBAMA', 'INFRAERO', 'POLICIA_MILITAR', 'POLICIA_RODOVIARIA'].includes(autuador)) {
+      ufFromAutuador = 'BR'; // Federal
+    }
+
     let city = '';
     let uf = '';
     const rawCityState = (payload.applicant.cityState || '').trim();
@@ -153,18 +164,25 @@ export class DocumentAssemblyEngine {
       const parts = rawCityState.split(' - ');
       city = parts[0]?.trim() || '';
       uf = parts[1]?.trim() || '';
-    } else if (rawCityState.includes('-')) {
+    } else if (rawCityState.includes('-') && !rawCityState.includes('–')) {
+      // Handle "São Paulo-SP" but not "São Paulo – SP" (en dash)
       const parts = rawCityState.split('-');
-      city = parts[0]?.trim() || '';
-      uf = parts[1]?.trim() || '';
+      if (parts.length === 2 && parts[1].trim().length === 2) {
+        city = parts[0]?.trim() || '';
+        uf = parts[1]?.trim() || '';
+      } else {
+        city = rawCityState;
+        uf = ufFromAutuador || '';
+      }
     } else if (rawCityState.includes(',')) {
       const parts = rawCityState.split(',');
       city = parts[0]?.trim() || '';
       uf = parts[1]?.trim() || '';
     } else {
       city = rawCityState;
-      uf = '';
+      uf = ufFromAutuador || '';
     }
+    
     const dateFormatted = new Date().toLocaleDateString('pt-BR', {
       day: 'numeric',
       month: 'long',
@@ -185,7 +203,7 @@ export class DocumentAssemblyEngine {
     const infractionDesc = payload.infraction.description || '';
     const infractionLocation = payload.infraction.location || '';
     const infractionDate = payload.dates?.infractionDate || payload.infraction.dateTime || '';
-    const expeditionDate = payload.dates?.expeditionDate || '';
+    const expeditionDate = payload.dates?.expeditionDate || payload.infraction.notificationExpeditionDate || '';
     const daysElapsed = payload.dates?.daysElapsed;
 
     const psddNumber = payload.processNumbers?.psddNumber || '';

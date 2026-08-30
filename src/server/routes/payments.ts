@@ -146,17 +146,17 @@ function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseD
 // Modo de teste / auth condicional
 // ============================================================================
 
-/** Fora de produção o sistema opera em modo de teste (simulação liberada). */
+/** Em sandbox o sistema opera em modo de teste (simulação liberada). */
 function isTestMode(): boolean {
-  return process.env.NODE_ENV !== 'production';
+  return (process.env.PAYMENT_MODE || 'sandbox').toLowerCase() !== 'production';
 }
 
 /**
- * Exige JWT apenas em produção. Em desenvolvimento/teste a rota fica aberta
+ * Exige JWT apenas em produção (PAYMENT_MODE=production). Em sandbox a rota fica aberta
  * para permitir E2E e validação local sem Supabase configurado.
  */
 function prodAuth(req: Request, res: Response, next: NextFunction): void {
-  if (process.env.NODE_ENV === 'production') {
+  if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     authenticateToken(req, res, next);
     return;
   }
@@ -282,7 +282,7 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       },
       finalAmount: offerResult.offer.finalAmount,
       gateway: gateway.id,
-      environment: process.env.NODE_ENV,
+      environment: process.env.PAYMENT_MODE || 'sandbox',
       userRole: (req as any).user?.role,
     });
 
@@ -330,7 +330,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
       logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', {
         error: err.message,
         gateway: activeGatewayId,
-        environment: process.env.NODE_ENV,
+        environment: process.env.PAYMENT_MODE || 'sandbox',
       });
       return res.status(500).json({ error: err.message || 'Erro ao consultar status do pagamento' });
     }
@@ -411,7 +411,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
 
     logger.info('payments', 'gateway', 'credit_card_gateway_check', 'Credit card gateway validated', {
       gateway: gateway.id,
-      environment: process.env.NODE_ENV,
+      environment: process.env.PAYMENT_MODE || 'sandbox',
       userRole: (req as any).user?.role,
       serviceType: offerResult.offer?.serviceType,
     });
@@ -763,13 +763,14 @@ router.get('/gateway/status', (req, res) => {
 // ============================================================================
 // Gateway Switch — Admin UI pode alternar gateway em runtime
 // ============================================================================
-router.post('/gateway/switch', requireAdmin, (req, res) => {
+router.post('/gateway/switch', requireAdmin, async (req, res) => {
   const { gatewayId } = req.body;
   if (!gatewayId) {
     return res.status(400).json({ error: 'gatewayId é obrigatório' });
   }
 
-  const result = gatewayManager.setActiveGateway(gatewayId);
+  const updatedBy = (req as any).user?.email || (req as any).user?.id || 'admin';
+  const result = await gatewayManager.setActiveGateway(gatewayId, updatedBy);
   if (!result.success) {
     return res.status(400).json({ error: result.message });
   }

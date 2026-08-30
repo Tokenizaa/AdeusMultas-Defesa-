@@ -1,3 +1,10 @@
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+
 // src/server/app.ts
 import express from "express";
 import helmet from "helmet";
@@ -585,6 +592,22 @@ var ConfigService = class {
       // 3. PAGAMENTOS (PagBank / GGPIXAPI / Gateway Abstraction)
       // =========================================================================
       {
+        key: "PAYMENT_MODE",
+        name: "Modo de Pagamento",
+        category: "payments",
+        type: "select",
+        description: "Define se o sistema opera em produ\xE7\xE3o (dinheiro real) ou sandbox (testes). Controla qual gateway pode ser ativo e valida\xE7\xF5es de seguran\xE7a.",
+        defaultValue: "sandbox",
+        isSecret: false,
+        isRequired: true,
+        isEditable: true,
+        options: [
+          { label: "Sandbox / Homologa\xE7\xE3o (Testes Seguros)", value: "sandbox" },
+          { label: "Produ\xE7\xE3o (Transa\xE7\xF5es Reais)", value: "production" }
+        ],
+        envSource: "PAYMENT_MODE"
+      },
+      {
         key: "PAYMENT_ACTIVE_GATEWAY",
         name: "Gateway de Pagamento Ativo",
         category: "payments",
@@ -595,10 +618,27 @@ var ConfigService = class {
         isRequired: true,
         isEditable: true,
         options: [
-          { label: "PagBank / PagSeguro (Recomendado \u2014 PIX + Cart\xE3o)", value: "pagbank" },
-          { label: "GGPIXAPI (Apenas PIX In)", value: "ggpixapi" }
+          { label: "PagBank / PagSeguro (Apenas Sandbox \u2014 PIX + Cart\xE3o)", value: "pagbank" },
+          { label: "GGPIXAPI (Produ\xE7\xE3o \u2014 Apenas PIX In)", value: "ggpixapi" }
         ],
         envSource: "PAYMENT_ACTIVE_GATEWAY"
+      },
+      {
+        key: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE",
+        name: "Gateway Ativo (Override Runtime)",
+        category: "payments",
+        type: "select",
+        description: "Override manual do gateway ativo feito via Admin UI. Persiste entre rein\xEDcios. Vazio = usa PAYMENT_ACTIVE_GATEWAY do environment.",
+        defaultValue: "",
+        isSecret: false,
+        isRequired: false,
+        isEditable: true,
+        options: [
+          { label: "Usar Padr\xE3o do Environment (PAYMENT_ACTIVE_GATEWAY)", value: "" },
+          { label: "PagBank / PagSeguro (Apenas Sandbox)", value: "pagbank" },
+          { label: "GGPIXAPI (Produ\xE7\xE3o)", value: "ggpixapi" }
+        ],
+        envSource: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE"
       },
       {
         key: "PAGBANK_ENV",
@@ -663,6 +703,18 @@ var ConfigService = class {
         isRequired: false,
         isEditable: true,
         envSource: "GGPIX_ENABLED"
+      },
+      {
+        key: "GGPIX_WEBHOOK_ALLOWED_IPS",
+        name: "GGPIXAPI Webhook IPs Permitidos",
+        category: "payments",
+        type: "string",
+        description: "Lista de IPs/CIDR permitidos para webhooks GGPIXAPI (separados por v\xEDrgula). Ex: 192.168.1.1,10.0.0.0/8. Obrigat\xF3rio em produ\xE7\xE3o para seguran\xE7a.",
+        defaultValue: "",
+        isSecret: false,
+        isRequired: false,
+        isEditable: true,
+        envSource: "GGPIX_WEBHOOK_ALLOWED_IPS"
       },
       {
         key: "PAYMENT_DEFAULT_AMOUNT",
@@ -1353,6 +1405,7 @@ var CaseRepository = class {
       analysis_json: parseJson(row.analysis_json, null),
       defense_draft_json: parseJson(row.defense_draft_json, null),
       protocol_info_json: parseJson(row.protocol_info_json, null),
+      ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null),
       timeline_json: parseJson(row.timeline_json, []),
       is_anonymous: row.is_anonymous,
       claim_token: row.claim_token ?? null,
@@ -1559,6 +1612,22 @@ var CanonicalMapper = class _CanonicalMapper {
         timeline = [];
       }
     }
+    let applicant = void 0;
+    if (row.applicant_json) {
+      try {
+        applicant = JSON.parse(row.applicant_json);
+      } catch (e) {
+        applicant = void 0;
+      }
+    }
+    let ocrAuxiliaryData = void 0;
+    if (row.ocr_auxiliary_json) {
+      try {
+        ocrAuxiliaryData = JSON.parse(row.ocr_auxiliary_json);
+      } catch (e) {
+        ocrAuxiliaryData = void 0;
+      }
+    }
     return {
       id: row.id,
       title: row.title || `Recurso Auto ${row.ait_number}`,
@@ -1600,6 +1669,8 @@ var CanonicalMapper = class _CanonicalMapper {
         formalFlawsDetected: formalFlaws
       },
       analysis,
+      applicant,
+      ocrAuxiliaryData,
       defenseDraft,
       protocolInfo,
       timeline,
@@ -1662,6 +1733,8 @@ var CanonicalMapper = class _CanonicalMapper {
       analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : void 0,
       defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : void 0,
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : void 0,
+      applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : void 0,
+      ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : void 0,
       commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),
@@ -14521,10 +14594,10 @@ var TEMPLATES_CATALOG = [
         isMandatory: true,
         contentTemplate: `I - DA TEMPESTIVIDADE E DOS FATOS
 
-O(A) Recorrente interp\xF5e o presente recurso ordin\xE1rio tempestivamente em face da Notifica\xE7\xE3o de Imposi\xE7\xE3o de Penalidade referente ao AIT n\xBA {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa \xE0 suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}").
+O(A) Recorrente interp\xF5e o presente recurso ordin\xE1rio tempestivamente em face da Notifica\xE7\xE3o de Imposi\xE7\xE3o de Penalidade referente ao AIT n\xBA {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa \xE0 suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}") no local {{local_infracao}}.
 
 Inobstante o inconformismo apresentado em sede de Defesa Pr\xE9via, a autoridade autuadora manteve a san\xE7\xE3o de forma desprovida de lastro f\xE1tico e legal, impondo-se a reforma integral da decis\xE3o por este Ilustre Colegiado.`,
-        supportedVariables: ["{{numero_ait}}", "{{orgao_autuador}}", "{{data_infracao}}", "{{enquadramento_ctb}}", "{{descricao_infracao}}"]
+        supportedVariables: ["{{numero_ait}}", "{{orgao_autuador}}", "{{data_infracao}}", "{{enquadramento_ctb}}", "{{descricao_infracao}}", "{{local_infracao}}"]
       },
       {
         id: "BLK_PRELIMINARES_JARI",
@@ -14752,9 +14825,9 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
       "Informar o n\xFAmero do AIT e a Notifica\xE7\xE3o de Autua\xE7\xE3o",
       "Articular preliminares de nulidade e m\xE9rito probat\xF3rio antes da penalidade"
     ],
-    blockIds: ["BLK-002", "BLK-008", "BLK-013", "BLK-039", "BLK-057", "BLK-066", "BLK-068"],
+    blockIds: ["BLK-001", "BLK-008", "BLK-013", "BLK-039", "BLK-057", "BLK-066", "BLK-068"],
     blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-002"),
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-001"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
       {
         id: "BLK_FATOS_DEFESA_PREVIA",
@@ -14763,8 +14836,8 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
         isMandatory: true,
         contentTemplate: `I - DA AUTUA\xC7\xC3O E DOS FATOS
 
-O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora impugnar a Notifica\xE7\xE3o de Autua\xE7\xE3o referente ao AIT n\xBA {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa \xE0 suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}"), com fundamento em v\xEDcios formais e materiais que ensejam o cancelamento do auto antes da imposi\xE7\xE3o de qualquer penalidade.`,
-        supportedVariables: ["{{numero_ait}}", "{{orgao_autuador}}", "{{data_infracao}}", "{{enquadramento_ctb}}", "{{descricao_infracao}}"]
+O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora impugnar a Notifica\xE7\xE3o de Autua\xE7\xE3o referente ao AIT n\xBA {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa \xE0 suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}") no local {{local_infracao}}, com fundamento em v\xEDcios formais e materiais que ensejam o cancelamento do auto antes da imposi\xE7\xE3o de qualquer penalidade.`,
+        supportedVariables: ["{{numero_ait}}", "{{orgao_autuador}}", "{{data_infracao}}", "{{enquadramento_ctb}}", "{{descricao_infracao}}", "{{local_infracao}}"]
       },
       {
         id: "BLK_PRELIMINARES_DEFESA_PREVIA",
@@ -20226,6 +20299,10 @@ var EXPERT_RULES = [
     name: "Verifica\xE7\xE3o da Decad\xEAncia de 30 Dias da Notifica\xE7\xE3o",
     description: "Verifica se a Notifica\xE7\xE3o da Autua\xE7\xE3o foi expedida ou postada ap\xF3s 30 dias contados da data da infra\xE7\xE3o.",
     category: "prazos_decadencia",
+    validFrom: "1998-01-22",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
         const infDate = new Date(ctx.infractionDate);
@@ -20253,6 +20330,10 @@ var EXPERT_RULES = [
     name: "Validade Metrol\xF3gica Anual de Radar Eletr\xF4nico",
     description: "Verifica se o medidor eletr\xF4nico de velocidade possui laudo de aferi\xE7\xE3o do INMETRO emitido h\xE1 mais de 12 meses.",
     category: "metrologia_engenharia",
+    validFrom: "2020-11-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
       const isSpeed = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10";
@@ -20292,6 +20373,11 @@ var EXPERT_RULES = [
     name: "Direito Subjetivo \xE0 Convers\xE3o em Advert\xEAncia (Art. 267 CTB)",
     description: "Identifica se a infra\xE7\xE3o \xE9 de gravidade leve ou m\xE9dia e se o condutor cumpre os requisitos de n\xE3o reincid\xEAncia.",
     category: "direito_material",
+    validFrom: "2021-04-12",
+    // Lei 14.071/2020
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
       const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace("-", "") === code.replace("-", ""));
@@ -20317,6 +20403,10 @@ var EXPERT_RULES = [
     name: "Termo de Sinais Psicomotores da Resolu\xE7\xE3o CONTRAN 432/2013",
     description: "Valida autua\xE7\xF5es por recusa ao baf\xF4metro (Art. 165-A) desprovidas do formul\xE1rio do Anexo II da Resolu\xE7\xE3o 432.",
     category: "direito_formal",
+    validFrom: "2013-01-29",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
       if (code === "516-91" || code === "516-92" || code.includes("516")) {
@@ -20339,6 +20429,10 @@ var EXPERT_RULES = [
     name: "Falta de Descri\xE7\xE3o Circunstanciada em Autua\xE7\xF5es sem Abordagem",
     description: "Valida multas manuais (celular, cinto, sem\xE1foro) lavradas sem parada do ve\xEDculo.",
     category: "direito_formal",
+    validFrom: "2023-01-02",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       if (ctx.infractionCode === "736-62" || ctx.infractionCode === "518-51" || ctx.infractionCode === "735-80") {
         return {
@@ -20360,6 +20454,10 @@ var EXPERT_RULES = [
     name: "Inobserv\xE2ncia \xE0 Sinaliza\xE7\xE3o Regulamentadora R-19 (Art. 90 CTB)",
     description: "Aplica a inexigibilidade de san\xE7\xE3o quando a sinaliza\xE7\xE3o regulamentadora for insuficiente ou incorreta.",
     category: "sinalizacao_viaria",
+    validFrom: "1998-01-22",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
     evaluate: (ctx) => {
       if (ctx.hasR19SignageProof === false || ctx.hasR19SignageProof === void 0) {
         return {
@@ -20378,12 +20476,33 @@ var EXPERT_RULES = [
 ];
 var ExpertRuleEngine = class {
   /**
-   * Evaluates an infraction against the entire catalog of deterministic rules
+   * Verifica se uma regra jurídica está vigente em determinada data de referência (ISO 'YYYY-MM-DD').
    */
-  static evaluate(caseId, infraction) {
+  static isRuleActiveAtDate(rule, dateIso) {
+    if (!dateIso) return true;
+    const target = dateIso.includes("T") ? dateIso.split("T")[0] : dateIso.slice(0, 10);
+    if (rule.validFrom && target < rule.validFrom) {
+      return false;
+    }
+    if (rule.validUntil && target > rule.validUntil) {
+      return false;
+    }
+    return true;
+  }
+  /**
+   * Retorna todas as regras ativas para uma data de referência.
+   */
+  static getActiveRules(dateIso) {
+    return EXPERT_RULES.filter((r) => this.isRuleActiveAtDate(r, dateIso));
+  }
+  /**
+   * Evaluates an infraction against the catalog of deterministic rules applicable at the infraction date
+   */
+  static evaluate(caseId, infraction, referenceDate) {
     if (!infraction.autuadorBody) {
       throw new Error("autuadorBody obrigat\xF3rio para avalia\xE7\xE3o do motor de regras");
     }
+    const effectiveDate = referenceDate || infraction.dateTime || infraction.notificationExpeditionDate || (/* @__PURE__ */ new Date()).toISOString();
     const context = {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
@@ -20400,7 +20519,8 @@ var ExpertRuleEngine = class {
     };
     const detectedInconsistencies = [];
     const recommendedArgs = [];
-    for (const rule of EXPERT_RULES) {
+    const activeRules = this.getActiveRules(effectiveDate);
+    for (const rule of activeRules) {
       const result = rule.evaluate(context);
       if (result) {
         detectedInconsistencies.push({
@@ -20568,9 +20688,41 @@ ${body}`;
       throw new Error("cityState obrigat\xF3rio para gera\xE7\xE3o da minuta");
     }
     const autuador = payload.infraction.autuadorBody;
-    const cityStateParts = payload.applicant.cityState.split("/");
-    const city = cityStateParts[0]?.trim();
-    const uf = cityStateParts[1]?.trim();
+    let ufFromAutuador = "";
+    const autuadorMatch = autuador.match(/(?:DETRAN|CET|DER|BHTRANS|SPTRANS|TRANSALVADOR|TRANSPE|TRANSFOR|PMT)-([A-Z]{2})/i);
+    if (autuadorMatch) {
+      ufFromAutuador = autuadorMatch[1].toUpperCase();
+    } else if (["PRF", "DNIT", "ANTT", "IBAMA", "INFRAERO", "POLICIA_MILITAR", "POLICIA_RODOVIARIA"].includes(autuador)) {
+      ufFromAutuador = "BR";
+    }
+    let city = "";
+    let uf = "";
+    const rawCityState = (payload.applicant.cityState || "").trim();
+    if (rawCityState.includes("/")) {
+      const parts = rawCityState.split("/");
+      city = parts[0]?.trim() || "";
+      uf = parts[1]?.trim() || "";
+    } else if (rawCityState.includes(" - ")) {
+      const parts = rawCityState.split(" - ");
+      city = parts[0]?.trim() || "";
+      uf = parts[1]?.trim() || "";
+    } else if (rawCityState.includes("-") && !rawCityState.includes("\u2013")) {
+      const parts = rawCityState.split("-");
+      if (parts.length === 2 && parts[1].trim().length === 2) {
+        city = parts[0]?.trim() || "";
+        uf = parts[1]?.trim() || "";
+      } else {
+        city = rawCityState;
+        uf = ufFromAutuador || "";
+      }
+    } else if (rawCityState.includes(",")) {
+      const parts = rawCityState.split(",");
+      city = parts[0]?.trim() || "";
+      uf = parts[1]?.trim() || "";
+    } else {
+      city = rawCityState;
+      uf = ufFromAutuador || "";
+    }
     const dateFormatted = (/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR", {
       day: "numeric",
       month: "long",
@@ -20585,7 +20737,7 @@ ${body}`;
     const infractionDesc = payload.infraction.description || "";
     const infractionLocation = payload.infraction.location || "";
     const infractionDate = payload.dates?.infractionDate || payload.infraction.dateTime || "";
-    const expeditionDate = payload.dates?.expeditionDate || "";
+    const expeditionDate = payload.dates?.expeditionDate || payload.infraction.notificationExpeditionDate || "";
     const daysElapsed = payload.dates?.daysElapsed;
     const psddNumber = payload.processNumbers?.psddNumber || "";
     const pcddNumber = payload.processNumbers?.pcddNumber || "";
@@ -20751,58 +20903,333 @@ ${payload.customFacts.trim()}`;
   }
 };
 
-// src/core/legal-base/organs.ts
-var ORGANS_DB = [
-  {
-    id: "DETRAN_SP",
-    code: "126000",
-    name: "Departamento Estadual de Tr\xE2nsito de S\xE3o Paulo",
-    abbreviation: "DETRAN-SP",
-    sphere: "estadual",
-    state: "SP",
-    onlinePortalUrl: "https://www.detran.sp.gov.br/servicos/recursos",
-    physicalAddress: "Rua Boa Vista, 209 - Centro, S\xE3o Paulo/SP - CEP 01014-001",
-    email: "recursos@detran.sp.gov.br",
-    standardDeadlineDays: 30,
-    jariStructure: "JARI Central do DETRAN-SP e JARI descentralizadas nas Ciretrans"
+// src/core/knowledge/national-registry.ts
+var NATIONAL_STATES_DB = {
+  AC: {
+    uf: "AC",
+    name: "Acre",
+    region: "Norte",
+    capital: "Rio Branco",
+    detranId: "DETRAN_AC",
+    cetranId: "CETRAN_AC",
+    officialGovernmentPortal: "https://www.ac.gov.br",
+    serviceNetworkName: "OCA - Organiza\xE7\xE3o em Centros de Atendimento",
+    activeProceduresCount: 5
   },
-  {
-    id: "DETRAN_RJ",
-    code: "119000",
-    name: "Departamento Estadual de Tr\xE2nsito do Rio de Janeiro",
-    abbreviation: "DETRAN-RJ",
-    sphere: "estadual",
-    state: "RJ",
-    onlinePortalUrl: "https://www.detran.rj.gov.br/protocolo-defesas",
-    physicalAddress: "Av. Presidente Vargas, 817 - Centro, Rio de Janeiro/RJ - CEP 20071-004",
-    email: "jari@detran.rj.gov.br",
-    standardDeadlineDays: 30,
-    jariStructure: "Comiss\xF5es de Julgamento da JARI DETRAN-RJ"
+  AL: {
+    uf: "AL",
+    name: "Alagoas",
+    region: "Nordeste",
+    capital: "Macei\xF3",
+    detranId: "DETRAN_AL",
+    cetranId: "CETRAN_AL",
+    officialGovernmentPortal: "https://www.al.gov.br",
+    serviceNetworkName: "Central J\xE1!",
+    activeProceduresCount: 5
   },
-  {
-    id: "DETRAN_MG",
-    code: "113000",
-    name: "Departamento Estadual de Tr\xE2nsito de Minas Gerais",
-    abbreviation: "DETRAN-MG",
-    sphere: "estadual",
-    state: "MG",
-    onlinePortalUrl: "https://www.detran.mg.gov.br/infracoes/recursos",
-    physicalAddress: "Av. Jo\xE3o Pinheiro, 417 - Boa Viagem, Belo Horizonte/MG - CEP 30130-180",
-    email: "jari.mg@policiacivil.mg.gov.br",
-    standardDeadlineDays: 30,
-    jariStructure: "Colegiados JARI DETRAN-MG"
+  AP: {
+    uf: "AP",
+    name: "Amap\xE1",
+    region: "Norte",
+    capital: "Macap\xE1",
+    detranId: "DETRAN_AP",
+    cetranId: "CETRAN_AP",
+    officialGovernmentPortal: "https://www.ap.gov.br",
+    serviceNetworkName: "Super F\xE1cil Amap\xE1",
+    activeProceduresCount: 5
   },
+  AM: {
+    uf: "AM",
+    name: "Amazonas",
+    region: "Norte",
+    capital: "Manaus",
+    detranId: "DETRAN_AM",
+    cetranId: "CETRAN_AM",
+    officialGovernmentPortal: "https://www.am.gov.br",
+    serviceNetworkName: "PAC - Pronto Atendimento ao Cidad\xE3o",
+    activeProceduresCount: 5
+  },
+  BA: {
+    uf: "BA",
+    name: "Bahia",
+    region: "Nordeste",
+    capital: "Salvador",
+    detranId: "DETRAN_BA",
+    cetranId: "CETRAN_BA",
+    officialGovernmentPortal: "https://www.ba.gov.br",
+    serviceNetworkName: "SAC - Servi\xE7o de Atendimento ao Cidad\xE3o",
+    activeProceduresCount: 5
+  },
+  CE: {
+    uf: "CE",
+    name: "Cear\xE1",
+    region: "Nordeste",
+    capital: "Fortaleza",
+    detranId: "DETRAN_CE",
+    cetranId: "CETRAN_CE",
+    officialGovernmentPortal: "https://www.ce.gov.br",
+    serviceNetworkName: "Vapt Vupt Cear\xE1 / Casa do Cidad\xE3o",
+    activeProceduresCount: 5
+  },
+  DF: {
+    uf: "DF",
+    name: "Distrito Federal",
+    region: "Centro-Oeste",
+    capital: "Bras\xEDlia",
+    detranId: "DETRAN_DF",
+    cetranId: "CONTRANDIFE_DF",
+    officialGovernmentPortal: "https://www.df.gov.br",
+    serviceNetworkName: "Na Hora DF",
+    activeProceduresCount: 5
+  },
+  ES: {
+    uf: "ES",
+    name: "Esp\xEDrito Santo",
+    region: "Sudeste",
+    capital: "Vit\xF3ria",
+    detranId: "DETRAN_ES",
+    cetranId: "CETRAN_ES",
+    officialGovernmentPortal: "https://www.es.gov.br",
+    serviceNetworkName: "Fa\xE7a F\xE1cil ES",
+    activeProceduresCount: 5
+  },
+  GO: {
+    uf: "GO",
+    name: "Goi\xE1s",
+    region: "Centro-Oeste",
+    capital: "Goi\xE2nia",
+    detranId: "DETRAN_GO",
+    cetranId: "CETRAN_GO",
+    officialGovernmentPortal: "https://www.go.gov.br",
+    serviceNetworkName: "Vapt Vupt Goi\xE1s",
+    activeProceduresCount: 5
+  },
+  MA: {
+    uf: "MA",
+    name: "Maranh\xE3o",
+    region: "Nordeste",
+    capital: "S\xE3o Lu\xEDs",
+    detranId: "DETRAN_MA",
+    cetranId: "CETRAN_MA",
+    officialGovernmentPortal: "https://www.ma.gov.br",
+    serviceNetworkName: "Viva Procon Maranh\xE3o",
+    activeProceduresCount: 5
+  },
+  MT: {
+    uf: "MT",
+    name: "Mato Grosso",
+    region: "Centro-Oeste",
+    capital: "Cuiab\xE1",
+    detranId: "DETRAN_MT",
+    cetranId: "CETRAN_MT",
+    officialGovernmentPortal: "https://www.mt.gov.br",
+    serviceNetworkName: "Ganha Tempo MT",
+    activeProceduresCount: 5
+  },
+  MS: {
+    uf: "MS",
+    name: "Mato Grosso do Sul",
+    region: "Centro-Oeste",
+    capital: "Campo Grande",
+    detranId: "DETRAN_MS",
+    cetranId: "CETRAN_MS",
+    officialGovernmentPortal: "https://www.ms.gov.br",
+    serviceNetworkName: "F\xE1cil MS",
+    activeProceduresCount: 5
+  },
+  MG: {
+    uf: "MG",
+    name: "Minas Gerais",
+    region: "Sudeste",
+    capital: "Belo Horizonte",
+    detranId: "DETRAN_MG",
+    cetranId: "CETRAN_MG",
+    officialGovernmentPortal: "https://www.mg.gov.br",
+    serviceNetworkName: "UAI - Unidade de Atendimento Integrado",
+    activeProceduresCount: 5
+  },
+  PA: {
+    uf: "PA",
+    name: "Par\xE1",
+    region: "Norte",
+    capital: "Bel\xE9m",
+    detranId: "DETRAN_PA",
+    cetranId: "CETRAN_PA",
+    officialGovernmentPortal: "https://www.pa.gov.br",
+    serviceNetworkName: "Esta\xE7\xE3o Cidadania Par\xE1",
+    activeProceduresCount: 5
+  },
+  PB: {
+    uf: "PB",
+    name: "Para\xEDba",
+    region: "Nordeste",
+    capital: "Jo\xE3o Pessoa",
+    detranId: "DETRAN_PB",
+    cetranId: "CETRAN_PB",
+    officialGovernmentPortal: "https://www.pb.gov.br",
+    serviceNetworkName: "Casa da Cidadania Para\xEDba",
+    activeProceduresCount: 5
+  },
+  PR: {
+    uf: "PR",
+    name: "Paran\xE1",
+    region: "Sul",
+    capital: "Curitiba",
+    detranId: "DETRAN_PR",
+    cetranId: "CETRAN_PR",
+    officialGovernmentPortal: "https://www.pr.gov.br",
+    serviceNetworkName: "Pi\xE1 Paran\xE1 / Ciretrans",
+    activeProceduresCount: 5
+  },
+  PE: {
+    uf: "PE",
+    name: "Pernambuco",
+    region: "Nordeste",
+    capital: "Recife",
+    detranId: "DETRAN_PE",
+    cetranId: "CETRAN_PE",
+    officialGovernmentPortal: "https://www.pe.gov.br",
+    serviceNetworkName: "Expresso Cidad\xE3o Pernambuco",
+    activeProceduresCount: 5
+  },
+  PI: {
+    uf: "PI",
+    name: "Piau\xED",
+    region: "Nordeste",
+    capital: "Teresina",
+    detranId: "DETRAN_PI",
+    cetranId: "CETRAN_PI",
+    officialGovernmentPortal: "https://www.pi.gov.br",
+    serviceNetworkName: "Espa\xE7o Cidadania Piau\xED",
+    activeProceduresCount: 5
+  },
+  RJ: {
+    uf: "RJ",
+    name: "Rio de Janeiro",
+    region: "Sudeste",
+    capital: "Rio de Janeiro",
+    detranId: "DETRAN_RJ",
+    cetranId: "CETRAN_RJ",
+    officialGovernmentPortal: "https://www.rj.gov.br",
+    serviceNetworkName: "Poupatempo RJ / Postos DETRAN",
+    activeProceduresCount: 5
+  },
+  RN: {
+    uf: "RN",
+    name: "Rio Grande do Norte",
+    region: "Nordeste",
+    capital: "Natal",
+    detranId: "DETRAN_RN",
+    cetranId: "CETRAN_RN",
+    officialGovernmentPortal: "https://www.rn.gov.br",
+    serviceNetworkName: "Central do Cidad\xE3o RN",
+    activeProceduresCount: 5
+  },
+  RS: {
+    uf: "RS",
+    name: "Rio Grande do Sul",
+    region: "Sul",
+    capital: "Porto Alegre",
+    detranId: "DETRAN_RS",
+    cetranId: "CETRAN_RS",
+    officialGovernmentPortal: "https://www.rs.gov.br",
+    serviceNetworkName: "Tudo F\xE1cil RS",
+    activeProceduresCount: 5
+  },
+  RO: {
+    uf: "RO",
+    name: "Rond\xF4nia",
+    region: "Norte",
+    capital: "Porto Velho",
+    detranId: "DETRAN_RO",
+    cetranId: "CETRAN_RO",
+    officialGovernmentPortal: "https://www.ro.gov.br",
+    serviceNetworkName: "Tudo Aqui Rond\xF4nia",
+    activeProceduresCount: 5
+  },
+  RR: {
+    uf: "RR",
+    name: "Roraima",
+    region: "Norte",
+    capital: "Boa Vista",
+    detranId: "DETRAN_RR",
+    cetranId: "CETRAN_RR",
+    officialGovernmentPortal: "https://www.rr.gov.br",
+    serviceNetworkName: "Casa do Cidad\xE3o Roraima",
+    activeProceduresCount: 5
+  },
+  SC: {
+    uf: "SC",
+    name: "Santa Catarina",
+    region: "Sul",
+    capital: "Florian\xF3polis",
+    detranId: "DETRAN_SC",
+    cetranId: "CETRAN_SC",
+    officialGovernmentPortal: "https://www.sc.gov.br",
+    serviceNetworkName: "Pronto Atendimento SC / Ciretrans",
+    activeProceduresCount: 5
+  },
+  SP: {
+    uf: "SP",
+    name: "S\xE3o Paulo",
+    region: "Sudeste",
+    capital: "S\xE3o Paulo",
+    detranId: "DETRAN_SP",
+    cetranId: "CETRAN_SP",
+    officialGovernmentPortal: "https://www.sp.gov.br",
+    serviceNetworkName: "Poupatempo SP",
+    activeProceduresCount: 5
+  },
+  SE: {
+    uf: "SE",
+    name: "Sergipe",
+    region: "Nordeste",
+    capital: "Aracaju",
+    detranId: "DETRAN_SE",
+    cetranId: "CETRAN_SE",
+    officialGovernmentPortal: "https://www.se.gov.br",
+    serviceNetworkName: "Ceac - Centro de Atendimento ao Cidad\xE3o",
+    activeProceduresCount: 5
+  },
+  TO: {
+    uf: "TO",
+    name: "Tocantins",
+    region: "Norte",
+    capital: "Palmas",
+    detranId: "DETRAN_TO",
+    cetranId: "CETRAN_TO",
+    officialGovernmentPortal: "https://www.to.gov.br",
+    serviceNetworkName: "\xC9 Pra J\xE1 Tocantins",
+    activeProceduresCount: 5
+  }
+};
+var NATIONAL_ORGANS_DB = [
+  // --- ÓRGÃOS FEDERAIS ---
   {
     id: "PRF_BRASIL",
     code: "000100",
     name: "Pol\xEDcia Rodovi\xE1ria Federal (Superintend\xEAncia Nacional)",
     abbreviation: "PRF",
     sphere: "federal",
+    state: "FEDERAL",
+    capital: "Bras\xEDlia",
     onlinePortalUrl: "https://sistemas.prf.gov.br/portal/recursos",
     physicalAddress: "Setor Policial Sul, Bloco C, Lote 5, Bras\xEDlia/DF - CEP 70610-909",
     email: "multas.sede@prf.gov.br",
     standardDeadlineDays: 30,
-    jariStructure: "JARI Nacional e Regionais da PRF nas Superintend\xEAncias Estaduais"
+    jariStructure: "JARI Nacional e Regionais da PRF nas Superintend\xEAncias Estaduais",
+    protocolChannels: {
+      digitalPortalUrl: "https://sistemas.prf.gov.br/portal/recursos",
+      govBrAuthenticationRequired: true,
+      postalAddress: "Setor Policial Sul, Bloco C, Lote 5, Bras\xEDlia/DF - CEP 70610-909",
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
   },
   {
     id: "DNIT_FEDERAL",
@@ -20810,24 +21237,78 @@ var ORGANS_DB = [
     name: "Departamento Nacional de Infraestrutura de Transportes",
     abbreviation: "DNIT",
     sphere: "federal",
+    state: "FEDERAL",
+    capital: "Bras\xEDlia",
     onlinePortalUrl: "https://servicos.dnit.gov.br/multas",
     physicalAddress: "SAN Quadra 3, Bloco A, Ed. N\xFAcleo dos Transportes, Bras\xEDlia/DF - CEP 70040-902",
     email: "recursos.dnit@dnit.gov.br",
     standardDeadlineDays: 30,
-    jariStructure: "JARI Especial do DNIT em Bras\xEDlia/DF"
+    jariStructure: "JARI Especial do DNIT em Bras\xEDlia/DF",
+    protocolChannels: {
+      digitalPortalUrl: "https://servicos.dnit.gov.br/multas",
+      govBrAuthenticationRequired: true,
+      postalAddress: "SAN Quadra 3, Bloco A, Ed. N\xFAcleo dos Transportes, Bras\xEDlia/DF - CEP 70040-902",
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 15
+    },
+    validFrom: "2001-06-05",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
   },
   {
-    id: "CET_SP",
-    code: "271000",
-    name: "Companhia de Engenharia de Tr\xE1fego de S\xE3o Paulo / DSV",
-    abbreviation: "CET-SP / DSV",
-    sphere: "municipal",
-    state: "SP",
-    onlinePortalUrl: "https://dsv.prefeitura.sp.gov.br/defesa",
-    physicalAddress: "Rua Sumidouro, 740 - Pinheiros, S\xE3o Paulo/SP - CEP 05428-010",
-    email: "dsveletronico@prefeitura.sp.gov.br",
+    id: "ANTT_FEDERAL",
+    code: "000300",
+    name: "Ag\xEAncia Nacional de Transportes Terrestres",
+    abbreviation: "ANTT",
+    sphere: "federal",
+    state: "FEDERAL",
+    capital: "Bras\xEDlia",
+    onlinePortalUrl: "https://www.gov.br/antt/pt-br/assuntos/passageiros/fiscalizacao-e-multas",
+    physicalAddress: "Setor de Clubes Esportivos Sul - SCES, Trecho 3, Lote 10, Bras\xEDlia/DF - CEP 70200-003",
+    email: "multas@antt.gov.br",
     standardDeadlineDays: 30,
-    jariStructure: "Juntas Administrativas da Secretaria Municipal de Mobilidade de SP"
+    jariStructure: "Comiss\xE3o Especial de Julgamento de Recursos da ANTT",
+    protocolChannels: {
+      digitalPortalUrl: "https://sistemas.antt.gov.br",
+      govBrAuthenticationRequired: true,
+      postalAddress: "Setor de Clubes Esportivos Sul - SCES, Trecho 3, Lote 10, Bras\xEDlia/DF - CEP 70200-003",
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "2001-06-05",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  // --- SUDESTE ---
+  {
+    id: "DETRAN_SP",
+    code: "126000",
+    name: "Departamento Estadual de Tr\xE2nsito de S\xE3o Paulo",
+    abbreviation: "DETRAN-SP",
+    sphere: "estadual",
+    state: "SP",
+    capital: "S\xE3o Paulo",
+    onlinePortalUrl: "https://www.detran.sp.gov.br/servicos/recursos",
+    physicalAddress: "Rua Boa Vista, 209 - Centro, S\xE3o Paulo/SP - CEP 01014-001",
+    email: "recursos@detran.sp.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Central do DETRAN-SP e JARI descentralizadas nas Ciretrans",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.sp.gov.br/servicos/recursos",
+      presencialNetworkName: "Postos Poupatempo em todo o Estado de S\xE3o Paulo",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF", "JPEG"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
   },
   {
     id: "DER_SP",
@@ -20836,29 +21317,2171 @@ var ORGANS_DB = [
     abbreviation: "DER-SP",
     sphere: "estadual",
     state: "SP",
+    capital: "S\xE3o Paulo",
     onlinePortalUrl: "https://www.der.sp.gov.br/multas/recursos",
-    physicalAddress: "Ala Central, Av. do Estado, 777 - Bom Retiro, S\xE3o Paulo/SP",
+    physicalAddress: "Ala Central, Av. do Estado, 777 - Bom Retiro, S\xE3o Paulo/SP - CEP 01107-901",
     email: "jari@der.sp.gov.br",
     standardDeadlineDays: 30,
-    jariStructure: "Colegiados JARI DER-SP"
+    jariStructure: "Colegiados JARI DER-SP",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.der.sp.gov.br/multas/recursos",
+      govBrAuthenticationRequired: true,
+      postalAddress: "Av. do Estado, 777 - Bom Retiro, S\xE3o Paulo/SP - CEP 01107-901",
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "CET_SP",
+    code: "271000",
+    name: "Companhia de Engenharia de Tr\xE1fego de S\xE3o Paulo / DSV",
+    abbreviation: "CET-SP / DSV",
+    sphere: "municipal",
+    state: "SP",
+    capital: "S\xE3o Paulo",
+    onlinePortalUrl: "https://dsv.prefeitura.sp.gov.br/defesa",
+    physicalAddress: "Rua Sumidouro, 740 - Pinheiros, S\xE3o Paulo/SP - CEP 05428-010",
+    email: "dsveletronico@prefeitura.sp.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Juntas Administrativas da Secretaria Municipal de Mobilidade de SP",
+    protocolChannels: {
+      digitalPortalUrl: "https://dsv.prefeitura.sp.gov.br/defesa",
+      presencialNetworkName: "Descomplica SP e Unidades DSV",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_RJ",
+    code: "119000",
+    name: "Departamento Estadual de Tr\xE2nsito do Rio de Janeiro",
+    abbreviation: "DETRAN-RJ",
+    sphere: "estadual",
+    state: "RJ",
+    capital: "Rio de Janeiro",
+    onlinePortalUrl: "https://www.detran.rj.gov.br/protocolo-defesas",
+    physicalAddress: "Av. Presidente Vargas, 817 - Centro, Rio de Janeiro/RJ - CEP 20071-004",
+    email: "jari@detran.rj.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Comiss\xF5es de Julgamento da JARI DETRAN-RJ",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.rj.gov.br/protocolo-defesas",
+      presencialNetworkName: "Postos de Atendimento DETRAN-RJ e Poupatempo RJ",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_MG",
+    code: "113000",
+    name: "Departamento Estadual de Tr\xE2nsito de Minas Gerais",
+    abbreviation: "DETRAN-MG",
+    sphere: "estadual",
+    state: "MG",
+    capital: "Belo Horizonte",
+    onlinePortalUrl: "https://www.detran.mg.gov.br/infracoes/recursos",
+    physicalAddress: "Av. Jo\xE3o Pinheiro, 417 - Boa Viagem, Belo Horizonte/MG - CEP 30130-180",
+    email: "jari.mg@policiacivil.mg.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Colegiados JARI DETRAN-MG",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.mg.gov.br/infracoes/recursos",
+      presencialNetworkName: "Unidades de Atendimento Integrado (UAI Minas)",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_ES",
+    code: "108000",
+    name: "Departamento Estadual de Tr\xE2nsito do Esp\xEDrito Santo",
+    abbreviation: "DETRAN-ES",
+    sphere: "estadual",
+    state: "ES",
+    capital: "Vit\xF3ria",
+    onlinePortalUrl: "https://detran.es.gov.br/recursos-de-infracoes",
+    physicalAddress: "Av. Fernando Ferrari, 1080 - Ed. Am\xE9rica Centro Empresarial, Vit\xF3ria/ES - CEP 29075-010",
+    email: "jari@detran.es.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Central do DETRAN-ES",
+    protocolChannels: {
+      digitalPortalUrl: "https://detran.es.gov.br/recursos-de-infracoes",
+      presencialNetworkName: "Ag\xEAncias Fa\xE7a F\xE1cil Cariacica e Ciretrans",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  // --- SUL ---
+  {
+    id: "DETRAN_PR",
+    code: "116000",
+    name: "Departamento de Tr\xE2nsito do Paran\xE1",
+    abbreviation: "DETRAN-PR",
+    sphere: "estadual",
+    state: "PR",
+    capital: "Curitiba",
+    onlinePortalUrl: "https://www.detran.pr.gov.br/servicos/recursos",
+    physicalAddress: "Av. Victor Ferreira do Amaral, 2940 - Tarum\xE3, Curitiba/PR - CEP 82800-900",
+    email: "recursos@detran.pr.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Juntas Administrativas de Recursos de Infra\xE7\xF5es do DETRAN-PR",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.pr.gov.br/servicos/recursos",
+      mobileAppName: "Detran Inteligente PR",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_SC",
+    code: "124000",
+    name: "Departamento Estadual de Tr\xE2nsito de Santa Catarina",
+    abbreviation: "DETRAN-SC",
+    sphere: "estadual",
+    state: "SC",
+    capital: "Florian\xF3polis",
+    onlinePortalUrl: "https://www.detran.sc.gov.br/infracoes/recursos",
+    physicalAddress: "Rua Ursulina de Senna Castro, 226 - Estreito, Florian\xF3polis/SC - CEP 88070-290",
+    email: "jari@detran.sc.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Colegiados JARI DETRAN-SC",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.sc.gov.br/infracoes/recursos",
+      mobileAppName: "Detran Digital SC",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_RS",
+    code: "123000",
+    name: "Departamento Estadual de Tr\xE2nsito do Rio Grande do Sul",
+    abbreviation: "DETRAN-RS",
+    sphere: "estadual",
+    state: "RS",
+    capital: "Porto Alegre",
+    onlinePortalUrl: "https://www.detran.rs.gov.br/infracoes-e-recursos",
+    physicalAddress: "Rua Volunt\xE1rios da P\xE1tria, 1358 - Centro, Porto Alegre/RS - CEP 90230-010",
+    email: "recursos@detran.rs.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Estadual DETRAN-RS",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.rs.gov.br/infracoes-e-recursos",
+      presencialNetworkName: "Unidades Tudo F\xE1cil RS e Centros de Registro de Ve\xEDculos (CRVAs)",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  // --- DISTRITO FEDERAL & CENTRO-OESTE ---
+  {
+    id: "DETRAN_DF",
+    code: "107000",
+    name: "Departamento de Tr\xE2nsito do Distrito Federal",
+    abbreviation: "DETRAN-DF",
+    sphere: "distrital",
+    state: "DF",
+    capital: "Bras\xEDlia",
+    onlinePortalUrl: "https://www.detran.df.gov.br/infracoes/recursos",
+    physicalAddress: "SAM Lote A Bloco B - Edif\xEDcio Sede do DETRAN-DF, Bras\xEDlia/DF - CEP 70620-000",
+    email: "jari@detran.df.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI do DETRAN-DF",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.df.gov.br/infracoes/recursos",
+      mobileAppName: "Detran Digital DF",
+      presencialNetworkName: "Postos Na Hora DF",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_GO",
+    code: "109000",
+    name: "Departamento Estadual de Tr\xE2nsito de Goi\xE1s",
+    abbreviation: "DETRAN-GO",
+    sphere: "estadual",
+    state: "GO",
+    capital: "Goi\xE2nia",
+    onlinePortalUrl: "https://www.detran.go.gov.br/servicos/recursos",
+    physicalAddress: "Av. Engenheiro At\xEDlio Correia Lima, 1875 - Cidade Jardim, Goi\xE2nia/GO - CEP 74425-030",
+    email: "jari@detran.go.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "Juntas Administrativas de Recursos de Goi\xE1s (JARI DETRAN-GO)",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.go.gov.br/servicos/recursos",
+      presencialNetworkName: "Vapt Vupt Goi\xE1s",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_MT",
+    code: "111000",
+    name: "Departamento Estadual de Tr\xE2nsito de Mato Grosso",
+    abbreviation: "DETRAN-MT",
+    sphere: "estadual",
+    state: "MT",
+    capital: "Cuiab\xE1",
+    onlinePortalUrl: "https://www.detran.mt.gov.br/recursos",
+    physicalAddress: "Av. Doutor H\xE9lio Ribeiro, 1000 - Centro Pol\xEDtico Administrativo, Cuiab\xE1/MT - CEP 78048-910",
+    email: "jari@detran.mt.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Estadual DETRAN-MT",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.mt.gov.br/recursos",
+      presencialNetworkName: "Ganha Tempo MT",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_MS",
+    code: "112000",
+    name: "Departamento Estadual de Tr\xE2nsito de Mato Grosso do Sul",
+    abbreviation: "DETRAN-MS",
+    sphere: "estadual",
+    state: "MS",
+    capital: "Campo Grande",
+    onlinePortalUrl: "https://www.detran.ms.gov.br/infracoes/recursos",
+    physicalAddress: "Rodovia MS-080, Km 10, s/n - Campo Grande/MS - CEP 79114-901",
+    email: "recursos@detran.ms.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Central DETRAN-MS",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ms.gov.br/infracoes/recursos",
+      presencialNetworkName: "Ag\xEAncias F\xE1cil MS",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  // --- NORDESTE ---
+  {
+    id: "DETRAN_BA",
+    code: "105000",
+    name: "Departamento Estadual de Tr\xE2nsito da Bahia",
+    abbreviation: "DETRAN-BA",
+    sphere: "estadual",
+    state: "BA",
+    capital: "Salvador",
+    onlinePortalUrl: "https://www.detran.ba.gov.br/servicos/recursos",
+    physicalAddress: "Av. Ant\xF4nio Carlos Magalh\xE3es, 7744 - Iguatemi, Salvador/BA - CEP 41110-700",
+    email: "jari@detran.ba.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-BA",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ba.gov.br/servicos/recursos",
+      presencialNetworkName: "Postos SAC Bahia",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_PE",
+    code: "117000",
+    name: "Departamento Estadual de Tr\xE2nsito de Pernambuco",
+    abbreviation: "DETRAN-PE",
+    sphere: "estadual",
+    state: "PE",
+    capital: "Recife",
+    onlinePortalUrl: "https://www.detran.pe.gov.br/infracoes/recursos",
+    physicalAddress: "Estrada do Barbalho, 889 - Iputinga, Recife/PE - CEP 50690-900",
+    email: "jari@detran.pe.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI Estadual DETRAN-PE",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.pe.gov.br/infracoes/recursos",
+      presencialNetworkName: "Expresso Cidad\xE3o Pernambuco",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_CE",
+    code: "106000",
+    name: "Departamento Estadual de Tr\xE2nsito do Cear\xE1",
+    abbreviation: "DETRAN-CE",
+    sphere: "estadual",
+    state: "CE",
+    capital: "Fortaleza",
+    onlinePortalUrl: "https://www.detran.ce.gov.br/servicos/recursos",
+    physicalAddress: "Av. Godofredo Maciel, 2900 - Maraponga, Fortaleza/CE - CEP 60710-903",
+    email: "jari@detran.ce.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-CE",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ce.gov.br/servicos/recursos",
+      presencialNetworkName: "Vapt Vupt Cear\xE1 / Casa do Cidad\xE3o",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_MA",
+    code: "110000",
+    name: "Departamento Estadual de Tr\xE2nsito do Maranh\xE3o",
+    abbreviation: "DETRAN-MA",
+    sphere: "estadual",
+    state: "MA",
+    capital: "S\xE3o Lu\xEDs",
+    onlinePortalUrl: "https://www.detran.ma.gov.br/recursos",
+    physicalAddress: "Av. dos Franceses, s/n - Vila Palmeira, S\xE3o Lu\xEDs/MA - CEP 65036-284",
+    email: "jari@detran.ma.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-MA",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ma.gov.br/recursos",
+      presencialNetworkName: "Viva Procon Maranh\xE3o",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_PB",
+    code: "115000",
+    name: "Departamento Estadual de Tr\xE2nsito da Para\xEDba",
+    abbreviation: "DETRAN-PB",
+    sphere: "estadual",
+    state: "PB",
+    capital: "Jo\xE3o Pessoa",
+    onlinePortalUrl: "https://detran.pb.gov.br/servicos/recursos",
+    physicalAddress: "Rua Em\xEDlia Batista Celani, s/n - Mangabeira VII, Jo\xE3o Pessoa/PB - CEP 58058-280",
+    email: "jari@detran.pb.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-PB",
+    protocolChannels: {
+      digitalPortalUrl: "https://detran.pb.gov.br/servicos/recursos",
+      presencialNetworkName: "Casas da Cidadania Para\xEDba",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_RN",
+    code: "120000",
+    name: "Departamento Estadual de Tr\xE2nsito do Rio Grande do Norte",
+    abbreviation: "DETRAN-RN",
+    sphere: "estadual",
+    state: "RN",
+    capital: "Natal",
+    onlinePortalUrl: "https://www.detran.rn.gov.br/recursos",
+    physicalAddress: "Av. Perimetral Leste, 113 - Cidade da Esperan\xE7a, Natal/RN - CEP 59070-400",
+    email: "jari@detran.rn.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-RN",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.rn.gov.br/recursos",
+      presencialNetworkName: "Central do Cidad\xE3o RN",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_AL",
+    code: "102000",
+    name: "Departamento Estadual de Tr\xE2nsito de Alagoas",
+    abbreviation: "DETRAN-AL",
+    sphere: "estadual",
+    state: "AL",
+    capital: "Macei\xF3",
+    onlinePortalUrl: "https://www.detran.al.gov.br/servicos/recursos",
+    physicalAddress: "Av. Menino Marcelo, s/n - Cidade Universit\xE1ria, Macei\xF3/AL - CEP 57073-470",
+    email: "jari@detran.al.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-AL",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.al.gov.br/servicos/recursos",
+      presencialNetworkName: "Centrais J\xE1! Alagoas",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_SE",
+    code: "125000",
+    name: "Departamento Estadual de Tr\xE2nsito de Sergipe",
+    abbreviation: "DETRAN-SE",
+    sphere: "estadual",
+    state: "SE",
+    capital: "Aracaju",
+    onlinePortalUrl: "https://www.detran.se.gov.br/recursos",
+    physicalAddress: "Av. Tancredo Neves, s/n - Ponto Novo, Aracaju/SE - CEP 49097-510",
+    email: "jari@detran.se.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-SE",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.se.gov.br/recursos",
+      presencialNetworkName: "Ceac Sergipe",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_PI",
+    code: "118000",
+    name: "Departamento Estadual de Tr\xE2nsito do Piau\xED",
+    abbreviation: "DETRAN-PI",
+    sphere: "estadual",
+    state: "PI",
+    capital: "Teresina",
+    onlinePortalUrl: "https://www.detran.pi.gov.br/recursos",
+    physicalAddress: "Av. Gil Martins, 2000 - Reden\xE7\xE3o, Teresina/PI - CEP 64017-810",
+    email: "jari@detran.pi.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-PI",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.pi.gov.br/recursos",
+      presencialNetworkName: "Espa\xE7o Cidadania Piau\xED",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  // --- NORTE ---
+  {
+    id: "DETRAN_AM",
+    code: "104000",
+    name: "Departamento Estadual de Tr\xE2nsito do Amazonas",
+    abbreviation: "DETRAN-AM",
+    sphere: "estadual",
+    state: "AM",
+    capital: "Manaus",
+    onlinePortalUrl: "https://www.detran.am.gov.br/servicos/recursos",
+    physicalAddress: "Av. M\xE1rio Ypiranga Monteiro, 2884 - Parque 10 de Novembro, Manaus/AM - CEP 69050-030",
+    email: "jari@detran.am.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-AM",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.am.gov.br/servicos/recursos",
+      presencialNetworkName: "PAC Amazonas",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_PA",
+    code: "114000",
+    name: "Departamento de Tr\xE2nsito do Estado do Par\xE1",
+    abbreviation: "DETRAN-PA",
+    sphere: "estadual",
+    state: "PA",
+    capital: "Bel\xE9m",
+    onlinePortalUrl: "https://www.detran.pa.gov.br/recursos",
+    physicalAddress: "Av. Augusto Montenegro, Km 03, s/n - Mangueir\xE3o, Bel\xE9m/PA - CEP 66640-000",
+    email: "jari@detran.pa.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-PA",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.pa.gov.br/recursos",
+      presencialNetworkName: "Esta\xE7\xE3o Cidadania Par\xE1",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_RO",
+    code: "121000",
+    name: "Departamento Estadual de Tr\xE2nsito de Rond\xF4nia",
+    abbreviation: "DETRAN-RO",
+    sphere: "estadual",
+    state: "RO",
+    capital: "Porto Velho",
+    onlinePortalUrl: "https://www.detran.ro.gov.br/recursos",
+    physicalAddress: "Rua Doutor Jos\xE9 Adelino, 4477 - Costa e Silva, Porto Velho/RO - CEP 76803-592",
+    email: "jari@detran.ro.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-RO",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ro.gov.br/recursos",
+      presencialNetworkName: "Tudo Aqui Rond\xF4nia",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_TO",
+    code: "127000",
+    name: "Departamento Estadual de Tr\xE2nsito do Tocantins",
+    abbreviation: "DETRAN-TO",
+    sphere: "estadual",
+    state: "TO",
+    capital: "Palmas",
+    onlinePortalUrl: "https://www.detran.to.gov.br/recursos",
+    physicalAddress: "Quadra 401 Norte, Av. NS 01, Lote 02 - Plano Diretor Norte, Palmas/TO - CEP 77006-444",
+    email: "jari@detran.to.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-TO",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.to.gov.br/recursos",
+      presencialNetworkName: "\xC9 Pra J\xE1 Tocantins",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_AC",
+    code: "101000",
+    name: "Departamento Estadual de Tr\xE2nsito do Acre",
+    abbreviation: "DETRAN-AC",
+    sphere: "estadual",
+    state: "AC",
+    capital: "Rio Branco",
+    onlinePortalUrl: "https://www.detran.ac.gov.br/recursos",
+    physicalAddress: "Estrada Dias Martins, 894 - Jardim Primavera, Rio Branco/AC - CEP 69919-278",
+    email: "jari@detran.ac.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-AC",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ac.gov.br/recursos",
+      presencialNetworkName: "OCA - Organiza\xE7\xE3o em Centros de Atendimento",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_AP",
+    code: "103000",
+    name: "Departamento Estadual de Tr\xE2nsito do Amap\xE1",
+    abbreviation: "DETRAN-AP",
+    sphere: "estadual",
+    state: "AP",
+    capital: "Macap\xE1",
+    onlinePortalUrl: "https://www.detran.ap.gov.br/recursos",
+    physicalAddress: "Rua Tancredo Neves, 217 - S\xE3o L\xE1zaro, Macap\xE1/AP - CEP 68908-450",
+    email: "jari@detran.ap.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-AP",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.ap.gov.br/recursos",
+      presencialNetworkName: "Super F\xE1cil Amap\xE1",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
+  },
+  {
+    id: "DETRAN_RR",
+    code: "122000",
+    name: "Departamento Estadual de Tr\xE2nsito de Roraima",
+    abbreviation: "DETRAN-RR",
+    sphere: "estadual",
+    state: "RR",
+    capital: "Boa Vista",
+    onlinePortalUrl: "https://www.detran.rr.gov.br/recursos",
+    physicalAddress: "Av. Brigadeiro Eduardo Gomes, 4214 - Aeroporto, Boa Vista/RR - CEP 69310-005",
+    email: "jari@detran.rr.gov.br",
+    standardDeadlineDays: 30,
+    jariStructure: "JARI DETRAN-RR",
+    protocolChannels: {
+      digitalPortalUrl: "https://www.detran.rr.gov.br/recursos",
+      presencialNetworkName: "Casa do Cidad\xE3o Roraima",
+      govBrAuthenticationRequired: true,
+      acceptedFormats: ["PDF"],
+      maxFileSizeMb: 10
+    },
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true,
+    version: 1,
+    lastVerifiedAt: "2026-08-29"
   }
 ];
-function resolveProtocolInfo(autuadorAbbreviation) {
-  const organ = ORGANS_DB.find((o) => o.abbreviation === autuadorAbbreviation);
+var NATIONAL_CETRANS_DB = [
+  {
+    id: "CONTRANDIFE_DF",
+    uf: "DF",
+    name: "Conselho de Tr\xE2nsito do Distrito Federal (CONTRANDIFE)",
+    sphere: "distrital",
+    presidentOrBoard: "Conselho Pleno do CONTRANDIFE",
+    address: "SAM Lote A Bloco B - Edif\xEDcio Sede do DETRAN-DF, Bras\xEDlia/DF",
+    portalUrl: "https://www.contrandife.df.gov.br",
+    isContrandife: true,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_SP",
+    uf: "SP",
+    name: "Conselho Estadual de Tr\xE2nsito de S\xE3o Paulo (CETRAN-SP)",
+    sphere: "estadual",
+    presidentOrBoard: "Presid\xEAncia e Colegiado do CETRAN-SP",
+    address: "Rua Boa Vista, 209 - 6\xBA andar - Centro, S\xE3o Paulo/SP - CEP 01014-001",
+    portalUrl: "https://www.cetran.sp.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_RJ",
+    uf: "RJ",
+    name: "Conselho Estadual de Tr\xE2nsito do Rio de Janeiro (CETRAN-RJ)",
+    sphere: "estadual",
+    presidentOrBoard: "Plen\xE1rio do CETRAN-RJ",
+    address: "Av. Presidente Vargas, 817 - 10\xBA andar - Centro, Rio de Janeiro/RJ",
+    portalUrl: "https://www.cetran.rj.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_MG",
+    uf: "MG",
+    name: "Conselho Estadual de Tr\xE2nsito de Minas Gerais (CETRAN-MG)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras Recursais do CETRAN-MG",
+    address: "Rodovia Papa Jo\xE3o Paulo II, 4001 - Edif\xEDcio Gerais, Belo Horizonte/MG",
+    portalUrl: "https://www.cetran.mg.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_ES",
+    uf: "ES",
+    name: "Conselho Estadual de Tr\xE2nsito do Esp\xEDrito Santo (CETRAN-ES)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-ES",
+    address: "Av. Fernando Ferrari, 1080 - Vit\xF3ria/ES",
+    portalUrl: "https://cetran.es.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_PR",
+    uf: "PR",
+    name: "Conselho Estadual de Tr\xE2nsito do Paran\xE1 (CETRAN-PR)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras de Julgamento do CETRAN-PR",
+    address: "Av. Victor Ferreira do Amaral, 2940 - Curitiba/PR",
+    portalUrl: "https://www.cetran.pr.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_SC",
+    uf: "SC",
+    name: "Conselho Estadual de Tr\xE2nsito de Santa Catarina (CETRAN-SC)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Estadual CETRAN-SC",
+    address: "Rua Ursulina de Senna Castro, 226 - Florian\xF3polis/SC",
+    portalUrl: "https://www.cetran.sc.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_RS",
+    uf: "RS",
+    name: "Conselho Estadual de Tr\xE2nsito do Rio Grande do Sul (CETRAN-RS)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-RS",
+    address: "Rua Volunt\xE1rios da P\xE1tria, 1358 - Porto Alegre/RS",
+    portalUrl: "https://www.cetran.rs.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_BA",
+    uf: "BA",
+    name: "Conselho Estadual de Tr\xE2nsito da Bahia (CETRAN-BA)",
+    sphere: "estadual",
+    presidentOrBoard: "Pleno do CETRAN-BA",
+    address: "Av. Ant\xF4nio Carlos Magalh\xE3es, 7744 - Salvador/BA",
+    portalUrl: "https://www.cetran.ba.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_PE",
+    uf: "PE",
+    name: "Conselho Estadual de Tr\xE2nsito de Pernambuco (CETRAN-PE)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Estadual CETRAN-PE",
+    address: "Estrada do Barbalho, 889 - Recife/PE",
+    portalUrl: "https://www.cetran.pe.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_CE",
+    uf: "CE",
+    name: "Conselho Estadual de Tr\xE2nsito do Cear\xE1 (CETRAN-CE)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras Recursais do CETRAN-CE",
+    address: "Av. Godofredo Maciel, 2900 - Fortaleza/CE",
+    portalUrl: "https://www.cetran.ce.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_GO",
+    uf: "GO",
+    name: "Conselho Estadual de Tr\xE2nsito de Goi\xE1s (CETRAN-GO)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-GO",
+    address: "Av. Engenheiro At\xEDlio Correia Lima, 1875 - Goi\xE2nia/GO",
+    portalUrl: "https://www.cetran.go.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_MT",
+    uf: "MT",
+    name: "Conselho Estadual de Tr\xE2nsito de Mato Grosso (CETRAN-MT)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Estadual CETRAN-MT",
+    address: "Av. Doutor H\xE9lio Ribeiro, 1000 - Cuiab\xE1/MT",
+    portalUrl: "https://www.cetran.mt.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_MS",
+    uf: "MS",
+    name: "Conselho Estadual de Tr\xE2nsito de Mato Grosso do Sul (CETRAN-MS)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras de Recursos do CETRAN-MS",
+    address: "Rodovia MS-080, Km 10 - Campo Grande/MS",
+    portalUrl: "https://www.cetran.ms.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_MA",
+    uf: "MA",
+    name: "Conselho Estadual de Tr\xE2nsito do Maranh\xE3o (CETRAN-MA)",
+    sphere: "estadual",
+    presidentOrBoard: "Pleno do CETRAN-MA",
+    address: "Av. dos Franceses, s/n - S\xE3o Lu\xEDs/MA",
+    portalUrl: "https://www.cetran.ma.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_PB",
+    uf: "PB",
+    name: "Conselho Estadual de Tr\xE2nsito da Para\xEDba (CETRAN-PB)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-PB",
+    address: "Rua Em\xEDlia Batista Celani, s/n - Jo\xE3o Pessoa/PB",
+    portalUrl: "https://cetran.pb.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_RN",
+    uf: "RN",
+    name: "Conselho Estadual de Tr\xE2nsito do Rio Grande do Norte (CETRAN-RN)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Pleno CETRAN-RN",
+    address: "Av. Perimetral Leste, 113 - Natal/RN",
+    portalUrl: "https://www.cetran.rn.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_AL",
+    uf: "AL",
+    name: "Conselho Estadual de Tr\xE2nsito de Alagoas (CETRAN-AL)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras Recursais do CETRAN-AL",
+    address: "Av. Menino Marcelo, s/n - Macei\xF3/AL",
+    portalUrl: "https://cetran.al.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_SE",
+    uf: "SE",
+    name: "Conselho Estadual de Tr\xE2nsito de Sergipe (CETRAN-SE)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-SE",
+    address: "Av. Tancredo Neves, s/n - Aracaju/SE",
+    portalUrl: "https://cetran.se.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_PI",
+    uf: "PI",
+    name: "Conselho Estadual de Tr\xE2nsito do Piau\xED (CETRAN-PI)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Estadual CETRAN-PI",
+    address: "Av. Gil Martins, 2000 - Teresina/PI",
+    portalUrl: "https://cetran.pi.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_AM",
+    uf: "AM",
+    name: "Conselho Estadual de Tr\xE2nsito do Amazonas (CETRAN-AM)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras Recursais do CETRAN-AM",
+    address: "Av. M\xE1rio Ypiranga Monteiro, 2884 - Manaus/AM",
+    portalUrl: "https://www.cetran.am.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_PA",
+    uf: "PA",
+    name: "Conselho Estadual de Tr\xE2nsito do Par\xE1 (CETRAN-PA)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-PA",
+    address: "Av. Augusto Montenegro, Km 03 - Bel\xE9m/PA",
+    portalUrl: "https://www.cetran.pa.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_RO",
+    uf: "RO",
+    name: "Conselho Estadual de Tr\xE2nsito de Rond\xF4nia (CETRAN-RO)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Pleno CETRAN-RO",
+    address: "Rua Doutor Jos\xE9 Adelino, 4477 - Porto Velho/RO",
+    portalUrl: "https://www.cetran.ro.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_TO",
+    uf: "TO",
+    name: "Conselho Estadual de Tr\xE2nsito do Tocantins (CETRAN-TO)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras de Julgamento do CETRAN-TO",
+    address: "Quadra 401 Norte, Av. NS 01 - Palmas/TO",
+    portalUrl: "https://www.cetran.to.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_AC",
+    uf: "AC",
+    name: "Conselho Estadual de Tr\xE2nsito do Acre (CETRAN-AC)",
+    sphere: "estadual",
+    presidentOrBoard: "Colegiado do CETRAN-AC",
+    address: "Estrada Dias Martins, 894 - Rio Branco/AC",
+    portalUrl: "https://www.cetran.ac.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_AP",
+    uf: "AP",
+    name: "Conselho Estadual de Tr\xE2nsito do Amap\xE1 (CETRAN-AP)",
+    sphere: "estadual",
+    presidentOrBoard: "Conselho Estadual CETRAN-AP",
+    address: "Rua Tancredo Neves, 217 - Macap\xE1/AP",
+    portalUrl: "https://www.cetran.ap.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  },
+  {
+    id: "CETRAN_RR",
+    uf: "RR",
+    name: "Conselho Estadual de Tr\xE2nsito de Roraima (CETRAN-RR)",
+    sphere: "estadual",
+    presidentOrBoard: "C\xE2maras Recursais do CETRAN-RR",
+    address: "Av. Brigadeiro Eduardo Gomes, 4214 - Boa Vista/RR",
+    portalUrl: "https://www.cetran.rr.gov.br",
+    isContrandife: false,
+    validFrom: "1998-01-22",
+    validUntil: null,
+    isActive: true
+  }
+];
+function getAllNationalStates() {
+  return Object.values(NATIONAL_STATES_DB);
+}
+function getAllNationalOrgans() {
+  return NATIONAL_ORGANS_DB;
+}
+function getAllNationalCetrans() {
+  return NATIONAL_CETRANS_DB;
+}
+function getNationalOrganById(id) {
+  if (!id) return null;
+  return NATIONAL_ORGANS_DB.find((o) => o.id === id) || null;
+}
+function getNationalOrganByAbbreviation(abbreviation) {
+  if (!abbreviation) return null;
+  const clean = abbreviation.trim().toUpperCase();
+  return NATIONAL_ORGANS_DB.find(
+    (o) => o.abbreviation.toUpperCase() === clean || o.id.toUpperCase() === clean || o.code === clean
+  ) || null;
+}
+function getNationalOrganByState(uf) {
+  if (!uf) return null;
+  const clean = uf.toUpperCase().trim();
+  return NATIONAL_ORGANS_DB.find((o) => o.state === clean && (o.sphere === "estadual" || o.sphere === "distrital" || o.abbreviation.startsWith("DETRAN"))) || NATIONAL_ORGANS_DB.find((o) => o.state === clean) || null;
+}
+function getCetranByState(uf) {
+  if (!uf) return null;
+  const clean = uf.toUpperCase().trim();
+  return NATIONAL_CETRANS_DB.find((c) => c.uf === clean) || null;
+}
+function resolveNationalProtocol(autuadorAbbreviationOrCode, _dateContext) {
+  if (!autuadorAbbreviationOrCode) return null;
+  const organ = getNationalOrganByAbbreviation(autuadorAbbreviationOrCode);
   if (!organ) return null;
+  const date = /* @__PURE__ */ new Date();
+  date.setDate(date.getDate() + (organ.standardDeadlineDays || 30));
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const deadlineDate = `${day}/${month}/${year}`;
   return {
     competentBody: organ.jariStructure,
     recommendedMethod: "portal_online",
     portalUrl: organ.onlinePortalUrl,
     physicalAddress: organ.physicalAddress,
     instructionsText: `Protocolo via ${organ.onlinePortalUrl} ou presencial em ${organ.physicalAddress}`,
-    deadlineDate: calculateDeadline(organ.standardDeadlineDays)
+    deadlineDate
   };
 }
-function calculateDeadline(days) {
-  const date = /* @__PURE__ */ new Date();
-  date.setDate(date.getDate() + days);
-  return date.toLocaleDateString("pt-BR");
+
+// src/core/knowledge/sources-registry.ts
+var OFFICIAL_SOURCES_REGISTRY = [
+  // ==========================================
+  // FEDERAL / NACIONAL (Tier 1 & Tier 3)
+  // ==========================================
+  {
+    id: "SRC_FED_PLANALTO_CTB",
+    uf: "FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "Planalto - C\xF3digo de Tr\xE2nsito Brasileiro (Lei 9.503/1997)",
+    url: "https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm",
+    category: "legislation",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_SENATRAN_PORTAL",
+    uf: "FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "Secretaria Nacional de Tr\xE2nsito (SENATRAN)",
+    url: "https://www.gov.br/transportes/pt-br/assuntos/transito/senatran",
+    category: "legislation",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_CONTRAN_RESOLUCOES",
+    uf: "FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "Conselho Nacional de Tr\xE2nsito (CONTRAN) - Resolu\xE7\xF5es",
+    url: "https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran",
+    category: "legislation",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_PRF_PORTAL",
+    uf: "FEDERAL",
+    organId: "PRF_BRASIL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "Pol\xEDcia Rodovi\xE1ria Federal - Portal de Multas e Recursos",
+    url: "https://sistemas.prf.gov.br/portal/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_DNIT_PORTAL",
+    uf: "FEDERAL",
+    organId: "DNIT_FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DNIT - Portal de Multas e Defesas",
+    url: "https://servicos.dnit.gov.br/multas",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_ANTT_PORTAL",
+    uf: "FEDERAL",
+    organId: "ANTT_FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "ANTT - Ag\xEAncia Nacional de Transportes Terrestres",
+    url: "https://www.gov.br/antt/pt-br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_INMETRO_RADARES",
+    uf: "FEDERAL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "INMETRO - PSIQ Consulta de Radares e Cronotac\xF3grafos",
+    url: "https://cronotacografo.rbmlq.gov.br/certificados/consultar",
+    category: "metrologia",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_DOU",
+    uf: "FEDERAL",
+    tier: "TIER_2_OFFICIAL_GAZETTE",
+    title: "Di\xE1rio Oficial da Uni\xE3o (Imprensa Nacional)",
+    url: "https://www.in.gov.br/leiturajornal",
+    category: "diario_oficial",
+    isActive: true
+  },
+  {
+    id: "SRC_FED_STJ_JURISPRUDENCIA",
+    uf: "FEDERAL",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "STJ - Jurisprud\xEAncia em Teses - Direito de Tr\xE2nsito",
+    url: "https://scon.stj.jus.br/SCON/",
+    category: "jurisprudencia",
+    isActive: true
+  },
+  // ==========================================
+  // SUDESTE (SP, RJ, MG, ES)
+  // ==========================================
+  {
+    id: "SRC_DETRAN_SP",
+    uf: "SP",
+    organId: "DETRAN_SP",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-SP - Protocolo Eletr\xF4nico de Recursos e Defesas",
+    url: "https://www.detran.sp.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_SP",
+    uf: "SP",
+    organId: "CETRAN_SP",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-SP - Conselho Estadual de Tr\xE2nsito de S\xE3o Paulo",
+    url: "https://www.cetran.sp.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DER_SP",
+    uf: "SP",
+    organId: "DER_SP",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DER-SP - Departamento de Estradas de Rodagem de SP",
+    url: "https://www.der.sp.gov.br/multas/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CET_SP",
+    uf: "SP",
+    organId: "CET_SP",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "CET / DSV S\xE3o Paulo - Defesa da Autua\xE7\xE3o e Recursos JARI",
+    url: "https://dsv.prefeitura.sp.gov.br/defesa",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_RJ",
+    uf: "RJ",
+    organId: "DETRAN_RJ",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-RJ - Protocolo Geral e Defesa Pr\xE9via",
+    url: "https://www.detran.rj.gov.br/protocolo-defesas",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_RJ",
+    uf: "RJ",
+    organId: "CETRAN_RJ",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-RJ - Conselho Estadual de Tr\xE2nsito do Rio de Janeiro",
+    url: "https://www.cetran.rj.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_MG",
+    uf: "MG",
+    organId: "DETRAN_MG",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-MG - Infra\xE7\xF5es e Recursos Online",
+    url: "https://www.detran.mg.gov.br/infracoes/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_MG",
+    uf: "MG",
+    organId: "CETRAN_MG",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-MG - Conselho Estadual de Tr\xE2nsito de Minas Gerais",
+    url: "https://www.cetran.mg.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_ES",
+    uf: "ES",
+    organId: "DETRAN_ES",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-ES - Portal de Servi\xE7os e Defesa de Multas",
+    url: "https://detran.es.gov.br/recursos-de-infracoes",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_ES",
+    uf: "ES",
+    organId: "CETRAN_ES",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-ES - Conselho Estadual de Tr\xE2nsito do Esp\xEDrito Santo",
+    url: "https://cetran.es.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  // ==========================================
+  // SUL (PR, SC, RS)
+  // ==========================================
+  {
+    id: "SRC_DETRAN_PR",
+    uf: "PR",
+    organId: "DETRAN_PR",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-PR - Recursos e Defesa Pr\xE9via Online",
+    url: "https://www.detran.pr.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_PR",
+    uf: "PR",
+    organId: "CETRAN_PR",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-PR - Conselho Estadual de Tr\xE2nsito do Paran\xE1",
+    url: "https://www.cetran.pr.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_SC",
+    uf: "SC",
+    organId: "DETRAN_SC",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-SC - Portal Digital de Multas e JARI",
+    url: "https://www.detran.sc.gov.br/infracoes/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_SC",
+    uf: "SC",
+    organId: "CETRAN_SC",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-SC - Conselho Estadual de Tr\xE2nsito de Santa Catarina",
+    url: "https://www.cetran.sc.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_RS",
+    uf: "RS",
+    organId: "DETRAN_RS",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-RS - Central de Servi\xE7os e Apresenta\xE7\xE3o de Defesas",
+    url: "https://www.detran.rs.gov.br/infracoes-e-recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_RS",
+    uf: "RS",
+    organId: "CETRAN_RS",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-RS - Conselho Estadual de Tr\xE2nsito do Rio Grande do Sul",
+    url: "https://www.cetran.rs.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  // ==========================================
+  // DISTRITO FEDERAL & CENTRO-OESTE (DF, GO, MT, MS)
+  // ==========================================
+  {
+    id: "SRC_DETRAN_DF",
+    uf: "DF",
+    organId: "DETRAN_DF",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-DF - Portal de Servi\xE7os e Defesa Pr\xE9via / JARI",
+    url: "https://www.detran.df.gov.br/infracoes/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CONTRANDIFE_DF",
+    uf: "DF",
+    organId: "CONTRANDIFE_DF",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CONTRANDIFE - Conselho de Tr\xE2nsito do Distrito Federal",
+    url: "https://www.contrandife.df.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_GO",
+    uf: "GO",
+    organId: "DETRAN_GO",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-GO - Portal de Recursos e JARI Goi\xE1s",
+    url: "https://www.detran.go.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_GO",
+    uf: "GO",
+    organId: "CETRAN_GO",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-GO - Conselho Estadual de Tr\xE2nsito de Goi\xE1s",
+    url: "https://www.cetran.go.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_MT",
+    uf: "MT",
+    organId: "DETRAN_MT",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-MT - Portal Oficial de Multas e Recursos",
+    url: "https://www.detran.mt.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_MT",
+    uf: "MT",
+    organId: "CETRAN_MT",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-MT - Conselho Estadual de Tr\xE2nsito de Mato Grosso",
+    url: "https://www.cetran.mt.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_MS",
+    uf: "MS",
+    organId: "DETRAN_MS",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-MS - Portal de Multas e Notifica\xE7\xF5es de MS",
+    url: "https://www.detran.ms.gov.br/infracoes/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_MS",
+    uf: "MS",
+    organId: "CETRAN_MS",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-MS - Conselho Estadual de Tr\xE2nsito de Mato Grosso do Sul",
+    url: "https://www.cetran.ms.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  // ==========================================
+  // NORDESTE (BA, PE, CE, MA, PB, RN, AL, SE, PI)
+  // ==========================================
+  {
+    id: "SRC_DETRAN_BA",
+    uf: "BA",
+    organId: "DETRAN_BA",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-BA - Portal de Defesa de Autua\xE7\xE3o e Recursos JARI",
+    url: "https://www.detran.ba.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_BA",
+    uf: "BA",
+    organId: "CETRAN_BA",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-BA - Conselho Estadual de Tr\xE2nsito da Bahia",
+    url: "https://www.cetran.ba.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_PE",
+    uf: "PE",
+    organId: "DETRAN_PE",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-PE - Central de Defesas e Recursos Administrativos",
+    url: "https://www.detran.pe.gov.br/infracoes/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_PE",
+    uf: "PE",
+    organId: "CETRAN_PE",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-PE - Conselho Estadual de Tr\xE2nsito de Pernambuco",
+    url: "https://www.cetran.pe.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_CE",
+    uf: "CE",
+    organId: "DETRAN_CE",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-CE - Protocolo de Recursos de Multas",
+    url: "https://www.detran.ce.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_CE",
+    uf: "CE",
+    organId: "CETRAN_CE",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-CE - Conselho Estadual de Tr\xE2nsito do Cear\xE1",
+    url: "https://www.cetran.ce.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_MA",
+    uf: "MA",
+    organId: "DETRAN_MA",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-MA - Portal de Servi\xE7os e Defesa de Notifica\xE7\xF5es",
+    url: "https://www.detran.ma.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_MA",
+    uf: "MA",
+    organId: "CETRAN_MA",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-MA - Conselho Estadual de Tr\xE2nsito do Maranh\xE3o",
+    url: "https://www.cetran.ma.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_PB",
+    uf: "PB",
+    organId: "DETRAN_PB",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-PB - Defesas e Recursos de Multas",
+    url: "https://detran.pb.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_PB",
+    uf: "PB",
+    organId: "CETRAN_PB",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-PB - Conselho Estadual de Tr\xE2nsito da Para\xEDba",
+    url: "https://cetran.pb.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_RN",
+    uf: "RN",
+    organId: "DETRAN_RN",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-RN - Protocolo e Junta de Recursos JARI",
+    url: "https://www.detran.rn.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_RN",
+    uf: "RN",
+    organId: "CETRAN_RN",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-RN - Conselho Estadual de Tr\xE2nsito do Rio Grande do Norte",
+    url: "https://www.cetran.rn.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_AL",
+    uf: "AL",
+    organId: "DETRAN_AL",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-AL - Portal de Recursos de Infra\xE7\xF5es",
+    url: "https://www.detran.al.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_AL",
+    uf: "AL",
+    organId: "CETRAN_AL",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-AL - Conselho Estadual de Tr\xE2nsito de Alagoas",
+    url: "https://cetran.al.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_SE",
+    uf: "SE",
+    organId: "DETRAN_SE",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-SE - Defesa Pr\xE9via e Recursos JARI Sergipe",
+    url: "https://www.detran.se.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_SE",
+    uf: "SE",
+    organId: "CETRAN_SE",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-SE - Conselho Estadual de Tr\xE2nsito de Sergipe",
+    url: "https://cetran.se.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_PI",
+    uf: "PI",
+    organId: "DETRAN_PI",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-PI - Recursos de Multas Piau\xED",
+    url: "https://www.detran.pi.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_PI",
+    uf: "PI",
+    organId: "CETRAN_PI",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-PI - Conselho Estadual de Tr\xE2nsito do Piau\xED",
+    url: "https://cetran.pi.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  // ==========================================
+  // NORTE (AM, PA, RO, TO, AC, AP, RR)
+  // ==========================================
+  {
+    id: "SRC_DETRAN_AM",
+    uf: "AM",
+    organId: "DETRAN_AM",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-AM - Portal de Recursos e Infra\xE7\xF5es Amazonas",
+    url: "https://www.detran.am.gov.br/servicos/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_AM",
+    uf: "AM",
+    organId: "CETRAN_AM",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-AM - Conselho Estadual de Tr\xE2nsito do Amazonas",
+    url: "https://www.cetran.am.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_PA",
+    uf: "PA",
+    organId: "DETRAN_PA",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-PA - Central de Recursos e Multas Par\xE1",
+    url: "https://www.detran.pa.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_PA",
+    uf: "PA",
+    organId: "CETRAN_PA",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-PA - Conselho Estadual de Tr\xE2nsito do Par\xE1",
+    url: "https://www.cetran.pa.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_RO",
+    uf: "RO",
+    organId: "DETRAN_RO",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-RO - Portal de Infra\xE7\xF5es e JARI Rond\xF4nia",
+    url: "https://www.detran.ro.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_RO",
+    uf: "RO",
+    organId: "CETRAN_RO",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-RO - Conselho Estadual de Tr\xE2nsito de Rond\xF4nia",
+    url: "https://www.cetran.ro.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_TO",
+    uf: "TO",
+    organId: "DETRAN_TO",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-TO - Defesa Pr\xE9via e Recursos Tocantins",
+    url: "https://www.detran.to.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_TO",
+    uf: "TO",
+    organId: "CETRAN_TO",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-TO - Conselho Estadual de Tr\xE2nsito do Tocantins",
+    url: "https://www.cetran.to.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_AC",
+    uf: "AC",
+    organId: "DETRAN_AC",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-AC - Portal de Servi\xE7os e Defesa de Multas Acre",
+    url: "https://www.detran.ac.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_AC",
+    uf: "AC",
+    organId: "CETRAN_AC",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-AC - Conselho Estadual de Tr\xE2nsito do Acre",
+    url: "https://www.cetran.ac.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_AP",
+    uf: "AP",
+    organId: "DETRAN_AP",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-AP - Portal de Recursos Amap\xE1",
+    url: "https://www.detran.ap.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_AP",
+    uf: "AP",
+    organId: "CETRAN_AP",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-AP - Conselho Estadual de Tr\xE2nsito do Amap\xE1",
+    url: "https://www.cetran.ap.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_DETRAN_RR",
+    uf: "RR",
+    organId: "DETRAN_RR",
+    tier: "TIER_1_GOV_PRIMARY",
+    title: "DETRAN-RR - Recursos de Multas Roraima",
+    url: "https://www.detran.rr.gov.br/recursos",
+    category: "portal_recurso",
+    isActive: true
+  },
+  {
+    id: "SRC_CETRAN_RR",
+    uf: "RR",
+    organId: "CETRAN_RR",
+    tier: "TIER_3_JUDICIAL_TRIBUNAL",
+    title: "CETRAN-RR - Conselho Estadual de Tr\xE2nsito de Roraima",
+    url: "https://www.cetran.rr.gov.br",
+    category: "portal_recurso",
+    isActive: true
+  }
+];
+
+// src/core/knowledge/temporal-engine.ts
+var TemporalKnowledgeEngine = class {
+  /**
+   * Resolve o conhecimento efetivo (Órgão, CETRAN, Prazos, Competências) para um determinado contexto temporal.
+   */
+  static getEffectiveKnowledge(ctx) {
+    const targetDate = ctx.infractionDate || ctx.notificationDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const isHistoric = targetDate < "2026-01-01";
+    let matchedOrgan = null;
+    let state = null;
+    let cetran = null;
+    if (ctx.autuadorBody || ctx.organCode) {
+      const candidateKey = ctx.autuadorBody || ctx.organCode || "";
+      matchedOrgan = this.findOrganValidAtDate(candidateKey, targetDate);
+    }
+    if (!matchedOrgan && ctx.uf) {
+      const ufUpper = ctx.uf.toUpperCase().trim();
+      state = NATIONAL_STATES_DB[ufUpper] || null;
+      matchedOrgan = this.findOrganByStateValidAtDate(ufUpper, targetDate);
+    } else if (matchedOrgan && matchedOrgan.state && matchedOrgan.state !== "FEDERAL") {
+      state = NATIONAL_STATES_DB[matchedOrgan.state] || null;
+    }
+    const stateUf = state?.uf || matchedOrgan?.state;
+    if (stateUf && stateUf !== "FEDERAL") {
+      cetran = this.findCetranValidAtDate(stateUf, targetDate);
+    }
+    const standardDeadlineDays = matchedOrgan?.standardDeadlineDays || 30;
+    return {
+      organ: matchedOrgan,
+      cetran,
+      state,
+      isHistoricRule: isHistoric,
+      effectiveDateUsed: targetDate,
+      standardDeadlineDays,
+      protocolUrl: matchedOrgan?.onlinePortalUrl || null,
+      physicalAddress: matchedOrgan?.physicalAddress || null,
+      competentBody: matchedOrgan?.jariStructure || null
+    };
+  }
+  /**
+   * Encontra órgão válido na data informada.
+   */
+  static findOrganValidAtDate(organIdentifier, dateIso) {
+    const organ = getNationalOrganByAbbreviation(organIdentifier);
+    if (!organ) return null;
+    if (this.isDateWithinRange(dateIso, organ.validFrom, organ.validUntil)) {
+      return organ;
+    }
+    const historicalMatch = NATIONAL_ORGANS_DB.find(
+      (o) => (o.abbreviation.toUpperCase() === organIdentifier.toUpperCase() || o.code === organIdentifier || o.id === organIdentifier) && this.isDateWithinRange(dateIso, o.validFrom, o.validUntil)
+    );
+    return historicalMatch || organ;
+  }
+  /**
+   * Encontra órgão estadual válido na data informada.
+   */
+  static findOrganByStateValidAtDate(uf, dateIso) {
+    const organ = NATIONAL_ORGANS_DB.find(
+      (o) => o.state === uf && o.sphere === "estadual" && this.isDateWithinRange(dateIso, o.validFrom, o.validUntil)
+    );
+    return organ || null;
+  }
+  /**
+   * Encontra CETRAN válido na data informada.
+   */
+  static findCetranValidAtDate(uf, dateIso) {
+    const cetran = NATIONAL_CETRANS_DB.find(
+      (c) => c.uf === uf && this.isDateWithinRange(dateIso, c.validFrom, c.validUntil)
+    );
+    return cetran || null;
+  }
+  /**
+   * Verifica se a data está no intervalo [validFrom, validUntil].
+   */
+  static isDateWithinRange(dateIso, validFrom, validUntil) {
+    if (!dateIso) return true;
+    const target = dateIso.split("T")[0];
+    const from = validFrom.split("T")[0];
+    if (target < from) return false;
+    if (validUntil) {
+      const until = validUntil.split("T")[0];
+      if (target > until) return false;
+    }
+    return true;
+  }
+};
+
+// src/core/knowledge/registry/canonical-registry.ts
+var CanonicalKnowledgeRegistry = class {
+  // ==========================================
+  // 1. ESTADOS E UNIDADES FEDERATIVAS (27 UFs)
+  // ==========================================
+  /**
+   * Retorna a lista de todos os 27 Estados brasileiros (26 Estados + DF).
+   */
+  static getAllStates() {
+    return Object.values(NATIONAL_STATES_DB);
+  }
+  /**
+   * Busca um Estado específico por sua sigla (UF). Retorna null se não existir.
+   */
+  static getState(uf) {
+    if (!uf) return null;
+    const clean = uf.trim().toUpperCase();
+    return NATIONAL_STATES_DB[clean] || null;
+  }
+  /**
+   * Verifica se a UF informada é uma das 27 UFs canônicas do Brasil.
+   */
+  static hasState(uf) {
+    if (!uf) return false;
+    return !!NATIONAL_STATES_DB[uf.trim().toUpperCase()];
+  }
+  // ==========================================
+  // 2. ÓRGÃOS DE TRÂNSITO E COMPETÊNCIAS
+  // ==========================================
+  /**
+   * Retorna todos os órgãos cadastrados no catálogo canônico nacional.
+   */
+  static getAllOrgans() {
+    return NATIONAL_ORGANS_DB;
+  }
+  /**
+   * Busca um órgão por sigla, id ou código, opcionalmente respeitando a vigência temporal.
+   */
+  static getOrgan(identifier, referenceDate) {
+    if (!identifier) return null;
+    if (referenceDate) {
+      return TemporalKnowledgeEngine.findOrganValidAtDate(identifier, referenceDate);
+    }
+    return getNationalOrganByAbbreviation(identifier) || getNationalOrganById(identifier);
+  }
+  /**
+   * Retorna o DETRAN oficial de determinado Estado (UF).
+   */
+  static getDetranByState(uf, referenceDate) {
+    if (!uf) return null;
+    if (referenceDate) {
+      return TemporalKnowledgeEngine.findOrganByStateValidAtDate(uf.trim().toUpperCase(), referenceDate);
+    }
+    return getNationalOrganByState(uf);
+  }
+  /**
+   * Retorna todos os órgãos pertencentes a determinado Estado ou esfera.
+   */
+  static getOrgansByState(uf) {
+    if (!uf) return [];
+    const clean = uf.trim().toUpperCase();
+    return NATIONAL_ORGANS_DB.filter((o) => o.state === clean);
+  }
+  // ==========================================
+  // 3. CONSELHOS ESTADUAIS DE TRÂNSITO (CETRANs)
+  // ==========================================
+  /**
+   * Retorna todos os CETRANs e CONTRANDIFE.
+   */
+  static getAllCetrans() {
+    return NATIONAL_CETRANS_DB;
+  }
+  /**
+   * Busca o CETRAN ou CONTRANDIFE correspondente à UF.
+   */
+  static getCetranByState(uf, referenceDate) {
+    if (!uf) return null;
+    if (referenceDate) {
+      return TemporalKnowledgeEngine.findCetranValidAtDate(uf.trim().toUpperCase(), referenceDate);
+    }
+    return getCetranByState(uf);
+  }
+  // ==========================================
+  // 4. PROCEDIMENTOS ADMINISTRATIVOS
+  // ==========================================
+  /**
+   * Retorna todos os procedimentos administrativos suportados.
+   */
+  static getAllProcedures() {
+    return PROCEDURES_CATALOG;
+  }
+  /**
+   * Busca um procedimento específico por seu identificador.
+   */
+  static getProcedure(id) {
+    if (!id) return null;
+    return PROCEDURES_CATALOG.find((p) => p.id === id || p.code === id) || null;
+  }
+  // ==========================================
+  // 5. FONTES OFICIAIS DE MONITORAMENTO
+  // ==========================================
+  /**
+   * Retorna todas as fontes oficiais registradas.
+   */
+  static getAllSources() {
+    return OFFICIAL_SOURCES_REGISTRY;
+  }
+  /**
+   * Filtra fontes oficiais por Tier, UF, categoria ou status.
+   */
+  static getSources(filter) {
+    let result = OFFICIAL_SOURCES_REGISTRY;
+    if (filter) {
+      if (filter.tier) {
+        result = result.filter((s) => s.tier === filter.tier);
+      }
+      if (filter.uf) {
+        const ufClean = filter.uf.trim().toUpperCase();
+        result = result.filter((s) => s.uf === ufClean || s.uf === "FEDERAL");
+      }
+      if (filter.category) {
+        result = result.filter((s) => s.category === filter.category);
+      }
+      if (filter.isActive !== void 0) {
+        result = result.filter((s) => s.isActive === filter.isActive);
+      }
+    }
+    return result;
+  }
+  /**
+   * Retorna apenas as fontes oficiais primárias e regulatórias (Tiers 1, 2 e 3).
+   */
+  static getTier1To3Sources(uf) {
+    const validTiers = [
+      "TIER_1_GOV_PRIMARY",
+      "TIER_2_OFFICIAL_GAZETTE",
+      "TIER_3_JUDICIAL_TRIBUNAL"
+    ];
+    let list = OFFICIAL_SOURCES_REGISTRY.filter((s) => validTiers.includes(s.tier));
+    if (uf) {
+      const ufClean = uf.trim().toUpperCase();
+      list = list.filter((s) => s.uf === ufClean || s.uf === "FEDERAL");
+    }
+    return list;
+  }
+  // ==========================================
+  // 6. TESES E ARGUMENTOS JURÍDICOS
+  // ==========================================
+  /**
+   * Retorna o catálogo completo de argumentos e teses jurídicas.
+   */
+  static getAllArguments() {
+    return ARGUMENTS_CATALOG;
+  }
+  /**
+   * Busca uma tese ou argumento pelo ID (ex: 'ARG-001', 'ARG-048').
+   */
+  static getArgument(id) {
+    if (!id) return null;
+    return ARGUMENTS_CATALOG.find((a) => a.id === id || a.code === id) || null;
+  }
+  // ==========================================
+  // 7. INFRAÇÕES E LEGISLAÇÃO
+  // ==========================================
+  /**
+   * Retorna o catálogo de infrações de trânsito.
+   */
+  static getAllInfractions() {
+    return INFRACTION_CATALOG;
+  }
+  /**
+   * Busca uma infração de trânsito pelo código (ex: '745-50', '516-91').
+   */
+  static getInfraction(code) {
+    if (!code) return null;
+    const clean = code.trim();
+    return INFRACTION_CATALOG.find(
+      (i) => i.code === clean || i.code.replace("-", "") === clean.replace("-", "")
+    ) || null;
+  }
+  /**
+   * Retorna todos os artigos do CTB catalogados.
+   */
+  static getAllArticles() {
+    return CTB_ARTICLES_DB;
+  }
+  /**
+   * Retorna todas as resoluções do CONTRAN/SENATRAN catalogadas.
+   */
+  static getAllResolutions() {
+    return RESOLUTIONS_DB;
+  }
+  // ==========================================
+  // 8. TEMPLATES E BLOCOS DE PETIÇÃO
+  // ==========================================
+  /**
+   * Retorna todos os modelos de peças jurídicas.
+   */
+  static getAllTemplates() {
+    return TEMPLATES_CATALOG;
+  }
+  /**
+   * Retorna todos os blocos modulares de petição.
+   */
+  static getAllDocumentBlocks() {
+    return DOCUMENT_BLOCKS;
+  }
+  // ==========================================
+  // 9. RESOLUÇÃO DE PROTOCOLO E TEMPORALIDADE
+  // ==========================================
+  /**
+   * Resolve instruções de submissão e protocolo para qualquer autoridade de trânsito.
+   * Não realiza fallbacks indevidos para outros Estados.
+   */
+  static resolveProtocolInfo(autuadorAbbreviationOrCode, referenceDate) {
+    if (!autuadorAbbreviationOrCode) return null;
+    return resolveNationalProtocol(autuadorAbbreviationOrCode, referenceDate);
+  }
+  /**
+   * Resolve o conhecimento efetivo aplicando as regras de temporalidade vigentes na data do fato.
+   */
+  static resolveEffectiveKnowledge(ctx) {
+    return TemporalKnowledgeEngine.getEffectiveKnowledge(ctx);
+  }
+  // ==========================================
+  // 10. DETECÇÃO DE KNOWLEDGE GAP (ISOLAMENTO SEGURO)
+  // ==========================================
+  /**
+   * Avalia se determinado órgão ou Estado possui cobertura canônica válida ou se constitui uma lacuna (KNOWLEDGE_GAP).
+   * Garante que o sistema nunca invente dados fictícios para órgãos desconhecidos.
+   */
+  static getKnowledgeStatus(identifier) {
+    if (!identifier || !identifier.trim()) {
+      return {
+        isCovered: false,
+        isKnowledgeGap: true,
+        code: "KNOWLEDGE_GAP",
+        entity: identifier || "DESCONHECIDO",
+        message: "Identificador de \xF3rg\xE3o ou UF vazio ou nulo."
+      };
+    }
+    const clean = identifier.trim().toUpperCase();
+    if (NATIONAL_STATES_DB[clean]) {
+      return {
+        isCovered: true,
+        isKnowledgeGap: false,
+        code: "CANONICAL_COVERAGE",
+        entity: clean,
+        uf: clean,
+        state: NATIONAL_STATES_DB[clean],
+        message: `Estado ${NATIONAL_STATES_DB[clean].name} (${clean}) possui cobertura can\xF4nica completa nas 27 UFs.`
+      };
+    }
+    const organ = getNationalOrganByAbbreviation(clean) || getNationalOrganById(clean);
+    if (organ) {
+      return {
+        isCovered: true,
+        isKnowledgeGap: false,
+        code: "CANONICAL_COVERAGE",
+        entity: organ.abbreviation,
+        uf: organ.state,
+        organ,
+        message: `\xD3rg\xE3o ${organ.name} (${organ.abbreviation}) registrado com procedimentos e portal can\xF4nico.`
+      };
+    }
+    return {
+      isCovered: false,
+      isKnowledgeGap: true,
+      code: "KNOWLEDGE_GAP",
+      entity: identifier,
+      message: `[KNOWLEDGE_GAP] A entidade '${identifier}' n\xE3o consta no Cat\xE1logo Can\xF4nico Nacional. Nenhuma informa\xE7\xE3o fict\xEDcia ou fallback ser\xE1 gerado.`,
+      organ: null,
+      state: null
+    };
+  }
+};
+
+// src/core/legal-base/organs.ts
+var ORGANS_DB = CanonicalKnowledgeRegistry.getAllOrgans();
+function resolveProtocolInfo(autuadorAbbreviation, referenceDate) {
+  if (!autuadorAbbreviation) return null;
+  return CanonicalKnowledgeRegistry.resolveProtocolInfo(autuadorAbbreviation, referenceDate);
 }
 
 // src/core/rag/rag-pipeline.ts
@@ -20942,6 +23565,13 @@ var RagPipeline = class {
    */
   static generateDefenseDraft(caseId, infraction, vehiclePlate, vehicleModel, applicantData, selectedArguments, procedureType = "recurso_jari") {
     const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
+    let daysElapsed;
+    if (infraction.dateTime && infraction.notificationExpeditionDate) {
+      const infDate = new Date(infraction.dateTime);
+      const expDate = new Date(infraction.notificationExpeditionDate);
+      const diffTime = expDate.getTime() - infDate.getTime();
+      daysElapsed = Math.ceil(diffTime / (1e3 * 60 * 60 * 24));
+    }
     const draft = DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
@@ -20951,7 +23581,19 @@ var RagPipeline = class {
         model: vehicleModel
       },
       applicant: applicantData,
-      selectedArgumentIds: selectedArguments.map((a) => a.id)
+      selectedArgumentIds: selectedArguments.map((a) => a.id),
+      dates: {
+        infractionDate: infraction.dateTime,
+        expeditionDate: infraction.notificationExpeditionDate,
+        notificationDate: infraction.notificationExpeditionDate,
+        appealFilingDate: infraction.defenseDeadline,
+        daysElapsed
+      },
+      speeds: {
+        measured: infraction.measuredSpeed,
+        considered: infraction.consideredSpeed,
+        limit: infraction.speedLimit
+      }
     });
     return { ...draft, protocolInfo };
   }
@@ -21654,6 +24296,9 @@ var PagBankIntegrationService = class {
     this.webhookSecret = process.env.PAGBANK_WEBHOOK_SECRET || "";
     this.appBaseUrl = process.env.APP_URL || "https://www.defesai.shop/";
   }
+  isProductionMode() {
+    return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
+  }
   /**
       * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
       * Validação oficial de assinatura de webhook do PagBank
@@ -21661,7 +24306,7 @@ var PagBankIntegrationService = class {
       */
   verifyWebhookSignature(rawBody, signatureHeader) {
     if (!this.webhookSecret) {
-      if (process.env.NODE_ENV === "production") {
+      if (this.isProductionMode()) {
         logger.error("payments", "pagbank", "verify_webhook", "CRITICAL: PAGBANK_WEBHOOK_SECRET n\xE3o configurado em produ\xE7\xE3o");
         return false;
       }
@@ -21674,6 +24319,13 @@ var PagBankIntegrationService = class {
     }
     const expectedSignature = `sha256=${crypto4.createHmac("sha256", this.webhookSecret).update(rawBody, "utf8").digest("hex")}`;
     const receivedSignature = signatureHeader.startsWith("sha256=") ? signatureHeader : `sha256=${signatureHeader}`;
+    if (expectedSignature.length !== receivedSignature.length) {
+      logger.warn("payments", "pagbank", "verify_webhook", "Signature length mismatch", {
+        expectedLength: expectedSignature.length,
+        receivedLength: receivedSignature.length
+      });
+      return false;
+    }
     return crypto4.timingSafeEqual(
       Buffer.from(expectedSignature),
       Buffer.from(receivedSignature)
@@ -21735,7 +24387,7 @@ var PagBankIntegrationService = class {
     this.orders.set(`case_${caseId}`, orderResult);
     paymentRepository.persistOrder(orderResult, { paymentMethod: "pix" });
     if (this.token && this.token.startsWith("mock_")) {
-      if (process.env.NODE_ENV === "production") {
+      if (this.isProductionMode()) {
         throw new Error('PAGBANK_TOKEN com prefixo "mock_" n\xE3o \xE9 permitido em produ\xE7\xE3o. Configure um token v\xE1lido.');
       }
       logger.warn("payments", "pagbank", "create_pix_order", "Token mock detectado \u2014 usando modo sandbox local");
@@ -21788,13 +24440,13 @@ var PagBankIntegrationService = class {
           this.orders.set(data.id, orderResult);
         }
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (this.isProductionMode()) {
           logger.error("payments", "pagbank", "create_pix_order", "PagBank API falhou em produ\xE7\xE3o \u2014 ordem N\xC3O criada", { error: String(err) });
           throw new Error("Falha ao criar ordem PIX no PagBank. Tente novamente.");
         }
         logger.warn("payments", "pagbank", "create_pix_order", "PagBank API falhou \u2014 modo dev: ordem local mantida", { error: String(err) });
       }
-    } else if (!this.token && process.env.NODE_ENV === "production") {
+    } else if (!this.token && this.isProductionMode()) {
       throw new Error("PAGBANK_TOKEN n\xE3o configurado. Pagamento indispon\xEDvel em produ\xE7\xE3o.");
     }
     eventBus.publish(
@@ -21830,7 +24482,7 @@ var PagBankIntegrationService = class {
     this.orders.set(`case_${caseId}`, orderResult);
     paymentRepository.persistOrder(orderResult, { paymentMethod: "credit_card" });
     if (this.token && this.token.startsWith("mock_")) {
-      if (process.env.NODE_ENV === "production") {
+      if (this.isProductionMode()) {
         throw new Error('PAGBANK_TOKEN com prefixo "mock_" n\xE3o \xE9 permitido em produ\xE7\xE3o.');
       }
       logger.warn("payments", "pagbank", "create_credit_card_order", "Token mock detectado \u2014 usando modo sandbox local");
@@ -21962,7 +24614,7 @@ var PagBankIntegrationService = class {
         throw new Error("Erro ao processar pagamento com cart\xE3o de cr\xE9dito");
       }
     } else {
-      if (process.env.NODE_ENV === "production") {
+      if (this.isProductionMode()) {
         throw new Error("PAGBANK_TOKEN n\xE3o configurado. Pagamento com cart\xE3o indispon\xEDvel em produ\xE7\xE3o.");
       }
       orderResult.threeDsChallengeRequired = authenticationMethod === "CHALLENGE";
@@ -22206,11 +24858,51 @@ import QRCode2 from "qrcode";
 var GGRAPI_BASE_URL = "https://ggpixapi.com/api/v1";
 var GGRAPI_BACKUP_URL = "https://ggatepixapi.com/api/v1";
 function getConfig() {
+  const allowedIpsRaw = process.env.GGPIX_WEBHOOK_ALLOWED_IPS || "";
+  const allowedIps = allowedIpsRaw.split(",").map((ip) => ip.trim()).filter(Boolean);
   return {
     apiKey: process.env.GGPIX_API_KEY || "",
     appUrl: process.env.APP_URL || "https://defesai.com.br",
-    enabled: process.env.GGPIX_ENABLED === "true"
+    enabled: process.env.GGPIX_ENABLED === "true",
+    webhookAllowedIps: allowedIps.length > 0 ? allowedIps : void 0
   };
+}
+function isProductionMode() {
+  return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
+}
+function validateWebhookSourceIp(headers, allowedIps) {
+  if (!allowedIps || allowedIps.length === 0) {
+    if (isProductionMode()) {
+      logger.warn("payments", "ggpix", "webhook_ip", "GGPIX_WEBHOOK_ALLOWED_IPS n\xE3o configurado \u2014 webhook aceito mas configurar em produ\xE7\xE3o");
+    }
+    return true;
+  }
+  const forwardedFor = headers["x-forwarded-for"];
+  const realIp = headers["x-real-ip"];
+  const clientIp = forwardedFor?.split(",")[0]?.trim() || realIp || "";
+  if (!clientIp) {
+    logger.warn("payments", "ggpix", "webhook_ip", "N\xE3o foi poss\xEDvel determinar IP do cliente");
+    return false;
+  }
+  const isAllowed = allowedIps.some((allowed) => {
+    if (allowed.includes("/")) {
+      const [baseIp, prefixStr] = allowed.split("/");
+      const prefix = parseInt(prefixStr, 10);
+      if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
+      const mask = ~((1 << 32 - prefix) - 1);
+      const clientNum = ipToNumber(clientIp);
+      const baseNum = ipToNumber(baseIp);
+      return (clientNum & mask) === (baseNum & mask);
+    }
+    return allowed === clientIp;
+  });
+  if (!isAllowed) {
+    logger.warn("payments", "ggpix", "webhook_ip", "Webhook GGPIXAPI rejeitado \u2014 IP n\xE3o permitido", { clientIp, allowedIps });
+  }
+  return isAllowed;
+}
+function ipToNumber(ip) {
+  return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 function mapGGPixStatus(status) {
   const map = {
@@ -22286,7 +24978,7 @@ var GGPIXAdapter = class {
           netAmountInCents = data.fees?.netAmount;
         } else {
           const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }));
-          if (process.env.NODE_ENV === "production") {
+          if (isProductionMode()) {
             logger.error("payments", "ggpix", "create_pix", "GGPIXAPI retornou erro em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", {
               httpStatus: response.status,
               error: errorData
@@ -22299,7 +24991,7 @@ var GGPIXAdapter = class {
           });
         }
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (isProductionMode()) {
           logger.error("payments", "ggpix", "create_pix", "GGPIXAPI falhou em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", { error: err.message });
           throw new Error("Falha ao conectar com GGPIXAPI. Pagamento n\xE3o processado.");
         }
@@ -22361,7 +25053,11 @@ var GGPIXAdapter = class {
       paidAt: data.paidAt
     };
   }
-  processWebhook(_rawBody, _headers, body) {
+  processWebhook(_rawBody, headers, body) {
+    const config = getConfig();
+    if (!validateWebhookSourceIp(headers, config.webhookAllowedIps)) {
+      throw new Error("Webhook GGPIXAPI rejeitado: IP de origem n\xE3o autorizado");
+    }
     const payload = body;
     return {
       gatewayEventId: `ggpix_${payload.transactionId}_${payload.status}_${Date.now()}`,
@@ -22384,41 +25080,41 @@ var ggpixAdapter = new GGPIXAdapter();
 
 // src/server/integrations/gateway/gateway-manager.ts
 function resolveActiveGatewayIdFromEnv() {
+  const configOverride = configService.get("PAYMENT_ACTIVE_GATEWAY_OVERRIDE");
+  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank")) {
+    logger.info("payments", "gateway_manager", "resolve", "Using ConfigService override for active gateway", {
+      override: configOverride
+    });
+    return configOverride;
+  }
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || "").toLowerCase().trim();
+  const paymentMode = (process.env.PAYMENT_MODE || "sandbox").toLowerCase().trim();
+  const isProduction = paymentMode === "production";
   if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
   if (envValue === "pagbank") {
-    if (process.env.NODE_ENV === "production") {
+    if (isProduction) {
+      logger.warn("payments", "gateway_manager", "resolve", "PagBank bloqueado em PAYMENT_MODE=production", {
+        requestedGateway: "pagbank",
+        paymentMode,
+        forcedGateway: "ggpixapi"
+      });
       return "ggpixapi";
     }
     return "pagbank";
   }
-  if (process.env.NODE_ENV === "production") {
-    return "ggpixapi";
-  }
-  return "pagbank";
+  return isProduction ? "ggpixapi" : "pagbank";
 }
 var GatewayManager = class {
   constructor() {
     this.gateways = /* @__PURE__ */ new Map();
-    /**
-     * Override explícito feito em runtime (Admin UI). Quando null, o gateway
-     * ativo é resolvido do ambiente a cada leitura.
-     *
-     * IMPORTANTE: a resolução é LAZY de propósito. O singleton é construído na
-     * avaliação do módulo, que ocorre ANTES de dotenv.config() rodar no
-     * server.ts (ordem de imports ES). Resolver eager no construtor lia envs
-     * vazias e caía silenciosamente no fallback PagBank, desativando o GGPix.
-     */
-    this.activeOverride = null;
     this.gateways.set("pagbank", pagbankAdapter);
     this.gateways.set("ggpixapi", ggpixAdapter);
     logger.info("payments", "gateway_manager", "init", `Gateway manager initialized`, {
       availableGateways: Array.from(this.gateways.keys())
     });
   }
-  /** Gateway ativo efetivo: override runtime > variável de ambiente. */
+  /** Gateway ativo efetivo: ConfigService override > variável de ambiente. */
   resolveActiveGatewayId() {
-    if (this.activeOverride) return this.activeOverride;
     return resolveActiveGatewayIdFromEnv();
   }
   /**
@@ -22493,11 +25189,10 @@ var GatewayManager = class {
    * Altera o gateway ativo (usado pelo Admin UI).
    * NÃO migra pagamentos existentes — apenas afeta novos pagamentos.
    *
-   * IMPORTANTE: Em produção, esta alteração deve ser persistida em env
-   * ou no ConfigService e refletir em todos os workers/instâncias.
-   * Em memória, a alteração é imediata mas não persiste entre reinícios.
+   * A alteração é persistida no ConfigService (PAYMENT_ACTIVE_GATEWAY_OVERRIDE)
+   * e reflete em todos os workers/instâncias após reinício.
    */
-  setActiveGateway(id) {
+  async setActiveGateway(id, updatedBy = "admin") {
     const gateway = this.gateways.get(id);
     if (!gateway) {
       return { success: false, message: `Gateway '${id}' n\xE3o encontrado.` };
@@ -22509,13 +25204,20 @@ var GatewayManager = class {
       };
     }
     const previousId = this.resolveActiveGatewayId();
-    this.activeOverride = id;
+    const updateResult = await configService.update({
+      key: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE",
+      value: id,
+      updatedBy
+    });
+    if (!updateResult.success) {
+      return { success: false, message: `Falha ao persistir override: ${updateResult.message}` };
+    }
     logger.info(
       "payments",
       "gateway_manager",
       "set_active",
-      `Gateway changed: ${previousId} \u2192 ${id}`,
-      { previousGateway: previousId, newGateway: id }
+      `Gateway changed: ${previousId} \u2192 ${id} (persisted to ConfigService)`,
+      { previousGateway: previousId, newGateway: id, updatedBy }
     );
     return {
       success: true,
@@ -22653,10 +25355,10 @@ ${buildDocumentRollText(procedureType, aitNumber)}
   return defense;
 }
 function isTestMode() {
-  return process.env.NODE_ENV !== "production";
+  return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() !== "production";
 }
 function prodAuth(req, res, next) {
-  if (process.env.NODE_ENV === "production") {
+  if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
     authenticateToken(req, res, next);
     return;
   }
@@ -22767,7 +25469,7 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       },
       finalAmount: offerResult.offer.finalAmount,
       gateway: gateway.id,
-      environment: process.env.NODE_ENV,
+      environment: process.env.PAYMENT_MODE || "sandbox",
       userRole: req.user?.role
     });
     res.json({
@@ -22808,7 +25510,7 @@ router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
       logger.error("payments", "gateway", "pix_status", "Error querying payment status", {
         error: err.message,
         gateway: activeGatewayId,
-        environment: process.env.NODE_ENV
+        environment: process.env.PAYMENT_MODE || "sandbox"
       });
       return res.status(500).json({ error: err.message || "Erro ao consultar status do pagamento" });
     }
@@ -22878,7 +25580,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     }
     logger.info("payments", "gateway", "credit_card_gateway_check", "Credit card gateway validated", {
       gateway: gateway.id,
-      environment: process.env.NODE_ENV,
+      environment: process.env.PAYMENT_MODE || "sandbox",
       userRole: req.user?.role,
       serviceType: offerResult.offer?.serviceType
     });
@@ -23156,12 +25858,13 @@ router11.get("/gateway/status", (req, res) => {
     testMode: isTestMode()
   });
 });
-router11.post("/gateway/switch", requireAdmin, (req, res) => {
+router11.post("/gateway/switch", requireAdmin, async (req, res) => {
   const { gatewayId } = req.body;
   if (!gatewayId) {
     return res.status(400).json({ error: "gatewayId \xE9 obrigat\xF3rio" });
   }
-  const result = gatewayManager.setActiveGateway(gatewayId);
+  const updatedBy = req.user?.email || req.user?.id || "admin";
+  const result = await gatewayManager.setActiveGateway(gatewayId, updatedBy);
   if (!result.success) {
     return res.status(400).json({ error: result.message });
   }
@@ -23171,6 +25874,1034 @@ var payments_default = router11;
 
 // src/server/routes/knowledge.ts
 import { Router as Router12 } from "express";
+
+// src/core/knowledge/monitoring/hash-generator.ts
+function calculateSha256Sync(text) {
+  try {
+    const crypto5 = __require("crypto");
+    return crypto5.createHash("sha256").update(text, "utf8").digest("hex");
+  } catch (e) {
+    let h1 = 3735928559 ^ text.length;
+    let h2 = 1103547991 ^ text.length;
+    let h3 = 2654435769 ^ text.length;
+    let h4 = 2246822507 ^ text.length;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+      h3 = Math.imul(h3 ^ ch, 2246822507);
+      h4 = Math.imul(h4 ^ ch, 3266489909);
+    }
+    const hex = (h) => (h >>> 0).toString(16).padStart(8, "0");
+    return (hex(h1) + hex(h2) + hex(h3) + hex(h4) + hex(h1 ^ h3) + hex(h2 ^ h4) + hex(h1 + h2) + hex(h3 + h4)).slice(0, 64);
+  }
+}
+
+// src/core/knowledge/monitoring/content-normalizer.ts
+var ContentNormalizer = class {
+  /**
+   * Normaliza o conteúdo bruto (HTML ou texto) extraindo o núcleo jurídico/operacional.
+   */
+  static normalize(rawContent) {
+    if (!rawContent) {
+      return {
+        normalizedText: "",
+        wordCount: 0,
+        extractedKeywords: [],
+        extractedDeadlines: [],
+        extractedArticles: [],
+        extractedUrls: []
+      };
+    }
+    let cleaned = rawContent;
+    cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, " ");
+    cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ");
+    cleaned = cleaned.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, " ");
+    cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, " ");
+    const urlRegex = /href=["'](https?:\/\/[^"']+)["']/gi;
+    const extractedUrls = [];
+    let matchUrl;
+    while ((matchUrl = urlRegex.exec(cleaned)) !== null) {
+      if (!extractedUrls.includes(matchUrl[1])) {
+        extractedUrls.push(matchUrl[1]);
+      }
+    }
+    cleaned = cleaned.replace(/<[^>]+>/g, " ");
+    cleaned = cleaned.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&ordm;/g, "\xBA").replace(/&ordf;/g, "\xAA");
+    cleaned = cleaned.replace(/[0-9a-fA-F]{32,64}/g, "");
+    cleaned = cleaned.replace(/\b(csrf|nonce|session_id|auth_token|timestamp)=[a-zA-Z0-9_-]+/gi, "");
+    cleaned = cleaned.replace(/\b\d{2}:\d{2}:\d{2}\b/g, "");
+    cleaned = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0).join("\n");
+    cleaned = cleaned.replace(/[ \t]+/g, " ");
+    const articleRegex = /\b(?:Art\.|Artigo)\s*(\d+[A-Za-z\-]*(?:\s*§\s*\d+)?(?:\s*,\s*[IVXLCDM]+)?)/gi;
+    const extractedArticles = [];
+    let matchArt;
+    while ((matchArt = articleRegex.exec(cleaned)) !== null) {
+      const art = matchArt[0].trim();
+      if (!extractedArticles.includes(art)) {
+        extractedArticles.push(art);
+      }
+    }
+    const deadlineRegex = /\b(?:prazo(?:\s+de)?\s*)?(\d{1,3})\s*(?:\([a-zA-Z\s]+\))?\s*dias\b/gi;
+    const extractedDeadlines = [];
+    let matchDead;
+    while ((matchDead = deadlineRegex.exec(cleaned)) !== null) {
+      const dead = matchDead[0].trim();
+      if (!extractedDeadlines.includes(dead)) {
+        extractedDeadlines.push(dead);
+      }
+    }
+    const keywordsOfInterest = [
+      "defesa previa",
+      "defesa da autua\xE7\xE3o",
+      "jari",
+      "cetran",
+      "contrandife",
+      "efeito suspensivo",
+      "advertencia por escrito",
+      "notificacao",
+      "decadencia",
+      "prescricao",
+      "inmetro",
+      "protocolo digital",
+      "poupatempo"
+    ];
+    const lowerCleaned = cleaned.toLowerCase();
+    const extractedKeywords = keywordsOfInterest.filter((kw) => lowerCleaned.includes(kw));
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    return {
+      normalizedText: cleaned,
+      wordCount: words.length,
+      extractedKeywords,
+      extractedDeadlines,
+      extractedArticles,
+      extractedUrls
+    };
+  }
+};
+
+// src/core/knowledge/monitoring/source-fetcher.ts
+var SourceFetcher = class {
+  static {
+    this.DEFAULT_TIMEOUT = 1e4;
+  }
+  static {
+    this.DEFAULT_USER_AGENT = "Mozilla/5.0 (DefesAi Legal Monitor/2026.1; +https://adeuscnhmultas.com/monitoring-bot)";
+  }
+  /**
+   * Executa a requisição HTTP real para a fonte oficial.
+   */
+  static async fetchSource(source, options = {}) {
+    const timeoutMs = options.timeoutMs || this.DEFAULT_TIMEOUT;
+    const userAgent = options.userAgent || this.DEFAULT_USER_AGENT;
+    const startTime = Date.now();
+    const fetchedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(source.url, {
+        method: "GET",
+        headers: {
+          "User-Agent": userAgent,
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Cache-Control": "no-cache"
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      const durationMs = Date.now() - startTime;
+      const httpStatus = response.status;
+      if (!response.ok) {
+        return {
+          sourceId: source.id,
+          url: source.url,
+          success: false,
+          httpStatus,
+          content: "",
+          contentLength: 0,
+          durationMs,
+          errorMessage: `HTTP Error ${httpStatus}: ${response.statusText}`,
+          fetchedAt
+        };
+      }
+      const text = await response.text();
+      return {
+        sourceId: source.id,
+        url: source.url,
+        success: true,
+        httpStatus,
+        content: text,
+        contentLength: text.length,
+        durationMs,
+        fetchedAt
+      };
+    } catch (error) {
+      clearTimeout(timer);
+      const durationMs = Date.now() - startTime;
+      const isTimeout = error.name === "AbortError";
+      return {
+        sourceId: source.id,
+        url: source.url,
+        success: false,
+        httpStatus: isTimeout ? 408 : 0,
+        content: "",
+        contentLength: 0,
+        durationMs,
+        errorMessage: isTimeout ? `Request timed out after ${timeoutMs}ms` : error.message || "Fetch failed",
+        fetchedAt
+      };
+    }
+  }
+  /**
+   * Executa requisições em lote com controle de concorrência.
+   */
+  static async fetchAllSources(sources, concurrency = 5, options = {}) {
+    const results = [];
+    const activeSources = sources.filter((s) => s.isActive);
+    for (let i = 0; i < activeSources.length; i += concurrency) {
+      const chunk = activeSources.slice(i, i + concurrency);
+      const chunkPromises = chunk.map((s) => this.fetchSource(s, options));
+      const chunkResults = await Promise.all(chunkPromises);
+      results.push(...chunkResults);
+    }
+    return results;
+  }
+};
+
+// src/core/knowledge/monitoring/snapshot-store.ts
+var SnapshotStore = class {
+  static {
+    this.snapshots = /* @__PURE__ */ new Map();
+  }
+  // sourceId -> list of snapshots
+  /**
+   * Salva um snapshot para a fonte indicada.
+   */
+  static saveSnapshot(snapshot) {
+    const list = this.snapshots.get(snapshot.sourceId) || [];
+    list.unshift(snapshot);
+    if (list.length > 50) {
+      list.length = 50;
+    }
+    this.snapshots.set(snapshot.sourceId, list);
+  }
+  /**
+   * Obtém o snapshot mais recente de uma fonte.
+   */
+  static getLatestSnapshot(sourceId) {
+    const list = this.snapshots.get(sourceId);
+    if (!list || list.length === 0) return null;
+    return list[0];
+  }
+  /**
+   * Obtém o penúltimo snapshot para comparação de diff.
+   */
+  static getPreviousSnapshot(sourceId) {
+    const list = this.snapshots.get(sourceId);
+    if (!list || list.length < 2) return null;
+    return list[1];
+  }
+  /**
+   * Obtém todo o histórico de snapshots de uma fonte.
+   */
+  static getHistory(sourceId) {
+    return this.snapshots.get(sourceId) || [];
+  }
+  /**
+   * Obtém todos os snapshots armazenados no sistema.
+   */
+  static getAllSnapshots() {
+    const all = [];
+    for (const list of this.snapshots.values()) {
+      all.push(...list);
+    }
+    return all;
+  }
+  /**
+   * Limpa todos os snapshots (útil para testes unitários).
+   */
+  static clear() {
+    this.snapshots.clear();
+  }
+};
+
+// src/core/knowledge/monitoring/change-detector.ts
+var ChangeDetector = class {
+  /**
+   * Compara o snapshot atual com o snapshot anterior para determinar se houve alteração.
+   */
+  static detectChange(currentSnapshot, previousSnapshot, source) {
+    if (!previousSnapshot) {
+      return null;
+    }
+    if (currentSnapshot.contentHash === previousSnapshot.contentHash) {
+      return null;
+    }
+    const { changeType, riskLevel, title, description, diffSummary } = this.analyzeDiff(
+      previousSnapshot.normalizedText,
+      currentSnapshot.normalizedText,
+      source
+    );
+    const changeId = `CHG_${source.id}_${Date.now()}`;
+    return {
+      id: changeId,
+      sourceId: source.id,
+      sourceUrl: source.url,
+      uf: source.uf,
+      organId: source.organId,
+      discoveredAt: currentSnapshot.fetchedAt,
+      changeType,
+      riskLevel,
+      title,
+      description,
+      previousValue: previousSnapshot.normalizedText.slice(0, 1e3),
+      newValue: currentSnapshot.normalizedText.slice(0, 1e3),
+      previousHash: previousSnapshot.contentHash,
+      newHash: currentSnapshot.contentHash,
+      diffSummary,
+      status: "PENDING_REVIEW"
+      // Padrão de segurança: passa pela esteira de validação
+    };
+  }
+  /**
+   * Analisa a diferença textual entre versões e infere o tipo e gravidade da mudança.
+   */
+  static analyzeDiff(oldText, newText, source) {
+    const oldLines = oldText.split("\n").filter((l) => l.trim().length > 0);
+    const newLines = newText.split("\n").filter((l) => l.trim().length > 0);
+    const addedLines = newLines.filter((l) => !oldLines.includes(l));
+    const removedLines = oldLines.filter((l) => !newLines.includes(l));
+    const addedContent = addedLines.join(" ");
+    const removedContent = removedLines.join(" ");
+    const combinedChangedText = (addedContent + " " + removedContent).toLowerCase();
+    let changeType = "MODIFIED_TEXT";
+    let riskLevel = "P2_MAINTENANCE";
+    let title = `Altera\xE7\xE3o de conte\xFAdo detectada em ${source.title}`;
+    let description = `Foram detectadas ${addedLines.length} linhas adicionadas e ${removedLines.length} linhas removidas.`;
+    if (combinedChangedText.includes("revoga") || combinedChangedText.includes("revogado") || combinedChangedText.includes("tornar sem efeito") || combinedChangedText.includes("inconstitucional")) {
+      changeType = "REVOCATION";
+      riskLevel = "P0_LEGAL_CRITICAL";
+      title = `Poss\xEDvel Revoga\xE7\xE3o Normativa Detectada em ${source.title}`;
+      description = `O termo 'revoga'/'revogado' foi detectado nas altera\xE7\xF5es da fonte oficial.`;
+    } else if (combinedChangedText.includes("resolucao") || combinedChangedText.includes("resolu\xE7\xE3o") || combinedChangedText.includes("lei n\xBA") || combinedChangedText.includes("portaria senatran") || combinedChangedText.includes("deliberacao")) {
+      changeType = "NEW_REGULATION";
+      riskLevel = "P0_LEGAL_CRITICAL";
+      title = `Nova Regulamenta\xE7\xE3o ou Resolu\xE7\xE3o Detectada em ${source.title}`;
+      description = `Altera\xE7\xE3o com termos normativos de CONTRAN/SENATRAN/Leis identificada.`;
+    } else if (combinedChangedText.includes("prazo") && (combinedChangedText.includes("dias") || combinedChangedText.includes("decadencia"))) {
+      changeType = "DEADLINE_CHANGE";
+      riskLevel = "P0_LEGAL_CRITICAL";
+      title = `Altera\xE7\xE3o em Prazos Processuais em ${source.title}`;
+      description = `Mudan\xE7a relacionada a contagem de dias ou prazos de defesa detectada.`;
+    } else if (combinedChangedText.includes("competencia") || combinedChangedText.includes("compet\xEAncia") || combinedChangedText.includes("art. 24") || combinedChangedText.includes("art. 22")) {
+      changeType = "COMPETENCE_CHANGE";
+      riskLevel = "P0_LEGAL_CRITICAL";
+      title = `Altera\xE7\xE3o de Compet\xEAncia de Tr\xE2nsito em ${source.title}`;
+      description = `Detec\xE7\xE3o de mudan\xE7a nas regras de compet\xEAncia de autua\xE7\xE3o municipal/estadual.`;
+    } else if (combinedChangedText.includes("portal") || combinedChangedText.includes("novo endereco") || combinedChangedText.includes("novo site") || combinedChangedText.includes("sistema indisponivel")) {
+      changeType = "PORTAL_URL_CHANGE";
+      riskLevel = "P1_OPERATIONAL_HIGH";
+      title = `Altera\xE7\xE3o no Portal de Protocolo em ${source.title}`;
+      description = `Instru\xE7\xF5es ou links de acesso ao sistema de protocolo foram modificados.`;
+    } else if (combinedChangedText.includes("endereco") || combinedChangedText.includes("endere\xE7o") || combinedChangedText.includes("sede") || combinedChangedText.includes("cep")) {
+      changeType = "ADDRESS_CHANGE";
+      riskLevel = "P2_MAINTENANCE";
+      title = `Altera\xE7\xE3o de Endere\xE7o ou Local de Atendimento em ${source.title}`;
+      description = `Atualiza\xE7\xE3o de dados de contato ou endere\xE7o presencial detectada.`;
+    }
+    const diffSummary = `+ ${addedLines.slice(0, 3).join(" | ")}
+- ${removedLines.slice(0, 3).join(" | ")}`;
+    return {
+      changeType,
+      riskLevel,
+      title,
+      description,
+      diffSummary: diffSummary.slice(0, 500)
+    };
+  }
+};
+
+// src/core/knowledge/validation/impact-classifier.ts
+var ImpactClassifier = class {
+  /**
+   * Avalia uma alteração e refina a sua classificação de risco.
+   */
+  static classify(change) {
+    if (change.changeType === "REVOCATION" || change.changeType === "NEW_REGULATION" || change.changeType === "DEADLINE_CHANGE" || change.changeType === "COMPETENCE_CHANGE") {
+      return "P0_LEGAL_CRITICAL";
+    }
+    if (change.changeType === "PORTAL_URL_CHANGE" || change.changeType === "SERVICE_OUTAGE" || change.changeType === "DOCUMENT_REQUIREMENT_CHANGE") {
+      return "P1_OPERATIONAL_HIGH";
+    }
+    if (change.changeType === "ADDRESS_CHANGE") {
+      return "P2_MAINTENANCE";
+    }
+    return "P3_INFO";
+  }
+};
+
+// src/core/knowledge/validation/conflict-detector.ts
+var ConflictDetector = class {
+  /**
+   * Analisa um conjunto de alterações e marca as que apresentarem contradições ou divergências.
+   */
+  static detectConflicts(changes) {
+    const organMap = /* @__PURE__ */ new Map();
+    for (const chg of changes) {
+      if (chg.organId) {
+        const list = organMap.get(chg.organId) || [];
+        list.push(chg);
+        organMap.set(chg.organId, list);
+      }
+    }
+    return changes.map((chg) => {
+      if (!chg.organId) return chg;
+      const organChanges = organMap.get(chg.organId) || [];
+      if (organChanges.length > 1) {
+        const hasMultipleDifferentChanges = organChanges.some(
+          (other) => other.id !== chg.id && other.changeType !== chg.changeType
+        );
+        if (hasMultipleDifferentChanges) {
+          return {
+            ...chg,
+            isConflicting: true,
+            conflictNotes: `Detectadas m\xFAltiplas altera\xE7\xF5es concorrentes para o \xF3rg\xE3o ${chg.organId} (${organChanges.length} eventos). Requer resolu\xE7\xE3o humana.`
+          };
+        }
+      }
+      return chg;
+    });
+  }
+};
+
+// src/core/knowledge/validation/validation-engine.ts
+var ValidationEngine = class {
+  /**
+   * Processa uma lista de alterações detectadas, aplicando classificação, detecção de conflitos
+   * e separação estrita entre Fila de Revisão Humana e Atualizações Seguras.
+   */
+  static validateAndRoute(changes) {
+    const classifiedChanges = changes.map((c) => ({
+      ...c,
+      riskLevel: ImpactClassifier.classify(c)
+    }));
+    const conflictsChecked = ConflictDetector.detectConflicts(classifiedChanges);
+    const itemsForHumanReview = [];
+    const autoAppliedChanges = [];
+    const validatedChanges = [];
+    for (const chg of conflictsChecked) {
+      const requiresHumanReview = chg.riskLevel === "P0_LEGAL_CRITICAL" || chg.riskLevel === "P1_OPERATIONAL_HIGH" || chg.isConflicting || chg.changeType === "NEW_REGULATION" || chg.changeType === "REVOCATION" || chg.changeType === "DEADLINE_CHANGE" || chg.changeType === "COMPETENCE_CHANGE";
+      if (requiresHumanReview) {
+        chg.status = "PENDING_REVIEW";
+        validatedChanges.push(chg);
+        itemsForHumanReview.push({
+          id: `REV_${chg.id}`,
+          changeId: chg.id,
+          uf: chg.uf,
+          organId: chg.organId,
+          organName: chg.organId || chg.uf,
+          sourceTitle: chg.title,
+          sourceUrl: chg.sourceUrl,
+          changeType: chg.changeType,
+          riskLevel: chg.riskLevel,
+          discoveredAt: chg.discoveredAt,
+          summary: chg.description,
+          impact: this.getImpactDescription(chg.riskLevel, chg.changeType),
+          legalBasis: chg.changeType === "DEADLINE_CHANGE" ? "Art. 281/282 CTB" : void 0,
+          diff: {
+            previous: chg.previousValue,
+            current: chg.newValue
+          },
+          status: "PENDING_REVIEW"
+        });
+      } else {
+        chg.status = "AUTO_APPLIED_SAFE";
+        chg.appliedAt = (/* @__PURE__ */ new Date()).toISOString();
+        autoAppliedChanges.push(chg);
+        validatedChanges.push(chg);
+      }
+    }
+    return {
+      validatedChanges,
+      itemsForHumanReview,
+      autoAppliedChanges
+    };
+  }
+  static getImpactDescription(risk, type) {
+    if (risk === "P0_LEGAL_CRITICAL") {
+      return "ALTO IMPACTO JUR\xCDDICO: Afeta validade de teses, contagem de prazos ou compet\xEAncia de julgamento.";
+    }
+    if (risk === "P1_OPERATIONAL_HIGH") {
+      return "IMPACTO OPERACIONAL: Pode impedir o envio de peti\xE7\xF5es pelo condutor devido a link ou canal desatualizado.";
+    }
+    return "MANUTEN\xC7\xC3O: Atualiza\xE7\xE3o cadastral e de dados complementares.";
+  }
+};
+
+// src/core/knowledge/validation/review-queue-service.ts
+var ReviewQueueService = class {
+  static {
+    this.queue = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Adiciona itens à fila de revisão.
+   */
+  static enqueueItems(items) {
+    for (const item of items) {
+      if (!this.queue.has(item.id)) {
+        this.queue.set(item.id, item);
+      }
+    }
+  }
+  /**
+   * Obtém todos os itens pendentes de revisão.
+   */
+  static getPending() {
+    return Array.from(this.queue.values()).filter((item) => item.status === "PENDING_REVIEW");
+  }
+  /**
+   * Retorna a quantidade de itens pendentes de revisão.
+   */
+  static getPendingCount() {
+    return this.getPending().length;
+  }
+  /**
+   * Obtém todos os itens da fila (pendentes, aprovados, rejeitados).
+   */
+  static getAll() {
+    return Array.from(this.queue.values());
+  }
+  /**
+   * Obtém item específico por ID.
+   */
+  static getById(id) {
+    return this.queue.get(id) || null;
+  }
+  /**
+   * Aprova uma alteração, aplicando-a ao registro canônico ativo com versionamento temporal.
+   */
+  static approve(id, reviewer = "Especialista Jur\xEDdico", notes = "Aprovado ap\xF3s confer\xEAncia com fonte prim\xE1ria") {
+    const item = this.queue.get(id);
+    if (!item) return false;
+    item.status = "APPROVED";
+    if (item.organId) {
+      this.applyApprovedChangeToOrgan(item);
+    }
+    return true;
+  }
+  /**
+   * Rejeita uma alteração.
+   */
+  static reject(id, reviewer = "Especialista Jur\xEDdico", reason = "Altera\xE7\xE3o rejeitada") {
+    const item = this.queue.get(id);
+    if (!item) return false;
+    item.status = "REJECTED";
+    return true;
+  }
+  /**
+   * Ajusta e aprova uma alteração com dados corrigidos pelo revisor.
+   */
+  static adjustAndApprove(id, adjustedData, reviewer = "Especialista Jur\xEDdico", notes = "Ajustado manualmente") {
+    const item = this.queue.get(id);
+    if (!item) return false;
+    item.status = "ADJUSTED";
+    if (item.organId) {
+      const organ = getNationalOrganById(item.organId);
+      if (organ) {
+        Object.assign(organ, adjustedData);
+        organ.version += 1;
+        organ.lastVerifiedAt = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      }
+    }
+    return true;
+  }
+  /**
+   * Marca uma detecção como falso positivo (ruído de crawler).
+   */
+  static markFalsePositive(id, notes = "Falso positivo") {
+    const item = this.queue.get(id);
+    if (!item) return false;
+    item.status = "FALSE_POSITIVE";
+    return true;
+  }
+  /**
+   * Aplica a mudança aprovada ao órgão no banco de dados canônico em memória.
+   */
+  static applyApprovedChangeToOrgan(item) {
+    if (!item.organId) return;
+    const organ = getNationalOrganById(item.organId);
+    if (!organ) return;
+    organ.version += 1;
+    organ.lastVerifiedAt = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    if (item.changeType === "PORTAL_URL_CHANGE") {
+      const urlMatch = item.diff.current.match(/https?:\/\/[^\s]+/);
+      if (urlMatch) {
+        organ.onlinePortalUrl = urlMatch[0];
+        if (organ.protocolChannels) {
+          organ.protocolChannels.digitalPortalUrl = urlMatch[0];
+        }
+      }
+    }
+    if (item.changeType === "ADDRESS_CHANGE") {
+      organ.physicalAddress = item.diff.current.slice(0, 200);
+    }
+  }
+  /**
+   * Limpa a fila (para testes).
+   */
+  static clear() {
+    this.queue.clear();
+  }
+};
+
+// src/core/knowledge/scheduler/notification-alert-service.ts
+var NotificationAlertService = class {
+  static {
+    this.alertsHistory = [];
+  }
+  /**
+   * Dispara alertas para itens críticos enviados para a fila de revisão.
+   */
+  static dispatchAlertsForReviewItems(items) {
+    const newAlerts = [];
+    for (const item of items) {
+      if (item.riskLevel === "P0_LEGAL_CRITICAL" || item.riskLevel === "P1_OPERATIONAL_HIGH") {
+        const isP0 = item.riskLevel === "P0_LEGAL_CRITICAL";
+        const alert = {
+          id: `ALT_${item.id}_${Date.now()}`,
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          level: isP0 ? "CRITICAL" : "WARNING",
+          title: isP0 ? `\u{1F6A8} [P0 JUR\xCDDICO] Altera\xE7\xE3o Normativa Cr\xEDtica em ${item.organName || item.uf}` : `\u26A0\uFE0F [P1 OPERACIONAL] Mudan\xE7a Operacional Relevante em ${item.organName || item.uf}`,
+          body: `Tipo: ${item.changeType} | UF: ${item.uf} | Resumo: ${item.summary}`,
+          sourceUrl: item.sourceUrl,
+          requiresImmediateAction: isP0
+        };
+        newAlerts.push(alert);
+        this.alertsHistory.unshift(alert);
+        console.warn(`[SNM-JO ALERT] ${alert.title} - ${alert.body}`);
+      }
+    }
+    return newAlerts;
+  }
+  /**
+   * Obtém o histórico de alertas emitidos.
+   */
+  static getAlertsHistory() {
+    return this.alertsHistory;
+  }
+  /**
+   * Limpa o histórico de alertas.
+   */
+  static clear() {
+    this.alertsHistory = [];
+  }
+};
+
+// src/core/knowledge/reporting/weekly-report-generator.ts
+var WeeklyReportGenerator = class {
+  /**
+   * Gera o conteúdo em Markdown do relatório semanal de monitoramento nacional.
+   */
+  static generateMarkdownReport(summary, sources, changes, reviewItems) {
+    const states = Object.values(NATIONAL_STATES_DB);
+    const dateFormatted = summary.completedAt.split("T")[0];
+    const availabilityPct = summary.totalSources > 0 ? Math.round(summary.successfulFetches / summary.totalSources * 100) : 100;
+    return `# RELAT\xD3RIO NACIONAL DE MONITORAMENTO JUR\xCDDICO-OPERACIONAL (SNM-JO)
+**Ciclo Semanal:** \`${summary.cycleId}\`  
+**Data de Execu\xE7\xE3o:** ${dateFormatted} (${summary.startedAt} \xE0s ${summary.completedAt})  
+**Status Global:** ${summary.changesByRisk.P0_LEGAL_CRITICAL > 0 ? "\u26A0\uFE0F ATEN\xC7\xC3O - P0 PENDENTE" : "\u2705 OPERACIONAL NORMAL"}  
+**Disponibilidade de Fontes:** ${availabilityPct}% (${summary.successfulFetches}/${summary.totalSources} fontes online)
+
+---
+
+## 1. RESUMO EXECUTIVO NACIONAL
+
+O Sistema Nacional de Monitoramento Jur\xEDdico-Operacional (SNM-JO) executou a varredura programada em todas as fontes oficiais dos **26 Estados + Distrito Federal + \xC2mbito Federal (Tier 1 a Tier 3)**.
+
+| M\xE9trica | Valor Registrado | Observa\xE7\xE3o |
+|---|---|---|
+| **Total de Fontes Monitoradas** | ${summary.totalSources} | Planalto, SENATRAN, CONTRAN, PRF, DNIT, 27 DETRANs, CETRANs |
+| **Consultas com Sucesso** | ${summary.successfulFetches} | Respostas HTTP v\xE1lidas |
+| **Falhas de Conex\xE3o / Timeouts** | ${summary.failedFetches} | Monitoradas para rechecagem |
+| **Snapshots Gravados** | ${summary.snapshotsCreated} | Hist\xF3rico com hashes SHA-256 |
+| **Altera\xE7\xF5es Detectadas** | ${summary.changesDetected} | An\xE1lise sem\xE2ntica e estrutural de diffs |
+| **Cr\xEDticas P0 (Revis\xE3o Humana)** | ${summary.changesByRisk.P0_LEGAL_CRITICAL} | Impacto legal direto |
+| **Operacionais P1 (Revis\xE3o Humana)** | ${summary.changesByRisk.P1_OPERATIONAL_HIGH} | Mudan\xE7a de portal/canais |
+| **Manuten\xE7\xF5es P2 (Cadastro)** | ${summary.changesByRisk.P2_MAINTENANCE} | Endere\xE7os e contatos |
+| **Informativas P3 (Autom\xE1ticas)** | ${summary.changesByRisk.P3_INFO} | Registros sem impacto direto |
+| **Fila de Revis\xE3o Humana Ativa** | ${reviewItems.filter((r) => r.status === "PENDING_REVIEW").length} | Itens aguardando valida\xE7\xE3o |
+
+---
+
+## 2. COBERTURA DAS 27 UNIDADES FEDERATIVAS
+
+| UF | Estado | Regi\xE3o | DETRAN Oficial | Inst\xE2ncia Recursal (CETRAN/CONTRANDIFE) | Rede de Atendimento |
+|---|---|---|---|---|---|
+${states.map(
+      (st) => `| **${st.uf}** | ${st.name} | ${st.region} | ${st.detranId} | ${st.cetranId} | ${st.serviceNetworkName} |`
+    ).join("\n")}
+
+---
+
+## 3. ALTERA\xC7\xD5ES DETECTADAS NO CICLO
+
+${changes.length === 0 ? "_Nenhuma altera\xE7\xE3o de conte\xFAdo foi detectada nas fontes oficiais durante este ciclo de monitoramento._" : changes.map(
+      (c, idx) => `### 3.${idx + 1}. [${c.riskLevel}] ${c.title}
+- **UF:** ${c.uf}
+- **Tipo de Mudan\xE7a:** \`${c.changeType}\`
+- **Fonte Oficial:** [${c.sourceUrl}](${c.sourceUrl})
+- **Resumo:** ${c.description}
+- **Status:** \`${c.status}\`
+\`\`\`diff
+${c.diffSummary}
+\`\`\`
+`
+    ).join("\n")}
+
+---
+
+## 4. FILA DE REVIS\xC3O HUMANA (HUMAN-IN-THE-LOOP)
+
+${reviewItems.length === 0 ? "_A fila de revis\xE3o jur\xEDdica est\xE1 zerada. Todas as bases operam em conformidade can\xF4nica._" : reviewItems.map(
+      (r, idx) => `### Item #${idx + 1} \u2014 [${r.riskLevel}] ${r.sourceTitle}
+- **ID da Revis\xE3o:** \`${r.id}\`
+- **UF:** ${r.uf} | **\xD3rg\xE3o:** ${r.organName || "Nacional"}
+- **Tipo:** \`${r.changeType}\`
+- **Impacto Jur\xEDdico/Operacional:** ${r.impact}
+- **Status Atual:** \`${r.status}\`
+- **URL da Fonte Prim\xE1ria:** ${r.sourceUrl}
+`
+    ).join("\n")}
+
+---
+
+## 5. DIRETRIZES & RECOMENDA\xC7\xD5ES OPERACIONAIS
+
+1. **Prioridade M\xE1xima:** Revisar imediatamente quaisquer itens classificados como \`P0_LEGAL_CRITICAL\` antes da emiss\xE3o de pe\xE7as recursais para a UF afetada.
+2. **Versionamento Temporal:** Ao aprovar uma altera\xE7\xE3o de prazo ou compet\xEAncia, verificar a data do fato gerador (data da infra\xE7\xE3o) para manter a aplica\xE7\xE3o da regra anterior a casos pret\xE9ritos.
+3. **Pr\xF3xima Execu\xE7\xE3o:** Agendada automaticamente para o pr\xF3ximo ciclo de 7 dias via \`WeeklyMonitorScheduler\`.
+`;
+  }
+};
+
+// src/core/knowledge/scheduler/weekly-monitor-scheduler.ts
+var WeeklyMonitorScheduler = class {
+  static {
+    this.isRunning = false;
+  }
+  static {
+    this.cycleHistory = [];
+  }
+  static {
+    this.latestReportMarkdown = "";
+  }
+  /**
+   * Executa um ciclo completo de monitoramento nacional.
+   */
+  static async runCycle(customSources, fetchTimeoutMs = 6e3) {
+    if (this.isRunning) {
+      throw new Error("Um ciclo de monitoramento j\xE1 est\xE1 em execu\xE7\xE3o.");
+    }
+    this.isRunning = true;
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const cycleId = `CYC_${Date.now()}`;
+    const sources = customSources || OFFICIAL_SOURCES_REGISTRY;
+    try {
+      const fetchResults = await SourceFetcher.fetchAllSources(sources, 5, {
+        timeoutMs: fetchTimeoutMs
+      });
+      let successfulFetches = 0;
+      let failedFetches = 0;
+      let snapshotsCreated = 0;
+      const detectedChanges = [];
+      for (const result of fetchResults) {
+        const source = sources.find((s) => s.id === result.sourceId);
+        if (!source) continue;
+        source.lastCheckedAt = result.fetchedAt;
+        source.httpStatus = result.httpStatus;
+        if (result.success) {
+          successfulFetches += 1;
+          source.lastSuccessfulFetchAt = result.fetchedAt;
+          const normalized = ContentNormalizer.normalize(result.content);
+          const hash = calculateSha256Sync(normalized.normalizedText);
+          source.contentHash = hash;
+          const snapshot = {
+            id: `SNP_${source.id}_${Date.now()}`,
+            sourceId: source.id,
+            url: source.url,
+            uf: source.uf,
+            fetchedAt: result.fetchedAt,
+            httpStatus: result.httpStatus,
+            contentLength: result.contentLength,
+            contentHash: hash,
+            normalizedText: normalized.normalizedText,
+            rawSample: result.content.slice(0, 500)
+          };
+          const previousSnapshot = SnapshotStore.getLatestSnapshot(source.id);
+          if (previousSnapshot) {
+            const change = ChangeDetector.detectChange(snapshot, previousSnapshot, source);
+            if (change) {
+              detectedChanges.push(change);
+            }
+          }
+          SnapshotStore.saveSnapshot(snapshot);
+          snapshotsCreated += 1;
+        } else {
+          failedFetches += 1;
+          source.fetchErrorCount = (source.fetchErrorCount || 0) + 1;
+          source.lastErrorMessage = result.errorMessage;
+        }
+      }
+      const validation = ValidationEngine.validateAndRoute(detectedChanges);
+      ReviewQueueService.enqueueItems(validation.itemsForHumanReview);
+      const alerts = NotificationAlertService.dispatchAlertsForReviewItems(validation.itemsForHumanReview);
+      const changesByRisk = {
+        P0_LEGAL_CRITICAL: validation.validatedChanges.filter((c) => c.riskLevel === "P0_LEGAL_CRITICAL").length,
+        P1_OPERATIONAL_HIGH: validation.validatedChanges.filter((c) => c.riskLevel === "P1_OPERATIONAL_HIGH").length,
+        P2_MAINTENANCE: validation.validatedChanges.filter((c) => c.riskLevel === "P2_MAINTENANCE").length,
+        P3_INFO: validation.validatedChanges.filter((c) => c.riskLevel === "P3_INFO").length
+      };
+      const completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const summary = {
+        cycleId,
+        startedAt,
+        completedAt,
+        totalSources: sources.length,
+        successfulFetches,
+        failedFetches,
+        snapshotsCreated,
+        changesDetected: detectedChanges.length,
+        changesByRisk,
+        sentToReviewQueue: validation.itemsForHumanReview.length,
+        autoAppliedSafe: validation.autoAppliedChanges.length,
+        conflictsDetected: validation.validatedChanges.filter((c) => c.isConflicting).length,
+        alertsTriggered: alerts.length
+      };
+      const reportMarkdown = WeeklyReportGenerator.generateMarkdownReport(
+        summary,
+        sources,
+        validation.validatedChanges,
+        ReviewQueueService.getAll()
+      );
+      this.latestReportMarkdown = reportMarkdown;
+      this.cycleHistory.unshift(summary);
+      return {
+        summary,
+        reportMarkdown
+      };
+    } finally {
+      this.isRunning = false;
+    }
+  }
+  static getCycleHistory() {
+    return this.cycleHistory;
+  }
+  static getLatestReport() {
+    return this.latestReportMarkdown;
+  }
+  static isCycleRunning() {
+    return this.isRunning;
+  }
+};
+
+// src/core/knowledge/scheduler/weekly-monitor-service.ts
+var WeeklyMonitorService = class {
+  static {
+    this.isRunning = false;
+  }
+  static {
+    this.timerId = null;
+  }
+  static {
+    this.cycleHistory = [];
+  }
+  static {
+    this.lastReportMarkdown = "";
+  }
+  static {
+    this.lastRunTimestamp = null;
+  }
+  static {
+    this.nextRunTimestamp = null;
+  }
+  /**
+   * Executa o ciclo de monitoramento semanal coletando fontes Tier 1 a 3 das 27 UFs.
+   */
+  static async runWeeklyCycle(config) {
+    if (this.isRunning) {
+      throw new Error("Um ciclo de monitoramento j\xE1 est\xE1 em andamento no momento.");
+    }
+    this.isRunning = true;
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const cycleId = `CYC_WEEKLY_${Date.now()}`;
+    const timeoutMs = config?.fetchTimeoutMs || 5e3;
+    const concurrency = config?.concurrency || 5;
+    try {
+      const sourcesToMonitor = config?.onlyTier1To3 === false ? CanonicalKnowledgeRegistry.getAllSources() : CanonicalKnowledgeRegistry.getTier1To3Sources();
+      const fetchResults = await SourceFetcher.fetchAllSources(
+        sourcesToMonitor,
+        concurrency,
+        { timeoutMs }
+      );
+      let successfulFetches = 0;
+      let failedFetches = 0;
+      let snapshotsCreated = 0;
+      const detectedChanges = [];
+      for (const result of fetchResults) {
+        const source = sourcesToMonitor.find((s) => s.id === result.sourceId);
+        if (!source) continue;
+        source.lastCheckedAt = result.fetchedAt;
+        source.httpStatus = result.httpStatus;
+        if (result.success) {
+          successfulFetches += 1;
+          source.lastSuccessfulFetchAt = result.fetchedAt;
+          const normalized = ContentNormalizer.normalize(result.content);
+          const hash = calculateSha256Sync(normalized.normalizedText);
+          source.contentHash = hash;
+          const currentSnapshot = {
+            id: `SNP_${source.id}_${Date.now()}`,
+            sourceId: source.id,
+            url: source.url,
+            uf: source.uf,
+            fetchedAt: result.fetchedAt,
+            httpStatus: result.httpStatus,
+            contentLength: result.contentLength,
+            contentHash: hash,
+            normalizedText: normalized.normalizedText,
+            rawSample: result.content.slice(0, 500)
+          };
+          const previousSnapshot = SnapshotStore.getLatestSnapshot(source.id);
+          if (previousSnapshot) {
+            const change = ChangeDetector.detectChange(currentSnapshot, previousSnapshot, source);
+            if (change) {
+              detectedChanges.push(change);
+            }
+          }
+          SnapshotStore.saveSnapshot(currentSnapshot);
+          snapshotsCreated += 1;
+        } else {
+          failedFetches += 1;
+          source.fetchErrorCount = (source.fetchErrorCount || 0) + 1;
+          source.lastErrorMessage = result.errorMessage;
+        }
+      }
+      const validation = ValidationEngine.validateAndRoute(detectedChanges);
+      ReviewQueueService.enqueueItems(validation.itemsForHumanReview);
+      const dispatchedAlerts = NotificationAlertService.dispatchAlertsForReviewItems(
+        validation.itemsForHumanReview
+      );
+      const changesByRisk = {
+        P0_LEGAL_CRITICAL: validation.validatedChanges.filter(
+          (c) => c.riskLevel === "P0_LEGAL_CRITICAL"
+        ).length,
+        P1_OPERATIONAL_HIGH: validation.validatedChanges.filter(
+          (c) => c.riskLevel === "P1_OPERATIONAL_HIGH"
+        ).length,
+        P2_MAINTENANCE: validation.validatedChanges.filter(
+          (c) => c.riskLevel === "P2_MAINTENANCE"
+        ).length,
+        P3_INFO: validation.validatedChanges.filter(
+          (c) => c.riskLevel === "P3_INFO"
+        ).length
+      };
+      const completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const summary = {
+        cycleId,
+        startedAt,
+        completedAt,
+        totalSources: sourcesToMonitor.length,
+        successfulFetches,
+        failedFetches,
+        snapshotsCreated,
+        changesDetected: detectedChanges.length,
+        changesByRisk,
+        sentToReviewQueue: validation.itemsForHumanReview.length,
+        autoAppliedSafe: validation.autoAppliedChanges.length,
+        conflictsDetected: validation.validatedChanges.filter((c) => c.isConflicting).length,
+        alertsTriggered: dispatchedAlerts.length
+      };
+      const reportMarkdown = WeeklyReportGenerator.generateMarkdownReport(
+        summary,
+        sourcesToMonitor,
+        validation.validatedChanges,
+        ReviewQueueService.getAll()
+      );
+      this.cycleHistory.unshift(summary);
+      if (this.cycleHistory.length > 20) {
+        this.cycleHistory = this.cycleHistory.slice(0, 20);
+      }
+      this.lastReportMarkdown = reportMarkdown;
+      this.lastRunTimestamp = completedAt;
+      return {
+        summary,
+        reportMarkdown,
+        reviewItems: validation.itemsForHumanReview,
+        detectedChanges: validation.validatedChanges
+      };
+    } finally {
+      this.isRunning = false;
+    }
+  }
+  /**
+   * Inicia o agendador periódico de monitoramento (padrão: 7 dias em ms).
+   */
+  static startScheduledService(intervalMs = 7 * 24 * 60 * 60 * 1e3) {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+    const nextRun = new Date(Date.now() + intervalMs);
+    this.nextRunTimestamp = nextRun.toISOString();
+    this.timerId = setInterval(async () => {
+      try {
+        await this.runWeeklyCycle();
+        const next = new Date(Date.now() + intervalMs);
+        this.nextRunTimestamp = next.toISOString();
+      } catch (error) {
+        console.error("[WeeklyMonitorService] Erro durante ciclo peri\xF3dico:", error);
+      }
+    }, intervalMs);
+  }
+  /**
+   * Para o agendador periódico de monitoramento.
+   */
+  static stopScheduledService() {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+      this.nextRunTimestamp = null;
+    }
+  }
+  /**
+   * Retorna o status operacional atual do serviço de monitoramento.
+   */
+  static getStatus() {
+    return {
+      isActive: !!this.timerId,
+      isRunning: this.isRunning,
+      lastRunAt: this.lastRunTimestamp,
+      nextRunAt: this.nextRunTimestamp,
+      totalCyclesExecuted: this.cycleHistory.length,
+      latestCycle: this.cycleHistory[0] || null,
+      pendingReviewsCount: ReviewQueueService.getPendingCount()
+    };
+  }
+  /**
+   * Retorna o histórico de ciclos executados.
+   */
+  static getCycleHistory() {
+    return [...this.cycleHistory];
+  }
+  /**
+   * Retorna o último relatório em Markdown gerado.
+   */
+  static getLatestReportMarkdown() {
+    return this.lastReportMarkdown;
+  }
+};
+
+// src/server/routes/knowledge.ts
 var router12 = Router12();
 router12.get("/ctb", (req, res) => {
   try {
@@ -23489,6 +27220,136 @@ router12.post("/engine/preview", (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: "Failed to generate document preview" });
+  }
+});
+router12.get("/national/states", (req, res) => {
+  try {
+    const states = getAllNationalStates();
+    res.json(states);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch national states" });
+  }
+});
+router12.get("/national/organs", (req, res) => {
+  try {
+    const organs = getAllNationalOrgans();
+    res.json(organs);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch national organs" });
+  }
+});
+router12.get("/national/cetrans", (req, res) => {
+  try {
+    const cetrans = getAllNationalCetrans();
+    res.json(cetrans);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch national cetrans" });
+  }
+});
+router12.get("/national/sources", (req, res) => {
+  try {
+    res.json(OFFICIAL_SOURCES_REGISTRY);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch sources registry" });
+  }
+});
+router12.post("/monitor/run", async (req, res) => {
+  try {
+    const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4e3;
+    const result = await WeeklyMonitorScheduler.runCycle(void 0, timeoutMs);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to run monitoring cycle" });
+  }
+});
+router12.get("/monitor/history", (req, res) => {
+  try {
+    const history = WeeklyMonitorScheduler.getCycleHistory();
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch monitor history" });
+  }
+});
+router12.get("/monitor/latest-report", (req, res) => {
+  try {
+    const report = WeeklyMonitorScheduler.getLatestReport();
+    res.json({ reportMarkdown: report });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch latest report" });
+  }
+});
+router12.get("/monitor/review-queue", (req, res) => {
+  try {
+    const items = ReviewQueueService.getAll();
+    const pending = ReviewQueueService.getPending();
+    res.json({ items, pendingCount: pending.length });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch review queue" });
+  }
+});
+router12.post("/monitor/review-queue/:id/approve", (req, res) => {
+  try {
+    const { reviewer, notes } = req.body;
+    const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
+    if (!success) {
+      return res.status(404).json({ error: "Review item not found" });
+    }
+    res.json({ success: true, message: "Item approved and applied to active registry." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to approve review item" });
+  }
+});
+router12.post("/monitor/review-queue/:id/reject", (req, res) => {
+  try {
+    const { reviewer, reason } = req.body;
+    const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
+    if (!success) {
+      return res.status(404).json({ error: "Review item not found" });
+    }
+    res.json({ success: true, message: "Item rejected." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to reject review item" });
+  }
+});
+router12.post("/monitor/review-queue/:id/adjust", (req, res) => {
+  try {
+    const { adjustedData, reviewer, notes } = req.body;
+    const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
+    if (!success) {
+      return res.status(404).json({ error: "Review item not found" });
+    }
+    res.json({ success: true, message: "Item adjusted and approved." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to adjust review item" });
+  }
+});
+router12.post("/monitor/review-queue/:id/false-positive", (req, res) => {
+  try {
+    const { notes } = req.body;
+    const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
+    if (!success) {
+      return res.status(404).json({ error: "Review item not found" });
+    }
+    res.json({ success: true, message: "Item marked as false positive." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to mark false positive" });
+  }
+});
+router12.get("/monitor/alerts", (req, res) => {
+  try {
+    const alerts = NotificationAlertService.getAlertsHistory();
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch alerts" });
+  }
+});
+router12.post("/temporal/resolve", (req, res) => {
+  try {
+    const context = req.body;
+    const result = TemporalKnowledgeEngine.getEffectiveKnowledge(context);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to resolve temporal knowledge" });
   }
 });
 var knowledge_default = router12;
@@ -25280,6 +29141,28 @@ router16.post("/cases", authenticateToken, (req, res) => {
     if (!domainData.analysis && domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
+    if ((domainData.isPaid || domainData.status === "defesa_pronta") && !domainData.defenseDraft && domainData.applicant) {
+      const a = domainData.applicant;
+      if (a.applicantName && a.applicantCpf && a.applicantCnh && a.addressStreet && a.addressCityState) {
+        domainData.defenseDraft = RagPipeline.generateDefenseDraft(
+          domainData.id,
+          domainData.infraction,
+          domainData.vehicle?.plate || "SEM PLACA",
+          domainData.vehicle?.brandModel || "Ve\xEDculo",
+          {
+            name: a.applicantName,
+            cpf: a.applicantCpf,
+            rg: a.applicantRg,
+            cnh: a.applicantCnh,
+            category: a.cnhCategory,
+            address: `${a.addressStreet}, ${a.addressNumber || ""}`.trim(),
+            cityState: a.addressCityState
+          },
+          domainData.analysis?.recommendedArguments || [],
+          domainData.serviceType || "recurso_jari"
+        );
+      }
+    }
     const row = CanonicalMapper.domainToRow(domainData);
     databaseRows.set(row.id, row);
     eventBus.publish(EventTopics.CASE_CREATED, { caseId: domainData.id, isAnonymous: domainData.isAnonymous }, "case_engine");
@@ -25373,6 +29256,23 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   } : void 0;
   if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
     return res.status(400).json({ error: "Dados de qualifica\xE7\xE3o do requerente incompletos. Preencha os dados complementares antes de gerar a defesa." });
+  }
+  if (b && (!domain.applicant || !domain.applicant.applicantCnh)) {
+    domain.applicant = {
+      applicantName: resolvedApplicant.name,
+      applicantCpf: resolvedApplicant.cpf,
+      applicantRg: resolvedApplicant.rg,
+      applicantCnh: resolvedApplicant.cnh,
+      cnhCategory: resolvedApplicant.category,
+      applicantPhone: domain.clientPhone || "",
+      applicantEmail: domain.clientEmail || "",
+      addressStreet: resolvedApplicant.address,
+      addressNumber: "",
+      addressNeighborhood: "",
+      addressZipCode: "",
+      addressCityState: resolvedApplicant.cityState,
+      factsNarrative: customFacts
+    };
   }
   let defense = RagPipeline.generateDefenseDraft(
     domain.id,
@@ -25523,56 +29423,56 @@ var USER_PROCESS_STAGES = [
 ];
 var RULES_MATRIX = {
   excesso_velocidade: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "speedLimit", "measuredSpeed"],
-    optionalFreeFields: ["dateTime", "location", "inmetroAferitionDate", "radarEquipmentId", "notificationExpeditionDate"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "speedLimit", "measuredSpeed", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["inmetroAferitionDate", "radarEquipmentId", "hasR19SignageProof"],
     inferableFields: ["consideredSpeed", "ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   lei_seca: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "hasSignTerm", "offeredRetest", "refusedTest"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["hasSignTerm", "offeredRetest", "refusedTest"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   celular: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "wasInHolder", "hadPhysicalApproach", "description"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["wasInHolder", "hadPhysicalApproach", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   vermelho: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "yellowDurationIssue", "emergencyPassage", "description"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["yellowDurationIssue", "emergencyPassage", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   estacionamento: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "parkingCircumstance", "hasRegulatorySign", "description"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["parkingCircumstance", "hasRegulatorySign", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   indicacao_condutor: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "realDriverName", "realDriverCpf", "realDriverCnh"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["realDriverName", "realDriverCpf", "realDriverCnh"],
     inferableFields: ["ctbArticle", "infractionCode"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   conversao_advertencia: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "noReoffense12Months"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["hasPreviousInfractionsLast12Months"],
     inferableFields: ["ctbArticle", "infractionCode", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   cnh_geral: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "description"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   outro: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate"],
-    optionalFreeFields: ["dateTime", "location", "description", "infractionCode"],
+    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
+    optionalFreeFields: ["description", "infractionCode"],
     inferableFields: ["ctbArticle", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   }

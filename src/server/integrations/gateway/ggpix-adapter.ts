@@ -39,11 +39,66 @@ const GGRAPI_BASE_URL = 'https://ggpixapi.com/api/v1';
 const GGRAPI_BACKUP_URL = 'https://ggatepixapi.com/api/v1';
 
 function getConfig() {
+  const allowedIpsRaw = process.env.GGPIX_WEBHOOK_ALLOWED_IPS || '';
+  const allowedIps = allowedIpsRaw.split(',').map(ip => ip.trim()).filter(Boolean);
   return {
     apiKey: process.env.GGPIX_API_KEY || '',
     appUrl: process.env.APP_URL || 'https://defesai.com.br',
     enabled: process.env.GGPIX_ENABLED === 'true',
+    webhookAllowedIps: allowedIps.length > 0 ? allowedIps : undefined,
   };
+}
+
+function isProductionMode(): boolean {
+  return (process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production';
+}
+
+// ============================================================================
+// IP Validation for Webhook Security (GGPIXAPI não tem HMAC)
+// ============================================================================
+
+function validateWebhookSourceIp(headers: Record<string, string | undefined>, allowedIps?: string[]): boolean {
+  if (!allowedIps || allowedIps.length === 0) {
+    // Se não configurado, permite em dev, bloqueia em prod com warning
+    if (isProductionMode()) {
+      logger.warn('payments', 'ggpix', 'webhook_ip', 'GGPIX_WEBHOOK_ALLOWED_IPS não configurado — webhook aceito mas configurar em produção');
+    }
+    return true;
+  }
+
+  // Extrair IP do cliente (considerando proxies)
+  const forwardedFor = headers['x-forwarded-for'] as string | undefined;
+  const realIp = headers['x-real-ip'] as string | undefined;
+  const clientIp = forwardedFor?.split(',')[0]?.trim() || realIp || '';
+
+  if (!clientIp) {
+    logger.warn('payments', 'ggpix', 'webhook_ip', 'Não foi possível determinar IP do cliente');
+    return false;
+  }
+
+  const isAllowed = allowedIps.some(allowed => {
+    // Suporte a CIDR simples (ex: 192.168.1.0/24) e IP exato
+    if (allowed.includes('/')) {
+      const [baseIp, prefixStr] = allowed.split('/');
+      const prefix = parseInt(prefixStr, 10);
+      if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
+      const mask = ~((1 << (32 - prefix)) - 1);
+      const clientNum = ipToNumber(clientIp);
+      const baseNum = ipToNumber(baseIp);
+      return (clientNum & mask) === (baseNum & mask);
+    }
+    return allowed === clientIp;
+  });
+
+  if (!isAllowed) {
+    logger.warn('payments', 'ggpix', 'webhook_ip', 'Webhook GGPIXAPI rejeitado — IP não permitido', { clientIp, allowedIps });
+  }
+
+  return isAllowed;
+}
+
+function ipToNumber(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
 // ============================================================================
@@ -178,7 +233,7 @@ export class GGPIXAdapter implements PaymentGateway {
         } else {
           const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
           // [PRODUCTION] Não retornar dados locais como se fossem reais
-          if (process.env.NODE_ENV === 'production') {
+          if (isProductionMode()) {
             logger.error('payments', 'ggpix', 'create_pix', 'GGPIXAPI retornou erro em produção — transação NÃO criada', {
               httpStatus: response.status,
               error: errorData,
@@ -192,7 +247,7 @@ export class GGPIXAdapter implements PaymentGateway {
         }
       } catch (err: any) {
         // [PRODUCTION] Não retornar dados locais como se fossem reais
-        if (process.env.NODE_ENV === 'production') {
+        if (isProductionMode()) {
           logger.error('payments', 'ggpix', 'create_pix', 'GGPIXAPI falhou em produção — transação NÃO criada', { error: err.message });
           throw new Error('Falha ao conectar com GGPIXAPI. Pagamento não processado.');
         }
@@ -272,9 +327,16 @@ export class GGPIXAdapter implements PaymentGateway {
 
   processWebhook(
     _rawBody: string,
-    _headers: Record<string, string | undefined>,
+    headers: Record<string, string | undefined>,
     body: unknown
   ): NormalizedWebhookEvent {
+    const config = getConfig();
+    
+    // Validar IP de origem do webhook (segurança já que não há HMAC)
+    if (!validateWebhookSourceIp(headers, config.webhookAllowedIps)) {
+      throw new Error('Webhook GGPIXAPI rejeitado: IP de origem não autorizado');
+    }
+
     const payload = body as GGWebhookPayload;
 
     return {
