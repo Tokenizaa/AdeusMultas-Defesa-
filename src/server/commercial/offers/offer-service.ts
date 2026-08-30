@@ -24,7 +24,7 @@ const round2 = (value: number): number => Number((Math.round(value * 100) / 100)
  *   o próprio nome para serem bloqueados em servicesWithoutCommercialOffer.
  * - Nenhum serviço comercial válido deve "cair" para um procedimento genérico.
  */
-const PROCEDURE_TO_COMMERCIAL: Record<string, CommercialServiceType | 'defesa_previa' | 'analise_tecnica' | 'relatorio_pericial'> = {
+const PROCEDURE_TO_COMMERCIAL: Record<string, CommercialServiceType | 'analise_tecnica' | 'relatorio_pericial'> = {
   recurso_jari: 'recurso_jari',
   recurso_cetran: 'recurso_cetran',
   suspensao: 'suspensao',
@@ -36,10 +36,6 @@ const PROCEDURE_TO_COMMERCIAL: Record<string, CommercialServiceType | 'defesa_pr
   cassacao_cnh: 'cassacao',
   processo_suspensao: 'suspensao',
   processo_cassacao: 'cassacao',
-  // Defesa Prévia (NA, Art. 281 CTB) é procedimento DISTINTO do Recurso JARI
-  // (Art. 285 CTB, contra NIP). NÃO possui oferta comercial própria ainda —
-  // é tratado como serviço sem preço (servicesWithoutCommercialOffer).
-  // Defesa Prévia não entra no Record: normalizeServiceType retorna intacta via ?? key.
   // Estes NÃO são serviços comerciais (sem preço no catálogo)
   analise_tecnica: 'analise_tecnica',
   relatorio_pericial: 'relatorio_pericial',
@@ -81,7 +77,6 @@ export class OfferService {
      * NOTE: This list uses CANONICAL names (post-normalization).
      */
     const servicesWithoutCommercialOffer: string[] = [
-      'defesa_previa',
       'analise_tecnica',
       'geracao_documento',
       'relatorio_pericial',

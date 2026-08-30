@@ -295,22 +295,6 @@ class ConfigService {
       // =========================================================================
       // 3. PAGAMENTOS (PagBank / GGPIXAPI / Gateway Abstraction)
       // =========================================================================
-      {
-        key: 'PAYMENT_MODE',
-        name: 'Modo de Pagamento',
-        category: 'payments',
-        type: 'select',
-        description: 'Define se o sistema opera em produção (dinheiro real) ou sandbox (testes). Controla qual gateway pode ser ativo e validações de segurança.',
-        defaultValue: 'sandbox',
-        isSecret: false,
-        isRequired: true,
-        isEditable: true,
-        options: [
-          { label: 'Sandbox / Homologação (Testes Seguros)', value: 'sandbox' },
-          { label: 'Produção (Transações Reais)', value: 'production' },
-        ],
-        envSource: 'PAYMENT_MODE',
-      },
 {
   key: 'PAYMENT_ACTIVE_GATEWAY',
   name: 'Gateway de Pagamento Ativo',
@@ -322,27 +306,10 @@ class ConfigService {
   isRequired: true,
   isEditable: true,
   options: [
-    { label: 'PagBank / PagSeguro (Apenas Sandbox — PIX + Cartão)', value: 'pagbank' },
-    { label: 'GGPIXAPI (Produção — Apenas PIX In)', value: 'ggpixapi' },
+    { label: 'PagBank / PagSeguro (Recomendado — PIX + Cartão)', value: 'pagbank' },
+    { label: 'GGPIXAPI (Apenas PIX In)', value: 'ggpixapi' },
   ],
   envSource: 'PAYMENT_ACTIVE_GATEWAY',
-},
-{
-  key: 'PAYMENT_ACTIVE_GATEWAY_OVERRIDE',
-  name: 'Gateway Ativo (Override Runtime)',
-  category: 'payments',
-  type: 'select',
-  description: 'Override manual do gateway ativo feito via Admin UI. Persiste entre reinícios. Vazio = usa PAYMENT_ACTIVE_GATEWAY do environment.',
-  defaultValue: '',
-  isSecret: false,
-  isRequired: false,
-  isEditable: true,
-  options: [
-    { label: 'Usar Padrão do Environment (PAYMENT_ACTIVE_GATEWAY)', value: '' },
-    { label: 'PagBank / PagSeguro (Apenas Sandbox)', value: 'pagbank' },
-    { label: 'GGPIXAPI (Produção)', value: 'ggpixapi' },
-  ],
-  envSource: 'PAYMENT_ACTIVE_GATEWAY_OVERRIDE',
 },
       {
         key: 'PAGBANK_ENV',
@@ -407,18 +374,6 @@ class ConfigService {
   isRequired: false,
   isEditable: true,
   envSource: 'GGPIX_ENABLED',
-},
-{
-  key: 'GGPIX_WEBHOOK_ALLOWED_IPS',
-  name: 'GGPIXAPI Webhook IPs Permitidos',
-  category: 'payments',
-  type: 'string',
-  description: 'Lista de IPs/CIDR permitidos para webhooks GGPIXAPI (separados por vírgula). Ex: 192.168.1.1,10.0.0.0/8. Obrigatório em produção para segurança.',
-  defaultValue: '',
-  isSecret: false,
-  isRequired: false,
-  isEditable: true,
-  envSource: 'GGPIX_WEBHOOK_ALLOWED_IPS',
 },
       {
         key: 'PAYMENT_DEFAULT_AMOUNT',

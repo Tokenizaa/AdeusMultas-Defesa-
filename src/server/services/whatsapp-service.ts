@@ -244,18 +244,11 @@ class WhatsAppService {
 
     try {
       const result = await this.makeRequest<any>('GET', `/instance/connectionState/${instance}`);
-      const rawState = result?.state || result?.instance?.state || 'close';
-      const status: 'open' | 'close' | 'connecting' =
-        rawState === 'open' ? 'open' : rawState === 'connecting' ? 'connecting' : 'close';
-      const rawPhone = result?.instance?.owner || result?.owner || result?.instance?.phone;
-      const phone = rawPhone ? String(rawPhone).replace(/@s\.whatsapp\.net$/, '') : undefined;
-
       return {
-        instanceName: result?.instance?.instanceName || instance,
-        instanceId: result?.instance?.instanceId || instance,
-        status,
-        owner: result?.instance?.profileName || result?.profileName || undefined,
-        phone,
+        instanceName: instance,
+        instanceId: result.instance?.instanceId || instance,
+        status: result.state || 'close',
+        phone: result.instance?.owner,
       };
     } catch (err) {
       logger.warn('whatsapp', 'whatsapp-service', 'get_instance_status', 'Failed to get instance status', {
@@ -308,18 +301,12 @@ class WhatsAppService {
         targetUrl,
       });
 
-      const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
-
       const result = await this.makeRequest<any>('POST', `/webhook/set/${instance}`, {
         webhook: {
           enabled: true,
           url: targetUrl,
           byEvents: false,
           base64: false,
-          // Envia o segredo de validacao de origem como custom header
-          // (suportado pela Evolution API v2; exigido pelo receiver quando
-          // EVOLUTION_WEBHOOK_SECRET estiver setado). Nunca loga o valor.
-          ...(webhookSecret ? { headers: { 'X-Webhook-Secret': webhookSecret } } : {}),
           events: [
             'MESSAGES_UPSERT',
             'MESSAGES_UPDATE',
@@ -405,4 +392,3 @@ class WhatsAppService {
 }
 
 export const whatsappService = new WhatsAppService();
-export const whatsAppService = whatsappService;

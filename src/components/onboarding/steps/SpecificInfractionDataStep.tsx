@@ -12,7 +12,6 @@ import {
   ArrowRight,
   RefreshCw,
   FileText,
-  ClipboardCheck,
 } from 'lucide-react';
 import { InfractionData } from '../../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../../core/onboarding/rules-matrix';
@@ -210,19 +209,17 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 </label>
                 <select
                   id="select-speed-sign"
-                  value={infractionData.hasR19SignageProof === false ? 'sem_placa' : infractionData.hasR19SignageProof === true ? 'placa_ok' : 'nao_informado'}
+                  value={infractionData.notes?.includes('sem_placa') ? 'sem_placa' : 'visivel'}
                   onChange={(e) => {
                     const val = e.target.value;
                     onUpdateInfraction({
                       ...infractionData,
-                      hasR19SignageProof: val === 'placa_ok' ? true : val === 'sem_placa' ? false : undefined,
-                      notes: val === 'sem_placa' ? 'sem_placa_visivel_art90' : val === 'placa_ok' ? 'placa_ok' : infractionData.notes?.replace('sem_placa_visivel_art90', '').replace('placa_ok', '') || '',
+                      notes: val === 'sem_placa' ? 'sem_placa_visivel_art90' : 'placa_ok',
                     });
                   }}
                   className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 >
-                  <option value="nao_informado">Não sei / Não informado</option>
-                  <option value="placa_ok">Sim, havia placa R-19 visível no trecho</option>
+                  <option value="visivel">Sim, havia placa no trecho</option>
                   <option value="sem_placa">Não havia placa ou estava encoberta/apagada (Art. 90 CTB)</option>
                 </select>
               </div>
@@ -449,8 +446,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <input
                   type="checkbox"
                   id="chk-no-reoffense"
-                  checked={infractionData.hasPreviousInfractionsLast12Months === false}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, hasPreviousInfractionsLast12Months: e.target.checked ? false : true })}
+                  defaultChecked
                   className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
                 />
                 <label htmlFor="chk-no-reoffense" className="cursor-pointer">

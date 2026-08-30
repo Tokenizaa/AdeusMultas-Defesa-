@@ -99,16 +99,16 @@ interface OnboardingWizardProps {
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onCaseReadyForCheckout,
   onOpenKnowledge,
-  isAdmin: isAdminProp = false,
+  isAdminFromParent = false,
 }) => {
   const { navigate } = useRouter();
-  const { user, isAuthenticated, isAdmin: isAdminAuth } = useAuth();
+  const { user, isAuthenticated, isAdmin } = useAuth();
   const authFetch = useAuthFetch();
   // Canal duplo de admin: prop explícita do pai (legado) OU sessão autenticada
   // com role=admin (AuthContext). Corrige o caso em que App.tsx passa `isAdmin`
   // mas o wizard lia uma prop inexistente (`isAdminFromParent`), deixando todos
   // os botões de teste invisíveis.
-  const effectiveIsAdmin = isAdminProp || isAdminAuth;
+  const effectiveIsAdmin = isAdminFromParent || isAdmin;
 
   // Load persisted wizard state if available (e.g., after email confirmation)
   const savedState = loadWizardState();

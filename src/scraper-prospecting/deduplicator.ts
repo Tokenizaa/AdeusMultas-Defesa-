@@ -65,7 +65,7 @@ export async function checkDuplicate(lead: Lead): Promise<DedupResult> {
       if (phone && found.phone_normalized === phone) return { isDuplicate: true, reason: 'phone' };
       if (website && found.website === website) return { isDuplicate: true, reason: 'website' };
       if (email && found.email === email) return { isDuplicate: true, reason: 'email' };
-      if (sourceUrl && (found as { sourceUrl?: string }).sourceUrl === sourceUrl) return { isDuplicate: true, reason: 'source_url' };
+      if (sourceUrl && found.source_url === sourceUrl) return { isDuplicate: true, reason: 'source_url' };
     }
   }
 

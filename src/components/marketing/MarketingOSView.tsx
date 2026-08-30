@@ -7,25 +7,29 @@ import {
 import { useMarketingService } from './hooks/use-marketing-service';
 import { MarketingDashboard } from './components/MarketingDashboard';
 import { InboxView } from './components/InboxView';
+import { ContentKanban } from './components/ContentKanban';
+import { PublicationsView } from './components/PublicationsView';
 import { ContentEditor } from './components/ContentEditor';
+import { ScheduleView } from './components/ScheduleView';
 import { ChannelsView } from './components/ChannelsView';
 import { MetaConnectionModal } from './meta/MetaConnectionModal';
+import { AutomationsView } from './components/AutomationsView';
 import { ResultsView } from './components/ResultsView';
 import { MarketingSettings } from './components/MarketingSettings';
 import { MediaStudioView } from './components/MediaStudioView';
 import { ProspectingAutomationView } from './components/ProspectingAutomationView';
-import { ContentView } from './components/ContentView';
-import { PublicationDashboard } from './components/PublicationDashboard';
 import { EditorialContentItem } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 
 export type ViewKey =
   | 'dashboard'
   | 'inbox'
+  | 'planning'
   | 'contents'
-  | 'publication'
   | 'studio'
+  | 'schedule'
   | 'channels'
+  | 'automations'
   | 'results'
   | 'settings'
   | 'prospecting';
@@ -52,14 +56,16 @@ const NAV_SECTIONS: NavSection[] = [
   {
     group: 'Criação & Editorial',
     items: [
-      { key: 'contents', label: 'Conteúdo', description: 'Kanban editorial e biblioteca de conteúdos', icon: FileText },
+      { key: 'planning', label: 'Kanban Editorial', description: 'Fluxo visual de produção e pautas', icon: Target },
+      { key: 'contents', label: 'Biblioteca de Conteúdos', description: 'Acervo de copies, formatos e status', icon: FileText },
       { key: 'studio', label: 'Estúdio Criativo IA', description: 'Gemini 3 Pro Image & Animação Veo 3.1', icon: Sparkles, badge: 'IA' },
     ],
   },
   {
     group: 'Distribuição & Automação',
     items: [
-      { key: 'publication', label: 'Publicação', description: 'Agenda, fila e automações', icon: Radio },
+      { key: 'schedule', label: 'Agendamento & Fila', description: 'Calendário e disparos programados', icon: CalendarClock },
+      { key: 'automations', label: 'Automações de Postagem', description: 'Regras de publicação autônoma', icon: Zap },
       { key: 'channels', label: 'Canais Conectados', description: 'Meta Graph API & WhatsApp Evolution', icon: Radio },
     ],
   },
@@ -83,13 +89,7 @@ export const MarketingOSView: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('dashboard');
   useEffect(() => {
     const view = (params.view || queryParams.view) as ViewKey || 'dashboard';
-    const legacyMap: Record<string, ViewKey> = {
-      planning: 'contents',
-      schedule: 'publication',
-      automations: 'publication',
-    };
-    const resolved = legacyMap[view] || view;
-    setActiveView(resolved);
+    setActiveView(view);
   }, [params.view, queryParams.view]);
 
   const {
@@ -206,13 +206,20 @@ export const MarketingOSView: React.FC = () => {
 
           {activeView === 'inbox' && <InboxView />}
 
-          {activeView === 'contents' && (
-            <ContentView
+          {activeView === 'planning' && (
+            <ContentKanban
               contents={contents}
-              loading={isLoadingContents}
-              onMove={updateContentStatus}
+              onMove={(id, status) => updateContentStatus(id, status)}
               onSelectContent={(item) => setEditingContent({ item, open: true })}
               onCreateNew={handleCreateNewContent}
+            />
+          )}
+
+          {activeView === 'contents' && (
+            <PublicationsView
+              contents={contents}
+              loading={isLoadingContents}
+              onSelect={(item) => setEditingContent({ item, open: true })}
             />
           )}
 
@@ -220,15 +227,23 @@ export const MarketingOSView: React.FC = () => {
             <MediaStudioView onContentCreated={() => refreshMarketingData()} />
           )}
 
-          {activeView === 'publication' && (
-            <PublicationDashboard
+          {activeView === 'schedule' && (
+            <ScheduleView
               contents={contents}
               publisherQueue={publisherQueue}
-              publisherJobs={publisherJobs}
               cycleCount={cycleCount}
               lastCycleAt={lastCycleAt}
-              metaState={metaState}
+            />
+          )}
+
+          {activeView === 'automations' && (
+            <AutomationsView
+              publisherQueue={publisherQueue}
+              publisherJobs={publisherJobs}
+              contents={contents}
               metrics={metrics}
+              metaState={metaState}
+              cycleCount={cycleCount}
             />
           )}
 

@@ -207,7 +207,6 @@ return {
       serviceType: serviceType || undefined,
       vehicle: vehicleData,
       infraction: infractionData,
-      applicant: documentData,
       analysis,
       isAnonymous: false,
       isPaid: true,
@@ -262,40 +261,7 @@ return {
   const finalizeAfterPayment = async () => {
     setIsProcessing(true);
     try {
-      let finalCase = await persistCase();
-      if (!finalCase.defenseDraft && finalCase.id) {
-        try {
-          const genRes = await authFetch(`/api/cases/${finalCase.id}/generate-defense`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              procedureType: serviceType || finalCase.serviceType,
-              selectedArgumentIds: analysis?.recommendedArguments?.map((a: any) => a.id) || [],
-              applicantData: {
-                name: documentData.applicantName,
-                cpf: documentData.applicantCpf,
-                rg: documentData.applicantRg,
-                cnh: documentData.applicantCnh,
-                category: documentData.cnhCategory,
-                address: `${documentData.addressStreet}, ${documentData.addressNumber || ''}`.trim(),
-                cityState: documentData.addressCityState,
-              },
-              customFacts: documentData.factsNarrative,
-            }),
-          });
-          if (genRes.ok) {
-            const genData = await genRes.json();
-            if (genData.defenseDraft) {
-              finalCase.defenseDraft = genData.defenseDraft;
-            }
-            if (genData.case) {
-              finalCase = { ...finalCase, ...genData.case };
-            }
-          }
-        } catch (genErr) {
-          console.error('Error generating defense during finalize:', genErr);
-        }
-      }
+      const finalCase = await persistCase();
       onPaymentSuccess(finalCase);
     } catch (err) {
       console.error('Error generating document:', err);
@@ -365,7 +331,7 @@ return {
               Liberação da Petição & Checklist de Protocolo
             </h1>
             <p className="text-xs text-slate-600 mt-1">
-              Gere sua minuta jurídica formal com 52 blocos do CTB/CONTRAN, pronta para impressão e protocolo perante o órgão autuador informado no onboarding.
+              Gere sua minuta jurídica formal com 52 blocos do CTB/CONTRAN, pronta para impressão e protocolo perante {infractionData.autuadorBody || 'o órgão autuador'}.
             </p>
 
             <div className="mt-4 border-t border-slate-200 pt-3 space-y-2 text-xs">

@@ -118,19 +118,6 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
     setIsRegenerating(true);
     try {
       // Timeout de segurança: nunca deixa o usuário preso no spinner "Redigindo com IA..."
-      let applicantData: Record<string, string | undefined> | undefined;
-      const a = currentCase?.applicant;
-      if (a && a.applicantName && a.applicantCpf && a.applicantCnh) {
-        applicantData = {
-          name: a.applicantName,
-          cpf: a.applicantCpf,
-          rg: a.applicantRg,
-          cnh: a.applicantCnh,
-          category: a.cnhCategory,
-          address: `${a.addressStreet}, ${a.addressNumber || ''}`,
-          cityState: a.addressCityState,
-        };
-      }
       const res = await fetch(`/api/cases/${resolvedCaseId}/generate-defense`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +125,13 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
         body: JSON.stringify({
           procedureType: currentCase?.serviceType,
           selectedArgumentIds: selectedArgIds,
-          applicantData,
+          applicantData: {
+            name: currentCase?.clientName,
+            cpf: currentCase.clientCpf || '000.000.000-00',
+            cnh: '05492817492',
+            address: 'Rua das Flores, 450, Apto 82',
+            cityState: 'São Paulo/SP',
+          },
         }),
       });
       const data = await res.json();

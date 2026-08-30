@@ -5,12 +5,7 @@ import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
-// Public health check - no auth required
-router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'agents', timestamp: new Date().toISOString() });
-});
-
-// Protected admin routes
+// All agent routes require admin authentication
 router.use(authenticateToken, requireAdmin);
 
 // Autonomous Agents Ecosystem & Pipeline

@@ -519,5 +519,4 @@ export const PROCEDURE_TITLES: Record<ProcedureType, string> = {
   processo_cassacao: 'Defesa contra Processo de Cassação da CNH (PCDD)',
   analise_tecnica: 'Análise de Viabilidade Técnica e Parecer de Risco',
   relatorio_pericial: 'Relatório Pericial de Engenharia e Metrologia',
-  defesa_previa: 'Defesa Prévia da Autuação (Art. 281 CTB)',
 };

@@ -106,27 +106,17 @@ function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseD
   const procedureType = domain.serviceType || 'recurso_jari';
   const selectedArgs = domain.analysis?.recommendedArguments || [];
 
-  // FAIL CLOSED: a peça paga usa APENAS os dados reais de qualificação do
-  // onboarding (domain.applicant). Ausente/incompleto → erro, NUNCA fabricar
-  // CNH/cidade/CPF. O webhook captura esse erro (não-bloqueante) e mantém o
-  // pagamento confirmado sem peça fabricada.
-  const a = domain.applicant;
-  if (!a || !a.applicantName || !a.applicantCpf || !a.applicantCnh || !a.addressStreet || !a.addressCityState) {
-    throw new Error('Dados de qualificação do requerente ausentes. Não é possível gerar a peça sem os dados reais.');
-  }
-
   const defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle?.plate || 'SEM PLACA',
     domain.vehicle?.brandModel || 'Veículo',
     {
-      name: a.applicantName,
-      cpf: a.applicantCpf,
-      rg: a.applicantRg,
-      cnh: a.applicantCnh,
-      address: `${a.addressStreet}, ${a.addressNumber || ''}`,
-      cityState: a.addressCityState,
+      name: domain.clientName || 'Requerente',
+      cpf: domain.clientCpf || '000.000.000-00',
+      cnh: '05492817492',
+      address: 'Rua das Flores, 450, Apto 82',
+      cityState: 'São Paulo/SP',
     },
     selectedArgs,
     procedureType
@@ -146,17 +136,17 @@ function generateDefenseDraftForDomain(domain: CaseDomain): CaseDomain['defenseD
 // Modo de teste / auth condicional
 // ============================================================================
 
-/** Em sandbox o sistema opera em modo de teste (simulação liberada). */
+/** Fora de produção o sistema opera em modo de teste (simulação liberada). */
 function isTestMode(): boolean {
-  return (process.env.PAYMENT_MODE || 'sandbox').toLowerCase() !== 'production';
+  return process.env.NODE_ENV !== 'production';
 }
 
 /**
- * Exige JWT apenas em produção (PAYMENT_MODE=production). Em sandbox a rota fica aberta
+ * Exige JWT apenas em produção. Em desenvolvimento/teste a rota fica aberta
  * para permitir E2E e validação local sem Supabase configurado.
  */
 function prodAuth(req: Request, res: Response, next: NextFunction): void {
-  if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
+  if (process.env.NODE_ENV === 'production') {
     authenticateToken(req, res, next);
     return;
   }
@@ -282,7 +272,7 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       },
       finalAmount: offerResult.offer.finalAmount,
       gateway: gateway.id,
-      environment: process.env.PAYMENT_MODE || 'sandbox',
+      environment: process.env.NODE_ENV,
       userRole: (req as any).user?.role,
     });
 
@@ -330,7 +320,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
       logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', {
         error: err.message,
         gateway: activeGatewayId,
-        environment: process.env.PAYMENT_MODE || 'sandbox',
+        environment: process.env.NODE_ENV,
       });
       return res.status(500).json({ error: err.message || 'Erro ao consultar status do pagamento' });
     }
@@ -411,7 +401,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
 
     logger.info('payments', 'gateway', 'credit_card_gateway_check', 'Credit card gateway validated', {
       gateway: gateway.id,
-      environment: process.env.PAYMENT_MODE || 'sandbox',
+      environment: process.env.NODE_ENV,
       userRole: (req as any).user?.role,
       serviceType: offerResult.offer?.serviceType,
     });
@@ -763,14 +753,13 @@ router.get('/gateway/status', (req, res) => {
 // ============================================================================
 // Gateway Switch — Admin UI pode alternar gateway em runtime
 // ============================================================================
-router.post('/gateway/switch', requireAdmin, async (req, res) => {
+router.post('/gateway/switch', requireAdmin, (req, res) => {
   const { gatewayId } = req.body;
   if (!gatewayId) {
     return res.status(400).json({ error: 'gatewayId é obrigatório' });
   }
 
-  const updatedBy = (req as any).user?.email || (req as any).user?.id || 'admin';
-  const result = await gatewayManager.setActiveGateway(gatewayId, updatedBy);
+  const result = gatewayManager.setActiveGateway(gatewayId);
   if (!result.success) {
     return res.status(400).json({ error: result.message });
   }

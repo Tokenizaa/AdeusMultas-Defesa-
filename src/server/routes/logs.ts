@@ -4,12 +4,7 @@ import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
-// Public health check - no auth required
-router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'logs', timestamp: new Date().toISOString() });
-});
-
-// Protected admin routes
+// All log routes require admin authentication
 router.use(authenticateToken, requireAdmin);
 
 // Central Structured Log Explorer Endpoints

@@ -5,7 +5,6 @@ import { useAuth } from '../../core/auth/AuthContext';
 import { ADMIN_NAV_GROUPS } from './admin-nav-groups';
 import { SubGroup } from './admin-sub-group';
 import type { AdminNavItem } from './admin-nav-types';
-import { AdeusMultasLogo } from '../brand/AdeusMultasLogo';
 
 interface AdminSidebarProps {
   onNavigate?: () => void;
@@ -73,9 +72,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
       <div className="shrink-0 p-4 border-b border-slate-900 bg-slate-950">
         <div
           onClick={() => handleItemClick('/admin')}
-          className="flex items-center cursor-pointer group p-2"
+          className="flex items-center gap-2.5 cursor-pointer group p-3"
         >
-          <AdeusMultasLogo variant="compact" theme="dark" iconSize="md" />
+          <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center font-bold text-white shadow-sm shadow-orange-500/20 group-hover:scale-105 transition-transform text-sm shrink-0">
+            <ShieldAlert className="w-4 h-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-white tracking-tight text-base">DefesAi</span>
+              <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-mono">
+                OS
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 font-mono truncate">Console Operacional</p>
+          </div>
         </div>
       </div>
 

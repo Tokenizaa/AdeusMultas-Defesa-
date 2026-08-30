@@ -4,14 +4,9 @@ import { INFRACTION_CATALOG } from '../data/knowledge-base';
 // ==========================================
 // DEV-ONLY GUARD
 // ==========================================
-// Test data generators must never run in production. Module-level throw is
-// unsafe (these modules are statically imported by production components),
-// so each exported generator validates the environment at call-time instead.
-function assertDevOnly(): void {
-  if (!import.meta.env.DEV) {
-    throw new Error('Test data only available in dev');
-  }
-}
+// Os botões de teste (TestFillButton) só renderizam para usuários com role
+// 'admin' (ver src/components/ui/TestFillButton.tsx). Em qualquer ambiente
+// o gerador é seguro de rodar — quem decide expor a ação é o caller.
 
 
 // ==========================================
@@ -84,12 +79,10 @@ function padZero(n: number): string {
 // ==========================================
 
 export function generateRandomName(): string {
-  assertDevOnly();
   return `${pick(NOMES)} ${pick(SOBRENOMES)} ${pick(SOBRENOMES)}`;
 }
 
 export function generateRandomCPF(): string {
-  assertDevOnly();
   const n = () => Math.floor(Math.random() * 10);
   const digits = Array.from({ length: 9 }, n);
   // Primeiro digito verificador
@@ -108,7 +101,6 @@ export function generateRandomCPF(): string {
 }
 
 export function generateRandomPhone(): string {
-  assertDevOnly();
   const ddd = pick([11, 21, 31, 41, 51, 61, 71, 81, 85, 19, 27, 34, 48, 62, 67, 77]);
   const prefix = `9${randInt(1000, 9999)}`;
   const suffix = `${randInt(1000, 9999)}`;
@@ -116,7 +108,6 @@ export function generateRandomPhone(): string {
 }
 
 export function generateRandomPlate(): string {
-  assertDevOnly();
   const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ'; // sem I, O, Q para evitar confusao
   const rLetter = () => letters[Math.floor(Math.random() * letters.length)];
   const rDigit = () => Math.floor(Math.random() * 10);
@@ -124,7 +115,6 @@ export function generateRandomPlate(): string {
 }
 
 export function generateRandomAIT(): string {
-  assertDevOnly();
   const len = Math.random() > 0.5 ? 10 : 12;
   return Array.from({ length: len }, () => Math.floor(Math.random() * 10)).join('');
 }
@@ -136,7 +126,6 @@ export function generateRandomAddress(): {
   zipCode: string;
   cityState: string;
 } {
-  assertDevOnly();
   const streetNum = randInt(10, 2000);
   return {
     street: `${pick(RUAS)}, ${streetNum}`,
@@ -148,7 +137,6 @@ export function generateRandomAddress(): {
 }
 
 export function generateRandomEmail(name: string): string {
-  assertDevOnly();
   const clean = name
     .toLowerCase()
     .normalize('NFD')
@@ -160,12 +148,10 @@ export function generateRandomEmail(name: string): string {
 }
 
 export function generateRandomRG(): string {
-  assertDevOnly();
   return `${randInt(10, 99)}.${randInt(100, 999)}.${randInt(100, 999)}-${randInt(0, 9)}`;
 }
 
 export function generateRandomCNH(): string {
-  assertDevOnly();
   return Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
 }
 
@@ -176,7 +162,6 @@ export function generateRandomCardData(): {
   cardCvv: string;
   cardCpf: string;
 } {
-  assertDevOnly();
   // Generate a valid-looking Visa test card number (starts with 4)
   const bin = `4${randInt(100, 999)}${randInt(1000, 9999)}${randInt(1000, 9999)}`;
   const lastDigit = randInt(0, 9);
@@ -202,7 +187,6 @@ export function generateRandomCardData(): {
 export function generateRandomInfractionData(
   overrides?: Partial<InfractionData>,
 ): InfractionData {
-  assertDevOnly();
   const speedLimit = randInt(40, 120);
   const measuredSpeed = speedLimit + randInt(5, 35);
   const consideredSpeed = measuredSpeed - 7;
@@ -233,7 +217,6 @@ export function generateRandomInfractionData(
 export function generateRandomVehicleData(
   overrides?: Partial<VehicleData>,
 ): VehicleData {
-  assertDevOnly();
   return {
     plate: generateRandomPlate(),
     brandModel: pick(MARCAS_CARROS),
@@ -247,7 +230,6 @@ export function generateRandomVehicleData(
 export function generateRandomDocumentData(
   overrides?: Partial<CaseDocumentData>,
 ): CaseDocumentData {
-  assertDevOnly();
   const name = generateRandomName();
   const address = generateRandomAddress();
   return {

@@ -25,12 +25,10 @@ import { DocumentEngineView } from './DocumentEngineView';
 import { BlocksView } from './BlocksView';
 import { ReportsView } from './ReportsView';
 import { JsonExplorer } from './JsonExplorer';
-import { NationalMonitorView } from './NationalMonitorView';
 import type { KnowledgeCategoryType } from '../../core/domain/knowledge-schema';
 
 type KnowledgeViewType =
   | 'infractions'
-  | 'nationalMonitor'
   | 'ctb'
   | 'arguments'
   | 'templates'
@@ -47,7 +45,6 @@ export const KnowledgeHub: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<KnowledgeCategoryType | 'all'>('all');
 
   const views = [
-    { id: 'nationalMonitor', title: 'Monitor Nacional (27 UFs)', icon: ShieldCheck, color: 'text-emerald-400', desc: 'Varredura & Fila de Revisão' },
     { id: 'infractions', title: 'Infrações', icon: AlertTriangle, color: 'text-amber-400', desc: 'Tipificação & Enquadramentos' },
     { id: 'ctb', title: 'Código CTB', icon: BookOpen, color: 'text-blue-400', desc: 'Artigos & Resoluções CONTRAN' },
     { id: 'arguments', title: 'Teses Jurídicas', icon: Scale, color: 'text-emerald-400', desc: '52 Teses Fundamentadas' },
@@ -130,7 +127,6 @@ export const KnowledgeHub: React.FC = () => {
 
       {/* Main View Area */}
       <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-sm">
-        {activeView === 'nationalMonitor' && <NationalMonitorView />}
         {activeView === 'infractions' && (
           <InfractionsView searchQuery={searchQuery} categoryFilter={selectedCategory} />
         )}

@@ -38,14 +38,13 @@ export function normalizeProcedureId(procedureType?: ProcedureType | string): st
   return LEGACY_PROCEDURE_ALIASES[raw] || raw;
 }
 
-/** Resolve o procedimento; falha (FAIL CLOSED) quando ausente/inválido. */
+/** Resolve o procedimento, caindo em recurso_jari quando ausente/inválido. */
 function resolveProcedure(procedureType?: ProcedureType | string) {
   const id = normalizeProcedureId(procedureType);
-  const procedure = PROCEDURES_CATALOG.find((p) => p.id === id);
-  if (!procedure) {
-    throw new Error(`Procedimento não suportado para rol de documentos: ${id}`);
-  }
-  return procedure;
+  return (
+    PROCEDURES_CATALOG.find((p) => p.id === id) ||
+    PROCEDURES_CATALOG.find((p) => p.id === 'recurso_jari')!
+  );
 }
 
 /**

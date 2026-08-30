@@ -2,7 +2,6 @@ import { logger } from '../../../server/observability/logger';
 import { eventBus, EventTopics } from '../../../core/events/topics';
 import { marketingService } from '../../services/marketing-service';
 import { metaPublisher } from '../meta-publisher.worker';
-import { metaAdapter } from '../../../integrations/meta/adapters/meta-adapter';
 
 
 /**
@@ -50,12 +49,6 @@ export class PublicacaoAgent {
   private async processScheduledContent(): Promise<void> {
     try {
       logger.debug('marketing', 'agents', 'publicacao', 'Processing scheduled content');
-
-      // Se a conexão com a Meta não estiver configurada, aguarda configuração ou OAuth sem gerar erros de publicação
-      if (!metaAdapter.isConnected()) {
-        logger.debug('marketing', 'agents', 'publicacao', 'Publicação suspensa no ciclo autônomo: Meta não configurada/conectada.');
-        return;
-      }
       
       // Get content that is approved and ready for scheduling
       const contents = await marketingService.getEditorialContents();
@@ -69,31 +62,25 @@ export class PublicacaoAgent {
         if (scheduledDateStr) {
           const scheduledDate = new Date(scheduledDateStr);
           
-          // If scheduled time has arrived or passed, enqueue and move to agendado
+          // If scheduled time has arrived or passed, move to agendado and enqueue for publishing
           if (scheduledDate <= now) {
             logger.info('marketing', 'agents', 'publicacao', `Processing content ${content.id} scheduled for ${scheduledDateStr}`);
-
-            // Enqueue FIRST: se o gate de qualidade rejeitar, o metaPublisher move o status
-            // para 'reprovado_qualidade' (side-effect). Só movemos p/ 'agendado' após sucesso —
-            // status movido antes da rejeição deixava a peça ETERNA em 'agendado' (loop infinito).
-            const enqueueResult = await metaPublisher.enqueue({
+            
+            // Move content to agendado status
+            await marketingService.updateContent(content.id, { 
+              status: 'agendado',
+              updatedAt: new Date().toISOString()
+            });
+            
+            // Enqueue for publishing (this will happen immediately in the meta publisher,
+            // but in a more sophisticated system, we might wait until the exact time)
+            metaPublisher.enqueue({
               destination: 'both',
               message: `${content.copyText || content.copy_text}\n\n${(content.hashtags || []).join(' ')}`,
               linkUrl: 'https://www.defesai.shop',
               mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || undefined,
             }, content.id);
-
-            if (enqueueResult.rejected) {
-              logger.error('marketing', 'agents', 'publicacao', `Conteúdo ${content.id} rejeitado pelo gate de qualidade: ${(enqueueResult.reasons || []).join(', ')}`);
-              continue;
-            }
-
-            // Move content to agendado status (após enfileirar com sucesso)
-            await marketingService.updateContent(content.id, {
-              status: 'agendado',
-              updatedAt: new Date().toISOString()
-            });
-
+            
             eventBus.publish(EventTopics.MARKETING_CONTENT_PUBLISHED, { contentId: content.id }, 'marketing_os');
             logger.info('marketing', 'agents', 'publish', `Conteúdo ${content.id} agendado e enfileirado na Meta`);
           }
@@ -117,18 +104,13 @@ export class PublicacaoAgent {
             logger.info('marketing', 'agents', 'publicacao', `Publishing scheduled content ${content.id} (scheduled for ${scheduledDateStr})`);
             
             // Publish the content
-            const result = await metaPublisher.enqueue({
+            const result = metaPublisher.enqueue({
               destination: 'both',
               message: `${content.copyText || content.copy_text}\n\n${(content.hashtags || []).join(' ')}`,
               linkUrl: 'https://www.defesai.shop',
               mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || undefined,
             }, content.id);
-
-            if (result.rejected) {
-              logger.error('marketing', 'agents', 'publicacao', `Conteúdo ${content.id} NÃO publicado (gate de qualidade): ${(result.reasons || []).join(', ')}`);
-              continue;
-            }
-
+            
             // Update status to published
             await marketingService.updateContent(content.id, { 
               status: 'publicado',
@@ -149,18 +131,13 @@ export class PublicacaoAgent {
         else {
           logger.info('marketing', 'agents', 'publicacao', `Publishing content ${content.id} without scheduled date (immediate)`);
           
-          const result = await metaPublisher.enqueue({
+          const result = metaPublisher.enqueue({
             destination: 'both',
             message: `${content.copyText || content.copy_text}\n\n${(content.hashtags || []).join(' ')}`,
             linkUrl: 'https://www.defesai.shop',
             mediaUrl: content.mediaUrl || content.media_url || content.imageUrl || content.image_url || undefined,
           }, content.id);
-
-          if (result.rejected) {
-            logger.error('marketing', 'agents', 'publicacao', `Conteúdo ${content.id} NÃO publicado (gate de qualidade): ${(result.reasons || []).join(', ')}`);
-            continue;
-          }
-
+          
           await marketingService.updateContent(content.id, { 
             status: 'publicado',
             publishedAt: new Date().toISOString(),

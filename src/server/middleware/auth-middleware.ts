@@ -112,17 +112,6 @@ export async function authenticateToken(
       return next();
     }
 
-    // 5. DEV AUTO-LOGIN: usa ADMIN_TEST_LOGIN/ADMIN_TEST_PASSWORD do .env para bypass automático
-    if (process.env.NODE_ENV !== 'production' && process.env.ADMIN_TEST_LOGIN && !req.user) {
-      req.user = {
-        id: 'usr_admin_e2e',
-        email: process.env.ADMIN_TEST_LOGIN,
-        role: 'admin',
-        name: 'Admin Teste (E2E)',
-      };
-      return next();
-    }
-
     // 5. Unauthenticated guest in production
     req.user = undefined;
     return next();

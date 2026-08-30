@@ -374,7 +374,7 @@ const recentCases = overviewData?.recentCases || [];
                       {c.infraction?.description || 'Infração de trânsito'}
                     </td>
                     <td className="py-3 px-4 text-slate-400">
-                      {c.infraction?.autuadorBody || 'Não informado'}
+                      {c.infraction?.autuadorBody || 'DETRAN'}
                     </td>
                     <td className="py-3 px-4">
                       <span

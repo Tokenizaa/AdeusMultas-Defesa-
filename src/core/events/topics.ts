@@ -50,7 +50,6 @@ export const EventTopics = {
   MARKETING_CONTENT_DRAFTED: 'marketing.content_drafted',
   MARKETING_QUALITY_APPROVED: 'marketing.quality_approved',
   MARKETING_CONTENT_PUBLISHED: 'marketing.content_published',
-  MARKETING_CONTENT_REJECTED: 'marketing.content_rejected',
   MARKETING_METRICS_COLLECTED: 'marketing.metrics_collected',
   MARKETING_LEARNING_UPDATE: 'marketing.learning_update',
   MARKETING_KNOWLEDGE_BASE_UPDATED: 'marketing.knowledge_base_updated',

@@ -84,7 +84,7 @@ export interface PagBankWebhookPayload {
   charges?: PagBankWebhookCharge[];
 }
 
-export class PagBankIntegrationService {
+class PagBankIntegrationService {
   private token: string;
   private environment: 'sandbox' | 'production';
   private apiBaseUrl: string;
@@ -107,10 +107,6 @@ export class PagBankIntegrationService {
     this.appBaseUrl = process.env.APP_URL || 'https://www.defesai.shop/';
   }
 
-  private isProductionMode(): boolean {
-    return (process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production';
-  }
-
 /**
     * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
     * Validação oficial de assinatura de webhook do PagBank
@@ -118,7 +114,7 @@ export class PagBankIntegrationService {
     */
   private verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
     if (!this.webhookSecret) {
-      if (this.isProductionMode()) {
+      if (process.env.NODE_ENV === 'production') {
         logger.error('payments', 'pagbank', 'verify_webhook', 'CRITICAL: PAGBANK_WEBHOOK_SECRET não configurado em produção');
         return false; // BLOQUEAR em produção
       }
@@ -141,15 +137,6 @@ export class PagBankIntegrationService {
     const receivedSignature = signatureHeader.startsWith('sha256=')
       ? signatureHeader
       : `sha256=${signatureHeader}`;
-
-    // timingSafeEqual requer buffers do mesmo tamanho - verificar antes
-    if (expectedSignature.length !== receivedSignature.length) {
-      logger.warn('payments', 'pagbank', 'verify_webhook', 'Signature length mismatch', {
-        expectedLength: expectedSignature.length,
-        receivedLength: receivedSignature.length,
-      });
-      return false;
-    }
 
     // Comparação em tempo constante para prevenir ataques de timing
     return crypto.timingSafeEqual(
@@ -225,7 +212,7 @@ paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
      // Chamar API real do PagBank se o token estiver configurado
      // [PRODUCTION] Bloquear tokens mock em produção — criar pagamento falso é fraude
      if (this.token && this.token.startsWith('mock_')) {
-       if (this.isProductionMode()) {
+       if (process.env.NODE_ENV === 'production') {
          throw new Error('PAGBANK_TOKEN com prefixo "mock_" não é permitido em produção. Configure um token válido.');
        }
        logger.warn('payments', 'pagbank', 'create_pix_order', 'Token mock detectado — usando modo sandbox local');
@@ -283,13 +270,13 @@ paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
          }
       } catch (err) {
         // [PRODUCTION] Não retornar ordem local como se fosse real quando a API falha
-        if (this.isProductionMode()) {
+        if (process.env.NODE_ENV === 'production') {
           logger.error('payments', 'pagbank', 'create_pix_order', 'PagBank API falhou em produção — ordem NÃO criada', { error: String(err) });
           throw new Error('Falha ao criar ordem PIX no PagBank. Tente novamente.');
         }
         logger.warn('payments', 'pagbank', 'create_pix_order', 'PagBank API falhou — modo dev: ordem local mantida', { error: String(err) });
       }
-    } else if (!this.token && this.isProductionMode()) {
+    } else if (!this.token && process.env.NODE_ENV === 'production') {
       throw new Error('PAGBANK_TOKEN não configurado. Pagamento indisponível em produção.');
     }
 
@@ -334,7 +321,7 @@ threeDsChallengeRequired: authenticationMethod === 'CHALLENGE',
 // Chamar API real do PagBank se o token estiver configurado
 // [PRODUCTION] Bloquear tokens mock em produção
 if (this.token && this.token.startsWith('mock_')) {
-  if (this.isProductionMode()) {
+  if (process.env.NODE_ENV === 'production') {
     throw new Error('PAGBANK_TOKEN com prefixo "mock_" não é permitido em produção.');
   }
   logger.warn('payments', 'pagbank', 'create_credit_card_order', 'Token mock detectado — usando modo sandbox local');
@@ -489,7 +476,7 @@ if (data.id) {
        }
      } else {
        // [PRODUCTION] Sandbox simulation bloqueada em produção
-       if (this.isProductionMode()) {
+       if (process.env.NODE_ENV === 'production') {
          throw new Error('PAGBANK_TOKEN não configurado. Pagamento com cartão indisponível em produção.');
        }
        // Sandbox simulation (dev only)

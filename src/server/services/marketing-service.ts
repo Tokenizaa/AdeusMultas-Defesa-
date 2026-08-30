@@ -21,11 +21,6 @@ export class MarketingService {
     this.initializeState();
   }
 
-  /** Força recarregamento do state a partir do Supabase. */
-  public async reload(): Promise<void> {
-    await this.initializeState();
-  }
-
   private async initializeState() {
     // If Supabase is not available, use default values from data files
     if (!this.supabase) {
@@ -197,7 +192,6 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
       authorAgent: '@marketing-criador',
       author_agent: '@marketing-criador',
       qualityReviewScore: 9.7,
-      audience: 'B2C',
     };
 
     // Save to Supabase
@@ -231,9 +225,6 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
   }
 
   // Create manual content item
-  // Status validation is enforced at DB level via CHECK constraint on editorial_content.status
-  // (7 values: rascunho, em_revisao, aprovado_qualidade, reprovado_qualidade, agendado, publicado, arquivado)
-  // See migration: 20260829130001_align_content_status_checks.sql
   async createManualContent(input: {
     title: string;
     channel: string;
@@ -244,7 +235,7 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
     imageUrl?: string | null;
     mediaUrl?: string | null;
     visualPrompt?: string;
-    status?: 'rascunho' | 'em_revisao' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado' | 'arquivado';
+    status?: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado';
     legalTheme?: string;
   }) {
     const newContent: any = {
@@ -271,7 +262,6 @@ O prazo máximo para expedição da notificação é de 30 dias. Qualquer atraso
       authorAgent: '@marketing-criador',
       author_agent: '@marketing-criador',
       qualityReviewScore: 9.5,
-      audience: 'B2C',
     };
 
     let savedContent = newContent;

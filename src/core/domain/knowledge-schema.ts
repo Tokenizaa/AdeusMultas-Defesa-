@@ -109,7 +109,7 @@ export interface OrganModel {
   code: string;
   name: string;
   abbreviation: string;
-  sphere: 'federal' | 'estadual' | 'municipal' | 'distrital';
+  sphere: 'federal' | 'estadual' | 'municipal';
   state?: string;
   onlinePortalUrl: string;
   physicalAddress: string;
@@ -145,8 +145,6 @@ export interface ArgumentModel {
   relatedJurisprudence: string[];
   requiredDocuments: string[];
   observations: string;
-  validFrom?: string; // ISO date 'YYYY-MM-DD'
-  validUntil?: string | null; // ISO date 'YYYY-MM-DD' ou null para vigente
   formattedParagraphs: {
     heading: string;
     text: string;
@@ -265,9 +263,5 @@ export interface RuleModel {
   name: string;
   description: string;
   category: KnowledgeCategoryType;
-  validFrom?: string; // ISO date 'YYYY-MM-DD'
-  validUntil?: string | null; // ISO date 'YYYY-MM-DD' ou null para norma vigente
-  version?: number;
-  jurisdiction?: 'federal' | 'estadual' | 'distrital' | 'municipal';
   evaluate: (ctx: RuleEvaluationContext) => DetectedInconsistencyResult | null;
 }

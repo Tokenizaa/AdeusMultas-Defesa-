@@ -28,21 +28,14 @@ export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({
   // Executar ExpertRuleEngine quando o componente montar
   useEffect(() => {
     try {
-      // Enriquecer infractionData com TODOS os campos que o ExpertRuleEngine espera
-      // CRÍTICO: notificationExpeditionDate e defenseDeadline são necessários para
-      // RULE_DECADENCIA_30_DIAS e para cálculo de prazos processuais
+      // Enriquecer infractionData com campos que o ExpertRuleEngine espera
       const enrichedData: InfractionData = {
         ...infractionData,
-        // notificationExpeditionDate: data de expedição da Notificação de Autuação
-        // Obrigatório para verificação de decadência (Art. 281, II CTB)
-        notificationExpeditionDate: infractionData.notificationExpeditionDate,
-        // defenseDeadline: prazo final para defesa informado na notificação
-        defenseDeadline: infractionData.defenseDeadline,
-        // hasPreviousInfractionsLast12Months: coletado no onboarding (SpecificInfractionDataStep)
-        // Se undefined, a regra de advertência NÃO dispara (conservador)
+        // Por padrão, assumir que NÃO temos dados de infrações anteriores
+        // O motor vai avaliar com cuidado (regra de advertência pode não disparar)
         hasPreviousInfractionsLast12Months: infractionData.hasPreviousInfractionsLast12Months ?? undefined,
-        // hasR19SignageProof: coletado no onboarding (SpecificInfractionDataStep para radar)
-        // Se undefined, a regra de sinalização R-19 dispara como "possível inconsistência"
+        // Por padrão, assumir que NÃO temos prova de sinalização R-19
+        // O motor vai considerar como possível inconsistência
         hasR19SignageProof: infractionData.hasR19SignageProof ?? undefined,
       };
       
@@ -51,7 +44,7 @@ export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({
     } catch (err) {
       console.error('ExpertRuleEngine evaluation failed:', err);
     }
-  }, [infractionData]);
+  }, []);
 
   const stages = [
     { label: 'Recebendo e validando dados informados pelo condutor', duration: 700 },

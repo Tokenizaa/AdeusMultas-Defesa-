@@ -16,15 +16,7 @@ export interface RawLead {
   googleMapsUrl?: string;
   rating?: number;
   reviewCount?: number;
-  openingHours?: string;
   sourceUrl?: string;
-}
-
-export interface ScrapedForKey {
-  query: string;
-  city: string;
-  state: string;
-  source: string;
 }
 
 export interface Lead extends RawLead {
@@ -33,8 +25,6 @@ export interface Lead extends RawLead {
   phone_normalized?: string | null;
   source: string;
   scraped_at: string;
-  scraped_for?: ScrapedForKey | null;
-  collection_run_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -45,24 +35,7 @@ export interface ScrapeResult {
   location: string;
   totalFound: number;
   inserted: number;
-  /** Leads que já existiam no banco com campos vazios e foram PREENCHIDOS (fill-gap upsert). */
-  filled: number;
   duplicates: number;
-  /** Duplicatas completas ignoradas (não preenchidas, não re-inseridas). */
-  completeDuplicates: number;
-  rejected: number;
-  errors: string[];
-  leads: RawLead[];
-}
-
-export interface QueryScrapeResult {
-  query: string;
-  location: string;
-  totalFound: number;
-  inserted: number;
-  filled: number;
-  duplicates: number;
-  completeDuplicates: number;
   rejected: number;
   errors: string[];
   leads: RawLead[];

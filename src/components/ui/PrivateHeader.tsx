@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
-import { AdeusMultasLogo } from '../brand/AdeusMultasLogo';
 
 export const PrivateHeader: React.FC = () => {
   const { navigate, currentPath } = useRouter();
@@ -84,12 +83,31 @@ export const PrivateHeader: React.FC = () => {
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
 
-            {/* Logo Oficial Adeus Multas */}
+            {/* Logo Oficial DefesAi */}
             <div
               onClick={() => navigate('/')}
-              className="flex items-center cursor-pointer select-none group"
+              className="flex items-center gap-3 cursor-pointer select-none group"
             >
-              <AdeusMultasLogo variant="full" iconSize="md" />
+              <div className="flex items-center font-extrabold text-lg sm:text-2xl tracking-tighter text-[#071D41] font-sans">
+                <span>Defe</span>
+                <span className="text-orange-500">s</span>
+                <span className="text-[#168821]">Ai</span>
+              </div>
+
+              <div className="h-6 w-px bg-slate-300 hidden sm:block" />
+
+              <div className="truncate max-w-[120px] sm:max-w-none">
+                <h1 className="text-sm sm:text-base font-bold text-[#071D41] tracking-tight flex items-center gap-1.5">
+                  <span>Adeus</span>
+                  <span className="text-orange-500">Multa</span>
+                  <span className="text-[10px] sm:text-sm font-bold font-mono px-1 py-0.5 bg-orange-50 text-orange-900 border border-orange-300 rounded">
+                    CTB • CONTRAN
+                  </span>
+                </h1>
+                <p className="text-sm text-slate-600 hidden md:block">
+                  Plataforma de Defesa Autônoma para Multas de Trânsito
+                </p>
+              </div>
             </div>
           </div>
 
@@ -173,8 +191,13 @@ export const PrivateHeader: React.FC = () => {
             aria-label="Navegação Principal do Sistema"
           >
             {/* Topo do Menu */}
-            <div className="p-4 bg-[#071D41] text-white flex items-center justify-between border-b border-[#0C326F]">
-              <AdeusMultasLogo variant="compact" theme="dark" iconSize="sm" />
+            <div className="p-4 bg-[#071D41] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-xl text-white">Defe</span>
+                <span className="text-orange-500">s</span>
+                <span className="text-[#168821]">Ai</span>
+              <span className="text-sm text-orange-300">| DefesAi</span>
+              </div>
               <button
                 onClick={() => setIsMenuOpen(false)}
                 className="p-1.5 rounded-lg text-white hover:bg-[#0C326F] cursor-pointer"

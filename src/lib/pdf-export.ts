@@ -23,7 +23,7 @@ export function exportDefenseToPDF(caseData: CaseDomain, customText?: string) {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Defesa Administrativa - Auto ${caseData.infraction?.aitNumber || 'Não informado'}</title>
+  <title>Defesa Administrativa - Auto ${caseData.infraction.aitNumber || '1B892014'}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -146,27 +146,27 @@ export function exportDefenseToPDF(caseData: CaseDomain, customText?: string) {
     <div class="meta-grid">
       <div class="meta-item">
         <strong>Auto de Infração (AIT):</strong>
-        <span>${caseData.infraction?.aitNumber || 'Não informado'}</span>
+        <span>${caseData.infraction.aitNumber || '1B892014'}</span>
       </div>
       <div class="meta-item">
         <strong>Placa / Veículo:</strong>
-        <span>${caseData.vehicle?.plate || 'Não informado'} — ${caseData.vehicle?.brandModel || 'Não informado'}</span>
+        <span>${caseData.vehicle.plate || 'BRA2E19'} — ${caseData.vehicle.brandModel || 'Veículo'}</span>
       </div>
       <div class="meta-item">
         <strong>Órgão Julgador:</strong>
-        <span>${caseData.infraction?.autuadorBody || 'Não informado'}</span>
+        <span>${caseData.infraction.autuadorBody || 'DETRAN-SP'}</span>
       </div>
       <div class="meta-item">
         <strong>Enquadramento:</strong>
-        <span>${caseData.infraction?.infractionCode || 'Não informado'} (${caseData.infraction?.ctbArticle || 'Não informado'})</span>
+        <span>${caseData.infraction.infractionCode || '745-50'} (${caseData.infraction.ctbArticle || 'Art. 218 CTB'})</span>
       </div>
       <div class="meta-item">
         <strong>Requerente:</strong>
-        <span>${caseData.clientName || 'Não informado'}</span>
+        <span>${caseData.clientName || 'Condutor Requerente'}</span>
       </div>
       <div class="meta-item">
         <strong>CPF:</strong>
-        <span>${caseData.clientCpf || 'Não informado'}</span>
+        <span>${caseData.clientCpf || '000.000.000-00'}</span>
       </div>
     </div>
   </div>
@@ -175,10 +175,10 @@ export function exportDefenseToPDF(caseData: CaseDomain, customText?: string) {
 
   <div class="signature-section">
     <p style="margin-bottom: 30px;">Nestes termos, pede e espera deferimento.</p>
-    <p style="margin-bottom: 40px;">${caseData.infraction?.location?.split('—')[1] || 'Não informado'}, ${dateFormatted}.</p>
+    <p style="margin-bottom: 40px;">${caseData.infraction.location?.split('—')[1] || 'Local'}, ${dateFormatted}.</p>
     <div class="signature-line"></div>
-    <p class="signature-name">${caseData.clientName || 'Não informado'}</p>
-    <p class="signature-info">CPF: ${caseData.clientCpf || 'Não informado'} • Requerente / Condutor</p>
+    <p class="signature-name">${caseData.clientName || 'Requerente'}</p>
+    <p class="signature-info">CPF: ${caseData.clientCpf || '000.000.000-00'} • Requerente / Condutor</p>
   </div>
 
   <div class="footer-stamp">

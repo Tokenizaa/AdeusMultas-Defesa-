@@ -22,10 +22,6 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Verificação da Decadência de 30 Dias da Notificação',
     description: 'Verifica se a Notificação da Autuação foi expedida ou postada após 30 dias contados da data da infração.',
     category: 'prazos_decadencia',
-    validFrom: '1998-01-22',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
         const infDate = new Date(ctx.infractionDate);
@@ -55,13 +51,8 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Validade Metrológica Anual de Radar Eletrônico',
     description: 'Verifica se o medidor eletrônico de velocidade possui laudo de aferição do INMETRO emitido há mais de 12 meses.',
     category: 'metrologia_engenharia',
-    validFrom: '2020-11-01',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
-      const code = ctx.infractionCode || '';
-      const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
+      const isSpeed = ctx.infractionCode.startsWith('74') || ctx.infractionCode === '745-50' || ctx.infractionCode === '746-30' || ctx.infractionCode === '747-10';
       if (isSpeed) {
         if (ctx.radarCalibrationDate && ctx.infractionDate) {
           const infDate = new Date(ctx.infractionDate);
@@ -100,14 +91,9 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Direito Subjetivo à Conversão em Advertência (Art. 267 CTB)',
     description: 'Identifica se a infração é de gravidade leve ou média e se o condutor cumpre os requisitos de não reincidência.',
     category: 'direito_material',
-    validFrom: '2021-04-12', // Lei 14.071/2020
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
-      const code = ctx.infractionCode || '';
-      const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace('-', '') === code.replace('-', ''));
-      const isLightOrMedium = cat ? (cat.severity === 'leve' || cat.severity === 'media') : (code === '745-50' || code === '735-80');
+      const cat = INFRACTION_CATALOG.find((i) => i.code === ctx.infractionCode || i.code.replace('-', '') === ctx.infractionCode.replace('-', ''));
+      const isLightOrMedium = cat ? (cat.severity === 'leve' || cat.severity === 'media') : (ctx.infractionCode === '745-50' || ctx.infractionCode === '735-80');
       const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false || ctx.hasPreviousInfractionsLast12Months === undefined;
 
       if (isLightOrMedium && isCleanRecord) {
@@ -131,13 +117,8 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Termo de Sinais Psicomotores da Resolução CONTRAN 432/2013',
     description: 'Valida autuações por recusa ao bafômetro (Art. 165-A) desprovidas do formulário do Anexo II da Resolução 432.',
     category: 'direito_formal',
-    validFrom: '2013-01-29',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
-      const code = ctx.infractionCode || '';
-      if (code === '516-91' || code === '516-92' || code.includes('516')) {
+      if (ctx.infractionCode === '516-91' || ctx.infractionCode === '516-92' || ctx.infractionCode.includes('516')) {
         return {
           ruleId: 'RULE_LEI_SECA_TERMO_432',
           title: 'Ausência ou Defeito no Termo de Constatação de Sinais (Res. 432/13)',
@@ -158,10 +139,6 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Falta de Descrição Circunstanciada em Autuações sem Abordagem',
     description: 'Valida multas manuais (celular, cinto, semáforo) lavradas sem parada do veículo.',
     category: 'direito_formal',
-    validFrom: '2023-01-02',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
       if (ctx.infractionCode === '736-62' || ctx.infractionCode === '518-51' || ctx.infractionCode === '735-80') {
         return {
@@ -184,10 +161,6 @@ export const EXPERT_RULES: RuleModel[] = [
     name: 'Inobservância à Sinalização Regulamentadora R-19 (Art. 90 CTB)',
     description: 'Aplica a inexigibilidade de sanção quando a sinalização regulamentadora for insuficiente ou incorreta.',
     category: 'sinalizacao_viaria',
-    validFrom: '1998-01-22',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
     evaluate: (ctx) => {
       if (ctx.hasR19SignageProof === false || ctx.hasR19SignageProof === undefined) {
         return {
@@ -207,37 +180,9 @@ export const EXPERT_RULES: RuleModel[] = [
 
 export class ExpertRuleEngine {
   /**
-   * Verifica se uma regra jurídica está vigente em determinada data de referência (ISO 'YYYY-MM-DD').
+   * Evaluates an infraction against the entire catalog of deterministic rules
    */
-  public static isRuleActiveAtDate(rule: RuleModel, dateIso?: string): boolean {
-    if (!dateIso) return true;
-    const target = dateIso.includes('T') ? dateIso.split('T')[0] : dateIso.slice(0, 10);
-    if (rule.validFrom && target < rule.validFrom) {
-      return false;
-    }
-    if (rule.validUntil && target > rule.validUntil) {
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Retorna todas as regras ativas para uma data de referência.
-   */
-  public static getActiveRules(dateIso?: string): RuleModel[] {
-    return EXPERT_RULES.filter((r) => this.isRuleActiveAtDate(r, dateIso));
-  }
-
-  /**
-   * Evaluates an infraction against the catalog of deterministic rules applicable at the infraction date
-   */
-  public static evaluate(caseId: string, infraction: InfractionData, referenceDate?: string): CaseAnalysis {
-    if (!infraction.autuadorBody) {
-      throw new Error('autuadorBody obrigatório para avaliação do motor de regras');
-    }
-
-    const effectiveDate = referenceDate || infraction.dateTime || infraction.notificationExpeditionDate || new Date().toISOString();
-
+  public static evaluate(caseId: string, infraction: InfractionData): CaseAnalysis {
     const context: RuleEvaluationContext = {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
@@ -256,9 +201,8 @@ export class ExpertRuleEngine {
     const detectedInconsistencies: CaseAnalysis['detectedInconsistencies'] = [];
     const recommendedArgs: LegalArgumentDomain[] = [];
 
-    // 1. Run all deterministic rules that are active on the effective date
-    const activeRules = this.getActiveRules(effectiveDate);
-    for (const rule of activeRules) {
+    // 1. Run all deterministic rules
+    for (const rule of EXPERT_RULES) {
       const result = rule.evaluate(context);
       if (result) {
         detectedInconsistencies.push({
@@ -345,7 +289,7 @@ export class ExpertRuleEngine {
       detectedInconsistencies,
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
-      competentBody: infraction.autuadorBody,
+      competentBody: infraction.autuadorBody || 'DETRAN / JARI',
       procedureDeadline: infraction.defenseDeadline || deadlineStr,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.`,
       createdAt: new Date().toISOString(),

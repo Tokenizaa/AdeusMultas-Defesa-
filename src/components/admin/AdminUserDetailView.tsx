@@ -181,7 +181,7 @@ export const AdminUserDetailView: React.FC = () => {
                   )}
                 </div>
                 <p className="text-sm text-slate-400 mt-1">
-                  Auto {c.infraction?.aitNumber || 'N/A'} • Placa {c.vehicle?.plate || 'N/A'} • {c.infraction?.autuadorBody || 'Não informado'}
+                  Auto {c.infraction?.aitNumber || 'N/A'} • Placa {c.vehicle?.plate || 'N/A'} • {c.infraction?.autuadorBody || 'DETRAN'}
                 </p>
               </div>
 

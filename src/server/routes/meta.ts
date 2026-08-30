@@ -191,8 +191,7 @@ router.post(['/integrations/meta/disconnect', '/meta/disconnect'], requireAdmin,
 // ==========================================
 // 4. Publishing Engine
 // ==========================================
-// Publicacao Meta simplificada (sem requireAdmin): token/configuracao residem no backend/.env
-router.post(['/integrations/meta/publish', '/meta/publish'], async (req, res) => {
+router.post(['/integrations/meta/publish', '/meta/publish'], requireAdmin, async (req, res) => {
   try {
     const { destination, message, mediaUrl, linkUrl, pageId, instagramAccountId, contentId } = req.body;
 
