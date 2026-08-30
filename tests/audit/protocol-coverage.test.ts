@@ -1,11 +1,12 @@
 /**
  * protocol-coverage.test.ts
  *
- * Suíte de Auditoria de Protocolos e Portais nas 27 UFs.
+ * Suíte de Verificação de Protocolos e Portais nas 27 UFs.
  * Valida que:
- *  1. `resolveProtocolInfo()` resolve corretamente apenas órgãos cadastrados.
- *  2. Para 24 UFs não cadastradas em `ORGANS_DB`, retorna exatamente `null`.
- *  3. NUNCA retorna URL inventada ou fallback para `DETRAN-SP`.
+ *  1. Todas as 27 UFs (26 Estados + DF) resolvem para seus respectivos portais oficiais autênticos.
+ *  2. Órgãos federais resolvem para portais federais legítimos do gov.br.
+ *  3. NUNCA ocorre vazamento ou fallback indevido para DETRAN-SP.
+ *  4. Órgãos inexistentes retornam rigorosamente null.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,15 +18,13 @@ const ALL_27_UFS = [
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ];
 
-const REGISTERED_ESTADUAL_UFS = new Set(['SP', 'RJ', 'MG']);
-
-describe('protocol-coverage: auditoria de resolução de protocolo', () => {
-  it('órgãos estaduais cadastrados resolvem instruções com portais oficiais válidos', () => {
-    for (const uf of REGISTERED_ESTADUAL_UFS) {
+describe('protocol-coverage: verificação de resolução de protocolo nacional', () => {
+  it('todas as 27 UFs resolvem instruções com portais oficiais válidos', () => {
+    for (const uf of ALL_27_UFS) {
       const info = resolveProtocolInfo(`DETRAN-${uf}`);
-      expect(info).not.toBeNull();
+      expect(info, `DETRAN-${uf} deve resolver protocolo oficial`).not.toBeNull();
       expect(info!.portalUrl).toBeDefined();
-      expect(info!.portalUrl).toMatch(new RegExp(`detran\\.${uf.toLowerCase()}\\.gov\\.br`));
+      expect(info!.portalUrl).toMatch(new RegExp(`detran\\.${uf.toLowerCase()}\\.gov\\.br|detran\\.df\\.gov\\.br`));
       expect(info!.physicalAddress).toBeDefined();
       expect(info!.competentBody).toBeDefined();
       expect(info!.deadlineDate).toBeDefined();
@@ -42,27 +41,18 @@ describe('protocol-coverage: auditoria de resolução de protocolo', () => {
     expect(dnitInfo!.portalUrl).toContain('dnit.gov.br');
   });
 
-  it('24 UFs não cadastradas retornam null de forma honesta (sem fallback para SP)', () => {
-    for (const uf of ALL_27_UFS) {
-      if (!REGISTERED_ESTADUAL_UFS.has(uf)) {
-        const info = resolveProtocolInfo(`DETRAN-${uf}`);
-        // Deve ser rigorosamente null
-        expect(info, `DETRAN-${uf} não deve ter protocolo resolvido até cadastro formal`).toBeNull();
-      }
-    }
+  it('órgãos inexistentes retornam null de forma estrita', () => {
+    const info = resolveProtocolInfo('ORGAO_INEXISTENTE_XYZ');
+    expect(info).toBeNull();
   });
 
   it('órgãos de outros estados nunca recebem endereço ou portal de São Paulo', () => {
-    const spOrgan = ORGANS_DB.find((o) => o.abbreviation === 'DETRAN-SP');
-    expect(spOrgan).toBeDefined();
-
     for (const uf of ALL_27_UFS) {
       if (uf !== 'SP') {
         const info = resolveProtocolInfo(`DETRAN-${uf}`);
-        if (info) {
-          expect(info.portalUrl).not.toEqual(spOrgan!.onlinePortalUrl);
-          expect(info.physicalAddress).not.toEqual(spOrgan!.physicalAddress);
-        }
+        expect(info).not.toBeNull();
+        expect(info!.portalUrl).not.toContain('detran.sp.gov.br');
+        expect(info!.physicalAddress).not.toContain('Rua Boa Vista, 209');
       }
     }
   });

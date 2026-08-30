@@ -1,123 +1,22 @@
 /**
  * @file organs.ts
- * DefesaAI — Traffic Authorities and Judgment Bodies Database (Fase 3)
+ * DefesaAI — Traffic Authorities and Judgment Bodies Database
+ * Integrado com o Registro Canônico Nacional de Órgãos (27 UFs + Federal).
  */
 
 import { OrganModel } from '../domain/knowledge-schema';
 import { SubmissionInstructions } from '../../types';
+import { CanonicalKnowledgeRegistry } from '../knowledge/registry';
 
-export const ORGANS_DB: OrganModel[] = [
-  {
-    id: 'DETRAN_SP',
-    code: '126000',
-    name: 'Departamento Estadual de Trânsito de São Paulo',
-    abbreviation: 'DETRAN-SP',
-    sphere: 'estadual',
-    state: 'SP',
-    onlinePortalUrl: 'https://www.detran.sp.gov.br/servicos/recursos',
-    physicalAddress: 'Rua Boa Vista, 209 - Centro, São Paulo/SP - CEP 01014-001',
-    email: 'recursos@detran.sp.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'JARI Central do DETRAN-SP e JARI descentralizadas nas Ciretrans',
-  },
-  {
-    id: 'DETRAN_RJ',
-    code: '119000',
-    name: 'Departamento Estadual de Trânsito do Rio de Janeiro',
-    abbreviation: 'DETRAN-RJ',
-    sphere: 'estadual',
-    state: 'RJ',
-    onlinePortalUrl: 'https://www.detran.rj.gov.br/protocolo-defesas',
-    physicalAddress: 'Av. Presidente Vargas, 817 - Centro, Rio de Janeiro/RJ - CEP 20071-004',
-    email: 'jari@detran.rj.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'Comissões de Julgamento da JARI DETRAN-RJ',
-  },
-  {
-    id: 'DETRAN_MG',
-    code: '113000',
-    name: 'Departamento Estadual de Trânsito de Minas Gerais',
-    abbreviation: 'DETRAN-MG',
-    sphere: 'estadual',
-    state: 'MG',
-    onlinePortalUrl: 'https://www.detran.mg.gov.br/infracoes/recursos',
-    physicalAddress: 'Av. João Pinheiro, 417 - Boa Viagem, Belo Horizonte/MG - CEP 30130-180',
-    email: 'jari.mg@policiacivil.mg.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'Colegiados JARI DETRAN-MG',
-  },
-  {
-    id: 'PRF_BRASIL',
-    code: '000100',
-    name: 'Polícia Rodoviária Federal (Superintendência Nacional)',
-    abbreviation: 'PRF',
-    sphere: 'federal',
-    onlinePortalUrl: 'https://sistemas.prf.gov.br/portal/recursos',
-    physicalAddress: 'Setor Policial Sul, Bloco C, Lote 5, Brasília/DF - CEP 70610-909',
-    email: 'multas.sede@prf.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'JARI Nacional e Regionais da PRF nas Superintendências Estaduais',
-  },
-  {
-    id: 'DNIT_FEDERAL',
-    code: '000200',
-    name: 'Departamento Nacional de Infraestrutura de Transportes',
-    abbreviation: 'DNIT',
-    sphere: 'federal',
-    onlinePortalUrl: 'https://servicos.dnit.gov.br/multas',
-    physicalAddress: 'SAN Quadra 3, Bloco A, Ed. Núcleo dos Transportes, Brasília/DF - CEP 70040-902',
-    email: 'recursos.dnit@dnit.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'JARI Especial do DNIT em Brasília/DF',
-  },
-  {
-    id: 'CET_SP',
-    code: '271000',
-    name: 'Companhia de Engenharia de Tráfego de São Paulo / DSV',
-    abbreviation: 'CET-SP / DSV',
-    sphere: 'municipal',
-    state: 'SP',
-    onlinePortalUrl: 'https://dsv.prefeitura.sp.gov.br/defesa',
-    physicalAddress: 'Rua Sumidouro, 740 - Pinheiros, São Paulo/SP - CEP 05428-010',
-    email: 'dsveletronico@prefeitura.sp.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'Juntas Administrativas da Secretaria Municipal de Mobilidade de SP',
-  },
-  {
-    id: 'DER_SP',
-    code: '126100',
-    name: 'Departamento de Estradas de Rodagem de São Paulo',
-    abbreviation: 'DER-SP',
-    sphere: 'estadual',
-    state: 'SP',
-    onlinePortalUrl: 'https://www.der.sp.gov.br/multas/recursos',
-    physicalAddress: 'Ala Central, Av. do Estado, 777 - Bom Retiro, São Paulo/SP',
-    email: 'jari@der.sp.gov.br',
-    standardDeadlineDays: 30,
-    jariStructure: 'Colegiados JARI DER-SP',
-  },
-];
+export const ORGANS_DB: OrganModel[] = CanonicalKnowledgeRegistry.getAllOrgans();
 
 /**
- * Resolves protocol information for a given autuador abbreviation.
+ * Resolves protocol information for a given autuador abbreviation or code.
  * Returns structured submission instructions including competent body, portal URL,
  * physical address, and calculated deadline.
  */
-export function resolveProtocolInfo(autuadorAbbreviation: string): SubmissionInstructions | null {
-  const organ = ORGANS_DB.find((o) => o.abbreviation === autuadorAbbreviation);
-  if (!organ) return null;
-  return {
-    competentBody: organ.jariStructure,
-    recommendedMethod: 'portal_online',
-    portalUrl: organ.onlinePortalUrl,
-    physicalAddress: organ.physicalAddress,
-    instructionsText: `Protocolo via ${organ.onlinePortalUrl} ou presencial em ${organ.physicalAddress}`,
-    deadlineDate: calculateDeadline(organ.standardDeadlineDays),
-  };
+export function resolveProtocolInfo(autuadorAbbreviation: string, referenceDate?: string): SubmissionInstructions | null {
+  if (!autuadorAbbreviation) return null;
+  return CanonicalKnowledgeRegistry.resolveProtocolInfo(autuadorAbbreviation, referenceDate);
 }
 
-function calculateDeadline(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toLocaleDateString('pt-BR');
-}

@@ -1,6 +1,6 @@
 /**
  * geographic-integrity — isolamento total entre casos.
- * Sequência SP → RJ → SP → PR(ausente) → RJ → SP: cada caso deve reter
+ * Sequência SP → RJ → SP → PR → RJ → SP: cada caso deve reter
  * seu próprio órgão/cidade/UF/portal. Contaminação = falha.
  */
 import { describe, it, expect } from 'vitest';
@@ -12,7 +12,7 @@ const seq = [
   { id: 'c1', autuador: 'DETRAN-SP', cityState: 'São Paulo/SP', portal: 'detran.sp.gov.br' },
   { id: 'c2', autuador: 'DETRAN-RJ', cityState: 'Rio de Janeiro/RJ', portal: 'detran.rj.gov.br' },
   { id: 'c3', autuador: 'DETRAN-SP', cityState: 'São Paulo/SP', portal: 'detran.sp.gov.br' },
-  { id: 'c4', autuador: 'DETRAN-PR', cityState: 'Curitiba/PR', portal: null }, // não registrado → SEM dado
+  { id: 'c4', autuador: 'DETRAN-PR', cityState: 'Curitiba/PR', portal: 'detran.pr.gov.br' },
   { id: 'c5', autuador: 'DETRAN-RJ', cityState: 'Rio de Janeiro/RJ', portal: 'detran.rj.gov.br' },
   { id: 'c6', autuador: 'DETRAN-SP', cityState: 'São Paulo/SP', portal: 'detran.sp.gov.br' },
 ];
@@ -71,18 +71,17 @@ describe('geographic-integrity: cada caso é independente', () => {
   });
 
   it('caso com órgão fora do registry não recebe portal alheio (sem contaminação)', () => {
-    // PR não registrado; nada pode "cair" p/ DETRAN-SP/MG/RJ
-    const pr = RagPipeline.generateDefenseDraft(
-      'case_pr',
-      makeInfraction({ autuadorBody: 'DETRAN-PR', aitNumber: 'AIT-PR' }),
-      'PRX-3333',
+    const unknown = RagPipeline.generateDefenseDraft(
+      'case_unknown',
+      makeInfraction({ autuadorBody: 'ORGAO_INEXISTENTE', aitNumber: 'AIT-UNK' }),
+      'UNK-3333',
       'Honda Civic',
-      { name: 'Ana', cpf: '111.222.333-44', cnh: '11122233344', address: 'Rua XV, 50', cityState: 'Curitiba/PR' },
+      { name: 'Ana', cpf: '111.222.333-44', cnh: '11122233344', address: 'Rua Desconhecida, 50', cityState: 'Desconhecida/XX' },
       [],
       'recurso_jari',
     );
-    expect(pr.protocolInfo).toBeNull();
-    const info = resolveProtocolInfo('DETRAN-PR');
+    expect(unknown.protocolInfo).toBeNull();
+    const info = resolveProtocolInfo('ORGAO_INEXISTENTE');
     expect(info).toBeNull();
   });
 });

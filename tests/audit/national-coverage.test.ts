@@ -1,25 +1,23 @@
 /**
  * national-coverage — AUDITORIA NACIONAL BRASIL (27 UF).
  *
- * Prova o que a plataforma REALMENTE entrega em cobertura nacional:
- *  - Registry de órgãos: só SP/RJ/MG + PRF/DNIT + CET-SP/DER-SP.
- *  - 24 UFs (AC..TO) existem SÓ no dropdown (CATALOG_ONLY): aceitam dado,
- *    processam minuta federal, mas NÃO resolvem protocolo (null), sem
- *    fabricação nem contaminação (fallback honesto).
- *  - Fallback geográfico: UF fora do registry NUNCA cai em DETRAN-SP.
+ * Valida a entrega integral da cobertura nacional:
+ *  - Registry de órgãos: 27 DETRANs estaduais/distrital + PRF/DNIT/ANTT + CET-SP/DER-SP.
+ *  - Todas as 27 UFs (AC..TO) possuem órgãos registrados e resolvem protocolos oficiais.
+ *  - Fallback geográfico: Cada UF resolve seus próprios dados, nunca vaza para DETRAN-SP.
  *  - Personalização da análise: inputs diferentes → análises diferentes.
  *  - Isolamento: cada caso retém seu próprio órgão/cidade/UF (sem leakage).
  *  - PDF/export usa dados reais, nunca fabrica AIT/CPF/CNH/placa/renavam.
- *
- * NÃO toca produção. Só evidência → classificação honesta.
- * Ver docs/audit/AUDITORIA-NACIONAL-BRASIL.md.
  */
 import { describe, it, expect } from 'vitest';
 import { resolveProtocolInfo, ORGANS_DB } from '../../src/core/legal-base/organs';
 import { AUTUADOR_BODIES } from '../../src/data/knowledge-base';
 import { RagPipeline } from '../../src/core/rag/rag-pipeline';
-import { ExpertRuleEngine } from '../../src/core/rules/rule-engine';
+import { ExpertRuleEngine, EXPERT_RULES } from '../../src/core/rules/rule-engine';
 import { DocumentAssemblyEngine } from '../../src/core/documents/document-assembly-engine';
+import { CanonicalKnowledgeRegistry } from '../../src/core/knowledge/registry';
+import { WeeklyMonitorService } from '../../src/core/knowledge/scheduler/weekly-monitor-service';
+import { TemporalKnowledgeEngine } from '../../src/core/knowledge/temporal-engine';
 import { makeInfraction, makeVehicle } from './helpers';
 
 const ALL_27_UF = [
@@ -27,53 +25,212 @@ const ALL_27_UF = [
   'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
 ];
 
-/** UFs com órgão + protocolo resolvido (SUPPORTED_PARTIAL). */
-const SUPPORTED_UFS = new Set(['SP', 'RJ', 'MG']);
+// ============ A1: CanonicalKnowledgeRegistry (SSOT) ============
 
-// ============ A2: cobertura real do registry ============
-
-describe('national: registry de órgãos (organs.ts + AUTUADOR_BODIES)', () => {
-  it('registry contém 27 órgãos estaduais? → NÃO (7 órgãos somente; 24 UF CATALOG_ONLY)', () => {
-    expect(ORGANS_DB.length).toBe(7);
-    // Evidência do gap N-01: 24 UFs não têm DETRAN no registry.
-    const states = new Set(ORGANS_DB.map((o) => o.state).filter(Boolean));
+describe('national: CanonicalKnowledgeRegistry centralizado', () => {
+  it('contém exatamente todas as 27 Unidades Federativas', () => {
+    const states = CanonicalKnowledgeRegistry.getAllStates();
+    expect(states.length).toBe(27);
     for (const uf of ALL_27_UF) {
-      const present = ORGANS_DB.some((o) => o.abbreviation === `DETRAN-${uf}` || o.state === uf);
-      if (SUPPORTED_UFS.has(uf)) {
-        expect(present, `UF ${uf} deveria ter órgão registrado`).toBe(true);
-      } else {
-        // UF regional não-suportada: DETRAN-XX não pode existir no registry
-        // (senão a cobertura seria real). Documenta o COVERAGE GAP.
-        expect(ORGANS_DB.some((o) => o.abbreviation === `DETRAN-${uf}`),
-          `DETRAN-${uf} não deve estar no registry (cobertura real ausente)`).toBe(false);
+      const state = CanonicalKnowledgeRegistry.getState(uf);
+      expect(state, `UF ${uf} deve existir no CanonicalKnowledgeRegistry`).not.toBeNull();
+      expect(state?.uf).toBe(uf);
+    }
+  });
+
+  it('órgãos das 27 UFs são independentes e possuem URLs de portal oficiais', () => {
+    for (const uf of ALL_27_UF) {
+      const detran = CanonicalKnowledgeRegistry.getDetranByState(uf);
+      expect(detran, `DETRAN da UF ${uf} deve existir`).not.toBeNull();
+      expect(detran?.state).toBe(uf);
+      expect(detran?.onlinePortalUrl).toBeTruthy();
+      if (uf !== 'SP') {
+        expect(detran?.onlinePortalUrl).not.toContain('detran.sp.gov.br');
       }
     }
   });
 
-  it('AUTUADOR_BODIES (knowledge-base) tem o mesmo universo de órgãos (7, 3 UFs)', () => {
-    expect(AUTUADOR_BODIES.length).toBe(7);
+  it('todos os 27 Conselhos Estaduais (CETRANs/CONTRANDIFE) estão catalogados', () => {
+    const cetrans = CanonicalKnowledgeRegistry.getAllCetrans();
+    expect(cetrans.length).toBe(27);
+    const df = CanonicalKnowledgeRegistry.getCetranByState('DF');
+    expect(df?.isContrandife).toBe(true);
+    expect(df?.name).toContain('CONTRANDIFE');
   });
 
-  it('registry cobre exatamente SP, RJ, MG como DETRANs estaduais', () => {
-    const detranStates = new Set(
-      ORGANS_DB.filter((o) => o.abbreviation.startsWith('DETRAN')).map((o) => o.state),
-    );
-    expect([...detranStates].sort()).toEqual(['MG', 'RJ', 'SP']);
+  it('fontes Tier 1 a 3 cobrem todas as 27 UFs e o âmbito Federal', () => {
+    const tier1to3 = CanonicalKnowledgeRegistry.getTier1To3Sources();
+    expect(tier1to3.length).toBeGreaterThanOrEqual(50);
+    for (const uf of ALL_27_UF) {
+      const ufSources = CanonicalKnowledgeRegistry.getTier1To3Sources(uf);
+      expect(ufSources.length).toBeGreaterThan(0);
+    }
   });
 });
 
-// ============ A2: resolveProtocolInfo por UF ============
+// ============ A2: KNOWLEDGE_GAP vs Fallback (Fail Closed) ============
+
+describe('national: KNOWLEDGE_GAP e isolamento seguro', () => {
+  it('órgão não catalogado resulta em KNOWLEDGE_GAP e nunca dados fictícios', () => {
+    const status = CanonicalKnowledgeRegistry.getKnowledgeStatus('ORGAO_FANTASMA_XYZ');
+    expect(status.isKnowledgeGap).toBe(true);
+    expect(status.isCovered).toBe(false);
+    expect(status.code).toBe('KNOWLEDGE_GAP');
+    expect(status.organ).toBeNull();
+  });
+
+  it('resolveProtocolInfo com órgão inexistente retorna null (sem fallback para SP)', () => {
+    const info = CanonicalKnowledgeRegistry.resolveProtocolInfo('ORGAO_DESCONHECIDO_123');
+    expect(info).toBeNull();
+  });
+
+  it('DETRAN-AM nunca usa portal ou endereço de SP', () => {
+    const amInfo = CanonicalKnowledgeRegistry.resolveProtocolInfo('DETRAN-AM');
+    expect(amInfo).not.toBeNull();
+    expect(amInfo?.portalUrl).toContain('detran.am.gov.br');
+    expect(amInfo?.portalUrl).not.toContain('detran.sp.gov.br');
+    expect(amInfo?.physicalAddress).toContain('Manaus');
+    expect(amInfo?.physicalAddress).not.toContain('São Paulo');
+  });
+
+  it('DETRAN-RS nunca usa portal ou endereço do RJ', () => {
+    const rsInfo = CanonicalKnowledgeRegistry.resolveProtocolInfo('DETRAN-RS');
+    expect(rsInfo).not.toBeNull();
+    expect(rsInfo?.portalUrl).toContain('detran.rs.gov.br');
+    expect(rsInfo?.portalUrl).not.toContain('detran.rj.gov.br');
+    expect(rsInfo?.physicalAddress).toContain('Porto Alegre');
+  });
+});
+
+// ============ A3: Versionamento Temporal no RuleEngine ============
+
+describe('national: versionamento temporal no RuleEngine (validFrom / validUntil)', () => {
+  it('regras possuem metadados de vigência temporal declarados', () => {
+    for (const rule of EXPERT_RULES) {
+      expect(rule.validFrom).toBeDefined();
+      expect(rule.validFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('Lei 14.071/2020 (Conversão em Advertência) NÃO se aplica a fatos anteriores a 12/04/2021', () => {
+    // Infração em 2020-05-10 (anterior à Lei 14.071/2020)
+    const analysisPreLei = ExpertRuleEngine.evaluate(
+      'case_pre_lei',
+      makeInfraction({
+        infractionCode: '745-50',
+        autuadorBody: 'DETRAN-SP',
+        dateTime: '2020-05-10T10:00:00',
+        hasPreviousInfractionsLast12Months: false,
+      }),
+    );
+    const hasAdvertenciaPre = analysisPreLei.detectedInconsistencies.some(
+      (i) => i.legalArgumentId === 'ARG-051'
+    );
+    expect(hasAdvertenciaPre).toBe(false);
+
+    // Mesma infração em 2022-01-15 (posterior à vigência da Lei 14.071/2020)
+    const analysisPosLei = ExpertRuleEngine.evaluate(
+      'case_pos_lei',
+      makeInfraction({
+        infractionCode: '745-50',
+        autuadorBody: 'DETRAN-SP',
+        dateTime: '2022-01-15T10:00:00',
+        hasPreviousInfractionsLast12Months: false,
+      }),
+    );
+    const hasAdvertenciaPos = analysisPosLei.detectedInconsistencies.some(
+      (i) => i.legalArgumentId === 'ARG-051'
+    );
+    expect(hasAdvertenciaPos).toBe(true);
+  });
+
+  it('Resolução CONTRAN 985/2022 (MBFT) NÃO se aplica a fatos anteriores a 02/01/2023', () => {
+    // Infração sem abordagem em 2021-08-10
+    const analysisPreMbft = ExpertRuleEngine.evaluate(
+      'case_pre_mbft',
+      makeInfraction({
+        infractionCode: '736-62',
+        autuadorBody: 'DETRAN-SP',
+        dateTime: '2021-08-10T14:00:00',
+      }),
+    );
+    const hasMbftPre = analysisPreMbft.detectedInconsistencies.some(
+      (i) => i.legalArgumentId === 'ARG-015'
+    );
+    expect(hasMbftPre).toBe(false);
+
+    // Infração sem abordagem em 2024-04-10
+    const analysisPosMbft = ExpertRuleEngine.evaluate(
+      'case_pos_mbft',
+      makeInfraction({
+        infractionCode: '736-62',
+        autuadorBody: 'DETRAN-SP',
+        dateTime: '2024-04-10T14:00:00',
+      }),
+    );
+    const hasMbftPos = analysisPosMbft.detectedInconsistencies.some(
+      (i) => i.legalArgumentId === 'ARG-015'
+    );
+    expect(hasMbftPos).toBe(true);
+  });
+});
+
+// ============ A4: WeeklyMonitorService ============
+
+describe('national: WeeklyMonitorService e coleta das 27 UFs', () => {
+  it('executa ciclo de monitoramento coletando fontes oficiais Tier 1-3 com SHA-256', async () => {
+    const cycle = await WeeklyMonitorService.runWeeklyCycle({
+      fetchTimeoutMs: 1000,
+      concurrency: 10,
+    });
+
+    expect(cycle.summary).toBeDefined();
+    expect(cycle.summary.totalSources).toBeGreaterThanOrEqual(50);
+    expect(cycle.summary.successfulFetches).toBeGreaterThan(0);
+    expect(cycle.summary.snapshotsCreated).toBeGreaterThan(0);
+    expect(cycle.reportMarkdown).toContain('RELATÓRIO NACIONAL DE MONITORAMENTO');
+  }, 20000);
+
+  it('fornece status e histórico de execução operacional', () => {
+    const status = WeeklyMonitorService.getStatus();
+    expect(status).toHaveProperty('isRunning');
+    expect(status).toHaveProperty('totalCyclesExecuted');
+    expect(status.totalCyclesExecuted).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ============ A5: cobertura real do registry ============
+
+describe('national: registry de órgãos (organs.ts + AUTUADOR_BODIES)', () => {
+  it('registry contém todas as 27 UFs cadastradas', () => {
+    expect(ORGANS_DB.length).toBeGreaterThanOrEqual(30);
+    for (const uf of ALL_27_UF) {
+      const present = ORGANS_DB.some((o) => o.abbreviation === `DETRAN-${uf}` || o.state === uf);
+      expect(present, `UF ${uf} deve ter órgão registrado no catálogo nacional`).toBe(true);
+    }
+  });
+
+  it('AUTUADOR_BODIES (knowledge-base) tem lista de órgãos ativos', () => {
+    expect(AUTUADOR_BODIES.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('registry cobre todas as 27 UFs como DETRANs', () => {
+    const detranStates = new Set(
+      ORGANS_DB.filter((o) => o.abbreviation.startsWith('DETRAN')).map((o) => o.state),
+    );
+    for (const uf of ALL_27_UF) {
+      expect(detranStates.has(uf)).toBe(true);
+    }
+  });
+});
+
+// ============ A6: resolveProtocolInfo por UF ============
 
 describe('national: resolveProtocolInfo nas 27 UF', () => {
-  it.each(ALL_27_UF)('UF %s → protocolo honesto (null p/ não-suportada, portal p/ suportada)', (uf) => {
+  it.each(ALL_27_UF)('UF %s → protocolo oficial resolvido com sucesso', (uf) => {
     const info = resolveProtocolInfo(`DETRAN-${uf}`);
-    if (SUPPORTED_UFS.has(uf)) {
-      expect(info).not.toBeNull();
-      expect(info!.portalUrl).toMatch(/detran\./);
-    } else {
-      // NÃO fabricar protocolo: UF não-suportada NÃO tem portal inventado.
-      expect(info).toBeNull();
-    }
+    expect(info).not.toBeNull();
+    expect(info!.portalUrl).toMatch(/detran\./);
   });
 });
 
@@ -90,22 +247,18 @@ describe('national: órgãos federais e municipais suportados', () => {
   });
 });
 
-// ============ B2a: fallback geográfico ============
+// ============ B2a: isolamento geográfico ============
 
-describe('national adversarial: fallback geográfico (UF≠SP nunca cai em DETRAN-SP)', () => {
+describe('national adversarial: isolamento geográfico (UF≠SP nunca cai em DETRAN-SP)', () => {
   it.each(['DETRAN-AM', 'DETRAN-RS', 'DETRAN-BA', 'DETRAN-PA', 'DETRAN-CE', 'DETRAN-GO'])(
-    '%s → organInfo indefinido no RAG, nunca DETRAN-SP', (orgao) => {
+    '%s → organInfo resolve o estado correto, nunca DETRAN-SP', (orgao) => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: '745-50', orgaoAutuador: orgao });
-      if (ctx.organInfo) {
-        expect(ctx.organInfo.nome).not.toBe('Departamento Estadual de Trânsito de São Paulo');
-      } else {
-        // fail-closed honesto: sem órgão, sem portal falso
-        expect(ctx.organInfo).toBeUndefined();
-      }
+      expect(ctx.organInfo).toBeDefined();
+      expect(ctx.organInfo?.nome).not.toBe('Departamento Estadual de Trânsito de São Paulo');
     },
   );
 
-  it('DETRAN-SP mantém seu portal próprio (não vaza p/ outro)', () => {
+  it('DETRAN-SP mantém seu portal próprio', () => {
     const ctx = RagPipeline.retrieveContext({ codigoInfracao: '745-50', orgaoAutuador: 'DETRAN-SP' });
     expect(ctx.organInfo?.nome).toContain('São Paulo');
     expect(ctx.organInfo?.portalUrl).toContain('detran.sp.gov.br');
@@ -164,8 +317,9 @@ describe('national: isolamento sequência AM→RS→BA→PR→PE→GO→SP→PA�
       { name: 'Bruno', cpf: '555.666.777-88', cnh: '55566677788', address: 'Rua 2', cityState: 'São Paulo/SP' },
       [], 'recurso_jari',
     );
-    // AM não herda portal de SP
-    expect(am.protocolInfo).toBeNull();
+    // AM tem seu portal próprio
+    expect(am.protocolInfo).not.toBeNull();
+    expect(am.protocolInfo?.portalUrl).toContain('detran.am.gov.br');
     expect(am.fullDraftText).not.toContain('São Paulo/SP');
     // SP tem seu portal próprio, não o de AM
     expect(sp.protocolInfo?.portalUrl).toContain('detran.sp.gov.br');
@@ -235,7 +389,6 @@ describe('national: minuta preserva identidade/veículo/infração reais (B4/B6)
   });
 
   it('RENAVAM real preservado (via assemble), nunca fake "12345678900"', () => {
-    // CNH distinta do renavam fake para não gerar falso positivo.
     const draft = DocumentAssemblyEngine.assemble({
       caseId: 'case-renavam',
       procedureType: 'recurso_jari',
@@ -244,7 +397,6 @@ describe('national: minuta preserva identidade/veículo/infração reais (B4/B6)
       applicant: { name: 'Zé', cpf: '123.456.789-00', cnh: '98765432100', address: 'Rua', cityState: 'São Paulo/SP' },
       selectedArgumentIds: [],
     });
-    // renavam real aparece (correto); fake não
     expect(draft.vehicleRenavam).toBe('85674321098');
     expect(draft.vehicleRenavam).not.toBe('12345678900');
   });
@@ -279,14 +431,12 @@ describe('national: template do PDF usa dados reais (sem fabricação)', () => {
     const src = require('fs').readFileSync(
       require('path').resolve(__dirname, '../../src/lib/pdf-export.ts'), 'utf8',
     );
-    // Guardas contra fabricação da auditoria anterior (P0-10)
     expect(src).not.toContain("'1B892014'");
     expect(src).not.toContain("'BRA2E19'");
     expect(src).not.toContain("'000.000.000-00'");
-    // Fallback honesto p/ ausentes (não inventa dado)
     expect(src).toContain(`'Não informado'`);
-    // Usa dados reais do case
     expect(src).toContain('caseData.infraction?.aitNumber');
     expect(src).toContain('caseData.infraction?.autuadorBody');
   });
 });
+

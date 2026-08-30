@@ -126,6 +126,7 @@ export class CaseRepository {
       analysis_json: parseJson(row.analysis_json, null),
       defense_draft_json: parseJson(row.defense_draft_json, null),
       protocol_info_json: parseJson(row.protocol_info_json, null),
+      ocr_auxiliary_json: parseJson((row as any).ocr_auxiliary_json, null),
       timeline_json: parseJson(row.timeline_json, []),
       is_anonymous: row.is_anonymous,
       claim_token: row.claim_token ?? null,

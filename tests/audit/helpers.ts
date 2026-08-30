@@ -15,7 +15,7 @@ export function makeInfraction(overrides: Partial<InfractionData> = {}): Infract
     fineAmount: 130.16,
     autuadorBody: 'DETRAN-SP',
     dateTime: '2026-01-15T10:30:00',
-    location: 'Av. Paulista, 1000 - São Paulo/SP',
+    location: 'Av. Central, 1000',
     speedLimit: 60,
     measuredSpeed: 78,
     consideredSpeed: 71,

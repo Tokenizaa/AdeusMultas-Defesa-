@@ -114,8 +114,8 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
         type: 'facts_narrative',
         title: 'Dos Fatos e da Notificação de Penalidade Impugnada',
         isMandatory: true,
-        contentTemplate: `I - DA TEMPESTIVIDADE E DOS FATOS\n\nO(A) Recorrente interpõe o presente recurso ordinário tempestivamente em face da Notificação de Imposição de Penalidade referente ao AIT nº {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa à suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}").\n\nInobstante o inconformismo apresentado em sede de Defesa Prévia, a autoridade autuadora manteve a sanção de forma desprovida de lastro fático e legal, impondo-se a reforma integral da decisão por este Ilustre Colegiado.`,
-        supportedVariables: ['{{numero_ait}}', '{{orgao_autuador}}', '{{data_infracao}}', '{{enquadramento_ctb}}', '{{descricao_infracao}}'],
+        contentTemplate: `I - DA TEMPESTIVIDADE E DOS FATOS\n\nO(A) Recorrente interpõe o presente recurso ordinário tempestivamente em face da Notificação de Imposição de Penalidade referente ao AIT nº {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa à suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}") no local {{local_infracao}}.\n\nInobstante o inconformismo apresentado em sede de Defesa Prévia, a autoridade autuadora manteve a sanção de forma desprovida de lastro fático e legal, impondo-se a reforma integral da decisão por este Ilustre Colegiado.`,
+        supportedVariables: ['{{numero_ait}}', '{{orgao_autuador}}', '{{data_infracao}}', '{{enquadramento_ctb}}', '{{descricao_infracao}}', '{{local_infracao}}'],
       },
       {
         id: 'BLK_PRELIMINARES_JARI',
@@ -333,17 +333,17 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Informar o número do AIT e a Notificação de Autuação',
       'Articular preliminares de nulidade e mérito probatório antes da penalidade',
     ],
-    blockIds: ['BLK-002', 'BLK-008', 'BLK-013', 'BLK-039', 'BLK-057', 'BLK-066', 'BLK-068'],
+    blockIds: ['BLK-001', 'BLK-008', 'BLK-013', 'BLK-039', 'BLK-057', 'BLK-066', 'BLK-068'],
     blocks: [
-      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-002')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-001')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
       {
         id: 'BLK_FATOS_DEFESA_PREVIA',
         type: 'facts_narrative',
         title: 'Da Autuação e dos Fatos',
         isMandatory: true,
-        contentTemplate: `I - DA AUTUAÇÃO E DOS FATOS\n\nO(A) Requerente, em sede de DEFESA PRÉVIA, vem perante a autoridade autuadora impugnar a Notificação de Autuação referente ao AIT nº {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa à suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}"), com fundamento em vícios formais e materiais que ensejam o cancelamento do auto antes da imposição de qualquer penalidade.`,
-        supportedVariables: ['{{numero_ait}}', '{{orgao_autuador}}', '{{data_infracao}}', '{{enquadramento_ctb}}', '{{descricao_infracao}}'],
+        contentTemplate: `I - DA AUTUAÇÃO E DOS FATOS\n\nO(A) Requerente, em sede de DEFESA PRÉVIA, vem perante a autoridade autuadora impugnar a Notificação de Autuação referente ao AIT nº {{numero_ait}}, emitida pelo(a) {{orgao_autuador}} em {{data_infracao}}, relativa à suposta conduta tipificada no {{enquadramento_ctb}} ("{{descricao_infracao}}") no local {{local_infracao}}, com fundamento em vícios formais e materiais que ensejam o cancelamento do auto antes da imposição de qualquer penalidade.`,
+        supportedVariables: ['{{numero_ait}}', '{{orgao_autuador}}', '{{data_infracao}}', '{{enquadramento_ctb}}', '{{descricao_infracao}}', '{{local_infracao}}'],
       },
       {
         id: 'BLK_PRELIMINARES_DEFESA_PREVIA',

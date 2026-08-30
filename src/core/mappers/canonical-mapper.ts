@@ -60,6 +60,24 @@ export class CanonicalMapper {
       }
     }
 
+    let applicant = undefined;
+    if (row.applicant_json) {
+      try {
+        applicant = JSON.parse(row.applicant_json);
+      } catch (e) {
+        applicant = undefined;
+      }
+    }
+
+    let ocrAuxiliaryData = undefined;
+    if (row.ocr_auxiliary_json) {
+      try {
+        ocrAuxiliaryData = JSON.parse(row.ocr_auxiliary_json);
+      } catch (e) {
+        ocrAuxiliaryData = undefined;
+      }
+    }
+
     return {
       id: row.id,
       title: row.title || `Recurso Auto ${row.ait_number}`,
@@ -101,6 +119,8 @@ export class CanonicalMapper {
         formalFlawsDetected: formalFlaws,
       },
       analysis,
+      applicant,
+      ocrAuxiliaryData,
       defenseDraft,
       protocolInfo,
       timeline,
@@ -166,6 +186,8 @@ export class CanonicalMapper {
       analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : undefined,
       defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : undefined,
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : undefined,
+      applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : undefined,
+      ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : undefined,
       commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),

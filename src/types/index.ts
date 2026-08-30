@@ -313,6 +313,8 @@ export interface CaseRow {
   analysis_json?: string;
   defense_draft_json?: string;
   protocol_info_json?: string;
+  applicant_json?: string;
+  ocr_auxiliary_json?: string;
   commercial_offer_id?: string;
   timeline_json?: string;
   is_anonymous: boolean;

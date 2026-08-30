@@ -390,4 +390,164 @@ router.post('/engine/preview', (req, res) => {
   }
 });
 
+// =========================================================================
+// SISTEMA NACIONAL DE MONITORAMENTO JURÍDICO-OPERACIONAL (SNM-JO) ENDPOINTS
+// =========================================================================
+
+import {
+  getAllNationalStates,
+  getAllNationalOrgans,
+  getAllNationalCetrans,
+  OFFICIAL_SOURCES_REGISTRY,
+  WeeklyMonitorScheduler,
+  ReviewQueueService,
+  NotificationAlertService,
+  TemporalKnowledgeEngine,
+} from '../../core/knowledge';
+
+router.get('/national/states', (req, res) => {
+  try {
+    const states = getAllNationalStates();
+    res.json(states);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch national states' });
+  }
+});
+
+router.get('/national/organs', (req, res) => {
+  try {
+    const organs = getAllNationalOrgans();
+    res.json(organs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch national organs' });
+  }
+});
+
+router.get('/national/cetrans', (req, res) => {
+  try {
+    const cetrans = getAllNationalCetrans();
+    res.json(cetrans);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch national cetrans' });
+  }
+});
+
+router.get('/national/sources', (req, res) => {
+  try {
+    res.json(OFFICIAL_SOURCES_REGISTRY);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch sources registry' });
+  }
+});
+
+router.post('/monitor/run', async (req, res) => {
+  try {
+    const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4000;
+    const result = await WeeklyMonitorScheduler.runCycle(undefined, timeoutMs);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to run monitoring cycle' });
+  }
+});
+
+router.get('/monitor/history', (req, res) => {
+  try {
+    const history = WeeklyMonitorScheduler.getCycleHistory();
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch monitor history' });
+  }
+});
+
+router.get('/monitor/latest-report', (req, res) => {
+  try {
+    const report = WeeklyMonitorScheduler.getLatestReport();
+    res.json({ reportMarkdown: report });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch latest report' });
+  }
+});
+
+router.get('/monitor/review-queue', (req, res) => {
+  try {
+    const items = ReviewQueueService.getAll();
+    const pending = ReviewQueueService.getPending();
+    res.json({ items, pendingCount: pending.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch review queue' });
+  }
+});
+
+router.post('/monitor/review-queue/:id/approve', (req, res) => {
+  try {
+    const { reviewer, notes } = req.body;
+    const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
+    if (!success) {
+      return res.status(404).json({ error: 'Review item not found' });
+    }
+    res.json({ success: true, message: 'Item approved and applied to active registry.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve review item' });
+  }
+});
+
+router.post('/monitor/review-queue/:id/reject', (req, res) => {
+  try {
+    const { reviewer, reason } = req.body;
+    const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
+    if (!success) {
+      return res.status(404).json({ error: 'Review item not found' });
+    }
+    res.json({ success: true, message: 'Item rejected.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject review item' });
+  }
+});
+
+router.post('/monitor/review-queue/:id/adjust', (req, res) => {
+  try {
+    const { adjustedData, reviewer, notes } = req.body;
+    const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
+    if (!success) {
+      return res.status(404).json({ error: 'Review item not found' });
+    }
+    res.json({ success: true, message: 'Item adjusted and approved.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to adjust review item' });
+  }
+});
+
+router.post('/monitor/review-queue/:id/false-positive', (req, res) => {
+  try {
+    const { notes } = req.body;
+    const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
+    if (!success) {
+      return res.status(404).json({ error: 'Review item not found' });
+    }
+    res.json({ success: true, message: 'Item marked as false positive.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to mark false positive' });
+  }
+});
+
+router.get('/monitor/alerts', (req, res) => {
+  try {
+    const alerts = NotificationAlertService.getAlertsHistory();
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+router.post('/temporal/resolve', (req, res) => {
+  try {
+    const context = req.body;
+    const result = TemporalKnowledgeEngine.getEffectiveKnowledge(context);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to resolve temporal knowledge' });
+  }
+});
+
 export default router;
+
