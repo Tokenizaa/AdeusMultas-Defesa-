@@ -3,7 +3,7 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { whatsappService } from '../services/whatsapp-service';
 import { messagingService } from '../services/messaging-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
-import { authorizeEvolutionWebhook } from '../shared/webhook/evolution-webhook-auth';
+import { authorizeEvolutionWebhook, verifyEvolutionSignature, resolveWebhookSecret } from '../shared/webhook/evolution-webhook-auth';
 import { logger } from '../observability/logger';
 
 const router = Router();
@@ -155,10 +155,38 @@ const handleWebhook = async (req: any, res: any) => {
         'Rejeitando webhook Evolution API por falha de autenticação',
         { reason }
       );
-      return res.status(401).json({
+      // Sem segredo configurado em produção = erro de configuração do operador (503),
+      // não uma origem inválida (401).
+      const status = reason === 'missing-secret' ? 503 : 401;
+      return res.status(status).json({
         error: 'Unauthorized webhook source',
         reason,
       });
+    }
+
+    // 1b. Verificação ADICIONAL via HMAC-SHA-256 (anti-spoofing criptográfico).
+    // Aplicada quando o remetente envia `X-Webhook-Secret: sha256=<hmac>` do
+    // body bruto. Remetentes legados (header = segredo puro, gate 1 acima)
+    // continuam válidos — mudança aditiva, sem quebra de fluxo existente.
+    const webhookSecret = resolveWebhookSecret();
+    const rawBody = (req as any).rawBody;
+    const sigHeader = Array.isArray(req.headers['x-webhook-secret'])
+      ? req.headers['x-webhook-secret'][0]
+      : req.headers['x-webhook-secret'];
+    if (
+      webhookSecret &&
+      rawBody &&
+      sigHeader?.startsWith('sha256=') &&
+      !verifyEvolutionSignature(rawBody, sigHeader, webhookSecret)
+    ) {
+      logger.warn(
+        'whatsapp',
+        'whatsapp_webhook',
+        'hmac_rejected',
+        'Rejeitando webhook Evolution API por assinatura HMAC inválida',
+        {}
+      );
+      return res.status(401).json({ error: 'Invalid signature' });
     }
 
     // 2. Responde 200 OK imediatamente para evitar retries da Evolution API

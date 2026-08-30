@@ -30,6 +30,7 @@ import governanceRoutes from './routes/governance';
 import analyticsRoutes from './routes/analytics';
 import aiRoutes from './routes/ai';
 import syncRoutes from './routes/sync';
+import authRoutes from './routes/auth';
 import { metaIntegration } from './integrations/meta';
 
 // ---------------------------------------------------------------------------
@@ -118,7 +119,17 @@ export function createApp() {
   app.use(globalLimiter);
 
   // Body parsing
-  app.use(express.json({ limit: '10mb' }));
+  // verify: anexa `req.rawBody` (bytes brutos como string) para verificacao de
+  // assinatura HMAC em webhooks (ex: Evolution API /api/webhooks/whatsapp).
+  // Aditivo — nao altera o parse nem o req.body; apenas captura o buffer.
+  app.use(
+    express.json({
+      limit: '10mb',
+      verify: (req, _res, buf) => {
+        (req as any).rawBody = buf.toString('utf8');
+      },
+    })
+  );
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // ----- Modular API Routes -----
@@ -144,6 +155,7 @@ export function createApp() {
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/notifications', notificationsRoutes);
+  app.use('/api/auth', authRoutes);
 
   // Health check
   app.use('/api', healthRoutes);
