@@ -31,10 +31,10 @@ export class MetaAdapter {
 
   private initializeFromEnvironment(): void {
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-    const pageId = process.env.META_PAGE_ID;
     const igId = process.env.INSTAGRAM_ACCOUNT_ID;
 
-    if (systemToken && pageId) {
+    // Só inicializa conexão se houver token + conta Instagram (não exige mais página FB)
+    if (systemToken && igId) {
       this.activeConnection = {
         id: 'conn_meta_env',
         userId: 'usr_system_admin',
@@ -51,21 +51,8 @@ export class MetaAdapter {
           'instagram_content_publish',
           'instagram_manage_insights',
         ],
-        pages: [
-          {
-            id: pageId,
-            name: 'DefesAi — Tecnologia em Defesas de Trânsito',
-            category: 'Serviços Jurídicos e Tecnologia',
-            accessToken: systemToken,
-            tasks: ['MANAGE', 'CREATE_CONTENT', 'PUBLISH', 'MODERATE'],
-            instagramAccount: {
-              id: igId,
-              username: 'defesai.oficial',
-              name: 'DefesAi Oficial',
-            },
-          },
-        ],
-        selectedPageId: pageId,
+        pages: [],
+        selectedPageId: undefined,
         selectedInstagramId: igId,
         status: 'connected',
         createdAt: new Date().toISOString(),
@@ -73,6 +60,18 @@ export class MetaAdapter {
         lastValidatedAt: new Date().toISOString(),
       };
     }
+  }
+
+  /**
+   * Checks if there is an active connection or valid environment credentials to publish
+   */
+  public isConnected(): boolean {
+    if (this.activeConnection && this.activeConnection.status === 'connected' && this.activeConnection.pages.length > 0) {
+      return true;
+    }
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const pageId = process.env.META_PAGE_ID;
+    return Boolean(systemToken && pageId);
   }
 
   /**
@@ -302,35 +301,69 @@ export class MetaAdapter {
   /**
    * Publishes content via the canonical publishing service
    */
+  /**
+   * Publishes content via the canonical publishing service
+   * Suporta dois modos:
+   *  - Com página FB conectada (fluxo antigo)
+   *  - Apenas conta Instagram via token direto (sem página)
+   */
   public async publishContent(params: MetaPublishParams): Promise<MetaPublishResponse> {
-    if (!this.activeConnection || this.activeConnection.pages.length === 0) {
-      const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
-      const pageId = process.env.META_PAGE_ID;
-      const igId = process.env.INSTAGRAM_ACCOUNT_ID;
-      if (systemToken && pageId) {
-        await this.connectWithToken(systemToken, pageId, igId);
-      } else {
-        throw new MetaAuthenticationRequiredError(
-          'Nenhuma conexão ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN no ambiente ou autentique via OAuth.'
-        );
+    const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
+    const igId = params.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID;
+    const pageId = process.env.META_PAGE_ID;
+
+    // Caso 1: Conexão ja ativa com página
+    if (this.activeConnection && this.activeConnection.pages.length > 0) {
+      const conn = this.activeConnection;
+      const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
+      const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
+
+      if (!page || !page.accessToken) {
+        throw new MetaAuthenticationRequiredError('Nenhuma página do Facebook configurada com token de acesso para publicação.');
       }
+
+      return metaPublishingService.publish(
+        {
+          id: page.id,
+          accessToken: page.accessToken,
+          instagramAccountId: params.instagramAccountId || conn.selectedInstagramId || page.instagramAccount?.id,
+        },
+        params
+      );
     }
 
-    const conn = this.activeConnection!;
-    const targetPageId = params.pageId || conn.selectedPageId || conn.pages[0]?.id;
-    const page = conn.pages.find((p) => p.id === targetPageId) || conn.pages[0];
+    // Caso 2: Publicacao direta no Instagram (sem página FB conectada)
+    if (systemToken && igId) {
+      // Constroi objeto page-like fake para o publishing service aceitar
+      const fakePage = {
+        id: igId, // o IG User ID sera usado como "page id"
+        accessToken: systemToken,
+        instagramAccountId: igId,
+      };
 
-    if (!page || !page.accessToken) {
-      throw new MetaAuthenticationRequiredError('Nenhuma página do Facebook configurada com token de acesso para publicação.');
+      return metaPublishingService.publish(
+        {
+          ...fakePage,
+          instagramAccountId: igId,
+        } as any,
+        params
+      );
     }
 
-    return metaPublishingService.publish(
-      {
-        id: page.id,
-        accessToken: page.accessToken,
-        instagramAccountId: params.instagramAccountId || conn.selectedInstagramId || page.instagramAccount?.id,
-      },
-      params
+    // Caso 3: Sem token/sem conta Instagram
+    if (!systemToken) {
+      throw new MetaAuthenticationRequiredError(
+        'Meta ausente. Configure META_ACCESS_TOKEN no ambiente.'
+      );
+    }
+    if (!igId) {
+      throw new MetaAuthenticationRequiredError(
+        'Conta Instagram não configurada. Defina INSTAGRAM_ACCOUNT_ID no .env.'
+      );
+    }
+
+    throw new MetaAuthenticationRequiredError(
+      'Nenhuma conexão ativa com a Meta. Configure META_PAGE_ID e META_ACCESS_TOKEN ou INSTAGRAM_ACCOUNT_ID.'
     );
   }
 

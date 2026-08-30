@@ -30,7 +30,7 @@ export interface PublisherJobRecord {
   id: string;
   channel: string;
   contentId?: string;
-  status: 'delivered' | 'retrying' | 'failed';
+  status: 'delivered' | 'retrying' | 'failed' | 'rejected';
   attempts: number;
   createdAt: string;
   resolvedAt?: string;
@@ -59,7 +59,7 @@ interface UseMarketingServiceReturn {
   // Actions
   refreshMarketingData: () => Promise<void>;
   createManualContent: (initialData?: Partial<EditorialContentItem>) => Promise<EditorialContentItem | null>;
-  updateContentStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
+  updateContentStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
   updateContentFields: (id: string, fields: Partial<EditorialContentItem>, versionNote?: { agent?: string; author?: string; changes?: string }) => Promise<void>;
   fetchContentVersions: (id: string) => Promise<{ id: string; version: number; agent: string; author: string; changes: string; createdAt: string }[]>;
   runCycleTick: () => Promise<void>;
@@ -217,7 +217,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   }, []);
 
   // Mudança de status via drag & drop no kanban (intervenção manual explícita)
-  const updateContentStatus = useCallback(async (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado') => {
+  const updateContentStatus = useCallback(async (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado') => {
     const res = await fetch(`/api/marketing/contents/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

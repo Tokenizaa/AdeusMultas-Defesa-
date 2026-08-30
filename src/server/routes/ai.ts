@@ -151,6 +151,8 @@ router.post('/ai/generate-defense', async (req, res) => {
 
     const ai = getGeminiClient();
     let generatedText = '';
+    const orgaoAutuador = infraction.orgaoAutuador || infraction.autuadorBody || 'ÓRGÃO NÃO INFORMADO';
+    const municipioUf = infraction.municipioUf || infraction.cityState || 'CIDADE/UF NÃO INFORMADA';
 
     if (ai) {
       try {
@@ -158,8 +160,8 @@ router.post('/ai/generate-defense', async (req, res) => {
 Elabore uma peça jurídica de DEFESA PRÉVIA / RECURSO ADMINISTRATIVO impecável, formal e técnica contra o auto de infração nº ${infraction.autoInfracao || infraction.aitNumber}.
 
 DADOS DO PROCESSO:
-- Requerente: ${infraction.nomeCondutor || 'Condutor / Proprietário'}
-- CPF: ${infraction.cpfCondutor || '000.000.000-00'} | CNH: ${infraction.cnhNumero || '00000000000'}
+- Requerente: ${infraction.nomeCondutor || 'NÃO INFORMADO'}
+- CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'} | CNH: ${infraction.cnhNumero || 'NÃO INFORMADO'}
 - Veículo: Placa ${infraction.placa} / ${infraction.ufVeiculo} (${infraction.marcaModelo || 'Veículo Automotor'})
 - Órgão Autuador: ${infraction.orgaoAutuador}
 - Infração: ${infraction.codigoInfracao || infraction.infractionCode} - ${infraction.descricaoInfracao || infraction.description}
@@ -207,7 +209,7 @@ Redija em português jurídico formal culto, com excelente fundamentação doutr
 
     // If Gemini didn't return text, build high-quality structured default piece
     if (!generatedText) {
-      generatedText = `ILUSTRÍSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRAÇÕES - JARI DO ${(infraction.orgaoAutuador || 'DETRAN').toUpperCase()}
+      generatedText = `ILUSTRÍSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRAÇÕES - JARI DO ${orgaoAutuador.toUpperCase()}
 
 REFERÊNCIA: AUTO DE INFRAÇÃO Nº ${infraction.autoInfracao || infraction.aitNumber || 'N/A'}
 PLACA DO VEÍCULO: ${infraction.placa || 'N/A'} / ${infraction.ufVeiculo || ''}
@@ -242,11 +244,11 @@ d) A anulação de quaisquer pontos lançados no prontuário do Requerente.
 Termos em que,
 Pede e Espera Deferimento.
 
-${infraction.municipioUf || 'São Paulo - SP'}, ${new Date().toLocaleDateString('pt-BR')}.
+${municipioUf}, ${new Date().toLocaleDateString('pt-BR')}.
 
 ________________________________________________
 ${(infraction.nomeCondutor || 'REQUERENTE').toUpperCase()}
-CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
+CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
     }
 
     // Construct defense blocks
@@ -255,7 +257,7 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
         id: 'blk_1',
         titulo: 'Endereçamento e Cabeçalho',
         categoria: 'cabecalho',
-        conteudo: `ILUSTRÍSSIMO SENHOR DIRETOR / PRESIDENTE DA JARI DO ${(infraction.orgaoAutuador || 'DETRAN').toUpperCase()}`,
+        conteudo: `ILUSTRÍSSIMO SENHOR DIRETOR / PRESIDENTE DA JARI DO ${orgaoAutuador.toUpperCase()}`,
         ativo: true,
         editavel: true,
       },
@@ -263,7 +265,7 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
         id: 'blk_2',
         titulo: 'Qualificação do Condutor e Veículo',
         categoria: 'cabecalho',
-        conteudo: `${(infraction.nomeCondutor || 'CONDUTOR / PROPRIETÁRIO').toUpperCase()}, CPF: ${infraction.cpfCondutor || '000.000.000-00'}, CNH: ${infraction.cnhNumero || '00000000000'}, proprietário do veículo Placa ${infraction.placa || 'N/A'}, vem apresentar DEFESA ADMINISTRATIVA.`,
+        conteudo: `${(infraction.nomeCondutor || 'CONDUTOR / PROPRIETÁRIO').toUpperCase()}, CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}, CNH: ${infraction.cnhNumero || 'NÃO INFORMADO'}, proprietário do veículo Placa ${infraction.placa || 'N/A'}, vem apresentar DEFESA ADMINISTRATIVA.`,
         ativo: true,
         editavel: true,
       },
@@ -315,7 +317,7 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
         id: 'blk_8',
         titulo: 'Fecho e Assinatura',
         categoria: 'fecho',
-        conteudo: `Pede Deferimento.\n${infraction.municipioUf || 'Brasil'}, ${new Date().toLocaleDateString('pt-BR')}.\n\n_____________________________________\nAssinatura do Requerente`,
+        conteudo: `Pede Deferimento.\n${municipioUf || 'Brasil'}, ${new Date().toLocaleDateString('pt-BR')}.\n\n_____________________________________\nAssinatura do Requerente`,
         ativo: true,
         editavel: true,
       },
@@ -326,11 +328,11 @@ CPF: ${infraction.cpfCondutor || '000.000.000-00'}`;
       caseId: caseData.id,
       tipoDefesa: caseData.tipoServico || caseData.serviceType || 'recurso_jari',
       titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || 'N/A'}`,
-      orgaoDestinatario: infraction.orgaoAutuador || infraction.autuadorBody,
+      orgaoDestinatario: orgaoAutuador,
       autorNome: infraction.nomeCondutor || 'Condutor / Requerente',
       autorCpf: infraction.cpfCondutor || '',
       autorCnh: infraction.cnhNumero || '',
-      autorEndereco: infraction.municipioUf || 'São Paulo - SP',
+      autorEndereco: municipioUf,
       textoCompleto: generatedText,
       blocos: blocks,
       geradoEm: new Date().toISOString(),

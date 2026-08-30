@@ -5,15 +5,249 @@ import { logger } from '../observability/logger';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { GenerateVideosOperation, GoogleGenAI } from '@google/genai';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
+import { mediaGenerationService } from '../media';
 
 const router = Router();
 
-// All media routes require admin authentication
+// Public health check - no auth required
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'media', timestamp: new Date().toISOString() });
+});
+
+// Protected admin routes
 router.use(authenticateToken, requireAdmin);
 
 /**
+ * GET /api/media/hardware
+ * Retorna diagnóstico e classificação de hardware do ambiente (GPU, VRAM, RAM, CPU).
+ */
+router.get('/hardware', (req, res) => {
+  try {
+    const hardware = mediaGenerationService.getHardwareAudit();
+    res.json({ success: true, hardware });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'getHardware', 'Failed to inspect hardware', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao auditar hardware' });
+  }
+});
+
+/**
+ * GET /api/media/providers
+ * Retorna os provedores de mídia disponíveis, ativos e status de roteamento.
+ */
+router.get('/providers', (req, res) => {
+  try {
+    const info = mediaGenerationService.getProvidersInfo();
+    res.json({ success: true, ...info });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'getProviders', 'Failed to get providers', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao listar provedores' });
+  }
+});
+
+/**
+ * POST /api/media/image
+ * Enfileira ou executa geração de imagem desacoplada.
+ */
+router.post('/image', async (req, res) => {
+  try {
+    const { prompt, aspectRatio, imageSize, stylePreset, negativePrompt, provider, sync } = req.body;
+
+    if (!prompt || typeof prompt !== 'string') {
+      res.status(400).json({ success: false, error: 'Prompt de texto é obrigatório.' });
+      return;
+    }
+
+    if (sync === true) {
+      const output = await mediaGenerationService.generateImageDirect(
+        { prompt, aspectRatio, imageSize, stylePreset, negativePrompt },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+
+    const job = mediaGenerationService.enqueueImageJob(
+      { prompt, aspectRatio, imageSize, stylePreset, negativePrompt },
+      provider
+    );
+
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: 'Job de geração de imagem enfileirado com sucesso.',
+    });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'postImage', 'Failed to create image job', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao enfileirar imagem' });
+  }
+});
+
+/**
+ * POST /api/media/video
+ * Enfileira ou executa geração de vídeo desacoplada.
+ */
+router.post('/video', async (req, res) => {
+  try {
+    const { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt, provider, sync } = req.body;
+
+    if (!prompt || typeof prompt !== 'string') {
+      res.status(400).json({ success: false, error: 'Prompt de texto é obrigatório.' });
+      return;
+    }
+
+    if (sync === true) {
+      const output = await mediaGenerationService.generateVideoDirect(
+        { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+
+    const job = mediaGenerationService.enqueueVideoJob(
+      { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt },
+      provider
+    );
+
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: 'Job de geração de vídeo enfileirado com sucesso.',
+    });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'postVideo', 'Failed to create video job', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao enfileirar vídeo' });
+  }
+});
+
+/**
+ * POST /api/media/image-to-video
+ * Enfileira ou executa Image-to-Video desacoplado.
+ */
+router.post('/image-to-video', async (req, res) => {
+  try {
+    const {
+      prompt,
+      referenceImageBase64,
+      referenceImageUrl,
+      referenceMimeType,
+      durationSeconds,
+      aspectRatio,
+      provider,
+      sync,
+    } = req.body;
+
+    if (!referenceImageBase64 && !referenceImageUrl) {
+      res.status(400).json({ success: false, error: 'Imagem de referência (base64 ou URL) é obrigatória para Image-to-Video.' });
+      return;
+    }
+
+    if (sync === true) {
+      const output = await mediaGenerationService.generateImageToVideoDirect(
+        { prompt: prompt || 'Animate naturally', referenceImageBase64, referenceImageUrl, referenceMimeType, durationSeconds, aspectRatio },
+        provider
+      );
+      res.json({ success: true, output });
+      return;
+    }
+
+    const job = mediaGenerationService.enqueueImageToVideoJob(
+      { prompt: prompt || 'Animate naturally', referenceImageBase64, referenceImageUrl, referenceMimeType, durationSeconds, aspectRatio },
+      {
+        imageBase64Preview: referenceImageBase64 ? referenceImageBase64.slice(0, 100) : undefined,
+        imageUrl: referenceImageUrl,
+        mimeType: referenceMimeType,
+      },
+      provider
+    );
+
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: 'Job de Image-to-Video enfileirado com sucesso.',
+    });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'postImageToVideo', 'Failed to create I2V job', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao enfileirar Image-to-Video' });
+  }
+});
+
+/**
+ * GET /api/media/jobs/:id
+ * Consulta status e resultado de um job assíncrono.
+ */
+router.get('/jobs/:id', (req, res) => {
+  try {
+    const job = mediaGenerationService.getJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ success: false, error: 'Job não encontrado.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      jobId: job.id,
+      type: job.type,
+      provider: job.provider,
+      status: job.status,
+      progress: job.progress,
+      output: job.output,
+      error: job.error,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+    });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'getJob', 'Failed to query job', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao consultar job' });
+  }
+});
+
+/**
+ * POST /api/media/jobs/:id/cancel
+ * Cancela um job de mídia.
+ */
+router.post('/jobs/:id/cancel', (req, res) => {
+  try {
+    const cancelled = mediaGenerationService.cancelJob(req.params.id);
+    if (!cancelled) {
+      res.status(400).json({ success: false, error: 'Não foi possível cancelar o job (inexistente ou já finalizado).' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Job cancelado com sucesso.' });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'cancelJob', 'Failed to cancel job', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao cancelar job' });
+  }
+});
+
+/**
+ * GET /api/media/jobs
+ * Lista histórico recente de jobs.
+ */
+router.get('/jobs', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 50;
+    const jobs = mediaGenerationService.listJobs(limit);
+    res.json({ success: true, jobs });
+  } catch (error: any) {
+    logger.error('media', 'routes', 'listJobs', 'Failed to list jobs', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Erro ao listar jobs' });
+  }
+});
+
+// ==========================================
+// ROTAS DE COMPATIBILIDADE RETROATIVA
+// ==========================================
+
+/**
  * POST /api/generate-image & /api/marketing/generate-image
- * Generate High-Quality Images with gemini-3-pro-image-preview (sizes: 1K, 2K, 4K)
+ * Generate High-Quality Images (compatibilidade frontend)
  */
 router.post(['/generate-image', '/marketing/generate-image'], async (req, res) => {
   try {
@@ -49,7 +283,6 @@ router.post(['/generate-image', '/marketing/generate-image'], async (req, res) =
 /**
  * POST /api/generate-video & /api/marketing/generate-video
  * Veo Video Generation: step 1 (Start operation)
- * Model: veo-3.1-fast-generate-preview
  */
 router.post(['/generate-video', '/marketing/generate-video'], async (req, res) => {
   try {

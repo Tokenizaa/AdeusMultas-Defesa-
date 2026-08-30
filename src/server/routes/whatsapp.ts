@@ -3,7 +3,8 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { whatsappService } from '../services/whatsapp-service';
 import { messagingService } from '../services/messaging-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
-import { authorizeEvolutionWebhook } from '../shared/webhook/evolution-webhook-auth';
+import { authorizeEvolutionWebhook, verifyEvolutionSignature, resolveWebhookSecret } from '../shared/webhook/evolution-webhook-auth';
+import { logger } from '../observability/logger';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.post('/communication/whatsapp/send', authenticateToken, async (req, res) 
     const { phone, message, caseId, notificationType } = req.body;
 
     if (!phone || !message) {
-      return res.status(400).json({ error: ' phone e message são obrigatórios' });
+      return res.status(400).json({ error: 'phone e message são obrigatórios' });
     }
 
     // Format phone: remove spaces, dashes, parentheses
@@ -28,13 +29,17 @@ router.post('/communication/whatsapp/send', authenticateToken, async (req, res) 
     });
 
     if (result.success) {
-      eventBus.publish(EventTopics.WHATSAPP_MESSAGE_SENT, {
-        phone: formattedPhone,
-        caseId,
-        notificationType,
-        delivered: true,
-        messageId: result.messageId,
-      }, 'whatsapp_service');
+      eventBus.publish(
+        EventTopics.WHATSAPP_MESSAGE_SENT,
+        {
+          phone: formattedPhone,
+          caseId,
+          notificationType,
+          delivered: true,
+          messageId: result.messageId,
+        },
+        'whatsapp_service'
+      );
 
       return res.json({
         success: true,
@@ -45,57 +50,15 @@ router.post('/communication/whatsapp/send', authenticateToken, async (req, res) 
       });
     }
 
-    // -------------------------------------------------------------------------
-    // Integração não configurada de verdade (EVOLUTION_API_URL/API_KEY ausentes
-    // ou placeholder). NUNCA fabricamos entrega real neste caminho.
-    // -------------------------------------------------------------------------
-    const evolutionConfigured = whatsappService['isConfigured'];
-
-    if (!evolutionConfigured) {
-      // SIMULAÇÃO DEV EXPLÍCITA (apenas fora de produção): permite testar o
-      // fluxo/eventBus sem Evolution. A resposta é marcada como simulated e o
-      // evento NÃO declara delivered:true — nenhum falso-verde é propagado.
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-          '[WhatsApp] ⚠️ SIMULAÇÃO DEV: Evolution API NÃO configurada. ' +
-          `Nenhuma mensagem real foi enviada para ${formattedPhone}. ` +
-          'Configure EVOLUTION_API_URL/EVOLUTION_API_KEY para envio real.'
-        );
-
-        eventBus.publish(EventTopics.WHATSAPP_MESSAGE_SENT, {
-          phone: formattedPhone,
-          caseId,
-          notificationType,
-          delivered: false,
-          simulated: true,
-        }, 'whatsapp_service_dev_simulation');
-
-        return res.json({
-          success: true,
-          simulated: true,
-          messageId: `sim_${Date.now()}`,
-          status: 'simulated',
-          destination: formattedPhone,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Produção sem integração configurada: erro claro, nunca "delivered".
-      return res.status(503).json({
-        error: 'Serviço WhatsApp não configurado',
-        message: 'Evolution API não está configurada (EVOLUTION_API_URL/EVOLUTION_API_KEY ausentes ou placeholder). Configure a integração antes de enviar mensagens.',
-        hint: 'Configure as variáveis EVOLUTION_API_URL e EVOLUTION_API_KEY (sem prefixo PLACEHOLDER).',
-      });
-    }
-
-    // Configurado, mas a Evolution API falhou de verdade ao enviar.
-    res.status(502).json({
+    return res.status(502).json({
       error: 'Falha no envio via WhatsApp',
       message: result.error || 'Serviço indisponível',
     });
   } catch (error: any) {
-    console.error('[WhatsApp] Send error:', error);
-    res.status(500).json({ error: error.message || 'Erro ao enviar mensagem WhatsApp' });
+    logger.error('whatsapp', 'whatsapp-route', 'send_error', 'Erro ao enviar mensagem WhatsApp', {
+      error: error.message,
+    });
+    return res.status(500).json({ error: error.message || 'Erro ao enviar mensagem WhatsApp' });
   }
 });
 
@@ -108,7 +71,7 @@ router.post('/communication/whatsapp/send-document', authenticateToken, async (r
     const { phone, pdfUrl, caseId, message } = req.body;
 
     if (!phone || !pdfUrl) {
-      return res.status(400).json({ error: ' phone e pdfUrl são obrigatórios' });
+      return res.status(400).json({ error: 'phone e pdfUrl são obrigatórios' });
     }
 
     const formattedPhone = phone.replace(/\D/g, '');
@@ -128,12 +91,12 @@ router.post('/communication/whatsapp/send-document', authenticateToken, async (r
       });
     }
 
-    res.status(502).json({
+    return res.status(502).json({
       error: 'Falha no envio do documento',
       message: result.error,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Erro ao enviar documento' });
+    return res.status(500).json({ error: error.message || 'Erro ao enviar documento' });
   }
 });
 
@@ -141,18 +104,19 @@ router.post('/communication/whatsapp/send-document', authenticateToken, async (r
  * GET /api/communication/whatsapp/status
  * Check WhatsApp instance connection status
  */
-router.get('/communication/whatsapp/status', authenticateToken, async (req, res) => {
+router.get('/communication/whatsapp/status', authenticateToken, async (_req, res) => {
   try {
     const status = await whatsappService.getInstanceStatus();
 
-    res.json({
+    return res.json({
       connected: status?.status === 'open',
-      status: status?.status || 'unknown',
-      phone: status?.phone,
-      instance: status?.instanceName,
+      status: status?.status || 'disconnected',
+      phone: status?.phone || null,
+      instance: status?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || 'defesai',
+      instanceId: status?.instanceId || null,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -160,7 +124,7 @@ router.get('/communication/whatsapp/status', authenticateToken, async (req, res)
  * GET /api/communication/whatsapp/qrcode
  * Get QR code for connecting WhatsApp instance (admin only)
  */
-router.get('/communication/whatsapp/qrcode', requireAdmin, async (req, res) => {
+router.get('/communication/whatsapp/qrcode', requireAdmin, async (_req, res) => {
   try {
     const qrCode = await whatsappService.getQrCode();
 
@@ -168,52 +132,79 @@ router.get('/communication/whatsapp/qrcode', requireAdmin, async (req, res) => {
       return res.json({ success: true, qrcode: qrCode });
     }
 
-    res.status(404).json({ error: 'QR code não disponível — instância pode já estar conectada' });
+    return res.status(404).json({ error: 'QR code não disponível — instância pode já estar conectada' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/webhooks/whatsapp & aliases
- * Webhook endpoint for Evolution API incoming messages — Publicly accessible (no auth middleware)
+ * POST /api/webhooks/whatsapp
+ * Manipulador canônico e único de webhook para mensagens da Evolution API
  */
 const handleWebhook = async (req: any, res: any) => {
   try {
-    // Validacao de origem (aditiva/retrocompativel): so rejeita com 401 quando
-    // EVOLUTION_WEBHOOK_SECRET estiver setado e o custom header X-Webhook-Secret
-    // nao corresponder. Sem a env var, o comportamento atual e preservado (dev).
-    // 401 e NON-RETRYABLE na Evolution API — nao ha loop de retries.
-    const auth = authorizeEvolutionWebhook(req.headers);
-    if (!auth.ok) {
-      logger?.warn?.('whatsapp', 'webhook', 'auth_rejected', 'Webhook Evolution rejeitado: origem nao autorizada', {
-        reason: auth.reason,
-        host: req.headers?.host,
+    // 1. Validação de autenticidade / origem (X-Webhook-Secret).
+    // `sha256=<hmac>` é deferido pelo gate 1 para o gate 1b (HMAC) decidir —
+    // comparar hex vs segredo puro jamais casaria e mataria o HMAC antes de rodar.
+    const authDecision = authorizeEvolutionWebhook(req.headers);
+    if (authDecision.ok === false) {
+      const reason = authDecision.reason;
+      logger.warn(
+        'whatsapp',
+        'whatsapp_webhook',
+        'auth_rejected',
+        'Rejeitando webhook Evolution API por falha de autenticação',
+        { reason }
+      );
+      return res.status(401).json({
+        error: 'Unauthorized webhook source',
+        reason,
       });
-      return res.status(401).json({ error: 'Unauthorized webhook request', received: false });
     }
 
-    const payload = req.body;
+    // 1b. Verificação HMAC-SHA-256 (anti-spoofing criptográfico).
+    // Headers no formato `sha256=<hmac>` são assinaturas do body bruto: com o
+    // segredo definido, a assinatura é OBRIGATÓRIA — verifica ou rejeita (rawBody
+    // ausente = impossível verificar = rejeita, 401). Remetentes legados (header =
+    // segredo puro, gate 1 acima) continuam válidos — mudança aditiva.
+    const webhookSecret = resolveWebhookSecret();
+    const sigHeaderRaw = req.headers['x-webhook-secret'];
+    const sigHeader = Array.isArray(sigHeaderRaw) ? sigHeaderRaw[0] : sigHeaderRaw;
+    if (webhookSecret && sigHeader?.startsWith('sha256=')) {
+      const rawBody = (req as any).rawBody;
+      if (!rawBody || !verifyEvolutionSignature(rawBody, sigHeader, webhookSecret)) {
+        logger.warn(
+          'whatsapp',
+          'whatsapp_webhook',
+          'hmac_rejected',
+          'Rejeitando webhook Evolution API por assinatura HMAC inválida',
+          {}
+        );
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    }
 
-    // Responde 200 OK imediatamente para evitar retries da Evolution API
+    // 2. Responde 200 OK imediatamente para evitar retries da Evolution API
     res.status(200).json({ received: true, success: true, timestamp: new Date().toISOString() });
 
+    const payload = req.body;
     if (!payload || (!payload.event && !payload.type && !payload.data)) {
       return;
     }
 
     const parsed = whatsappService.parseWebhook(payload);
 
-    logger?.info?.('whatsapp', 'webhook', 'incoming', 'WhatsApp message received via Evolution API', {
+    logger.info('whatsapp', 'whatsapp_webhook', 'incoming', 'WhatsApp message received via Evolution API', {
       from: parsed.from,
       type: parsed.type,
       instance: parsed.instance,
     });
 
-    // Processa pelo Channel Adapter unificado (normalização, contato, conversa, lead CRM e IA)
+    // 3. Processamento canônico unificado via messagingService
     await messagingService.handleEvolutionWebhook(payload);
 
-    // Emite evento para downstream
+    // 4. Publicação downstream no barramento de eventos
     eventBus.publish(
       EventTopics.WHATSAPP_WEBHOOK_RECEIVED || ('whatsapp.webhook_received' as any),
       {
@@ -227,19 +218,17 @@ const handleWebhook = async (req: any, res: any) => {
       'whatsapp_webhook'
     );
   } catch (error: any) {
-    console.error('[WhatsApp Webhook] Erro ao processar webhook:', error);
-    // Não retornar 500 para o webhook da Evolution API para evitar retries infinitos
+    logger.error('whatsapp', 'whatsapp_webhook', 'process_error', 'Erro ao processar webhook da Evolution API', {
+      error: error.message,
+    });
   }
 };
 
-// Aliases para cobrir todas as convenções de URL possíveis na Evolution API
+// Rota Canônica Única de Webhook
 router.post('/webhooks/whatsapp', handleWebhook);
-router.post('/whatsapp/webhook', handleWebhook);
-router.post('/webhook', handleWebhook);
-router.post('/webhook/whatsapp', handleWebhook);
 
 // Verificação GET (Health check / Probes de webhook)
-router.get('/webhooks/whatsapp', (req, res) => {
+router.get('/webhooks/whatsapp', (_req, res) => {
   res.json({
     status: 'active',
     endpoint: '/api/webhooks/whatsapp',
@@ -248,28 +237,20 @@ router.get('/webhooks/whatsapp', (req, res) => {
   });
 });
 
-router.get('/whatsapp/webhook', (req, res) => {
-  res.json({
-    status: 'active',
-    endpoint: '/api/webhooks/whatsapp',
-    timestamp: new Date().toISOString(),
-  });
-});
-
 /**
  * GET /api/communication/whatsapp/webhook-config
  * Retorna o status de configuração do Webhook na Evolution API
  */
-router.get('/communication/whatsapp/webhook-config', authenticateToken, async (req, res) => {
+router.get('/communication/whatsapp/webhook-config', authenticateToken, async (_req, res) => {
   try {
     const config = await whatsappService.getWebhookConfig();
-    res.json({
+    return res.json({
       success: true,
       currentConfig: config,
       recommendedUrl: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -281,14 +262,10 @@ router.post('/communication/whatsapp/webhook-config', requireAdmin, async (req, 
   try {
     const { webhookUrl, instanceName } = req.body;
     const result = await whatsappService.configureWebhook(webhookUrl, instanceName);
-    res.json(result);
+    return res.json(result);
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
-
-// Lazy import logger to avoid circular dependency
-let logger: any;
-import('../observability/logger').then(m => { logger = m; }).catch(() => {});
 
 export default router;

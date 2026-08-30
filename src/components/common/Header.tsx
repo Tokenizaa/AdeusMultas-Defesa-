@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, FileText, Scale, Bot, CheckCircle2, PlusCircle, FolderLock, Sparkles } from 'lucide-react';
+import { AdeusMultasLogo } from '../brand/AdeusMultasLogo';
 
 interface HeaderProps {
   currentTab: string;
@@ -12,23 +13,13 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, activeC
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
-          {/* Brand Logo - High Density AM badge */}
+          {/* Brand Logo - Official Adeus Multas */}
           <div
             id="brand-logo"
             onClick={() => onSelectTab('onboarding')}
-            className="flex items-center gap-2.5 cursor-pointer group"
+            className="flex items-center cursor-pointer group"
           >
-            <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center font-bold text-white shadow-sm shadow-orange-200 group-hover:scale-105 transition-transform text-sm tracking-tighter">
-              AM
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 tracking-tight text-base">Adeus Multa</span>
-                <span className="text-sm font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono">
-                  CTB & CONTRAN
-                </span>
-              </div>
-            </div>
+            <AdeusMultasLogo variant="compact" iconSize="md" />
           </div>
 
           {/* Main High-Density Navigation */}

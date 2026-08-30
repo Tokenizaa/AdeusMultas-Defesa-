@@ -8,9 +8,9 @@
 import { INFRACTION_CATALOG, InfractionCatalogItem } from '../../data/knowledge-base';
 import { ExpertRuleEngine } from '../rules/rule-engine';
 import { DocumentAssemblyEngine } from '../documents/document-assembly-engine';
-import { InfractionData, LegalArgumentDomain, CaseAnalysis, DefenseDraft, ProcedureType } from '../../types';
+import { InfractionData, LegalArgumentDomain, CaseAnalysis, DefenseDraft, ProcedureType, SubmissionInstructions } from '../../types';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
-import { ORGANS_DB } from '../legal-base/organs';
+import { ORGANS_DB, resolveProtocolInfo } from '../legal-base/organs';
 
 export class RagPipeline {
   /**
@@ -22,7 +22,7 @@ export class RagPipeline {
       INFRACTION_CATALOG.find((item) => {
         const itemCodeClean = item.code.replace(/[^0-9]/g, '');
         return itemCodeClean.includes(clean) || clean.includes(itemCodeClean);
-      }) || INFRACTION_CATALOG[0]
+      })
     );
   }
 
@@ -85,18 +85,20 @@ export class RagPipeline {
       },
     ];
 
-    // Organ info
+    // Organ info — FAIL CLOSED: órgão não encontrado → undefined, nunca DETRAN-SP padrão
     const organMatch = ORGANS_DB.find(
       (o) => o.abbreviation.toLowerCase() === (infraction?.orgaoAutuador || '').toLowerCase() ||
              o.name.toLowerCase().includes((infraction?.orgaoAutuador || '').toLowerCase())
-    ) || ORGANS_DB[0];
+    );
 
-    const organInfo = {
-      nome: organMatch.name,
-      portalUrl: organMatch.onlinePortalUrl,
-      enderecoFisico: organMatch.physicalAddress,
-      prazoDias: organMatch.standardDeadlineDays,
-    };
+    const organInfo = organMatch
+      ? {
+          nome: organMatch.name,
+          portalUrl: organMatch.onlinePortalUrl,
+          enderecoFisico: organMatch.physicalAddress,
+          prazoDias: organMatch.standardDeadlineDays,
+        }
+      : undefined;
 
     return {
       matchedTeses: matchedTeses.length > 0 ? matchedTeses : [
@@ -131,23 +133,47 @@ export class RagPipeline {
       cpf: string;
       rg?: string;
       cnh: string;
+      category?: string;
       address: string;
       cityState: string;
     },
     selectedArguments: LegalArgumentDomain[],
     procedureType: ProcedureType = 'recurso_jari'
-  ): DefenseDraft {
-    return DocumentAssemblyEngine.assemble({
+  ): DefenseDraft & { protocolInfo?: SubmissionInstructions } {
+    const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
+    
+    // Calculate days elapsed for decadence rule
+    let daysElapsed: number | undefined;
+    if (infraction.dateTime && infraction.notificationExpeditionDate) {
+      const infDate = new Date(infraction.dateTime);
+      const expDate = new Date(infraction.notificationExpeditionDate);
+      const diffTime = expDate.getTime() - infDate.getTime();
+      daysElapsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    
+    const draft = DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
       infraction,
       vehicle: {
         plate: vehiclePlate,
         model: vehicleModel,
-        renavam: '12345678900',
       },
       applicant: applicantData,
       selectedArgumentIds: selectedArguments.map((a) => a.id),
+      dates: {
+        infractionDate: infraction.dateTime,
+        expeditionDate: infraction.notificationExpeditionDate,
+        notificationDate: infraction.notificationExpeditionDate,
+        appealFilingDate: infraction.defenseDeadline,
+        daysElapsed,
+      },
+      speeds: {
+        measured: infraction.measuredSpeed,
+        considered: infraction.consideredSpeed,
+        limit: infraction.speedLimit,
+      },
     });
+    return { ...draft, protocolInfo };
   }
 }

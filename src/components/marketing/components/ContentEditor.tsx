@@ -35,7 +35,7 @@ interface ContentEditorProps {
     fields: Partial<EditorialContentItem>, 
     versionNote?: { agent?: string; author?: string; changes?: string }
   ) => Promise<void>;
-  onStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
+  onStatus: (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado') => Promise<void>;
   onChannel?: (id: string, channel: string) => Promise<void>;
   onFetchVersions: (id: string) => Promise<ContentVersion[]>;
   contents?: EditorialContentItem[];

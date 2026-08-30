@@ -72,28 +72,34 @@ router.post('/cases', authenticateToken, (req, res) => {
     }
     domainData.updatedAt = new Date().toISOString();
 
-    // Run legal RAG analysis
+    // Run legal RAG analysis (gratuita, sem minuta)
     if (!domainData.analysis && domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
 
-    // Generate initial defense draft
-    if (!domainData.defenseDraft && domainData.infraction) {
-      domainData.defenseDraft = RagPipeline.generateDefenseDraft(
-        domainData.id,
-        domainData.infraction,
-        domainData.vehicle?.plate || 'SEM PLACA',
-        domainData.vehicle?.brandModel || 'Veículo',
-        {
-          name: domainData.clientName || 'Requerente',
-          cpf: domainData.clientCpf || '000.000.000-00',
-          cnh: '00000000000',
-          address: 'Endereço residencial',
-          cityState: 'São Paulo/SP',
-        },
-        domainData.analysis?.recommendedArguments || [],
-        domainData.serviceType || 'recurso_jari'
-      );
+    // Se o caso já é pago e os dados de qualificação reais do requerente estão presentes,
+    // gera deterministicamente a minuta da defesa sem fabricar dados.
+    if ((domainData.isPaid || domainData.status === 'defesa_pronta') && !domainData.defenseDraft && domainData.applicant) {
+      const a = domainData.applicant;
+      if (a.applicantName && a.applicantCpf && a.applicantCnh && a.addressStreet && a.addressCityState) {
+        domainData.defenseDraft = RagPipeline.generateDefenseDraft(
+          domainData.id,
+          domainData.infraction,
+          domainData.vehicle?.plate || 'SEM PLACA',
+          domainData.vehicle?.brandModel || 'Veículo',
+          {
+            name: a.applicantName,
+            cpf: a.applicantCpf,
+            rg: a.applicantRg,
+            cnh: a.applicantCnh,
+            category: a.cnhCategory,
+            address: `${a.addressStreet}, ${a.addressNumber || ''}`.trim(),
+            cityState: a.addressCityState,
+          },
+          domainData.analysis?.recommendedArguments || [],
+          domainData.serviceType || 'recurso_jari'
+        );
+      }
     }
 
     const row = CanonicalMapper.domainToRow(domainData);
@@ -195,18 +201,59 @@ router.post('/cases/:id/generate-defense', async (req, res) => {
     selectedArgumentIds?.includes(a.id)
   );
 
+  // Dados de qualificação do requerente DEVEM vir do onboarding real (body ou
+  // domain.applicant). NUNCA fabricar CNH/cidade. FAIL CLOSED: ausentes → erro.
+  const b = applicantData as any;
+  const resolvedApplicant = (b && (b.name !== undefined || b.applicantName !== undefined))
+    ? {
+        name: b.name || b.applicantName || '',
+        cpf: b.cpf || b.applicantCpf || '',
+        rg: b.rg || b.applicantRg,
+        cnh: b.cnh || b.applicantCnh || '',
+        category: b.category || b.cnhCategory,
+        address: b.address || (b.addressStreet ? `${b.addressStreet}, ${b.addressNumber || ''}` : ''),
+        cityState: b.cityState || b.addressCityState || '',
+      }
+    : domain.applicant
+      ? {
+          name: domain.applicant.applicantName,
+          cpf: domain.applicant.applicantCpf,
+          rg: domain.applicant.applicantRg,
+          cnh: domain.applicant.applicantCnh,
+          category: domain.applicant.cnhCategory,
+          address: `${domain.applicant.addressStreet}, ${domain.applicant.addressNumber || ''}`,
+          cityState: domain.applicant.addressCityState,
+        }
+      : undefined;
+
+  if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
+    return res.status(400).json({ error: 'Dados de qualificação do requerente incompletos. Preencha os dados complementares antes de gerar a defesa.' });
+  }
+
+  if (b && (!domain.applicant || !domain.applicant.applicantCnh)) {
+    domain.applicant = {
+      applicantName: resolvedApplicant.name,
+      applicantCpf: resolvedApplicant.cpf,
+      applicantRg: resolvedApplicant.rg,
+      applicantCnh: resolvedApplicant.cnh,
+      cnhCategory: resolvedApplicant.category,
+      applicantPhone: domain.clientPhone || '',
+      applicantEmail: domain.clientEmail || '',
+      addressStreet: resolvedApplicant.address,
+      addressNumber: '',
+      addressNeighborhood: '',
+      addressZipCode: '',
+      addressCityState: resolvedApplicant.cityState,
+      factsNarrative: customFacts,
+    };
+  }
+
   let defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle.plate,
     domain.vehicle.brandModel,
-    applicantData || {
-      name: domain.clientName,
-      cpf: domain.clientCpf || '000.000.000-00',
-      cnh: '05492817492',
-      address: 'Rua das Flores, 450, Apto 82',
-      cityState: 'São Paulo/SP',
-    },
+    resolvedApplicant,
     selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
     procedureType || domain.serviceType
   );
@@ -218,7 +265,7 @@ router.post('/cases/:id/generate-defense', async (req, res) => {
   // Optionally enrich with Gemini AI for superior legal polish
   const enrichedGemini = await enrichDefenseWithGemini({
     infraction: domain.infraction,
-    applicant: applicantData,
+    applicant: resolvedApplicant,
     arguments: selectedArgs,
     procedure: procedureType,
   });

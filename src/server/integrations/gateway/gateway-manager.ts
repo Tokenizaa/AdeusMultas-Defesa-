@@ -24,37 +24,52 @@ import { PaymentGateway, GatewayId, GatewayStatus } from './types';
 import { pagbankAdapter } from './pagbank-adapter';
 import { ggpixAdapter } from './ggpix-adapter';
 import { logger } from '../../observability/logger';
+import { configService } from '../../config/config-service';
 
 // ============================================================================
 // Configuração do gateway ativo
 // ============================================================================
 
 /**
- * Determina o gateway ativo a partir de variáveis de ambiente.
+ * Determina o gateway ativo a partir de variáveis de ambiente + ConfigService override.
  *
  * Prioridade:
- * 1. PAYMENT_ACTIVE_GATEWAY (env explicitamente definido)
- * 2. Fallback para 'pagbank' (comportamento atual preservado)
+ * 1. PAYMENT_ACTIVE_GATEWAY_OVERRIDE (ConfigService — admin manual switch, persiste)
+ * 2. PAYMENT_ACTIVE_GATEWAY (env explicitamente definido)
+ * 3. PAYMENT_MODE (production → ggpixapi, sandbox → pagbank)
+ * 4. Fallback baseado no modo
  *
- * O Admin UI pode alterar este valor via /gateway/switch (override em runtime),
- * mas a configuração padrão vive no environment.
+ * REGRA: Em PAYMENT_MODE=production, NUNCA permite PagBank como gateway ativo.
  */
 function resolveActiveGatewayIdFromEnv(): GatewayId {
+  // 1. Override persistido no ConfigService (admin UI switch)
+  const configOverride = configService.get('PAYMENT_ACTIVE_GATEWAY_OVERRIDE');
+  if (configOverride && (configOverride === 'ggpixapi' || configOverride === 'pagbank')) {
+    logger.info('payments', 'gateway_manager', 'resolve', 'Using ConfigService override for active gateway', {
+      override: configOverride,
+    });
+    return configOverride;
+  }
+
+  // 2. Env explícito
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || '').toLowerCase().trim();
+  const paymentMode = (process.env.PAYMENT_MODE || 'sandbox').toLowerCase().trim();
+  const isProduction = paymentMode === 'production';
+
   if (envValue === 'ggpixapi' || envValue === 'ggpix') return 'ggpixapi';
   if (envValue === 'pagbank') {
-    if (process.env.NODE_ENV === 'production') {
-      // Em produção, NUNCA permitir PagBank como gateway ativo
+    if (isProduction) {
+      logger.warn('payments', 'gateway_manager', 'resolve', 'PagBank bloqueado em PAYMENT_MODE=production', {
+        requestedGateway: 'pagbank',
+        paymentMode,
+        forcedGateway: 'ggpixapi',
+      });
       return 'ggpixapi';
     }
     return 'pagbank';
   }
-  // Em dev/teste, manter fallback PagBank para compatibilidade
-  if (process.env.NODE_ENV === 'production') {
-    // Em produção, fallback é GGPIXAPI
-    return 'ggpixapi';
-  }
-  return 'pagbank';
+  // Sem env explícito → fallback baseado no PAYMENT_MODE
+  return isProduction ? 'ggpixapi' : 'pagbank';
 }
 
 // ============================================================================
@@ -74,16 +89,6 @@ export interface GatewayInfo {
 
 export class GatewayManager {
   private gateways: Map<GatewayId, PaymentGateway> = new Map();
-  /**
-   * Override explícito feito em runtime (Admin UI). Quando null, o gateway
-   * ativo é resolvido do ambiente a cada leitura.
-   *
-   * IMPORTANTE: a resolução é LAZY de propósito. O singleton é construído na
-   * avaliação do módulo, que ocorre ANTES de dotenv.config() rodar no
-   * server.ts (ordem de imports ES). Resolver eager no construtor lia envs
-   * vazias e caía silenciosamente no fallback PagBank, desativando o GGPix.
-   */
-  private activeOverride: GatewayId | null = null;
 
   constructor() {
     // Registrar todos os gateways conhecidos
@@ -95,9 +100,8 @@ export class GatewayManager {
     });
   }
 
-  /** Gateway ativo efetivo: override runtime > variável de ambiente. */
+  /** Gateway ativo efetivo: ConfigService override > variável de ambiente. */
   private resolveActiveGatewayId(): GatewayId {
-    if (this.activeOverride) return this.activeOverride;
     return resolveActiveGatewayIdFromEnv();
   }
 
@@ -179,11 +183,10 @@ export class GatewayManager {
    * Altera o gateway ativo (usado pelo Admin UI).
    * NÃO migra pagamentos existentes — apenas afeta novos pagamentos.
    *
-   * IMPORTANTE: Em produção, esta alteração deve ser persistida em env
-   * ou no ConfigService e refletir em todos os workers/instâncias.
-   * Em memória, a alteração é imediata mas não persiste entre reinícios.
+   * A alteração é persistida no ConfigService (PAYMENT_ACTIVE_GATEWAY_OVERRIDE)
+   * e reflete em todos os workers/instâncias após reinício.
    */
-  setActiveGateway(id: GatewayId): { success: boolean; message: string } {
+  async setActiveGateway(id: GatewayId, updatedBy: string = 'admin'): Promise<{ success: boolean; message: string }> {
     const gateway = this.gateways.get(id);
     if (!gateway) {
       return { success: false, message: `Gateway '${id}' não encontrado.` };
@@ -197,11 +200,21 @@ export class GatewayManager {
     }
 
     const previousId = this.resolveActiveGatewayId();
-    this.activeOverride = id;
+    
+    // Persistir no ConfigService
+    const updateResult = await configService.update({
+      key: 'PAYMENT_ACTIVE_GATEWAY_OVERRIDE',
+      value: id,
+      updatedBy,
+    });
+
+    if (!updateResult.success) {
+      return { success: false, message: `Falha ao persistir override: ${updateResult.message}` };
+    }
 
     logger.info('payments', 'gateway_manager', 'set_active',
-      `Gateway changed: ${previousId} → ${id}`,
-      { previousGateway: previousId, newGateway: id }
+      `Gateway changed: ${previousId} → ${id} (persisted to ConfigService)`,
+      { previousGateway: previousId, newGateway: id, updatedBy }
     );
 
     return {

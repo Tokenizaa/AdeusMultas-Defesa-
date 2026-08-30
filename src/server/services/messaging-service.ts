@@ -7,8 +7,11 @@
 
 import { logger } from '../observability/logger';
 import { eventBus, EventTopics } from '../../core/events/topics';
+import { getSupabaseServerClient } from '../db/supabase-server';
 import { whatsappService } from './whatsapp-service';
 import { metaGraphClient } from '../../integrations/meta/client/meta-graph-client';
+import { persistProspectingResponse } from './prospecting-responder';
+import { whatsappJourneyRouter } from './whatsapp-journey-router';
 import {
   SupportedChannel,
   MarketingContact,
@@ -432,9 +435,23 @@ export class MessagingService {
   private conversations: Map<string, MarketingConversation> = new Map();
   private messages: Map<string, MarketingMessage[]> = new Map(); // conversationId -> messages[]
 
+  // --- Persistência Supabase (source of truth de longo prazo) ---
+  // Mapas em memória continuam servindo leituras síncronas (contrato frontend intacto);
+  // toda mutação é espelhada nas tabelas messaging_* e, no boot, os Mapas são
+  // re-hidratados do banco (restart preserva histórico).
+  // Falhas de DB são logadas e engolidas (zero regressão in-process).
+  private supabase: ReturnType<typeof getSupabaseServerClient> | null = null;
+  private contactDbIds = new Map<string, string>(); // mapId (cnt_*) -> uuid da linha
+  private convDbIds = new Map<string, string>(); // mapId (conv_*) -> uuid da linha
+
   constructor() {
     this.registerAdapters();
     this.seedInitialData();
+    // Hidratação assíncrona: não bloqueia o boot; mapas já populados com seed
+    // são enriquecidos/substituídos pelos registros persistidos quando a query resolve.
+    this.hydrateFromDatabase().catch((err) => {
+      logger.error('messaging', 'persist', 'hydrate_unhandled', `Falha não tratada na hidratação: ${err?.message ?? String(err)}`);
+    });
   }
 
   private registerAdapters() {
@@ -873,6 +890,17 @@ export class MessagingService {
     convMessages.push(message);
     this.messages.set(conversation.id, convMessages);
 
+    // 4b. Acoplamento ADITIVO com prospecção B2B: resposta inbound de lead prospectado
+    //     persiste em marketing_messages e marca marketing_lead_campaigns='responded'.
+    //     Nunca lança erro — falhas são logadas internamente e engolidas.
+    await persistProspectingResponse(incoming);
+
+    // 4c. WhatsApp Journey Router (ADR-013 / P0.2) — decide B2C_AUTO vs B2B_RELATIONSHIP
+    //     Deve rodar ANTES do auto-responder IA e ANTES da emissão de evento,
+    //     para que conversation.metadata.journeyType esteja disponível downstream.
+    const journey = await whatsappJourneyRouter.resolveJourney(incoming);
+    conversation.metadata = { ...conversation.metadata, journeyType: journey };
+
     // 5. Emissão de Evento para UI / WebSockets / Inbox
     eventBus.publish(
       EventTopics.MESSAGING_MESSAGE_RECEIVED,
@@ -885,12 +913,21 @@ export class MessagingService {
       'messaging_service'
     );
 
-    // 6. Motor de IA / Auto-Atendimento em background
-    if (conversation.aiMode === 'auto' && incoming.text) {
+    // 6. Motor de IA / Auto-Atendimento em background — SOMENTE para B2C_AUTO
+    if (conversation.aiMode === 'auto' && incoming.text && journey === 'B2C_AUTO') {
       setImmediate(async () => {
         await this.triggerAIAutoResponse(conversation!, contact!, incoming.text || '');
       });
     }
+
+    // Para B2B_RELATIONSHIP: persiste inbound, emite evento, mas NÃO dispara auto-resposta.
+    // Cadence state em marketing_lead_campaigns permanece 'responded' (não rebaixa para 'sent').
+
+    // Persistência Supabase (source of truth): espelha contato+conversa+mensagem.
+    // Sequencial p/ respeitar FKs (contact → conversation → message). Nunca lança.
+    await this.persistContact(contact);
+    await this.persistConversation(conversation);
+    await this.persistMessage(message);
 
     return { contact, conversation, message };
   }
@@ -954,6 +991,10 @@ export class MessagingService {
     conversation.lastMessageAt = now;
     conversation.updatedAt = now;
     conversation.unreadCount = 0;
+
+    // Persistência Supabase (source of truth): mensagem + atualização da conversa.
+    await this.persistMessage(message);
+    await this.persistConversation(conversation);
 
     // Publica evento
     eventBus.publish(
@@ -1105,6 +1146,8 @@ export class MessagingService {
       updatedAt: new Date().toISOString(),
     };
     this.conversations.set(conv.id, updated);
+    // Persistência Supabase (sync API → fire-and-forget; nunca lança)
+    void this.persistConversation(updated);
     return updated;
   }
 
@@ -1114,6 +1157,8 @@ export class MessagingService {
 
     const updated = { ...cnt, ...updates, updatedAt: new Date().toISOString() };
     this.contacts.set(id, updated);
+    // Persistência Supabase (sync API → fire-and-forget; nunca lança)
+    void this.persistContact(updated);
     return updated;
   }
 
@@ -1140,6 +1185,20 @@ export class MessagingService {
     this.leads.set(id, lead);
     contact.leadId = id;
     if (lead.vehiclePlate) contact.vehiclePlate = lead.vehiclePlate;
+
+    // Persistência Supabase (sync API → fire-and-forget; nunca lança).
+    // O lead embutido na conversa mantém o contrato de objeto no hydrate.
+    const conv = this.findConversationByContactId(contact.id);
+    if (conv) {
+      const withLead: MarketingConversation = {
+        ...conv,
+        lead,
+        metadata: { ...(conv.metadata || {}), lead: lead as unknown as Record<string, any> },
+      };
+      this.conversations.set(conv.id, withLead);
+      void this.persistConversation(withLead);
+    }
+    void this.persistContact(contact);
 
     return lead;
   }
@@ -1302,7 +1361,273 @@ export class MessagingService {
     return { success: allPassed, results };
   }
 
+  // =========================================================================
+  // 7. SUPABASE PERSISTENCE LAYER (source of truth) — hybrid cache pattern
+  // =========================================================================
+  // Mapas em memória permanecem como cache de leitura síncrona (frontend contract
+  // intacto). Toda mutação é espelhada aqui e o estado é re-hidratado no boot.
+  // Todos os métodos abaixo engolem erros — falha de DB NÃO degrada o inbox.
+
+  private get db(): ReturnType<typeof getSupabaseServerClient> | null {
+    if (!this.supabase) this.supabase = getSupabaseServerClient();
+    return this.supabase;
+  }
+
+  private async hydrateFromDatabase(): Promise<void> {
+    const client = this.db;
+    if (!client) {
+      logger.warn('messaging', 'persist', 'hydrate_skip', 'Supabase client ausente — inbox permanecerá em memória apenas');
+      return;
+    }
+
+    try {
+      // 1. Contatos
+      const { data: contactRows, error: cErr } = await (client as any)
+        .from('messaging_contacts')
+        .select('*');
+      if (cErr) throw cErr;
+      if (Array.isArray(contactRows)) {
+        for (const row of contactRows) {
+          const contact = this.mapContactRow(row);
+          this.contacts.set(contact.id, contact);
+          this.contactDbIds.set(contact.id, row.id);
+        }
+      }
+
+      // 2. Conversas (deps: contatos já carregados)
+      const { data: convRows, error: vErr } = await (client as any)
+        .from('messaging_conversations')
+        .select('*');
+      if (vErr) throw vErr;
+      if (Array.isArray(convRows)) {
+        for (const row of convRows) {
+          const { conv, lead } = this.mapConversationRow(row);
+          if (lead && lead.id) this.leads.set(lead.id, lead);
+          this.conversations.set(conv.id, conv);
+          this.convDbIds.set(conv.id, row.id);
+        }
+      }
+
+      // 3. Mensagens (append + dedupe por mapId contra eventuais msgs de seed)
+      const { data: msgRows, error: mErr } = await (client as any)
+        .from('messaging_messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (mErr) throw mErr;
+      if (Array.isArray(msgRows)) {
+        const byConv = new Map<string, any[]>();
+        for (const row of msgRows) {
+          const convUuid = row.conversation_id;
+          // mapeia uuid da conversa de volta para o mapId (key do Map de msgs)
+          let convKey: string | undefined = this.convDbIdsFromUuid(convUuid);
+          if (!convKey) convKey = convUuid; // fallback: linha externa sem mapId
+          (byConv.get(convKey) || byConv.set(convKey, []).get(convKey)!).push(row);
+        }
+        for (const [key, rows] of byConv) {
+          const existing = this.messages.get(key) || [];
+          const merged = [...rows.map((r) => this.mapMessageRow(r, key)), ...existing];
+          const dedup = new Map(merged.map((m) => [m.id, m]));
+          this.messages.set(
+            key,
+            Array.from(dedup.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          );
+        }
+      }
+
+      logger.info('messaging', 'persist', 'hydrate_done', 'Inbox hidratado do Supabase', {
+        contacts: this.contacts.size,
+        conversations: this.conversations.size,
+        leads: this.leads.size,
+        messages: msgRows?.length ?? 0,
+      });
+    } catch (err: any) {
+      logger.error('messaging', 'persist', 'hydrate_failed', `Falha na hidratação do inbox: ${err?.message ?? String(err)}`);
+    }
+  }
+
+  private async persistContact(contact: MarketingContact): Promise<void> {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const { data, error } = await (client as any)
+        .from('messaging_contacts')
+        .upsert(this.contactToRow(contact), { onConflict: 'channel,external_id' })
+        .select('id')
+        .single();
+      if (error) throw error;
+      if (data?.id) this.contactDbIds.set(contact.id, data.id);
+    } catch (err: any) {
+      logger.error('messaging', 'persist', 'contact_failed', `Falha ao persistir contato ${contact.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+
+  private async persistConversation(conversation: MarketingConversation): Promise<void> {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const contactUuid = this.contactDbIds.get(conversation.contactId);
+      if (!contactUuid) return; // sem FK de contato ainda → skip (será retentado em mutation futura)
+      const { data, error } = await (client as any)
+        .from('messaging_conversations')
+        .upsert(this.conversationToRow(conversation, contactUuid), { onConflict: 'contact_id,channel' })
+        .select('id')
+        .single();
+      if (error) throw error;
+      if (data?.id) this.convDbIds.set(conversation.id, data.id);
+    } catch (err: any) {
+      logger.error('messaging', 'persist', 'conversation_failed', `Falha ao persistir conversa ${conversation.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+
+  private async persistMessage(message: MarketingMessage): Promise<void> {
+    const client = this.db;
+    if (!client) return;
+    try {
+      const convUuid = this.convDbIds.get(message.conversationId);
+      if (!convUuid) return; // conversa não persistida ainda → skip
+      await (client as any).from('messaging_messages').insert(this.messageToRow(message, convUuid));
+    } catch (err: any) {
+      logger.error('messaging', 'persist', 'message_failed', `Falha ao persistir mensagem ${message.id}: ${err?.message ?? String(err)}`);
+    }
+  }
+
+  // --- row <-> memory mappings ---
+  // O id legado do Map (cnt_wpp_01, conv_wpp_01, msg_01_1) é preservado via
+  // metadata.mapId. Leads embutidos em conversations.metadata.lead.
+
+  private contactToRow(c: MarketingContact): Record<string, any> {
+    return {
+      name: c.name,
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+      channel: c.channel,
+      external_id: c.externalId,
+      avatar_url: c.avatarUrl ?? null,
+      vehicle_plate: c.vehiclePlate ?? null,
+      metadata: { mapId: c.id, ...(c.leadId ? { leadId: c.leadId } : {}) },
+      updated_at: c.updatedAt,
+    };
+  }
+
+  private mapContactRow(row: any): MarketingContact {
+    const meta = row.metadata || {};
+    return {
+      id: meta.mapId || row.id,
+      name: row.name,
+      phone: row.phone ?? undefined,
+      email: row.email ?? undefined,
+      channel: row.channel,
+      externalId: row.external_id,
+      avatarUrl: row.avatar_url ?? undefined,
+      leadId: meta.leadId,
+      vehiclePlate: row.vehicle_plate ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private conversationToRow(c: MarketingConversation, contactUuid: string): Record<string, any> {
+    const metadata: Record<string, any> = {
+      ...(c.metadata || {}),
+      mapId: c.id,
+      contactMapId: c.contactId,
+    };
+    if (c.lead) metadata.lead = c.lead;
+    return {
+      contact_id: contactUuid,
+      channel: c.channel,
+      channel_label: c.channelLabel ?? null,
+      status: c.status,
+      unread_count: c.unreadCount,
+      last_message_text: c.lastMessageText,
+      last_message_at: c.lastMessageAt,
+      ai_mode: c.aiMode,
+      metadata,
+      updated_at: c.updatedAt,
+    };
+  }
+
+  private mapConversationRow(row: any): { conv: MarketingConversation; lead?: MarketingLeadInfo } {
+    const meta = row.metadata || {};
+    const mapId = meta.mapId || row.id;
+    const contactMapId = meta.contactMapId || row.contact_id;
+    const contact = this.contacts.get(contactMapId);
+    // ponytail: contato sem mapId conhecido (escrito por ferramenta externa) → placeholder mínimo.
+    const safeContact = contact ?? {
+      id: contactMapId,
+      name: 'Contato (sem mapa local)',
+      channel: row.channel,
+      externalId: '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+    const lead = meta.lead ? (meta.lead as MarketingLeadInfo) : undefined;
+    const conv: MarketingConversation = {
+      id: mapId,
+      conversationId: mapId,
+      contactId: contactMapId,
+      contact: safeContact,
+      lead,
+      channel: row.channel,
+      channelLabel: row.channel_label ?? undefined,
+      status: row.status,
+      unreadCount: row.unread_count,
+      lastMessageText: row.last_message_text ?? '',
+      lastMessageAt: row.last_message_at ?? row.created_at,
+      aiMode: row.ai_mode,
+      metadata: meta,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+    return { conv, lead };
+  }
+
+  private messageToRow(m: MarketingMessage, convUuid: string): Record<string, any> {
+    return {
+      conversation_id: convUuid,
+      channel: m.channel,
+      direction: m.direction,
+      sender_id: m.senderId,
+      sender_name: m.senderName,
+      text: m.text ?? null,
+      media_url: m.mediaUrl ?? null,
+      media_type: m.mediaType ?? null,
+      status: m.status,
+      external_message_id: m.externalMessageId ?? null,
+      raw_metadata: m.rawMetadata ?? null,
+      metadata: { mapId: m.id },
+      created_at: m.createdAt,
+    };
+  }
+
+  private mapMessageRow(row: any, conversationId: string): MarketingMessage {
+    const meta = row.metadata || {};
+    return {
+      id: meta.mapId || row.id,
+      conversationId,
+      channel: row.channel,
+      direction: row.direction,
+      senderId: row.sender_id,
+      senderName: row.sender_name,
+      text: row.text ?? '',
+      mediaUrl: row.media_url ?? undefined,
+      mediaType: row.media_type ?? undefined,
+      status: row.status,
+      externalMessageId: row.external_message_id ?? undefined,
+      rawMetadata: row.raw_metadata ?? undefined,
+      createdAt: row.created_at,
+    };
+  }
+
+  private convDbIdsFromUuid(uuid: string): string | undefined {
+    const entry = Array.from(this.convDbIds.entries()).find(([, v]) => v === uuid);
+    return entry ? entry[0] : undefined;
+  }
+
+  // =========================================================================
   // Helpers
+  // =========================================================================
+
   private findContactByExternalId(externalId: string, channel: SupportedChannel): MarketingContact | undefined {
     return Array.from(this.contacts.values()).find(
       (c) => c.externalId === externalId && c.channel === channel

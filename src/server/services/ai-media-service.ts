@@ -1,5 +1,13 @@
 import { GoogleGenAI, GenerateVideosOperation } from '@google/genai';
 import { logger } from '../observability/logger';
+import { validateImageQuality } from './image-quality.service';
+import type { ImageQualityResult } from './image-quality.service';
+
+// Mocks de placeholder (SVG) só são permitidos fora de produção quando
+// explicitamente habilitados via DEV_ALLOW_MOCKS. Em produção, falham com erro.
+// Lazy (não constante de módulo) para que env seja observado no momento da chamada.
+const mocksAllowed = () =>
+  process.env.NODE_ENV !== 'production' && process.env.DEV_ALLOW_MOCKS === 'true';
 
 export interface GenerateImageOptions {
   prompt: string;
@@ -52,6 +60,8 @@ export class AIMediaService {
     error?: string;
     /** true quando a saída é SVG placeholder (nenhum modelo IA respondeu) */
     isFallback?: boolean;
+    /** Gate de qualidade da imagem gerada (undefined p/ fallback SVG). NÃO bloqueia retorno — só sinaliza. */
+    quality?: ImageQualityResult;
   }> {
     const {
       prompt,
@@ -124,6 +134,22 @@ export class AIMediaService {
                 aspectRatio,
                 imageSize,
               });
+
+              // GATE DE QUALIDADE — validação local pós-geração; NÃO segura o retorno, só sinaliza
+              const quality: ImageQualityResult | undefined =
+                mime.startsWith('image/') && mime !== 'image/svg+xml'
+                  ? await validateImageQuality({ buffer: Buffer.from(base64, 'base64') })
+                  : undefined;
+
+              if (quality && !quality.pass && quality.failureKind === 'quality') {
+                logger.error('ai_media', 'service', 'generateImage_quality',
+                  `Imagem gerada reprovou no gate de qualidade (${model})`, {
+                    reasons: quality.reasons,
+                    metrics: quality.metrics,
+                    score: quality.score,
+                  });
+              }
+
               return {
                 success: true,
                 imageUrl,
@@ -133,6 +159,7 @@ export class AIMediaService {
                 imageSize,
                 aspectRatio,
                 promptUsed: fullPrompt,
+                quality,
               };
             }
           }
@@ -143,8 +170,12 @@ export class AIMediaService {
       }
     }
 
-    // Fallback SVG placeholder quando IA indisponível E caller explícito permitiu
+    // Fallback SVG placeholder quando IA indisponível E caller explícito permitiu.
+    // Só em dev (DEV_ALLOW_MOCKS). Em produção, nunca devolver mock: falha explícita.
     if (options.allowFallback) {
+      if (!mocksAllowed()) {
+        throw new Error('Geração de imagem indisponível: mocks (SVG placeholder) desabilitados em produção. Configure GEMINI_API_KEY.');
+      }
       const fallbackUrl = this.createFallbackImage(fullPrompt, aspectRatio || '1:1', imageSize || '1K');
       logger.warn('ai_media', 'service', 'generateImage',
         'Nenhum modelo IA disponível — retornando SVG placeholder', { promptUsed: fullPrompt });

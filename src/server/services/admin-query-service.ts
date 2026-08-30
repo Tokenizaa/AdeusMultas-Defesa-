@@ -260,7 +260,7 @@ export class AdminQueryService {
       paidAt: row.paid_at,
       externalId: `PAGBANK_TX_${(row.case_id || '').substring(0, 10).toUpperCase()}`,
       infractionCode: '745-50',
-      organ: 'DETRAN',
+      organ: 'Não informado',
     }));
 
     const totalCount = count ?? payments.length;
@@ -312,7 +312,7 @@ export class AdminQueryService {
         paidAt: isPaid ? (c.paidAt || c.updatedAt || new Date().toISOString()) : null,
         externalId: `PAGBANK_TX_${c.id.substring(0, 10).toUpperCase()}`,
         infractionCode: c.infraction?.infractionCode || '745-50',
-        organ: c.infraction?.autuadorBody || 'DETRAN',
+        organ: c.infraction?.autuadorBody ?? 'ÓRGÃO NÃO INFORMADO',
       };
     });
 
@@ -355,12 +355,12 @@ export class AdminQueryService {
         id: `doc_${c.id}`,
         caseId: c.id,
         title: c.title || `Petição Auto ${c.infraction?.aitNumber || c.id}`,
-        clientName: c.clientName || 'Condutor DefesAi',
-        clientCpf: c.clientCpf || '000.000.000-00',
-        aitNumber: c.infraction?.aitNumber || '1B892014',
-        infractionCode: c.infraction?.infractionCode || '745-50',
-        infractionDescription: c.infraction?.description || 'Excesso de velocidade',
-        organ: c.infraction?.autuadorBody || 'DETRAN-SP',
+        clientName: c.clientName || 'Não informado',
+        clientCpf: c.clientCpf || 'Não informado',
+        aitNumber: c.infraction?.aitNumber || 'Não informado',
+        infractionCode: c.infraction?.infractionCode || 'Não informado',
+        infractionDescription: c.infraction?.description || 'Não informado',
+        organ: c.infraction?.autuadorBody ?? 'ÓRGÃO NÃO INFORMADO',
         procedureType: c.serviceType || 'recurso_jari',
         procedureLabel: c.serviceType === 'conversao_advertencia'
           ? 'Conversão em Advertência (Art. 267 CTB)'

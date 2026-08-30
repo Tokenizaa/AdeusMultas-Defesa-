@@ -7,7 +7,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
-// All monitoring routes require admin authentication
+// Public health check - no auth required
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'monitoring', timestamp: new Date().toISOString() });
+});
+
+// Protected admin routes
 router.use(authenticateToken, requireAdmin);
 
 // Platform Observability, Health & Monitoring Endpoints

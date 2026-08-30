@@ -12,6 +12,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  /* Ignore vitest-style invariant files from Playwright scan */
+  testIgnore: ['**/invariants/**'],
   /* Maximum time one test can run for. */
   timeout: 60 * 1000,
   expect: {

@@ -4,6 +4,7 @@ import { RouterProvider, useRouter } from './core/router/RouterContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import { api } from './lib/api/client';
 import { CASES_CHANGED_EVENT } from './context/casesEvents';
+import { useSEO } from './core/meta/SEO';
 
 // Layouts
 import { PublicLayout } from './components/layout/PublicLayout';
@@ -27,6 +28,7 @@ import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
 import { KnowledgeHub } from './components/knowledge/KnowledgeHub';
 import { MarketingOSView } from './components/marketing/MarketingOSView';
+import { ProspectingPage } from './components/marketing/components/ProspectingPage';
 import { AdminAuditView } from './components/admin/AdminAuditView';
 import { WhatsAppSimulatorModal } from './components/communication/WhatsAppSimulatorModal';
 import { PWAInstallBanner } from './components/pwa/PWAInstallBanner';
@@ -53,6 +55,9 @@ import { CaseDomain } from './types';
 function AppContent() {
   const { currentPath, activeArea, params, navigate } = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
+
+  // Sincronização e controle dinâmico de metadados Open Graph e SEO
+  useSEO(undefined, currentPath);
 
   const [cases, setCases] = useState<CaseDomain[]>([]);
   const [activeCase, setActiveCase] = useState<CaseDomain | null>(null);
@@ -163,12 +168,24 @@ function AppContent() {
     } else if (currentPath === '/admin/knowledge') {
       title = 'Base Jurídica Canônica';
       subtitle = '52 teses fundamentadas, 6 checklists e templates determinísticos';
-    } else if (currentPath === '/admin/marketing') {
+    } else if (currentPath.startsWith('/admin/marketing/prospecting')) {
+      title = 'Prospecção B2B Autônoma';
+      if (currentPath === '/admin/marketing/prospecting/leads') {
+        subtitle = 'Base qualificada de despachantes e advogados de trânsito';
+      } else if (currentPath === '/admin/marketing/prospecting/campaigns') {
+        subtitle = 'Regras de cadência, segmentação por cidade e disparos ativos';
+      } else if (currentPath === '/admin/marketing/prospecting/automation') {
+        subtitle = 'Status do motor, worker autônomo e conectividade Evolution API';
+      } else if (currentPath === '/admin/marketing/prospecting/queue') {
+        subtitle = 'Jobs agendados, tentativas, retries e logs de processamento';
+      } else if (currentPath === '/admin/marketing/prospecting/collection') {
+        subtitle = 'Aquisição autônoma de novos contatos no Google Maps e bases públicas';
+      } else {
+        subtitle = 'Métricas, KPIs de conversão e motor de prospecção via WhatsApp';
+      }
+    } else if (currentPath.startsWith('/admin/marketing')) {
       title = 'Marketing OS (7 Agentes)';
       subtitle = 'Campanhas autônomas de aquisição e nutrição de condutores';
-    } else if (currentPath === '/admin/marketing/prospecting') {
-      title = 'Prospecção B2B Autônoma';
-      subtitle = 'Motor automático de prospecção via WhatsApp';
     } else if (currentPath === '/admin/settings') {
       title = 'Configurações da Plataforma (Settings)';
       subtitle = 'Gestão centralizada de variáveis operacionais e credenciais criptográficas';
@@ -230,14 +247,23 @@ function AppContent() {
         {currentPath === '/admin/ai' && <AdminAiGatewayView />}
         {currentPath === '/admin/integrations' && <AdminIntegrationsView />}
         {currentPath === '/admin/knowledge' && <KnowledgeHub />}
-        {currentPath === '/admin/marketing' && <MarketingOSView />}
+        {currentPath.startsWith('/admin/marketing/prospecting') && <ProspectingPage />}
+        {currentPath.startsWith('/admin/marketing') && !currentPath.startsWith('/admin/marketing/prospecting') && <MarketingOSView />}
         {currentPath === '/admin/settings' && <AdminSettingsView />}
         {currentPath === '/admin/logs' && <AdminAuditView />}
         {currentPath === '/admin/monitoring' && <AdminMonitoringView />}
         {currentPath === '/admin/audit' && <AdminAuditView />}
 
         {/* Commercial Management Hub with Sub-Tabs */}
-        {currentPath.startsWith('/admin/commercial') && <CommercialHubView />}
+        {currentPath === '/admin/commercial' && <CommercialHubView initialTab="overview" />}
+        {currentPath === '/admin/commercial/prices' && <CommercialHubView initialTab="prices" />}
+        {currentPath === '/admin/commercial/promotions' && <CommercialHubView initialTab="promotions" />}
+        {currentPath === '/admin/commercial/coupons' && <CommercialHubView initialTab="coupons" />}
+        {currentPath === '/admin/commercial/bonuses' && <CommercialHubView initialTab="bonuses" />}
+        {currentPath === '/admin/commercial/referrals' && <CommercialHubView initialTab="referrals" />}
+        {currentPath === '/admin/commercial/commissions' && <CommercialHubView initialTab="commissions" />}
+        {currentPath === '/admin/commercial/settings' && <CommercialHubView initialTab="settings" />}
+        {currentPath === '/admin/commercial/tests' && <CommercialHubView initialTab="tests" />}
 
         {/* PWA Mobile & Desktop Install Prompt */}
         <PWAInstallBanner />

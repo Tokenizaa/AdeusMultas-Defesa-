@@ -55,12 +55,34 @@ export class MetaPublishingService {
   }
 
   /**
+   * Troca user token por page token de longa duração (quando necessário).
+   * Se pageId for fornecido, consulta a Graph API para obter o page token.
+   * Retorna o page token se o token original for um user token, senão retorna o mesmo token.
+   */
+  private async resolvePageToken(pageId: string, token: string): Promise<string> {
+    if (!pageId) return token;
+    try {
+      const result = await metaGraphClient.request<{ access_token: string }>({
+        method: 'GET',
+        endpoint: `${pageId}`,
+        accessToken: token,
+        params: { fields: 'access_token' },
+      });
+      if (result.access_token) return result.access_token;
+    } catch (err) {
+      logger.warn('meta', 'publishing', 'page_token_resolve_failed', 'Não foi possível obter page token, usando token original');
+    }
+    return token;
+  }
+
+  /**
    * Publishes content to Instagram Business via 2-step Media Container API
    */
   public async publishToInstagram(
     instagramAccountId: string,
     pageAccessToken: string,
-    params: { caption: string; imageUrl: string }
+    params: { caption: string; imageUrl: string },
+    pageId?: string
   ): Promise<{ mediaId: string }> {
     const { caption, imageUrl } = params;
 
@@ -72,12 +94,15 @@ export class MetaPublishingService {
       );
     }
 
+    // Resolve page token se necessário (user token → page token)
+    const resolvedToken = pageId ? await this.resolvePageToken(pageId, pageAccessToken) : pageAccessToken;
+
     try {
       // Step 1: Create media container
       const containerRes = await metaGraphClient.request<{ id: string }>({
         method: 'POST',
         endpoint: `${instagramAccountId}/media`,
-        accessToken: pageAccessToken,
+        accessToken: resolvedToken,
         body: {
           image_url: imageUrl,
           caption,
@@ -166,7 +191,7 @@ export class MetaPublishingService {
           const igResult = await this.publishToInstagram(igId, page.accessToken, {
             caption: message,
             imageUrl: mediaUrl,
-          });
+          }, page.id);
           instagramMediaId = igResult.mediaId;
         } catch (err: any) {
           errors.push(`Instagram: ${err.message}`);

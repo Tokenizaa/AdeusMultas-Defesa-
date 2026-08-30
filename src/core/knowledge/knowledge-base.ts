@@ -93,3 +93,9 @@ export const KNOWLEDGE_DEFENSE_BLOCKS_52 = DOCUMENT_BLOCKS.map((blk) => ({
   variaveisSuportadas: blk.supportedVariables,
   procedimentosRecomendados: blk.recommendedProcedures,
 }));
+
+export * from './national-registry';
+export * from './sources-registry';
+export * from './temporal-engine';
+export * from './types';
+

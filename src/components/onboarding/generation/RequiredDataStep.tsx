@@ -78,7 +78,7 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
         <div className="font-mono text-slate-900 font-bold flex flex-wrap gap-3 text-[11px]">
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200">Placa: {vehicleData.plate || 'N/A'}</span>
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200">AIT: {infractionData.aitNumber || 'N/A'}</span>
-          <span className="bg-white px-2 py-0.5 rounded border border-slate-200">Órgão: {infractionData.autuadorBody?.split('—')[0] || 'DETRAN'}</span>
+          <span className="bg-white px-2 py-0.5 rounded border border-slate-200">Órgão: {infractionData.autuadorBody?.split('—')[0] || '— não informado —'}</span>
         </div>
       </div>
 

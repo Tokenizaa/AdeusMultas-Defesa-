@@ -118,7 +118,7 @@ export const AdminCaseDetailView: React.FC = () => {
               )}
             </div>
             <p className="text-sm text-slate-400 font-mono mt-0.5">
-              Criado em {new Date(caseData.createdAt).toLocaleString('pt-BR')} • Órgão: {caseData.infraction?.autuadorBody || 'DETRAN'}
+              Criado em {new Date(caseData.createdAt).toLocaleString('pt-BR')} • Órgão: {caseData.infraction?.autuadorBody || 'Não informado'}
             </p>
           </div>
         </div>
@@ -251,7 +251,7 @@ export const AdminCaseDetailView: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-500 text-sm uppercase">Órgão Autuador</span>
-                  <p className="text-slate-200 font-medium">{caseData.infraction?.autuadorBody || 'DETRAN'}</p>
+                  <p className="text-slate-200 font-medium">{caseData.infraction?.autuadorBody || 'Não informado'}</p>
                 </div>
                 <div>
                   <span className="text-slate-500 text-sm uppercase">Data e Hora</span>
@@ -322,7 +322,7 @@ export const AdminCaseDetailView: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-500 text-sm uppercase">CPF</span>
-                  <p className="text-slate-200">{caseData.clientCpf || '000.000.000-00'}</p>
+                  <p className="text-slate-200">{caseData.clientCpf || 'Não informado'}</p>
                 </div>
                 <div>
                   <span className="text-slate-500 text-sm uppercase">E-mail de Contato</span>
