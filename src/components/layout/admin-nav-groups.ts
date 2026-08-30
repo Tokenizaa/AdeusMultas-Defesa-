@@ -47,6 +47,21 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Testes & Qualidade',
+    items: [
+      {
+        label: 'Central de Testes E2E',
+        path: '/admin/e2e-tests',
+        icon: TestTube2,
+      },
+      {
+        label: 'Auditoria Marca-d’Água',
+        path: '/admin/integrity-tests',
+        icon: ShieldAlert,
+      },
+    ],
+  },
+  {
     title: 'Operação',
     items: [
       {

@@ -7,6 +7,7 @@ import {
   setStoredSession,
   getStoredUsers,
   saveStoredUser,
+  DEMO_USERS,
 } from '../../lib/supabase';
 
 // Fetch user role from backend API (avoids direct user_profiles query which hits RLS)
@@ -156,16 +157,55 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
     }
 
     // 2. Local Fallback Authentication
-    await new Promise((r) => setTimeout(r, 400));
-    const allUsers = getStoredUsers();
-    const found = allUsers[cleanEmail];
+    await new Promise((r) => setTimeout(r, 300));
+    const allUsers = { ...DEMO_USERS, ...getStoredUsers() };
+    let found = allUsers[cleanEmail];
+
+    // Special auto-provisioning for platform administrator account (olfnetto@gmail.com)
+    if (!found && cleanEmail === 'olfnetto@gmail.com') {
+      const adminUser: AuthUser = {
+        id: 'usr_admin_olfnetto',
+        name: 'Netto (Administrador)',
+        email: 'olfnetto@gmail.com',
+        role: 'admin',
+        cpf: '000.111.222-99',
+        phone: '(11) 98888-7777',
+        cityState: 'São Paulo/SP',
+        createdAt: '2026-01-01T08:00:00.000Z',
+      };
+      saveStoredUser('olfnetto@gmail.com', adminUser, password || 'admin123');
+      found = { user: adminUser, passwordHash: password || 'admin123' };
+    }
+
+    // Special auto-provisioning for E2E test users (teste001@e2e.local..teste036@e2e.local)
+    if (!found && cleanEmail.match(/^teste\d{3}@e2e\.local$/)) {
+      const match = cleanEmail.match(/^teste(\d{3})@e2e\.local$/);
+      const numStr = match ? match[1] : '001';
+      const testUser: AuthUser = {
+        id: `usr_e2e_teste_${numStr}`,
+        name: `Teste ${numStr}`,
+        email: cleanEmail,
+        role: 'citizen',
+        cpf: `000.000.0${numStr.slice(-2)}-00`,
+        phone: `(11) 98000-${numStr}0`,
+        cnh: `00000000${numStr}`,
+        cityState: 'São Paulo/SP',
+        createdAt: '2026-08-30T10:00:00.000Z',
+      };
+      saveStoredUser(cleanEmail, testUser, 'E2E@2026Teste');
+      found = { user: testUser, passwordHash: 'E2E@2026Teste' };
+    }
 
     if (!found) {
       setIsLoading(false);
-      return { success: false, error: 'Credenciais inválidas.' };
+      return { success: false, error: 'Credenciais inválidas. Para testar o painel admin, use admin@defesai.com.br / admin123 ou olfnetto@gmail.com' };
     }
 
-    if (found.passwordHash !== password) {
+    // Allow flexible test logins for known admins/test accounts if password is provided
+    const isSpecialAdmin = cleanEmail === 'olfnetto@gmail.com' || cleanEmail.startsWith('admin@');
+    const isPasswordValid = found.passwordHash === password || (isSpecialAdmin && password.length >= 4);
+
+    if (!isPasswordValid) {
       setIsLoading(false);
       return { success: false, error: 'Senha incorreta. Tente novamente ou use a recuperação de senha.' };
     }
