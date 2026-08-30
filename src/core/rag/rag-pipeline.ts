@@ -133,6 +133,7 @@ export class RagPipeline {
       cpf: string;
       rg?: string;
       cnh: string;
+      category?: string;
       address: string;
       cityState: string;
     },

@@ -207,6 +207,7 @@ return {
       serviceType: serviceType || undefined,
       vehicle: vehicleData,
       infraction: infractionData,
+      applicant: documentData,
       analysis,
       isAnonymous: false,
       isPaid: true,
@@ -261,7 +262,40 @@ return {
   const finalizeAfterPayment = async () => {
     setIsProcessing(true);
     try {
-      const finalCase = await persistCase();
+      let finalCase = await persistCase();
+      if (!finalCase.defenseDraft && finalCase.id) {
+        try {
+          const genRes = await authFetch(`/api/cases/${finalCase.id}/generate-defense`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              procedureType: serviceType || finalCase.serviceType,
+              selectedArgumentIds: analysis?.recommendedArguments?.map((a: any) => a.id) || [],
+              applicantData: {
+                name: documentData.applicantName,
+                cpf: documentData.applicantCpf,
+                rg: documentData.applicantRg,
+                cnh: documentData.applicantCnh,
+                category: documentData.cnhCategory,
+                address: `${documentData.addressStreet}, ${documentData.addressNumber || ''}`.trim(),
+                cityState: documentData.addressCityState,
+              },
+              customFacts: documentData.factsNarrative,
+            }),
+          });
+          if (genRes.ok) {
+            const genData = await genRes.json();
+            if (genData.defenseDraft) {
+              finalCase.defenseDraft = genData.defenseDraft;
+            }
+            if (genData.case) {
+              finalCase = { ...finalCase, ...genData.case };
+            }
+          }
+        } catch (genErr) {
+          console.error('Error generating defense during finalize:', genErr);
+        }
+      }
       onPaymentSuccess(finalCase);
     } catch (err) {
       console.error('Error generating document:', err);

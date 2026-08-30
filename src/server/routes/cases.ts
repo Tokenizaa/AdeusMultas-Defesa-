@@ -77,10 +77,30 @@ router.post('/cases', authenticateToken, (req, res) => {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
 
-    // NOTA: NÃO gerar minuta na criação. A peça documental só é gerada na
-    // etapa paga com os dados reais de qualificação do requerente (ver
-    // generate-defense e webhook de pagamento). Geração aqui fabricaria
-    // CNH/cidade sem dados reais do usuário.
+    // Se o caso já é pago e os dados de qualificação reais do requerente estão presentes,
+    // gera deterministicamente a minuta da defesa sem fabricar dados.
+    if ((domainData.isPaid || domainData.status === 'defesa_pronta') && !domainData.defenseDraft && domainData.applicant) {
+      const a = domainData.applicant;
+      if (a.applicantName && a.applicantCpf && a.applicantCnh && a.addressStreet && a.addressCityState) {
+        domainData.defenseDraft = RagPipeline.generateDefenseDraft(
+          domainData.id,
+          domainData.infraction,
+          domainData.vehicle?.plate || 'SEM PLACA',
+          domainData.vehicle?.brandModel || 'Veículo',
+          {
+            name: a.applicantName,
+            cpf: a.applicantCpf,
+            rg: a.applicantRg,
+            cnh: a.applicantCnh,
+            category: a.cnhCategory,
+            address: `${a.addressStreet}, ${a.addressNumber || ''}`.trim(),
+            cityState: a.addressCityState,
+          },
+          domainData.analysis?.recommendedArguments || [],
+          domainData.serviceType || 'recurso_jari'
+        );
+      }
+    }
 
     const row = CanonicalMapper.domainToRow(domainData);
     databaseRows.set(row.id, row);
@@ -208,6 +228,24 @@ router.post('/cases/:id/generate-defense', async (req, res) => {
 
   if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
     return res.status(400).json({ error: 'Dados de qualificação do requerente incompletos. Preencha os dados complementares antes de gerar a defesa.' });
+  }
+
+  if (b && (!domain.applicant || !domain.applicant.applicantCnh)) {
+    domain.applicant = {
+      applicantName: resolvedApplicant.name,
+      applicantCpf: resolvedApplicant.cpf,
+      applicantRg: resolvedApplicant.rg,
+      applicantCnh: resolvedApplicant.cnh,
+      cnhCategory: resolvedApplicant.category,
+      applicantPhone: domain.clientPhone || '',
+      applicantEmail: domain.clientEmail || '',
+      addressStreet: resolvedApplicant.address,
+      addressNumber: '',
+      addressNeighborhood: '',
+      addressZipCode: '',
+      addressCityState: resolvedApplicant.cityState,
+      factsNarrative: customFacts,
+    };
   }
 
   let defense = RagPipeline.generateDefenseDraft(

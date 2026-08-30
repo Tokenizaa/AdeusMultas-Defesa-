@@ -59,7 +59,7 @@ describe.each(ORGANS)('fluxo órgão $autuador ($uf)', ({ autuador, uf, cityStat
     const draft = DocumentAssemblyEngine.assemble({
       caseId: 'case_x',
       procedureType: 'recurso_jari',
-      infraction: makeInfraction({ autuadorBody: autuador }),
+      infraction: makeInfraction({ autuadorBody: autuador, location: `Via Principal, 100 - ${cityState}` }),
       vehicle: makeVehicle(),
       applicant: { name: 'J', cpf: '123.456.789-00', cnh: '12345678900', address: 'Rua X, 1', cityState },
       selectedArgumentIds: analysisArgs(autuador).map((a) => a.id),

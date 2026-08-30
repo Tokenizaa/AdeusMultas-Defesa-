@@ -142,9 +142,29 @@ export class DocumentAssemblyEngine {
       throw new Error('cityState obrigatório para geração da minuta');
     }
     const autuador = payload.infraction.autuadorBody;
-    const cityStateParts = payload.applicant.cityState.split('/');
-    const city = cityStateParts[0]?.trim();
-    const uf = cityStateParts[1]?.trim();
+    let city = '';
+    let uf = '';
+    const rawCityState = (payload.applicant.cityState || '').trim();
+    if (rawCityState.includes('/')) {
+      const parts = rawCityState.split('/');
+      city = parts[0]?.trim() || '';
+      uf = parts[1]?.trim() || '';
+    } else if (rawCityState.includes(' - ')) {
+      const parts = rawCityState.split(' - ');
+      city = parts[0]?.trim() || '';
+      uf = parts[1]?.trim() || '';
+    } else if (rawCityState.includes('-')) {
+      const parts = rawCityState.split('-');
+      city = parts[0]?.trim() || '';
+      uf = parts[1]?.trim() || '';
+    } else if (rawCityState.includes(',')) {
+      const parts = rawCityState.split(',');
+      city = parts[0]?.trim() || '';
+      uf = parts[1]?.trim() || '';
+    } else {
+      city = rawCityState;
+      uf = '';
+    }
     const dateFormatted = new Date().toLocaleDateString('pt-BR', {
       day: 'numeric',
       month: 'long',
