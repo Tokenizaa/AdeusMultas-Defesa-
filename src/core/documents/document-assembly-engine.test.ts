@@ -209,4 +209,67 @@ describe('DocumentAssemblyEngine validation', () => {
     expect(result.validation.appliedArgumentCount).toBe(1);
     expect(result.preliminaryArgumentsText).toContain('DUPLA NOTIFICAÇÃO');
   });
+
+  // ===== Fase 8: evidências das teses detectadas entram no rol de documentos =====
+
+  it('includes evidence of detected theses in the document roll (never invented)', () => {
+    const analysis = {
+      id: 'anl_r',
+      caseId: 'case_123',
+      overallSuccessRate: 92,
+      detectedInconsistencies: [
+        {
+          title: 'Radar calibração vencida',
+          description: 'Aferição metrológica superior a 12 meses.',
+          severity: 'alta' as const,
+          legalArgumentId: 'ARG-001',
+          impact: 'Nulidade.',
+        },
+      ],
+      recommendedArguments: [],
+      recommendedProcedure: 'recurso_cetran' as const,
+      competentBody: 'DETRAN-SP',
+      summaryReasoning: 'r',
+      createdAt: new Date().toISOString(),
+    };
+    const result = DocumentAssemblyEngine.assemble({
+      ...validPayload,
+      procedureType: 'recurso_cetran' as const,
+      analysis: analysis as any,
+    });
+    // A evidência canônica de ARG-001 (certidão PSInmetro) deve constar no rol.
+    expect(result.fullDraftText).toContain('PSInmetro');
+    // Sem as teses, essa evidência não apareceria.
+    const base = DocumentAssemblyEngine.assemble({ ...validPayload, procedureType: 'recurso_cetran' as const });
+    expect(base.fullDraftText).not.toContain('PSInmetro');
+  });
+
+  it('never invents evidence for a foreign (non-canonical) thesis', () => {
+    const analysis = {
+      id: 'anl_f',
+      caseId: 'case_123',
+      overallSuccessRate: 50,
+      detectedInconsistencies: [
+        {
+          title: 'Tese inexistente',
+          description: 'Fora do catálogo.',
+          severity: 'alta' as const,
+          legalArgumentId: 'ARG-ZZZ',
+          impact: 'x',
+        },
+      ],
+      recommendedArguments: [],
+      recommendedProcedure: 'recurso_jari' as const,
+      competentBody: 'DETRAN-SP',
+      summaryReasoning: 'f',
+      createdAt: new Date().toISOString(),
+    };
+    const result = DocumentAssemblyEngine.assemble({
+      ...validPayload,
+      procedureType: 'recurso_jari' as const,
+      analysis: analysis as any,
+    });
+    // ARG-ZZZ não existe no catálogo: nenhuma evidência inventada é acrescida.
+    expect(result.fullDraftText).not.toContain('Evidência da tese ARG-ZZZ');
+  });
 });

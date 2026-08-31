@@ -12,6 +12,7 @@
  */
 
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
+import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { ProcedureType } from '../../types';
 
 export interface DocumentRollItem {
@@ -74,6 +75,52 @@ export function buildDocumentRollText(
   aitNumber?: string
 ): string {
   const items = buildDocumentRollItems(procedureType);
+  return formatRoll(items, aitNumber);
+}
+
+/**
+ * Fase 8 (P1/P2): rol de documentos dirigido pelas TESES DETECTADAS.
+ * Mescla os documentos OBRIGATÓRIOS do procedimento com as EVIDÊNCIAS
+ * exigidas por cada tese juridicamente detectada (RuleModel.evidenceRequired).
+ *
+ * As evidências vêm SOMENTE do catálogo canônico de argumentos (never inventa):
+ * cada legalArgumentId detectada na análise busca evidenceRequired correspondente
+ * em ARGUMENTS_CATALOG. Falta de evidência canônica => item ausente, não fabricado.
+ */
+export function buildDocumentRollTextForAnalysis(
+  procedureType?: ProcedureType | string,
+  detectedArgumentIds?: string[],
+  aitNumber?: string
+): string {
+  const procedureItems = buildDocumentRollItems(procedureType);
+  const seen = new Set<string>();
+  const merged: DocumentRollItem[] = [];
+
+  for (const item of procedureItems) {
+    if (!seen.has(item.label)) {
+      seen.add(item.label);
+      merged.push(item);
+    }
+  }
+
+  for (const argId of detectedArgumentIds || []) {
+    const arg = ARGUMENTS_CATALOG.find((a) => a.id === argId);
+    if (!arg) continue; // KNOWLEDGE_GAP: sem evidência canônica, não inventa
+    // Fonte de verdade do catálogo de argumentos: `requirements`.
+    // (RuleModel usa `evidenceRequired`; ArgumentModel publica como `requirements`.)
+    const evidences = (arg as any).evidenceRequired ?? arg.requirements ?? [];
+    for (const ev of evidences) {
+      if (!seen.has(ev)) {
+        seen.add(ev);
+        merged.push({ id: `doc_evid_${argId}`, label: ev, hint: `Evidência da tese ${arg.title}` });
+      }
+    }
+  }
+
+  return formatRoll(merged, aitNumber);
+}
+
+function formatRoll(items: DocumentRollItem[], aitNumber?: string): string {
   const list = items
     .map((item, idx) => {
       let label = item.label;

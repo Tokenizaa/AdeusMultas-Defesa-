@@ -17,7 +17,7 @@ import { TEMPLATES_CATALOG } from '../templates/templates-catalog';
 import { DOCUMENT_BLOCKS, DocumentBlockModel } from '../templates/document-blocks';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
-import { buildDocumentRollText } from './document-roll';
+import { buildDocumentRollText, buildDocumentRollTextForAnalysis } from './document-roll';
 import { DefenseDraft, InfractionData, ProcedureType, CaseAnalysis } from '../../types';
 
 export interface DocumentAssemblyPayload {
@@ -323,10 +323,16 @@ export class DocumentAssemblyEngine {
       }
 
       // ROL DE DOCUMENTOS dinâmico (BLK-068): derivado dos documentos
-      // OBRIGATÓRIOS do procedimento em PROCEDURES_CATALOG.requiredDocuments,
-      // garantindo alinhamento entre petição e checklist de anexos da etapa 4.
+      // OBRIGATÓRIOS do procedimento + evidências das teses detectadas quando
+      // há análise (Fase 8). Nunca inventa evidência: só do catálogo canônico.
       if (block.id === 'BLK-068') {
-        content = buildDocumentRollText(payload.procedureType, aitNumber);
+        content = payload.analysis && payload.analysis.detectedInconsistencies.length > 0
+          ? buildDocumentRollTextForAnalysis(
+              payload.procedureType,
+              payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean) as string[],
+              aitNumber
+            )
+          : buildDocumentRollText(payload.procedureType, aitNumber);
       }
 
       for (const [placeholder, value] of Object.entries(variableMap)) {
