@@ -79,7 +79,6 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         (currentLeadName.trim().length >= 3) &&
         (currentLeadPhone.trim().length >= 8) &&
         (vehicleData.plate?.trim().length || 0) >= 7 &&
-        (infractionData.autuadorBody?.trim().length || 0) >= 3 &&
         (infractionData.infractionCode?.trim().length || 0) >= 3 &&
         (infractionData.location?.trim().length || 0) >= 5;
 
