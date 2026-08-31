@@ -19,13 +19,16 @@ router.get('/cases', authenticateToken, (req, res) => {
 
   let allRows = Array.from(databaseRows.values());
 
-  // Non-admin users only see their own cases
+  // Non-admin users only see their own cases — FAIL CLOSED: no fallback to all rows
   if (user && user.role !== 'admin' && user.id !== 'dev_user') {
-    const userSpecific = allRows.filter((r) => r.user_id === user.id);
-    allRows = userSpecific.length > 0 ? userSpecific : allRows;
+    // Match both UUID and email formats for user_id
+    const userSpecific = allRows.filter((r) =>
+      r.user_id === user.id || r.user_id === user.email
+    );
+    allRows = userSpecific; // FAIL CLOSED: if no match, return empty (not all rows)
   } else if (userId) {
     const userSpecific = allRows.filter((r) => r.user_id === userId);
-    allRows = userSpecific.length > 0 ? userSpecific : allRows;
+    allRows = userSpecific; // FAIL CLOSED
   } else if (claimToken) {
     allRows = allRows.filter((r) => r.claim_token === claimToken);
   }
@@ -45,8 +48,11 @@ router.get('/cases/:id', authenticateToken, (req, res) => {
 
   // IDOR Protection: non-admin users can only access their own cases
   const user = req.user;
-  if (user && user.role !== 'admin' && row.user_id && row.user_id !== user.id) {
-    return res.status(403).json({ error: 'Você não tem permissão para acessar este caso' });
+  if (user && user.role !== 'admin' && row.user_id) {
+    const ownsCase = row.user_id === user.id || row.user_id === user.email;
+    if (!ownsCase) {
+      return res.status(403).json({ error: 'Você não tem permissão para acessar este caso' });
+    }
   }
 
   res.json(CanonicalMapper.rowToDomain(row));
@@ -59,12 +65,19 @@ router.post('/cases', authenticateToken, (req, res) => {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
 
-    // Ownership fallback (defesa em profundidade): se o payload não trouxer userId,
-    // carimba a partir da sessão autenticada. Só preenche quando ausente e UUID válido
-    // (ids mock de dev não são uuid e violariam cases.user_id).
-    if (!domainData.userId && req.user?.id
-        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
-      domainData.userId = req.user.id;
+    // Ownership fallback: carimba userId a partir da sessão autenticada.
+    // Aceita tanto UUID quanto email (olfnetto@gmail.com).
+    if (!domainData.userId && req.user?.id) {
+      const uid = req.user.id;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
+      const isEmail = uid.includes('@');
+      if (isUuid || isEmail) {
+        domainData.userId = uid;
+      }
+      // Fallback: also stamp email if available
+      if (req.user.email && !domainData.userId) {
+        domainData.userId = req.user.email;
+      }
     }
 
     if (!domainData.createdAt) {
