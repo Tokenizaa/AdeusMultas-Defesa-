@@ -232,7 +232,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 {
                     id: `tl_${Date.now()}_2`,
                     title: `Pagamento ${paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'} Confirmado`,
-                    description: `Valor de R$ ${effectivePrice.toFixed(2)} recebido com sucesso.`,
+                    description: `Valor de R$ ${(effectivePrice ?? pixData?.amount ?? 0).toFixed(2)} recebido com sucesso.`,
                     timestamp: new Date().toISOString(),
                     type: 'payment',
                 },
