@@ -282,7 +282,7 @@ export const AdminCaseDetailView: React.FC = () => {
               <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-sm font-mono">
                 <span className="text-slate-500 text-sm uppercase block mb-1">Descrição Legal CTB</span>
                 <p className="text-slate-300">{caseData.infraction?.description || 'Transitar em velocidade superior à máxima permitida em até 20%'}</p>
-                <p className="text-orange-400 font-bold mt-1">Artigo {caseData.infraction?.ctbArticle || '218, I'} do CTB • {caseData.infraction?.points || 4} Pontos • R$ {caseData.infraction?.fineAmount?.toFixed(2) || '130.16'}</p>
+                <p className="text-orange-400 font-bold mt-1">Artigo {caseData.infraction?.ctbArticle || '218, I'} do CTB • {caseData.infraction?.points || 4} Pontos • R$ {caseData.infraction?.fineAmount != null ? caseData.infraction.fineAmount.toFixed(2) : '130.16'}</p>
               </div>
             </div>
 
@@ -477,7 +477,7 @@ export const AdminCaseDetailView: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-500 text-sm uppercase">Valor Total</span>
-                <p className="text-emerald-400 font-bold text-sm">R$ {caseData.payment?.amount?.toFixed(2) || PRICING.DEFAULT_PRICE.toFixed(2)}</p>
+                <p className="text-emerald-400 font-bold text-sm">R$ {(caseData.payment?.amount != null ? caseData.payment.amount.toFixed(2) : PRICING.DEFAULT_PRICE.toFixed(2))}</p>
               </div>
               <div>
                 <span className="text-slate-500 text-sm uppercase">Método</span>
