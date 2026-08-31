@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { forceLocalAuth, ADMIN_USER, testUser, testVehicle, testInfraction } from './onboarding.spec';
+import { testUser, testVehicle, testInfraction } from './onboarding.spec';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
