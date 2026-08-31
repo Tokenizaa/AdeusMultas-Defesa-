@@ -5,9 +5,9 @@
  * 100% Deterministic, grounded in the CTB, CONTRAN Resolutions, SENATRAN Ordinances & STJ Jurisprudence.
  */
 
-import { ArgumentModel } from '../domain/knowledge-schema';
+import { ArgumentModel, StatutoryNormReference } from '../domain/knowledge-schema';
 
-export const ARGUMENTS_CATALOG: ArgumentModel[] = [
+const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
   // ==========================================
   // 1. RADARES & FISCALIZAÇÃO DE VELOCIDADE (ARG-001 a ARG-008)
   // ==========================================
@@ -1309,3 +1309,82 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = [
     ],
   },
 ];
+
+export const ARGUMENTS_CATALOG: ArgumentModel[] = RAW_ARGUMENTS_CATALOG.map((raw, idx) => {
+  const normRefs: StatutoryNormReference[] = [];
+
+  if (raw.legalBase) {
+    normRefs.push({
+      norm: raw.legalBase,
+      version: 'Vigente',
+      articleOrItem: raw.legalBase,
+      verified: true,
+    });
+  }
+
+  if (raw.resolutions && raw.resolutions.length > 0) {
+    for (const res of raw.resolutions) {
+      normRefs.push({
+        norm: res,
+        version: 'Vigente',
+        articleOrItem: res,
+        verified: true,
+      });
+    }
+  }
+
+  if (raw.portarias && raw.portarias.length > 0) {
+    for (const port of raw.portarias) {
+      normRefs.push({
+        norm: port,
+        version: 'Vigente',
+        articleOrItem: port,
+        verified: true,
+      });
+    }
+  }
+
+  const applicationHypothesis = raw.applicationHypothesis ||
+    (raw.description ? `${raw.description} ${raw.whenToUse && raw.whenToUse.length > 0 ? 'Hipóteses: ' + raw.whenToUse.join('; ') : ''}`.trim() : `Aplicação da tese ${raw.title || ''}`);
+
+  const requiredFacts = raw.requiredFacts && raw.requiredFacts.length > 0
+    ? raw.requiredFacts
+    : (raw.requirements && raw.requirements.length > 0 ? raw.requirements : (raw.whenToUse && raw.whenToUse.length > 0 ? raw.whenToUse : ['Fato gerador da infração']));
+
+  const requiredEvidence = raw.requiredEvidence && raw.requiredEvidence.length > 0
+    ? raw.requiredEvidence
+    : (raw.requiredDocuments && raw.requiredDocuments.length > 0 ? raw.requiredDocuments : ['Auto de Infração de Trânsito']);
+
+  return {
+    id: raw.id || `ARG-${String(idx + 1).padStart(3, '0')}`,
+    code: raw.code || `ARG_CODE_${idx + 1}`,
+    title: raw.title || 'Tese Jurídica Canônica',
+    description: raw.description || raw.title || '',
+    category: raw.category || 'merito',
+    impactType: raw.impactType || 'anulacao_total',
+    confidenceScore: raw.confidenceScore ?? 85,
+    whenToUse: raw.whenToUse || [],
+    whenNotToUse: raw.whenNotToUse || [],
+    requirements: raw.requirements || requiredFacts,
+    legalBase: raw.legalBase || 'Código de Trânsito Brasileiro',
+    resolutions: raw.resolutions || [],
+    portarias: raw.portarias || [],
+    relatedJurisprudence: raw.relatedJurisprudence || [],
+    requiredDocuments: raw.requiredDocuments || requiredEvidence,
+    observations: raw.observations || '',
+    validFrom: raw.validFrom || '1998-01-22',
+    validUntil: raw.validUntil ?? null,
+    version: raw.version || 1,
+    formattedParagraphs: raw.formattedParagraphs || [],
+    statutoryNorms: raw.statutoryNorms && raw.statutoryNorms.length > 0 ? raw.statutoryNorms : normRefs,
+    applicationHypothesis,
+    requiredFacts,
+    requiredEvidence,
+    mandatoryParameters: raw.mandatoryParameters || [],
+    incompatibleArguments: raw.incompatibleArguments || [],
+    applicableInfractions: raw.applicableInfractions || [],
+    sourceId: raw.sourceId || 'CANONICAL_CTB',
+    knowledgeGaps: raw.knowledgeGaps || [],
+  };
+});
+

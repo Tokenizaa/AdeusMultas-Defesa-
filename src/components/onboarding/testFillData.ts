@@ -102,6 +102,7 @@ export function buildCoherentTestInfraction(
         ...current,
         ...neutral,
         ...catalogFields(code),
+        hasPsychomotorTerm: false, // Dispara ARG-025 se termo ausente/sem sinais
         // Coerência: Lei Seca não possui medição de velocidade.
         speedLimit: undefined,
         measuredSpeed: undefined,
@@ -115,11 +116,13 @@ export function buildCoherentTestInfraction(
 
     case 'celular': {
       const circunstancias = ['suporte_gps', 'veiculo_parado_semaforo', 'sem_abordagem', 'viva_voz'];
-      extras = { notes: `celular_${pick(circunstancias)}` };
+      const chosen = pick(circunstancias);
+      extras = { notes: `celular_${chosen}` };
       return {
         ...current,
         ...neutral,
         ...catalogFields('736-62'),
+        hasAgentDetailedObservations: chosen === 'sem_abordagem' ? false : undefined,
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,

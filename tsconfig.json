@@ -28,6 +28,8 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
+    "**/*.spec.ts",
+    "tests",
     "agents"
   ]
 }

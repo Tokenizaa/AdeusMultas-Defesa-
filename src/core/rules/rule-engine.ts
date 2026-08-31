@@ -13,7 +13,7 @@ import {
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
-import { CaseAnalysis, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
+import { CaseAnalysis, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
 
 export const EXPERT_RULES: RuleModel[] = [
   // Rule 1: Decadência de 30 dias da Notificação de Autuação (Art. 281, II CTB)
@@ -363,6 +363,8 @@ export class ExpertRuleEngine {
     const detectedInconsistencies: CaseAnalysis['detectedInconsistencies'] = [];
     const recommendedArgs: LegalArgumentDomain[] = [];
     const dataGaps: NonNullable<CaseAnalysis['dataGaps']> = [];
+    const evaluatedRules: EvaluatedRule[] = [];
+    const nowIso = new Date().toISOString();
 
     // 1. Run all deterministic rules that are active on the effective date.
     //    FAIL CLOSED (Fase 2): regra com requiredData ausente => DATA_INSUFFICIENT,
@@ -379,6 +381,14 @@ export class ExpertRuleEngine {
           missingData,
           reason: `Não há dados suficientes para avaliar a hipótese "${rule.name}". Sem ${missingData.join(', ')}, a regra não pode concluir pela existência do vício (FAIL CLOSED).`,
         });
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: 'DATA_GAP',
+          evaluatedAt: nowIso,
+          inputs: { missingData },
+          reason: `Faltam dados obrigatórios: ${missingData.join(', ')}`,
+        });
         continue;
       }
       const result = rule.evaluate(context);
@@ -389,6 +399,17 @@ export class ExpertRuleEngine {
           severity: result.severity,
           legalArgumentId: result.legalArgumentId,
           impact: result.impact,
+        });
+
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: 'FAIL',
+          evaluatedAt: nowIso,
+          legalArgumentId: result.legalArgumentId,
+          impact: result.impact,
+          severity: result.severity,
+          reason: result.description,
         });
 
         const matchedArg = ARGUMENTS_CATALOG.find((a) => a.id === result.legalArgumentId);
@@ -406,6 +427,14 @@ export class ExpertRuleEngine {
             applicabilityNote: matchedArg.whenToUse.join('; '),
           });
         }
+      } else {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: 'PASS',
+          evaluatedAt: nowIso,
+          reason: 'Nenhuma inconformidade detectada para os dados fornecidos.',
+        });
       }
     }
 
@@ -466,12 +495,14 @@ export class ExpertRuleEngine {
     return {
       id: `anl_${Date.now()}`,
       caseId,
+      engineVersion: '2.5.0',
       overallSuccessRate,
       detectedInconsistencies,
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
       competentBody: infraction.autuadorBody,
       procedureDeadline: infraction.defenseDeadline,
+      evaluatedRules,
       dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`,
       createdAt: new Date().toISOString(),

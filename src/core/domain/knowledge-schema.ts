@@ -129,22 +129,39 @@ export interface GlossaryTermModel {
 // 3. ARGUMENT MODEL (FASE 5)
 // ==========================================
 
+export interface StatutoryNormReference {
+  norm: string; // ex: 'CTB', 'Resolução CONTRAN nº 798/2020', 'Portaria SENATRAN nº 354/2022'
+  version: string; // ex: 'Lei 14.071/2020', 'Original 2020', '2022 Atualizada'
+  articleOrItem: string; // ex: 'Art. 281, Parágrafo Único, II', 'Art. 4º, §2º'
+  verified: boolean; // Confirmação de vigência ativa
+}
+
 export interface ArgumentModel {
   id: string; // ex: ARG-001
   code: string; // ex: INMETRO_CALIBRATION_EXPIRED
   title: string;
   description: string;
   category: 'preliminar' | 'merito' | 'formal' | 'constitucional';
-  impactType: 'anulacao_total' | 'conversao_advertencia' | 'reclassificacao' | 'efeito_suspensivo';
-  confidenceScore: number; // 0-100
-  whenToUse: string[];
-  whenNotToUse: string[];
-  requirements: string[];
-  legalBase: string;
-  resolutions: string[];
-  relatedJurisprudence: string[];
-  requiredDocuments: string[];
+  applicationHypothesis?: string; // Hipótese fático-jurídica de aplicação
+  requiredFacts?: string[]; // Fatos necessários indispensáveis
+  requiredEvidence?: string[]; // Provas necessárias e documentais
+  mandatoryParameters?: string[]; // Parâmetros obrigatórios de entrada no caso
+  legalBase: string; // Fundamento legal principal (CTB, CF/88, Lei Federal)
+  resolutions: string[]; // Resoluções do CONTRAN aplicáveis
+  portarias?: string[]; // Portarias SENATRAN/INMETRO aplicáveis
+  relatedJurisprudence: string[]; // Súmulas e jurisprudência vinculante/dominante (STJ, STF, Tribunais)
+  statutoryNorms?: StatutoryNormReference[]; // Rastreabilidade de versões normativas
+  requirements: string[]; // Requisitos procedimentais/fáticos
+  impactType: 'anulacao_total' | 'conversao_advertencia' | 'reclassificacao' | 'efeito_suspensivo' | 'nulidade_formal';
+  confidenceScore: number; // 0-100 (Taxa de sucesso estimada / nível de confiança)
+  whenToUse: string[]; // Diretrizes de aplicação
+  whenNotToUse: string[]; // Vedações e hipóteses de não aplicação
+  incompatibleArguments?: string[]; // Incompatibilidades lógicas com outras teses
+  requiredDocuments: string[]; // Rol de documentos comprobatórios necessários
   observations: string;
+  applicableInfractions?: string[]; // Códigos de infração aplicáveis (ex: ['745-50', '746-30'])
+  sourceId?: string; // ID da fonte jurídica/canônica
+  knowledgeGaps?: string[]; // Documentação explícita de KNOWLEDGE_GAP quando dados/regulamentações pendentes
   validFrom?: string; // ISO date 'YYYY-MM-DD'
   validUntil?: string | null; // ISO date 'YYYY-MM-DD' ou null para vigente
   version?: number; // versão do item (rastreabilidade Fase 1)

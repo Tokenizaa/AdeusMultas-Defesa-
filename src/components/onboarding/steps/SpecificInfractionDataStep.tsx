@@ -297,11 +297,20 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   </label>
                   <select
                     id="select-termo-sinais"
+                    value={
+                      infractionData.hasPsychomotorTerm === false
+                        ? 'sem_sinais'
+                        : infractionData.hasPsychomotorTerm === true
+                        ? 'entregue'
+                        : 'nao_entregue'
+                    }
                     className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                     onChange={(e) => {
+                      const val = e.target.value;
                       onUpdateInfraction({
                         ...infractionData,
-                        notes: `${infractionData.notes || ''} | termo_${e.target.value}`,
+                        hasPsychomotorTerm: val === 'entregue' ? true : false,
+                        notes: `${(infractionData.notes || '').replace(/termo_[a-z_]+/g, '')} | termo_${val}`,
                       });
                     }}
                   >
@@ -350,11 +359,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 id="select-celular-circunstancia"
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 onChange={(e) => {
+                  const val = e.target.value;
                   onUpdateInfraction({
                     ...infractionData,
                     ctbArticle: 'Art. 252, Parágrafo Único do CTB',
                     infractionCode: '736-62',
-                    notes: `celular_${e.target.value}`,
+                    hasAgentDetailedObservations: val === 'sem_abordagem' ? false : undefined,
+                    notes: `celular_${val}`,
                   });
                 }}
               >

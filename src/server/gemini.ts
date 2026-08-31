@@ -107,8 +107,33 @@ Por favor, responda no formato JSON com:
   return null;
 }
 
-export async function enrichDefenseWithGemini(draftContext: any) {
+export async function enrichDefenseWithGemini(draftContext: any): Promise<string | null> {
   try {
+    const rawText = typeof draftContext === 'string'
+      ? draftContext
+      : (draftContext?.petitionText || draftContext?.draftText || draftContext?.fullDraftText);
+
+    if (rawText) {
+      const prompt = `Você é um revisor e redator jurídico especializado em Direito de Trânsito brasileiro.
+Sua função é refinar e polir a redação e conectivos da minuta de petição abaixo, tornando-a mais elegante, fluida e persuasiva.
+
+REGRAS VINCULANTES E INEGOCIÁVEIS:
+1. PRESERVE RIGOROSAMENTE todos os fatos, nomes do requerente, CPF, CNH, placa, AIT, datas, medições de velocidade, artigos de lei (CTB), resoluções do CONTRAN e pedidos finais.
+2. NUNCA altere números, prazos, identificadores ou enquadramentos legais.
+3. NUNCA invente teses novas ou fatos que não constem na minuta original.
+4. Mantenha a estrutura formal das seções (Endereçamento, Qualificação, Fatos, Preliminares, Mérito, Pedidos, Fecho).
+5. Retorne APENAS o texto completo da petição refinada, sem comentários adicionais ou markdown fences desnecessários.
+
+MINUTA ORIGINAL:
+"""
+${rawText}
+"""`;
+
+      const text = await generateWithFallback(prompt);
+      return text;
+    }
+
+    // Se receber contexto em formato de objeto estruturado sem texto base
     const prompt = `Você é um redator jurídico especializado em recursos de trânsito brasileiro.
 Escreva uma petição administrativa formal, elegante e de alto rigor técnico para o seguinte caso:
 
@@ -129,7 +154,7 @@ Escreva a minuta em português formal e impecável.`;
     const text = await generateWithFallback(prompt);
     return text;
   } catch (error) {
-    console.warn('[Gemini] Graceful fallback to template generator.');
+    console.warn('[Gemini] Graceful fallback to deterministic template generator.');
     return null;
   }
 }

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vercel env run -- tsx watch server.ts",
+    "dev": "tsx server.ts",
     "postinstall": "node scripts/build-api.mjs",
     "build": "node scripts/generate-brand-assets.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && node scripts/build-api.mjs",
     "start": "node dist/server.cjs",

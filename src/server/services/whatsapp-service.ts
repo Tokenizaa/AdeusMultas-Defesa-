@@ -242,6 +242,14 @@ class WhatsAppService {
   async getInstanceStatus(instanceName?: string): Promise<WhatsAppInstance | null> {
     const instance = instanceName || this.config.instanceName;
 
+    if (!this.isConfigured) {
+      return {
+        instanceName: instance,
+        instanceId: instance,
+        status: 'close',
+      };
+    }
+
     try {
       const result = await this.makeRequest<any>('GET', `/instance/connectionState/${instance}`);
       const rawState = result?.state || result?.instance?.state || 'close';
@@ -258,11 +266,15 @@ class WhatsAppService {
         phone,
       };
     } catch (err) {
-      logger.warn('whatsapp', 'whatsapp-service', 'get_instance_status', 'Failed to get instance status', {
+      logger.info('whatsapp', 'whatsapp-service', 'get_instance_status', 'Instance status check offline or unavailable', {
         error: String(err),
         instance,
       });
-      return null;
+      return {
+        instanceName: instance,
+        instanceId: instance,
+        status: 'close',
+      };
     }
   }
 
@@ -272,11 +284,15 @@ class WhatsAppService {
   async getQrCode(instanceName?: string): Promise<string | null> {
     const instance = instanceName || this.config.instanceName;
 
+    if (!this.isConfigured) {
+      return null;
+    }
+
     try {
       const result = await this.makeRequest<any>('GET', `/instance/connect/${instance}`);
       return result.base64 || result.qrcode || null;
     } catch (err) {
-      logger.warn('whatsapp', 'whatsapp-service', 'get_qrcode', 'Failed to get QR code', {
+      logger.info('whatsapp', 'whatsapp-service', 'get_qrcode', 'Could not get QR code (instance offline or connecting)', {
         error: String(err),
         instance,
       });
@@ -351,6 +367,13 @@ class WhatsAppService {
    */
   async getWebhookConfig(instanceName?: string): Promise<any> {
     const instance = instanceName || this.config.instanceName;
+    if (!this.isConfigured) {
+      return {
+        enabled: false,
+        url: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
+        configured: false,
+      };
+    }
     try {
       const result = await this.makeRequest<any>('GET', `/webhook/find/${instance}`);
       return result;

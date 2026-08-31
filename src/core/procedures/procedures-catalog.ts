@@ -29,7 +29,14 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia do CRLV do veículo autuado', required: true, description: 'Documento do veículo.' },
       { name: 'Provas documentais anexas (fotos, laudos, declarações)', required: false, description: 'Provas materiais que demonstrem a atipicidade da conduta.' },
     ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-010', 'ARG-011', 'ARG-014', 'ARG-016', 'ARG-017', 'ARG-018'],
+    applicableGrounds: [
+      'ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008',
+      'ARG-009', 'ARG-010', 'ARG-011', 'ARG-012', 'ARG-013', 'ARG-014', 'ARG-015', 'ARG-016',
+      'ARG-017', 'ARG-018', 'ARG-019', 'ARG-020', 'ARG-021', 'ARG-022', 'ARG-023', 'ARG-024',
+      'ARG-025', 'ARG-026', 'ARG-027', 'ARG-028', 'ARG-029', 'ARG-030', 'ARG-031', 'ARG-032',
+      'ARG-033', 'ARG-034', 'ARG-035', 'ARG-036', 'ARG-037', 'ARG-038', 'ARG-048', 'ARG-049',
+      'ARG-050', 'ARG-051',
+    ],
     availableTemplates: ['TPL_RECURSO_JARI'], // variantes (lei seca/radar) são composições de blocos, não templates separados
     executionChecklist: [
       'Garantir protocolo dentro da data limite expressa no campo "Prazo de Recurso" da NP',
@@ -63,7 +70,14 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia do Recurso da JARI interposto anteriormente', required: true, description: 'Histórico dos argumentos apresentados.' },
       { name: 'Cópia da CNH e CRLV do veículo', required: true, description: 'Documentos do condutor e do veículo.' },
     ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-005', 'ARG-007', 'ARG-010', 'ARG-016', 'ARG-017'],
+    applicableGrounds: [
+      'ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008',
+      'ARG-009', 'ARG-010', 'ARG-011', 'ARG-012', 'ARG-013', 'ARG-014', 'ARG-015', 'ARG-016',
+      'ARG-017', 'ARG-018', 'ARG-019', 'ARG-020', 'ARG-021', 'ARG-022', 'ARG-023', 'ARG-024',
+      'ARG-025', 'ARG-026', 'ARG-027', 'ARG-028', 'ARG-029', 'ARG-030', 'ARG-031', 'ARG-032',
+      'ARG-033', 'ARG-034', 'ARG-035', 'ARG-036', 'ARG-037', 'ARG-038', 'ARG-048', 'ARG-049',
+      'ARG-050', 'ARG-051', 'ARG-052',
+    ],
     availableTemplates: ['TPL_RECURSO_CETRAN'],
     executionChecklist: [
       'Apontar expressamente que a JARI não analisou as preliminares arguidas',
@@ -92,7 +106,10 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH e RG/CPF', required: true, description: 'Identificação do condutor com prontuário.' },
       { name: 'Extrato consolidado de pontuação do DETRAN', required: true, description: 'Histórico de infrações nos últimos 12 meses.' },
     ],
-    applicableGrounds: ['ARG-007', 'ARG-010', 'ARG-011', 'ARG-003', 'ARG-001', 'ARG-005'],
+    applicableGrounds: [
+      'ARG-042', 'ARG-043', 'ARG-044', 'ARG-047', 'ARG-025', 'ARG-026', 'ARG-027', 'ARG-028',
+      'ARG-029', 'ARG-030', 'ARG-048', 'ARG-049', 'ARG-050', 'ARG-052',
+    ],
     availableTemplates: ['TPL_SUSPENSAO_CNH'], // alias legado do PSDD (mesmos blocos)
     executionChecklist: [
       'Verificar se as multas componentes transitaram em julgado regularmente',
@@ -120,7 +137,9 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH e comprovante de endereço', required: true, description: 'Dados do condutor.' },
       { name: 'Provas de que outro condutor dirigia no flagrante', required: false, description: 'Declarações, bilhetes de pedágio, contratos.' },
     ],
-    applicableGrounds: ['ARG-007', 'ARG-005', 'ARG-003'],
+    applicableGrounds: [
+      'ARG-045', 'ARG-046', 'ARG-044', 'ARG-048', 'ARG-049', 'ARG-050', 'ARG-052',
+    ],
     availableTemplates: ['TPL_CASSACAO_CNH'], // alias legado do PCDD (mesmos blocos)
     executionChecklist: [
       'Verificar se houve abordagem presencial do condutor com CNH suspensa',
@@ -147,7 +166,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH do real condutor indicado', required: true, description: 'Habilitação válida na data do evento.' },
       { name: 'Cópia do documento de identidade do proprietário', required: true, description: 'Identidade com assinatura comparável.' },
     ],
-    applicableGrounds: ['ARG-007'],
+    applicableGrounds: ['ARG-039', 'ARG-040', 'ARG-041', 'ARG-048'],
     availableTemplates: ['TPL_FICI_INDICACAO'],
     executionChecklist: [
       'Garantir que as assinaturas correspondam com perfeição aos documentos apresentados',
@@ -175,7 +194,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Extrato de pontos / Prontuário do condutor (últimos 12 meses)', required: true, description: 'Comprova ausência de reincidência infracional.' },
       { name: 'Cópia da CNH do condutor requerente', required: true, description: 'Documento de habilitação.' },
     ],
-    applicableGrounds: ['ARG-008'],
+    applicableGrounds: ['ARG-051', 'ARG-048'],
     availableTemplates: ['TPL_CONVERSAO_ADVERTENCIA'],
     executionChecklist: [
       'Confirmar que o código da infração corresponde a natureza leve ou média',
@@ -200,7 +219,14 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
     requiredDocuments: [
       { name: 'Imagem legível do Auto de Infração ou Notificação', required: true, description: 'Para extração dos dados técnicos e cruzamento.' },
     ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008', 'ARG-010', 'ARG-011', 'ARG-014', 'ARG-016', 'ARG-017', 'ARG-018'],
+    applicableGrounds: [
+      'ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008',
+      'ARG-009', 'ARG-010', 'ARG-011', 'ARG-012', 'ARG-013', 'ARG-014', 'ARG-015', 'ARG-016',
+      'ARG-017', 'ARG-018', 'ARG-019', 'ARG-020', 'ARG-021', 'ARG-022', 'ARG-023', 'ARG-024',
+      'ARG-025', 'ARG-026', 'ARG-027', 'ARG-028', 'ARG-029', 'ARG-030', 'ARG-031', 'ARG-032',
+      'ARG-033', 'ARG-034', 'ARG-035', 'ARG-036', 'ARG-037', 'ARG-038', 'ARG-048', 'ARG-049',
+      'ARG-050',
+    ],
     availableTemplates: [], // KNOWLEDGE_GAP: laudo técnico ainda sem template canônico (composição futura)
     executionChecklist: [
       'Realizar checagem de 100% dos campos normativos da Portaria SENATRAN 354',
@@ -226,7 +252,10 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Auto de Infração e fotos do radar', required: true, description: 'Dados do equipamento e enquadramento.' },
       { name: 'Fotos da via e da sinalização do trecho', required: false, description: 'Evidências do local fiscalizado.' },
     ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-004', 'ARG-016'],
+    applicableGrounds: [
+      'ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-009',
+      'ARG-010', 'ARG-012', 'ARG-013', 'ARG-014', 'ARG-016', 'ARG-026', 'ARG-028', 'ARG-029',
+    ],
     availableTemplates: [], // KNOWLEDGE_GAP: laudo pericial de metrologia ainda sem template canônico
     executionChecklist: [
       'Validar distância métrica entre a placa R-19 e o ponto do sensor',
@@ -259,7 +288,11 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH do requerente', required: true, description: 'Documento de habilitação do condutor.' },
       { name: 'Cópia do CRLV do veículo autuado', required: true, description: 'Documento do veículo.' },
     ],
-    applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004'],
+    applicableGrounds: [
+      'ARG-048', 'ARG-049', 'ARG-050', 'ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005',
+      'ARG-006', 'ARG-015', 'ARG-020', 'ARG-025', 'ARG-031', 'ARG-035', 'ARG-036', 'ARG-038',
+      'ARG-051',
+    ],
     availableTemplates: ['TPL_DEFESA_PREVIA'],
     executionChecklist: [
       'Verificar a tempestividade da apresentação perante a NA',
@@ -287,7 +320,10 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH e RG/CPF', required: true, description: 'Identificação do condutor com prontuário.' },
       { name: 'Extrato consolidado de pontuação do DETRAN', required: true, description: 'Histórico de infrações nos últimos 12 meses.' },
     ],
-    applicableGrounds: ['ARG-007', 'ARG-010', 'ARG-011', 'ARG-003', 'ARG-001', 'ARG-005'],
+    applicableGrounds: [
+      'ARG-042', 'ARG-043', 'ARG-044', 'ARG-047', 'ARG-025', 'ARG-026', 'ARG-027', 'ARG-028',
+      'ARG-029', 'ARG-030', 'ARG-048', 'ARG-049', 'ARG-050', 'ARG-052',
+    ],
     availableTemplates: ['TPL_PSDD_SUSPENSAO'],
     executionChecklist: [
       'Verificar se as multas componentes transitaram em julgado regularmente',
@@ -314,7 +350,9 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Notificação de Instauração de Cassação', required: true, description: 'Notificação inicial do processo.' },
       { name: 'Cópia da CNH e comprovante de endereço', required: true, description: 'Dados do condutor.' },
     ],
-    applicableGrounds: ['ARG-007', 'ARG-005', 'ARG-003'],
+    applicableGrounds: [
+      'ARG-045', 'ARG-046', 'ARG-044', 'ARG-048', 'ARG-049', 'ARG-050', 'ARG-052',
+    ],
     availableTemplates: ['TPL_PCDD_CASSACAO'],
     executionChecklist: [
       'Verificar se houve abordagem presencial do condutor com CNH suspensa',

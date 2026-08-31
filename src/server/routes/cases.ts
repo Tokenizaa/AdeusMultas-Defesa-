@@ -7,8 +7,21 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { CaseDomain } from '../../types';
 import { enrichDefenseWithGemini } from '../gemini';
 import { authenticateToken } from '../middleware/auth-middleware';
+import {
+  registerRefinementProvider,
+  runControlledPipeline,
+  permittedTheses,
+} from '../../core/ai/ai-orchestrator';
+import { logger } from '../observability/logger';
 
 const router = Router();
+
+// Garantir registro do provider de refinamento controlado
+registerRefinementProvider({
+  refineProse: async (draftText: string) => {
+    return enrichDefenseWithGemini({ petitionText: draftText });
+  },
+});
 
 // Cases CRUD & Lifecycle Endpoints
 
@@ -275,16 +288,37 @@ router.post('/cases/:id/generate-defense', async (req, res) => {
     defense.factsNarrative = customFacts;
   }
 
-  // Optionally enrich with Gemini AI for superior legal polish
-  const enrichedGemini = await enrichDefenseWithGemini({
-    infraction: domain.infraction,
-    applicant: resolvedApplicant,
-    arguments: selectedArgs,
-    procedure: procedureType,
-  });
+  // ===== IA Controlada subordinada ao motor (Fase 6) =====
+  // Fluxo: determinístico -> IA refina prosa -> validador de integridade -> final.
+  // IA nunca decide tese; teses derivam da análise e do catálogo.
+  const analysis = domain.analysis as any;
+  const theses = permittedTheses(analysis).map((a: any) => a.id);
 
-  if (enrichedGemini) {
-    defense.fullDraftText = enrichedGemini;
+  const pipelineResult = await runControlledPipeline(
+    {
+      analysis: analysis || {
+        recommendedArguments: selectedArgs,
+        detectedInconsistencies: [],
+        recommendedProcedure: procedureType || domain.serviceType || 'recurso_jari',
+        overallSuccessRate: 50,
+        caseId: domain.id,
+        id: `anl_${Date.now()}`,
+        competentBody: domain.infraction?.autuadorBody || '',
+        summaryReasoning: 'análise gerada para defesa',
+        createdAt: new Date().toISOString(),
+      },
+      draft: defense,
+    },
+    { tone: 'formal_rigorous' }
+  );
+
+  defense.fullDraftText = pipelineResult.draft.fullDraftText;
+  defense.selectedArgumentIds = (theses.length ? theses : defense.selectedArgumentIds);
+
+  if (pipelineResult.controlled.reason === 'REFINED_VALID') {
+    logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
+  } else if (pipelineResult.controlled.reason === 'PROVIDER_UNAVAILABLE') {
+    logger.info('system', 'ai_fallback_deterministic', 'ai_fallback_deterministic', 'IA indisponível; minuta determinística mantida.', { caseId: domain.id });
   }
 
   domain.defenseDraft = defense;

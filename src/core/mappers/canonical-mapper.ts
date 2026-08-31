@@ -3,13 +3,102 @@
  * Canonical Mapper enforcing strict Row (database/snake_case) ↔ Domain (frontend/camelCase) separation.
  */
 
-import { CaseDomain, CaseRow, ProcedureType, InfractionSeverity, CaseStatus, JourneyStage } from '../../types';
+import { CaseDomain, CaseRow, ProcedureType, InfractionSeverity, CaseStatus, JourneyStage, CanonicalOnboardingPayload } from '../../types';
 
 export type CaseDatabaseRow = CaseRow;
 
 export class CanonicalMapper {
   public static toDomain = CanonicalMapper.rowToDomain;
   public static toRow = CanonicalMapper.domainToRow;
+
+  /**
+   * Convert Canonical Onboarding Payload to CaseDomain
+   */
+  public static onboardingPayloadToDomain(payload: CanonicalOnboardingPayload, caseId?: string): CaseDomain {
+    const id = caseId || `case_${Date.now()}`;
+    const applicantName = payload.applicant?.name || payload.leadName || 'Condutor';
+    const applicantEmail = payload.applicant?.email || payload.leadEmail;
+    const applicantPhone = payload.applicant?.phone || payload.leadPhone;
+    const applicantCpf = payload.applicant?.cpf;
+
+    return {
+      id,
+      title: `Defesa Auto ${payload.infraction.aitNumber || 'SN'}`,
+      clientName: applicantName,
+      clientEmail: applicantEmail,
+      clientPhone: applicantPhone,
+      clientCpf: applicantCpf,
+      status: 'novo',
+      currentStage: payload.applicant ? 2 : 1,
+      serviceType: payload.procedureType,
+      vehicle: {
+        plate: (payload.vehicle.plate || 'SEM PLACA').toUpperCase(),
+        brandModel: payload.vehicle.brandModel || 'Veículo não informado',
+        renavam: payload.vehicle.renavam,
+        chassis: payload.vehicle.chassis,
+        year: payload.vehicle.year,
+        color: payload.vehicle.color,
+      },
+      infraction: {
+        aitNumber: payload.infraction.aitNumber,
+        infractionCode: payload.infraction.infractionCode,
+        description: payload.infraction.description || '',
+        ctbArticle: payload.infraction.ctbArticle || '',
+        severity: payload.infraction.severity || 'grave',
+        points: payload.infraction.points || 0,
+        fineAmount: payload.infraction.fineAmount || 0,
+        autuadorBody: payload.infraction.autuadorBody,
+        dateTime: payload.infraction.dateTime,
+        location: payload.infraction.location,
+        speedLimit: payload.infraction.speedLimit,
+        measuredSpeed: payload.infraction.measuredSpeed,
+        consideredSpeed: payload.infraction.consideredSpeed,
+        speedMeasured: payload.infraction.speedMeasured,
+        speedConsidered: payload.infraction.speedConsidered,
+        radarEquipmentId: payload.infraction.radarEquipmentId,
+        inmetroAferitionDate: payload.infraction.inmetroAferitionDate,
+        notificationExpeditionDate: payload.infraction.notificationExpeditionDate,
+        notificationDeliveryDate: payload.infraction.notificationDeliveryDate,
+        defenseDeadline: payload.infraction.defenseDeadline,
+        hasPreviousInfractionsLast12Months: payload.infraction.hasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: payload.infraction.hasPsychomotorTerm,
+        hasAgentDetailedObservations: payload.infraction.hasAgentDetailedObservations,
+        hasPhotoProof: payload.infraction.hasPhotoProof,
+        hasR19SignageProof: payload.infraction.hasR19SignageProof,
+        formalFlawsDetected: [],
+      },
+      applicant: payload.applicant ? {
+        applicantName: payload.applicant.name,
+        applicantCpf: payload.applicant.cpf,
+        applicantRg: payload.applicant.rg,
+        applicantCnh: payload.applicant.cnh,
+        cnhCategory: payload.applicant.category,
+        applicantPhone: payload.applicant.phone || '',
+        applicantEmail: payload.applicant.email || '',
+        addressStreet: payload.applicant.addressStreet || '',
+        addressNumber: payload.applicant.addressNumber || '',
+        addressComplement: payload.applicant.addressComplement,
+        addressNeighborhood: payload.applicant.addressNeighborhood || '',
+        addressZipCode: payload.applicant.addressZipCode || '',
+        addressCityState: payload.applicant.addressCityState || '',
+        vehicleRenavam: payload.vehicle.renavam,
+        factsNarrative: payload.infraction.customFacts,
+      } : undefined,
+      timeline: [
+        {
+          id: `evt_${Date.now()}`,
+          title: 'Caso Criado',
+          description: 'Diagnóstico jurídico preliminar iniciado via Onboarding.',
+          timestamp: new Date().toISOString(),
+          type: 'system',
+        },
+      ],
+      isPaid: false,
+      isAnonymous: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
 
   /**
    * Convert database Row (snake_case) to Frontend Domain (camelCase)

@@ -102,6 +102,21 @@ export interface LegalArgumentDomain {
 }
 
 /**
+ * AVALIAÇÃO DE REGRA JURÍDICA DETERMINÍSTICA (Árvore de Decisão Auditável)
+ */
+export interface EvaluatedRule {
+  ruleId: string;
+  name?: string;
+  status: 'PASS' | 'FAIL' | 'DATA_GAP';
+  evaluatedAt: string;
+  inputs?: Record<string, unknown>;
+  reason?: string;
+  legalArgumentId?: string;
+  impact?: string;
+  severity?: 'alta' | 'media' | 'baixa';
+}
+
+/**
  * ETAPA 1 — DIAGNÓSTICO PRELIMINAR GRATUITO
  */
 export interface CaseAnalysis {
@@ -122,6 +137,8 @@ export interface CaseAnalysis {
   procedureDeadline?: string;
   summaryReasoning: string;
   createdAt: string;
+  engineVersion?: string;
+  evaluatedRules?: EvaluatedRule[];
   /**
    * Regras que não puderam concluir por dados insuficientes (FAIL CLOSED,
    * Fase 2). Nunca tratadas como vício detectado.
@@ -131,6 +148,102 @@ export interface CaseAnalysis {
     missingData: string[];
     reason: string;
   }[];
+}
+
+/**
+ * CONTRATO CANÔNICO DE ENTRADA DO ONBOARDING
+ */
+export interface CanonicalOnboardingPayload {
+  procedureType: ProcedureType;
+  situation?: string;
+  processStage?: string;
+  leadName?: string;
+  leadPhone?: string;
+  leadEmail?: string;
+  
+  vehicle: {
+    plate: string;
+    brandModel: string;
+    renavam?: string;
+    chassis?: string;
+    year?: string;
+    color?: string;
+  };
+  
+  infraction: {
+    aitNumber: string;
+    infractionCode: string;
+    description?: string;
+    ctbArticle?: string;
+    severity?: InfractionSeverity;
+    points?: number;
+    fineAmount?: number;
+    autuadorBody: string;
+    dateTime?: string;
+    location?: string;
+    speedLimit?: number;
+    measuredSpeed?: number;
+    consideredSpeed?: number;
+    speedMeasured?: number;
+    speedConsidered?: number;
+    radarEquipmentId?: string;
+    inmetroAferitionDate?: string;
+    notificationExpeditionDate?: string;
+    notificationDeliveryDate?: string;
+    defenseDeadline?: string;
+    
+    // Fatos e Evidências Específicas
+    hasPreviousInfractionsLast12Months?: boolean;
+    hasPsychomotorTerm?: boolean;
+    hasAgentDetailedObservations?: boolean;
+    hasPhotoProof?: boolean;
+    hasR19SignageProof?: boolean;
+    daysElapsed?: number;
+    customFacts?: string;
+  };
+  
+  applicant?: {
+    name: string;
+    cpf: string;
+    rg?: string;
+    cnh: string;
+    category?: string;
+    phone?: string;
+    email?: string;
+    addressStreet?: string;
+    addressNumber?: string;
+    addressComplement?: string;
+    addressNeighborhood?: string;
+    addressZipCode?: string;
+    addressCityState?: string;
+  };
+  
+  nominatedDriver?: {
+    name: string;
+    cpf: string;
+    rg?: string;
+    cnh: string;
+    category?: string;
+    uf?: string;
+    address?: string;
+    city?: string;
+  };
+  
+  company?: {
+    name: string;
+    cnpj: string;
+    address: string;
+    city: string;
+    uf: string;
+    representativeName: string;
+    representativeCpf: string;
+  };
+  
+  processNumbers?: {
+    psddNumber?: string;
+    pcddNumber?: string;
+    suspensionMonths?: number;
+  };
 }
 
 /**

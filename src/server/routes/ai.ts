@@ -1,9 +1,17 @@
 import { Router } from 'express';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
-import { getGeminiClient } from '../gemini';
-import { DefenseBlock } from '../../types';
+import { getGeminiClient, enrichDefenseWithGemini } from '../gemini';
+import { DefenseBlock, InfractionData, ProcedureType } from '../../types';
+import { runControlledPipeline, registerRefinementProvider } from '../../core/ai/ai-orchestrator';
+import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
 
 const router = Router();
+
+registerRefinementProvider({
+  refineProse: async (draftText: string) => {
+    return enrichDefenseWithGemini({ petitionText: draftText });
+  },
+});
 
 /**
  * POST /api/ai/analyze-infraction
@@ -141,115 +149,74 @@ Responda em formato JSON estrito com o seguinte schema:
 
 /**
  * POST /api/ai/generate-defense
- * AI Generate Complete Defense Document
+ * AI Generate Complete Defense Document via Deterministic Assembly & Controlled Refinement
  */
 router.post('/ai/generate-defense', async (req, res) => {
   try {
     const { caseData, customInstructions } = req.body;
-    const infraction = caseData.dadosInfracao || caseData.infraction || {};
-    const ragContext = RagPipeline.retrieveContext(infraction);
+    const rawInfraction = caseData?.dadosInfracao || caseData?.infraction || {};
+    const orgaoAutuador = rawInfraction.orgaoAutuador || rawInfraction.autuadorBody || 'DETRAN';
+    
+    // Normalizar dados para InfractionData canônico
+    const infraction: InfractionData = {
+      aitNumber: rawInfraction.autoInfracao || rawInfraction.aitNumber || 'SN',
+      infractionCode: rawInfraction.codigoInfracao || rawInfraction.infractionCode || '745-50',
+      description: rawInfraction.descricaoInfracao || rawInfraction.description || 'Infração de Trânsito',
+      ctbArticle: rawInfraction.enquadramentoLegal || rawInfraction.ctbArticle || 'Art. 218, I do CTB',
+      severity: rawInfraction.gravidade || rawInfraction.severity || 'media',
+      points: Number(rawInfraction.pontos || rawInfraction.points || 4),
+      fineAmount: Number(rawInfraction.valor || rawInfraction.fineAmount || 130.16),
+      dateTime: rawInfraction.dataHoraInfracao || rawInfraction.dateTime || new Date().toISOString().split('T')[0],
+      location: rawInfraction.localInfracao || rawInfraction.location || 'Via Pública',
+      autuadorBody: orgaoAutuador,
+      speedLimit: rawInfraction.velocidadePermitida ? Number(rawInfraction.velocidadePermitida) : rawInfraction.speedLimit,
+      speedMeasured: rawInfraction.velocidadeMedida ? Number(rawInfraction.velocidadeMedida) : rawInfraction.measuredSpeed,
+      speedConsidered: rawInfraction.velocidadeConsiderada ? Number(rawInfraction.velocidadeConsiderada) : rawInfraction.consideredSpeed,
+      radarEquipmentId: rawInfraction.numeroEquipamentoInmetro || rawInfraction.radarEquipmentId,
+      inmetroAferitionDate: rawInfraction.dataAfericaoInmetro || rawInfraction.inmetroAferitionDate,
+      defenseDeadline: rawInfraction.prazoDefesa || rawInfraction.defenseDeadline,
+    };
 
-    const ai = getGeminiClient();
-    let generatedText = '';
-    const orgaoAutuador = infraction.orgaoAutuador || infraction.autuadorBody || 'ÓRGÃO NÃO INFORMADO';
-    const municipioUf = infraction.municipioUf || infraction.cityState || 'CIDADE/UF NÃO INFORMADA';
+    const applicant = {
+      name: rawInfraction.nomeCondutor || caseData?.applicantName || 'CONDUTOR REQUERENTE',
+      cpf: rawInfraction.cpfCondutor || caseData?.applicantCpf || '000.000.000-00',
+      rg: rawInfraction.rgCondutor || caseData?.applicantRg,
+      cnh: rawInfraction.cnhNumero || caseData?.applicantCnh || '00000000000',
+      category: rawInfraction.categoriaCnh || caseData?.cnhCategory || 'B',
+      address: caseData?.applicantAddress || 'Endereço não informado',
+      cityState: rawInfraction.municipioUf || caseData?.applicantCityState || 'São Paulo/SP',
+    };
 
-    if (ai) {
-      try {
-        const prompt = `Você é o mais prestigiado especialista em Direito de Trânsito Administrativo do Brasil.
-Elabore uma peça jurídica de DEFESA PRÉVIA / RECURSO ADMINISTRATIVO impecável, formal e técnica contra o auto de infração nº ${infraction.autoInfracao || infraction.aitNumber}.
+    const vehiclePlate = rawInfraction.placa || caseData?.vehiclePlate || 'ABC-1234';
+    const vehicleModel = rawInfraction.marcaModelo || caseData?.vehicleModel || 'Veículo Automotor';
+    const procedureType: ProcedureType = caseData?.procedureType || 'defesa_previa';
 
-DADOS DO PROCESSO:
-- Requerente: ${infraction.nomeCondutor || 'NÃO INFORMADO'}
-- CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'} | CNH: ${infraction.cnhNumero || 'NÃO INFORMADO'}
-- Veículo: Placa ${infraction.placa} / ${infraction.ufVeiculo} (${infraction.marcaModelo || 'Veículo Automotor'})
-- Órgão Autuador: ${infraction.orgaoAutuador}
-- Infração: ${infraction.codigoInfracao || infraction.infractionCode} - ${infraction.descricaoInfracao || infraction.description}
-- Enquadramento: ${infraction.enquadramentoLegal || infraction.ctbArticle}
-- Data/Hora: ${infraction.dataHoraInfracao || infraction.dateTime} | Local: ${infraction.localInfracao || infraction.location}
-- Medições Técnicas: Permitida ${infraction.velocidadePermitida || infraction.speedLimit || 'N/A'} km/h, Medida ${infraction.velocidadeMedida || infraction.measuredSpeed || 'N/A'} km/h, Considerada ${infraction.velocidadeConsiderada || infraction.consideredSpeed || 'N/A'} km/h
-- Equipamento: ${infraction.numeroEquipamentoInmetro || infraction.radarEquipmentId || 'Eletrônico'} (Aferição: ${infraction.dataAfericaoInmetro || infraction.inmetroAferitionDate || 'Não informada'})
+    // 1. Executar análise determinística via ExpertRuleEngine
+    const analysis = RagPipeline.analyzeInfraction(caseData?.caseId || `case_${Date.now()}`, infraction);
 
-TESES E NULIDADES A INCLUIR:
-${ragContext.potentialNullities.map((n) => `- ${n.titulo}: ${n.fundamentoLegal} - ${n.descricao}`).join('\n')}
+    // 2. Montar minuta determinística via DocumentAssemblyEngine
+    const defense = RagPipeline.generateDefenseDraft(
+      analysis.caseId,
+      infraction,
+      vehiclePlate,
+      vehicleModel,
+      applicant,
+      analysis.recommendedArguments || [],
+      procedureType
+    );
 
-ESTRUTURA OBRIGATÓRIA DA PEÇA:
-1. ENDEREÇAMENTO AO ILUSTRÍSSIMO DIRETOR DO ÓRGÃO AUTUADOR
-2. QUALIFICAÇÃO COMPLETA DO REQUERENTE E DO VEÍCULO
-3. DOS FATOS
-4. DAS PRELIMINARES DE NULIDADE (Decadência do Art. 281, Falta de Tipicidade, Aferição do INMETRO expirada conforme Resolução 798/2020)
-5. DO MÉRITO TÉCNICO E JURÍDICO (Violação ao devido processo legal, Art. 5º, LIV e LV da CF/88, Resoluções CONTRAN 798 e 918)
-6. DO PEDIDO SUBSIDIÁRIO DE CONVERSÃO EM ADVERTÊNCIA POR ESCRITO (Art. 267 CTB)
-7. DOS PEDIDOS E REQUERIMENTOS FINAIS (Arquivamento, cancelamento de pontuação e efeito suspensivo)
-8. FECHO E LOCAL/DATA
-
-Redija em português jurídico formal culto, com excelente fundamentação doutrinária e jurisprudencial.`;
-
-        const aiResponse = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
-          contents: prompt,
-          config: {
-            temperature: 0.3,
-          },
-        });
-
-        if (aiResponse.text) {
-          generatedText = aiResponse.text;
-        }
-      } catch (e) {
-        console.error('Error generating defense with Gemini:', e);
-        if (process.env.NODE_ENV === 'production') {
-          return res.status(503).json({
-            error: 'Serviço de geração de defesa indisponível',
-            message: 'Tente novamente em alguns minutos.',
-          });
-        }
-      }
+    if (customInstructions) {
+      defense.factsNarrative = `${defense.factsNarrative}\n\nObservações complementares do requerente: ${customInstructions}`;
     }
 
-    // If Gemini didn't return text, build high-quality structured default piece
-    if (!generatedText) {
-      generatedText = `ILUSTRÍSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRAÇÕES - JARI DO ${orgaoAutuador.toUpperCase()}
-
-REFERÊNCIA: AUTO DE INFRAÇÃO Nº ${infraction.autoInfracao || infraction.aitNumber || 'N/A'}
-PLACA DO VEÍCULO: ${infraction.placa || 'N/A'} / ${infraction.ufVeiculo || ''}
-ENQUADRAMENTO: ${infraction.enquadramentoLegal || infraction.ctbArticle || 'N/A'} (${infraction.codigoInfracao || infraction.infractionCode || 'N/A'})
-
-${(infraction.nomeCondutor || 'REQUERENTE').toUpperCase()}, brasileiro(a), inscrito(a) no CPF/MF sob o nº ${infraction.cpfCondutor || 'XXX.XXX.XXX-XX'}, portador(a) da CNH nº ${infraction.cnhNumero || 'XXXXXXXXXXX'}, proprietário(a)/condutor(a) do veículo marca/modelo ${infraction.marcaModelo || 'automotor'}, placa ${infraction.placa || 'N/A'}, vem, tempestivamente, com fulcro nos Artigos 5º, incisos LIV e LV da Constituição Federal de 1988, e nos Artigos 280 e seguintes do Código de Trânsito Brasileiro (Lei nº 9.503/1997), apresentar a presente:
-
-DEFESA ADMINISTRATIVA DE AUTUAÇÃO
-
-em face do Auto de Infração supra epigrafado, lavrado em ${infraction.dataHoraInfracao ? new Date(infraction.dataHoraInfracao).toLocaleDateString('pt-BR') : 'data recente'}, pelos substratos fáticos e jurídicos a seguir delineados:
-
-1. DOS FATOS
-Consta no referido Auto de Infração que o veículo supostamente transitava no local '${infraction.localInfracao || 'Via Pública'}' em desacordo com a velocidade regulamentada. Ocorre que o presente ato administrativo encontra-se maculado por vícios insanáveis de forma e de mérito técnico, não podendo subsistir no ordenamento jurídico pátrio.
-
-2. DAS PRELIMINARES DE NULIDADE ABSOLUTA DO AUTO
-2.1. Da Inobservância aos Requisitos Metrológicos Vinculantes (Resolução CONTRAN nº 798/2020 e Portaria INMETRO nº 158/2022)
-O Artigo 280, § 2º do CTB e o Artigo 4º da Resolução CONTRAN nº 798/2020 exigem expressamente que o medidor de velocidade comprove validade de verificação metrológica periódica anual (12 meses) pelo INMETRO. No caso em tela, o equipamento ${infraction.numeroEquipamentoInmetro || infraction.radarEquipmentId || 'utilizado'} operava sem o laudo de aferição regular e tempestivo, tornando insubsistente o registro fotográfico e documental.
-
-2.2. Da Falta de Sinalização Ostensiva Regulamentadora (Artigo 90 do CTB)
-Não restou comprovada a existência de placa de sinalização vertical R-19 previamente ao equipamento de fiscalização eletrônica no trecho regulamentado, desrespeitando o princípio da legalidade estrita e da segurança viária.
-
-3. DO PEDIDO SUBSIDIÁRIO: CONVERSÃO EM ADVERTÊNCIA POR ESCRITO (Art. 267 do CTB)
-Subsidiariamente, caso superadas as nulidades formais (o que não se espera), requer a aplicação do Artigo 267 do CTB (com redação alterada pela Lei Federal nº 14.071/2020), convertendo-se a penalidade de multa em ADVERTÊNCIA POR ESCRITO, tratando-se de direito público subjetivo do condutor que não possui reincidência específica no período de 12 meses.
-
-4. DOS PEDIDOS
-Ante o exposto, REQUER a Vossa Senhoria:
-a) O RECEBIMENTO da presente Defesa Prévia com a concessão de EFEITO SUSPENSIVO;
-b) No mérito, o TOTAL DEFERIMENTO e o consequente ARQUIVAMENTO do Auto de Infração nº ${infraction.autoInfracao || 'N/A'} por manifesta insubsistência formal e metrológica;
-c) Subsidiariamente, a conversão em Advertência por Escrito nos termos do Art. 267 do CTB;
-d) A anulação de quaisquer pontos lançados no prontuário do Requerente.
-
-Termos em que,
-Pede e Espera Deferimento.
-
-${municipioUf}, ${new Date().toLocaleDateString('pt-BR')}.
-
-________________________________________________
-${(infraction.nomeCondutor || 'REQUERENTE').toUpperCase()}
-CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
-    }
+    // 3. Submeter ao pipeline de IA subordinada e validação de integridade
+    const pipelineResult = await runControlledPipeline(
+      {
+        analysis,
+        draft: defense,
+      },
+      { tone: 'formal_rigorous' }
+    );
 
     // Construct defense blocks
     const blocks: DefenseBlock[] = [
@@ -265,7 +232,7 @@ CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
         id: 'blk_2',
         titulo: 'Qualificação do Condutor e Veículo',
         categoria: 'cabecalho',
-        conteudo: `${(infraction.nomeCondutor || 'CONDUTOR / PROPRIETÁRIO').toUpperCase()}, CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}, CNH: ${infraction.cnhNumero || 'NÃO INFORMADO'}, proprietário do veículo Placa ${infraction.placa || 'N/A'}, vem apresentar DEFESA ADMINISTRATIVA.`,
+        conteudo: `${(applicant.name || 'CONDUTOR / PROPRIETÁRIO').toUpperCase()}, CPF: ${applicant.cpf || 'NÃO INFORMADO'}, CNH: ${applicant.cnh || 'NÃO INFORMADO'}, proprietário do veículo Placa ${vehiclePlate || 'N/A'}, vem apresentar DEFESA ADMINISTRATIVA.`,
         ativo: true,
         editavel: true,
       },
@@ -273,7 +240,7 @@ CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
         id: 'blk_3',
         titulo: 'Síntese dos Fatos',
         categoria: 'fatos',
-        conteudo: `Em ${infraction.dataHoraInfracao ? new Date(infraction.dataHoraInfracao).toLocaleDateString('pt-BR') : 'data da autuação'}, foi lavrado o Auto de Infração ${infraction.autoInfracao || infraction.aitNumber || 'N/A'} referente a ${infraction.descricaoInfracao || infraction.description || 'infração de trânsito'} no local ${infraction.localInfracao || infraction.location || 'Via Pública'}.`,
+        conteudo: `Em ${infraction.dateTime ? new Date(infraction.dateTime).toLocaleDateString('pt-BR') : 'data da autuação'}, foi lavrado o Auto de Infração ${infraction.aitNumber || 'N/A'} referente a ${infraction.description || 'infração de trânsito'} no local ${infraction.location || 'Via Pública'}.`,
         ativo: true,
         editavel: true,
       },
@@ -317,7 +284,7 @@ CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
         id: 'blk_8',
         titulo: 'Fecho e Assinatura',
         categoria: 'fecho',
-        conteudo: `Pede Deferimento.\n${municipioUf || 'Brasil'}, ${new Date().toLocaleDateString('pt-BR')}.\n\n_____________________________________\nAssinatura do Requerente`,
+        conteudo: `Pede Deferimento.\n${applicant.cityState || 'Brasil'}, ${new Date().toLocaleDateString('pt-BR')}.\n\n_____________________________________\nAssinatura do Requerente`,
         ativo: true,
         editavel: true,
       },
@@ -325,15 +292,19 @@ CPF: ${infraction.cpfCondutor || 'NÃO INFORMADO'}`;
 
     const defenseDoc = {
       id: 'doc_' + Math.random().toString(36).substring(2, 9),
-      caseId: caseData.id,
-      tipoDefesa: caseData.tipoServico || caseData.serviceType || 'recurso_jari',
-      titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || 'N/A'}`,
+      caseId: caseData?.id || pipelineResult.draft.caseId,
+      tipoDefesa: caseData?.tipoServico || caseData?.serviceType || procedureType,
+      titulo: `Defesa Administrativa - Auto ${infraction.aitNumber || 'N/A'}`,
       orgaoDestinatario: orgaoAutuador,
-      autorNome: infraction.nomeCondutor || 'Condutor / Requerente',
-      autorCpf: infraction.cpfCondutor || '',
-      autorCnh: infraction.cnhNumero || '',
-      autorEndereco: municipioUf,
-      textoCompleto: generatedText,
+      autorNome: applicant.name,
+      autorCpf: applicant.cpf,
+      autorCnh: applicant.cnh,
+      autorEndereco: applicant.cityState,
+      textoCompleto: pipelineResult.draft.fullDraftText,
+      defenseDraft: pipelineResult.draft,
+      analysis,
+      aiControlled: pipelineResult.controlled,
+      validationReport: pipelineResult.validationReport,
       blocos: blocks,
       geradoEm: new Date().toISOString(),
       ultimaEdicao: new Date().toISOString(),

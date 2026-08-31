@@ -98,6 +98,15 @@ export async function applyAsyncRefinement(
 
   // Validação de integridade da minuta refinada: precisa preservar os campos
   // estruturais (AIT, procedimento, caseId). NUNCA corrige silenciosamente.
+  if (baseDraft.aitNumber && baseDraft.fullDraftText.includes(baseDraft.aitNumber) && !refined.includes(baseDraft.aitNumber)) {
+    return {
+      finalText: baseDraft.fullDraftText,
+      applied: false,
+      reason: 'REFINED_REJECTED',
+      validationIssues: ['AIT_MISSING: O refinamento removeu o número do AIT obrigatório'],
+    };
+  }
+
   const candidate: DefenseDraft = { ...baseDraft, fullDraftText: refined };
   const report = validateDraft(candidate);
   if (!report.valid) {
