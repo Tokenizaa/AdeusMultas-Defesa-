@@ -43,12 +43,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const DEFAULT_CANONICAL_PRICINGS: ServicePricing[] = [
   {
-    id: 'price_recurso_jari',
-    serviceType: 'recurso_jari',
-    serviceName: 'Recurso JARI',
-    description: 'Recurso à Junta Administrativa de Recursos de Infrações (1ª Instância).',
-    standardPrice: 1.00,
-    promotionalPrice: 1.00,
+    id: 'price_defesa_previa',
+    serviceType: 'defesa_previa',
+    serviceName: 'Defesa Prévia',
+    description: 'Defesa administrativa em primeira instância (Art. 281 CTB).',
+    standardPrice: 89.90,
+    promotionalPrice: 44.95,
     isActive: true,
     history: [],
     updatedAt: new Date().toISOString(),
@@ -572,40 +572,34 @@ export class CommercialRepository {
       .order('service_type');
     if (pricingsError) {
       this.warn('pricings', 'loadAll', pricingsError.message);
+      // On error, keep existing in-memory state (could be defaults from constructor)
+      // Do NOT overwrite with potentially stale defaults
     } else if (pricings && pricings.length > 0) {
-      const dbPricings = new Map(pricings.map((p: any) => [
-        p.service_type,
-        {
-          id: p.id || `price_${p.service_type}`,
-          serviceType: p.service_type,
-          serviceName: p.service_name || p.service_type,
-          description: p.description,
-          standardPrice: p.standard_price > 1000 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
-          promotionalPrice: p.promotional_price !== null && p.promotional_price !== undefined
-            ? (p.promotional_price > 1000 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)))
-            : null,
-          isActive: p.is_active ?? true,
-          validFrom: p.valid_from,
-          validUntil: p.valid_until,
-          history: p.history ?? [],
-          updatedAt: p.updated_at,
-          updatedBy: p.updated_by,
-        },
-      ]));
+      // Supabase has data: use ONLY Supabase data (authoritative source)
+      this._pricings = pricings.map((p: any) => ({
+        id: p.id || `price_${p.service_type}`,
+        serviceType: p.service_type,
+        serviceName: p.service_name || p.service_type,
+        description: p.description,
+        standardPrice: p.standard_price > 1000 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
+        promotionalPrice: p.promotional_price !== null && p.promotional_price !== undefined
+          ? (p.promotional_price > 1000 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)))
+          : null,
+        isActive: p.is_active ?? true,
+        validFrom: p.valid_from,
+        validUntil: p.valid_until,
+        history: p.history ?? [],
+        updatedAt: p.updated_at,
+        updatedBy: p.updated_by,
+      }));
 
-      this._pricings = DEFAULT_CANONICAL_PRICINGS.map((d) => {
-        const db = dbPricings.get(d.serviceType);
-        if (db) return db;
-        return d;
+      logger.info('supabase', 'commercial_repository', 'loadAll', `Pricings carregados do Supabase: ${this._pricings.length} (authoritative)`, {
+        count: this._pricings.length,
+        services: this._pricings.map(p => `${p.serviceType}:${p.standardPrice}/${p.promotionalPrice}`).join(', '),
       });
-
-      for (const [serviceType, db] of dbPricings) {
-        if (!DEFAULT_CANONICAL_PRICINGS.some((d) => d.serviceType === serviceType)) {
-          this._pricings.push(db);
-        }
-      }
-
-      logger.info('supabase', 'commercial_repository', 'loadAll', `Pricings carregados: ${this._pricings.length} (merged with defaults)`, {
+    } else {
+      // Supabase returned empty table: keep defaults (for initial bootstrap before seeding)
+      logger.warn('supabase', 'commercial_repository', 'loadAll', 'service_pricings vazio no Supabase — usando defaults canônicos', {
         count: this._pricings.length,
       });
     }

@@ -235,6 +235,7 @@ async function startServer() {
     await commercialService.warmup().catch((warmupErr: any) => {
       console.warn(`[warmup] Falha ao carregar catálogo comercial do Supabase: ${warmupErr?.message || warmupErr}`);
     });
+    console.log(`[warmup] Catálogo comercial carregado com sucesso`);
   } catch (warmupErr: any) {
     console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
   }

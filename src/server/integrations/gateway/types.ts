@@ -16,7 +16,7 @@
 // ============================================================================
 
 /** Identificador único de um gateway de pagamento suportado. */
-export type GatewayId = 'pagbank' | 'ggpixapi';
+export type GatewayId = 'pagbank' | 'ggpixapi' | 'test';
 
 /** Status do gateway na configuração administrativa. */
 export type GatewayStatus = 'configured' | 'not_configured';

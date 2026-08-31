@@ -23,6 +23,7 @@
 import { PaymentGateway, GatewayId, GatewayStatus } from './types';
 import { pagbankAdapter } from './pagbank-adapter';
 import { ggpixAdapter } from './ggpix-adapter';
+import { testAdapter } from './test-adapter';
 import { logger } from '../../observability/logger';
 import { configService } from '../../config/config-service';
 
@@ -36,7 +37,7 @@ import { configService } from '../../config/config-service';
  * Prioridade:
  * 1. PAYMENT_ACTIVE_GATEWAY_OVERRIDE (ConfigService — admin manual switch, persiste)
  * 2. PAYMENT_ACTIVE_GATEWAY (env explicitamente definido)
- * 3. PAYMENT_MODE (production → ggpixapi, sandbox → pagbank)
+ * 3. PAYMENT_MODE (production → ggpixapi, sandbox → test gateway se disponível, senão pagbank)
  * 4. Fallback baseado no modo
  *
  * REGRA: Em PAYMENT_MODE=production, NUNCA permite PagBank como gateway ativo.
@@ -44,7 +45,7 @@ import { configService } from '../../config/config-service';
 function resolveActiveGatewayIdFromEnv(): GatewayId {
   // 1. Override persistido no ConfigService (admin UI switch)
   const configOverride = configService.get('PAYMENT_ACTIVE_GATEWAY_OVERRIDE');
-  if (configOverride && (configOverride === 'ggpixapi' || configOverride === 'pagbank')) {
+  if (configOverride && (configOverride === 'ggpixapi' || configOverride === 'pagbank' || configOverride === 'test')) {
     logger.info('payments', 'gateway_manager', 'resolve', 'Using ConfigService override for active gateway', {
       override: configOverride,
     });
@@ -68,8 +69,15 @@ function resolveActiveGatewayIdFromEnv(): GatewayId {
     }
     return 'pagbank';
   }
-  // Sem env explícito → fallback baseado no PAYMENT_MODE
-  return isProduction ? 'ggpixapi' : 'pagbank';
+  if (envValue === 'test') return 'test';
+  
+  // 3. Sem env explícito → fallback inteligente
+  if (isProduction) {
+    return 'ggpixapi';
+  }
+  // Em sandbox/dev: preferir 'test' gateway se disponível (não requer credenciais)
+  // Isso evita o erro "PagBank não está configurado" em desenvolvimento
+  return 'test';
 }
 
 // ============================================================================
@@ -94,6 +102,9 @@ export class GatewayManager {
     // Registrar todos os gateways conhecidos
     this.gateways.set('pagbank', pagbankAdapter);
     this.gateways.set('ggpixapi', ggpixAdapter);
+    if (testAdapter) {
+      this.gateways.set('test', testAdapter);
+    }
 
     logger.info('payments', 'gateway_manager', 'init', `Gateway manager initialized`, {
       availableGateways: Array.from(this.gateways.keys()),
@@ -150,6 +161,8 @@ export class GatewayManager {
           notConfiguredReason = 'PAGBANK_TOKEN não configurado';
         } else if (gw.id === 'ggpixapi') {
           notConfiguredReason = 'GGPIX_API_KEY ou GGPIX_ENABLED não configurado';
+        } else if (gw.id === 'test') {
+          notConfiguredReason = 'Apenas para desenvolvimento/teste (NODE_ENV !== production)';
         }
       }
 

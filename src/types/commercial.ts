@@ -19,6 +19,7 @@ import { ProcedureType } from './index';
  * são tratados em servicesWithoutCommercialOffer no domain service.
  */
 export type CommercialServiceType =
+  | 'defesa_previa'
   | 'recurso_jari'
   | 'recurso_cetran'
   | 'suspensao'
