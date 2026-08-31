@@ -30,7 +30,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Provas documentais anexas (fotos, laudos, declarações)', required: false, description: 'Provas materiais que demonstrem a atipicidade da conduta.' },
     ],
     applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-010', 'ARG-011', 'ARG-014', 'ARG-016', 'ARG-017', 'ARG-018'],
-    availableTemplates: ['TPL_RECURSO_JARI_PADRAO', 'TPL_RECURSO_JARI_LEI_SECA', 'TPL_RECURSO_JARI_RADAR'],
+    availableTemplates: ['TPL_RECURSO_JARI'], // variantes (lei seca/radar) são composições de blocos, não templates separados
     executionChecklist: [
       'Garantir protocolo dentro da data limite expressa no campo "Prazo de Recurso" da NP',
       'Articular pedidos subsidiários (nulidade principal ou cancelamento de pontos)',
@@ -64,7 +64,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia da CNH e CRLV do veículo', required: true, description: 'Documentos do condutor e do veículo.' },
     ],
     applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-005', 'ARG-007', 'ARG-010', 'ARG-016', 'ARG-017'],
-    availableTemplates: ['TPL_RECURSO_CETRAN_PADRAO', 'TPL_RECURSO_CETRAN_NULIDADE_JARI'],
+    availableTemplates: ['TPL_RECURSO_CETRAN'],
     executionChecklist: [
       'Apontar expressamente que a JARI não analisou as preliminares arguidas',
       'Citar jurisprudência consolidada do STJ e tribunais de justiça',
@@ -93,7 +93,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Extrato consolidado de pontuação do DETRAN', required: true, description: 'Histórico de infrações nos últimos 12 meses.' },
     ],
     applicableGrounds: ['ARG-007', 'ARG-010', 'ARG-011', 'ARG-003', 'ARG-001', 'ARG-005'],
-    availableTemplates: ['TPL_SUSPENSAO_PONTUACAO', 'TPL_SUSPENSAO_LEI_SECA', 'TPL_SUSPENSAO_VELOCIDADE_50'],
+    availableTemplates: ['TPL_SUSPENSAO_CNH'], // alias legado do PSDD (mesmos blocos)
     executionChecklist: [
       'Verificar se as multas componentes transitaram em julgado regularmente',
       'Checar se o condutor exerce atividade remunerada (EAR) para regra benéfica de 40 pontos',
@@ -121,7 +121,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Provas de que outro condutor dirigia no flagrante', required: false, description: 'Declarações, bilhetes de pedágio, contratos.' },
     ],
     applicableGrounds: ['ARG-007', 'ARG-005', 'ARG-003'],
-    availableTemplates: ['TPL_CASSACAO_CNH_PADRAO'],
+    availableTemplates: ['TPL_CASSACAO_CNH'], // alias legado do PCDD (mesmos blocos)
     executionChecklist: [
       'Verificar se houve abordagem presencial do condutor com CNH suspensa',
       'Checar a validade do processo de suspensão anterior',
@@ -148,7 +148,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Cópia do documento de identidade do proprietário', required: true, description: 'Identidade com assinatura comparável.' },
     ],
     applicableGrounds: ['ARG-007'],
-    availableTemplates: ['TPL_INDICACAO_CONDUTOR_FARI'],
+    availableTemplates: ['TPL_FICI_INDICACAO'],
     executionChecklist: [
       'Garantir que as assinaturas correspondam com perfeição aos documentos apresentados',
       'Protocolar antes do vencimento impresso na Notificação de Autuação',
@@ -201,7 +201,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Imagem legível do Auto de Infração ou Notificação', required: true, description: 'Para extração dos dados técnicos e cruzamento.' },
     ],
     applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-004', 'ARG-005', 'ARG-006', 'ARG-007', 'ARG-008', 'ARG-010', 'ARG-011', 'ARG-014', 'ARG-016', 'ARG-017', 'ARG-018'],
-    availableTemplates: ['TPL_RELATORIO_TECNICO_DIAGNOSTICO'],
+    availableTemplates: [], // KNOWLEDGE_GAP: laudo técnico ainda sem template canônico (composição futura)
     executionChecklist: [
       'Realizar checagem de 100% dos campos normativos da Portaria SENATRAN 354',
       'Emitir matriz de risco com probabilidade percentual matemática',
@@ -227,7 +227,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       { name: 'Fotos da via e da sinalização do trecho', required: false, description: 'Evidências do local fiscalizado.' },
     ],
     applicableGrounds: ['ARG-001', 'ARG-002', 'ARG-004', 'ARG-016'],
-    availableTemplates: ['TPL_RELATORIO_PERICIAL_METROLOGIA'],
+    availableTemplates: [], // KNOWLEDGE_GAP: laudo pericial de metrologia ainda sem template canônico
     executionChecklist: [
       'Validar distância métrica entre a placa R-19 e o ponto do sensor',
       'Conferir histórico de aprovação de modelo pelo INMETRO',

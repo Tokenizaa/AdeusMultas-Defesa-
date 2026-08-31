@@ -5,6 +5,7 @@
  */
 
 import { KnowledgeSource, KnowledgeSnapshot, KnowledgeChange, ChangeType, RiskLevel, ReviewStatus } from '../../core/knowledge/types';
+import { calculateSha256Sync } from '../../core/knowledge/monitoring/hash-generator';
 import { CanonicalKnowledgeRegistry } from '../../core/knowledge/registry/canonical-registry';
 import { TemporalKnowledgeEngine } from '../../core/knowledge/temporal-engine';
 import { logger } from '../../server/observability/logger';
@@ -187,36 +188,28 @@ export class LegislationCollector {
       riskLevel: change.riskLevel,
     });
 
-    // In a real system, persist change to DB and add to review queue.
-    // For now, we log and optionally auto-apply if risk is low and change is safe.
-    if (change.riskLevel === 'P3_INFO' && changeInfo.autoApplySafe) {
-      change.status = 'APPROVED';
-      change.appliedAt = new Date().toISOString();
-      logger.info('knowledge', 'legislation-collector', 'change_auto_applied', `Change auto-applied (low risk) for ${this.source.title}`, {
-        changeId: change.id,
-      });
-      // TODO: Apply change to knowledge base (e.g., add new resolution, update argument, etc.)
-      await this.applyChangeToKnowledgeBase(change, responseData);
-    } else {
-      // Send to review queue (P0, P1, P2)
-      logger.warn('knowledge', 'legislation-collector', 'change_requires_review', `Change requires human review for ${this.source.title}`, {
-        changeId: change.id,
-        riskLevel: change.riskLevel,
-      });
-      // TODO: persist to review queue
-    }
+    // ===== Fase 7: NUNCA auto-aplicar mudança na base de conhecimento =====
+    // Uma página ter mudado NÃO autoriza alterar tese jurídica. Toda mudança
+    // (inclusive P3_INFO) vai à esteira de revisão humana (PENDING_REVIEW).
+    // Aplicação somente após validação e aprovação explícita (REQUIRES_HUMAN_REVIEW).
+    logger.warn('knowledge', 'legislation-collector', 'change_requires_review', `Change detected requires human review for ${this.source.title}`, {
+      changeId: change.id,
+      changeType: change.changeType,
+      riskLevel: change.riskLevel,
+    });
+    // TODO(monitoring): persistir `change` na fila de revisão (review-queue-service)
+    // para aprovação humana antes de qualquer applyChangeToKnowledgeBase.
 
     // Update source with successful fetch and new hash
     await this.updateSourceStatus(true, httpStatus, null, contentHash, true);
   }
 
   /**
-   * Hash content using a simple hash (for demonstration; replace with crypto in production)
+   * Hash determinístico SHA-256 do conteúdo normalizado.
+   * NUNCA usa timestamp: hash instável faria todo fetch parecer mudança.
    */
   private hashContent(content: string): string {
-    // Simple placeholder: replace with real hash implementation (e.g., crypto.createHash('sha256'))
-    // For demonstration, we'll use a fake hash based on length and timestamp.
-    return `hash-${content.length}-${Date.now()}`;
+    return calculateSha256Sync(this.normalizeContent(content));
   }
 
   /**

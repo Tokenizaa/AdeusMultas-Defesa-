@@ -18,7 +18,7 @@ import { DOCUMENT_BLOCKS, DocumentBlockModel } from '../templates/document-block
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { buildDocumentRollText } from './document-roll';
-import { DefenseDraft, InfractionData, ProcedureType } from '../../types';
+import { DefenseDraft, InfractionData, ProcedureType, CaseAnalysis } from '../../types';
 
 export interface DocumentAssemblyPayload {
   caseId: string;
@@ -77,6 +77,12 @@ export interface DocumentAssemblyPayload {
   selectedBlockIds?: string[];
   selectedArgumentIds?: string[];
   customFacts?: string;
+  /**
+   * Análise jurídica estruturada (Fase 4): quando presente, a seleção de teses
+   * deriva SOMENTE dos vícios detectados pelo motor de regras — nunca de lista
+   * livre. Ausente => comportamento legado (procedure.applicableGrounds).
+   */
+  analysis?: CaseAnalysis;
 }
 
 export interface AssemblyValidationResult {
@@ -86,6 +92,8 @@ export interface AssemblyValidationResult {
   appliedArgumentCount: number;
   procedureName: string;
   templateCode: string;
+  /** Preenchido quando payload.analysis existe e recomenda procedimento divergente. */
+  procedureMismatch?: boolean;
 }
 
 export class DocumentAssemblyEngine {
@@ -106,10 +114,22 @@ export class DocumentAssemblyEngine {
     }
 
     // 3. Resolve Arguments (Preliminaries vs Merits)
-    const activeArgIds =
-      payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0
-        ? payload.selectedArgumentIds
-        : procedure.applicableGrounds;
+    //    Fase 4: análise estruturada comanda a seleção — somente teses cujo vício
+    //    foi DETECTADO entram. Sem análise, mantém-se o caminho legado.
+    let activeArgIds: string[];
+    if (payload.analysis) {
+      // Fase 4: análise comanda a seleção; vazia => nenhuma tese (nada inventado).
+      activeArgIds = Array.from(new Set(payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean) as string[]));
+      // Garantias constitucionais são sempre aplicáveis (devido processo legal).
+      const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
+      if (constArg && !activeArgIds.includes('ARG-049')) {
+        activeArgIds.push('ARG-049');
+      }
+    } else if (payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0) {
+      activeArgIds = payload.selectedArgumentIds;
+    } else {
+      activeArgIds = procedure.applicableGrounds;
+    }
 
     const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
     const preliminaryArgs = matchedArguments.filter(
@@ -359,6 +379,10 @@ export class DocumentAssemblyEngine {
       appliedArgumentCount: matchedArguments.length,
       procedureName: procedure.name,
       templateCode: template.code,
+      procedureMismatch:
+        payload.analysis && payload.analysis.recommendedProcedure !== payload.procedureType
+          ? true
+          : undefined,
     };
 
     return {

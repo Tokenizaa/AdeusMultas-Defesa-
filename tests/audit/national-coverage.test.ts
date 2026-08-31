@@ -145,13 +145,15 @@ describe('national: versionamento temporal no RuleEngine (validFrom / validUntil
   });
 
   it('Resolução CONTRAN 985/2022 (MBFT) NÃO se aplica a fatos anteriores a 02/01/2023', () => {
-    // Infração sem abordagem em 2021-08-10
+    // Infração sem abordagem em 2021-08-10 (anterioir à vigência da Res. 985/2022).
+    // FAIL CLOSED: dado de observação presente, porém fato anterior => regra inativa.
     const analysisPreMbft = ExpertRuleEngine.evaluate(
       'case_pre_mbft',
       makeInfraction({
         infractionCode: '736-62',
         autuadorBody: 'DETRAN-SP',
         dateTime: '2021-08-10T14:00:00',
+        hasAgentDetailedObservations: false,
       }),
     );
     const hasMbftPre = analysisPreMbft.detectedInconsistencies.some(
@@ -159,13 +161,14 @@ describe('national: versionamento temporal no RuleEngine (validFrom / validUntil
     );
     expect(hasMbftPre).toBe(false);
 
-    // Infração sem abordagem em 2024-04-10
+    // Infração sem abordagem em 2024-04-10 (posterior à vigência, dado confirma ausência)
     const analysisPosMbft = ExpertRuleEngine.evaluate(
       'case_pos_mbft',
       makeInfraction({
         infractionCode: '736-62',
         autuadorBody: 'DETRAN-SP',
         dateTime: '2024-04-10T14:00:00',
+        hasAgentDetailedObservations: false,
       }),
     );
     const hasMbftPos = analysisPosMbft.detectedInconsistencies.some(

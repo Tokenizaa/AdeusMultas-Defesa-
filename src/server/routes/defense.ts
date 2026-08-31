@@ -6,10 +6,31 @@ import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
 import { caseRepository } from '../db/case-repository';
 import { auditService } from '../services/audit-service';
 import { enrichDefenseWithGemini } from '../gemini';
+import {
+  registerRefinementProvider,
+  runControlledPipeline,
+  permittedTheses,
+} from '../../core/ai/ai-orchestrator';
 import { logger } from '../observability/logger';
 import { CaseDomain } from '../../types';
 
 const router = Router();
+
+// ===== IA Controlada (Fase 6) =====
+// A IA atua SOMENTE como refinadora de prosa sobre a minuta determinística.
+// preserveRegister: registrado uma única vez; o orquestrador valida a saída e
+// descarta o texto de IA se a integridade falhar (mantém a minuta determinística).
+let providerRegistered = false;
+function ensureRefinementProviderRegistered() {
+  if (providerRegistered) return;
+  providerRegistered = true;
+  registerRefinementProvider({
+    refineProse: async (draftText: string) => {
+      return enrichDefenseWithGemini({ petitionText: draftText });
+    },
+  });
+}
+ensureRefinementProviderRegistered();
 
 // Defense Generation & AI Enrichment
 router.post('/api/cases/:id/generate-defense', async (req, res) => {
@@ -69,16 +90,39 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
       defense.factsNarrative = customFacts;
     }
 
-    // Optionally enrich with Gemini AI for superior legal polish
-    const enrichedGemini = await enrichDefenseWithGemini({
-      infraction: domain.infraction,
-      applicant: applicantData,
-      arguments: selectedArgs,
-      procedure: procedureType,
-    });
+    // ===== IA Controlada subordinada ao motor (Fase 6) =====
+    // Fluxo: determinístico -> IA refina prosa -> validador -> final.
+    // IA nunca decide tese; teses derivam da análise (permittedTheses).
+    const analysis = domain.analysis as any;
+    const theses = permittedTheses(analysis).map((a: any) => a.id);
+    // Reforça: a minuta já foi montada pelo RagPipeline com as teses selecionadas;
+    // o orquestrador apenas refina prosa e garante integridade.
+    const pipelineResult = await runControlledPipeline(
+      {
+        analysis: analysis || {
+          recommendedArguments: [],
+          detectedInconsistencies: [],
+          recommendedProcedure: procedureType || domain.serviceType || 'recurso_jari',
+          overallSuccessRate: 50,
+          caseId: domain.id,
+          id: `anl_${Date.now()}`,
+          competentBody: domain.infraction?.autuadorBody || '',
+          summaryReasoning: 'análise indisponível',
+          createdAt: new Date().toISOString(),
+        },
+        draft: defense,
+      },
+      { tone: 'formal_rigorous' }
+    );
 
-    if (enrichedGemini) {
-      defense.fullDraftText = enrichedGemini;
+    defense.fullDraftText = pipelineResult.draft.fullDraftText;
+    // Nunca sobrescrever as teses determinísticas com escolha de IA.
+    defense.selectedArgumentIds = (theses.length ? theses : defense.selectedArgumentIds);
+
+    if (pipelineResult.controlled.reason === 'REFINED_VALID') {
+      logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
+    } else if (pipelineResult.controlled.reason === 'PROVIDER_UNAVAILABLE') {
+      logger.info('system', 'ai_fallback_deterministic', 'ai_fallback_deterministic', 'IA indisponível; minuta determinística mantida.', { caseId: domain.id });
     }
 
     domain.defenseDraft = defense;

@@ -129,4 +129,84 @@ describe('DocumentAssemblyEngine validation', () => {
       expect(result.fullDraftText).toContain(autuador.toUpperCase());
     }
   });
+
+  // ===== Fase 4: composição dirigida pela análise estruturada =====
+
+  it('should derive arguments ONLY from detected rule inconsistencies when analysis is present', () => {
+    const analysis = {
+      id: 'anl_x',
+      caseId: 'case_123',
+      overallSuccessRate: 88,
+      detectedInconsistencies: [
+        {
+          title: 'Termo de sinais psicomotores ausente',
+          description: 'Ausência do Anexo II da Res. 432/2013.',
+          severity: 'alta' as const,
+          legalArgumentId: 'ARG-025',
+          impact: 'Anulação do AIT.',
+        },
+      ],
+      recommendedArguments: [],
+      recommendedProcedure: 'recurso_jari' as const,
+      competentBody: 'DETRAN-SP',
+      summaryReasoning: 'x',
+      createdAt: new Date().toISOString(),
+    };
+    const result = DocumentAssemblyEngine.assemble({
+      ...validPayload,
+      analysis: analysis as any,
+    });
+    expect(result.validation.appliedArgumentCount).toBe(2); // ARG-025 (detectado) + ARG-049 (garantia)
+    expect(result.meritArgumentsText).toContain('SINAIS PSICOMOTORES');
+    expect(result.preliminaryArgumentsText).toContain('DUPLA NOTIFICAÇÃO');
+  });
+
+  it('should flag procedure mismatch when analysis recommends a different procedure', () => {
+    const analysis = {
+      id: 'anl_y',
+      caseId: 'case_123',
+      overallSuccessRate: 94,
+      detectedInconsistencies: [
+        {
+          title: 'Conversão em advertência',
+          description: 'Infração leve sem reincidência.',
+          severity: 'alta' as const,
+          legalArgumentId: 'ARG-051',
+          impact: 'Isenção.',
+        },
+      ],
+      recommendedArguments: [],
+      recommendedProcedure: 'conversao_advertencia' as const,
+      competentBody: 'DETRAN-SP',
+      summaryReasoning: 'y',
+      createdAt: new Date().toISOString(),
+    };
+    const result = DocumentAssemblyEngine.assemble({
+      ...validPayload,
+      procedureType: 'recurso_jari' as const,
+      analysis: analysis as any,
+    });
+    expect(result.validation.procedureMismatch).toBe(true);
+  });
+
+  it('should not invent arguments when analysis detects no inconsistencies', () => {
+    const analysis = {
+      id: 'anl_z',
+      caseId: 'case_123',
+      overallSuccessRate: 35,
+      detectedInconsistencies: [],
+      recommendedArguments: [],
+      recommendedProcedure: 'recurso_jari' as const,
+      competentBody: 'DETRAN-SP',
+      summaryReasoning: 'z',
+      createdAt: new Date().toISOString(),
+    };
+    const result = DocumentAssemblyEngine.assemble({
+      ...validPayload,
+      analysis: analysis as any,
+    });
+    // Sem inconsistências: apenas a garantia constitucional entra, nada inventado.
+    expect(result.validation.appliedArgumentCount).toBe(1);
+    expect(result.preliminaryArgumentsText).toContain('DUPLA NOTIFICAÇÃO');
+  });
 });

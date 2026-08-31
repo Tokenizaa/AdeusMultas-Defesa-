@@ -370,11 +370,11 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
 // E2E Test Endpoints
 router.get('/admin/e2e-tests/stats', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient() as any;
     
     // Get counts from relevant tables
     const [usersCount, casesCount, runsCount] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact' }),
+      supabase.from('user_profiles').select('id', { count: 'exact' }),
       supabase.from('cases').select('id', { count: 'exact' }),
       supabase.from('e2e_test_runs').select('id', { count: 'exact' }),
     ]);
@@ -406,7 +406,7 @@ router.get('/admin/e2e-tests/stats', async (req, res) => {
 
 router.get('/admin/e2e-tests/runs', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient() as any;
     const { data: runs, error } = await supabase
       .from('e2e_test_runs')
       .select('*')
@@ -423,8 +423,11 @@ router.get('/admin/e2e-tests/runs', async (req, res) => {
 
 router.post('/admin/e2e-tests/run', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
-    const { services, triggeredBy, isFailedOnly } = req.body;
+    // ponytail: client tipado não inclui e2e_test_runs (migração 20260830000001).
+    // Cast local de ferramenta admin; regenerar types remove.
+    const supabase = getSupabaseServerClient() as any;
+    const { services, triggeredBy } = req.body;
+    const runId = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     
     // Create a new test run record
     const { data: runData, error: runError } = await supabase
@@ -461,7 +464,7 @@ res.json({
 });
 router.get('/admin/e2e-tests/run/:id', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient() as any;
     const { id } = req.params;
     
     const { data: run, error } = await supabase
