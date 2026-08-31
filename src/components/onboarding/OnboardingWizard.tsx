@@ -494,6 +494,14 @@ const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseA
       onCaseReadyForCheckout(finalCase);
       return;
     }
+    // FIX pós-pagamento: o caso retornado tem `currentStage=3` + `defenseDraft`
+    // pronto, mas o estado global `cases` do App.tsx ainda contém a versão
+    // antiga (currentStage=2) carregada em `loadCases()` antes do pagamento.
+    // Sem emitir o evento, o `CaseDetailView` recebe um `currentCase`
+    // obsoleto via prop e cai na Etapa 2 (Teses CTB) em vez da Etapa 3
+    // (Minuta A4). `emitCasesChanged` dispara `loadCases()` no App.tsx,
+    // sincronizando `cases` + `activeCase` antes do navigate.
+    emitCasesChanged();
     navigate(`/cases/${finalCase.id}`);
   };
 

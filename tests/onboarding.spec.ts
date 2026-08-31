@@ -108,14 +108,14 @@ async function completeSteps1to4(page: Page) {
   await page.click('#category-card-excesso_velocidade');
   await waitForStep(page, 4); // Now goes to step 4 (infraction identification) (auto-advanced)
 
-  // Step 4: fill infraction identification
+  // Step 4: fill infraction identification (UI refatorada — sem `input-autuador-body`;
+  // `autuadorBody` é resolvido pela categoria no backend)
   await fillInput(page, 'input-lead-name', testUser.name);
   await fillInput(page, 'input-lead-phone', testUser.phone);
   await fillInput(page, 'input-ait-number', testInfraction.aitNumber);
   await fillInput(page, 'input-vehicle-plate', testVehicle.plate);
   await selectNativeOption(page, 'input-infraction-code', testInfraction.infractionCode);
-  await selectNativeOption(page, 'input-autuador-body', testInfraction.autuadorBody);
-  await fillInput(page, 'input-datetime', testInfraction.dateTime);
+  await fillInput(page, 'input-location', 'Av. Paulista, 1000 - São Paulo/SP');
 
   await page.click('#btn-next-to-specifics');
   await waitForStep(page, 5); // Now goes to step 5 (specific infraction data)
@@ -163,13 +163,13 @@ test.describe('Onboarding Flow - E2E', () => {
     await page.click('#category-card-excesso_velocidade');
     await waitForStep(page, 4); // Now at step 4: infraction identification (auto-advanced)
 
-    // Step 4: fill identification form
+    // Step 4: fill identification form (UI refatorada — sem `input-autuador-body`)
     await fillInput(page, 'input-lead-name', testUser.name);
     await fillInput(page, 'input-lead-phone', testUser.phone);
     await fillInput(page, 'input-ait-number', testInfraction.aitNumber);
     await fillInput(page, 'input-vehicle-plate', testVehicle.plate);
     await selectNativeOption(page, 'input-infraction-code', testInfraction.infractionCode);
-    await selectNativeOption(page, 'input-autuador-body', testInfraction.autuadorBody);
+    await fillInput(page, 'input-location', 'Av. Paulista, 1000 - São Paulo/SP');
 
     const nextBtn = page.locator('#btn-next-to-specifics');
     await expect(nextBtn).toBeEnabled();
@@ -241,7 +241,7 @@ test.describe('Onboarding Flow - E2E', () => {
     await fillInput(page, 'input-ait-number', testInfraction.aitNumber);
     await fillInput(page, 'input-vehicle-plate', testVehicle.plate);
     await selectNativeOption(page, 'input-infraction-code', testInfraction.infractionCode);
-    await selectNativeOption(page, 'input-autuador-body', testInfraction.autuadorBody);
+    await fillInput(page, 'input-location', 'Av. Paulista, 1000 - São Paulo/SP');
     await page.click('#btn-next-to-specifics');
     await waitForStep(page, 5);
     await expect(page.locator(TEST_FILL_BTN)).not.toBeVisible();
@@ -273,12 +273,12 @@ test.describe('Onboarding Flow - E2E', () => {
     await fillInput(page, 'input-ait-number', testInfraction.aitNumber);
     await expect(nextBtn).toBeDisabled();
 
-    // + infraction code (still missing autuador)
+    // + infraction code (still missing location)
     await selectNativeOption(page, 'input-infraction-code', testInfraction.infractionCode);
     await expect(nextBtn).toBeDisabled();
 
-    // + autuador -> enabled
-    await selectNativeOption(page, 'input-autuador-body', testInfraction.autuadorBody);
+    // + location -> enabled
+    await fillInput(page, 'input-location', 'Av. Paulista, 1000 - São Paulo/SP');
     await expect(nextBtn).toBeEnabled();
   });
 
@@ -404,7 +404,7 @@ test.describe('Onboarding Flow - E2E', () => {
     await waitForStep(page, 4); // Now at step 4: infraction identification (auto-advanced)
 
     // Verify labeled inputs exist on step 4
-    for (const id of ['input-lead-name', 'input-lead-phone', 'input-ait-number', 'input-vehicle-plate', 'input-infraction-code', 'input-autuador-body']) {
+    for (const id of ['input-lead-name', 'input-lead-phone', 'input-ait-number', 'input-vehicle-plate', 'input-infraction-code', 'input-location']) {
       await expect(page.locator(`#${id}`)).toBeVisible();
     }
   });
@@ -448,6 +448,78 @@ test.describe('Phase 2 - Document Generation (paid)', () => {
     // Step 10: checkout visible with PIX tab
     await expect(page.locator('button[role="tab"]:has-text("PIX")')).toBeVisible();
     await expect(page.locator('button[role="tab"]:has-text("Cartão")')).toBeVisible();
+  });
+
+  /**
+   * Regression test for the post-payment stage-routing bug:
+   *
+   * Após o pagamento confirmado, o wizard chama `navigate('/cases/:id')`.
+   * Sem emitir `CASES_CHANGED_EVENT` antes do navigate, o estado global
+   * `cases` do App.tsx ficava com a versão pré-pagamento do caso
+   * (`currentStage=2`), e o `CaseDetailView` caía na Etapa 2 (Teses CTB)
+   * em vez da Etapa 3 (Minuta A4) onde o documento já está gerado.
+   *
+   * O fix em `OnboardingWizard.handlePaymentSuccess` adiciona
+   * `emitCasesChanged()` antes do navigate, sincronizando `cases` e
+   * `activeCase` para a versão pós-pagamento (`currentStage=3`).
+   *
+   * Esse teste valida que, após simular o pagamento como admin via
+   * "✅ Aprovar Automaticamente", o usuário é redirecionado para a
+   * Etapa 3 (Minuta A4) e visualiza a petição gerada — sem precisar
+   * clicar em "Gerar Defesa" na Etapa 2.
+   */
+  test('Admin payment approval lands user on Stage 3 (Minuta A4), not Stage 2', async ({ page }) => {
+    await forceLocalAuth(page, ADMIN_USER);
+
+    await navigateToOnboarding(page);
+    await completeSteps1to4(page);
+    await fillInput(page, 'input-speed-limit', '60');
+    await fillInput(page, 'input-measured-speed', '73');
+    await page.waitForTimeout(300);
+    await runAnalysisAndWaitResult(page);
+
+    // Step 7 -> Step 8 (admin pula auth gate)
+    await page.click('#btn-proceed-to-document-generation');
+    await waitForStep(page, 8);
+
+    // Step 8: preencher qualificação com dados sintéticos
+    await fillInput(page, 'input-applicant-name', testUser.name);
+    await fillInput(page, 'input-applicant-cpf', testUser.cpf);
+    await fillInput(page, 'input-applicant-cnh', testUser.cnh);
+    await fillInput(page, 'input-cnh-category', 'AB');
+    await fillInput(page, 'input-applicant-email', testUser.email);
+    await fillInput(page, 'input-applicant-phone', testUser.phone);
+    await fillInput(page, 'input-address-street', 'Rua das Flores, 450');
+    await fillInput(page, 'input-address-number', '450');
+    await fillInput(page, 'input-address-neighborhood', 'Vila Madalena');
+    await fillInput(page, 'input-address-zipcode', '01234-567');
+    await fillInput(page, 'input-address-citystate', 'São Paulo/SP');
+    await page.click('#btn-next-to-review');
+    await waitForStep(page, 9);
+
+    // Step 9 -> Step 10 (checkout)
+    await page.click('#btn-proceed-to-checkout');
+    await waitForStep(page, 10);
+
+    // Step 10: como admin + testMode ativo, facilitator toolbar fica visível.
+    // "✅ Aprovar Automaticamente" finaliza o pagamento sem depender de PIX/webhook.
+    const directApproveBtn = page.locator('#btn-admin-direct-approve');
+    await expect(directApproveBtn).toBeVisible();
+    await directApproveBtn.click();
+
+    // Após pagamento, wizard navega para /cases/:id e o usuário deve cair
+    // DIRETO na Etapa 3 (Minuta A4), com a petição renderizada.
+    await page.waitForURL(/\/cases\//, { timeout: 30000 });
+
+    // ❌ REGRESSÃO: NÃO pode cair na Etapa 2 (Teses CTB), que exige
+    // clique em "Gerar Nova Defesa" para efetivamente gerar o documento.
+    await expect(page.locator('button:has-text("Gerar Nova Defesa")')).not.toBeVisible();
+
+    // ✅ FIX: cai na Etapa 3 (Minuta A4), com o cabeçalho "Petição Pronta"
+    // e o timbre oficial visíveis — sem interação humana adicional.
+    await expect(page.locator('text=Petição Pronta (52 Blocos CTB)')).toBeVisible();
+    await expect(page.locator('text=REPÚBLICA FEDERATIVA DO BRASIL')).toBeVisible();
+    await expect(page.locator('text=Minuta A4')).toBeVisible();
   });
 
   test('PIX payment screen loads QR code (requires live PagBank)', async ({ page }) => {

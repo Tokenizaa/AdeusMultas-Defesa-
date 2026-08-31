@@ -9167,21 +9167,34 @@ var CommercialRepository = class {
     if (pricingsError) {
       this.warn("pricings", "loadAll", pricingsError.message);
     } else if (pricings && pricings.length > 0) {
-      this._pricings = pricings.map((p) => ({
-        id: p.id || `price_${p.service_type}`,
-        serviceType: p.service_type,
-        serviceName: p.service_name || p.service_type,
-        description: p.description,
-        standardPrice: p.standard_price > 1e3 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
-        promotionalPrice: p.promotional_price !== null && p.promotional_price !== void 0 ? p.promotional_price > 1e3 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)) : null,
-        isActive: p.is_active ?? true,
-        validFrom: p.valid_from,
-        validUntil: p.valid_until,
-        history: p.history ?? [],
-        updatedAt: p.updated_at,
-        updatedBy: p.updated_by
-      }));
-      logger.info("supabase", "commercial_repository", "loadAll", `Pricings carregados: ${this._pricings.length}`, {
+      const dbPricings = new Map(pricings.map((p) => [
+        p.service_type,
+        {
+          id: p.id || `price_${p.service_type}`,
+          serviceType: p.service_type,
+          serviceName: p.service_name || p.service_type,
+          description: p.description,
+          standardPrice: p.standard_price > 1e3 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
+          promotionalPrice: p.promotional_price !== null && p.promotional_price !== void 0 ? p.promotional_price > 1e3 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)) : null,
+          isActive: p.is_active ?? true,
+          validFrom: p.valid_from,
+          validUntil: p.valid_until,
+          history: p.history ?? [],
+          updatedAt: p.updated_at,
+          updatedBy: p.updated_by
+        }
+      ]));
+      this._pricings = DEFAULT_CANONICAL_PRICINGS.map((d) => {
+        const db = dbPricings.get(d.serviceType);
+        if (db) return db;
+        return d;
+      });
+      for (const [serviceType, db] of dbPricings) {
+        if (!DEFAULT_CANONICAL_PRICINGS.some((d) => d.serviceType === serviceType)) {
+          this._pricings.push(db);
+        }
+      }
+      logger.info("supabase", "commercial_repository", "loadAll", `Pricings carregados: ${this._pricings.length} (merged with defaults)`, {
         count: this._pricings.length
       });
     }
