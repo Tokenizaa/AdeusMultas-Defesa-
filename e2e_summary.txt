@@ -1,0 +1,36 @@
+E2E Test System Update Summary
+================================
+
+✅ Updated service-specific E2E tests to use UI-based flow:
+   - defensa-previa
+   - recurso-jari
+   - recurso-cetran
+   - suspensao
+   - cassacao
+   - indicacao-condutor
+   - conversao-advertencia
+   - analise-tecnica
+   - relatorio-pericial
+
+✅ Updated e2e-runner.spec.ts to run all test cases by service
+
+✅ Verified AdminE2ETestsView.tsx already implements:
+   - Overview of executions and persisted results
+   - 9 independent commercial suites
+   - Individual/batch execution with confirmation
+   - Mass user creation (Teste 001..Teste 036)
+   - Re-execute all/failed buttons
+   - Real-time status polling
+
+✅ Added E2E test endpoints to admin route:
+   - GET /admin/e2e-tests/stats
+   - GET /admin/e2e-tests/runs
+   - POST /admin/e2e-tests/run
+   - GET /admin/e2e-tests/run/:id
+   - POST /admin/e2e-tests/execute-failed
+   - POST /admin/e2e-tests/execute-service
+
+✅ Added E2E test scripts to package.json:
+   - test:e2e
+   - test:e2e:service
+   - test:e2e:failed

@@ -41,6 +41,10 @@ Thumbs.db
 # Secrets (NEVER commit)
 env_*.md
 *Zone.Identifier
+.env.vercel-*
+count_profiles.js
+count_supabase.js
+test_profiles.js
 
 # Runtime / temp artifacts
 server.pid
@@ -57,3 +61,4 @@ test-results/
 # Screenshots
 screenshots/
 /*.png
+.env*.local

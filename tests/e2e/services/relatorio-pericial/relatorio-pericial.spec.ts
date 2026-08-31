@@ -1,35 +1,74 @@
 import { test, expect } from '@playwright/test';
-import { TestUserFactory } from '../../fixtures/user.factory';
-import { TestCaseFactory } from '../../fixtures/case.factory';
-import { executeDeterministicE2EVerification } from '../../helpers/documents';
+import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../e2e-infrastructure';
+import { executeOnboardingFlow, TestCaseData } from '../../e2e-onboarding-executor';
+import { E2EValidator, ValidationResult } from '../../e2e-validator';
 
 test.describe('Suíte E2E: Relatório Técnico Pericial de Engenharia e Radar', () => {
-  test('Cenário 1: Laudo pericial metrológico com aferição vencida INMETRO (Teste 033)', async () => {
-    const user = TestUserFactory.create(33);
-    const scenario = TestCaseFactory.createScenario('relatorio-pericial', 1, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-    expect(result.audit.crossContaminationDetected).toBe(false);
+  let testManager: E2ETestManager;
+  let validator: E2EValidator;
+  const testUsers: TestUser[] = [];
+  const testCases: TestCase[] = [];
+
+  test.beforeAll(async () => {
+    // Initialize test manager
+    testManager = await getE2ETestManager();
+    validator = new E2EValidator();
+    
+    // Get all test users and cases for relatorio-pericial
+    const allUsers = await testManager.getTestUsers();
+    const allCases = await testManager.getTestCases();
+    
+    testUsers.push(...allUsers.filter(u => u.serviceType === 'relatorio_pericial'));
+    testCases.push(...allCases.filter(c => c.serviceType === 'relatorio_pericial'));
+    
+    console.log(`[Relatório Pericial] Found ${testUsers.length} users and ${testCases.length} test cases`);
   });
 
-  test('Cenário 2: Perícia de distância de placa R-19 Resolução 798 (Teste 034)', async () => {
-    const user = TestUserFactory.create(34);
-    const scenario = TestCaseFactory.createScenario('relatorio-pericial', 2, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+  // Create a test for each user/case (at least 4 per service)
+  for (const testCase of testCases.slice(0, Math.max(4, testCases.length))) {
+    test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType}) - User ${testCase.id.slice(0, 8)}`, async ({ page }) => {
+      // Find the corresponding user
+      const user = testUsers.find(u => u.id === testCase.userId);
+      if (!user) {
+        throw new Error(`User not found for case ${testCase.id}`);
+      }
 
-  test('Cenário 3: Laudo de semáforo eletrônico com tempo de amarelo irregular (Teste 035)', async () => {
-    const user = TestUserFactory.create(35);
-    const scenario = TestCaseFactory.createScenario('relatorio-pericial', 3, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Convert to TestCaseData format
+      const testCaseData: TestCaseData = {
+        id: testCase.id,
+        userId: testCase.userId,
+        email: user.email,
+        password: user.password,
+        serviceType: testCase.serviceType,
+        scenario: testCase.scenario,
+        procedureType: testCase.procedureType,
+        infraction: testCase.infraction,
+        vehicle: testCase.vehicle,
+        applicant: testCase.applicant,
+        testRunId: TEST_RUN_ID,
+      };
 
-  test('Cenário 4: Perícia em rodovia federal DNIT com múltiplos sensores (Teste 036)', async () => {
-    const user = TestUserFactory.create(36);
-    const scenario = TestCaseFactory.createScenario('relatorio-pericial', 4, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Execute onboarding flow
+      console.log(`[${TEST_RUN_ID}] Running onboarding for ${testCase.serviceType}-${testCase.scenario}...`);
+      const executionResult = await executeOnboardingFlow(page, testCaseData);
+
+      // Validate results against database
+      console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
+      const validationResult = await validator.validateCase(testCase);
+
+      // Combine results
+      const combinedResult = {
+        ...validationResult,
+        execution: executionResult,
+      };
+
+      // Save intermediate evidence
+      await testManager.saveEvidence(`relatorio-pericial-${testCase.id}-result.json`, combinedResult);
+
+      // Assert overall pass
+      expect(combinedResult.overall).toBe('PASS');
+      
+      console.log(`[${TEST_RUN_ID}] Case ${testCase.id}: ${combinedResult.overall}`);
+    });
+  }
 });

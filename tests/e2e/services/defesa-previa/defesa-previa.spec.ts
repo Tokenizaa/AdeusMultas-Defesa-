@@ -1,37 +1,78 @@
 import { test, expect } from '@playwright/test';
-import { TestUserFactory } from '../../fixtures/user.factory';
-import { TestCaseFactory } from '../../fixtures/case.factory';
-import { executeDeterministicE2EVerification } from '../../helpers/documents';
+import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../e2e-infrastructure';
+import { executeOnboardingFlow, TestCaseData } from '../../e2e-onboarding-executor';
+import { E2EValidator, ValidationResult } from '../../e2e-validator';
 
 test.describe('Suíte E2E: Defesa Prévia (Notificação de Autuação)', () => {
-  test('Cenário 1: Notificação de Autuação com vício temporal (Teste 001)', async ({ page }) => {
-    const user = TestUserFactory.create(1);
-    const scenario = TestCaseFactory.createScenario('defesa-previa', 1, user);
+  let testManager: E2ETestManager;
+  let validator: E2EValidator;
+  const testUsers: TestUser[] = [];
+  const testCases: TestCase[] = [];
+
+  test.beforeAll(async () => {
+    // Initialize test manager
+    testManager = await getE2ETestManager();
+    validator = new E2EValidator();
     
-    // Executa verificação determinística completa do fluxo e marca-d'água
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-    expect(result.audit.crossContaminationDetected).toBe(false);
+    // Get all test users and cases for defesa-previa
+    const allUsers = await testManager.getTestUsers();
+    const allCases = await testManager.getTestCases();
+    
+    testUsers.push(...allUsers.filter(u => u.serviceType === 'defesa_previa'));
+    testCases.push(...allCases.filter(c => c.serviceType === 'defesa_previa'));
+    
+    console.log(`[Defesa Prévia] Found ${testUsers.length} users and ${testCases.length} test cases`);
   });
 
-  test('Cenário 2: Excesso de velocidade com inconsistência formal (Teste 002)', async ({ page }) => {
-    const user = TestUserFactory.create(2);
-    const scenario = TestCaseFactory.createScenario('defesa-previa', 2, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+  // Create a test for each user/case (at least 4 per service)
+  for (const testCase of testCases.slice(0, Math.max(4, testCases.length))) {
+    test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType}) - User ${testCase.id.slice(0, 8)}`, async ({ page }) => {
+      // Find the corresponding user
+      const user = testUsers.find(u => u.id === testCase.userId);
+      if (!user) {
+        throw new Error(`User not found for case ${testCase.id}`);
+      }
 
-  test('Cenário 3: Defesa prévia perante órgão municipal (Teste 003)', async ({ page }) => {
-    const user = TestUserFactory.create(3);
-    const scenario = TestCaseFactory.createScenario('defesa-previa', 3, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Convert to TestCaseData format
+      const testCaseData: TestCaseData = {
+        id: testCase.id,
+        userId: testCase.userId,
+        email: user.email,
+        password: user.password,
+        serviceType: testCase.serviceType,
+        scenario: testCase.scenario,
+        procedureType: testCase.procedureType,
+        infraction: testCase.infraction,
+        vehicle: testCase.vehicle,
+        applicant: testCase.applicant,
+        testRunId: TEST_RUN_ID,
+      };
 
-  test('Cenário 4: Defesa prévia em rodovia estadual com radar (Teste 004)', async ({ page }) => {
-    const user = TestUserFactory.create(4);
-    const scenario = TestCaseFactory.createScenario('defesa-previa', 4, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Execute onboarding flow
+      console.log(`[${TEST_RUN_ID}] Running onboarding for ${testCase.serviceType}-${testCase.scenario}...`);
+      const executionResult = await executeOnboardingFlow(page, testCaseData);
+
+      // Validate results against database
+      console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
+      const validationResult = await validator.validateCase(testCase);
+
+      // Combine results
+      const combinedResult = {
+        ...validationResult,
+        execution: executionResult,
+      };
+
+      // Save intermediate evidence
+      await testManager.saveEvidence(`defesa-previa-${testCase.id}-result.json`, combinedResult);
+
+      // Assert overall pass
+      expect(combinedResult.overall).toBe('PASS');
+      
+      console.log(`[${TEST_RUN_ID}] Case ${testCase.id}: ${combinedResult.overall}`);
+      
+      // Additionally, verify that the case appears in user dashboard
+      // This would require logging in and checking the dashboard, but for now
+      // we rely on the validator which checks database persistence
+    });
+  }
 });

@@ -9,6 +9,12 @@ export interface InfractionCatalogItem {
   fineAmount: number;
   typicalFlaws: string[];
   recommendedArgumentCodes: string[];
+  // Versioning and source tracking
+  validFrom?: string; // ISO date 'YYYY-MM-DD'
+  validUntil?: string | null; // null = vigente
+  sourceId?: string; // reference to knowledge source
+  contentHash?: string; // hash of the source content
+  version?: number; // version number of this item
 }
 
 export interface AutuadorBodyInfo {
@@ -33,6 +39,12 @@ export const INFRACTION_CATALOG: InfractionCatalogItem[] = [
     fineAmount: 130.16,
     typicalFlaws: ['Aferição do radar vencida (+12 meses)', 'Falta de placa R-19 de velocidade', 'Notificação expedida após 30 dias', 'Margem de erro INMETRO não deduzida'],
     recommendedArgumentCodes: ['ARG-001', 'ARG-002', 'ARG-003', 'ARG-008'],
+     // Versioning and source tracking
+     validFrom: '1998-01-22',
+     validUntil: null,
+     sourceId: 'MANUAL',
+     contentHash: '',
+     version: 1,
   },
   {
     code: '746-30',

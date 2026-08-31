@@ -58,9 +58,8 @@ const TEST_MATRIX = [
     service: 'multa_transito',
     stage: 'nao_tenho_certeza',
   },
-], {
-  // Suspensao cnh scenarios
   {
+    // Suspensao cnh scenarios
     name: 'suspensao_cnh_lei_seca',
     service: 'suspensao_cnh',
     stage: 'primeira_notificacao',
@@ -72,29 +71,26 @@ const TEST_MATRIX = [
     stage: 'primeira_notificacao',
     category: 'excesso_velocidade',
   },
-}, {
-  // Indicacao condutor scenario
   {
+    // Indicacao condutor scenario
     name: 'indicacao_condutor',
     service: 'indicacao_condutor',
     stage: 'primeira_notificacao',
     category: 'indicacao_condutor',
   },
-}, {
-  // Conversao advertencia scenario
   {
+    // Conversao advertencia scenario
     name: 'conversao_advertencia',
     service: 'conversao_advertencia',
     stage: 'primeira_notificacao',
   },
-}, {
-  // Inferred stage scenario
   {
+    // Inferred stage scenario
     name: 'inferred_stage',
     service: 'multa_transito',
     stage: 'nao_tenho_certeza',
   },
-]);
+];
 
 /**
  * Test the complete onboarding flow for a specific scenario

@@ -89,6 +89,12 @@ export interface LegalArgumentDomain {
   confidenceScore: number; // 0-100
   applicabilityNote: string;
   applicableInfractions?: string[];
+  // Versioning and source tracking
+  validFrom?: string; // ISO date 'YYYY-MM-DD'
+  validUntil?: string | null; // null = vigente
+  sourceId?: string; // reference to knowledge source
+  contentHash?: string; // hash of the source content
+  version?: number; // version number of this item
 }
 
 /**

@@ -52,9 +52,8 @@ test.describe.serial('E2E National Test Suite', () => {
     console.log(`\n========== E2E TEST RUN COMPLETE: ${TEST_RUN_ID} ==========\n`);
   });
 
-  // Run tests for each test case - ALL test cases, not just first 5
-  const testCases = await (await getE2ETestManager()).getTestCases();
-  for (const testCase of testCases) {
+  // Run tests for each test case
+  for (const testCase of (await testManager.getTestCases()).slice(0, 5)) { // Start with 5 for initial run
     test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType})`, async () => {
       const page = await context.newPage();
       

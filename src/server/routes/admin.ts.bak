@@ -267,7 +267,6 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
 // ─────────────────────────────────────────────
 // USERS (user_profiles + sync auth.users via SECURITY DEFINER function)
 // ─────────────────────────────────────────────
-router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabaseServerClient();
     if (!supabase) {
@@ -458,8 +457,7 @@ res.json({
 } catch (error) {
   console.error('Error starting E2E test run:', error);
   res.status(500).json({ error: 'Failed to start test execution' });
-}
-});
+};
 router.get('/admin/e2e-tests/run/:id', async (req, res) => {
   try {
     const supabase = getSupabaseServerClient();

@@ -38,6 +38,10 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
       'Juntar comprovantes e certidões que fundamentem o fato alegado',
     ],
     notes: 'Não é obrigatório pagar a multa para recorrer à JARI (Súmula Vinculante 21 do STF e Art. 284 do CTB).',
+     // Versioning and temporal validity
+     validFrom: '1998-01-22',
+     validUntil: null,
+     version: 1,
   },
   {
     id: 'recurso_cetran',

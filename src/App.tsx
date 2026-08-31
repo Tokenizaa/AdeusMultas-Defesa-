@@ -20,6 +20,7 @@ import { RegisterPageView } from './components/public/RegisterPageView';
 import { UserDashboardView } from './components/user/UserDashboardView';
 import { UserProfileView } from './components/user/UserProfileView';
 import { UserSettingsView } from './components/user/UserSettingsView';
+import { UserServicesView } from './components/user/UserServicesView';
 
 // Existing Product Modules & Functional Views
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
@@ -307,6 +308,9 @@ function AppContent() {
     } else if (currentPath === '/afiliado' || currentPath === '/affiliate') {
       title = 'Programa de Afiliados & Indicações';
       subtitle = 'Ganhe até 17% de comissão em 3 níveis divulgando o DefesAi';
+    } else if (currentPath === '/servicos') {
+      title = 'Valores dos Serviços';
+      subtitle = 'Consulte os valores padrão e promocionais de cada serviço oferecido';
     }
 
     return (

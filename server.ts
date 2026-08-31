@@ -46,6 +46,10 @@ import { logger } from './src/server/observability/logger';
 
 dotenv.config();
 
+// Initialize legislation collectors
+import { contranCollector } from './src/server/services/legislation-collector';
+contranCollector.start();
+
 // Initialize Gemini SDK with User-Agent header as required
 const getGenAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;

@@ -43,6 +43,10 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = [
       'Espelho de verificação do instrumento emitido pelo INMETRO/IPEM',
     ],
     observations: 'A falta de comprovação de calibração retira a presunção de legitimidade e veracidade da medição de velocidade apurada pelo equipamento.',
+     // Versioning and source tracking
+     validFrom: '2020-10-01',
+     validUntil: null,
+     version: 1,
     formattedParagraphs: [
       {
         heading: '1. Da Obrigatoriedade Legal da Verificação Metrológica Anual pelo INMETRO',
@@ -85,6 +89,10 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = [
       'Estudo técnico ou certidão do órgão viário local',
     ],
     observations: 'O Art. 90 do CTB estabelece expressamente a inexigibilidade de sanção por sinalização incorreta ou insuficiente.',
+     // Versioning and source tracking
+     validFrom: '1998-01-22',
+     validUntil: null,
+     version: 1,
     formattedParagraphs: [
       {
         heading: '1. Do Mandamento Legal do Artigo 90 do Código de Trânsito Brasileiro',
@@ -112,11 +120,19 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = [
     relatedJurisprudence: ['TJ-PR; Reexame Necessário 0004512-32.2022.8.16.0004; 4ª Câmara Cível'],
     requiredDocuments: ['Cópia da Notificação de Autuação', 'Petição solicitando exibição do estudo técnico'],
     observations: 'O estudo técnico de velocidade tem validade de 2 anos e deve ser atualizado periodicamente.',
+     // Versioning and source tracking
+     validFrom: '2020-10-01',
+     validUntil: null,
+     version: 1,
     formattedParagraphs: [
       {
         heading: '1. Da Obrigatoriedade de Estudo Técnico de Engenharia Prévio',
         text: 'A instalação e a operação de medidores de velocidade do tipo fixo em vias públicas exigem a prévia elaboração de estudo técnico que comprove a necessidade do controle de velocidade no trecho, demonstrando o índice de acidentes e o potencial de risco à segurança viária (Art. 6º da Resolução CONTRAN nº 798/2020).',
-      },
+      
+    // Versioning and temporal validity
+    validFrom: '2020-10-01',
+    validUntil: null,
+    version: 1,},
       {
         heading: '2. Da Nulidade dos Autos Lavrados por Equipamento sem Amparo Técnico',
         text: 'A inexistência ou a não apresentação do estudo técnico atualizado, devidamente assinado por engenheiro com Anotação de Responsabilidade Técnica (ART), contamina de vício de legalidade a instalação do equipamento e anula todas as autuações dele decorrentes.',

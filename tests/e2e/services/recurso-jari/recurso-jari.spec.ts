@@ -1,35 +1,74 @@
 import { test, expect } from '@playwright/test';
-import { TestUserFactory } from '../../fixtures/user.factory';
-import { TestCaseFactory } from '../../fixtures/case.factory';
-import { executeDeterministicE2EVerification } from '../../helpers/documents';
+import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../e2e-infrastructure';
+import { executeOnboardingFlow, TestCaseData } from '../../e2e-onboarding-executor';
+import { E2EValidator, ValidationResult } from '../../e2e-validator';
 
-test.describe('Suíte E2E: Recurso Ordinário à JARI (1ª Instância)', () => {
-  test('Cenário 1: Recurso JARI contra NIP por falta de aferição metrológica (Teste 005)', async () => {
-    const user = TestUserFactory.create(5);
-    const scenario = TestCaseFactory.createScenario('recurso-jari', 1, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-    expect(result.audit.crossContaminationDetected).toBe(false);
+test.describe('Suíte E2E: Recurso Ordinário à JARI', () => {
+  let testManager: E2ETestManager;
+  let validator: E2EValidator;
+  const testUsers: TestUser[] = [];
+  const testCases: TestCase[] = [];
+
+  test.beforeAll(async () => {
+    // Initialize test manager
+    testManager = await getE2ETestManager();
+    validator = new E2EValidator();
+    
+    // Get all test users and cases for recurso-jari
+    const allUsers = await testManager.getTestUsers();
+    const allCases = await testManager.getTestCases();
+    
+    testUsers.push(...allUsers.filter(u => u.serviceType === 'recurso_jari'));
+    testCases.push(...allCases.filter(c => c.serviceType === 'recurso_jari'));
+    
+    console.log(`[Recurso JARI] Found ${testUsers.length} users and ${testCases.length} test cases`);
   });
 
-  test('Cenário 2: Recurso JARI contra autuação grave estadual (Teste 006)', async () => {
-    const user = TestUserFactory.create(6);
-    const scenario = TestCaseFactory.createScenario('recurso-jari', 2, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+  // Create a test for each user/case (at least 4 per service)
+  for (const testCase of testCases.slice(0, Math.max(4, testCases.length))) {
+    test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType}) - User ${testCase.id.slice(0, 8)}`, async ({ page }) => {
+      // Find the corresponding user
+      const user = testUsers.find(u => u.id === testCase.userId);
+      if (!user) {
+        throw new Error(`User not found for case ${testCase.id}`);
+      }
 
-  test('Cenário 3: Recurso JARI com pedido de efeito suspensivo Art. 285 §3º (Teste 007)', async () => {
-    const user = TestUserFactory.create(7);
-    const scenario = TestCaseFactory.createScenario('recurso-jari', 3, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Convert to TestCaseData format
+      const testCaseData: TestCaseData = {
+        id: testCase.id,
+        userId: testCase.userId,
+        email: user.email,
+        password: user.password,
+        serviceType: testCase.serviceType,
+        scenario: testCase.scenario,
+        procedureType: testCase.procedureType,
+        infraction: testCase.infraction,
+        vehicle: testCase.vehicle,
+        applicant: testCase.applicant,
+        testRunId: TEST_RUN_ID,
+      };
 
-  test('Cenário 4: Recurso JARI em autuação municipal com ausência de sinalização (Teste 008)', async () => {
-    const user = TestUserFactory.create(8);
-    const scenario = TestCaseFactory.createScenario('recurso-jari', 4, user);
-    const result = executeDeterministicE2EVerification(scenario);
-    expect(result.audit.integrityScorePercent).toBe(100);
-  });
+      // Execute onboarding flow
+      console.log(`[${TEST_RUN_ID}] Running onboarding for ${testCase.serviceType}-${testCase.scenario}...`);
+      const executionResult = await executeOnboardingFlow(page, testCaseData);
+
+      // Validate results against database
+      console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
+      const validationResult = await validator.validateCase(testCase);
+
+      // Combine results
+      const combinedResult = {
+        ...validationResult,
+        execution: executionResult,
+      };
+
+      // Save intermediate evidence
+      await testManager.saveEvidence(`recurso-jari-${testCase.id}-result.json`, combinedResult);
+
+      // Assert overall pass
+      expect(combinedResult.overall).toBe('PASS');
+      
+      console.log(`[${TEST_RUN_ID}] Case ${testCase.id}: ${combinedResult.overall}`);
+    });
+  }
 });

@@ -1,5 +1,6 @@
 /**
  * OCR Service — Multi-provider OCR with intelligent traffic ticket parsing
+ * Enhanced version with improved verification according to standard nomenclature
  *
  * Providers (in priority order):
  * 1. OCR.space — FREE tier: 25,000 requests/month, no credit card
@@ -7,6 +8,13 @@
  * 3. Tesseract fallback (self-hosted, optional)
  *
  * Specialized for Brazilian traffic tickets (AIT — Auto de Infração de Trânsito)
+ * 
+ * Improvements:
+ * - Enhanced pattern matching for Brazilian traffic ticket nomenclature
+ * - Field-level validation and confidence scoring
+ * - Cross-validation between related fields
+ * - Improved infraction code database
+ * - Better date validation and formatting
  */
 
 import { logger } from '../observability/logger';
@@ -40,6 +48,13 @@ export interface ExtractedTicketData {
   equipamentoRadar?: string;
   dataAfericao?: string;
   prazoDefesa?: string;
+  // Enhanced fields for verification
+  confiancaPlaca?: number;
+  confiancaCodigoInfracao?: number;
+  confiancaDataInfracao?: number;
+  confiancaValorMulta?: number;
+  validacaoVelocidade?: boolean;
+  observacoesValidacao?: string[];
 }
 
 export interface OcrProviderConfig {
@@ -50,32 +65,80 @@ export interface OcrProviderConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Brazilian Traffic Ticket Regex Patterns
+// Enhanced Brazilian Traffic Ticket Regex Patterns
 // ---------------------------------------------------------------------------
 
-const PLATE_PATTERN = /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g;
-const AIT_PATTERN = /\b(?:AIT|Nº?|N°|Numero|NÚMERO)[:\s]*(\d{4,12})\b/i;
-const CODE_PATTERN = /\b(?:Código|Artigo|Art)\.?\s*(\d{3}-\d{2})\b/i;
-const CTB_ARTICLE_PATTERN = /\bArt\.?\s*(\d{1,3}(?:\.\d{2})?)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)?/gi;
-const VALUE_PATTERN = /R\$\s*([\d.,]+)/g;
-const DATE_PATTERN = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/g;
-const SPEED_PATTERN = /(\d{2,3})\s*km\/?h/gi;
+const PLATE_PATTERNS = [
+  // Mercosul format: ABC1D23
+  /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g,
+  // Old format: ABC-1234
+  /[A-Z]{3}-?\d{4}/g,
+  // With possible OCR errors
+  /[A-Z]{3}[\s\-]?[0-9O][A-Z0-9][\s\-]?[0-9]{2}/g
+];
+
+const AIT_PATTERNS = [
+  /\b(?:AIT|Nº?|N°|Numero|NÚMERO|Auto[.\s]*Infra[çc][aã]o)[:\s]*(\d{4,12})\b/i,
+  /\b(?:Processo|PROCESSO)[:\s]*(\d{4,12})\b/i,
+  /\b(\d{4,6}[-.]?\d{2,4}[-.]?\d{2,4})\b/ // Generic numeric ID
+];
+
+const CODE_PATTERNS = [
+  /\b(?:Código|CODIGO|Artigo|ARTIGO|Art)\.?\s*(\d{3}-\d{2})\b/i,
+  /\bInfra[çc][aã]o\s*:?\s*(\d{3}-\d{2})\b/i,
+  /\b(\d{3}-\d{2})(?:\s*[-\/]\s*|\s*\(\s*)/ // Code followed by dash or parenthesis
+];
+
+const CTB_ARTICLE_PATTERNS = [
+  /\bArt\.?\s*(\d{1,3}(?:\.\d{2})?)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)/gi,
+  /\b(\d{1,3}(?:\.\d{2})?)\s*(?:artigo|ARTIGO)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)/gi
+];
+
+const VALUE_PATTERNS = [
+  /R\$\s*([\d.,]+)/g,
+  /Valor\s*:?\s*R?\$?\s*([\d.,]+)/i,
+  /multa\s*:?\s*R?\$?\s*([\d.,]+)/i
+];
+
+const DATE_PATTERNS = [
+  /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/g,
+  /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g, // YYYY-MM-DD format
+  /(\d{1,2})\s+de\s+de\s+de\s+(\d{4})/i // DD de MM de YYYY
+];
+
+const SPEED_PATTERNS = [
+  /(\d{2,3})\s*km\/?h/gi,
+  /(\d{2,3})\s*quilometros\s*por\s*hora/gi,
+  /Velocidade[:\s]*(\d{2,3})\s*km\/h/i
+];
+
 const RENAVAM_PATTERN = /\bRENAVAM[:\s]*(\d{9,11})\b/i;
 
-const INFRACAO_CODES: Record<string, { description: string; article: string; severity: string }> = {
-  '518-10': { description: 'Dirigir veículos automotores ou reboques com dimensões acima dos limites', article: 'Art. 203', severity: 'média' },
-  '745-50': { description: 'Velocidade acima da permitida em até 20 km/h', article: 'Art. 218, I', severity: 'leve' },
-  '745-51': { description: 'Velocidade acima da permitida de 21 a 50 km/h', article: 'Art. 218, II', severity: 'média' },
-  '745-52': { description: 'Velocidade acima da permitida acima de 50 km/h', article: 'Art. 218, III', severity: 'gravíssima' },
-  '516-91': { description: 'Conduzir veículo sob influência de álcool ou substância psicoativa', article: 'Art. 165', severity: 'gravíssima' },
-  '736-62': { description: 'Utilizar equipamento de telefonia celular durante a direção', article: 'Art. 218, IV', severity: 'média' },
-  '605-01': { description: 'Não respeitar a sinalização semafórica', article: 'Art. 208', severity: 'média' },
-  '746-10': { description: 'Ultrapassar faixa dupla contínua', article: 'Art. 199', severity: 'média' },
-  '746-30': { description: 'Avançar o sinal vermelho do semáforo', article: 'Art. 208', severity: 'média' },
-  '752-20': { description: 'Estacionar em local proibido', article: 'Art. 181, IX', severity: 'leve' },
-  '753-30': { description: 'Utilizar calçada para estacionamento', article: 'Art. 181, XI', severity: 'média' },
-  '761-80': { description: 'Deixar de usar cinto de segurança', article: 'Art. 196', severity: 'leve' },
-  '593-70': { description: 'Transitar em可达velocidade incompatível com a segurança', article: 'Art. 198', severity: 'média' },
+// Enhanced infraction code database with more codes and better structure
+const INFRACAO_CODES: Record<string, { 
+  description: string; 
+  article: string; 
+  severity: string;
+  points: number;
+  isSpeedRelated: boolean;
+  typicalSpeedRange?: { min: number; max: number };
+}> = {
+  '518-10': { description: 'Dirigir veículos automotores ou reboques com dimensões acima dos limites', article: 'Art. 203', severity: 'média', points: 0, isSpeedRelated: false },
+  '745-50': { description: 'Velocidade acima da permitida em até 20%', article: 'Art. 218, I', severity: 'leve', points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 20 } },
+  '745-51': { description: 'Velocidade acima da permitida de 21% a 50%', article: 'Art. 218, II', severity: 'média', points: 5, isSpeedRelated: true, typicalSpeedRange: { min: 21, max: 50 } },
+  '745-52': { description: 'Velocidade acima da permitida acima de 50%', article: 'Art. 218, III', severity: 'gravíssima', points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
+  '516-91': { description: 'Conduzir veículo sob influência de álcool ou substância psicoativa', article: 'Art. 165', severity: 'gravíssima', points: 7, isSpeedRelated: false },
+  '736-62': { description: 'Utilizar equipamento de telefonia celular durante a direção', article: 'Art. 252, Parágrafo Único', severity: 'média', points: 4, isSpeedRelated: false },
+  '605-01': { description: 'Não respeitar a sinalização semafórica', article: 'Art. 208', severity: 'média', points: 4, isSpeedRelated: false },
+  '746-10': { description: 'Ultrapassar faixa dupla contínua', article: 'Art. 199', severity: 'média', points: 4, isSpeedRelated: false },
+  '746-30': { description: 'Avançar o sinal vermelho do semáforo', article: 'Art. 208', severity: 'média', points: 5, isSpeedRelated: false },
+  '752-20': { description: 'Estacionar em local proibido', article: 'Art. 181, IX', severity: 'leve', points: 0, isSpeedRelated: false },
+  '753-30': { description: 'Utilizar calçada para estacionamento', article: 'Art. 181, XI', severity: 'média', points: 2, isSpeedRelated: false },
+  '761-80': { description: 'Deixar de usar cinto de segurança', article: 'Art. 196', severity: 'leve', points: 0, isSpeedRelated: false },
+  '593-70': { description: 'Transitar em velocidade incompatível com a segurança', article: 'Art. 198', severity: 'média', points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 100 } },
+  '516-92': { description: 'Conduzir veículo com concentração de álcool por decilitro de sangue igual ou superior a 0,06 gram', article: 'Art. 165 do CTB', severity: 'gravíssima', points: 7, isSpeedRelated: false },
+  '747-10': { description: 'Velocidade acima da permitida em mais de 50% (factor multiplicador)', article: 'Art. 218, III', severity: 'gravíssima', points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
+  '748-90': { description: 'Fugir da blitz policial', article: 'Art. 311', severity: 'gravíssima', points: 7, isSpeedRelated: false }
 };
 
 // ---------------------------------------------------------------------------
@@ -195,49 +258,297 @@ async function callGoogleVision(
 }
 
 // ---------------------------------------------------------------------------
-// Ticket Parser — Extract structured data from raw OCR text
+// Enhanced Ticket Parser — Extract structured data from raw OCR text
 // ---------------------------------------------------------------------------
+
+function extractWithPatterns(text: string, patterns: RegExp[]): string[] {
+  let results: string[] = [];
+  for (const pattern of patterns) {
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length > 0) {
+      results = matches.map(m => m[1]).filter(Boolean);
+      if (results.length > 0) break;
+    }
+  }
+  return results;
+}
+
+function validatePlaca(placa: string): { isValid: boolean; confidence: number } {
+  // Remove non-alphanumeric characters and convert to uppercase
+  const cleanPlaca = placa.replace(/[^A-Z0-9]/g, '').toUpperCase();
+  
+  // Mercosul pattern: AAA1A23
+  const mercosulPattern = /^[A-Z]{3}\d[A-Z]\d{2}$/;
+  // Old pattern: AAA-1234 or AAA1234
+  const oldPattern = /^[A-Z]{3}\d{4}$/;
+  
+  if (mercosulPattern.test(cleanPlaca) || oldPattern.test(cleanPlaca)) {
+    return { isValid: true, confidence: 95 };
+  }
+  
+  // Check for common OCR errors
+  if (/^[A-Z]{3}[0-9O][A-Z0-9]\d{2}$/.test(cleanPlaca)) {
+    return { isValid: true, confidence: 80 }; // Likely OCR confusion between 0 and O
+  }
+  
+  return { isValid: false, confidence: 0 };
+}
+
+function validateCodigoInfracao(codigo: string): { isValid: boolean; confidence: number } {
+  if (!/^\d{3}-\d{2}$/.test(codigo)) {
+    return { isValid: false, confidence: 0 };
+  }
+  
+  // Check if it's in our database
+  if (INFRACAO_CODES[codigo]) {
+    return { isValid: true, confidence: 95 };
+  }
+  
+  // Check if it follows the format but isn't in our database (might be a newer code)
+  return { isValid: true, confidence: 70 }; // Format is valid but code unknown
+}
+
+function validateDataInfracao(data: string): { isValid: boolean; confidence: number } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    return { isValid: false, confidence: 0 };
+  }
+  
+  const [year, month, day] = data.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  
+  // Check if it's a valid date
+  if (isNaN(date.getTime())) {
+    return { isValid: false, confidence: 0 };
+  }
+  
+  // Check if it's not in the future (more than 1 day tolerance for timezone issues)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const inputDate = new Date(year, month - 1, day);
+  
+  if (inputDate > today) {
+    return { isValid: false, confidence: 30 }; // Future date is suspicious
+  }
+  
+  // Check if it's not too old (more than 10 years)
+  const tenYearsAgo = new Date();
+  tenYearsAgo.setFullYear(today.getFullYear() - 10);
+  
+  if (inputDate < tenYearsAgo) {
+    return { isValid: false, confidence: 40 }; // Too old is suspicious
+  }
+  
+  return { isValid: true, confidence: 90 };
+}
+
+function validateValorMulta(valor: number): { isValid: boolean; confidence: number } {
+  if (isNaN(valor) || valor < 0) {
+    return { isValid: false, confidence: 0 };
+  }
+  
+  // Typical traffic fine ranges in Brazil (as of 2024)
+  // Minor infractions: R$ 88,38 to R$ 130,16
+  // Medium infractions: R$ 130,16 to R$ 293,47
+  // Serious infractions: R$ 293,47 to R$ 586,94
+  // Very serious infractions: R$ 586,94 to R$ 2.934,70
+  
+  if (valor >= 50 && valor <= 10000) {
+    return { isValid: true, confidence: 85 };
+  }
+  
+  if (valor >= 10000 && valor <= 50000) {
+    return { isValid: true, confidence: 60 }; // Unusually high but possible
+  }
+  
+  return { isValid: false, confidence: 10 }; // Likely an extraction error
+}
+
+function validateVelocidades(
+  velocidadePermitida: number | undefined,
+  velocidadeAferida: number | undefined,
+  velocidadeConsiderada: number | undefined,
+  codigoInfracao: string
+): { isValid: boolean; confidence: number; observacoes: string[] } {
+  const observacoes: string[] = [];
+  
+  // If no speed data, that's OK for non-speed related infractions
+  const infracaoInfo = INFRACAO_CODES[codigoInfracao];
+  if (!infracaoInfo || !infracaoInfo.isSpeedRelated) {
+    return { isValid: true, confidence: 90, observacoes: ['Infração não relacionada a velocidade'] };
+  }
+  
+  // For speed-related infractions, we expect speed data
+  if (!velocidadePermitida || !velocidadeAferida) {
+    observacoes.push('Dados de velocidade incompletos para infração relacionada a velocidade');
+    return { isValid: false, confidence: 40, observacoes };
+  }
+  
+  // Validate speed ranges
+  if (velocidadePermitida < 10 || velocidadePermitida > 200) {
+    observacoes.push(`Velocidade permitida fora do intervalo esperado: ${velocidadePermitida} km/h`);
+  }
+  
+  if (velocidadeAferida < 10 || velocidadeAferida > 300) {
+    observacoes.push(`Velocidade aferida fora do intervalo esperado: ${velocidadeAferida} km/h`);
+  }
+  
+  // Check if the speeds make sense together
+  if (velocidadeAferida < velocidadePermitida) {
+    observacoes.push('Velocidade aferida menor que a permitida (possível erro de medição ou extracção)');
+  }
+  
+  // Calculate excess percentage
+  const excessoPercentual = ((velocidadeAferida - velocidadePermitida) / velocidadePermitida) * 100;
+  
+  // Check if it matches the infraction code expectations
+  if (infracaoInfo.typicalSpeedRange) {
+    const { min, max } = infracaoInfo.typicalSpeedRange;
+    if (excessoPercentual < min || excessoPercentual > max) {
+      observacoes.push(
+        `Excesso percentual (${excessoPercentual.toFixed(1)}%) não compatível com o código de infração ` +
+        `(${codigoInfracao}), que geralmente corresponde a ${min}%-${max}% acima do limite`
+      );
+    }
+  }
+  
+  const isValid = observacoes.length === 0;
+  const confidence = isValid ? 85 : Math.max(30, 85 - observacoes.length * 15);
+  
+  return { isValid, confidence, observacoes };
+}
 
 function parseTrafficTicket(rawText: string): ExtractedTicketData {
   const text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const observacoesValidacao: string[] = [];
 
-  // Extract plates
-  const plates = text.match(PLATE_PATTERN) || [];
-  const placa = plates[0]?.replace(/\s/g, '') || 'N/A';
+  // Extract plates with multiple pattern attempts
+  let placa = 'N/A';
+  let confiancaPlaca = 0;
+  
+  const plateMatches = extractWithPatterns(text, PLATE_PATTERNS);
+  if (plateMatches.length > 0) {
+    const validation = validatePlaca(plateMatches[0]);
+    placa = plateMatches[0].replace(/[^A-Z0-9]/g, '').toUpperCase();
+    confiancaPlaca = validation.confidence;
+    if (!validation.isValid) {
+      observacoesValidacao.push(`Placa pode estar incorreta: ${placa}`);
+    }
+  }
 
   // Extract AIT number
-  const aitMatch = text.match(AIT_PATTERN);
-  const aitNumber = aitMatch?.[1] || extractAitFromContext(text);
+  let aitNumber = `AIT-${Date.now().toString().slice(-8)}`;
+  const aitMatches = extractWithPatterns(text, AIT_PATTERNS);
+  if (aitMatches.length > 0) {
+    aitNumber = aitMatches[0];
+  }
 
-  // Extract infraction code (XXX-XX format)
-  const codeMatch = text.match(CODE_PATTERN);
-  const codigoInfracao = codeMatch?.[1] || '';
+  // Extract infraction code
+  let codigoInfracao = '';
+  let confiancaCodigoInfracao = 0;
+  
+  const codeMatches = extractWithPatterns(text, CODE_PATTERNS);
+  if (codeMatches.length > 0) {
+    const validation = validateCodigoInfracao(codeMatches[0]);
+    codigoInfracao = codeMatches[0];
+    confiancaCodigoInfracao = validation.confidence;
+    if (!validation.isValid) {
+      observacoesValidacao.push(`Código de infração pode estar incorreto: ${codigoInfracao}`);
+    }
+  }
 
   // Extract CTB article
-  const articleMatches = [...text.matchAll(CTB_ARTICLE_PATTERN)];
-  const artigoCtb = articleMatches.map((m) => `Art. ${m[1]}`).join(', ') || '';
+  let artigoCtb = '';
+  const articleMatches = [...text.matchAll(CTB_ARTICLE_PATTERNS[0])];
+  if (articleMatches.length === 0) {
+    // Try the second pattern
+    articleMatches.push(...[...text.matchAll(CTB_ARTICLE_PATTERNS[1])]);
+  }
+  if (articleMatches.length > 0) {
+    artigoCtb = articleMatches.map((m: RegExpMatchArray) => `Art. ${m[1]}`).join(', ');
+  }
 
   // Extract monetary values
-  const values = [...text.matchAll(VALUE_PATTERN)].map((m) =>
-    parseFloat(m[1].replace(/\./g, '').replace(',', '.'))
-  );
-  const valorMulta = values.find((v) => v >= 50 && v <= 5000) || 0;
+  let valorMulta = 0;
+  let confiancaValorMulta = 0;
+  const allValues: number[] = [];
+  
+  for (const pattern of VALUE_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach(m => {
+      const value = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(value)) allValues.push(value);
+    });
+  }
+  
+  if (allValues.length > 0) {
+    // Find the most likely fine amount (typically between 50 and 5000)
+    const fineCandidates = allValues.filter(v => v >= 50 && v <= 5000);
+    if (fineCandidates.length > 0) {
+      valorMulta = fineCandidates[0]; // Take the first reasonable candidate
+      const validation = validateValorMulta(valorMulta);
+      confiancaValorMulta = validation.confidence;
+      if (!validation.isValid) {
+        observacoesValidacao.push(`Valor da multa suspeito: R$ ${valorMulta.toFixed(2)}`);
+      }
+    } else if (allValues.length > 0) {
+      // If no typical fine found, take the smallest reasonable value
+      valorMulta = Math.min(...allValues.filter(v => v >= 10));
+      const validation = validateValorMulta(valorMulta);
+      confiancaValorMulta = validation.confidence * 0.8; // Lower confidence for atypical value
+      if (!validation.isValid) {
+        observacoesValidacao.push(`Valor da multa fora do intervalo típico: R$ ${valorMulta.toFixed(2)}`);
+      }
+    }
+  }
 
   // Extract dates
-  const dates = [...text.matchAll(DATE_PATTERN)].map((m) => {
-    const [, day, month, year] = m;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  });
-  const dataInfracao = dates[0] || '';
-
-  // Extract speed values
-  const speeds = [...text.matchAll(SPEED_PATTERN)].map((m) => parseInt(m[1], 10));
-  const velocidadePermitida = speeds[0];
-  const VelocidadeAferida = speeds[1];
-  const velocidadeConsiderada = speeds[2] || VelocidadeAferida;
-
-  // Extract RENAVAM
-  const renavamMatch = text.match(RENAVAM_PATTERN);
+  let dataInfracao = '';
+  let confiancaDataInfracao = 0;
+  
+  const allDates: string[] = [];
+  for (const pattern of DATE_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach(m => {
+      let dateStr: string;
+      if (m.length === 4) { // DD/MM/YYYY or MM/DD/YYYY
+        const [, day, month, year] = m;
+        dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      } else if (m.length === 3) { // YYYY-MM-DD
+        const [, year, month, day] = m;
+        dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      } else {
+        // Handle "DD de MM de YYYY" format
+        const [, day, , month, , year] = m as any;
+        const monthNum = {
+          'janeiro': '01', 'fevereiro': '02', 'março': '03', 'abril': '04',
+          'maio': '05', 'junho': '06', 'julho': '07', 'agosto': '08',
+          'setembro': '09', 'outubro': '10', 'novembro': '11', 'dezembro': '12'
+        }[month.toLowerCase()] || '01';
+        dateStr = `${year}-${monthNum}-${day.padStart(2, '0')}`;
+      }
+      if (dateStr) allDates.push(dateStr);
+    });
+  }
+  
+  if (allDates.length > 0) {
+    // Take the first date that looks like an infraction date (not too far in past/future)
+    const validDates = allDates.filter(date => {
+      const validation = validateDataInfracao(date);
+      return validation.isValid;
+    });
+    
+    if (validDates.length > 0) {
+      dataInfracao = validDates[0];
+      const validation = validateDataInfracao(dataInfracao);
+      confiancaDataInfracao = validation.confidence;
+    } else if (allDates.length > 0) {
+      // Use the first date even if validation failed, but with lower confidence
+      dataInfracao = allDates[0];
+      const validation = validateDataInfracao(dataInfracao);
+      confiancaDataInfracao = validation.confidence * 0.5;
+      observacoesValidacao.push(`Data pode estar incorreta: ${dataInfracao}`);
+    }
+  }
 
   // Extract location (heuristic: look for street/avenue patterns)
   const localInfracao = extractLocation(text);
@@ -247,10 +558,15 @@ function parseTrafficTicket(rawText: string): ExtractedTicketData {
 
   // Extract description from infraction code lookup
   const infracaoInfo = INFRACAO_CODES[codigoInfracao];
-  const descricao = infracaoInfo?.description || extractDescription(text);
+  let descricao = infracaoInfo?.description || extractDescription(text);
+  if (!infracaoInfo && descricao === 'Infração de trânsito') {
+    observacoesValidacao.push(`Código de infração não reconhecido: ${codigoInfracao}`);
+  }
 
   // Extract defense deadline
-  const prazoDefesa = extractDefenseDeadline(text, dates);
+  const prazoDefesa = extractDefenseDeadline(text, 
+    allDates.map(d => `${d}T00:00:00`) // Convert to ISO strings for the function
+  );
 
   // Radar equipment
   const radarMatch = text.match(/(?:Equipamento|Radar|EQUIPAMENTO)[:\s]*([A-Z0-9\-]+)/i);
@@ -259,6 +575,41 @@ function parseTrafficTicket(rawText: string): ExtractedTicketData {
   // Aferição date
   const afericaoMatch = text.match(/(?:Aferição|AFERIÇÃO|Validade)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
   const dataAfericao = afericaoMatch?.[1]?.replace(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/, '$3-$2-$1');
+
+  // Extract speed values
+  let velocidadePermitida: number | undefined;
+  let VelocidadeAferida: number | undefined;
+  let velocidadeConsiderada: number | undefined;
+  
+  const allSpeeds: number[] = [];
+  for (const pattern of SPEED_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach(m => {
+      const speed = parseInt(m[1], 10);
+      if (!isNaN(speed)) allSpeeds.push(speed);
+    });
+  }
+  
+  if (allSpeeds.length >= 1) velocidadePermitida = allSpeeds[0];
+  if (allSpeeds.length >= 2) VelocidadeAferida = allSpeeds[1];
+  if (allSpeeds.length >= 3) velocidadeConsiderada = allSpeeds[2];
+  else if (allSpeeds.length === 2) velocidadeConsiderada = VelocidadeAferida;
+
+  // Validate speeds for speed-related infractions
+  let validacaoVelocidade = true;
+  let velocidadeConfianca = 90;
+  
+  if (infracaoInfo?.isSpeedRelated) {
+    const velocidadeValidation = validateVelocidades(
+      velocidadePermitida, 
+      VelocidadeAferida, 
+      velocidadeConsiderada, 
+      codigoInfracao
+    );
+    validacaoVelocidade = velocidadeValidation.isValid;
+    velocidadeConfianca = velocidadeValidation.confidence;
+    observacoesValidacao.push(...velocidadeValidation.observacoes);
+  }
 
   return {
     aitNumber,
@@ -276,36 +627,32 @@ function parseTrafficTicket(rawText: string): ExtractedTicketData {
     equipamentoRadar,
     dataAfericao,
     prazoDefesa,
+    // Enhanced verification fields
+    confiancaPlaca: confiancaPlaca || 0,
+    confiancaCodigoInfracao: confiancaCodigoInfracao || 0,
+    confiancaDataInfracao: confiancaDataInfracao || 0,
+    confiancaValorMulta: confiancaValorMulta || 0,
+    validacaoVelocidade,
+    observacoesValidacao: observacoesValidacao.length > 0 ? observacoesValidacao : undefined
   };
-}
-
-function extractAitFromContext(text: string): string {
-  // Look for AIT-like patterns in common positions
-  const patterns = [
-    /\b(\d{4,6}[-.]?\d{2,4}[-.]?\d{2,4})\b/, // Generic numeric ID
-    /\bN[º°]?\s*:?\s*(\w{2,4}\d{4,8})\b/i,
-    /AIT[:\s]*(\w+)/i,
-    /Auto[:\s]*(\w+)/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1];
-  }
-
-  return `AIT-${Date.now().toString().slice(-8)}`;
 }
 
 function extractLocation(text: string): string {
   const locationPatterns = [
-    /(?:Local|LOCAL|Endereço|ENDEREÇO|Via|VIA)[:\s]*(.+?)(?:\n|$)/i,
-    /((?:Av\.|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda)\s+.+?)(?:\n|—|-|$)/i,
-    /((?:Av\.|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda)\s+.+?),\s*(.{2,30}\/[A-Z]{2})/i,
+    /(?:Local|LOCAL|Endereço|ENDEREÇO|Via|VIA|Trecho|TRECHO)[:\s]*(.+?)(?:\n|$)/i,
+    /((?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda|Travessa|Trav\\.|Praça|Pç\\.)\s+.+?)(?:\n|—|-|$)/i,
+    /((?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda|Travessa|Trav\\.|Praça|Pç\\.)\s+.+?),\s*(.{2,30}\/[A-Z]{2})/i,
+    /(?:km\s*)?(\d+[\.,]\d+)\s*(?:de\s+)?(?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia)/i
   ];
 
   for (const pattern of locationPatterns) {
     const match = text.match(pattern);
-    if (match) return (match[1] || match[0]).trim().substring(0, 150);
+    if (match) {
+      let result = (match[1] || match[0]).trim();
+      // Clean up common OCR artifacts
+      result = result.replace(/[\-_]{2,}/g, '-').replace(/\s{2,}/g, ' ');
+      return result.substring(0, 150);
+    }
   }
 
   return 'N/A';
@@ -313,16 +660,23 @@ function extractLocation(text: string): string {
 
 function extractOrgao(text: string): string {
   const orgaoPatterns = [
-    /(?:Órgão|ORGAO|Autuador|AUTUADOR|Exigência)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:Órgão|ORGAO|Autuador|AUTUADOR|Exigência|Autoridade)[:\s]*(.+?)(?:\n|$)/i,
     /(DETRAN[-\s]*[A-Z]{2})/i,
-    /(CET[-\s]*[A-Z]{2})/i,
-    /(BHTRANS|SPTRANS|CBM|PMDF|PCDF)/i,
-    /(Secretaria.+?(?:Trânsito|Trasito|Segurança).+?)(?:\n|$)/i,
+    /(CETRAN[-\s]*[A-Z]{2})/i,
+    /(BHTRANS|SPTRANS|CBM|PMDF|PCDF|PM|GCM|Guardas?\s+Municipais)/i,
+    /(Secretaria.+?(?:Trânsito|Trasito|Segurança|Transportes).+?)(?:\n|$)/i,
+    /(Polícia\s+Rodoviária\s+Federal|PRF)/i,
+    /(Polícia\s+Militar|PM)\s+[A-Z]{2}/i
   ];
 
   for (const pattern of orgaoPatterns) {
     const match = text.match(pattern);
-    if (match) return (match[1] || match[0]).trim().substring(0, 100);
+    if (match) {
+      let result = (match[1] || match[0]).trim();
+      // Clean up common OCR artifacts
+      result = result.replace(/[\-_]{2,}/g, '-').replace(/\s{2,}/g, ' ');
+      return result.substring(0, 100);
+    }
   }
 
   return 'N/A';
@@ -330,13 +684,19 @@ function extractOrgao(text: string): string {
 
 function extractDescription(text: string): string {
   const descPatterns = [
-    /(?:Infração|INFRAÇÃO|Descrição|DESCRIÇÃO|Motivo|MOTIVO)[:\s]*(.+?)(?:\n|$)/i,
-    /(?:Conduta|CONDUTA)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:Infração|INFRAÇÃO|Descrição|DESCRIÇÃO|Motivo|MOTIVO|Conduta|CONDUTA)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:Veículo|VEÍCULO)\s*:?\s*(.+?)(?:\n|$)/i,
+    /(?:Condutor|CONDUTOR)\s*:?\s*(.+?)(?:\n|$)/i
   ];
 
   for (const pattern of descPatterns) {
     const match = text.match(pattern);
-    if (match) return match[1].trim().substring(0, 200);
+    if (match) {
+      let result = match[1].trim();
+      // Clean up common OCR artifacts
+      result = result.replace(/[\-_]{2,}/g, '-').replace(/\s{2,}/g, ' ');
+      return result.substring(0, 200);
+    }
   }
 
   return 'Infração de trânsito';
@@ -344,23 +704,42 @@ function extractDescription(text: string): string {
 
 function extractDefenseDeadline(text: string, dates: string[]): string {
   const deadlinePatterns = [
-    /(?:Prazo|PRAZO|Defesa|DEFESA|recural|RECURSO)[:\s]*(?:at[aéé]|prazo)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
-    /(?:data\s+limite|DATA\s+LIMITE)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(?:Prazo|PRAZO|Defesa|DEFESA|recurso|RECURSO|notificação|NOTIFICAÇÃO)[:\s]*(?:at[aéé]|prazo|data\s+limite)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(?:data\s+limite|DATA\s+LIMITE|vencimento|VENCIMENTO)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(?:protela[çc][aã]o|PROTELA[ÇC][AÃ]O)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i
   ];
 
   for (const pattern of deadlinePatterns) {
     const match = text.match(pattern);
     if (match) {
-      const [, day, month, year] = match[1].match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/) || [];
-      if (day && month && year) return `${year}-${month}-${day}`;
+      const dateMatch = match[1].match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+      if (dateMatch) {
+        const [, day, month, year] = dateMatch;
+        const validatedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        const validation = validateDataInfracao(validatedDate);
+        if (validation.isValid) {
+          return validatedDate;
+        }
+      }
     }
   }
 
   // Default: 30 days from last date found
   if (dates.length > 0) {
-    const lastDate = new Date(dates[dates.length - 1]);
-    lastDate.setDate(lastDate.getDate() + 30);
-    return lastDate.toISOString().split('T')[0];
+    try {
+      const validDates = dates
+        .map(d => new Date(d))
+        .filter(d => !isNaN(d.getTime()))
+        .sort((a, b) => b.getTime() - a.getTime()); // Descending order
+      
+      if (validDates.length > 0) {
+        const lastDate = validDates[0];
+        lastDate.setDate(lastDate.getDate() + 30);
+        return lastDate.toISOString().split('T')[0];
+      }
+    } catch (e) {
+      // If date parsing fails, continue to fallback
+    }
   }
 
   // Default: 30 days from now
@@ -401,6 +780,9 @@ class OcrService {
         confianca,
         aitNumber: dadosExtraidos.aitNumber,
         placa: dadosExtraidos.placa,
+        codigoInfracao: dadosExtraidos.codigoInfracao,
+        confiancaPlaca: dadosExtraidos.confiancaPlaca,
+        confiancaCodigoInfracao: dadosExtraidos.confiancaCodigoInfracao
       });
 
       return {
@@ -427,6 +809,9 @@ class OcrService {
         confianca,
         aitNumber: dadosExtraidos.aitNumber,
         placa: dadosExtraidos.placa,
+        codigoInfracao: dadosExtraidos.codigoInfracao,
+        confiancaPlaca: dadosExtraidos.confiancaPlaca,
+        confiancaCodigoInfracao: dadosExtraidos.confiancaCodigoInfracao
       });
 
       return {

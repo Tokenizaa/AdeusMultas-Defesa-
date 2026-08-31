@@ -191,6 +191,10 @@ export interface ProcedureModel {
   availableTemplates: string[]; // Template IDs
   executionChecklist: string[];
   notes: string;
+  // Versioning and temporal validity
+  validFrom?: string; // ISO date 'YYYY-MM-DD'
+  validUntil?: string | null; // null = vigente
+  version?: number; // version number of this item
 }
 
 // ==========================================
