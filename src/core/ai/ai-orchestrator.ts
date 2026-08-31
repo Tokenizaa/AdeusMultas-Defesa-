@@ -12,7 +12,7 @@
  *        se IA indisponível   => mantém determinístico (FAIL CLOSED, sem inventar).
  */
 
-import { DefenseDraft, CaseAnalysis, LegalArgumentDomain, ProcedureType } from '../../types';
+import { DefenseDraft, CaseAnalysis, LegalArgumentDomain } from '../../types';
 import { validateDraft } from '../validation/integrity-validator';
 
 export interface AiRefinementProvider {
@@ -166,5 +166,3 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
 export function permittedTheses(analysis: CaseAnalysis): LegalArgumentDomain[] {
   return analysis.recommendedArguments || [];
 }
-
-export { ProcedureType };
