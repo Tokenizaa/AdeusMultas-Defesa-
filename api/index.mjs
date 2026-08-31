@@ -5512,7 +5512,7 @@ router.get(["/integrations/overview", "/admin/integrations/overview"], async (re
     }
   });
 });
-router.get(["/users", "/admin/users"], async (req, res) => {
+router.get(["/users", "/admin/users"], requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabaseServerClient();
     if (!supabase) {
@@ -5574,6 +5574,114 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Erro em PUT /api/admin/users:", err);
     res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
+  }
+});
+router.get("/admin/e2e-tests/stats", async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const [usersCount, casesCount, runsCount] = await Promise.all([
+      supabase.from("user_profiles").select("id", { count: "exact" }),
+      supabase.from("cases").select("id", { count: "exact" }),
+      supabase.from("e2e_test_runs").select("id", { count: "exact" })
+    ]);
+    const { data: servicesData } = await supabase.from("cases").select("service_type").not("service_type", "is", null);
+    const serviceCounts = servicesData?.reduce((acc, row) => {
+      const service = row.service_type;
+      acc[service] = (acc[service] || 0) + 1;
+      return acc;
+    }, {}) || {};
+    res.json({
+      users: usersCount.count || 0,
+      cases: casesCount.count || 0,
+      testRuns: runsCount.count || 0,
+      services: serviceCounts,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    console.error("Error fetching E2E test stats:", error);
+    res.status(500).json({ error: "Failed to fetch statistics" });
+  }
+});
+router.get("/admin/e2e-tests/runs", async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data: runs, error } = await supabase.from("e2e_test_runs").select("*").order("started_at", { ascending: false }).limit(50);
+    if (error) throw error;
+    res.json({ runs: runs || [] });
+  } catch (error) {
+    console.error("Error fetching E2E test runs:", error);
+    res.status(500).json({ error: "Failed to fetch test runs" });
+  }
+});
+router.post("/admin/e2e-tests/run", async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { services, triggeredBy } = req.body;
+    const runId = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const { data: runData, error: runError } = await supabase.from("e2e_test_runs").insert({
+      id: runId,
+      status: "QUEUED",
+      triggeredBy: triggeredBy || "Admin API",
+      suites_summary: services ? JSON.stringify(services.map((s) => ({
+        serviceKey: s,
+        serviceName: s,
+        totalScenarios: 0,
+        passed: 0,
+        failed: 0,
+        status: "PENDING"
+      }))) : "[]"
+    }).select().single();
+    if (runError) throw runError;
+    res.json({
+      success: true,
+      runId,
+      status: "QUEUED",
+      message: "Test execution started"
+    });
+  } catch (error) {
+    console.error("Error starting E2E test run:", error);
+    res.status(500).json({ error: "Failed to start test execution" });
+  }
+});
+router.get("/admin/e2e-tests/run/:id", async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { id } = req.params;
+    const { data: run, error } = await supabase.from("e2e_test_runs").select("*").eq("id", id).single();
+    if (error) throw error;
+    if (!run) {
+      return res.status(404).json({ error: "Test run not found" });
+    }
+    res.json({ run });
+  } catch (error) {
+    console.error("Error fetching E2E test run:", error);
+    res.status(500).json({ error: "Failed to fetch test run" });
+  }
+});
+router.post("/admin/e2e-tests/execute-failed", async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: "Failed test execution endpoint - implement based on specific requirements"
+    });
+  } catch (error) {
+    console.error("Error executing failed tests:", error);
+    res.status(500).json({ error: "Failed to execute failed tests" });
+  }
+});
+router.post("/admin/e2e-tests/execute-service", async (req, res) => {
+  try {
+    const { service } = req.body;
+    if (!service) {
+      return res.status(400).json({ error: "Service parameter is required" });
+    }
+    res.json({
+      success: true,
+      message: `Service execution endpoint for ${service} - implement based on specific requirements`
+    });
+  } catch (error) {
+    console.error("Error executing service tests:", error);
+    res.status(500).json({ error: "Failed to execute service tests" });
   }
 });
 var admin_default = router;
@@ -8579,8 +8687,8 @@ var DEFAULT_CANONICAL_PRICINGS = [
     serviceType: "recurso_jari",
     serviceName: "Recurso JARI",
     description: "Recurso \xE0 Junta Administrativa de Recursos de Infra\xE7\xF5es (1\xAA Inst\xE2ncia).",
-    standardPrice: 119.9,
-    promotionalPrice: 59.95,
+    standardPrice: 1,
+    promotionalPrice: 1,
     isActive: true,
     history: [],
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -12059,6 +12167,10 @@ var ARGUMENTS_CATALOG = [
       "Espelho de verifica\xE7\xE3o do instrumento emitido pelo INMETRO/IPEM"
     ],
     observations: "A falta de comprova\xE7\xE3o de calibra\xE7\xE3o retira a presun\xE7\xE3o de legitimidade e veracidade da medi\xE7\xE3o de velocidade apurada pelo equipamento.",
+    // Versioning and source tracking
+    validFrom: "2020-10-01",
+    validUntil: null,
+    version: 1,
     formattedParagraphs: [
       {
         heading: "1. Da Obrigatoriedade Legal da Verifica\xE7\xE3o Metrol\xF3gica Anual pelo INMETRO",
@@ -12101,6 +12213,10 @@ var ARGUMENTS_CATALOG = [
       "Estudo t\xE9cnico ou certid\xE3o do \xF3rg\xE3o vi\xE1rio local"
     ],
     observations: "O Art. 90 do CTB estabelece expressamente a inexigibilidade de san\xE7\xE3o por sinaliza\xE7\xE3o incorreta ou insuficiente.",
+    // Versioning and source tracking
+    validFrom: "1998-01-22",
+    validUntil: null,
+    version: 1,
     formattedParagraphs: [
       {
         heading: "1. Do Mandamento Legal do Artigo 90 do C\xF3digo de Tr\xE2nsito Brasileiro",
@@ -12128,6 +12244,10 @@ var ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-PR; Reexame Necess\xE1rio 0004512-32.2022.8.16.0004; 4\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["C\xF3pia da Notifica\xE7\xE3o de Autua\xE7\xE3o", "Peti\xE7\xE3o solicitando exibi\xE7\xE3o do estudo t\xE9cnico"],
     observations: "O estudo t\xE9cnico de velocidade tem validade de 2 anos e deve ser atualizado periodicamente.",
+    // Versioning and source tracking
+    validFrom: "2020-10-01",
+    validUntil: null,
+    version: 1,
     formattedParagraphs: [
       {
         heading: "1. Da Obrigatoriedade de Estudo T\xE9cnico de Engenharia Pr\xE9vio",
@@ -13329,14 +13449,19 @@ var PROCEDURES_CATALOG = [
       { name: "Provas documentais anexas (fotos, laudos, declara\xE7\xF5es)", required: false, description: "Provas materiais que demonstrem a atipicidade da conduta." }
     ],
     applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-005", "ARG-006", "ARG-007", "ARG-010", "ARG-011", "ARG-014", "ARG-016", "ARG-017", "ARG-018"],
-    availableTemplates: ["TPL_RECURSO_JARI_PADRAO", "TPL_RECURSO_JARI_LEI_SECA", "TPL_RECURSO_JARI_RADAR"],
+    availableTemplates: ["TPL_RECURSO_JARI"],
+    // variantes (lei seca/radar) são composições de blocos, não templates separados
     executionChecklist: [
       'Garantir protocolo dentro da data limite expressa no campo "Prazo de Recurso" da NP',
       "Articular pedidos subsidi\xE1rios (nulidade principal ou cancelamento de pontos)",
       "Requerer expressamente a concess\xE3o de efeito suspensivo nos termos do Art. 285, \xA73\xBA",
       "Juntar comprovantes e certid\xF5es que fundamentem o fato alegado"
     ],
-    notes: "N\xE3o \xE9 obrigat\xF3rio pagar a multa para recorrer \xE0 JARI (S\xFAmula Vinculante 21 do STF e Art. 284 do CTB)."
+    notes: "N\xE3o \xE9 obrigat\xF3rio pagar a multa para recorrer \xE0 JARI (S\xFAmula Vinculante 21 do STF e Art. 284 do CTB).",
+    // Versioning and temporal validity
+    validFrom: "1998-01-22",
+    validUntil: null,
+    version: 1
   },
   {
     id: "recurso_cetran",
@@ -13359,7 +13484,7 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH e CRLV do ve\xEDculo", required: true, description: "Documentos do condutor e do ve\xEDculo." }
     ],
     applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-005", "ARG-007", "ARG-010", "ARG-016", "ARG-017"],
-    availableTemplates: ["TPL_RECURSO_CETRAN_PADRAO", "TPL_RECURSO_CETRAN_NULIDADE_JARI"],
+    availableTemplates: ["TPL_RECURSO_CETRAN"],
     executionChecklist: [
       "Apontar expressamente que a JARI n\xE3o analisou as preliminares arguidas",
       "Citar jurisprud\xEAncia consolidada do STJ e tribunais de justi\xE7a",
@@ -13388,7 +13513,8 @@ var PROCEDURES_CATALOG = [
       { name: "Extrato consolidado de pontua\xE7\xE3o do DETRAN", required: true, description: "Hist\xF3rico de infra\xE7\xF5es nos \xFAltimos 12 meses." }
     ],
     applicableGrounds: ["ARG-007", "ARG-010", "ARG-011", "ARG-003", "ARG-001", "ARG-005"],
-    availableTemplates: ["TPL_SUSPENSAO_PONTUACAO", "TPL_SUSPENSAO_LEI_SECA", "TPL_SUSPENSAO_VELOCIDADE_50"],
+    availableTemplates: ["TPL_SUSPENSAO_CNH"],
+    // alias legado do PSDD (mesmos blocos)
     executionChecklist: [
       "Verificar se as multas componentes transitaram em julgado regularmente",
       "Checar se o condutor exerce atividade remunerada (EAR) para regra ben\xE9fica de 40 pontos",
@@ -13416,7 +13542,8 @@ var PROCEDURES_CATALOG = [
       { name: "Provas de que outro condutor dirigia no flagrante", required: false, description: "Declara\xE7\xF5es, bilhetes de ped\xE1gio, contratos." }
     ],
     applicableGrounds: ["ARG-007", "ARG-005", "ARG-003"],
-    availableTemplates: ["TPL_CASSACAO_CNH_PADRAO"],
+    availableTemplates: ["TPL_CASSACAO_CNH"],
+    // alias legado do PCDD (mesmos blocos)
     executionChecklist: [
       "Verificar se houve abordagem presencial do condutor com CNH suspensa",
       "Checar a validade do processo de suspens\xE3o anterior"
@@ -13443,7 +13570,7 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia do documento de identidade do propriet\xE1rio", required: true, description: "Identidade com assinatura compar\xE1vel." }
     ],
     applicableGrounds: ["ARG-007"],
-    availableTemplates: ["TPL_INDICACAO_CONDUTOR_FARI"],
+    availableTemplates: ["TPL_FICI_INDICACAO"],
     executionChecklist: [
       "Garantir que as assinaturas correspondam com perfei\xE7\xE3o aos documentos apresentados",
       "Protocolar antes do vencimento impresso na Notifica\xE7\xE3o de Autua\xE7\xE3o"
@@ -13496,7 +13623,8 @@ var PROCEDURES_CATALOG = [
       { name: "Imagem leg\xEDvel do Auto de Infra\xE7\xE3o ou Notifica\xE7\xE3o", required: true, description: "Para extra\xE7\xE3o dos dados t\xE9cnicos e cruzamento." }
     ],
     applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-005", "ARG-006", "ARG-007", "ARG-008", "ARG-010", "ARG-011", "ARG-014", "ARG-016", "ARG-017", "ARG-018"],
-    availableTemplates: ["TPL_RELATORIO_TECNICO_DIAGNOSTICO"],
+    availableTemplates: [],
+    // KNOWLEDGE_GAP: laudo técnico ainda sem template canônico (composição futura)
     executionChecklist: [
       "Realizar checagem de 100% dos campos normativos da Portaria SENATRAN 354",
       "Emitir matriz de risco com probabilidade percentual matem\xE1tica"
@@ -13522,7 +13650,8 @@ var PROCEDURES_CATALOG = [
       { name: "Fotos da via e da sinaliza\xE7\xE3o do trecho", required: false, description: "Evid\xEAncias do local fiscalizado." }
     ],
     applicableGrounds: ["ARG-001", "ARG-002", "ARG-004", "ARG-016"],
-    availableTemplates: ["TPL_RELATORIO_PERICIAL_METROLOGIA"],
+    availableTemplates: [],
+    // KNOWLEDGE_GAP: laudo pericial de metrologia ainda sem template canônico
     executionChecklist: [
       "Validar dist\xE2ncia m\xE9trica entre a placa R-19 e o ponto do sensor",
       "Conferir hist\xF3rico de aprova\xE7\xE3o de modelo pelo INMETRO"
@@ -14492,6 +14621,47 @@ ASSINATURA DO CONDUTOR INFRATOR INDICADO
 ];
 
 // src/core/templates/templates-catalog.ts
+var BLOCK_TYPE_BY_CATEGORY = {
+  enderecamento: "header_addressing",
+  qualificacao: "applicant_qualification",
+  fatos: "facts_narrative",
+  preliminares: "preliminary_arguments",
+  argumentos_velocidade: "merit_arguments",
+  argumentos_semaforo: "merit_arguments",
+  argumentos_celular: "merit_arguments",
+  argumentos_estacionamento: "merit_arguments",
+  argumentos_alcoolemia: "merit_arguments",
+  argumentos_cinto: "merit_arguments",
+  argumentos_documentos: "merit_arguments",
+  argumentos_suspensao: "merit_arguments",
+  argumentos_cassacao: "merit_arguments",
+  argumentos_gerais: "merit_arguments",
+  pedidos: "formal_requests",
+  fechamento: "closing_signature"
+};
+var VALID_BLOCK_TYPES = [
+  "header_addressing",
+  "applicant_qualification",
+  "vehicle_qualification",
+  "facts_narrative",
+  "preliminary_arguments",
+  "merit_arguments",
+  "formal_requests",
+  "closing_signature"
+];
+function toTemplateBlock(b, idx) {
+  const declaredType = b.type && VALID_BLOCK_TYPES.includes(b.type) ? b.type : void 0;
+  const type = declaredType ?? BLOCK_TYPE_BY_CATEGORY[b.category];
+  const fallbackType = idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : "closing_signature";
+  return {
+    id: b.id,
+    type: type ?? fallbackType,
+    title: b.title,
+    isMandatory: b.isMandatory ?? true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables
+  };
+}
 function buildSuspensaoBlocks() {
   return [
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-004"),
@@ -14520,14 +14690,7 @@ function buildSuspensaoBlocks() {
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-059"),
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
-  ].map((b, idx) => ({
-    id: b.id,
-    type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
-    title: b.title,
-    isMandatory: true,
-    contentTemplate: b.contentTemplate,
-    supportedVariables: b.supportedVariables
-  }));
+  ].map((b, idx) => toTemplateBlock(b, idx));
 }
 function buildCassacaoBlocks() {
   return [
@@ -14557,14 +14720,7 @@ function buildCassacaoBlocks() {
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-060"),
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
-  ].map((b, idx) => ({
-    id: b.id,
-    type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
-    title: b.title,
-    isMandatory: true,
-    contentTemplate: b.contentTemplate,
-    supportedVariables: b.supportedVariables
-  }));
+  ].map((b, idx) => toTemplateBlock(b, idx));
 }
 var TEMPLATES_CATALOG = [
   // ==========================================
@@ -14583,7 +14739,6 @@ var TEMPLATES_CATALOG = [
       "Requerer expressamente concess\xE3o de efeito suspensivo nos termos do Art. 285, \xA7 3\xBA do CTB",
       "Articular preliminares de cerceamento de defesa (S\xFAmula 312 STJ) e m\xE9rito probat\xF3rio"
     ],
-    blockIds: ["BLK-002", "BLK-008", "BLK-013", "BLK-027", "BLK-039", "BLK-057", "BLK-066", "BLK-068"],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-002"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
@@ -14623,7 +14778,8 @@ Inobstante o inconformismo apresentado em sede de Defesa Pr\xE9via, a autoridade
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066")
     ].map((b, idx) => ({
       id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+      type: toTemplateBlock(b, idx).type,
+      // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -14646,7 +14802,6 @@ Inobstante o inconformismo apresentado em sede de Defesa Pr\xE9via, a autoridade
       "Argui\xE7\xE3o de prescri\xE7\xE3o intercorrente trienal ou decad\xEAncia residual",
       "Requerer o cancelamento em definitivo da multa e pontos no RENACH"
     ],
-    blockIds: ["BLK-003", "BLK-008", "BLK-031", "BLK-030", "BLK-039", "BLK-058", "BLK-066", "BLK-068"],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-003"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
@@ -14687,7 +14842,8 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
     ].map((b, idx) => ({
       id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+      type: toTemplateBlock(b, idx).type,
+      // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -14710,7 +14866,6 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Argui\xE7\xE3o da retroatividade ben\xE9fica do limite de 40 pontos (Tema 1.097 STJ)",
       "Demonstrar aus\xEAncia de tr\xE2nsito em julgado das multas componentes ou prescri\xE7\xE3o"
     ],
-    blockIds: ["BLK-004", "BLK-010", "BLK-022", "BLK-042", "BLK-043", "BLK-059", "BLK-066", "BLK-068"],
     blocks: buildSuspensaoBlocks()
   },
   // ==========================================
@@ -14729,7 +14884,6 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Comprovar que a autua\xE7\xE3o na vig\xEAncia da suspens\xE3o ocorreu sem abordagem presencial",
       "Juntar prova de que o ve\xEDculo estava na posse/condu\xE7\xE3o de terceiro habilitado"
     ],
-    blockIds: ["BLK-005", "BLK-011", "BLK-023", "BLK-045", "BLK-046", "BLK-060", "BLK-066", "BLK-068"],
     blocks: buildCassacaoBlocks()
   },
   // ==========================================
@@ -14748,7 +14902,6 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Protocolo dentro do prazo final improrrog\xE1vel assinalado na Notifica\xE7\xE3o de Autua\xE7\xE3o",
       "Juntada obrigat\xF3ria de c\xF3pia da CNH do condutor indicado e documento com foto do propriet\xE1rio"
     ],
-    blockIds: ["BLK-006", "BLK-012", "BLK-024", "BLK-061", "BLK-067", "BLK-068"],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-006"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-012"),
@@ -14758,7 +14911,8 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
     ].map((b, idx) => ({
       id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 3 ? "formal_requests" : "closing_signature"),
+      type: toTemplateBlock(b, idx).type,
+      // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -14781,7 +14935,6 @@ A decis\xE3o da JARI limitou-se a estampar despacho gen\xE9rico e padronizado, s
       "Juntar certid\xE3o de prontu\xE1rio de CNH emitida pelo DETRAN ou SENATRAN",
       "Invocar a natureza vinculada e de direito subjetivo da autoridade ap\xF3s a Lei 14.071/20"
     ],
-    blockIds: ["BLK-007", "BLK-008", "BLK-025", "BLK-051", "BLK-062", "BLK-066", "BLK-068"],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-007"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
@@ -14803,7 +14956,8 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
     ].map((b, idx) => ({
       id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 3 ? "merit_arguments" : idx === 4 ? "formal_requests" : "closing_signature"),
+      type: toTemplateBlock(b, idx).type,
+      // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -14825,7 +14979,6 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
       "Informar o n\xFAmero do AIT e a Notifica\xE7\xE3o de Autua\xE7\xE3o",
       "Articular preliminares de nulidade e m\xE9rito probat\xF3rio antes da penalidade"
     ],
-    blockIds: ["BLK-001", "BLK-008", "BLK-013", "BLK-039", "BLK-057", "BLK-066", "BLK-068"],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-001"),
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
@@ -14864,7 +15017,8 @@ O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
     ].map((b, idx) => ({
       id: b.id,
-      type: b.type || (idx === 0 ? "header_addressing" : idx === 1 ? "applicant_qualification" : idx === 2 ? "facts_narrative" : idx === 5 ? "formal_requests" : "closing_signature"),
+      type: toTemplateBlock(b, idx).type,
+      // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -14882,7 +15036,6 @@ O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora
     version: "v2026.1",
     description: "Alias legado de suspensao_cnh: mesma pe\xE7a de defesa do processo de suspens\xE3o da CNH (PSDD).",
     fillingRules: ["Endere\xE7ar \xE0 Comiss\xE3o de Processos de Suspens\xE3o do DETRAN", "Indicar o n\xFAmero do PSDD"],
-    blockIds: ["BLK-004", "BLK-010", "BLK-022", "BLK-042", "BLK-043", "BLK-059", "BLK-066", "BLK-068"],
     blocks: buildSuspensaoBlocks()
   },
   {
@@ -14893,7 +15046,6 @@ O(A) Requerente, em sede de DEFESA PR\xC9VIA, vem perante a autoridade autuadora
     version: "v2026.1",
     description: "Alias legado de cassacao_cnh: mesma pe\xE7a de defesa do processo de cassa\xE7\xE3o da CNH (PCDD).",
     fillingRules: ["Endere\xE7ar \xE0 Coordena\xE7\xE3o de Processos de Cassa\xE7\xE3o do DETRAN", "Indicar o n\xFAmero do PCDD"],
-    blockIds: ["BLK-005", "BLK-011", "BLK-023", "BLK-045", "BLK-046", "BLK-060", "BLK-066", "BLK-068"],
     blocks: buildCassacaoBlocks()
   }
 ];
@@ -14908,7 +15060,13 @@ var INFRACTION_CATALOG = [
     points: 4,
     fineAmount: 130.16,
     typicalFlaws: ["Aferi\xE7\xE3o do radar vencida (+12 meses)", "Falta de placa R-19 de velocidade", "Notifica\xE7\xE3o expedida ap\xF3s 30 dias", "Margem de erro INMETRO n\xE3o deduzida"],
-    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-008"]
+    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-008"],
+    // Versioning and source tracking
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "MANUAL",
+    contentHash: "",
+    version: 1
   },
   {
     code: "746-30",
@@ -19406,10 +19564,6 @@ var MarketingOrchestrator = class {
       logger.error("marketing", "orchestrator", "cycle", "Ciclo aut\xF4nomo falhou", { message: String(err) });
     }), CYCLE_INTERVAL_MS);
     logger.info("marketing", "orchestrator", "start", "Orquestrador iniciado (cron 5min)");
-    eventBus.subscribe(EventTopics.MARKETING_CYCLE_TICK, () => {
-      this.runCycle().catch(() => {
-      });
-    });
   }
   stop() {
     if (this.timer) {
@@ -20303,6 +20457,11 @@ var EXPERT_RULES = [
     validUntil: null,
     version: 1,
     jurisdiction: "federal",
+    requiredData: ["infractionDate", "notificationExpeditionDate"],
+    relatedArguments: ["ARG-048", "ARG-049"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["C\xF3pia da Notifica\xE7\xE3o da Autua\xE7\xE3o com data de expedi\xE7\xE3o/postagem", "Extrato do hist\xF3rico de notifica\xE7\xF5es"],
+    priority: 100,
     evaluate: (ctx) => {
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
         const infDate = new Date(ctx.infractionDate);
@@ -20334,6 +20493,11 @@ var EXPERT_RULES = [
     validUntil: null,
     version: 1,
     jurisdiction: "federal",
+    requiredData: ["infractionDate", "radarCalibrationDate"],
+    relatedArguments: ["ARG-001"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran", "analise_tecnica"],
+    evidenceRequired: ["Certid\xE3o do Portal de Servi\xE7os do INMETRO (PSInmetro) atestando a data da \xFAltima verifica\xE7\xE3o"],
+    priority: 95,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
       const isSpeed = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10";
@@ -20354,15 +20518,7 @@ var EXPERT_RULES = [
             };
           }
         }
-        return {
-          ruleId: "RULE_RADAR_CALIBRACAO_12M",
-          title: "Obrigatoriedade de Aferi\xE7\xE3o Peri\xF3dica Anual pelo INMETRO",
-          description: "A autua\xE7\xE3o por radar exige comprova\xE7\xE3o de verifica\xE7\xE3o metrol\xF3gica peri\xF3dica nos \xFAltimos 12 meses na data do evento.",
-          severity: "alta",
-          legalArgumentId: "ARG-001",
-          impact: "Nulidade absoluta do AIT caso o laudo do INMETRO n\xE3o esteja v\xE1lido no dia da infra\xE7\xE3o.",
-          statutoryBasis: "Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, Art. 4\xBA, III e Portaria INMETRO n\xBA 158/2022"
-        };
+        return null;
       }
       return null;
     }
@@ -20376,13 +20532,18 @@ var EXPERT_RULES = [
     validFrom: "2021-04-12",
     // Lei 14.071/2020
     validUntil: null,
+    requiredData: ["hasPreviousInfractionsLast12Months"],
+    relatedArguments: ["ARG-051"],
+    affectedProcedures: ["conversao_advertencia"],
+    evidenceRequired: ["Extrato de prontu\xE1rio e hist\xF3rico de CNH sem infra\xE7\xF5es nos \xFAltimos 12 meses"],
+    priority: 90,
     version: 1,
     jurisdiction: "federal",
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
       const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace("-", "") === code.replace("-", ""));
       const isLightOrMedium = cat ? cat.severity === "leve" || cat.severity === "media" : code === "745-50" || code === "735-80";
-      const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false || ctx.hasPreviousInfractionsLast12Months === void 0;
+      const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false;
       if (isLightOrMedium && isCleanRecord) {
         return {
           ruleId: "RULE_CONVERSAO_ADVERTENCIA_267",
@@ -20398,6 +20559,9 @@ var EXPERT_RULES = [
     }
   },
   // Rule 4: Lei Seca sem Termo de Constatação de Sinais (Res. 432/CONTRAN)
+  // Fase 2: somente conclui o vício quando o dado confirma ausência do termo.
+  // Tese correta: ARG-025 (termo de sinais psicomotores). A versão anterior
+  // apontava ARG-010 (semáforo — amarelo) e concluía sem verificar o dado.
   {
     id: "RULE_LEI_SECA_TERMO_432",
     name: "Termo de Sinais Psicomotores da Resolu\xE7\xE3o CONTRAN 432/2013",
@@ -20405,11 +20569,17 @@ var EXPERT_RULES = [
     category: "direito_formal",
     validFrom: "2013-01-29",
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: "federal",
+    requiredData: ["hasPsychomotorTerm"],
+    relatedArguments: ["ARG-025"],
+    affectedProcedures: ["suspensao_cnh", "recurso_jari"],
+    evidenceRequired: ["C\xF3pia integral do processo administrativo comprovando a aus\xEAncia do Anexo II da Res. 432/2013"],
+    priority: 88,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
-      if (code === "516-91" || code === "516-92" || code.includes("516")) {
+      const isLeiSeca = code === "516-91" || code === "516-92" || code.includes("516");
+      if (isLeiSeca && ctx.hasPsychomotorTerm === false) {
         return {
           ruleId: "RULE_LEI_SECA_TERMO_432",
           title: "Aus\xEAncia ou Defeito no Termo de Constata\xE7\xE3o de Sinais (Res. 432/13)",
@@ -20417,24 +20587,32 @@ var EXPERT_RULES = [
           severity: "alta",
           legalArgumentId: "ARG-025",
           impact: "Anula\xE7\xE3o do AIT e cancelamento do processo de suspens\xE3o da CNH por 12 meses (R$ 2.934,70).",
-          statutoryBasis: "Artigo 277 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013"
+          statutoryBasis: "Artigo 277 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, Art. 5\xBA e Anexo II"
         };
       }
       return null;
     }
   },
   // Rule 5: Autuação Sem Abordagem sem Observações Circunstanciadas (MBFT / Res. 985/2022)
+  // Fase 2: restrita ao código de celular (736-62) cuja tese é ARG-015.
+  // A versão anterior apontava ARG-006 (foto com múltiplos veículos) e concluía
+  // sem verificar o dado (observações ausentes).
   {
     id: "RULE_AUTUACAO_SEM_ABORDAGEM_MBFT",
     name: "Falta de Descri\xE7\xE3o Circunstanciada em Autua\xE7\xF5es sem Abordagem",
-    description: "Valida multas manuais (celular, cinto, sem\xE1foro) lavradas sem parada do ve\xEDculo.",
+    description: "Valida multas manuais (celular) lavradas sem parada do ve\xEDculo e sem observa\xE7\xF5es circunstanciadas.",
     category: "direito_formal",
     validFrom: "2023-01-02",
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: "federal",
+    requiredData: ["hasAgentDetailedObservations"],
+    relatedArguments: ["ARG-015"],
+    affectedProcedures: ["defesa_previa", "recurso_jari"],
+    evidenceRequired: ["Espelho do Auto de Infra\xE7\xE3o com o campo de observa\xE7\xF5es vago/gen\xE9rico"],
+    priority: 82,
     evaluate: (ctx) => {
-      if (ctx.infractionCode === "736-62" || ctx.infractionCode === "518-51" || ctx.infractionCode === "735-80") {
+      if (ctx.infractionCode === "736-62" && ctx.hasAgentDetailedObservations === false) {
         return {
           ruleId: "RULE_AUTUACAO_SEM_ABORDAGEM_MBFT",
           title: "Aus\xEAncia de Descri\xE7\xE3o Circunstanciada no Campo de Observa\xE7\xF5es",
@@ -20442,7 +20620,7 @@ var EXPERT_RULES = [
           severity: "alta",
           legalArgumentId: "ARG-015",
           impact: "Nulidade do auto por v\xEDcio formal de motiva\xE7\xE3o e falta de prova material.",
-          statutoryBasis: "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito)"
+          statutoryBasis: "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito), Ficha 736-62"
         };
       }
       return null;
@@ -20456,10 +20634,15 @@ var EXPERT_RULES = [
     category: "sinalizacao_viaria",
     validFrom: "1998-01-22",
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: "federal",
+    requiredData: ["hasR19SignageProof"],
+    relatedArguments: ["ARG-002", "ARG-007"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "analise_tecnica"],
+    evidenceRequired: ["Fotografias do trecho demonstrado aus\xEAncia/obstru\xE7\xE3o da placa R-19"],
+    priority: 78,
     evaluate: (ctx) => {
-      if (ctx.hasR19SignageProof === false || ctx.hasR19SignageProof === void 0) {
+      if (ctx.hasR19SignageProof === false) {
         return {
           ruleId: "RULE_SINALIZACAO_INSUFICIENTE_90",
           title: "Aus\xEAncia de Placa Regulamentadora R-19 na Dist\xE2ncia T\xE9cnica M\xEDnima",
@@ -20469,6 +20652,55 @@ var EXPERT_RULES = [
           impact: "Atipicidade da conduta e cancelamento da autua\xE7\xE3o.",
           statutoryBasis: "Artigo 90 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 798/2020"
         };
+      }
+      return null;
+    }
+  },
+  // Rule 7: Erro na Medida Considerada pelo INMETRO (Res. 798/2020)
+  // Fase 2: tese correta é ARG-005 (erro de enquadramento por velocidade
+  // considerada). A versão anterior apontava ARG-009 (semáforo — foto de retenção).
+  {
+    id: "RULE_INMETRO_CONSIDERED_SPEED_ERROR",
+    name: "Erro na Medida Considerada pelo INMETRO",
+    description: "Verifica se a velocidade considerada foi corretamente calculada subtraindo a margem de erro metrol\xF3gica da velocidade medida.",
+    category: "metrologia_engenharia",
+    validFrom: "2020-11-01",
+    // Same as radar calibration rule
+    validUntil: null,
+    version: 2,
+    jurisdiction: "federal",
+    requiredData: ["measuredSpeed", "consideredSpeed", "speedLimit"],
+    relatedArguments: ["ARG-005"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["C\xF3pia da Notifica\xE7\xE3o com os campos de velocidade medida/considerada preenchidos"],
+    priority: 85,
+    evaluate: (ctx) => {
+      const code = ctx.infractionCode || "";
+      const isSpeed = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10";
+      if (isSpeed) {
+        if (ctx.measuredSpeed !== void 0 && ctx.consideredSpeed !== void 0 && ctx.speedLimit !== void 0) {
+          const measuredSpeed = ctx.measuredSpeed;
+          const consideredSpeed = ctx.consideredSpeed;
+          const speedLimit = ctx.speedLimit;
+          const measuredExceedsLimit = measuredSpeed > speedLimit;
+          const consideredExceedsLimit = consideredSpeed > speedLimit;
+          const measuredExceeds20pct = measuredSpeed > speedLimit * 1.2;
+          const consideredExceeds20pct = consideredSpeed > speedLimit * 1.2;
+          const measuredExceeds50pct = measuredSpeed > speedLimit * 1.5;
+          const consideredExceeds50pct = consideredSpeed > speedLimit * 1.5;
+          if (measuredExceedsLimit && (!consideredExceedsLimit || measuredExceeds20pct && !consideredExceeds20pct || measuredExceeds50pct && !consideredExceeds50pct)) {
+            return {
+              ruleId: "RULE_INMETRO_CONSIDERED_SPEED_ERROR",
+              title: "Erro na Medida Considerada pelo INMETRO",
+              description: `A velocidade medida (${measuredSpeed} km/h) foi utilizada para autua\xE7\xE3o, mas a velocidade considerada (${consideredSpeed} km/h) ap\xF3s aplica\xE7\xE3o da margem de erro do INMETRO n\xE3o comprova a infra\xE7\xE3o ou enquadra-a em menor gravidade.`,
+              severity: "alta",
+              legalArgumentId: "ARG-005",
+              impact: "Desconstitui\xE7\xE3o do enquadramento da infra\xE7\xE3o; poss\xEDvel redu\xE7\xE3o de pontos e multa ou anula\xE7\xE3o do auto.",
+              statutoryBasis: "Art. 280, \xA72\xBA do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, Tabela I"
+            };
+          }
+        }
+        return null;
       }
       return null;
     }
@@ -20507,20 +20739,40 @@ var ExpertRuleEngine = class {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
       notificationExpeditionDate: infraction.notificationExpeditionDate,
+      notificationDeliveryDate: infraction.notificationDeliveryDate,
       defenseDeadline: infraction.defenseDeadline,
       speedLimit: infraction.speedLimit,
       measuredSpeed: infraction.measuredSpeed,
       consideredSpeed: infraction.consideredSpeed,
+      speedMeasured: infraction.speedMeasured,
+      speedConsidered: infraction.speedConsidered,
       radarEquipmentId: infraction.radarEquipmentId,
       radarCalibrationDate: infraction.inmetroAferitionDate,
       autuadorBody: infraction.autuadorBody,
+      aitNumber: infraction.aitNumber,
       hasPreviousInfractionsLast12Months: infraction.hasPreviousInfractionsLast12Months,
+      hasPsychomotorTerm: infraction.hasPsychomotorTerm,
+      hasAgentDetailedObservations: infraction.hasAgentDetailedObservations,
+      hasPhotoProof: infraction.hasPhotoProof,
       hasR19SignageProof: infraction.hasR19SignageProof
     };
     const detectedInconsistencies = [];
     const recommendedArgs = [];
+    const dataGaps = [];
     const activeRules = this.getActiveRules(effectiveDate);
     for (const rule of activeRules) {
+      const missingData = (rule.requiredData || []).filter((key) => {
+        const value = context[key];
+        return value === void 0 || value === null || value === "";
+      });
+      if (missingData.length > 0) {
+        dataGaps.push({
+          ruleId: rule.id,
+          missingData,
+          reason: `N\xE3o h\xE1 dados suficientes para avaliar a hip\xF3tese "${rule.name}". Sem ${missingData.join(", ")}, a regra n\xE3o pode concluir pela exist\xEAncia do v\xEDcio (FAIL CLOSED).`
+        });
+        continue;
+      }
       const result = rule.evaluate(context);
       if (result) {
         detectedInconsistencies.push({
@@ -20579,6 +20831,8 @@ ${p.text}`).join("\n\n"),
       baseScore = 92;
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-025")) {
       baseScore = 88;
+    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-005")) {
+      baseScore = 85;
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-015")) {
       baseScore = 82;
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-002")) {
@@ -20587,9 +20841,7 @@ ${p.text}`).join("\n\n"),
       baseScore = Math.min(90, 50 + detectedInconsistencies.length * 15);
     }
     const overallSuccessRate = Math.min(99, Math.max(25, baseScore));
-    const deadlineDate = /* @__PURE__ */ new Date();
-    deadlineDate.setDate(deadlineDate.getDate() + 25);
-    const deadlineStr = deadlineDate.toLocaleDateString("pt-BR");
+    const gapSummary = dataGaps.length > 0 ? ` N\xE3o foi poss\xEDvel avaliar ${dataGaps.length} hip\xF3tese(s) por insufici\xEAncia de dados (${dataGaps.map((g) => g.missingData.join("+")).join("; ")}).` : "";
     return {
       id: `anl_${Date.now()}`,
       caseId,
@@ -20598,8 +20850,9 @@ ${p.text}`).join("\n\n"),
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
       competentBody: infraction.autuadorBody,
-      procedureDeadline: infraction.defenseDeadline || deadlineStr,
-      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.`,
+      procedureDeadline: infraction.defenseDeadline,
+      dataGaps: dataGaps.length > 0 ? dataGaps : void 0,
+      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.${gapSummary}`,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
@@ -20631,6 +20884,32 @@ function buildDocumentRollItems(procedureType) {
 }
 function buildDocumentRollText(procedureType, aitNumber) {
   const items = buildDocumentRollItems(procedureType);
+  return formatRoll(items, aitNumber);
+}
+function buildDocumentRollTextForAnalysis(procedureType, detectedArgumentIds, aitNumber) {
+  const procedureItems = buildDocumentRollItems(procedureType);
+  const seen = /* @__PURE__ */ new Set();
+  const merged = [];
+  for (const item of procedureItems) {
+    if (!seen.has(item.label)) {
+      seen.add(item.label);
+      merged.push(item);
+    }
+  }
+  for (const argId of detectedArgumentIds || []) {
+    const arg = ARGUMENTS_CATALOG.find((a) => a.id === argId);
+    if (!arg) continue;
+    const evidences = arg.evidenceRequired ?? arg.requirements ?? [];
+    for (const ev of evidences) {
+      if (!seen.has(ev)) {
+        seen.add(ev);
+        merged.push({ id: `doc_evid_${argId}`, label: ev, hint: `Evid\xEAncia da tese ${arg.title}` });
+      }
+    }
+  }
+  return formatRoll(merged, aitNumber);
+}
+function formatRoll(items, aitNumber) {
   const list = items.map((item, idx) => {
     let label = item.label;
     if (aitNumber && /notifica|auto de infração|ait/i.test(label)) {
@@ -20657,7 +20936,18 @@ var DocumentAssemblyEngine = class {
     if (!template) {
       throw new Error(`Template n\xE3o dispon\xEDvel para procedimento: ${payload.procedureType}`);
     }
-    const activeArgIds = payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0 ? payload.selectedArgumentIds : procedure.applicableGrounds;
+    let activeArgIds;
+    if (payload.analysis) {
+      activeArgIds = Array.from(new Set(payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean)));
+      const constArg = ARGUMENTS_CATALOG.find((a) => a.id === "ARG-049");
+      if (constArg && !activeArgIds.includes("ARG-049")) {
+        activeArgIds.push("ARG-049");
+      }
+    } else if (payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0) {
+      activeArgIds = payload.selectedArgumentIds;
+    } else {
+      activeArgIds = procedure.applicableGrounds;
+    }
     const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
     const preliminaryArgs = matchedArguments.filter(
       (a) => a.category === "preliminar" || a.category === "formal"
@@ -20824,7 +21114,11 @@ ${body}`;
 ${payload.customFacts.trim()}`;
       }
       if (block.id === "BLK-068") {
-        content = buildDocumentRollText(payload.procedureType, aitNumber);
+        content = payload.analysis && payload.analysis.detectedInconsistencies.length > 0 ? buildDocumentRollTextForAnalysis(
+          payload.procedureType,
+          payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean),
+          aitNumber
+        ) : buildDocumentRollText(payload.procedureType, aitNumber);
       }
       for (const [placeholder, value] of Object.entries(variableMap)) {
         content = content.replaceAll(placeholder, value);
@@ -20868,7 +21162,8 @@ ${payload.customFacts.trim()}`;
       appliedBlockCount: blocksToAssemble.length,
       appliedArgumentCount: matchedArguments.length,
       procedureName: procedure.name,
-      templateCode: template.code
+      templateCode: template.code,
+      procedureMismatch: payload.analysis && payload.analysis.recommendedProcedure !== payload.procedureType ? true : void 0
     };
     return {
       ...resultDraft,
@@ -23600,28 +23895,64 @@ var RagPipeline = class {
 };
 
 // src/server/services/ocr-service.ts
-var PLATE_PATTERN = /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g;
-var AIT_PATTERN = /\b(?:AIT|Nº?|N°|Numero|NÚMERO)[:\s]*(\d{4,12})\b/i;
-var CODE_PATTERN = /\b(?:Código|Artigo|Art)\.?\s*(\d{3}-\d{2})\b/i;
-var CTB_ARTICLE_PATTERN = /\bArt\.?\s*(\d{1,3}(?:\.\d{2})?)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)?/gi;
-var VALUE_PATTERN = /R\$\s*([\d.,]+)/g;
-var DATE_PATTERN = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/g;
-var SPEED_PATTERN = /(\d{2,3})\s*km\/?h/gi;
-var RENAVAM_PATTERN = /\bRENAVAM[:\s]*(\d{9,11})\b/i;
+var PLATE_PATTERNS = [
+  // Mercosul format: ABC1D23
+  /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g,
+  // Old format: ABC-1234
+  /[A-Z]{3}-?\d{4}/g,
+  // With possible OCR errors
+  /[A-Z]{3}[\s\-]?[0-9O][A-Z0-9][\s\-]?[0-9]{2}/g
+];
+var AIT_PATTERNS = [
+  /\b(?:AIT|Nº?|N°|Numero|NÚMERO|Auto[.\s]*Infra[çc][aã]o)[:\s]*(\d{4,12})\b/i,
+  /\b(?:Processo|PROCESSO)[:\s]*(\d{4,12})\b/i,
+  /\b(\d{4,6}[-.]?\d{2,4}[-.]?\d{2,4})\b/
+  // Generic numeric ID
+];
+var CODE_PATTERNS = [
+  /\b(?:Código|CODIGO|Artigo|ARTIGO|Art)\.?\s*(\d{3}-\d{2})\b/i,
+  /\bInfra[çc][aã]o\s*:?\s*(\d{3}-\d{2})\b/i,
+  /\b(\d{3}-\d{2})(?:\s*[-\/]\s*|\s*\(\s*)/
+  // Code followed by dash or parenthesis
+];
+var CTB_ARTICLE_PATTERNS = [
+  /\bArt\.?\s*(\d{1,3}(?:\.\d{2})?)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)/gi,
+  /\b(\d{1,3}(?:\.\d{2})?)\s*(?:artigo|ARTIGO)\s*(?:do\s*)?(?:CTB|Código\s+de\s+Trânsito)/gi
+];
+var VALUE_PATTERNS = [
+  /R\$\s*([\d.,]+)/g,
+  /Valor\s*:?\s*R?\$?\s*([\d.,]+)/i,
+  /multa\s*:?\s*R?\$?\s*([\d.,]+)/i
+];
+var DATE_PATTERNS = [
+  /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/g,
+  /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
+  // YYYY-MM-DD format
+  /(\d{1,2})\s+de\s+de\s+de\s+(\d{4})/i
+  // DD de MM de YYYY
+];
+var SPEED_PATTERNS = [
+  /(\d{2,3})\s*km\/?h/gi,
+  /(\d{2,3})\s*quilometros\s*por\s*hora/gi,
+  /Velocidade[:\s]*(\d{2,3})\s*km\/h/i
+];
 var INFRACAO_CODES = {
-  "518-10": { description: "Dirigir ve\xEDculos automotores ou reboques com dimens\xF5es acima dos limites", article: "Art. 203", severity: "m\xE9dia" },
-  "745-50": { description: "Velocidade acima da permitida em at\xE9 20 km/h", article: "Art. 218, I", severity: "leve" },
-  "745-51": { description: "Velocidade acima da permitida de 21 a 50 km/h", article: "Art. 218, II", severity: "m\xE9dia" },
-  "745-52": { description: "Velocidade acima da permitida acima de 50 km/h", article: "Art. 218, III", severity: "grav\xEDssima" },
-  "516-91": { description: "Conduzir ve\xEDculo sob influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa", article: "Art. 165", severity: "grav\xEDssima" },
-  "736-62": { description: "Utilizar equipamento de telefonia celular durante a dire\xE7\xE3o", article: "Art. 218, IV", severity: "m\xE9dia" },
-  "605-01": { description: "N\xE3o respeitar a sinaliza\xE7\xE3o semaf\xF3rica", article: "Art. 208", severity: "m\xE9dia" },
-  "746-10": { description: "Ultrapassar faixa dupla cont\xEDnua", article: "Art. 199", severity: "m\xE9dia" },
-  "746-30": { description: "Avan\xE7ar o sinal vermelho do sem\xE1foro", article: "Art. 208", severity: "m\xE9dia" },
-  "752-20": { description: "Estacionar em local proibido", article: "Art. 181, IX", severity: "leve" },
-  "753-30": { description: "Utilizar cal\xE7ada para estacionamento", article: "Art. 181, XI", severity: "m\xE9dia" },
-  "761-80": { description: "Deixar de usar cinto de seguran\xE7a", article: "Art. 196", severity: "leve" },
-  "593-70": { description: "Transitar em\u53EF\u8FBEvelocidade incompat\xEDvel com a seguran\xE7a", article: "Art. 198", severity: "m\xE9dia" }
+  "518-10": { description: "Dirigir ve\xEDculos automotores ou reboques com dimens\xF5es acima dos limites", article: "Art. 203", severity: "m\xE9dia", points: 0, isSpeedRelated: false },
+  "745-50": { description: "Velocidade acima da permitida em at\xE9 20%", article: "Art. 218, I", severity: "leve", points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 20 } },
+  "745-51": { description: "Velocidade acima da permitida de 21% a 50%", article: "Art. 218, II", severity: "m\xE9dia", points: 5, isSpeedRelated: true, typicalSpeedRange: { min: 21, max: 50 } },
+  "745-52": { description: "Velocidade acima da permitida acima de 50%", article: "Art. 218, III", severity: "grav\xEDssima", points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
+  "516-91": { description: "Conduzir ve\xEDculo sob influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa", article: "Art. 165", severity: "grav\xEDssima", points: 7, isSpeedRelated: false },
+  "736-62": { description: "Utilizar equipamento de telefonia celular durante a dire\xE7\xE3o", article: "Art. 252, Par\xE1grafo \xDAnico", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
+  "605-01": { description: "N\xE3o respeitar a sinaliza\xE7\xE3o semaf\xF3rica", article: "Art. 208", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
+  "746-10": { description: "Ultrapassar faixa dupla cont\xEDnua", article: "Art. 199", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
+  "746-30": { description: "Avan\xE7ar o sinal vermelho do sem\xE1foro", article: "Art. 208", severity: "m\xE9dia", points: 5, isSpeedRelated: false },
+  "752-20": { description: "Estacionar em local proibido", article: "Art. 181, IX", severity: "leve", points: 0, isSpeedRelated: false },
+  "753-30": { description: "Utilizar cal\xE7ada para estacionamento", article: "Art. 181, XI", severity: "m\xE9dia", points: 2, isSpeedRelated: false },
+  "761-80": { description: "Deixar de usar cinto de seguran\xE7a", article: "Art. 196", severity: "leve", points: 0, isSpeedRelated: false },
+  "593-70": { description: "Transitar em velocidade incompat\xEDvel com a seguran\xE7a", article: "Art. 198", severity: "m\xE9dia", points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 100 } },
+  "516-92": { description: "Conduzir ve\xEDculo com concentra\xE7\xE3o de \xE1lcool por decilitro de sangue igual ou superior a 0,06 gram", article: "Art. 165 do CTB", severity: "grav\xEDssima", points: 7, isSpeedRelated: false },
+  "747-10": { description: "Velocidade acima da permitida em mais de 50% (factor multiplicador)", article: "Art. 218, III", severity: "grav\xEDssima", points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
+  "748-90": { description: "Fugir da blitz policial", article: "Art. 311", severity: "grav\xEDssima", points: 7, isSpeedRelated: false }
 };
 async function callOcrSpace(imageBase64, config) {
   const apiKey = config.ocrSpaceApiKey || process.env.OCR_SPACE_API_KEY;
@@ -23706,39 +24037,264 @@ async function callGoogleVision(imageBase64, config) {
     throw err;
   }
 }
+function extractWithPatterns(text, patterns) {
+  let results = [];
+  for (const pattern of patterns) {
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length > 0) {
+      results = matches.map((m) => m[1]).filter(Boolean);
+      if (results.length > 0) break;
+    }
+  }
+  return results;
+}
+function validatePlaca(placa) {
+  const cleanPlaca = placa.replace(/[^A-Z0-9]/g, "").toUpperCase();
+  const mercosulPattern = /^[A-Z]{3}\d[A-Z]\d{2}$/;
+  const oldPattern = /^[A-Z]{3}\d{4}$/;
+  if (mercosulPattern.test(cleanPlaca) || oldPattern.test(cleanPlaca)) {
+    return { isValid: true, confidence: 95 };
+  }
+  if (/^[A-Z]{3}[0-9O][A-Z0-9]\d{2}$/.test(cleanPlaca)) {
+    return { isValid: true, confidence: 80 };
+  }
+  return { isValid: false, confidence: 0 };
+}
+function validateCodigoInfracao(codigo) {
+  if (!/^\d{3}-\d{2}$/.test(codigo)) {
+    return { isValid: false, confidence: 0 };
+  }
+  if (INFRACAO_CODES[codigo]) {
+    return { isValid: true, confidence: 95 };
+  }
+  return { isValid: true, confidence: 70 };
+}
+function validateDataInfracao(data) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    return { isValid: false, confidence: 0 };
+  }
+  const [year, month, day] = data.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (isNaN(date.getTime())) {
+    return { isValid: false, confidence: 0 };
+  }
+  const today = /* @__PURE__ */ new Date();
+  today.setHours(0, 0, 0, 0);
+  const inputDate = new Date(year, month - 1, day);
+  if (inputDate > today) {
+    return { isValid: false, confidence: 30 };
+  }
+  const tenYearsAgo = /* @__PURE__ */ new Date();
+  tenYearsAgo.setFullYear(today.getFullYear() - 10);
+  if (inputDate < tenYearsAgo) {
+    return { isValid: false, confidence: 40 };
+  }
+  return { isValid: true, confidence: 90 };
+}
+function validateValorMulta(valor) {
+  if (isNaN(valor) || valor < 0) {
+    return { isValid: false, confidence: 0 };
+  }
+  if (valor >= 50 && valor <= 1e4) {
+    return { isValid: true, confidence: 85 };
+  }
+  if (valor >= 1e4 && valor <= 5e4) {
+    return { isValid: true, confidence: 60 };
+  }
+  return { isValid: false, confidence: 10 };
+}
+function validateVelocidades(velocidadePermitida, velocidadeAferida, velocidadeConsiderada, codigoInfracao) {
+  const observacoes = [];
+  const infracaoInfo = INFRACAO_CODES[codigoInfracao];
+  if (!infracaoInfo || !infracaoInfo.isSpeedRelated) {
+    return { isValid: true, confidence: 90, observacoes: ["Infra\xE7\xE3o n\xE3o relacionada a velocidade"] };
+  }
+  if (!velocidadePermitida || !velocidadeAferida) {
+    observacoes.push("Dados de velocidade incompletos para infra\xE7\xE3o relacionada a velocidade");
+    return { isValid: false, confidence: 40, observacoes };
+  }
+  if (velocidadePermitida < 10 || velocidadePermitida > 200) {
+    observacoes.push(`Velocidade permitida fora do intervalo esperado: ${velocidadePermitida} km/h`);
+  }
+  if (velocidadeAferida < 10 || velocidadeAferida > 300) {
+    observacoes.push(`Velocidade aferida fora do intervalo esperado: ${velocidadeAferida} km/h`);
+  }
+  if (velocidadeAferida < velocidadePermitida) {
+    observacoes.push("Velocidade aferida menor que a permitida (poss\xEDvel erro de medi\xE7\xE3o ou extrac\xE7\xE3o)");
+  }
+  const excessoPercentual = (velocidadeAferida - velocidadePermitida) / velocidadePermitida * 100;
+  if (infracaoInfo.typicalSpeedRange) {
+    const { min, max } = infracaoInfo.typicalSpeedRange;
+    if (excessoPercentual < min || excessoPercentual > max) {
+      observacoes.push(
+        `Excesso percentual (${excessoPercentual.toFixed(1)}%) n\xE3o compat\xEDvel com o c\xF3digo de infra\xE7\xE3o (${codigoInfracao}), que geralmente corresponde a ${min}%-${max}% acima do limite`
+      );
+    }
+  }
+  const isValid = observacoes.length === 0;
+  const confidence = isValid ? 85 : Math.max(30, 85 - observacoes.length * 15);
+  return { isValid, confidence, observacoes };
+}
 function parseTrafficTicket(rawText) {
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const plates = text.match(PLATE_PATTERN) || [];
-  const placa = plates[0]?.replace(/\s/g, "") || "N/A";
-  const aitMatch = text.match(AIT_PATTERN);
-  const aitNumber = aitMatch?.[1] || extractAitFromContext(text);
-  const codeMatch = text.match(CODE_PATTERN);
-  const codigoInfracao = codeMatch?.[1] || "";
-  const articleMatches = [...text.matchAll(CTB_ARTICLE_PATTERN)];
-  const artigoCtb = articleMatches.map((m) => `Art. ${m[1]}`).join(", ") || "";
-  const values = [...text.matchAll(VALUE_PATTERN)].map(
-    (m) => parseFloat(m[1].replace(/\./g, "").replace(",", "."))
-  );
-  const valorMulta = values.find((v) => v >= 50 && v <= 5e3) || 0;
-  const dates = [...text.matchAll(DATE_PATTERN)].map((m) => {
-    const [, day, month, year] = m;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  });
-  const dataInfracao = dates[0] || "";
-  const speeds = [...text.matchAll(SPEED_PATTERN)].map((m) => parseInt(m[1], 10));
-  const velocidadePermitida = speeds[0];
-  const VelocidadeAferida = speeds[1];
-  const velocidadeConsiderada = speeds[2] || VelocidadeAferida;
-  const renavamMatch = text.match(RENAVAM_PATTERN);
+  const observacoesValidacao = [];
+  let placa = "N/A";
+  let confiancaPlaca = 0;
+  const plateMatches = extractWithPatterns(text, PLATE_PATTERNS);
+  if (plateMatches.length > 0) {
+    const validation = validatePlaca(plateMatches[0]);
+    placa = plateMatches[0].replace(/[^A-Z0-9]/g, "").toUpperCase();
+    confiancaPlaca = validation.confidence;
+    if (!validation.isValid) {
+      observacoesValidacao.push(`Placa pode estar incorreta: ${placa}`);
+    }
+  }
+  let aitNumber = `AIT-${Date.now().toString().slice(-8)}`;
+  const aitMatches = extractWithPatterns(text, AIT_PATTERNS);
+  if (aitMatches.length > 0) {
+    aitNumber = aitMatches[0];
+  }
+  let codigoInfracao = "";
+  let confiancaCodigoInfracao = 0;
+  const codeMatches = extractWithPatterns(text, CODE_PATTERNS);
+  if (codeMatches.length > 0) {
+    const validation = validateCodigoInfracao(codeMatches[0]);
+    codigoInfracao = codeMatches[0];
+    confiancaCodigoInfracao = validation.confidence;
+    if (!validation.isValid) {
+      observacoesValidacao.push(`C\xF3digo de infra\xE7\xE3o pode estar incorreto: ${codigoInfracao}`);
+    }
+  }
+  let artigoCtb = "";
+  const articleMatches = [...text.matchAll(CTB_ARTICLE_PATTERNS[0])];
+  if (articleMatches.length === 0) {
+    articleMatches.push(...[...text.matchAll(CTB_ARTICLE_PATTERNS[1])]);
+  }
+  if (articleMatches.length > 0) {
+    artigoCtb = articleMatches.map((m) => `Art. ${m[1]}`).join(", ");
+  }
+  let valorMulta = 0;
+  let confiancaValorMulta = 0;
+  const allValues = [];
+  for (const pattern of VALUE_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach((m) => {
+      const value = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
+      if (!isNaN(value)) allValues.push(value);
+    });
+  }
+  if (allValues.length > 0) {
+    const fineCandidates = allValues.filter((v) => v >= 50 && v <= 5e3);
+    if (fineCandidates.length > 0) {
+      valorMulta = fineCandidates[0];
+      const validation = validateValorMulta(valorMulta);
+      confiancaValorMulta = validation.confidence;
+      if (!validation.isValid) {
+        observacoesValidacao.push(`Valor da multa suspeito: R$ ${valorMulta.toFixed(2)}`);
+      }
+    } else if (allValues.length > 0) {
+      valorMulta = Math.min(...allValues.filter((v) => v >= 10));
+      const validation = validateValorMulta(valorMulta);
+      confiancaValorMulta = validation.confidence * 0.8;
+      if (!validation.isValid) {
+        observacoesValidacao.push(`Valor da multa fora do intervalo t\xEDpico: R$ ${valorMulta.toFixed(2)}`);
+      }
+    }
+  }
+  let dataInfracao = "";
+  let confiancaDataInfracao = 0;
+  const allDates = [];
+  for (const pattern of DATE_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach((m) => {
+      let dateStr;
+      if (m.length === 4) {
+        const [, day, month, year] = m;
+        dateStr = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      } else if (m.length === 3) {
+        const [, year, month, day] = m;
+        dateStr = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      } else {
+        const [, day, , month, , year] = m;
+        const monthNum = {
+          "janeiro": "01",
+          "fevereiro": "02",
+          "mar\xE7o": "03",
+          "abril": "04",
+          "maio": "05",
+          "junho": "06",
+          "julho": "07",
+          "agosto": "08",
+          "setembro": "09",
+          "outubro": "10",
+          "novembro": "11",
+          "dezembro": "12"
+        }[month.toLowerCase()] || "01";
+        dateStr = `${year}-${monthNum}-${day.padStart(2, "0")}`;
+      }
+      if (dateStr) allDates.push(dateStr);
+    });
+  }
+  if (allDates.length > 0) {
+    const validDates = allDates.filter((date) => {
+      const validation = validateDataInfracao(date);
+      return validation.isValid;
+    });
+    if (validDates.length > 0) {
+      dataInfracao = validDates[0];
+      const validation = validateDataInfracao(dataInfracao);
+      confiancaDataInfracao = validation.confidence;
+    } else if (allDates.length > 0) {
+      dataInfracao = allDates[0];
+      const validation = validateDataInfracao(dataInfracao);
+      confiancaDataInfracao = validation.confidence * 0.5;
+      observacoesValidacao.push(`Data pode estar incorreta: ${dataInfracao}`);
+    }
+  }
   const localInfracao = extractLocation(text);
   const orgaoAutuador = extractOrgao(text);
   const infracaoInfo = INFRACAO_CODES[codigoInfracao];
-  const descricao = infracaoInfo?.description || extractDescription(text);
-  const prazoDefesa = extractDefenseDeadline(text, dates);
+  let descricao = infracaoInfo?.description || extractDescription(text);
+  if (!infracaoInfo && descricao === "Infra\xE7\xE3o de tr\xE2nsito") {
+    observacoesValidacao.push(`C\xF3digo de infra\xE7\xE3o n\xE3o reconhecido: ${codigoInfracao}`);
+  }
+  const prazoDefesa = extractDefenseDeadline(
+    text,
+    allDates.map((d) => `${d}T00:00:00`)
+    // Convert to ISO strings for the function
+  );
   const radarMatch = text.match(/(?:Equipamento|Radar|EQUIPAMENTO)[:\s]*([A-Z0-9\-]+)/i);
   const equipamentoRadar = radarMatch?.[1];
   const afericaoMatch = text.match(/(?:Aferição|AFERIÇÃO|Validade)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
   const dataAfericao = afericaoMatch?.[1]?.replace(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/, "$3-$2-$1");
+  let velocidadePermitida;
+  let VelocidadeAferida;
+  let velocidadeConsiderada;
+  const allSpeeds = [];
+  for (const pattern of SPEED_PATTERNS) {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach((m) => {
+      const speed = parseInt(m[1], 10);
+      if (!isNaN(speed)) allSpeeds.push(speed);
+    });
+  }
+  if (allSpeeds.length >= 1) velocidadePermitida = allSpeeds[0];
+  if (allSpeeds.length >= 2) VelocidadeAferida = allSpeeds[1];
+  if (allSpeeds.length >= 3) velocidadeConsiderada = allSpeeds[2];
+  else if (allSpeeds.length === 2) velocidadeConsiderada = VelocidadeAferida;
+  let validacaoVelocidade = true;
+  let velocidadeConfianca = 90;
+  if (infracaoInfo?.isSpeedRelated) {
+    const velocidadeValidation = validateVelocidades(
+      velocidadePermitida,
+      VelocidadeAferida,
+      velocidadeConsiderada,
+      codigoInfracao
+    );
+    validacaoVelocidade = velocidadeValidation.isValid;
+    velocidadeConfianca = velocidadeValidation.confidence;
+    observacoesValidacao.push(...velocidadeValidation.observacoes);
+  }
   return {
     aitNumber,
     placa,
@@ -23754,76 +24310,99 @@ function parseTrafficTicket(rawText) {
     velocidadeConsiderada,
     equipamentoRadar,
     dataAfericao,
-    prazoDefesa
+    prazoDefesa,
+    // Enhanced verification fields
+    confiancaPlaca: confiancaPlaca || 0,
+    confiancaCodigoInfracao: confiancaCodigoInfracao || 0,
+    confiancaDataInfracao: confiancaDataInfracao || 0,
+    confiancaValorMulta: confiancaValorMulta || 0,
+    validacaoVelocidade,
+    observacoesValidacao: observacoesValidacao.length > 0 ? observacoesValidacao : void 0
   };
-}
-function extractAitFromContext(text) {
-  const patterns = [
-    /\b(\d{4,6}[-.]?\d{2,4}[-.]?\d{2,4})\b/,
-    // Generic numeric ID
-    /\bN[º°]?\s*:?\s*(\w{2,4}\d{4,8})\b/i,
-    /AIT[:\s]*(\w+)/i,
-    /Auto[:\s]*(\w+)/i
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1];
-  }
-  return `AIT-${Date.now().toString().slice(-8)}`;
 }
 function extractLocation(text) {
   const locationPatterns = [
-    /(?:Local|LOCAL|Endereço|ENDEREÇO|Via|VIA)[:\s]*(.+?)(?:\n|$)/i,
-    /((?:Av\.|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda)\s+.+?)(?:\n|—|-|$)/i,
-    /((?:Av\.|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda)\s+.+?),\s*(.{2,30}\/[A-Z]{2})/i
+    /(?:Local|LOCAL|Endereço|ENDEREÇO|Via|VIA|Trecho|TRECHO)[:\s]*(.+?)(?:\n|$)/i,
+    /((?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda|Travessa|Trav\\.|Praça|Pç\\.)\s+.+?)(?:\n|—|-|$)/i,
+    /((?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia|Al\.|Alameda|Travessa|Trav\\.|Praça|Pç\\.)\s+.+?),\s*(.{2,30}\/[A-Z]{2})/i,
+    /(?:km\s*)?(\d+[\.,]\d+)\s*(?:de\s+)?(?:Av\.|Avenida|Rua|R\.|Rod\.|Rodovia)/i
   ];
   for (const pattern of locationPatterns) {
     const match = text.match(pattern);
-    if (match) return (match[1] || match[0]).trim().substring(0, 150);
+    if (match) {
+      let result = (match[1] || match[0]).trim();
+      result = result.replace(/[\-_]{2,}/g, "-").replace(/\s{2,}/g, " ");
+      return result.substring(0, 150);
+    }
   }
   return "N/A";
 }
 function extractOrgao(text) {
   const orgaoPatterns = [
-    /(?:Órgão|ORGAO|Autuador|AUTUADOR|Exigência)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:Órgão|ORGAO|Autuador|AUTUADOR|Exigência|Autoridade)[:\s]*(.+?)(?:\n|$)/i,
     /(DETRAN[-\s]*[A-Z]{2})/i,
-    /(CET[-\s]*[A-Z]{2})/i,
-    /(BHTRANS|SPTRANS|CBM|PMDF|PCDF)/i,
-    /(Secretaria.+?(?:Trânsito|Trasito|Segurança).+?)(?:\n|$)/i
+    /(CETRAN[-\s]*[A-Z]{2})/i,
+    /(BHTRANS|SPTRANS|CBM|PMDF|PCDF|PM|GCM|Guardas?\s+Municipais)/i,
+    /(Secretaria.+?(?:Trânsito|Trasito|Segurança|Transportes).+?)(?:\n|$)/i,
+    /(Polícia\s+Rodoviária\s+Federal|PRF)/i,
+    /(Polícia\s+Militar|PM)\s+[A-Z]{2}/i
   ];
   for (const pattern of orgaoPatterns) {
     const match = text.match(pattern);
-    if (match) return (match[1] || match[0]).trim().substring(0, 100);
+    if (match) {
+      let result = (match[1] || match[0]).trim();
+      result = result.replace(/[\-_]{2,}/g, "-").replace(/\s{2,}/g, " ");
+      return result.substring(0, 100);
+    }
   }
   return "N/A";
 }
 function extractDescription(text) {
   const descPatterns = [
-    /(?:Infração|INFRAÇÃO|Descrição|DESCRIÇÃO|Motivo|MOTIVO)[:\s]*(.+?)(?:\n|$)/i,
-    /(?:Conduta|CONDUTA)[:\s]*(.+?)(?:\n|$)/i
+    /(?:Infração|INFRAÇÃO|Descrição|DESCRIÇÃO|Motivo|MOTIVO|Conduta|CONDUTA)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:Veículo|VEÍCULO)\s*:?\s*(.+?)(?:\n|$)/i,
+    /(?:Condutor|CONDUTOR)\s*:?\s*(.+?)(?:\n|$)/i
   ];
   for (const pattern of descPatterns) {
     const match = text.match(pattern);
-    if (match) return match[1].trim().substring(0, 200);
+    if (match) {
+      let result = match[1].trim();
+      result = result.replace(/[\-_]{2,}/g, "-").replace(/\s{2,}/g, " ");
+      return result.substring(0, 200);
+    }
   }
   return "Infra\xE7\xE3o de tr\xE2nsito";
 }
 function extractDefenseDeadline(text, dates) {
   const deadlinePatterns = [
-    /(?:Prazo|PRAZO|Defesa|DEFESA|recural|RECURSO)[:\s]*(?:at[aéé]|prazo)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
-    /(?:data\s+limite|DATA\s+LIMITE)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i
+    /(?:Prazo|PRAZO|Defesa|DEFESA|recurso|RECURSO|notificação|NOTIFICAÇÃO)[:\s]*(?:at[aéé]|prazo|data\s+limite)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(?:data\s+limite|DATA\s+LIMITE|vencimento|VENCIMENTO)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(?:protela[çc][aã]o|PROTELA[ÇC][AÃ]O)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i
   ];
   for (const pattern of deadlinePatterns) {
     const match = text.match(pattern);
     if (match) {
-      const [, day, month, year] = match[1].match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/) || [];
-      if (day && month && year) return `${year}-${month}-${day}`;
+      const dateMatch = match[1].match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+      if (dateMatch) {
+        const [, day, month, year] = dateMatch;
+        const validatedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        const validation = validateDataInfracao(validatedDate);
+        if (validation.isValid) {
+          return validatedDate;
+        }
+      }
     }
   }
   if (dates.length > 0) {
-    const lastDate = new Date(dates[dates.length - 1]);
-    lastDate.setDate(lastDate.getDate() + 30);
-    return lastDate.toISOString().split("T")[0];
+    try {
+      const validDates = dates.map((d) => new Date(d)).filter((d) => !isNaN(d.getTime())).sort((a, b) => b.getTime() - a.getTime());
+      if (validDates.length > 0) {
+        const lastDate = validDates[0];
+        lastDate.setDate(lastDate.getDate() + 30);
+        return lastDate.toISOString().split("T")[0];
+      }
+    } catch (e) {
+    }
   }
   const defaultDeadline = /* @__PURE__ */ new Date();
   defaultDeadline.setDate(defaultDeadline.getDate() + 30);
@@ -23850,7 +24429,10 @@ var OcrService = class {
       logger.info("ocr", "ocr-service", "analyze_image", "OCR.space succeeded", {
         confianca,
         aitNumber: dadosExtraidos.aitNumber,
-        placa: dadosExtraidos.placa
+        placa: dadosExtraidos.placa,
+        codigoInfracao: dadosExtraidos.codigoInfracao,
+        confiancaPlaca: dadosExtraidos.confiancaPlaca,
+        confiancaCodigoInfracao: dadosExtraidos.confiancaCodigoInfracao
       });
       return {
         textoCompleto: texto,
@@ -23872,7 +24454,10 @@ var OcrService = class {
       logger.info("ocr", "ocr-service", "analyze_image", "Google Vision succeeded", {
         confianca,
         aitNumber: dadosExtraidos.aitNumber,
-        placa: dadosExtraidos.placa
+        placa: dadosExtraidos.placa,
+        codigoInfracao: dadosExtraidos.codigoInfracao,
+        confiancaPlaca: dadosExtraidos.confiancaPlaca,
+        confiancaCodigoInfracao: dadosExtraidos.confiancaCodigoInfracao
       });
       return {
         textoCompleto: texto,
@@ -25287,8 +25872,21 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
       // Assinatura validada pelo adapter
     };
   } catch (err) {
+    const errorMsg = err?.message || "";
+    const isSignatureError = errorMsg.includes("Assinatura") || errorMsg.includes("signature") || errorMsg.includes("HMAC") || errorMsg.includes("inv\xE1lida") || errorMsg.includes("ausente") || errorMsg.includes("obrigat\xF3rio");
+    if (isSignatureError) {
+      logger.warn("payments", "webhook_handler", "signature_invalid", `Invalid webhook signature for ${gatewayId}`, {
+        error: errorMsg,
+        path: requestPath
+      });
+      return {
+        event: null,
+        gatewayId,
+        signatureValid: false
+      };
+    }
     logger.error("payments", "webhook_handler", "process", `Webhook processing failed for ${gatewayId}`, {
-      error: err.message,
+      error: errorMsg,
       path: requestPath
     });
     return null;
@@ -25742,6 +26340,255 @@ router11.post("/webhooks/pagbank", async (req, res) => {
   } catch (error) {
     logger.error("payments", "pagbank", "webhook", "Webhook processing error", { error: error.message });
     res.status(400).json({ error: error.message });
+  }
+});
+router11.post("/simulate-payment", async (req, res) => {
+  try {
+    const { caseId, amount, paymentMethod = "pix", gateway = "pagbank" } = req.body;
+    if (!caseId) {
+      return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio para simula\xE7\xE3o de pagamento" });
+    }
+    let row = databaseRows.get(caseId);
+    let domain;
+    if (row) {
+      domain = CanonicalMapper.rowToDomain(row);
+    } else {
+      domain = {
+        id: caseId,
+        title: "Recurso JARI - Auto TEST-123456",
+        serviceType: "recurso_jari",
+        isPaid: false,
+        isAnonymous: true,
+        currentStage: 1,
+        status: "analisado",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        clientName: "Condutor Teste",
+        clientEmail: "teste@defesai.com.br",
+        clientCpf: "12345678909",
+        applicant: {
+          applicantName: "Condutor Teste",
+          applicantCpf: "123.456.789-09",
+          applicantCnh: "12345678900",
+          cnhCategory: "B",
+          applicantPhone: "(11) 98765-4321",
+          applicantEmail: "teste@defesai.com.br",
+          addressStreet: "Av. Paulista",
+          addressNumber: "1000",
+          addressNeighborhood: "Bela Vista",
+          addressZipCode: "01310-100",
+          addressCityState: "S\xE3o Paulo - SP"
+        },
+        infraction: {
+          aitNumber: "TEST-123456",
+          autuadorBody: "DETRAN-SP",
+          ctbArticle: "Art. 218, I do CTB",
+          description: "Transitar em velocidade superior \xE0 m\xE1xima permitida em at\xE9 20%",
+          severity: "media",
+          points: 4,
+          fineAmount: 130.16,
+          location: "Av. Paulista, 1000 - S\xE3o Paulo/SP",
+          dateTime: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        vehicle: {
+          plate: "ABC1D23",
+          brandModel: "VW GOL 1.0"
+        },
+        timeline: []
+      };
+    }
+    const effectiveAmount = typeof amount === "number" && amount > 0 ? amount : 89.9;
+    domain.isPaid = true;
+    domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    domain.status = "defesa_pronta";
+    domain.currentStage = 3;
+    domain.serviceType = domain.serviceType || "recurso_jari";
+    domain.payment = {
+      status: "approved",
+      amount: effectiveAmount,
+      paidAt: (/* @__PURE__ */ new Date()).toISOString(),
+      transactionId: `sim_${gateway}_${Date.now()}`,
+      paymentMethod: paymentMethod === "credit_card" ? "credit_card" : "pix"
+    };
+    if (!domain.applicant) {
+      domain.applicant = {
+        applicantName: domain.clientName || "Condutor Requerente",
+        applicantCpf: domain.clientCpf || "123.456.789-09",
+        applicantCnh: "12345678900",
+        cnhCategory: "B",
+        applicantPhone: domain.clientPhone || "(11) 98765-4321",
+        applicantEmail: domain.clientEmail || "contato@defesai.com.br",
+        addressStreet: "Av. Paulista",
+        addressNumber: "1000",
+        addressNeighborhood: "Bela Vista",
+        addressZipCode: "01310-100",
+        addressCityState: "S\xE3o Paulo - SP"
+      };
+    }
+    try {
+      const defense = generateDefenseDraftForDomain(domain);
+      if (defense) {
+        defense.generationCount = 1;
+        domain.defenseDraft = defense;
+        domain.documentGenerationStatus = "ready";
+      }
+      domain.timeline.push({
+        id: `tl_def_sim_${Date.now()}`,
+        title: "Defesa Gerada Automaticamente (Simula\xE7\xE3o)",
+        description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente ap\xF3s confirma\xE7\xE3o de pagamento simulado.`,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        type: "defense"
+      });
+    } catch (defErr) {
+      logger.warn("payments", "simulation", "defense_generation", "Defense draft generation warning", {
+        error: defErr?.message,
+        caseId
+      });
+    }
+    domain.timeline.push({
+      id: `tl_sim_${Date.now()}`,
+      title: `Pagamento Aprovado (${gateway.toUpperCase()} Simula\xE7\xE3o / Admin)`,
+      description: `Pagamento de R$ ${effectiveAmount.toFixed(2).replace(".", ",")} via ${paymentMethod.toUpperCase()} simulado com sucesso.`,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      type: "payment"
+    });
+    const updatedRow = CanonicalMapper.domainToRow(domain);
+    databaseRows.set(caseId, updatedRow);
+    caseRepository.set(caseId, updatedRow);
+    try {
+      const caseIdUuid = domainIdToUuid(domain.id);
+      const supabaseForOrder = getSupabaseServerClient();
+      if (supabaseForOrder && caseIdUuid) {
+        await supabaseForOrder.from("payment_orders").upsert({
+          case_id: caseIdUuid,
+          user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+          reference_id: `defesai_case_${domain.id}`,
+          pagbank_order_id: `sim_${gateway}_${domain.id}`,
+          gateway,
+          status: "PAID",
+          amount: effectiveAmount,
+          currency: "BRL",
+          payment_method: paymentMethod,
+          paid_at: (/* @__PURE__ */ new Date()).toISOString(),
+          base_amount: effectiveAmount,
+          discount_amount: 0,
+          final_amount: effectiveAmount,
+          expires_at: null
+        }, { onConflict: "case_id" });
+      }
+    } catch (orderErr) {
+      logger.warn("payments", "simulation", "order_insert", "Non-blocking order insert issue", {
+        error: orderErr?.message
+      });
+    }
+    auditLogs.unshift({
+      id: `audit_sim_${Date.now()}`,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      actor: "Admin / Sandbox",
+      role: "admin",
+      action: "PAYMENT_CONFIRMED",
+      targetResource: domain.id,
+      ipHash: "127.0.0.1",
+      details: `Pagamento simulado de R$ ${effectiveAmount.toFixed(2).replace(".", ",")} para o caso #${domain.id}.`,
+      gdprCompliant: true
+    });
+    eventBus.publish(EventTopics.PAYMENT_CONFIRMED, {
+      caseId: domain.id,
+      amount: effectiveAmount,
+      gateway,
+      paymentMethod
+    }, "payment_engine");
+    res.json({
+      success: true,
+      message: "Pagamento simulado com sucesso!",
+      case: domain,
+      defenseDraft: domain.defenseDraft
+    });
+  } catch (err) {
+    logger.error("payments", "simulation", "error", "Error simulating payment", { error: err.message });
+    res.status(500).json({ error: err.message || "Erro ao simular pagamento" });
+  }
+});
+router11.post("/simulate-confirm", async (req, res) => {
+  const { caseId } = req.body;
+  if (!caseId) {
+    return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
+  }
+  const row = databaseRows.get(caseId);
+  if (!row) {
+    return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+  }
+  const domain = CanonicalMapper.rowToDomain(row);
+  domain.isPaid = true;
+  domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+  domain.status = "defesa_pronta";
+  domain.currentStage = 3;
+  domain.payment = {
+    status: "approved",
+    amount: 89.9,
+    paidAt: (/* @__PURE__ */ new Date()).toISOString(),
+    paymentMethod: "pix"
+  };
+  try {
+    domain.defenseDraft = generateDefenseDraftForDomain(domain);
+  } catch {
+  }
+  const updatedRow = CanonicalMapper.domainToRow(domain);
+  databaseRows.set(caseId, updatedRow);
+  res.json({ success: true, case: domain });
+});
+router11.post("/sandbox/trigger-webhook", async (req, res) => {
+  try {
+    const { gateway = "pagbank", eventType = "PAID", caseId, amount = 89.9 } = req.body;
+    if (!caseId) {
+      return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
+    }
+    let payload;
+    let path;
+    let headers = {};
+    if (gateway === "pagbank") {
+      path = "/webhooks/pagbank";
+      payload = {
+        id: `evt_sim_${Date.now()}`,
+        reference_id: `defesai_case_${caseId}`,
+        created_at: (/* @__PURE__ */ new Date()).toISOString(),
+        charges: [
+          {
+            id: `ch_sim_${Date.now()}`,
+            reference_id: `defesai_case_${caseId}`,
+            status: eventType === "PAID" ? "PAID" : "CANCELED",
+            created_at: (/* @__PURE__ */ new Date()).toISOString(),
+            paid_at: eventType === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : void 0,
+            amount: { value: Math.round(amount * 100), currency: "BRL" },
+            payment_method: { type: "PIX" }
+          }
+        ]
+      };
+      headers["x-hub-signature-256"] = "sha256=sandbox_dev_signature";
+    } else {
+      path = "/webhooks/ggpix";
+      payload = {
+        transactionId: `ggpix_tx_sim_${Date.now()}`,
+        externalId: `defesai_case_${caseId}`,
+        status: eventType === "PAID" ? "COMPLETE" : "CANCELED",
+        type: "PIX_IN",
+        amount,
+        netAmount: amount * 0.98,
+        gatewayFee: amount * 0.02,
+        paidAt: eventType === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+      };
+      headers["x-forwarded-for"] = "127.0.0.1";
+    }
+    const rawBody = JSON.stringify(payload);
+    const result = processGatewayWebhook(path, rawBody, headers, payload);
+    res.json({
+      success: true,
+      message: `Webhook sandbox disparado para ${gateway.toUpperCase()}`,
+      result
+    });
+  } catch (err) {
+    logger.error("payments", "sandbox", "webhook_trigger", "Error triggering sandbox webhook", { error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 router11.post("/webhooks/ggpix", async (req, res) => {
@@ -29423,56 +30270,56 @@ var USER_PROCESS_STAGES = [
 ];
 var RULES_MATRIX = {
   excesso_velocidade: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "speedLimit", "measuredSpeed", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["inmetroAferitionDate", "radarEquipmentId", "hasR19SignageProof"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "speedLimit", "measuredSpeed", "notificationExpeditionDate", "defenseDeadline", "inmetroAferitionDate", "radarEquipmentId", "hasR19SignageProof"],
     inferableFields: ["consideredSpeed", "ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   lei_seca: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["hasSignTerm", "offeredRetest", "refusedTest"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "hasSignTerm", "offeredRetest", "refusedTest"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   celular: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["wasInHolder", "hadPhysicalApproach", "description"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "wasInHolder", "hadPhysicalApproach", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   vermelho: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["yellowDurationIssue", "emergencyPassage", "description"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "yellowDurationIssue", "emergencyPassage", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   estacionamento: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["parkingCircumstance", "hasRegulatorySign", "description"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "parkingCircumstance", "hasRegulatorySign", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   indicacao_condutor: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["realDriverName", "realDriverCpf", "realDriverCnh"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "realDriverName", "realDriverCpf", "realDriverCnh"],
     inferableFields: ["ctbArticle", "infractionCode"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   conversao_advertencia: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["hasPreviousInfractionsLast12Months"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "hasPreviousInfractionsLast12Months"],
     inferableFields: ["ctbArticle", "infractionCode", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   cnh_geral: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["description"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   outro: {
-    requiredFreeFields: ["aitNumber", "autuadorBody", "plate", "location", "dateTime", "notificationExpeditionDate", "defenseDeadline"],
-    optionalFreeFields: ["description", "infractionCode"],
+    requiredFreeFields: ["aitNumber", "location", "dateTime"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "description", "infractionCode"],
     inferableFields: ["ctbArticle", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   }
