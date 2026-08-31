@@ -367,7 +367,6 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   }
 });
 
-export default router;
 // E2E Test Endpoints
 router.get('/admin/e2e-tests/stats', async (req, res) => {
   try {

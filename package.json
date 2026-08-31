@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vercel env run -- tsx watch server.ts",
-    "postinstall": "vercel env run -- node scripts/build-api.mjs",
-    "build": "vercel env run -- sh -c 'node scripts/generate-brand-assets.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && node scripts/build-api.mjs'",
+    "postinstall": "node scripts/build-api.mjs",
+    "build": "node scripts/generate-brand-assets.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && node scripts/build-api.mjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "test": "playwright test --project=chromium",

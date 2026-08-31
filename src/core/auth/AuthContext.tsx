@@ -13,7 +13,26 @@ import {
 // Fetch user role from backend API (avoids direct user_profiles query which hits RLS)
 async function fetchUserRoleFromBackend(userId: string): Promise<UserRole | undefined> {
   try {
-    const res = await fetch(`/api/auth/me`);
+    const headers = new Headers();
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers.set('Authorization', `Bearer ${session.access_token}`);
+      }
+    }
+    const stored = getStoredSession();
+    if (stored) {
+      if (stored.id) headers.set('x-user-id', stored.id);
+      if (stored.role) headers.set('x-user-role', stored.role);
+      if (stored.email) headers.set('x-user-email', stored.email);
+      if (stored.name) headers.set('x-user-name', encodeURIComponent(stored.name));
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer local_${stored.id}_${stored.role}`);
+      }
+    }
+    // Sem identidade (visitante): não envia headers — endpoint responde 401 e
+    // o caller cai no fallback de user_metadata (comportamento preservado).
+    const res = await fetch(`/api/auth/me`, { headers });
     if (res.ok) {
       const data = await res.json();
       return data.role as UserRole;

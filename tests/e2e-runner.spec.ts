@@ -19,6 +19,10 @@ let browser: Browser;
 let context: BrowserContext;
 const allResults: (ValidationResult & { execution: any })[] = [];
 
+// Test cases for dynamic suite registration (top-level await; Playwright loads
+// spec files with top-level await as ESM).
+const testCasesForSuite = await (await getE2ETestManager()).getTestCases();
+
 test.describe.configure({ retries: 0 });
 
 test.describe.serial('E2E National Test Suite', () => {
@@ -53,7 +57,7 @@ test.describe.serial('E2E National Test Suite', () => {
   });
 
   // Run tests for each test case - ALL test cases, not just first 5
-  const testCases = await (await getE2ETestManager()).getTestCases();
+  const testCases = testCasesForSuite;
   for (const testCase of testCases) {
     test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType})`, async () => {
       const page = await context.newPage();
