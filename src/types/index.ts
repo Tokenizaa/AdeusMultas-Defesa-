@@ -71,10 +71,14 @@ export interface InfractionData {
   radarEquipmentId?: string;
   inmetroAferitionDate?: string;
   notificationExpeditionDate?: string;
+  notificationDeliveryDate?: string; // Data de entrega/recebimento da NA (decadência postal)
   defenseDeadline?: string; // Prazo fixado na notificação informada pelo usuário
   formalFlawsDetected?: string[];
   hasPreviousInfractionsLast12Months?: boolean;
   hasR19SignageProof?: boolean;
+  hasPsychomotorTerm?: boolean; // Termo de constatação de sinais psicomotores (Lei Seca)
+  hasAgentDetailedObservations?: boolean; // Campo de observações circunstanciadas preenchido no AIT
+  hasPhotoProof?: boolean; // Fotos/evidência fotográfica do flagrante
 }
 
 export interface LegalArgumentDomain {
@@ -118,6 +122,15 @@ export interface CaseAnalysis {
   procedureDeadline?: string;
   summaryReasoning: string;
   createdAt: string;
+  /**
+   * Regras que não puderam concluir por dados insuficientes (FAIL CLOSED,
+   * Fase 2). Nunca tratadas como vício detectado.
+   */
+  dataGaps?: {
+    ruleId: string;
+    missingData: string[];
+    reason: string;
+  }[];
 }
 
 /**

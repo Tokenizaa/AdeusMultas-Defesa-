@@ -27,6 +27,7 @@ import {
     generateRandomPhone,
     generateRandomVehicleData,
     generateRandomPlate,
+    generateRandomAddress,
 } from '../../../utils/test-data-generator';
 import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
 

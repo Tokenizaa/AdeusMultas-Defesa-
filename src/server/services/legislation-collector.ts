@@ -12,18 +12,37 @@ import { configService } from '../config/config-service';
 
 export class LegislationCollector {
   private readonly source: KnowledgeSource;
+  private readonly intervalSeconds: number;
   private intervalId: NodeJS.Timeout | null;
   private readonly httpTimeout: number = 15000; // 15 seconds
   private readonly maxRetries: number = 3;
 
   constructor(source: KnowledgeSource, intervalSeconds: number = 86400) { // default: 24 hours
     this.source = source;
-    this.intervalId = setInterval(async () => {
-      await this.collectAndProcess();
-    }, intervalSeconds * 1000);
+    this.intervalSeconds = intervalSeconds;
+    this.intervalId = null;
     logger.info('knowledge', 'legislation-collector', 'collector_initialized', `Legislation collector initialized for source ${this.source.id}`, {
       sourceId: this.source.id,
       intervalSeconds,
+    });
+  }
+
+  /**
+   * Start the periodic collection loop (idempotent: no-op if already running).
+   */
+  start(): void {
+    if (this.intervalId) {
+      logger.info('knowledge', 'legislation-collector', 'collector_already_running', `Collector already running for source ${this.source.id}`, {
+        sourceId: this.source.id,
+      });
+      return;
+    }
+    this.intervalId = setInterval(async () => {
+      await this.collectAndProcess();
+    }, this.intervalSeconds * 1000);
+    logger.info('knowledge', 'legislation-collector', 'collector_started', `Legislation collector started for source ${this.source.id}`, {
+      sourceId: this.source.id,
+      intervalSeconds: this.intervalSeconds,
     });
   }
 

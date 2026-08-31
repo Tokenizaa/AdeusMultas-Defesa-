@@ -147,6 +147,7 @@ export interface ArgumentModel {
   observations: string;
   validFrom?: string; // ISO date 'YYYY-MM-DD'
   validUntil?: string | null; // ISO date 'YYYY-MM-DD' ou null para vigente
+  version?: number; // versão do item (rastreabilidade Fase 1)
   formattedParagraphs: {
     heading: string;
     text: string;
@@ -236,6 +237,7 @@ export interface DocumentTemplateModel {
 // ==========================================
 
 export interface RuleEvaluationContext {
+  aitNumber?: string;
   infractionCode: string;
   infractionDate?: string;
   notificationExpeditionDate?: string;
@@ -244,6 +246,8 @@ export interface RuleEvaluationContext {
   speedLimit?: number;
   measuredSpeed?: number;
   consideredSpeed?: number;
+  speedMeasured?: number;
+  speedConsidered?: number;
   radarEquipmentId?: string;
   radarCalibrationDate?: string;
   hasPreviousInfractionsLast12Months?: boolean;
@@ -273,5 +277,19 @@ export interface RuleModel {
   validUntil?: string | null; // ISO date 'YYYY-MM-DD' ou null para norma vigente
   version?: number;
   jurisdiction?: 'federal' | 'estadual' | 'distrital' | 'municipal';
+  /**
+   * Chaves de RuleEvaluationContext sem as quais a regra NÃO pode concluir a
+   * existência do vício (FAIL CLOSED — Fase 2). Ausência de qualquer chave
+   * registra DATA_INSUFFICIENT e a regra é ignorada.
+   */
+  requiredData: string[];
+  /** Teses (IDs ARG-*) relacionadas que a regra pode fundamentar. */
+  relatedArguments?: string[];
+  /** Procedimentos afetados quando a regra dispara. */
+  affectedProcedures?: ProcedureType[];
+  /** Evidências documentais necessárias para sustentar a tese. */
+  evidenceRequired?: string[];
+  /** Prioridade relativa (0-100) para ordenação das inconsistências. */
+  priority?: number;
   evaluate: (ctx: RuleEvaluationContext) => DetectedInconsistencyResult | null;
 }

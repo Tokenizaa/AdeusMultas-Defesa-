@@ -5,11 +5,71 @@
  * 100% AI-Independent, structured for precision procedural drafting.
  */
 
-import { DocumentTemplateModel } from '../domain/knowledge-schema';
-import { DOCUMENT_BLOCKS } from './document-blocks';
+import { DocumentTemplateModel, TemplateBlock, BlockType } from '../domain/knowledge-schema';
+import { DOCUMENT_BLOCKS, DocumentBlockCategory } from './document-blocks';
 
-export interface ExtendedDocumentTemplateModel extends DocumentTemplateModel {
-  blockIds: string[];
+/**
+ * Mapa determinístico category (DOCUMENT_BLOCKS) -> type (TemplateBlock).
+ * Fase 3: elimina a inferência por posição (idx) para blocos do catálogo.
+ */
+const BLOCK_TYPE_BY_CATEGORY: Record<DocumentBlockCategory, BlockType> = {
+  enderecamento: 'header_addressing',
+  qualificacao: 'applicant_qualification',
+  fatos: 'facts_narrative',
+  preliminares: 'preliminary_arguments',
+  argumentos_velocidade: 'merit_arguments',
+  argumentos_semaforo: 'merit_arguments',
+  argumentos_celular: 'merit_arguments',
+  argumentos_estacionamento: 'merit_arguments',
+  argumentos_alcoolemia: 'merit_arguments',
+  argumentos_cinto: 'merit_arguments',
+  argumentos_documentos: 'merit_arguments',
+  argumentos_suspensao: 'merit_arguments',
+  argumentos_cassacao: 'merit_arguments',
+  argumentos_gerais: 'merit_arguments',
+  pedidos: 'formal_requests',
+  fechamento: 'closing_signature',
+};
+
+const VALID_BLOCK_TYPES: readonly BlockType[] = [
+  'header_addressing',
+  'applicant_qualification',
+  'vehicle_qualification',
+  'facts_narrative',
+  'preliminary_arguments',
+  'merit_arguments',
+  'formal_requests',
+  'closing_signature',
+];
+
+type RawBlock = {
+  id: string;
+  type?: string;
+  category?: DocumentBlockCategory;
+  title: string;
+  isMandatory?: boolean;
+  contentTemplate: string;
+  supportedVariables: string[];
+};
+
+/**
+ * Normaliza um bloco (do DOCUMENT_BLOCKS ou inline) para TemplateBlock,
+ * resolvendo o type sem `(b as any)` e sem depender da posição.
+ */
+function toTemplateBlock(b: RawBlock, idx: number): TemplateBlock {
+  const declaredType = b.type && VALID_BLOCK_TYPES.includes(b.type as BlockType) ? (b.type as BlockType) : undefined;
+  const type = declaredType ?? BLOCK_TYPE_BY_CATEGORY[b.category as DocumentBlockCategory];
+  // Fallback posicional apenas para blocos inline que não declaram type/category.
+  const fallbackType: BlockType =
+    idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : 'closing_signature';
+  return {
+    id: b.id,
+    type: type ?? fallbackType,
+    title: b.title,
+    isMandatory: b.isMandatory ?? true,
+    contentTemplate: b.contentTemplate,
+    supportedVariables: b.supportedVariables,
+  };
 }
 
 /**
@@ -40,14 +100,7 @@ function buildSuspensaoBlocks() {
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-059')!,
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
-  ].map((b, idx) => ({
-    id: b.id,
-    type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
-    title: b.title,
-    isMandatory: true,
-    contentTemplate: b.contentTemplate,
-    supportedVariables: b.supportedVariables,
-  }));
+  ].map((b, idx) => toTemplateBlock(b, idx));
 }
 
 /**
@@ -78,17 +131,10 @@ function buildCassacaoBlocks() {
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-060')!,
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
-  ].map((b, idx) => ({
-    id: b.id,
-    type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
-    title: b.title,
-    isMandatory: true,
-    contentTemplate: b.contentTemplate,
-    supportedVariables: b.supportedVariables,
-  }));
+  ].map((b, idx) => toTemplateBlock(b, idx));
 }
 
-export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
+export const TEMPLATES_CATALOG: DocumentTemplateModel[] = [
   // ==========================================
   // 2. RECURSO À JARI - 1ª INSTÂNCIA (TPL-02)
   // ==========================================
@@ -105,7 +151,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Requerer expressamente concessão de efeito suspensivo nos termos do Art. 285, § 3º do CTB',
       'Articular preliminares de cerceamento de defesa (Súmula 312 STJ) e mérito probatório',
     ],
-    blockIds: ['BLK-002', 'BLK-008', 'BLK-013', 'BLK-027', 'BLK-039', 'BLK-057', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-002')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -137,7 +182,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
     ].map((b, idx) => ({
       id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+      type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -161,7 +206,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Arguição de prescrição intercorrente trienal ou decadência residual',
       'Requerer o cancelamento em definitivo da multa e pontos no RENACH',
     ],
-    blockIds: ['BLK-003', 'BLK-008', 'BLK-031', 'BLK-030', 'BLK-039', 'BLK-058', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-003')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -194,7 +238,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+      type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -218,7 +262,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Arguição da retroatividade benéfica do limite de 40 pontos (Tema 1.097 STJ)',
       'Demonstrar ausência de trânsito em julgado das multas componentes ou prescrição',
     ],
-    blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066', 'BLK-068'],
     blocks: buildSuspensaoBlocks(),
   },
 
@@ -238,7 +281,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Comprovar que a autuação na vigência da suspensão ocorreu sem abordagem presencial',
       'Juntar prova de que o veículo estava na posse/condução de terceiro habilitado',
     ],
-    blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066', 'BLK-068'],
     blocks: buildCassacaoBlocks(),
   },
 
@@ -258,7 +300,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Protocolo dentro do prazo final improrrogável assinalado na Notificação de Autuação',
       'Juntada obrigatória de cópia da CNH do condutor indicado e documento com foto do proprietário',
     ],
-    blockIds: ['BLK-006', 'BLK-012', 'BLK-024', 'BLK-061', 'BLK-067', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-006')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-012')!,
@@ -268,7 +309,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 3 ? 'formal_requests' : 'closing_signature'),
+      type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -292,7 +333,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Juntar certidão de prontuário de CNH emitida pelo DETRAN ou SENATRAN',
       'Invocar a natureza vinculada e de direito subjetivo da autoridade após a Lei 14.071/20',
     ],
-    blockIds: ['BLK-007', 'BLK-008', 'BLK-025', 'BLK-051', 'BLK-062', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-007')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -310,7 +350,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 3 ? 'merit_arguments' : idx === 4 ? 'formal_requests' : 'closing_signature'),
+      type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -333,7 +373,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       'Informar o número do AIT e a Notificação de Autuação',
       'Articular preliminares de nulidade e mérito probatório antes da penalidade',
     ],
-    blockIds: ['BLK-001', 'BLK-008', 'BLK-013', 'BLK-039', 'BLK-057', 'BLK-066', 'BLK-068'],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-001')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
@@ -366,7 +405,7 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
-      type: (b as any).type || (idx === 0 ? 'header_addressing' : idx === 1 ? 'applicant_qualification' : idx === 2 ? 'facts_narrative' : idx === 5 ? 'formal_requests' : 'closing_signature'),
+      type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock
       title: b.title,
       isMandatory: true,
       contentTemplate: b.contentTemplate,
@@ -385,7 +424,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
     version: 'v2026.1',
     description: 'Alias legado de suspensao_cnh: mesma peça de defesa do processo de suspensão da CNH (PSDD).',
     fillingRules: ['Endereçar à Comissão de Processos de Suspensão do DETRAN', 'Indicar o número do PSDD'],
-    blockIds: ['BLK-004', 'BLK-010', 'BLK-022', 'BLK-042', 'BLK-043', 'BLK-059', 'BLK-066', 'BLK-068'],
     blocks: buildSuspensaoBlocks(),
   },
   {
@@ -396,7 +434,6 @@ export const TEMPLATES_CATALOG: ExtendedDocumentTemplateModel[] = [
     version: 'v2026.1',
     description: 'Alias legado de cassacao_cnh: mesma peça de defesa do processo de cassação da CNH (PCDD).',
     fillingRules: ['Endereçar à Coordenação de Processos de Cassação do DETRAN', 'Indicar o número do PCDD'],
-    blockIds: ['BLK-005', 'BLK-011', 'BLK-023', 'BLK-045', 'BLK-046', 'BLK-060', 'BLK-066', 'BLK-068'],
     blocks: buildCassacaoBlocks(),
   },
 ];

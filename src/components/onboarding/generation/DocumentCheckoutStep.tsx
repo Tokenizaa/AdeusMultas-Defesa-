@@ -13,7 +13,8 @@ import {
     Download,
     CreditCard,
     RotateCcw,
-    AlertCircle
+    AlertCircle,
+    CheckCircle2,
 } from 'lucide-react';
 import { CaseDomain, CaseDocumentData, InfractionData, VehicleData, CaseAnalysis, ProcedureType } from '../../../types';
 import { CreditCardForm } from '../../checkout/CreditCardForm';

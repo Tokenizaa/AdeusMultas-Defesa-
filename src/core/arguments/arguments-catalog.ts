@@ -128,11 +128,7 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = [
       {
         heading: '1. Da Obrigatoriedade de Estudo Técnico de Engenharia Prévio',
         text: 'A instalação e a operação de medidores de velocidade do tipo fixo em vias públicas exigem a prévia elaboração de estudo técnico que comprove a necessidade do controle de velocidade no trecho, demonstrando o índice de acidentes e o potencial de risco à segurança viária (Art. 6º da Resolução CONTRAN nº 798/2020).',
-      
-    // Versioning and temporal validity
-    validFrom: '2020-10-01',
-    validUntil: null,
-    version: 1,},
+      },
       {
         heading: '2. Da Nulidade dos Autos Lavrados por Equipamento sem Amparo Técnico',
         text: 'A inexistência ou a não apresentação do estudo técnico atualizado, devidamente assinado por engenheiro com Anotação de Responsabilidade Técnica (ART), contamina de vício de legalidade a instalação do equipamento e anula todas as autuações dele decorrentes.',

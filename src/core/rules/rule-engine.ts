@@ -26,6 +26,11 @@ export const EXPERT_RULES: RuleModel[] = [
     validUntil: null,
     version: 1,
     jurisdiction: 'federal',
+    requiredData: ['infractionDate', 'notificationExpeditionDate'],
+    relatedArguments: ['ARG-048', 'ARG-049'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Cópia da Notificação da Autuação com data de expedição/postagem', 'Extrato do histórico de notificações'],
+    priority: 100,
     evaluate: (ctx) => {
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
         const infDate = new Date(ctx.infractionDate);
@@ -60,6 +65,11 @@ export const EXPERT_RULES: RuleModel[] = [
     validUntil: null,
     version: 1,
     jurisdiction: 'federal',
+    requiredData: ['infractionDate', 'radarCalibrationDate'],
+    relatedArguments: ['ARG-001'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran', 'analise_tecnica'],
+    evidenceRequired: ['Certidão do Portal de Serviços do INMETRO (PSInmetro) atestando a data da última verificação'],
+    priority: 95,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
       const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
@@ -80,10 +90,8 @@ export const EXPERT_RULES: RuleModel[] = [
             };
           }
         }
-        // If speed ticket without explicit calibration data, flag for verification
-        // This is not a conclusion that the violation exists, but rather a flag that verification is needed
-        // Since we cannot conclusively determine if the calibration is expired without the date,
-        // we return null (insufficient data to conclude violation exists)
+        // FAIL CLOSED: sem a data de aferição não há como concluir o vício —
+        // a ausência fica registrada como DATA_INSUFFICIENT pelo motor.
         return null;
       }
       return null;
@@ -98,13 +106,20 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'direito_material',
     validFrom: '2021-04-12', // Lei 14.071/2020
     validUntil: null,
+    requiredData: ['hasPreviousInfractionsLast12Months'],
+    relatedArguments: ['ARG-051'],
+    affectedProcedures: ['conversao_advertencia'],
+    evidenceRequired: ['Extrato de prontuário e histórico de CNH sem infrações nos últimos 12 meses'],
+    priority: 90,
     version: 1,
     jurisdiction: 'federal',
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
       const cat = INFRACTION_CATALOG.find((i) => i.code === code || i.code.replace('-', '') === code.replace('-', ''));
       const isLightOrMedium = cat ? (cat.severity === 'leve' || cat.severity === 'media') : (code === '745-50' || code === '735-80');
-      const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false || ctx.hasPreviousInfractionsLast12Months === undefined;
+      // FAIL CLOSED: reincidência é dado obrigatório. undefined => dados insuficientes,
+      // tratado pelo motor como DATA_INSUFFICIENT (nunca presumir ficha limpa).
+      const isCleanRecord = ctx.hasPreviousInfractionsLast12Months === false;
 
       if (isLightOrMedium && isCleanRecord) {
         return {
@@ -123,7 +138,9 @@ export const EXPERT_RULES: RuleModel[] = [
   },
 
   // Rule 4: Lei Seca sem Termo de Constatação de Sinais (Res. 432/CONTRAN)
-  // FIXED: Was incorrectly pointing to ARG-025, now correctly points to ARG-010
+  // Fase 2: somente conclui o vício quando o dado confirma ausência do termo.
+  // Tese correta: ARG-025 (termo de sinais psicomotores). A versão anterior
+  // apontava ARG-010 (semáforo — amarelo) e concluía sem verificar o dado.
   {
     id: 'RULE_LEI_SECA_TERMO_432',
     name: 'Termo de Sinais Psicomotores da Resolução CONTRAN 432/2013',
@@ -131,50 +148,62 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'direito_formal',
     validFrom: '2013-01-29',
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: 'federal',
+    requiredData: ['hasPsychomotorTerm'],
+    relatedArguments: ['ARG-025'],
+    affectedProcedures: ['suspensao_cnh', 'recurso_jari'],
+    evidenceRequired: ['Cópia integral do processo administrativo comprovando a ausência do Anexo II da Res. 432/2013'],
+    priority: 88,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
-      if (code === '516-91' || code === '516-92' || code.includes('516')) {
+      const isLeiSeca = code === '516-91' || code === '516-92' || code.includes('516');
+      // FAIL CLOSED: convicção somente se o dado comprovar ausência do termo.
+      if (isLeiSeca && ctx.hasPsychomotorTerm === false) {
         return {
           ruleId: 'RULE_LEI_SECA_TERMO_432',
           title: 'Ausência ou Defeito no Termo de Constatação de Sinais (Res. 432/13)',
           description: 'A autuação por recusa exige o preenchimento simultâneo do Termo do Anexo II com conjunto notório de sinais clínicos observados.',
           severity: 'alta',
-          legalArgumentId: 'ARG-010', // FIXED: Was ARG-025, now correctly ARG-010
+          legalArgumentId: 'ARG-025',
           impact: 'Anulação do AIT e cancelamento do processo de suspensão da CNH por 12 meses (R$ 2.934,70).',
-          statutoryBasis: 'Artigo 277 do CTB c/c Resolução CONTRAN nº 432/2013',
+          statutoryBasis: 'Artigo 277 do CTB c/c Resolução CONTRAN nº 432/2013, Art. 5º e Anexo II',
         };
       }
-      // If not a Lei Seca infraction, return null (no conclusion can be made about this specific rule)
       return null;
     },
   },
 
   // Rule 5: Autuação Sem Abordagem sem Observações Circunstanciadas (MBFT / Res. 985/2022)
-  // FIXED: Was incorrectly pointing to ARG-015, now correctly points to ARG-006
+  // Fase 2: restrita ao código de celular (736-62) cuja tese é ARG-015.
+  // A versão anterior apontava ARG-006 (foto com múltiplos veículos) e concluía
+  // sem verificar o dado (observações ausentes).
   {
     id: 'RULE_AUTUACAO_SEM_ABORDAGEM_MBFT',
     name: 'Falta de Descrição Circunstanciada em Autuações sem Abordagem',
-    description: 'Valida multas manuais (celular, cinto, semáforo) lavradas sem parada do veículo.',
+    description: 'Valida multas manuais (celular) lavradas sem parada do veículo e sem observações circunstanciadas.',
     category: 'direito_formal',
     validFrom: '2023-01-02',
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: 'federal',
+    requiredData: ['hasAgentDetailedObservations'],
+    relatedArguments: ['ARG-015'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari'],
+    evidenceRequired: ['Espelho do Auto de Infração com o campo de observações vago/genérico'],
+    priority: 82,
     evaluate: (ctx) => {
-      if (ctx.infractionCode === '736-62' || ctx.infractionCode === '518-51' || ctx.infractionCode === '735-80') {
+      if (ctx.infractionCode === '736-62' && ctx.hasAgentDetailedObservations === false) {
         return {
           ruleId: 'RULE_AUTUACAO_SEM_ABORDAGEM_MBFT',
           title: 'Ausência de Descrição Circunstanciada no Campo de Observações',
           description: 'A Resolução 985/2022 exige fundamentação detalhada do ângulo de visão e do motivo da não abordagem para flagrantes à distância.',
           severity: 'alta',
-          legalArgumentId: 'ARG-006', // FIXED: Was ARG-015, now correctly ARG-006
+          legalArgumentId: 'ARG-015',
           impact: 'Nulidade do auto por vício formal de motivação e falta de prova material.',
-          statutoryBasis: 'Resolução CONTRAN nº 985/2022 (Manual Brasileiro de Fiscalização de Trânsito)',
+          statutoryBasis: 'Resolução CONTRAN nº 985/2022 (Manual Brasileiro de Fiscalização de Trânsito), Ficha 736-62',
         };
       }
-      // If not one of the target infraction codes, return null
       return null;
     },
   },
@@ -187,10 +216,16 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'sinalizacao_viaria',
     validFrom: '1998-01-22',
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: 'federal',
+    requiredData: ['hasR19SignageProof'],
+    relatedArguments: ['ARG-002', 'ARG-007'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'analise_tecnica'],
+    evidenceRequired: ['Fotografias do trecho demonstrado ausência/obstrução da placa R-19'],
+    priority: 78,
     evaluate: (ctx) => {
-      if (ctx.hasR19SignageProof === false || ctx.hasR19SignageProof === undefined) {
+      // FAIL CLOSED: sem o dado (undefined) a regra não dispara — vira DATA_INSUFFICIENT.
+      if (ctx.hasR19SignageProof === false) {
         return {
           ruleId: 'RULE_SINALIZACAO_INSUFICIENTE_90',
           title: 'Ausência de Placa Regulamentadora R-19 na Distância Técnica Mínima',
@@ -201,13 +236,13 @@ export const EXPERT_RULES: RuleModel[] = [
           statutoryBasis: 'Artigo 90 do CTB c/c Resolução CONTRAN nº 798/2020',
         };
       }
-      // If we have proof of R-19 signage, return null (no violation detected)
       return null;
     },
   },
 
   // Rule 7: Erro na Medida Considerada pelo INMETRO (Res. 798/2020)
-  // NEW RULE for ARG-009
+  // Fase 2: tese correta é ARG-005 (erro de enquadramento por velocidade
+  // considerada). A versão anterior apontava ARG-009 (semáforo — foto de retenção).
   {
     id: 'RULE_INMETRO_CONSIDERED_SPEED_ERROR',
     name: 'Erro na Medida Considerada pelo INMETRO',
@@ -215,8 +250,13 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'metrologia_engenharia',
     validFrom: '2020-11-01', // Same as radar calibration rule
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: 'federal',
+    requiredData: ['measuredSpeed', 'consideredSpeed', 'speedLimit'],
+    relatedArguments: ['ARG-005'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Cópia da Notificação com os campos de velocidade medida/considerada preenchidos'],
+    priority: 85,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
       const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
@@ -251,7 +291,7 @@ export const EXPERT_RULES: RuleModel[] = [
               title: 'Erro na Medida Considerada pelo INMETRO',
               description: `A velocidade medida (${measuredSpeed} km/h) foi utilizada para autuação, mas a velocidade considerada (${consideredSpeed} km/h) após aplicação da margem de erro do INMETRO não comprova a infração ou enquadra-a em menor gravidade.`,
               severity: 'alta',
-              legalArgumentId: 'ARG-009',
+              legalArgumentId: 'ARG-005',
               impact: 'Desconstituição do enquadramento da infração; possível redução de pontos e multa ou anulação do auto.',
               statutoryBasis: 'Art. 280, §2º do CTB c/c Resolução CONTRAN nº 798/2020, Tabela I',
             };
@@ -260,96 +300,6 @@ export const EXPERT_RULES: RuleModel[] = [
         // If data is insufficient (missing speed data), return null
         return null;
       }
-      return null;
-    },
-  },
-
-  // Rule 8: Nulidade do AIT por Preenchimento Incorreto
-  // PARTIAL RULE for ARG-013 - checks for obvious missing data
-  {
-    id: 'RULE_AIT_INCOMPLETION_ERRORS',
-    name: 'Nulidade do Auto de Infração por Preenchimento Incorreto',
-    description: 'Verifica erros óbvios de preenchimento do AIT que podem causar nulidade.',
-    category: 'direito_formal',
-    validFrom: '1998-01-22',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
-    evaluate: (ctx) => {
-      const errors = [];
-      
-      // Check for missing or empty aitNumber
-      if (!ctx.infractionCode || ctx.infractionCode.trim() === '') {
-        errors.push('Número do AIT ausente ou inválido');
-      }
-      
-      // Check for missing or empty infraction description
-      // Note: We don't have direct access to description in RuleEvaluationContext,
-      // but we can check if infractionCode is present (which it should be if description exists)
-      
-      // Check for missing speed data when it's expected for speeding infractions
-      const code = ctx.infractionCode || '';
-      const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
-      if (isSpeed) {
-        if (ctx.speedLimit === undefined) {
-          errors.push('Limite de velocidade ausente para infração de velocidade');
-        }
-        // Note: measuredSpeed and consideredSpeed are optional, but at least one should be present for validation
-      }
-      
-      // Check for missing date/time
-      if (!ctx.infractionDate || ctx.infractionDate.trim() === '') {
-        errors.push('Data e hora da infração ausentes ou inválidas');
-      }
-      
-      // If we found errors, return a result
-      if (errors.length > 0) {
-        return {
-          ruleId: 'RULE_AIT_INCOMPLETION_ERRORS',
-          title: 'Erros de Preenchimento do AIT',
-          description: errors.join('; '),
-          severity: 'alta',
-          legalArgumentId: 'ARG-013',
-          impact: 'Possível nulidade do AIT por vício formal insanável devido a erros de preenchimento.',
-          statutoryBasis: 'Art. 280 do CTB c/c Portaria SENATRAN nº 354/2022',
-        };
-      }
-      
-      // If no obvious errors found, return null (cannot conclude violation exists)
-      return null;
-    },
-  },
-
-  // Rule 9: Falta de Descrição Detalhada dos Sinais Psicomotores (Lei Seca)
-  // PARTIAL RULE for ARG-015 - checks if psychomotor term is missing
-  {
-    id: 'RULE_LEI_SECA_PSYCHOMOTOR_MISSING',
-    name: 'Falta de Descrição Detalhada dos Sinais Psicomotores (Lei Seca)',
-    description: 'Verifica se o termo de constatação de sinais psicomotores está ausente em autuações por Lei Seca.',
-    category: 'direito_formal',
-    validFrom: '2013-01-29',
-    validUntil: null,
-    version: 1,
-    jurisdiction: 'federal',
-    evaluate: (ctx) => {
-      const code = ctx.infractionCode || '';
-      if (code === '516-91' || code === '516-92' || code.includes('516')) {
-        // For Lei Seca infractions, check if psychomotor term documentation is missing
-        if (ctx.hasPsychomotorTerm === false || ctx.hasPsychomotorTerm === undefined) {
-          return {
-            ruleId: 'RULE_LEI_SECA_PSYCHOMOTOR_MISSING',
-            title: 'Falta de Descrição Detalhada dos Sinais Psicomotores (Lei Seca)',
-            description: 'Ausência do Termo de Constatação de Sinais com descrição dos sinais psicomotores observados em autuação por Lei Seca.',
-            severity: 'alta',
-            legalArgumentId: 'ARG-015',
-            impact: 'Anulação do AIT e cancelamento do processo de suspensão da CNH por 12 meses (R$ 2.934,70).',
-            statutoryBasis: 'Art. 277 do CTB c/c Resolução CONTRAN nº 432/2013, Art. 5º e Anexo II',
-          };
-        }
-        // If hasPsychomotorTerm is true, we cannot determine if it's "detailed" enough, so return null
-        return null;
-      }
-      // If not a Lei Seca infraction, return null
       return null;
     },
   },
@@ -402,19 +352,35 @@ export class ExpertRuleEngine {
       radarEquipmentId: infraction.radarEquipmentId,
       radarCalibrationDate: infraction.inmetroAferitionDate,
       autuadorBody: infraction.autuadorBody,
+      aitNumber: infraction.aitNumber,
       hasPreviousInfractionsLast12Months: infraction.hasPreviousInfractionsLast12Months,
-      hasPsychomotorTerm: infraction.hasPsychomotorTerm, // Note: This field doesn't exist in InfractionData - we'll need to check
-      hasAgentDetailedObservations: infraction.hasAgentDetailedObservations, // Note: This field doesn't exist in InfractionData
-      hasPhotoProof: infraction.hasPhotoProof, // Note: This field doesn't exist in InfractionData
+      hasPsychomotorTerm: infraction.hasPsychomotorTerm,
+      hasAgentDetailedObservations: infraction.hasAgentDetailedObservations,
+      hasPhotoProof: infraction.hasPhotoProof,
       hasR19SignageProof: infraction.hasR19SignageProof,
     };
 
     const detectedInconsistencies: CaseAnalysis['detectedInconsistencies'] = [];
     const recommendedArgs: LegalArgumentDomain[] = [];
+    const dataGaps: NonNullable<CaseAnalysis['dataGaps']> = [];
 
-    // 1. Run all deterministic rules that are active on the effective date
+    // 1. Run all deterministic rules that are active on the effective date.
+    //    FAIL CLOSED (Fase 2): regra com requiredData ausente => DATA_INSUFFICIENT,
+    //    nunca vira vício detectado.
     const activeRules = this.getActiveRules(effectiveDate);
     for (const rule of activeRules) {
+      const missingData = (rule.requiredData || []).filter((key) => {
+        const value = (context as unknown as Record<string, unknown>)[key];
+        return value === undefined || value === null || value === '';
+      });
+      if (missingData.length > 0) {
+        dataGaps.push({
+          ruleId: rule.id,
+          missingData,
+          reason: `Não há dados suficientes para avaliar a hipótese "${rule.name}". Sem ${missingData.join(', ')}, a regra não pode concluir pela existência do vício (FAIL CLOSED).`,
+        });
+        continue;
+      }
       const result = rule.evaluate(context);
       if (result) {
         detectedInconsistencies.push({
@@ -479,6 +445,8 @@ export class ExpertRuleEngine {
       baseScore = 92; // Radar calibration expired per Res. 798/2020 CONTRAN
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')) {
       baseScore = 88; // Lei Seca lacking mandatory technical terms
+    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-005')) {
+      baseScore = 85; // Considered speed after INMETRO tolerance breaks the framing
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-015')) {
       baseScore = 82; // Manual citation without stop and without required MBFT remarks
     } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-002')) {
@@ -489,10 +457,11 @@ export class ExpertRuleEngine {
 
     const overallSuccessRate = Math.min(99, Math.max(25, baseScore));
 
-    // 5. Default deadline
-    const deadlineDate = new Date();
-    deadlineDate.setDate(deadlineDate.getDate() + 25);
-    const deadlineStr = deadlineDate.toLocaleDateString('pt-BR');
+    // 5. Prazo: somente o prazo real da notificação. Nenhum prazo inventado
+    //    (Fase 2: não usar prazo de outro estado/órgão ou regra como fallback).
+    const gapSummary = dataGaps.length > 0
+      ? ` Não foi possível avaliar ${dataGaps.length} hipótese(s) por insuficiência de dados (${dataGaps.map((g) => g.missingData.join('+')).join('; ')}).`
+      : '';
 
     return {
       id: `anl_${Date.now()}`,
@@ -502,8 +471,9 @@ export class ExpertRuleEngine {
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
       competentBody: infraction.autuadorBody,
-      procedureDeadline: infraction.defenseDeadline || deadlineStr,
-      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.`,
+      procedureDeadline: infraction.defenseDeadline,
+      dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
+      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`,
       createdAt: new Date().toISOString(),
     };
   }
