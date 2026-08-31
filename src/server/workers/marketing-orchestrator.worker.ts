@@ -37,11 +37,6 @@ export class MarketingOrchestrator {
       logger.error('marketing', 'orchestrator', 'cycle', 'Ciclo autônomo falhou', { message: String(err) });
     }), CYCLE_INTERVAL_MS);
     logger.info('marketing', 'orchestrator', 'start', 'Orquestrador iniciado (cron 5min)');
-
-    // Event-driven: reage ao tick manual/disparado por outras rotas
-    eventBus.subscribe(EventTopics.MARKETING_CYCLE_TICK, () => {
-      this.runCycle().catch(() => { /* error já logado no ciclo */ });
-    });
   }
 
   stop() {

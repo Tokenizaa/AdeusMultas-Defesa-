@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { CanonicalMapper, CaseDatabaseRow } from './src/core/mappers/canonical-mapper';
@@ -43,8 +42,6 @@ import { marketingMetricsCollector } from './src/server/workers/marketing-metric
 import { startMetaTokenRenewal } from './src/server/workers/meta-token-renewal.worker';
 import healthRoutes from './src/server/routes/health';
 import { logger } from './src/server/observability/logger';
-
-dotenv.config();
 
 // Initialize legislation collectors
 import { contranCollector } from './src/server/services/legislation-collector';

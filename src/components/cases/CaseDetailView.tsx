@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { CaseDetailBase } from '../shared/CaseDetailBase';
 import { CaseDomain, JourneyStage, ProcedureType, LegalArgumentDomain } from '../../types';
-import { LEGAL_ARGUMENTS, AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
+import { CanonicalKnowledgeRegistry } from '../../core/knowledge/registry/canonical-registry';
+import { LEGAL_ARGUMENTS, PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { exportDefenseToPDF } from '../../lib/pdf-export';
 import { buildDocumentRollItems, normalizeProcedureId } from '../../core/documents/document-roll';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
@@ -186,11 +187,15 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
     }
   };
 
-  // Find organ info
-  const autuadorInfo =
-    AUTUADOR_BODIES.find((b) =>
-      caseData?.infraction?.autuadorBody?.toLowerCase().includes(b.name.toLowerCase().split(' ')[0])
-    ) || AUTUADOR_BODIES[0];
+  // Find organ info — FAIL CLOSED (Fase 8): resolve via registry canônico nacional
+  // (27 UFs + órgãos federais/municipais). NUNCA exibe dados de outro órgão:
+  // se o órgão não consta no catálogo, retorna null e o UI avisa sem inventar.
+  const autuadorInfo = (() => {
+    const raw = caseData?.infraction?.autuadorBody || '';
+    if (!raw) return null;
+    // Abreviação uppercase normalizada para match canônico (DETRAN-MG, CET-SP / DSV, PRF).
+    return CanonicalKnowledgeRegistry.resolveProtocolInfo(raw.toUpperCase()) || null;
+  })();
 
   if (isLoading) {
     return (
@@ -720,6 +725,8 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {autuadorInfo ? (
+            <>
             {/* Digital Protocol Card */}
             <div className="p-4 rounded-xl border border-emerald-500 bg-emerald-50/20">
               <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
@@ -732,12 +739,12 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               <div className="mt-3 pt-2 border-t border-emerald-200">
                 <span className="text-sm font-bold text-slate-700 uppercase block font-mono">Portal Oficial:</span>
                 <a
-                  href={autuadorInfo.onlineProtocolUrl}
+                  href={autuadorInfo.portalUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="text-sm font-mono text-emerald-700 underline break-all mt-0.5 block hover:text-emerald-900 font-semibold"
                 >
-                  {autuadorInfo.onlineProtocolUrl}
+                  {autuadorInfo.portalUrl}
                 </a>
               </div>
             </div>
@@ -752,10 +759,18 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                 Imprima a petição, assine à caneta, anexe as cópias e envie para o endereço da JARI:
               </p>
               <div className="mt-3 pt-2 border-t border-slate-200 text-sm">
-                <span className="font-bold text-slate-900 block text-sm">{autuadorInfo.name}</span>
+                <span className="font-bold text-slate-900 block text-sm">{autuadorInfo.competentBody}</span>
                 <span className="text-slate-600 block mt-0.5 text-sm">{autuadorInfo.physicalAddress}</span>
               </div>
             </div>
+            </>
+            ) : (
+              <div className="col-span-full p-4 rounded-xl border border-amber-400 bg-amber-50/20 text-amber-900 text-sm">
+                <strong>Dados de protocolo não disponíveis para o órgão autuador informado.</strong>{' '}
+                Não exibimos portal/endereço de outro órgão (evita orientação incorreta). Consulte o órgão
+                autuador diretamente para confirmar o canal de protocolo.
+              </div>
+            )}
           </div>
 
           {/* Checklist of Mandatory Documents — espelha o ROL DE DOCUMENTOS (BLK-068) da minuta gerada.
@@ -767,7 +782,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               Checklist de Documentos Obrigatórios para Juntada:
             </h3>
             <p className="text-xs text-slate-500 mb-2.5 leading-snug">
-              Estes são os mesmos itens declarados no Rol de Documentos (Seção final da sua petição), conforme exigência do {autuadorInfo?.name || 'órgão autuador'} para o procedimento <strong>{PROCEDURE_TITLES[normalizeProcedureId(caseData.serviceType) as keyof typeof PROCEDURE_TITLES] || caseData.serviceType}</strong>. Junte todos antes de protocolar.
+              Estes são os mesmos itens declarados no Rol de Documentos (Seção final da sua petição), conforme exigência do {autuadorInfo?.competentBody || 'órgão autuador'} para o procedimento <strong>{PROCEDURE_TITLES[normalizeProcedureId(caseData.serviceType) as keyof typeof PROCEDURE_TITLES] || caseData.serviceType}</strong>. Junte todos antes de protocolar.
             </p>
 
             <div className="space-y-1.5 text-sm">
