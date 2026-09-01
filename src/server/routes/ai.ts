@@ -3,7 +3,6 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { getGeminiClient, enrichDefenseWithGemini } from '../gemini';
 import { DefenseBlock, InfractionData, ProcedureType } from '../../types';
 import { runControlledPipeline, registerRefinementProvider } from '../../core/ai/ai-orchestrator';
-import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
 
 const router = Router();
 

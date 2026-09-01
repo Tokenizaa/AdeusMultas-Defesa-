@@ -19,6 +19,8 @@ import {
   RefreshCw,
   MapPin,
   CheckCircle2,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { useAuthFetch } from '../../../hooks/useAuthFetch';
 import type { Lead, AutomationStatus } from '../types/prospecting';
@@ -47,6 +49,41 @@ export const ProspectingLeadsPage: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeDrawerLead, setActiveDrawerLead] = useState<Lead | null>(null);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (search.trim()) params.append('search', search.trim());
+      if (selectedType !== 'all') params.append('lead_type', selectedType);
+      if (selectedCity !== 'all') params.append('city', selectedCity);
+      if (selectedSource !== 'all') params.append('source', selectedSource);
+      if (selectedContactFilter !== 'all') params.append('contact_filter', selectedContactFilter);
+
+      const res = await authFetch(`/api/marketing/automation/export?${params.toString()}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Falha ao exportar XLSX');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Erro ao exportar:', err);
+      alert('Erro ao exportar XLSX');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [authFetch, search, selectedType, selectedCity, selectedSource, selectedContactFilter]);
 
   // Server-side Fetch
   const fetchLeads = useCallback(async () => {
@@ -65,7 +102,11 @@ export const ProspectingLeadsPage: React.FC = () => {
       if (selectedContactFilter !== 'all') params.append('contact_filter', selectedContactFilter);
 
       const res = await authFetch(`/api/marketing/automation/leads?${params.toString()}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        console.error('Erro ao buscar leads:', res.status, errorText);
+        return;
+      }
 
       const data = await res.json();
       if (data.data) {
@@ -89,11 +130,14 @@ export const ProspectingLeadsPage: React.FC = () => {
   // Load Status once
   useEffect(() => {
     authFetch('/api/marketing/automation/status')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return r.text().then(t => { throw new Error(`${r.status}: ${t}`); });
+        return r.json();
+      })
       .then((data) => {
         if (data?.status) setStatus(data.status);
       })
-      .catch(() => {});
+      .catch((err) => console.error('Erro ao buscar status:', err));
   }, [authFetch]);
 
   // Ouvir evento de invalidação disparado pela página de Coleta após raspagem
@@ -209,6 +253,26 @@ export const ProspectingLeadsPage: React.FC = () => {
                   <option value="has_website" className="bg-slate-900 text-white">Com Website</option>
                 </select>
               </div>
+
+              {/* Export Button */}
+              <button
+                onClick={handleExport}
+                disabled={isExporting || totalLeads === 0}
+                className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-orange-500/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Exportar leads filtrados para XLSX"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Exportando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Exportar XLSX</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 

@@ -12,8 +12,9 @@
  *        se IA indisponível   => mantém determinístico (FAIL CLOSED, sem inventar).
  */
 
-import { DefenseDraft, CaseAnalysis, LegalArgumentDomain } from '../../types';
+import { DefenseDraft, CaseAnalysis, LegalArgumentDomain, QualityGateReport } from '../../types';
 import { validateDraft } from '../validation/integrity-validator';
+import { runFullQualityGate } from '../validation/final-quality-gate';
 
 export interface AiRefinementProvider {
   /**
@@ -118,6 +119,33 @@ export async function applyAsyncRefinement(
     };
   }
 
+  // Verificação adicional: a IA NÃO pode alterar o conteúdo jurídico protegido.
+  // Detecta adulterações em datas, AIT, artigos, teses, pedidos, fatos, nome.
+  const tamperIssues: string[] = [];
+  const baseText = baseDraft.fullDraftText;
+  // Nome do requerente (se explícito na base)
+  if (baseDraft.applicantName && baseDraft.applicantName.length > 3 &&
+      baseText.includes(baseDraft.applicantName) && !refined.includes(baseDraft.applicantName)) {
+    tamperIssues.push('APPLICANT_NAME_REMOVED: O refinamento alterou o nome do requerente.');
+  }
+  // AIT (já verificado acima)
+  // Datas ISO: heurística simples — datas YYYY-MM-DD na base devem aparecer na refinação
+  const dateMatches = baseText.match(/\b\d{4}-\d{2}-\d{2}\b/g) || [];
+  for (const dm of dateMatches) {
+    if (!refined.includes(dm)) {
+      tamperIssues.push(`DATE_ALTERED: O refinamento alterou/removeu data ${dm}`);
+      break;
+    }
+  }
+  if (tamperIssues.length > 0) {
+    return {
+      finalText: baseDraft.fullDraftText,
+      applied: false,
+      reason: 'REFINED_REJECTED',
+      validationIssues: tamperIssues,
+    };
+  }
+
   return { finalText: refined, applied: true, reason: 'REFINED_VALID' };
 }
 
@@ -126,6 +154,10 @@ export async function applyAsyncRefinement(
 export interface PipelineInput {
   analysis: CaseAnalysis;
   draft: DefenseDraft;
+  /** Payload completo do onboarding para reconciliação (Fase 8). */
+  onboardingPayload?: any;
+  /** Caso canônico montado pelo mapper (Fase 8). */
+  canonicalCase?: any;
 }
 
 export interface PipelineResult {
@@ -133,6 +165,8 @@ export interface PipelineResult {
   aiUses: 'deterministic' | 'controlled_refinement';
   controlled: ControlledRefinementResult;
   validationReport: ReturnType<typeof validateDraft>;
+  /** FASE 8: Relatório do Quality Gate de Reconciliação Integral. */
+  qualityGateReport?: QualityGateReport;
 }
 
 /**
@@ -144,8 +178,18 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
   const baseValid = validateDraft(input.draft);
   if (!baseValid.valid) {
     // Não há o que refinar com garantia: retorna a base (validador aponta erros).
+    const draftWithMeta: DefenseDraft = {
+      ...input.draft,
+      canonicalDraft: input.draft.canonicalDraft || input.draft.fullDraftText,
+      refinedDraft: null,
+      finalDraft: input.draft.fullDraftText,
+      usedAI: false,
+      refinementStatus: 'unavailable',
+      validationStatus: 'invalid',
+      integrityScore: 0,
+    };
     return {
-      draft: input.draft,
+      draft: draftWithMeta,
       aiUses: 'deterministic',
       controlled: { finalText: input.draft.fullDraftText, applied: false, reason: 'PROVIDER_UNAVAILABLE' },
       validationReport: baseValid,
@@ -159,15 +203,67 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
   const finalDraft: DefenseDraft = {
     ...input.draft,
     fullDraftText: controlled.finalText,
+    canonicalDraft: input.draft.canonicalDraft || input.draft.fullDraftText,
+    refinedDraft: controlled.applied ? controlled.finalText : null,
+    finalDraft: controlled.finalText,
     // IA nunca altera a seleção de teses: preserva a derivada da análise.
     selectedArgumentIds: (input.analysis.recommendedArguments || []).map((a) => a.id),
+    usedAI: controlled.applied,
+    refinementStatus:
+      controlled.applied
+        ? 'applied'
+        : controlled.reason === 'PROVIDER_UNAVAILABLE'
+        ? 'unavailable'
+        : controlled.reason === 'REFINED_REJECTED'
+        ? 'rejected'
+        : 'not_attempted',
+    validationStatus: 'valid',
+    integrityScore: 100,
   };
+
+  // 4. FASE 8 — Quality Gate de Reconciliação Integral (se dados disponíveis).
+  let qualityGateReport: QualityGateReport | undefined;
+  if (input.onboardingPayload && input.canonicalCase) {
+    qualityGateReport = runFullQualityGate(
+      input.onboardingPayload,
+      input.canonicalCase,
+      input.analysis,
+      finalDraft.finalDraft || finalDraft.fullDraftText
+    );
+
+    // Se gate bloquear, não entregar documento — retornar erro estruturado.
+    if (qualityGateReport.blocked) {
+      const blockedDraft: DefenseDraft = {
+        ...finalDraft,
+        validationStatus: 'blocked',
+        integrityScore: qualityGateReport.score,
+        integrityIssues: qualityGateReport.checks
+          .filter((c) => !c.passed)
+          .map((c) => ({
+            code: c.check,
+            severity: c.severity,
+            message: c.message,
+          })),
+      };
+      return {
+        draft: blockedDraft,
+        aiUses: controlled.applied ? 'controlled_refinement' : 'deterministic',
+        controlled,
+        validationReport: validateDraft(blockedDraft),
+        qualityGateReport,
+      };
+    }
+
+    // Gate passou: atualizar score de integridade com score do gate.
+    finalDraft.integrityScore = qualityGateReport.score;
+  }
 
   return {
     draft: finalDraft,
     aiUses: controlled.applied ? 'controlled_refinement' : 'deterministic',
     controlled,
     validationReport: validateDraft(finalDraft),
+    qualityGateReport,
   };
 }
 

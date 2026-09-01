@@ -21,10 +21,38 @@ import {
 import { CaseDetailBase } from '../shared/CaseDetailBase';
 import { CaseDomain, JourneyStage, ProcedureType, LegalArgumentDomain } from '../../types';
 import { CanonicalKnowledgeRegistry } from '../../core/knowledge/registry/canonical-registry';
-import { LEGAL_ARGUMENTS, PROCEDURE_TITLES } from '../../data/knowledge-base';
+import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
+import { PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { exportDefenseToPDF } from '../../lib/pdf-export';
 import { buildDocumentRollItems, normalizeProcedureId } from '../../core/documents/document-roll';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
+
+/**
+ * Deriva a jornada processual do caso em linguagem legível ao cidadão,
+ * a partir dos artefatos do pipeline canônico (análise + minuta).
+ * Não expõe detalhes internos técnicos ao usuário.
+ */
+function pipelineJourney(caseData: CaseDomain | null) {
+  const hasAnalysis = Boolean(caseData?.analysis?.recommendedArguments?.length || caseData?.analysis?.detectedInconsistencies?.length);
+  const hasRules = Boolean(caseData?.analysis?.evaluatedRules?.length);
+  const hasFlaws = Boolean(caseData?.analysis?.detectedFlaws?.length || caseData?.analysis?.detectedInconsistencies?.length);
+  const hasDraft = Boolean(caseData?.defenseDraft?.fullDraftText);
+  const draftValid = caseData?.defenseDraft?.validationStatus === 'valid'
+    || (hasDraft && caseData.defenseDraft?.integrityScore !== undefined && caseData.defenseDraft.integrityScore >= 100);
+
+  const steps = [
+    { label: 'Dados recebidos', done: true, active: false },
+    { label: 'Caso classificado', done: Boolean(caseData?.serviceType), active: !caseData?.serviceType },
+    { label: 'Fatos analisados', done: hasAnalysis, active: !hasAnalysis && Boolean(caseData?.serviceType) },
+    { label: 'Regras executadas', done: hasRules, active: !hasRules && hasAnalysis },
+    { label: 'Vícios identificados', done: hasFlaws, active: !hasFlaws && hasRules },
+    { label: 'Teses aplicadas', done: Boolean(caseData?.analysis?.selectedArguments?.length) || hasAnalysis, active: !hasAnalysis },
+    { label: 'Minuta montada', done: hasDraft, active: !hasDraft && (hasFlaws || hasAnalysis) },
+    { label: 'Validação concluída', done: draftValid, active: !draftValid && hasDraft },
+    { label: 'Documento pronto', done: draftValid, active: false },
+  ];
+  return steps;
+}
 
 interface CaseDetailViewProps {
   /** Optional pre-loaded case. When absent, the view fetches it by `caseId`. */
@@ -428,7 +456,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
       {/* Simplified by default (auto top-3) — professional manual picking opt-in */}
       {/* ========================================================================= */}
       {activeStage === 2 && (() => {
-        const recommendedArgs = LEGAL_ARGUMENTS.filter((a) => selectedArgIds.includes(a.id)).slice(0, 3);
+        const recommendedArgs = ARGUMENTS_CATALOG.filter((a) => selectedArgIds.includes(a.id)).slice(0, 3);
         const MAX_GENERATIONS = 3;
         // O backend controla o limite efetivo; o frontend apenas reflete o estado.
         const generationCount = caseData.defenseDraft?.generationCount ?? 0;
@@ -501,7 +529,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             /* ---------- MODO SIMPLIFICADO: top-3 automático, somente leitura ---------- */
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {(recommendedArgs.length > 0 ? recommendedArgs : LEGAL_ARGUMENTS.slice(0, 3)).map((arg, idx) => (
+                {(recommendedArgs.length > 0 ? recommendedArgs : ARGUMENTS_CATALOG.slice(0, 3)).map((arg, idx) => (
                   <div key={arg.id} className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 flex flex-col text-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-xs uppercase font-mono">
@@ -512,7 +540,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                       </span>
                     </div>
                     <h4 className="font-bold text-slate-900 leading-snug">{arg.title}</h4>
-                    <p className="text-slate-600 mt-1.5 leading-relaxed flex-1">{arg.summary}</p>
+                    <p className="text-slate-600 mt-1.5 leading-relaxed flex-1">{arg.description}</p>
                     <div className="mt-3 pt-2 border-t border-emerald-100 flex items-center justify-between font-mono text-xs">
                       <span className="text-slate-500">{arg.legalBase}</span>
                       <span className="text-emerald-700 font-bold shrink-0 ml-2">{arg.confidenceScore}%</span>
@@ -535,7 +563,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             /* ---------- MODO PROFISSIONAL: seleção manual completa (preservada) ---------- */
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {LEGAL_ARGUMENTS.map((arg) => {
+                {ARGUMENTS_CATALOG.map((arg) => {
                   const isSelected = selectedArgIds.includes(arg.id);
                   return (
                     <div
@@ -563,7 +591,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                         </span>
                       </div>
 
-                      <p className="text-slate-600 mt-1.5 leading-relaxed text-sm">{arg.summary}</p>
+                      <p className="text-slate-600 mt-1.5 leading-relaxed text-sm">{arg.description}</p>
                       <p className="font-mono text-sm text-orange-600 mt-1.5">{arg.legalBase}</p>
 
                       <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-sm font-mono">
@@ -823,6 +851,31 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               </h2>
             </div>
           </div>
+
+          {/* Jornada do Processamento do Caso (pipeline canônico, linguagem do cidadão) */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
+              Jornada do Seu Caso
+            </p>
+            {pipelineJourney(caseData).map((step, idx) => (
+              <div key={step.label} className="flex items-center gap-3">
+                <div
+                  className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                    step.done
+                      ? 'bg-emerald-500'
+                      : step.active
+                      ? 'bg-orange-500 ring-4 ring-orange-100'
+                      : 'bg-slate-200'
+                  }`}
+                />
+                <span className={`text-sm ${step.done ? 'text-slate-900' : step.active ? 'text-slate-900 font-semibold' : 'text-slate-400'}`}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-slate-100 pt-4" />
 
           <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
             {(caseData.timeline || []).map((item, idx) => (

@@ -31,6 +31,7 @@ import analyticsRoutes from './routes/analytics';
 import aiRoutes from './routes/ai';
 import syncRoutes from './routes/sync';
 import authRoutes from './routes/auth';
+import documensoRoutes from './routes/documenso';
 import { metaIntegration } from './integrations/meta';
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,9 @@ export function createApp() {
 
   // Sync
   app.use('/api', syncRoutes);
+
+  // Documenso integration
+  app.use('/api/documenso', documensoRoutes);
 
   // API 404 fallback — garante que nenhum endpoint /api/* responda HTML
   // (evita "Expected JSON response" no cliente quando a rota não existe).

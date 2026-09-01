@@ -79,6 +79,30 @@ export interface InfractionData {
   hasPsychomotorTerm?: boolean; // Termo de constatação de sinais psicomotores (Lei Seca)
   hasAgentDetailedObservations?: boolean; // Campo de observações circunstanciadas preenchido no AIT
   hasPhotoProof?: boolean; // Fotos/evidência fotográfica do flagrante
+  hasRegulatorySign?: boolean;
+
+  // Lei Seca
+  refusedTest?: boolean;
+  offeredRetest?: boolean;
+
+  // Celular
+  cellphoneCircumstance?: string;
+
+  // Semáforo
+  yellowPhaseCrossing?: boolean;
+  emergencyPassage?: boolean;
+
+  // Indicação de condutor
+  realDriverName?: string;
+  realDriverCpf?: string;
+  realDriverCnh?: string;
+  indicationWithinDeadline?: boolean;
+
+  // Evidências/OCR auxiliares
+  ocrExtractedText?: string;
+  ocrConfidence?: number;
+  photoProofUrls?: string[];
+  notes?: string;
 }
 
 export interface LegalArgumentDomain {
@@ -117,6 +141,29 @@ export interface EvaluatedRule {
 }
 
 /**
+ * Vício detectado pelo RuleEngine — cadeia jurídica rastreável
+ * FACT → RULE → FLAW → ARGUMENT → BLOCK → PROCEDURE
+ */
+export interface DetectedFlaw {
+  /** ID da regra que detectou (origem rastreável). */
+  ruleId: string;
+  /** ID da tese canônica (ARG-*) a aplicar. */
+  argumentId: string;
+  /** ID do bloco jurídico (BLK-*) recomendado para a peça. */
+  blockId?: string;
+  /** Severidade programática do vício. */
+  severity: 'alta' | 'media' | 'baixa';
+  /** Título do vício. */
+  title: string;
+  /** Descrição jurídica do vício. */
+  description: string;
+  /** Impacto processual (anulação, conversão, reclassificação). */
+  impact: string;
+  /** Base legal consolidada. */
+  statutoryBasis: string;
+}
+
+/**
  * ETAPA 1 — DIAGNÓSTICO PRELIMINAR GRATUITO
  */
 export interface CaseAnalysis {
@@ -137,8 +184,27 @@ export interface CaseAnalysis {
   procedureDeadline?: string;
   summaryReasoning: string;
   createdAt: string;
+  /**
+   * Versão do motor que produziu esta análise (rastreabilidade).
+   */
   engineVersion?: string;
+  /**
+   * Árvore de decisão auditável (cada regra avaliada com status PASS/FAIL/DATA_GAP).
+   */
   evaluatedRules?: EvaluatedRule[];
+  /**
+   * Vícios detectados normalizados — cadeia FACT → RULE → FLAW → ARGUMENT → BLOCK.
+   * Espelho estruturado das detectedInconsistencies para auditoria.
+   */
+  detectedFlaws?: DetectedFlaw[];
+  /**
+   * Teses canônicas selecionadas (IDs ARG-*).
+   */
+  selectedArguments?: string[];
+  /**
+   * Score de integridade estrutural (0-100). 100 = sem pendências conhecidas.
+   */
+  integrityScore?: number;
   /**
    * Regras que não puderam concluir por dados insuficientes (FAIL CLOSED,
    * Fase 2). Nunca tratadas como vício detectado.
@@ -148,10 +214,135 @@ export interface CaseAnalysis {
     missingData: string[];
     reason: string;
   }[];
+  /**
+   * Timestamp do início da avaliação determinística.
+   */
+  engineStartedAt?: string;
+  /**
+   * Timestamp do fim da avaliação determinística.
+   */
+  engineFinishedAt?: string;
+}
+
+/**
+ * FASE 8 — Rastreabilidade de Dados (Data Lineage)
+ *
+ * Cada informação relevante percorre o pipeline:
+ * ONBOARDING → CANONICAL CASE → RULE ENGINE → TESes/VÍCIOS/BLOCOS → DOCUMENTO
+ *
+ * O lineage permite auditoria completa: de onde veio, se foi transformado,
+ * se disparou regra, gerou vício/tese/bloco, aparece no documento.
+ */
+export type DataLineageSource = 'onboarding' | 'ocr' | 'catalog' | 'rule_engine' | 'system';
+
+export interface DataLineageEntry {
+  /** Campo original no onboarding (ex: 'infraction.inmetroAferitionDate'). */
+  field: string;
+  /** Valor normalizado (hash para comparação rápida). */
+  valueHash: string;
+  /** Valor original legível (para debug). */
+  originalValue?: string;
+  /** Origem do dado. */
+  source: DataLineageSource;
+  /** Regras que consumiram este dado. */
+  usedByRules: string[];
+  /** Teses (ARG-*) geradas a partir deste dado. */
+  generatedArguments: string[];
+  /** Blocos (BLK-*) gerados a partir deste dado. */
+  generatedBlocks: string[];
+  /** Número de ocorrências no documento final. */
+  documentOccurrences: number;
+  /** Se o dado é obrigatório no documento. */
+  requiredInDocument: boolean;
+  /** Se o dado é um fato condicional (ex: específico de radar/lei seca). */
+  isConditionalFact: boolean;
+}
+
+/**
+ * Mapa completo de linhagem para um caso.
+ */
+export interface CaseDataLineage {
+  caseId: string;
+  entries: DataLineageEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * FASE 8 — Quality Gate de Reconciliação Integral
+ *
+ * 7 verificações obrigatórias antes de entregar o documento ao frontend.
+ */
+export type QualityGateCheck =
+  | 'COMPLETUDE'
+  | 'FIDELIDADE'
+  | 'CONSISTENCIA'
+  | 'CAUSALIDADE'
+  | 'RASTREABILIDADE'
+  | 'NAO_INVENCAO'
+  | 'ESTRUTURA';
+
+export interface QualityGateResult {
+  check: QualityGateCheck;
+  passed: boolean;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  details?: {
+    field?: string;
+    expected?: string;
+    actual?: string;
+    ruleId?: string;
+    argumentId?: string;
+    blockId?: string;
+    lineageEntry?: DataLineageEntry;
+  };
+}
+
+export interface QualityGateReport {
+  caseId: string;
+  overallPass: boolean;
+  checks: QualityGateResult[];
+  /** Score agregado 0-100. */
+  score: number;
+  /** Se o documento está bloqueado para entrega. */
+  blocked: boolean;
+  generatedAt: string;
+}
+
+/**
+ * Entrada para o Quality Gate: tudo o que ele precisa comparar.
+ */
+export interface QualityGateInput {
+  /** Payload completo do onboarding (inclui specificFacts, evidence, etc). */
+  onboardingPayload: CanonicalOnboardingPayload;
+  /** Caso canônico montado pelo mapper. */
+  canonicalCase: any; // CaseDomain
+  /** Análise determinística com evaluatedRules, detectedFlaws, selectedArguments. */
+  analysis: any; // CaseAnalysis
+  /** Documento final montado (canonicalDraft ou refinedDraft). */
+  finalDocument: string;
+  /** Linhagem de dados computada. */
+  lineage: CaseDataLineage;
+  /** Catálogo de argumentos para validação de teses. */
+  argumentsCatalog: any[]; // ARGUMENTS_CATALOG
+  /** Catálogo de blocos para validação de estrutura. */
+  blocksCatalog: any[]; // DOCUMENT_BLOCKS
 }
 
 /**
  * CONTRATO CANÔNICO DE ENTRADA DO ONBOARDING
+ *
+ * O contrato é composto por 6 blocos semânticos:
+ *  1. identification → dados de identificação do caso (AIT, fase, etc.)
+ *  2. infraction     → dados da infração
+ *  3. vehicle        → dados do veículo
+ *  4. applicant      → dados do requerente
+ *  5. specificFacts  → fatos juridicamente relevantes específicos da categoria
+ *  6. evidence       → evidências auxiliares (OCR, fotos, declarações)
+ *
+ * Os campos legacy `vehicle`, `infraction`, `applicant`, etc. são mantidos
+ * por compatibilidade, mas o pipeline canônico consome as chaves
+ * `identification / infraction / vehicle / applicant / specificFacts / evidence`.
  */
 export interface CanonicalOnboardingPayload {
   procedureType: ProcedureType;
@@ -160,7 +351,19 @@ export interface CanonicalOnboardingPayload {
   leadName?: string;
   leadPhone?: string;
   leadEmail?: string;
-  
+
+  /** Dados de identificação do caso / fase processual. */
+  identification?: {
+    aitNumber?: string;
+    infractionCode?: string;
+    autuadorBody?: string;
+    category?: string;
+    processStage?: string;
+    notificationExpeditionDate?: string;
+    notificationDeliveryDate?: string;
+    defenseDeadline?: string;
+  };
+
   vehicle: {
     plate: string;
     brandModel: string;
@@ -169,7 +372,7 @@ export interface CanonicalOnboardingPayload {
     year?: string;
     color?: string;
   };
-  
+
   infraction: {
     aitNumber: string;
     infractionCode: string;
@@ -181,6 +384,8 @@ export interface CanonicalOnboardingPayload {
     autuadorBody: string;
     dateTime?: string;
     location?: string;
+    municipality?: string;
+    uf?: string;
     speedLimit?: number;
     measuredSpeed?: number;
     consideredSpeed?: number;
@@ -191,17 +396,81 @@ export interface CanonicalOnboardingPayload {
     notificationExpeditionDate?: string;
     notificationDeliveryDate?: string;
     defenseDeadline?: string;
-    
+
     // Fatos e Evidências Específicas
     hasPreviousInfractionsLast12Months?: boolean;
     hasPsychomotorTerm?: boolean;
     hasAgentDetailedObservations?: boolean;
     hasPhotoProof?: boolean;
     hasR19SignageProof?: boolean;
+    hasRegulatorySign?: boolean;
     daysElapsed?: number;
     customFacts?: string;
+
+    // Semáforo
+    yellowPhaseCrossing?: boolean;
+    emergencyPassage?: boolean;
+
+    // Celular
+    cellphoneCircumstance?: string;
+
+    // Lei Seca
+    refusedTest?: boolean;
+    offeredRetest?: boolean;
+
+    // Indicação de condutor
+    realDriverName?: string;
+    realDriverCpf?: string;
+    realDriverCnh?: string;
+    indicationWithinDeadline?: boolean;
   };
-  
+
+  /**
+   * Fatos específicos exigidos pelo RuleEngine, indexados pela regra que os
+   * consome (FAIL CLOSED). Nunca inventados — ausentes => DATA_GAP.
+   */
+  specificFacts?: {
+    /** Radar / velocidade */
+    speedLimit?: number;
+    measuredSpeed?: number;
+    consideredSpeed?: number;
+    radarEquipmentId?: string;
+    inmetroAferitionDate?: string;
+    hasRegulatorySign?: boolean;
+    hasR19SignageProof?: boolean;
+    /** Lei Seca */
+    refusedTest?: boolean;
+    hasPsychomotorTerm?: boolean;
+    offeredRetest?: boolean;
+    /** Celular */
+    cellphoneCircumstance?: string;
+    hasAgentDetailedObservations?: boolean;
+    /** Semáforo */
+    yellowPhaseCrossing?: boolean;
+    emergencyPassage?: boolean;
+    hasPhotoProof?: boolean;
+    /** Advertência */
+    isFirstInfractionLast12Months?: boolean;
+    /** Indicação de condutor */
+    realDriverName?: string;
+    realDriverCpf?: string;
+    realDriverCnh?: string;
+    indicationWithinDeadline?: boolean;
+  };
+
+  /**
+   * Evidências auxiliares carregadas pelo cidadão (OCR, fotos, declarações).
+   * A IA nunca decide com base em evidências — apenas o operador humano
+   * confirma ou descarta.
+   */
+  evidence?: {
+    ocrExtractedText?: string;
+    ocrConfidence?: number;
+    photoProofUrls?: string[];
+    declarationFiles?: string[];
+    notes?: string;
+  };
+
   applicant?: {
     name: string;
     cpf: string;
@@ -217,7 +486,7 @@ export interface CanonicalOnboardingPayload {
     addressZipCode?: string;
     addressCityState?: string;
   };
-  
+
   nominatedDriver?: {
     name: string;
     cpf: string;
@@ -228,7 +497,7 @@ export interface CanonicalOnboardingPayload {
     address?: string;
     city?: string;
   };
-  
+
   company?: {
     name: string;
     cnpj: string;
@@ -238,7 +507,7 @@ export interface CanonicalOnboardingPayload {
     representativeName: string;
     representativeCpf: string;
   };
-  
+
   processNumbers?: {
     psddNumber?: string;
     pcddNumber?: string;
@@ -301,6 +570,48 @@ export interface DefenseDraft {
    * esse estado para desabilitar o botão quando o limite é atingido.
    */
   generationCount?: number;
+
+  /**
+   * Minuta canônica determinística (pré-IA). Sempre presente e íntegra.
+   */
+  canonicalDraft?: string;
+  /**
+   * Minuta após refinamento de IA (somente se IA rodou e passou na validação).
+   */
+  refinedDraft?: string | null;
+  /**
+   * Texto final entregue (canonicalDraft ou refinedDraft conforme validação).
+   */
+  finalDraft?: string;
+  /**
+   * IA foi efetivamente utilizada para gerar `finalDraft`?
+   */
+  usedAI?: boolean;
+  /**
+   * Status do refinamento: 'not_attempted' | 'applied' | 'rejected' | 'unavailable'.
+   */
+  refinementStatus?: 'not_attempted' | 'applied' | 'rejected' | 'unavailable';
+  /**
+   * Status da validação estrutural: 'pending' | 'valid' | 'invalid' | 'blocked'.
+   * 'blocked' = Quality Gate (Fase 8) impediu entrega por inconsistência detectada.
+   */
+  validationStatus?: 'pending' | 'valid' | 'invalid' | 'blocked';
+  /**
+   * Score de integridade estrutural do documento (0-100).
+   */
+  integrityScore?: number;
+  /**
+   * Lista de issues de integridade detectadas pelo validador.
+   */
+  integrityIssues?: {
+    code: string;
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+  }[];
+  /**
+   * Versão do motor/assembly que produziu a minuta (rastreabilidade).
+   */
+  engineVersion?: string;
 }
 
 /**
@@ -442,7 +753,18 @@ export interface CaseRow {
   notification_expedition_date?: string;
   defense_deadline?: string;
   formal_flaws_json?: string;
+  /**
+   * Análise jurídica determinística. Pode conter o formato legado
+   * (detectedInconsistencies + recommendedArguments) ou o formato
+   * expandido com engineVersion, evaluatedRules, detectedFlaws,
+   * selectedArguments, integrityScore, timestamps.
+   */
   analysis_json?: string;
+  /**
+   * Minuta jurídica. Pode ser o formato legado (fullDraftText + selectedArgumentIds)
+   * ou o formato expandido com canonicalDraft, refinedDraft, usedAI,
+   * refinementStatus, validationStatus, integrityScore, integrityIssues.
+   */
   defense_draft_json?: string;
   protocol_info_json?: string;
   applicant_json?: string;
@@ -455,6 +777,22 @@ export interface CaseRow {
   paid_at?: string;
   created_at: string;
   updated_at: string;
+  // Novos campos específicos de infração
+  has_previous_infractions_last_12_months?: boolean;
+  has_psychomotor_term?: boolean;
+  has_agent_detailed_observations?: boolean;
+  has_photo_proof?: boolean;
+  has_r19_signage_proof?: boolean;
+  has_regulatory_sign?: boolean;
+  refused_test?: boolean;
+  offered_retest?: boolean;
+  cellphone_circumstance?: string;
+  yellow_phase_crossing?: boolean;
+  emergency_passage?: boolean;
+  real_driver_name?: string;
+  real_driver_cpf?: string;
+  real_driver_cnh?: string;
+  indication_within_deadline?: boolean;
 }
 
 // Marketing OS 7 Autonomous Agents Types

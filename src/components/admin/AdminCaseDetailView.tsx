@@ -14,6 +14,7 @@ import {
   User,
   FileCheck,
   Printer,
+  ListTree,
 } from 'lucide-react';
 import { CaseDetailBase } from '../shared/CaseDetailBase';
 import { CaseDomain } from '../../types';
@@ -365,6 +366,106 @@ export const AdminCaseDetailView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* ÁRVORE DE DECISÃO AUDITÁVEL (Troubleshooting / Auditoria)            */}
+      {/* ===================================================================== */}
+      {(activeTab === 'overview' || activeTab === 'theses') && (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h2 className="text-base font-bold text-white font-mono flex items-center gap-2">
+              <ListTree className="w-4 h-4 text-orange-400" />
+              Árvore de Decisão Auditável
+            </h2>
+            <p className="text-sm text-slate-400 font-mono">FACT → RULE → FLAW → ARGUMENT → BLOCK → PROCEDURE</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 bg-slate-800 text-orange-300 rounded-lg text-xs font-mono">
+              Engine: {caseData.analysis?.engineVersion || 'indisponível (histórico)'}
+            </span>
+            {typeof caseData.analysis?.integrityScore === 'number' && (
+              <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-mono">
+                Score: {caseData.analysis.integrityScore}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Regras Avaliadas */}
+        <div>
+          <p className="text-xs font-bold text-slate-500 font-mono uppercase mb-3">Regras Avaliadas (evaluatedRules)</p>
+          {caseData.analysis?.evaluatedRules?.length ? (
+            <div className="space-y-2">
+              {caseData.analysis.evaluatedRules.map((rule, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-2.5 bg-slate-950 rounded-lg border border-slate-800 font-mono text-sm">
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                    rule.status === 'FAIL' ? 'bg-rose-500/20 text-rose-400' :
+                    rule.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-400' :
+                    'bg-amber-500/20 text-amber-400'
+                  }`}>{rule.status}</span>
+                  <span className="text-slate-300 font-bold">{rule.ruleId}</span>
+                  <span className="text-slate-500 flex-1 truncate">{rule.name}</span>
+                  {rule.legalArgumentId && <span className="text-orange-400">→ {rule.legalArgumentId}</span>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 font-mono">evaluatedRules indisponível (caso histórico). Não inventamos decisões retrospectivas.</p>
+          )}
+        </div>
+
+        {/* Vícios Detectados */}
+        {caseData.analysis?.detectedFlaws?.length ? (
+          <div>
+            <p className="text-xs font-bold text-slate-500 font-mono uppercase mb-3">Vícios Detectados (detectedFlaws)</p>
+            <div className="space-y-2">
+              {caseData.analysis.detectedFlaws.map((flaw, idx) => (
+                <div key={idx} className="p-3 bg-rose-950/30 border border-rose-900/50 rounded-lg font-mono text-sm space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-rose-400 font-bold">RULE {flaw.ruleId}</span>
+                    <span className="text-slate-400">→</span>
+                    <span className="text-orange-400 font-bold">{flaw.argumentId}</span>
+                  </div>
+                  <p className="text-rose-200">{flaw.title}</p>
+                  <p className="text-slate-500 text-xs">{flaw.statutoryBasis}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Teses Selecionadas */}
+        {caseData.analysis?.selectedArguments?.length ? (
+          <div>
+            <p className="text-xs font-bold text-slate-500 font-mono uppercase mb-3">Teses Selecionadas (selectedArguments)</p>
+            <div className="flex flex-wrap gap-2">
+              {caseData.analysis.selectedArguments.map((argId, idx) => (
+                <span key={idx} className="px-2.5 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 rounded-lg text-xs font-mono">
+                  {argId}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* IA Utilizada + Validação */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-800 pt-4">
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-sm">
+            <p className="text-slate-500 text-xs uppercase">IA Utilizada?</p>
+            <p className="text-white font-bold">{caseData.defenseDraft?.usedAI ? 'Sim (refinamento)' : 'Não / Determinístico'}</p>
+          </div>
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-sm">
+            <p className="text-slate-500 text-xs uppercase">Status Validação</p>
+            <p className="text-white font-bold">{caseData.defenseDraft?.validationStatus || 'n/a'}</p>
+          </div>
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-sm">
+            <p className="text-slate-500 text-xs uppercase">Integrity Score (minuta)</p>
+            <p className="text-white font-bold">{caseData.defenseDraft?.integrityScore ?? 'n/a'}</p>
+          </div>
+        </div>
+      </div>
       )}
 
       {/* Tab 2: Theses and RAG Diagnosis */}

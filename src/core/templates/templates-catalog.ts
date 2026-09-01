@@ -180,6 +180,7 @@ export const TEMPLATES_CATALOG: DocumentTemplateModel[] = [
       },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-057')!,
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-066')!,
+      DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-068')!,
     ].map((b, idx) => ({
       id: b.id,
       type: toTemplateBlock(b, idx).type,  // resolvido por toTemplateBlock

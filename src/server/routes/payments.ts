@@ -12,7 +12,6 @@ import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { buildDocumentRollText } from '../../core/documents/document-roll';
-import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { PRICING } from '../config/pricing';

@@ -33,7 +33,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { CaseDomain, JourneyStage, ProcedureType } from '../../types';
-import { LEGAL_ARGUMENTS, AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
+import { AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { api } from '../../lib/api/client';
 
 interface CaseDetailBaseProps {

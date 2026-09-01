@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
@@ -29,6 +30,7 @@ import paymentsRoutes from './src/server/routes/payments';
 import notificationsRoutes from './src/server/routes/notifications';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import marketingAutomationRoutes from './src/server/routes/marketing-automation';
+import { scraperJobQueue } from './src/server/services/scraper-job-queue';
 import e2eTestsRoutes from './src/server/routes/e2e-tests';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
@@ -42,6 +44,7 @@ import { marketingMetricsCollector } from './src/server/workers/marketing-metric
 import { startMetaTokenRenewal } from './src/server/workers/meta-token-renewal.worker';
 import healthRoutes from './src/server/routes/health';
 import { logger } from './src/server/observability/logger';
+import { startPollingJob } from './src/server/lib/documenso/polling-job';
 
 // Initialize legislation collectors
 import { contranCollector } from './src/server/services/legislation-collector';
@@ -210,11 +213,81 @@ auditLogsStore.push({
   hashIntegridade: 'sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069'
 });
 
+/**
+ * Valida variáveis de ambiente críticas no startup
+ * Em produção (Vercel), as vars vêm do dashboard
+ * Em desenvolvimento, vêm do .env via dotenv.config()
+ */
+function validateCriticalEnvVars(): void {
+  const criticalVars = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SUPABASE_ANON_KEY',
+  ];
+
+  const optionalButImportant = [
+    'EVOLUTION_API_URL',
+    'EVOLUTION_API_KEY',
+    'EVOLUTION_INSTANCE_NAME',
+    'GEMINI_API_KEY',
+    'APP_URL',
+    'PAYMENT_MODE',
+    'PAYMENT_ACTIVE_GATEWAY',
+    'NODE_ENV',
+  ];
+
+  const missing: string[] = [];
+  const placeholders: string[] = [];
+
+  for (const v of criticalVars) {
+    const val = process.env[v];
+    if (!val || val.trim() === '') {
+      missing.push(v);
+    } else if (val.includes('your-') || val.includes('placeholder') || val === 'YOUR_SERVICE_ROLE_KEY') {
+      placeholders.push(v);
+    }
+  }
+
+  for (const v of optionalButImportant) {
+    const val = process.env[v];
+    if (!val || val.trim() === '') {
+      console.warn(`[env] Variável importante não definida: ${v}`);
+    } else if (val.includes('your-') || val.includes('placeholder') || val === 'change-me-in-production') {
+      console.warn(`[env] Variável com placeholder: ${v} = ${val}`);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.error(`[env] ❌ CRÍTICO: Variáveis obrigatórias ausentes: ${missing.join(', ')}`);
+    console.error('[env]    Configure no Vercel Dashboard ou no arquivo .env local');
+  }
+
+  if (placeholders.length > 0) {
+    console.warn(`[env] ⚠️ Variáveis com placeholders (não funcionarão): ${placeholders.join(', ')}`);
+    console.warn('[env]    Substitua por valores reais no .env.local ou Vercel Dashboard');
+  }
+
+  if (missing.length === 0 && placeholders.length === 0) {
+    console.log('[env] ✅ Variáveis de ambiente críticas configuradas');
+  }
+}
+
 async function startServer() {
+  // Validar variáveis de ambiente ANTES de inicializar
+  validateCriticalEnvVars();
+
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    // Captura body bruto (bytes exatos) p/ verificacao de assinatura HMAC
+    // em webhooks (Evolution API /api/webhooks/whatsapp). Aditivo — nao
+    // altera req.body; apenas anexa req.rawBody (mesmo padrao do app.ts).
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf.toString('utf8');
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Warm-up: carregar dados persistidos do Supabase ANTES de montar rotas.
@@ -240,6 +313,9 @@ async function startServer() {
     console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
   }
 
+  // Iniciar worker de scraping (background, headless)
+  scraperJobQueue.startWorker();
+
   // Mount Modular API Routes First
    app.use('/api/admin/commercial', commercialRoutes);
    app.use('/api/commercial', commercialRoutes);
@@ -251,7 +327,11 @@ async function startServer() {
    app.use('/api/marketing/automation', marketingAutomationRoutes);
    app.use('/api/marketing', marketingRoutes);
    app.use('/api/agents', agentsRoutes);
-   app.use('/api/communication/whatsapp', whatsappRoutes);
+   // whatsappRoutes declara paths completos (/communication/whatsapp/* e
+   // /webhooks/whatsapp). Montar em /api (nao /api/communication/whatsapp)
+   // preserva as URLs documentadas e consumidas: /api/communication/whatsapp/send
+   // (frontend/simulator) e /api/webhooks/whatsapp (alvo do webhook da Evolution).
+   app.use('/api', whatsappRoutes);
    app.use('/api/ocr', ocrRoutes);
    app.use('/api/payments', paymentsRoutes);
    app.use('/api/notifications', notificationsRoutes);
@@ -1190,6 +1270,13 @@ app.get('/api/audit/logs', (req, res) => {
       startMetaTokenRenewal();
     } catch (workerErr) {
       // Silently ignore worker init errors in dev; workers are optional
+    }
+    // Start Documenso polling job for webhook fallback
+    try {
+      startPollingJob();
+      logger.info('documenso' as any, 'server', 'startup', 'Documenso polling job started', { status: 'success' });
+    } catch (pollingErr) {
+      logger.error('documenso' as any, 'server', 'startup', 'Failed to start Documenso polling job', { err: pollingErr, status: 'failed' });
     }
   });
 }

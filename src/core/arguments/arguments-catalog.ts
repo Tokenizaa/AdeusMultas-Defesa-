@@ -1388,3 +1388,5 @@ export const ARGUMENTS_CATALOG: ArgumentModel[] = RAW_ARGUMENTS_CATALOG.map((raw
   };
 });
 
+export type { ArgumentModel, StatutoryNormReference } from '../domain/knowledge-schema';
+

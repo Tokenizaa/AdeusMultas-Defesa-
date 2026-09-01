@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { marketingAutomationWorker } from '../services/marketing-automation/worker';
 import { supabaseAdmin } from '../../scraper-prospecting/supabase';
-import { runScrape } from '../../scraper-prospecting/persister';
+import { scraperJobQueue } from '../services/scraper-job-queue';
 import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
+import { configService } from '../config/config-service';
 
 const router = Router();
 
@@ -515,7 +516,12 @@ router.get('/health', async (_req, res) => {
     const workerStatus = await marketingAutomationWorker.getStatus();
     
     // Check Evolution API status
-    let evolutionStatus: any = { status: 'online', instance: process.env.EVOLUTION_INSTANCE_NAME || 'defesai' };
+    // Honestidade: NUNCA reportar 'online' sem confirmacao real. Default nao
+    // preenchido -> status 'offline' quando instancia inalcancavel/fechada.
+    let evolutionStatus: any = {
+      status: 'offline',
+      instance: configService.get('EVOLUTION_INSTANCE_NAME') || 'defesai',
+    };
     try {
       const ev = await whatsappService.getInstanceStatus();
       if (ev) {
@@ -526,7 +532,7 @@ router.get('/health', async (_req, res) => {
         };
       }
     } catch {
-      // Fallback
+      // Mantem 'offline' (nao mascarar falha real como 'online').
     }
 
     res.json({
@@ -592,56 +598,119 @@ router.get('/queue', async (_req, res) => {
   });
 
   router.post('/scrape', async (req, res) => {
-  try {
-    const { queries = [], cities = [], limitPerQuery = 10 } = req.body || {};
+    try {
+      const { queries = [], cities = [], limitPerQuery = 10 } = req.body || {};
 
-    const config = {
-      queries: Array.isArray(queries) && queries.length > 0 ? queries : ['despachante de trânsito', 'advogado direito de trânsito'],
-      cities: Array.isArray(cities) ? cities : [],
-      states: [],
-      limitPerQuery: Math.max(1, Math.min(50, Number(limitPerQuery) || 10)),
-    };
+      const config = {
+        queries: Array.isArray(queries) && queries.length > 0 ? queries : ['despachante de trânsito', 'advogado direito de trânsito'],
+        cities: Array.isArray(cities) ? cities : [],
+        states: [],
+        limitPerQuery: Math.max(1, Math.min(50, Number(limitPerQuery) || 10)),
+      };
 
-    const result = await runScrape(config);
+      // Criar job no queue (não executa sincronamente)
+      const job = await scraperJobQueue.createJob(config);
 
-    // Buscar o último collection_run para retornar o ID
-    const { data: lastRun } = await supabaseAdmin
-      .from('collection_runs')
-      .select('id, status, results_found, new_leads, duplicates, rejected')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .single();
+      res.json({
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        message: 'Job de scraping enfileirado. Consulte GET /api/marketing/automation/scrape/' + job.id + ' para status.',
+      });
+    } catch (err) {
+      console.error('Erro no endpoint /scrape:', err);
+      res.status(500).json({ error: 'Falha ao criar job de scraping', message: (err as Error).message });
+    }
+  });
 
-    res.json({
-      success: true,
-      source: result.source,
-      query: result.query,
-      location: result.location,
-      totalFound: result.totalFound,
-      inserted: result.inserted,
-      filled: result.filled,
-      duplicates: result.duplicates,
-      completeDuplicates: result.completeDuplicates,
-      rejected: result.rejected,
-      errors: result.errors,
-      leads: result.leads,
-      collection_run_id: lastRun?.id || null,
-      collection_run_status: lastRun?.status || 'unknown',
-      metrics: {
-        results_found: result.totalFound,
-        new_leads: result.inserted,
-        filled: result.filled,
-        duplicates: result.duplicates,
-        complete_duplicates: result.completeDuplicates,
-        rejected: result.rejected,
-        errors: result.errors.length,
-      },
-    });
-  } catch (err) {
-    console.error('Erro no endpoint /scrape:', err);
-    res.status(500).json({ error: 'Falha ao executar scraper', message: (err as Error).message });
-  }
-});
+  router.get('/scrape/:jobId', async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const job = await scraperJobQueue.getJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: 'Job não encontrado' });
+      }
+
+      res.json({
+        id: job.id,
+        status: job.status,
+        progress: job.progress,
+        config: job.config,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        error: job.error,
+        collectionRunId: job.collectionRunId,
+      });
+    } catch (err) {
+      console.error('Erro no endpoint /scrape/:jobId:', err);
+      res.status(500).json({ error: 'Falha ao obter status do job', message: (err as Error).message });
+    }
+  });
+
+  router.post('/scrape/:jobId/cancel', async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const cancelled = await scraperJobQueue.cancelJob(jobId);
+
+      if (!cancelled) {
+        return res.status(400).json({ error: 'Não foi possível cancelar o job (não existe ou já finalizado)' });
+      }
+
+      res.json({ success: true, jobId, status: 'cancelled' });
+    } catch (err) {
+      console.error('Erro no endpoint /scrape/:jobId/cancel:', err);
+      res.status(500).json({ error: 'Falha ao cancelar job', message: (err as Error).message });
+    }
+  });
+
+  router.get('/scrape/:jobId/results', async (req, res) => {
+    try {
+      const { jobId } = req.params;
+
+      // Buscar leads associados a este collection_run
+      const { data: leads, error } = await supabaseAdmin
+        .from('marketing_leads')
+        .select('*')
+        .eq('collection_run_id', jobId)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+
+      const { data: runRow } = await supabaseAdmin
+        .from('collection_runs')
+        .select('status, results_found, new_leads, duplicates, rejected, errors, started_at, finished_at')
+        .eq('id', jobId)
+        .single();
+
+      res.json({
+        jobId,
+        status: runRow?.status || 'unknown',
+        totalFound: runRow?.results_found || 0,
+        processed: (leads || []).length,
+        duplicates: runRow?.duplicates || 0,
+        errors: runRow?.errors || [],
+        startedAt: runRow?.started_at,
+        finishedAt: runRow?.finished_at,
+        leads: leads || [],
+      });
+    } catch (err) {
+      console.error('Erro no endpoint /scrape/:jobId/results:', err);
+      res.status(500).json({ error: 'Falha ao buscar resultados', message: (err as Error).message });
+    }
+  });
+
+  router.get('/scrapes', async (_req, res) => {
+    try {
+      const jobs = await scraperJobQueue.listJobs(20);
+      res.json({ jobs });
+    } catch (err) {
+      console.error('Erro no endpoint /scrapes:', err);
+      res.status(500).json({ error: 'Falha ao listar jobs', message: (err as Error).message });
+    }
+  });
 
 router.get('/export/:collectionRunId?', async (req, res) => {
   try {
@@ -694,6 +763,65 @@ router.get('/export/:collectionRunId?', async (req, res) => {
     res.send(xlsxBuffer);
   } catch (err) {
     console.error('Erro no endpoint /export:', err);
+    res.status(500).json({ error: 'Falha ao gerar XLSX', message: (err as Error).message });
+  }
+});
+
+router.get('/export', async (req, res) => {
+  try {
+    const search = ((req.query.search as string) || '').trim().toLowerCase();
+    const leadType = (req.query.lead_type as string) || '';
+    const city = (req.query.city as string) || '';
+    const source = (req.query.source as string) || '';
+    const contactFilter = (req.query.contact_filter as string) || '';
+
+    let query = supabaseAdmin
+      .from('marketing_leads')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (leadType && leadType !== 'all') {
+      query = query.eq('lead_type', leadType);
+    }
+
+    if (city && city !== 'all') {
+      query = query.ilike('city', `%${city}%`);
+    }
+
+    if (source && source !== 'all') {
+      query = query.eq('source', source);
+    }
+
+    if (contactFilter === 'has_whatsapp') {
+      query = query.not('whatsapp', 'is', null);
+    } else if (contactFilter === 'has_email') {
+      query = query.not('email', 'is', null);
+    } else if (contactFilter === 'has_website') {
+      query = query.not('website', 'is', null);
+    }
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      searchTerm: search || undefined,
+      location: city || undefined,
+      totalFound: leads?.length || 0,
+      totalProcessed: leads?.length || 0,
+      duplicates: 0,
+      errors: 0,
+    });
+
+    const filename = `leads-filtered-${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error('Erro no endpoint /export (filtered):', err);
     res.status(500).json({ error: 'Falha ao gerar XLSX', message: (err as Error).message });
   }
 });

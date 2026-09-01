@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
-import { INFRACTION_CATALOG, LEGAL_ARGUMENTS } from '../../data/knowledge-base';
+import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 
 describe('Knowledge Base Expansion & Catalog Integrity (Prompt 1)', () => {
   it('should have all 52 canonical arguments defined with complete fields', () => {
@@ -48,14 +48,6 @@ describe('Knowledge Base Expansion & Catalog Integrity (Prompt 1)', () => {
       for (const ground of procedure.applicableGrounds) {
         expect(validArgIds.has(ground)).toBe(true);
       }
-    }
-  });
-
-  it('should correctly map LEGAL_ARGUMENTS to ARGUMENTS_CATALOG without loss of information', () => {
-    expect(LEGAL_ARGUMENTS.length).toBe(ARGUMENTS_CATALOG.length);
-    for (let i = 0; i < ARGUMENTS_CATALOG.length; i++) {
-      expect(LEGAL_ARGUMENTS[i].id).toBe(ARGUMENTS_CATALOG[i].id);
-      expect(LEGAL_ARGUMENTS[i].title).toBe(ARGUMENTS_CATALOG[i].title);
     }
   });
 });

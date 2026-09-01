@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../scraper-prospecting/supabase';
 import { whatsappService } from '../whatsapp-service';
 import { logger } from '../../../scraper-prospecting/logger';
+import { configService } from '../../config/config-service';
 import {
   loadAutomationState,
   updateAutomationState,
@@ -191,7 +192,7 @@ export class MarketingAutomationWorker {
     const result = await whatsappService.sendText({
       to: toPhone,
       message: text,
-      instanceName: process.env.EVOLUTION_INSTANCE_NAME,
+      instanceName: configService.get('EVOLUTION_INSTANCE_NAME'),
     });
 
     const messageId = result.messageId || `wamid_${Date.now()}`;

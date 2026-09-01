@@ -1,7 +1,7 @@
 import { Lead, RawLead, ScrapeResult, QueryScrapeResult, SearchConfig, ScrapedForKey } from './types';
 import { supabaseAdmin } from './supabase';
 import { classifyLead } from './classifier';
-import { normalizePhone } from './normalizer';
+import { normalizePhone, normalizeWebsite, normalizeEmail } from './normalizer';
 import { buildSeenKeys } from './seen-filter';
 import { logger } from './logger';
 import { SeleniumSession } from './selenium/session';
@@ -33,9 +33,19 @@ const FILLABLE_COLUMNS = [
   'zip_code',
   'rating',
   'review_count',
+  'price_level',
   'category',
   'source_url',
   'google_maps_url',
+  'place_id',
+  'opening_hours',
+  'current_status',
+  'description',
+  'latitude',
+  'longitude',
+  'plus_code',
+  'social_links',
+  'raw_data',
 ] as const;
 
 type DbRow = Record<string, unknown> & { id: string };
@@ -94,14 +104,17 @@ function buildLead(raw: RawLead, leadType: 'despachante' | 'advogado_transito', 
   // remove +55/55 e zero inicial de DDD. phone (exibição) e phone_normalized (índice
   // único de dedup) derivam da MESMA função -> dedup confiável entre execuções.
   const phone = normalizePhone(raw.phone) || null;
+  const website = normalizeWebsite(raw.website) || null;
+  const email = normalizeEmail(raw.email) || null;
+  
   return {
     name: raw.name,
     category: raw.category || null,
     phone,
     phone_normalized: phone,
     whatsapp: raw.whatsapp || null,
-    email: raw.email || null,
-    website: raw.website || null,
+    email,
+    website,
     instagram: raw.instagram || null,
     facebook: raw.facebook || null,
     address: raw.address || null,
@@ -109,14 +122,26 @@ function buildLead(raw: RawLead, leadType: 'despachante' | 'advogado_transito', 
     state: raw.state || null,
     zipCode: raw.zipCode || null,
     googleMapsUrl: raw.googleMapsUrl || null,
+    placeId: raw.placeId || null,
     rating: raw.rating ?? null,
     reviewCount: raw.reviewCount ?? null,
+    priceLevel: raw.priceLevel ?? null,
+    openingHours: raw.openingHours || null,
+    currentStatus: raw.currentStatus || null,
+    description: raw.description || null,
+    latitude: raw.latitude ?? null,
+    longitude: raw.longitude ?? null,
+    plusCode: raw.plusCode || null,
+    socialLinks: raw.socialLinks || null,
+    rawData: raw.rawData || null,
     sourceUrl: raw.sourceUrl || '',
     lead_type: leadType,
     source,
-    scraped_at: new Date().toISOString(),
+    scraped_at: raw.scrapedAt || new Date().toISOString(),
     scraped_for: scrapedFor,
     collection_run_id: collectionRunId,
+    searchTerm: raw.searchTerm || null,
+    searchLocation: raw.searchLocation || null,
   };
 }
 
@@ -154,16 +179,27 @@ export async function persistLeads(
         state: lead.state,
         zip_code: lead.zipCode,
         google_maps_url: lead.googleMapsUrl,
+        place_id: lead.placeId,
         rating: lead.rating,
         review_count: lead.reviewCount,
+        price_level: lead.priceLevel,
         category: lead.category,
         source: lead.source,
         source_url: lead.sourceUrl,
         scraped_at: lead.scraped_at,
         audience: 'B2B',
-        // jsonb: gravar como objeto, sem JSON.stringify duplo
+        opening_hours: lead.openingHours,
+        current_status: lead.currentStatus,
+        description: lead.description,
+        latitude: lead.latitude,
+        longitude: lead.longitude,
+        plus_code: lead.plusCode,
+        social_links: lead.socialLinks,
+        raw_data: lead.rawData,
         scraped_for: scrapedFor ?? null,
         collection_run_id: collectionRunId,
+        search_term: lead.searchTerm,
+        search_location: lead.searchLocation,
       };
 
       // FILL-GAP UPSERT: se a URL já existe no banco, atualizar apenas o que está vazio.
@@ -325,32 +361,73 @@ async function updateCollectionRun(
   updates: Record<string, unknown>,
 ): Promise<void> {
   try {
+    const isTerminal = ['completed', 'failed', 'cancelled'].includes((updates.status || '') as string);
     await supabaseAdmin
       .from('collection_runs')
-      .update({ ...updates, finished_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date().toISOString(), ...(isTerminal && { finished_at: new Date().toISOString() }) })
       .eq('id', runId);
   } catch (err) {
     logger.warn('Erro ao atualizar collection_run', { runId, error: err instanceof Error ? err.message : err });
   }
 }
 
-export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
+export interface ScraperCallbacks {
+  onProgress?: (progress: { phase: string; discovered: number; processed: number; persisted: number; duplicates: number; errors: number }) => void;
+  onCheckCancel?: () => boolean;
+  onDriverCrash?: () => void;
+}
+
+export interface ScrapeRunResult {
+  source: string;
+  query: string;
+  location: string;
+  totalFound: number;
+  inserted: number;
+  filled: number;
+  duplicates: number;
+  completeDuplicates: number;
+  rejected: number;
+  errors: string[];
+  leads: RawLead[];
+  queriesExecuted: Array<{
+    query: string;
+    location: string;
+    found: number;
+    inserted: number;
+    filled: number;
+    duplicates: number;
+    completeDuplicates: number;
+    rejected: number;
+    errors: string[];
+  }>;
+  hasBlockingError: boolean;
+}
+
+export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCallbacks = {}, collectionRunId?: string): Promise<ScrapeRunResult> {
   const session = new SeleniumSession({
     headless: true,
     args: [
-      '--disable-blink-features=AutomationControlled',
+      '--headless=new',
+      '--disable-blink-features=AutomationDetected',
       '--no-sandbox',
       '--disable-gpu',
       '--disable-dev-shm-usage',
-      '--window-size=1366,900',
+      '--window-size=1920,1080',
     ],
   });
 
   let scraper: GoogleMapsSeleniumScraper | null = null;
+  let cancelled = false;
+
+  const scraperCallbacks = {
+    onProgress: callbacks.onProgress,
+    onCheckCancel: () => cancelled || callbacks.onCheckCancel?.() || false,
+    onDriverCrash: callbacks.onDriverCrash,
+  };
 
   try {
     await session.start();
-    scraper = new GoogleMapsSeleniumScraper(session);
+    scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
 
     // Montar lista de locations a partir de cities ou states
     const locations: string[] = [];
@@ -358,9 +435,15 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
     for (const state of config.states || []) locations.push(state);
     if (locations.length === 0) locations.push('Brasil');
 
-    // Criar registro de execução antes de iniciar
-    const collectionRun = await createCollectionRun(config);
-    const collectionRunId = collectionRun?.id || null;
+    // Criar/atualizar registro de execução antes de iniciar
+    const collectionRun = collectionRunId
+      ? { id: collectionRunId }
+      : await createCollectionRun(config);
+    const runId = collectionRun?.id || null;
+    // Se collectionRunId foi passado, o job já foi criado com status 'running' pelo queue
+    if (collectionRunId && runId) {
+      await updateCollectionRun(runId, { status: 'running' });
+    }
 
     // Carregar chaves existentes para deduplicação incremental cross-execução
     const seenKeys = await loadExistingScrapedKeys();
@@ -384,6 +467,13 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
 
     for (const q of config.queries) {
       for (const loc of locations) {
+        // Check cancellation before each query
+        if (cancelled || callbacks.onCheckCancel?.()) {
+          cancelled = true;
+          logger.info('Coleta cancelada pelo usuário', { query: q, location: loc });
+          break;
+        }
+
         const scrapedFor: ScrapedForKey = {
           query: q,
           city: loc.split(',')[0]?.trim() || loc,
@@ -392,16 +482,69 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
         };
 
         // requiredNew: quantos leads NOVOS ainda faltam para atingir o limite total
-        // NOTA: fill-gap (preenchimento de vazios) NÃO incrementa "inserted", então o loop
-        // continua coletando até atingir o limite de leads realmente novos inseridos.
         const requiredNew = Math.max(1, config.limitPerQuery - aggregated.inserted);
 
         logger.info('Executando query incremental', { query: q, location: loc, requiredNew, seenKeysSize: seenKeys.size });
 
-        const queryResult = await scraper.search(q, loc, requiredNew, seenKeys);
+        // Retry logic for transient errors
+        let attempt = 0;
+        const maxAttempts = 3;
+        let queryResult: QueryScrapeResult | null = null;
+
+        while (attempt < maxAttempts && !cancelled) {
+          attempt += 1;
+          try {
+            queryResult = await scraper.search(q, loc, requiredNew, seenKeys);
+            break;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn('Erro no scraping (retry)', { attempt, error: message });
+
+            if (attempt < maxAttempts) {
+              try {
+                await scraper.close();
+                await session.start();
+                scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                callbacks.onDriverCrash?.();
+              } catch (restartErr) {
+                logger.error('Falha ao reiniciar driver', { error: restartErr instanceof Error ? restartErr.message : restartErr });
+              }
+            } else {
+              queryResult = {
+                query: `${q} ${loc}`,
+                location: loc,
+                totalFound: 0,
+                inserted: 0,
+                filled: 0,
+                duplicates: 0,
+                completeDuplicates: 0,
+                rejected: 0,
+                errors: [`Falha após ${maxAttempts} tentativas: ${message}`],
+                leads: [],
+              };
+            }
+          }
+        }
+
+        if (!queryResult) {
+          queryResult = {
+            query: `${q} ${loc}`,
+            location: loc,
+            totalFound: 0,
+            inserted: 0,
+            filled: 0,
+            duplicates: 0,
+            completeDuplicates: 0,
+            rejected: 0,
+            errors: ['Resultado não obtido após tentativas'],
+            leads: [],
+          };
+        }
+
+        if (cancelled) break;
 
         // Persistir (com fill-gap) os leads coletados no banco
-        const persist = await persistLeads(queryResult.leads, 'google_maps', scrapedFor, collectionRunId);
+        const persist = await persistLeads(queryResult.leads, 'google_maps', scrapedFor, runId);
 
         aggregated.totalFound += queryResult.totalFound;
         aggregated.leads.push(...queryResult.leads);
@@ -425,16 +568,27 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
         });
 
         // Atualizar o collection_run após cada query
-        if (collectionRunId) {
-          await updateCollectionRun(collectionRunId, {
+        if (runId) {
+          await updateCollectionRun(runId, {
             results_found: aggregated.totalFound,
             new_leads: aggregated.inserted,
             duplicates: aggregated.duplicates,
             rejected: aggregated.rejected,
             errors: aggregated.errors,
             queries_executed: queriesExecuted,
+            ...(cancelled && { status: 'cancelled' }),
           });
         }
+
+        // Notificar progresso via callback
+        callbacks.onProgress?.({
+          phase: 'details',
+          discovered: aggregated.totalFound,
+          processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected,
+          persisted: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          errors: aggregated.errors.length,
+        });
 
         logger.info('Query concluída', {
           query: q,
@@ -449,11 +603,13 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
     }
 
     // Marcar execução como concluída
-    if (collectionRunId) {
-      const finalStatus = aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED/.test(e))
-        ? 'error'
-        : 'completed';
-      await updateCollectionRun(collectionRunId, {
+    if (runId) {
+      const finalStatus = cancelled
+        ? 'cancelled'
+        : aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED/.test(e))
+          ? 'error'
+          : 'completed';
+      await updateCollectionRun(runId, {
         status: finalStatus,
         results_found: aggregated.totalFound,
         new_leads: aggregated.inserted,
@@ -464,7 +620,21 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
       });
     }
 
-    return aggregated;
+    return {
+      source: aggregated.source,
+      query: aggregated.query,
+      location: aggregated.location,
+      totalFound: aggregated.totalFound,
+      inserted: aggregated.inserted,
+      filled: aggregated.filled,
+      duplicates: aggregated.duplicates,
+      completeDuplicates: aggregated.completeDuplicates,
+      rejected: aggregated.rejected,
+      errors: aggregated.errors,
+      leads: aggregated.leads,
+      queriesExecuted,
+      hasBlockingError: aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED|Falha fatal/.test(e)),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido no scraper Selenium';
     logger.error('Falha fatal no scraper Selenium', { error: message });
@@ -477,3 +647,5 @@ export async function runScrape(config: SearchConfig): Promise<ScrapeResult> {
     }
   }
 }
+
+export const runScrape = runScrapeAsJob;

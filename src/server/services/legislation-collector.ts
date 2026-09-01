@@ -283,9 +283,10 @@ export class LegislationCollector {
     });
     // TODO: Implement actual application:
     // - Parse newContent for new resolutions, laws, etc.
-    // - Update INFRACTION_CATALOG, LEGAL_ARGUMENTS, PROCEDURES_CATALOG, etc. as needed.
-    // - Ensure temporal validity (validFrom/v Until) based on publication date.
+    // - Update INFRACTION_CATALOG, ARGUMENTS_CATALOG, PROCEDURES_CATALOG, etc. as needed.
+    // - Ensure temporal validity (validFrom/validUntil) based on publication date.
     // - Add to appropriate knowledge arrays (mutate the imported constants).
+    // - LEGAL_ARGUMENTS is deprecated; it maps from ARGUMENTS_CATALOG automatically.
     // For now, we just log.
   }
 }

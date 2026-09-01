@@ -2002,6 +2002,15 @@ import { AuthUser } from '../types/auth';
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
+// Validação de variáveis de ambiente no frontend
+if (typeof window !== 'undefined') {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('[env] Frontend: VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não definidas');
+  } else if (supabaseUrl.includes('your-') || supabaseAnonKey.includes('your-')) {
+    console.warn('[env] Frontend: Variáveis Supabase contêm placeholders - configure no .env.local ou Vercel');
+  }
+}
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 

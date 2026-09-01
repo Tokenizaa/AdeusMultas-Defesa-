@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { SearchConfig } from './types';
 import { runScrape } from './persister';
 import { logger } from './logger';

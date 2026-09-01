@@ -14,10 +14,22 @@ export interface RawLead {
   state?: string;
   zipCode?: string;
   googleMapsUrl?: string;
+  placeId?: string;
   rating?: number;
   reviewCount?: number;
+  priceLevel?: number;
   openingHours?: string;
+  currentStatus?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  plusCode?: string;
+  socialLinks?: string[];
   sourceUrl?: string;
+  rawData?: Record<string, unknown>;
+  scrapedAt?: string;
+  searchTerm?: string;
+  searchLocation?: string;
 }
 
 export interface ScrapedForKey {

@@ -369,6 +369,13 @@ export const INFRACTION_CATALOG: InfractionCatalogItem[] = [
   },
 ];
 
+/**
+ * @deprecated Use ARGUMENTS_CATALOG from '@/core/arguments/arguments-catalog' directly.
+ * LEGAL_ARGUMENTS is maintained only for backward compatibility with legacy consumers.
+ * New code MUST import from ARGUMENTS_CATALOG.
+ * Migration: Replace `import { LEGAL_ARGUMENTS } from '@/data/knowledge-base'`
+ * with `import { ARGUMENTS_CATALOG } from '@/core/arguments/arguments-catalog'`.
+ */
 export const LEGAL_ARGUMENTS: LegalArgumentDomain[] = ARGUMENTS_CATALOG.map((arg) => {
   let mappedCategory: 'preliminar' | 'merito' | 'constitucional' | 'formal' = 'merito';
   if (arg.category === 'formal') mappedCategory = 'formal';

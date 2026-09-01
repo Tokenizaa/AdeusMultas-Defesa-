@@ -1,4 +1,5 @@
 import { Builder, Capabilities, WebDriver, WebElement, Key } from 'selenium-webdriver';
+import chrome from 'selenium-webdriver/chrome';
 import { logger } from '../logger';
 
 const USER_AGENT =
@@ -17,11 +18,12 @@ export class SeleniumSession {
     this.options = {
       headless: true,
       args: [
-        '--disable-blink-features=AutomationControlled',
+        '--headless=new',
+        '--disable-blink-features=AutomationDetected',
         '--no-sandbox',
         '--disable-gpu',
         '--disable-dev-shm-usage',
-        '--window-size=1366,900',
+        '--window-size=1920,1080',
       ],
       ...options,
     };
@@ -32,9 +34,17 @@ export class SeleniumSession {
 
     try {
       const caps = Capabilities.chrome();
+      const opt = new chrome.Options();
+      opt.addArguments(...this.options.args || []);
+      if (this.options.headless) {
+        opt.addArguments('--headless=new');
+      }
+      opt.addArguments(`--user-agent=${USER_AGENT}`);
+
       this.driver = await new Builder()
         .forBrowser('chrome')
         .withCapabilities(caps)
+        .setChromeOptions(opt)
         .build();
 
       await this.driver.manage().setTimeouts({ implicit: 0, pageLoad: 45000, script: 30000 });
@@ -42,7 +52,7 @@ export class SeleniumSession {
         `Object.defineProperty(navigator, 'webdriver', { get: () => false });`
       ).catch(() => undefined);
 
-      logger.info('Selenium session iniciada');
+      logger.info('Selenium session iniciada (headless)');
       return this.driver;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao iniciar Chrome/Selenium';

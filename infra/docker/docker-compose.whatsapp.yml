@@ -27,7 +27,10 @@ services:
   # Evolution API — WhatsApp Business Gateway
   # ---------------------------------------------------------------------------
   evolution:
-    image: evoapicloud/evolution-api:v2.1.1
+    # v2.1.1 could not pair with current WhatsApp (Baileys noise handshake
+    # "Connection Failure" loop, QR never generated - GH #2184/#2437).
+    # v2.3.7 ships updated Baileys/WPPConnect that connects to current WhatsApp.
+    image: evoapicloud/evolution-api:latest
     container_name: defesai-whatsapp
     ports:
       - "${EVOLUTION_PORT:-8080}:8080"
@@ -36,6 +39,15 @@ services:
       - SERVER_URL=${EVOLUTION_URL:-http://localhost:8080}
       - SERVER_PORT=8080
       - SERVER_TYPE=http
+
+      # QR Code configuration (fix for QR generation issues - see GH #2437/#2385)
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#198754
+
+      # Instance / phone session configuration
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1033773198
+      - CONFIG_SESSION_PHONE_CLIENT=Chrome
+      - CONFIG_SESSION_PHONE_NAME=Chrome
 
       # Authentication
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-change-me-in-production}
@@ -46,15 +58,25 @@ services:
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD:-evolution_pass}@evolution-db:5432/evolution
 
-      # Cache (Redis)
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://evolution-redis:6379
-      - CACHE_REDIS_PREFIX_KEY=defesai
+      # Cache (workaround for QR/pre-key timeout - see GH #2437)
+      # Disable Redis + history sync to avoid CPU/RAM choke on QR generation
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
+      - DATABASE_SAVE_DATA_CHATS=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_HISTORIC=false
+      - DATABASE_SAVE_DATA_LABELS=false
 
       # Webhooks
+      # NOTA (Linux): host.docker.internal so resolve com extra_hosts abaixo
+      # (host-gateway). Sem isso o container nao alcanca o servidor do host e o
+      # webhook nunca entrega. Em producao use APP_WEBHOOK_URL publica/HTTPS.
       - WEBHOOK_GLOBAL_ENABLED=true
       - WEBHOOK_GLOBAL_URL=${APP_WEBHOOK_URL:-http://host.docker.internal:3000/api/webhooks/whatsapp}
-      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=true
+      # byEvents=false => entrega no URL exato (sem sufixo /EVENTO), casando com
+      # o handler POST /api/webhooks/whatsapp. Habilitar byEvents exigiria rotas
+      # /api/webhooks/whatsapp/{EVENTO}.
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
       - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
       - WEBHOOK_EVENTS_QRCODE_UPDATED=true
@@ -65,15 +87,30 @@ services:
       # Logs
       - LOG_LEVEL=${LOG_LEVEL:-WARN}
       - LOG_COLOR=true
+      - LOG_BAILEYS=debug
 
       # Delivery settings
       - DELIVERY_RETRY_INTERVAL=5000
       - DELIVERY_RETRY_MAX=5
       - DELIVERY_WEBHOOK_TIMEOUT=10000
 
+      # Force IPv4 DNS resolution (fixes WhatsApp "Connection Failure" / QR loop)
+      # Combined with sysctl IPv6 disable - see GH #2184
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+
     volumes:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
+    extra_hosts:
+      # Resolve host.docker.internal no Linux (sem isso o webhook p/ o servidor
+      # do host nao entrega). host-gateway = IP do host.
+      - "host.docker.internal:host-gateway"
+    sysctls:
+      # Force IPv4: host has no global IPv6 route, so Baileys WS to WhatsApp
+      # hangs on IPv6 AAAA and fails with "Connection Failure" (noise decodeFrame).
+      # Disabling IPv6 makes Node fall back to IPv4 -> QR generation works.
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     depends_on:
       evolution-db:
         condition: service_healthy

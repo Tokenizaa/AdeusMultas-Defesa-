@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
-import { LEGAL_ARGUMENTS } from '../../data/knowledge-base';
+import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
 import { caseRepository } from '../db/case-repository';
 import { auditService } from '../services/audit-service';
 import { enrichDefenseWithGemini } from '../gemini';
@@ -43,7 +43,7 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
     const domain = CanonicalMapper.rowToDomain(row);
     const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body;
 
-    const selectedArgs = LEGAL_ARGUMENTS.filter((a) =>
+    const selectedArgs = ARGUMENTS_CATALOG.filter((a) =>
       selectedArgumentIds?.includes(a.id)
     );
 
@@ -82,7 +82,7 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
       domain.vehicle.plate,
       domain.vehicle.brandModel,
       resolvedApplicant,
-      selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
+      selectedArgs.length > 0 ? selectedArgs : (domain.analysis?.recommendedArguments as any) || [],
       procedureType || domain.serviceType
     );
 
@@ -97,6 +97,10 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
     const theses = permittedTheses(analysis).map((a: any) => a.id);
     // Reforça: a minuta já foi montada pelo RagPipeline com as teses selecionadas;
     // o orquestrador apenas refina prosa e garante integridade.
+
+    // FASE 8: Obter payload de onboarding para quality gate
+    const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
+
     const pipelineResult = await runControlledPipeline(
       {
         analysis: analysis || {
@@ -111,6 +115,8 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
           createdAt: new Date().toISOString(),
         },
         draft: defense,
+        onboardingPayload,
+        canonicalCase: domain,
       },
       { tone: 'formal_rigorous' }
     );

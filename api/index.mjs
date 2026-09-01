@@ -8683,12 +8683,12 @@ import { Router as Router3 } from "express";
 var UUID_RE3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var DEFAULT_CANONICAL_PRICINGS = [
   {
-    id: "price_recurso_jari",
-    serviceType: "recurso_jari",
-    serviceName: "Recurso JARI",
-    description: "Recurso \xE0 Junta Administrativa de Recursos de Infra\xE7\xF5es (1\xAA Inst\xE2ncia).",
-    standardPrice: 1,
-    promotionalPrice: 1,
+    id: "price_defesa_previa",
+    serviceType: "defesa_previa",
+    serviceName: "Defesa Pr\xE9via",
+    description: "Defesa administrativa em primeira inst\xE2ncia (Art. 281 CTB).",
+    standardPrice: 89.9,
+    promotionalPrice: 44.95,
     isActive: true,
     history: [],
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -9167,34 +9167,26 @@ var CommercialRepository = class {
     if (pricingsError) {
       this.warn("pricings", "loadAll", pricingsError.message);
     } else if (pricings && pricings.length > 0) {
-      const dbPricings = new Map(pricings.map((p) => [
-        p.service_type,
-        {
-          id: p.id || `price_${p.service_type}`,
-          serviceType: p.service_type,
-          serviceName: p.service_name || p.service_type,
-          description: p.description,
-          standardPrice: p.standard_price > 1e3 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
-          promotionalPrice: p.promotional_price !== null && p.promotional_price !== void 0 ? p.promotional_price > 1e3 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)) : null,
-          isActive: p.is_active ?? true,
-          validFrom: p.valid_from,
-          validUntil: p.valid_until,
-          history: p.history ?? [],
-          updatedAt: p.updated_at,
-          updatedBy: p.updated_by
-        }
-      ]));
-      this._pricings = DEFAULT_CANONICAL_PRICINGS.map((d) => {
-        const db = dbPricings.get(d.serviceType);
-        if (db) return db;
-        return d;
+      this._pricings = pricings.map((p) => ({
+        id: p.id || `price_${p.service_type}`,
+        serviceType: p.service_type,
+        serviceName: p.service_name || p.service_type,
+        description: p.description,
+        standardPrice: p.standard_price > 1e3 ? Number((p.standard_price / 100).toFixed(2)) : Number(Number(p.standard_price).toFixed(2)),
+        promotionalPrice: p.promotional_price !== null && p.promotional_price !== void 0 ? p.promotional_price > 1e3 ? Number((p.promotional_price / 100).toFixed(2)) : Number(Number(p.promotional_price).toFixed(2)) : null,
+        isActive: p.is_active ?? true,
+        validFrom: p.valid_from,
+        validUntil: p.valid_until,
+        history: p.history ?? [],
+        updatedAt: p.updated_at,
+        updatedBy: p.updated_by
+      }));
+      logger.info("supabase", "commercial_repository", "loadAll", `Pricings carregados do Supabase: ${this._pricings.length} (authoritative)`, {
+        count: this._pricings.length,
+        services: this._pricings.map((p) => `${p.serviceType}:${p.standardPrice}/${p.promotionalPrice}`).join(", ")
       });
-      for (const [serviceType, db] of dbPricings) {
-        if (!DEFAULT_CANONICAL_PRICINGS.some((d) => d.serviceType === serviceType)) {
-          this._pricings.push(db);
-        }
-      }
-      logger.info("supabase", "commercial_repository", "loadAll", `Pricings carregados: ${this._pricings.length} (merged with defaults)`, {
+    } else {
+      logger.warn("supabase", "commercial_repository", "loadAll", "service_pricings vazio no Supabase \u2014 usando defaults can\xF4nicos", {
         count: this._pricings.length
       });
     }
@@ -10003,6 +9995,7 @@ var CommercialAuditService = class {
 // src/server/commercial/offers/offer-service.ts
 var round2 = (value) => Number((Math.round(value * 100) / 100).toFixed(2));
 var PROCEDURE_TO_COMMERCIAL = {
+  defesa_previa: "defesa_previa",
   recurso_jari: "recurso_jari",
   recurso_cetran: "recurso_cetran",
   suspensao: "suspensao",
@@ -10014,10 +10007,6 @@ var PROCEDURE_TO_COMMERCIAL = {
   cassacao_cnh: "cassacao",
   processo_suspensao: "suspensao",
   processo_cassacao: "cassacao",
-  // Defesa Prévia (NA, Art. 281 CTB) é procedimento DISTINTO do Recurso JARI
-  // (Art. 285 CTB, contra NIP). NÃO possui oferta comercial própria ainda —
-  // é tratado como serviço sem preço (servicesWithoutCommercialOffer).
-  // Defesa Prévia não entra no Record: normalizeServiceType retorna intacta via ?? key.
   // Estes NÃO são serviços comerciais (sem preço no catálogo)
   analise_tecnica: "analise_tecnica",
   relatorio_pericial: "relatorio_pericial"
@@ -10041,7 +10030,6 @@ var OfferService = class {
     }
     const normalized = normalizeServiceType(serviceType);
     const servicesWithoutCommercialOffer = [
-      "defesa_previa",
       "analise_tecnica",
       "geracao_documento",
       "relatorio_pericial"
@@ -25676,10 +25664,93 @@ var GGPIXAdapter = class {
 };
 var ggpixAdapter = new GGPIXAdapter();
 
+// src/server/integrations/gateway/test-adapter.ts
+var IS_DEV = process.env.NODE_ENV !== "production" || process.env.PAYMENT_MODE === "sandbox";
+var TestGatewayAdapter = class {
+  constructor() {
+    this.id = "test";
+    this.displayName = "Test Gateway (Dev Only)";
+  }
+  isConfigured() {
+    if (!IS_DEV) {
+      logger.warn("payments", "test_gateway", "isConfigured", "Test gateway disabled in production");
+      return false;
+    }
+    return true;
+  }
+  async createPix(input) {
+    if (!IS_DEV) {
+      throw new Error("Test gateway only available in development/sandbox mode");
+    }
+    const gatewayTransactionId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const referenceId = input.referenceId || input.caseId;
+    const now = /* @__PURE__ */ new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 60 * 1e3);
+    const pixCopyPaste = this.generateFakePixCopyPaste(input.amountInCents, referenceId);
+    logger.info("payments", "test_gateway", "createPix", "Test PIX created", {
+      gatewayTransactionId,
+      amountInCents: input.amountInCents,
+      referenceId
+    });
+    return {
+      gatewayTransactionId,
+      referenceId,
+      gateway: this.id,
+      status: "PENDING",
+      amountInCents: input.amountInCents,
+      pixCopyPaste,
+      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCopyPaste)}`,
+      qrCodeDataUrl: await this.generateQrCodeDataUrl(pixCopyPaste),
+      expiresAt: expiresAt.toISOString(),
+      createdAt: now.toISOString(),
+      feeInCents: 0,
+      netAmountInCents: input.amountInCents
+    };
+  }
+  async getPaymentStatus(gatewayTransactionId) {
+    if (!IS_DEV) {
+      throw new Error("Test gateway only available in development/sandbox mode");
+    }
+    return {
+      gatewayTransactionId,
+      gateway: this.id,
+      status: "PAID",
+      paidAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  processWebhook(rawBody, headers, body) {
+    const parsed = typeof body === "object" && body !== null ? body : {};
+    const gatewayTransactionId = parsed.gatewayTransactionId || `test_${Date.now()}`;
+    return {
+      gatewayEventId: `test_evt_${Date.now()}`,
+      gateway: this.id,
+      gatewayTransactionId,
+      referenceId: parsed.referenceId,
+      status: "PAID",
+      transactionType: "PIX_IN",
+      amountInCents: parsed.amountInCents || 0,
+      netAmountInCents: parsed.amountInCents || 0,
+      gatewayFeeInCents: 0,
+      paidAt: (/* @__PURE__ */ new Date()).toISOString(),
+      rawPayload: body,
+      isDuplicate: false
+    };
+  }
+  generateFakePixCopyPaste(amountInCents, referenceId) {
+    const amount = (amountInCents / 100).toFixed(2);
+    return `00020126580014br.gov.bcb.pix0136test@defesai0204MULT520400005303986540${amount.padStart(10, "0")}5802BR5916DEFESAI TECNOLOG6009SAO PAULO62070503***6304`;
+  }
+  async generateQrCodeDataUrl(text) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="white"/><text x="100" y="100" font-family="monospace" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">${text.substring(0, 50)}</text></svg>`;
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+};
+var testAdapter = IS_DEV ? new TestGatewayAdapter() : null;
+
 // src/server/integrations/gateway/gateway-manager.ts
 function resolveActiveGatewayIdFromEnv() {
   const configOverride = configService.get("PAYMENT_ACTIVE_GATEWAY_OVERRIDE");
-  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank")) {
+  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank" || configOverride === "test")) {
     logger.info("payments", "gateway_manager", "resolve", "Using ConfigService override for active gateway", {
       override: configOverride
     });
@@ -25700,13 +25771,20 @@ function resolveActiveGatewayIdFromEnv() {
     }
     return "pagbank";
   }
-  return isProduction ? "ggpixapi" : "pagbank";
+  if (envValue === "test") return "test";
+  if (isProduction) {
+    return "ggpixapi";
+  }
+  return "test";
 }
 var GatewayManager = class {
   constructor() {
     this.gateways = /* @__PURE__ */ new Map();
     this.gateways.set("pagbank", pagbankAdapter);
     this.gateways.set("ggpixapi", ggpixAdapter);
+    if (testAdapter) {
+      this.gateways.set("test", testAdapter);
+    }
     logger.info("payments", "gateway_manager", "init", `Gateway manager initialized`, {
       availableGateways: Array.from(this.gateways.keys())
     });
@@ -25757,6 +25835,8 @@ var GatewayManager = class {
           notConfiguredReason = "PAGBANK_TOKEN n\xE3o configurado";
         } else if (gw.id === "ggpixapi") {
           notConfiguredReason = "GGPIX_API_KEY ou GGPIX_ENABLED n\xE3o configurado";
+        } else if (gw.id === "test") {
+          notConfiguredReason = "Apenas para desenvolvimento/teste (NODE_ENV !== production)";
         }
       }
       return {
@@ -29962,11 +30042,13 @@ router16.get("/cases", authenticateToken, (req, res) => {
   const user = req.user;
   let allRows = Array.from(databaseRows.values());
   if (user && user.role !== "admin" && user.id !== "dev_user") {
-    const userSpecific = allRows.filter((r) => r.user_id === user.id);
-    allRows = userSpecific.length > 0 ? userSpecific : allRows;
+    const userSpecific = allRows.filter(
+      (r) => r.user_id === user.id || r.user_id === user.email
+    );
+    allRows = userSpecific;
   } else if (userId) {
     const userSpecific = allRows.filter((r) => r.user_id === userId);
-    allRows = userSpecific.length > 0 ? userSpecific : allRows;
+    allRows = userSpecific;
   } else if (claimToken) {
     allRows = allRows.filter((r) => r.claim_token === claimToken);
   }
@@ -29980,8 +30062,11 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
   }
   const user = req.user;
-  if (user && user.role !== "admin" && row.user_id && row.user_id !== user.id) {
-    return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
+  if (user && user.role !== "admin" && row.user_id) {
+    const ownsCase = row.user_id === user.id || row.user_id === user.email;
+    if (!ownsCase) {
+      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
+    }
   }
   res.json(CanonicalMapper.rowToDomain(row));
 });
@@ -29991,8 +30076,16 @@ router16.post("/cases", authenticateToken, (req, res) => {
     if (!domainData.id) {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
-    if (!domainData.userId && req.user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
-      domainData.userId = req.user.id;
+    if (!domainData.userId && req.user?.id) {
+      const uid = req.user.id;
+      const isUuid3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
+      const isEmail = uid.includes("@");
+      if (isUuid3 || isEmail) {
+        domainData.userId = uid;
+      }
+      if (req.user.email && !domainData.userId) {
+        domainData.userId = req.user.email;
+      }
     }
     if (!domainData.createdAt) {
       domainData.createdAt = (/* @__PURE__ */ new Date()).toISOString();

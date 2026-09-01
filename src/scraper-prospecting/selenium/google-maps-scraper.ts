@@ -7,8 +7,6 @@ import { logger } from '../logger';
 
 /**
  * Deriva CEP, UF e cidade de um endereço brasileiro completo.
- * Heurística: CEP no formato 99999-999; UF = 2 letras maiúsculas perto do fim;
- * cidade = texto entre a última separação e a UF.
  */
 function deriveCityStateZip(address: string | null | undefined): { city?: string; state?: string; zipCode?: string } {
   if (!address) return {};
@@ -17,13 +15,11 @@ function deriveCityStateZip(address: string | null | undefined): { city?: string
   const zipMatch = address.match(/\b(\d{5}-?\d{3})\b/);
   if (zipMatch) out.zipCode = zipMatch[1].replace('-', '');
 
-  // UF: 2 letras maiúsculas no fim da string, ou logo antes do CEP
   const ufMatch = address.match(/\b([A-Za-z]{2})\b(?=[\s,;-]*$)/) || address.match(/\b([A-Za-z]{2})\b[\s,;-]*\d{5}/);
   if (ufMatch && /^[A-Za-z]{2}$/.test(ufMatch[1])) {
     const uf = ufMatch[1].toUpperCase();
     out.state = uf;
 
-    // Cidade: segmento mais próximo antes da UF
     const withoutZip = address.replace(/\d{5}-?\d{3}/g, ' ').trim();
     const ufIndex = withoutZip.toUpperCase().lastIndexOf(uf);
     if (ufIndex > 0) {
@@ -38,11 +34,7 @@ function deriveCityStateZip(address: string | null | undefined): { city?: string
 }
 
 const GENERIC_NAMES = new Set([
-  'Resultados',
-  'Resultado',
-  'Patrocinado',
-  'Anúncio',
-  'Mapa',
+  'Resultados', 'Resultado', 'Patrocinado', 'Anúncio', 'Mapa',
   'Saiba mais sobre a divulgação legal de avaliações públicas no Google Maps',
 ]);
 
@@ -52,18 +44,45 @@ const FEED_SELECTORS = [
   'div',
 ];
 
-const ITEM_SELECTORS = [
-  'a[href*="/maps/place/"]',
-  '[role="heading"]',
-  '> div',
-];
+interface DiscoveredCard {
+  name: string;
+  sourceUrl: string;
+  googleMapsUrl: string;
+  category?: string;
+  leadType?: 'despachante' | 'advogado_transito';
+  phone?: string;
+  website?: string;
+  email?: string;
+  index: number;
+}
+
+interface ScraperProgress {
+  phase: 'discovery' | 'details' | 'completed';
+  discovered: number;
+  processed: number;
+  persisted: number;
+  duplicates: number;
+  errors: number;
+}
+
+interface ScraperCallbacks {
+  onProgress?: (progress: ScraperProgress) => void;
+  onCheckCancel?: () => boolean;
+  onDriverCrash?: () => void;
+}
 
 export class GoogleMapsSeleniumScraper {
   private session: SeleniumSession;
   private blocked = false;
+  private callbacks: ScraperCallbacks = {};
 
-  constructor(session: SeleniumSession) {
+  constructor(session: SeleniumSession, callbacks: ScraperCallbacks = {}) {
     this.session = session;
+    this.callbacks = callbacks;
+  }
+
+  setCallbacks(callbacks: ScraperCallbacks): void {
+    this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
   async detectPageState(): Promise<{ status: string; reason: string }> {
@@ -87,7 +106,6 @@ export class GoogleMapsSeleniumScraper {
     for (const sel of FEED_SELECTORS) {
       const found = await this.session.findElements(sel);
       if (found.length > 0) {
-        // validar se há links de place dentro
         const links = await this.session.findElements(`${sel} a[href*="/maps/place/"]`);
         if (links.length > 0 || sel === 'div[role="feed"]') {
           return sel;
@@ -115,7 +133,7 @@ export class GoogleMapsSeleniumScraper {
     existingCount: number,
     maxScrolls = 200,
   ): Promise<{ selector: string; newCount: number; stopped: 'limit_reached' | 'no_new' | 'max_scrolls' | 'error' }> {
-    const WAIT_BETWEEN_SCROLLS = 4000;
+    const WAIT_BETWEEN_SCROLLS = 3000;
     const STABLE_THRESHOLD = 5;
 
     let lastCount = existingCount;
@@ -123,6 +141,12 @@ export class GoogleMapsSeleniumScraper {
     let stopped: 'limit_reached' | 'no_new' | 'max_scrolls' | 'error' = 'no_new';
 
     for (let scrolls = 0; scrolls < maxScrolls; scrolls++) {
+      if (this.callbacks.onCheckCancel?.()) {
+        logger.info('Scroll cancelado pelo usuário', { jobId: this.callbacks });
+        stopped = 'no_new';
+        break;
+      }
+
       await this.session.scrollContainer(feedSelector);
       await this.session.wait(WAIT_BETWEEN_SCROLLS);
 
@@ -132,7 +156,6 @@ export class GoogleMapsSeleniumScraper {
 
       logger.info('Scroll progressivo', {
         scroll: scrolls + 1,
-        method: 'container-scrollTop-selenium',
         before: lastCount,
         after: afterCount,
         delta,
@@ -158,13 +181,11 @@ export class GoogleMapsSeleniumScraper {
       }
     }
 
-    if (stopped === 'no_new' && maxScrolls > 0 && stableRounds >= STABLE_THRESHOLD) {
-      // nothing
-    } else if (stopped !== 'limit_reached') {
+    if (stopped !== 'limit_reached') {
       const finalCount = await this.getPlaceLinkCount(feedSelector);
       if (finalCount === lastCount && stableRounds >= STABLE_THRESHOLD) {
         stopped = 'no_new';
-      } else if (maxScrolls > 0 && stableRounds < STABLE_THRESHOLD) {
+      } else if (stableRounds < STABLE_THRESHOLD) {
         stopped = 'max_scrolls';
       }
     }
@@ -173,67 +194,242 @@ export class GoogleMapsSeleniumScraper {
   }
 
   /**
-   * Abre o card de um place para carregar o painel de detalhes do Google Maps e
-   * extrai os campos que o feed NÃO expõe (telefone, website, endereço, horários,
-   * rating, total de avaliações). Fecha o card ao final para prosseguir ao próximo.
-   * `restoreUrl` é usado para restaurar o feed caso o fechamento colapse a página
-   * para a view de mapa (observado em alguns tamanhos de viewport).
+   * FASE 1 - DISCOVERY: Coleta todos os cards do feed sem abrir detalhes.
+   * Retorna array de DiscoveredCard com URL e dados básicos.
    */
-  private async openCardAndExtractDetail(cardEl: WebElement, restoreUrl: string): Promise<Partial<RawLead> & { opened: boolean }> {
+  private async discoverAllCards(
+    feedSelector: string,
+    requiredNew: number,
+    seenKeys: Set<string>,
+  ): Promise<DiscoveredCard[]> {
     const driver = await this.session.getDriver();
-    const detail: Partial<RawLead> & { opened: boolean } = { opened: false };
+    const genericNames = Array.from(GENERIC_NAMES);
+    const discovered: DiscoveredCard[] = [];
+    let extraScrollRounds = 0;
+    const maxExtraScrollRounds = 3;
+
+    while (true) {
+      if (this.callbacks.onCheckCancel?.()) break;
+      if (requiredNew > 0 && discovered.length >= requiredNew) break;
+
+      const cards = await driver.findElements({ css: `${feedSelector} a[href*="/maps/place/"]` });
+
+      for (let i = discovered.length; i < cards.length; i++) {
+        if (this.callbacks.onCheckCancel?.()) break;
+        if (requiredNew > 0 && discovered.length >= requiredNew) break;
+
+        const cardEl = cards[i];
+        try {
+          const data = (await driver.executeScript(
+            (element: WebElement, idx: number, genericNames: string[]) => {
+              const GENERIC_NAMES = new Set(genericNames);
+              const cardEl = element as unknown as HTMLElement;
+              const text = cardEl.innerText || '';
+              const linkEl = cardEl.tagName === 'A'
+                ? (cardEl as HTMLAnchorElement)
+                : cardEl.querySelector<HTMLAnchorElement>('a[href*="/maps/place/"]');
+              const mapsUrl = linkEl?.getAttribute('href') || undefined;
+              const label = linkEl?.getAttribute('aria-label') || undefined;
+              const nameEl = cardEl.querySelector<HTMLElement>('[role="heading"], h1, h2, h3');
+              const fallbackName = cardEl.tagName === 'A'
+                ? (cardEl as HTMLAnchorElement).textContent?.trim() || label?.replace(/^.*:\s*/, '')?.trim()
+                : undefined;
+              const name = nameEl?.textContent?.trim() || fallbackName || `Resultado ${idx + 1}`;
+
+              if (!mapsUrl || GENERIC_NAMES.has(name) || name.startsWith('Resultado') || name === 'Resultados') {
+                return {} as Record<string, unknown>;
+              }
+
+              const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+              const fullText = lines.join(' ').toLowerCase();
+              const lead: Record<string, unknown> = { name, sourceUrl: mapsUrl, googleMapsUrl: mapsUrl };
+
+              const categoryMatch = lines.find((l) => /despachante|advogado|direito|trânsito|detran|cnh/i.test(l));
+              let leadType: 'despachante' | 'advogado_transito' | undefined;
+              if (/despachante/.test(fullText)) {
+                lead.category = 'despachante de trânsito';
+                leadType = 'despachante';
+              } else if (
+                /advogado|direito de trânsito|trânsito direito|defesa de multa|suspensão cnh|cassação cnh/.test(fullText)
+              ) {
+                lead.category = categoryMatch ? (categoryMatch as string) : 'advogado direito de trânsito';
+                leadType = 'advogado_transito';
+              }
+
+              if (!lead.category && mapsUrl) {
+                const catMatch = (mapsUrl as string).match(/place\/([^/]+)/);
+                if (catMatch) {
+                  const slug = decodeURIComponent(catMatch[1]).toLowerCase();
+                  if (slug.includes('despachante')) {
+                    lead.category = 'despachante de trânsito';
+                    leadType = 'despachante';
+                  } else if (slug.includes('advogado') || slug.includes('transito')) {
+                    lead.category = 'advogado direito de trânsito';
+                    leadType = 'advogado_transito';
+                  }
+                }
+              }
+
+              return { ...lead, leadType };
+            }, cardEl, i)) as DiscoveredCard | null;
+
+          if (!data || !data.sourceUrl) continue;
+
+          // Skip já visto nesta query
+          if (discovered.some((d) => d.sourceUrl === data.sourceUrl)) continue;
+
+          // Skip já visto no banco (cross-execution)
+          if (isSeen(seenKeys, data.sourceUrl, data.phone, data.website, data.email)) {
+            logger.info('Card já conhecido (banco), pulando', { url: data.sourceUrl });
+            continue;
+          }
+
+          discovered.push(data);
+        } catch (err) {
+          logger.warn('Erro ao extrair card base', { index: i, error: err instanceof Error ? err.message : err });
+        }
+      }
+
+      if (discovered.length >= cards.length) {
+        // Pool visível esgotado: tentar scroll extra
+        if (stillNeedsScroll(discovered.length, requiredNew, extraScrollRounds, maxExtraScrollRounds)) {
+          const loaded = await this.getPlaceLinkCount(feedSelector);
+          const more = await this.scrollUntilNoNewItems(feedSelector, requiredNew - discovered.length, loaded);
+          if (more.newCount === 0) break;
+          extraScrollRounds += 1;
+          continue;
+        }
+        break;
+      }
+    }
+
+    logger.info('Discovery concluído', { totalDiscovered: discovered.length });
+    return discovered;
+  }
+
+  /**
+   * FASE 2 - DETAIL EXTRACTION: Para cada card descoberto, navega direto para a URL
+   * e extrai detalhes completos. Não usa click/back - navega direto.
+   */
+  private async extractDetailsForCards(
+    discovered: DiscoveredCard[],
+    seenKeys: Set<string>,
+    scrapedFor: ScrapedForKey,
+  ): Promise<{ leads: RawLead[]; duplicates: number; rejected: number; errors: string[] }> {
+    const leads: RawLead[] = [];
+    let duplicates = 0;
+    let rejected = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < discovered.length; i++) {
+      if (this.callbacks.onCheckCancel?.()) break;
+
+      const card = discovered[i];
+
+      try {
+        this.callbacks.onProgress?.({
+          phase: 'details',
+          discovered: discovered.length,
+          processed: i + 1,
+          persisted: leads.length,
+          duplicates,
+          errors: errors.length,
+        });
+
+        // Navegar direto para a URL do place (não click no feed)
+        await this.session.navigate(card.sourceUrl);
+        await this.session.wait(2500);
+
+        // Aguardar painel de detalhes
+        const detailReady = await this.session.waitForSelector(
+          'a[href^="tel:"], button[data-item-id="address"], button[data-item-id="oh"], div[role="main"]',
+          8000,
+        );
+        if (!detailReady) await this.session.wait(1500);
+
+        // Extrair dados do painel
+        const detail = await this.extractDetailFromPanel();
+
+        const enriched: RawLead = {
+          name: card.name,
+          category: card.category,
+          sourceUrl: card.sourceUrl,
+          googleMapsUrl: card.googleMapsUrl,
+          lead_type: card.leadType,
+          ...detail,
+          scrapedAt: new Date().toISOString(),
+          searchTerm: scrapedFor.query,
+          searchLocation: `${scrapedFor.city}, ${scrapedFor.state}`,
+        } as RawLead;
+
+        // Registrar chaves para dedup
+        for (const key of buildSeenKeys(enriched.sourceUrl, enriched.phone, enriched.website, enriched.email)) {
+          seenKeys.add(key);
+        }
+
+        leads.push(enriched);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao extrair detalhe';
+        errors.push(message);
+        rejected += 1;
+        logger.warn('Erro ao processar card', { url: card.sourceUrl, error: message });
+      }
+    }
+
+    return { leads, duplicates, rejected, errors };
+  }
+
+  /**
+   * Extrai dados completos do painel de detalhes via DOM.
+   * Não depende de click/back - apenas lê o DOM atual.
+   */
+  private async extractDetailFromPanel(): Promise<Partial<RawLead>> {
+    const driver = await this.session.getDriver();
+    const detail: Partial<RawLead> = {};
 
     try {
-      // 1. Abrir o card (clique nativo com fallback via JS)
-      try {
-        await cardEl.click();
-      } catch {
-        await driver.executeScript(`arguments[0].click();`, cardEl).catch(() => undefined);
-      }
-      await this.session.wait(2500);
-
-      // 2. Aguardar o painel de detalhes carregar (presença de tel:/endereço/horários ou navegação)
-      const detailReady = await this.session.waitForSelector(
-        'a[href^="tel:"], button[data-item-id="address"], button[data-item-id="oh"], div[role="main"] [data-item-id="address"]',
-        7000,
-      );
-      if (!detailReady) {
-        // pode ter navegado ou o painel não carregou; tentar mesmo assim via DOM global
-        await this.session.wait(1500);
-      }
-      detail.opened = true;
-
-      // 3. Extrair dados do painel de detalhes via DOM (robusto a ausência de seletores)
       const panelData = (await driver.executeScript(() => {
         const data: Record<string, unknown> = {};
+        const rawData: Record<string, unknown> = {};
 
-        // Telefone: primeiro link tel: (href ou aria-label)
+        // Telefone: primeiro link tel:
         const telLink = document.querySelector<HTMLAnchorElement>('a[href^="tel:"]');
         if (telLink) {
           data.phoneRaw = telLink.getAttribute('href') || undefined;
           data.phoneLabel = telLink.getAttribute('aria-label') || telLink.textContent?.trim() || undefined;
+          rawData.phoneHref = telLink.getAttribute('href');
+          rawData.phoneAriaLabel = telLink.getAttribute('aria-label');
         }
 
-        // Website: primeiro link http fora do domínio Google (maps/contas/suporte)
+        // Website: primeiro link http fora do domínio Google
         const siteLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="http"]')).find(
           (a) =>
             a.href &&
             !/^https?:\/\/(www\.)?((.*\.)?google\.(com|com\.br|br)|maps\.google\.)/i.test(a.href) &&
             !/(support\.google|policies\.google|accounts\.google|maps\.google)/i.test(a.href),
         );
-        if (siteLink) data.website = siteLink.href;
+        if (siteLink) {
+          data.website = siteLink.href;
+          rawData.websiteHref = siteLink.href;
+        }
 
         // Endereço
         const addrBtn = document.querySelector<HTMLElement>(
           'button[data-item-id="address"], div[data-item-id="address"]',
         );
-        if (addrBtn) data.address = addrBtn.textContent?.trim() || undefined;
+        if (addrBtn) {
+          data.address = addrBtn.textContent?.trim() || undefined;
+          rawData.addressText = addrBtn.textContent?.trim();
+        }
 
-        // Horários de funcionamento
+        // Horários
         const hoursBtn = document.querySelector<HTMLElement>('button[data-item-id="oh"]');
-        if (hoursBtn) data.openingHours = hoursBtn.textContent?.trim() || undefined;
+        if (hoursBtn) {
+          data.openingHours = hoursBtn.textContent?.trim() || undefined;
+          rawData.openingHoursText = hoursBtn.textContent?.trim();
+        }
 
-        // Rating (aria-label com estrelas)
+        // Rating
         const ratingEl = Array.from(document.querySelectorAll<HTMLElement>('[role="img"][aria-label]')).find((el) =>
           /(estrelas?|stars?|5)/i.test(el.getAttribute('aria-label') || ''),
         );
@@ -241,35 +437,100 @@ export class GoogleMapsSeleniumScraper {
           const label = ratingEl.getAttribute('aria-label') || '';
           const m = label.match(/(\d+[.,]\d+)/);
           if (m) data.rating = parseFloat(m[1].replace(',', '.'));
+          rawData.ratingAriaLabel = label;
         }
 
-        // Total de avaliações: regex no texto do painel principal
+        // Total de avaliações
         const mainText =
           document.querySelector<HTMLElement>('div[role="main"], [data-item-id="address"]')?.textContent || '';
         const reviewMatch = mainText.match(/(\d{1,6})\s+(avaliações?|comentários?|reviews?)/i);
         if (reviewMatch) data.reviewCount = parseInt(reviewMatch[1], 10);
+        rawData.mainTextSnippet = mainText.slice(0, 2000);
 
+        // Place ID
+        const placeIdMatch = window.location.href.match(/place\/([^\/]+)/);
+        if (placeIdMatch) {
+          data.placeId = placeIdMatch[1];
+          rawData.placeIdFromUrl = placeIdMatch[1];
+        }
+
+        // Preço
+        const priceEl = document.querySelector<HTMLElement>('[data-price-level], [aria-label*="Preço"], [aria-label*="price"]');
+        if (priceEl) {
+          const priceText = priceEl.textContent || priceEl.getAttribute('aria-label') || '';
+          const priceMatch = priceText.match(/[€$R\$]\s*\d+|gratuito|free|\$\d+/i);
+          if (priceMatch) data.priceLevel = priceMatch[0];
+          rawData.priceText = priceText;
+        }
+
+        // Status
+        const statusEl = document.querySelector<HTMLElement>(
+          '[data-item-id="oh"] ~ div, .ZDu9vd, [aria-label*="Aberto"], [aria-label*="Fechado"], [aria-label*="Open"], [aria-label*="Closed"]',
+        );
+        if (statusEl) {
+          data.currentStatus = statusEl.textContent?.trim() || undefined;
+          rawData.currentStatusText = statusEl.textContent?.trim();
+        }
+
+        // Descrição
+        const descEl = document.querySelector<HTMLElement>('[data-item-id="description"], [jsaction*="description"], .PYvSYb');
+        if (descEl) {
+          data.description = descEl.textContent?.trim() || undefined;
+          rawData.descriptionText = descEl.textContent?.trim();
+        }
+
+        // Lat/Lng
+        const latLngMatch = window.location.href.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (latLngMatch) {
+          data.latitude = parseFloat(latLngMatch[1]);
+          data.longitude = parseFloat(latLngMatch[2]);
+          rawData.latLngFromUrl = { lat: latLngMatch[1], lng: latLngMatch[2] };
+        }
+
+        // Plus Code
+        const plusCodeEl = document.querySelector<HTMLElement>('[data-item-id="plus_code"], [aria-label*="Plus Code"]');
+        if (plusCodeEl) {
+          data.plusCode = plusCodeEl.textContent?.trim() || undefined;
+          rawData.plusCodeText = plusCodeEl.textContent?.trim();
+        }
+
+        // Social links
+        const socialLinks: string[] = [];
+        const socialSelectors = [
+          'a[href*="instagram.com"]',
+          'a[href*="facebook.com"]',
+          'a[href*="linkedin.com"]',
+          'a[href*="twitter.com"]',
+          'a[href*="youtube.com"]',
+        ];
+        for (const sel of socialSelectors) {
+          const els = document.querySelectorAll<HTMLAnchorElement>(sel);
+          els.forEach((el) => {
+            if (el.href && !socialLinks.includes(el.href)) socialLinks.push(el.href);
+          });
+        }
+        if (socialLinks.length > 0) {
+          data.socialLinks = socialLinks;
+          rawData.socialLinks = socialLinks;
+        }
+
+        // HTML do painel (limitado)
+        const panel = document.querySelector<HTMLElement>('div[role="main"]');
+        if (panel) {
+          rawData.panelHtml = panel.innerHTML.slice(0, 50000);
+        }
+
+        data.rawData = rawData;
         return data;
       }).catch(() => ({}))) as Record<string, unknown>;
 
-      // Telefone limpo a partir do href tel: (prioridade) ou label
+      // Processar telefone
       const telHref = (panelData.phoneRaw as string) || '';
       const telLabel = (panelData.phoneLabel as string) || '';
       const phoneFromHref = cleanPhoneFromTel(telHref);
       const phoneFromLabel = extractCleanPhone(telLabel);
       const phone = phoneFromHref || phoneFromLabel;
-      if (phone) {
-        detail.phone = phone;
-      } else {
-        // Fallback: procurar telefone no texto do painel. NUNCA grava texto bruto
-        // (ex. "Aberto · Fecha 18:00 · (51) 4066-6564") — extractCleanPhone devolve
-        // apenas dígitos 10-11 válidos, ou null (BUG 2).
-        const panelText = (await driver.executeScript(
-          `const m = document.querySelector('div[role="main"]') || document.body; return m ? m.innerText.slice(0, 5000) : '';`,
-        ).catch(() => '')) as string;
-        const cleanPhone = extractCleanPhone(panelText);
-        if (cleanPhone) detail.phone = cleanPhone;
-      }
+      if (phone) detail.phone = phone;
 
       if (panelData.website) detail.website = panelData.website as string;
       if (panelData.address) {
@@ -282,110 +543,25 @@ export class GoogleMapsSeleniumScraper {
       if (panelData.rating != null) detail.rating = panelData.rating as number;
       if (panelData.reviewCount != null) detail.reviewCount = panelData.reviewCount as number;
       if (panelData.openingHours) detail.openingHours = panelData.openingHours as string;
+      if (panelData.placeId) detail.placeId = panelData.placeId as string;
+      if (panelData.priceLevel) detail.priceLevel = panelData.priceLevel as number;
+      if (panelData.currentStatus) detail.currentStatus = panelData.currentStatus as string;
+      if (panelData.description) detail.description = panelData.description as string;
+      if (panelData.latitude != null) detail.latitude = panelData.latitude as number;
+      if (panelData.longitude != null) detail.longitude = panelData.longitude as number;
+      if (panelData.plusCode) detail.plusCode = panelData.plusCode as string;
+      if (panelData.socialLinks) detail.socialLinks = panelData.socialLinks as string[];
+      if (panelData.rawData) detail.rawData = panelData.rawData as Record<string, unknown>;
     } catch (err) {
-      logger.warn('Falha ao abrir/extrair detalhe do card', {
-        error: err instanceof Error ? err.message : 'erro desconhecido',
-      });
-    } finally {
-      // 4. Fechar o card (Escape) para voltar ao feed
-      try {
-        await driver.actions().sendKeys(Key.ESCAPE).perform();
-      } catch {
-        /* ignore */
-      }
-      await this.session.wait(1200);
-
-      // Se o fechamento colapsou a página (feed sumiu), re-navegar para restaurar a listagem
-      const remaining = await this.getPlaceLinkCount('div');
-      if (remaining === 0 && restoreUrl) {
-        logger.info('Feed colapsado após fechar card, restaurando listagem', { restoreUrl });
-        await this.session.navigate(restoreUrl);
-        await this.session.wait(3500);
-      }
+      logger.warn('Falha ao extrair painel de detalhes', { error: err instanceof Error ? err.message : err });
     }
 
     return detail;
   }
 
-  /** Extrai apenas os dados básicos do card no feed (nome, url, categoria), SEM abrir o detalhe. */
-  private async extractBaseFromElement(el: WebElement, index: number): Promise<RawLead | null> {
-    const driver = await this.session.getDriver();
-    const genericNames = Array.from(GENERIC_NAMES);
-    const data = (await driver.executeScript(
-      (element: WebElement, idx: number, genericNames: string[]) => {
-        const GENERIC_NAMES = new Set(genericNames);
-        const cardEl = element as unknown as HTMLElement;
-        const text = cardEl.innerText || '';
-        const linkEl = cardEl.tagName === 'A'
-          ? (cardEl as HTMLAnchorElement)
-          : cardEl.querySelector<HTMLAnchorElement>('a[href*="/maps/place/"]');
-      const mapsUrl = linkEl?.getAttribute('href') || undefined;
-      const label = linkEl?.getAttribute('aria-label') || undefined;
-      const nameEl = cardEl.querySelector<HTMLElement>('[role="heading"], h1, h2, h3');
-      const fallbackName = cardEl.tagName === 'A'
-        ? (cardEl as HTMLAnchorElement).textContent?.trim() || label?.replace(/^.*:\s*/, '')?.trim()
-        : undefined;
-      const name = nameEl?.textContent?.trim() || fallbackName || `Resultado ${idx + 1}`;
-
-      if (!mapsUrl || GENERIC_NAMES.has(name) || name.startsWith('Resultado') || name === 'Resultados') {
-        return {} as Record<string, unknown>;
-      }
-
-      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-      const fullText = lines.join(' ').toLowerCase();
-      const lead: Record<string, unknown> = { name, sourceUrl: mapsUrl, googleMapsUrl: mapsUrl };
-
-      const categoryMatch = lines.find((l) => /despachante|advogado|direito|trânsito|detran|cnh/i.test(l));
-      if (/despachante/.test(fullText)) {
-        lead.category = 'despachante de trânsito';
-        (lead as any).leadType = 'despachante';
-      } else if (
-        /advogado|direito de trânsito|trânsito direito|defesa de multa|suspensão cnh|cassação cnh/.test(fullText)
-      ) {
-        lead.category = categoryMatch ? (categoryMatch as string) : 'advogado direito de trânsito';
-        (lead as any).leadType = 'advogado_transito';
-      }
-
-      if (!lead.category && mapsUrl) {
-        const catMatch = (mapsUrl as string).match(/place\/([^/]+)/);
-        if (catMatch) {
-          const slug = decodeURIComponent(catMatch[1]).toLowerCase();
-          if (slug.includes('despachante')) {
-            lead.category = 'despachante de trânsito';
-            (lead as any).leadType = 'despachante';
-          } else if (slug.includes('advogado') || slug.includes('transito')) {
-            lead.category = 'advogado direito de trânsito';
-            (lead as any).leadType = 'advogado_transito';
-          }
-        }
-      }
-
-      return lead;
-    }, el, index)) as RawLead | null;
-
-    const isEmpty = !data || Object.keys(data).length === 0 || !(data as any).name;
-    return isEmpty ? null : (data as RawLead);
-  }
-
-  /** Abre o card de detalhe e mergir os campos ricos (telefone/endereço/website/horários/etc.) no lead. */
-  private async enrichFromDetail(el: WebElement, lead: RawLead, restoreUrl: string): Promise<RawLead> {
-    const detail = await this.openCardAndExtractDetail(el, restoreUrl);
-
-    // Preferir dados do painel de detalhes quando disponíveis; caso contrário manter os do feed
-    if (detail.phone) lead.phone = detail.phone;
-    if (detail.website) lead.website = detail.website;
-    if (detail.address) {
-      lead.address = detail.address;
-      if (detail.city) lead.city = detail.city as string;
-      if (detail.state) lead.state = detail.state as string;
-      if (detail.zipCode) lead.zipCode = detail.zipCode as string;
-    }
-    if (detail.rating != null) lead.rating = detail.rating;
-    if (detail.reviewCount != null) lead.reviewCount = detail.reviewCount;
-
-    return lead;
-  }
-
+  /**
+   * Método principal de busca com arquitetura discovery-first.
+   */
   async search(
     query: string,
     location: string,
@@ -437,14 +613,19 @@ export class GoogleMapsSeleniumScraper {
       const initialCount = await this.getPlaceLinkCount(feedSelector);
       logger.info('Resultados iniciais no DOM', { count: initialCount, query });
 
-      const scrollResult = await this.scrollUntilNoNewItems(
-        feedSelector,
-        requiredNew,
-        initialCount,
-      );
+      // Scroll até o fim (ou limite)
+      this.callbacks.onProgress?.({
+        phase: 'discovery',
+        discovered: 0,
+        processed: 0,
+        persisted: 0,
+        duplicates: 0,
+        errors: 0,
+      });
+
+      const scrollResult = await this.scrollUntilNoNewItems(feedSelector, requiredNew, initialCount);
 
       logger.info('Scroll concluído', {
-        strategy: 'infinite-scroll-selenium',
         initialCount,
         finalCount: initialCount + scrollResult.newCount,
         newLoaded: scrollResult.newCount,
@@ -459,106 +640,50 @@ export class GoogleMapsSeleniumScraper {
         return result;
       }
 
-      const driver = await this.session.getDriver();
+      // FASE 1: Discovery - coletar todos os cards
+      this.callbacks.onProgress?.({
+        phase: 'discovery',
+        discovered: result.totalFound,
+        processed: 0,
+        persisted: 0,
+        duplicates: 0,
+        errors: 0,
+      });
 
-      const seenInThisQuery = new Set<string>();
-      let duplicatesThisQuery = 0;
-      let rejectedThisQuery = 0;
+      const discovered = await this.discoverAllCards(feedSelector, requiredNew, seenKeys);
 
-      // Abrir o card provoca re-render do feed (invalida os WebElements anteriores).
-      // Por isso os cards são re-consultados a cada iteração, em vez de manter um array fixo.
-      let i = 0;
-      let extraScrollRounds = 0;
-      const maxIterations = 200;
-      // Teto de rounds extras de scroll: quando o pool visível se esgota em duplicatas
-      // conhecidas (BUG 3), avançar além da primeira página SEM loop infinito.
-      const maxExtraScrollRounds = 3;
-      while (i < maxIterations) {
-        if (requiredNew > 0 && result.leads.length >= requiredNew) {
-          logger.info('Limite maxResults atingido, parando abertura de cards', {
-            collected: result.leads.length,
-            limit: requiredNew,
-          });
-          break;
-        }
+      logger.info('Discovery finalizado', { totalCards: discovered.length });
 
-        const cards = await driver.findElements({ css: `${feedSelector} a[href*="/maps/place/"]` });
-        if (i >= cards.length) {
-          // Pool visível esgotado: tentar carregar mais resultados (scroll extra)
-          // para descobrir negócios NOVOS além dos já vistos.
-          if (stillNeedsScroll(result.leads.length, requiredNew, extraScrollRounds, maxExtraScrollRounds)) {
-            const loaded = await this.getPlaceLinkCount(feedSelector);
-            const more = await this.scrollUntilNoNewItems(
-              feedSelector,
-              requiredNew - result.leads.length,
-              loaded,
-            );
-            if (more.newCount === 0) {
-              break; // scroll não carregou nada novo; não insistir
-            }
-            extraScrollRounds += 1;
-            continue; // re-consultar cards (re-render) e seguir do índice onde parou
-          }
-          break;
-        }
-        const cardEl = cards[i];
+      // FASE 2: Detail Extraction - processar cada card
+      const scrapedFor: ScrapedForKey = {
+        query,
+        city: location.split(',')[0]?.trim() || location,
+        state: (location.split(',')[1]?.trim() || '').slice(0, 2).toUpperCase(),
+        source: 'google_maps',
+      };
 
-        try {
-          // 1. Extrai apenas a base do feed (sem abrir) para decidir duplicata/rejeição barato
-          const lead = await this.extractBaseFromElement(cardEl, i);
-          if (!lead || !lead.sourceUrl) {
-            rejectedThisQuery += 1;
-            i += 1;
-            continue;
-          }
+      const detailResult = await this.extractDetailsForCards(discovered, seenKeys, scrapedFor);
 
-          if (seenInThisQuery.has(lead.sourceUrl)) {
-            duplicatesThisQuery += 1;
-            i += 1;
-            continue;
-          }
-          seenInThisQuery.add(lead.sourceUrl);
+      result.leads = detailResult.leads;
+      result.duplicates = detailResult.duplicates;
+      result.rejected = detailResult.rejected;
+      result.errors.push(...detailResult.errors);
 
-          // Skip intra-execucao (seenKeys carregado do banco em formato canônico,
-          // mesmas chaves de loadExistingScrapedKeys -> BUG 3: não re-coletar o já visto)
-          if (isSeen(seenKeys, lead.sourceUrl, lead.phone, lead.website, lead.email)) {
-            duplicatesThisQuery += 1;
-            i += 1;
-            continue;
-          }
-
-          // 2. É um lead novo: abrir o card de detalhe para enriquecer
-          const enriched = await this.enrichFromDetail(cardEl, lead, searchUrl);
-
-          // Registrar chaves canônicas (url + campo composto) p/ skip na própria run e nas próximas
-          for (const key of buildSeenKeys(
-            enriched.sourceUrl,
-            enriched.phone,
-            enriched.website,
-            enriched.email,
-          )) {
-            seenKeys.add(key);
-          }
-
-          result.leads.push(enriched);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Erro ao extrair item';
-          result.errors.push(message);
-          rejectedThisQuery += 1;
-        }
-
-        i += 1;
-      }
-
-      result.duplicates = duplicatesThisQuery;
-      result.rejected = rejectedThisQuery;
+      this.callbacks.onProgress?.({
+        phase: 'completed',
+        discovered: result.totalFound,
+        processed: discovered.length,
+        persisted: detailResult.leads.length,
+        duplicates: detailResult.duplicates,
+        errors: detailResult.errors.length,
+      });
 
       logger.info('Extração concluída', {
         query,
         totalItems: result.totalFound,
         newLeads: result.leads.length,
-        duplicates: duplicatesThisQuery,
-        rejected: rejectedThisQuery,
+        duplicates: detailResult.duplicates,
+        rejected: detailResult.rejected,
         scrollStopped: scrollResult.stopped,
       });
     } catch (err) {
@@ -566,6 +691,10 @@ export class GoogleMapsSeleniumScraper {
       logger.error('Falha no scraping do Google Maps (Selenium)', { error: message });
       result.errors.push(message);
       this.blocked = true;
+
+      if (err instanceof Error && (err.name === 'WebDriverError' || err.message.includes('session'))) {
+        this.callbacks.onDriverCrash?.();
+      }
     }
 
     return result;

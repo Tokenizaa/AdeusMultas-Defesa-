@@ -13,6 +13,16 @@ export class CanonicalMapper {
 
   /**
    * Convert Canonical Onboarding Payload to CaseDomain
+   *
+   * Preserva SEM perda:
+   *  - identification (AIT, fase, código, órgão autuador)
+   *  - infraction (dados da infração + fatos específicos)
+   *  - vehicle (placa, marca, renavam)
+   *  - applicant (qualificação do requerente)
+   *  - specificFacts (fatos juridicamente relevantes)
+   *  - evidence (OCR, fotos, declarações)
+   *  - procedure (tipo de procedimento)
+   *  - journey stage (fase processual)
    */
   public static onboardingPayloadToDomain(payload: CanonicalOnboardingPayload, caseId?: string): CaseDomain {
     const id = caseId || `case_${Date.now()}`;
@@ -20,6 +30,32 @@ export class CanonicalMapper {
     const applicantEmail = payload.applicant?.email || payload.leadEmail;
     const applicantPhone = payload.applicant?.phone || payload.leadPhone;
     const applicantCpf = payload.applicant?.cpf;
+
+    // Mescla fatos específicos vindos tanto de `infraction` quanto de `specificFacts`
+    // (FAIL CLOSED: regra vê o que veio do chamador — nunca inventa).
+    const mergedHasPsychomotorTerm = payload.specificFacts?.hasPsychomotorTerm ?? payload.infraction.hasPsychomotorTerm;
+    const mergedHasPhotoProof = payload.specificFacts?.hasPhotoProof ?? payload.infraction.hasPhotoProof;
+    const mergedHasR19SignageProof = payload.specificFacts?.hasR19SignageProof ?? payload.infraction.hasR19SignageProof;
+    const mergedHasAgentDetailedObservations =
+      payload.specificFacts?.hasAgentDetailedObservations ?? payload.infraction.hasAgentDetailedObservations;
+    const mergedHasPreviousInfractionsLast12Months =
+      payload.specificFacts?.isFirstInfractionLast12Months === false
+        ? true
+        : payload.specificFacts?.isFirstInfractionLast12Months === true
+        ? false
+        : payload.infraction.hasPreviousInfractionsLast12Months;
+
+    // Novos campos específicos
+    const mergedRefusedTest = payload.specificFacts?.refusedTest ?? payload.infraction.refusedTest;
+    const mergedOfferedRetest = payload.specificFacts?.offeredRetest ?? payload.infraction.offeredRetest;
+    const mergedCellphoneCircumstance = payload.specificFacts?.cellphoneCircumstance ?? payload.infraction.cellphoneCircumstance;
+    const mergedYellowPhaseCrossing = payload.specificFacts?.yellowPhaseCrossing ?? payload.infraction.yellowPhaseCrossing;
+    const mergedEmergencyPassage = payload.specificFacts?.emergencyPassage ?? payload.infraction.emergencyPassage;
+    const mergedRealDriverName = payload.specificFacts?.realDriverName ?? payload.infraction.realDriverName;
+    const mergedRealDriverCpf = payload.specificFacts?.realDriverCpf ?? payload.infraction.realDriverCpf;
+    const mergedRealDriverCnh = payload.specificFacts?.realDriverCnh ?? payload.infraction.realDriverCnh;
+    const mergedIndicationWithinDeadline = payload.specificFacts?.indicationWithinDeadline ?? payload.infraction.indicationWithinDeadline;
+    const mergedHasRegulatorySign = payload.specificFacts?.hasRegulatorySign ?? payload.infraction.hasRegulatorySign;
 
     return {
       id,
@@ -50,22 +86,34 @@ export class CanonicalMapper {
         autuadorBody: payload.infraction.autuadorBody,
         dateTime: payload.infraction.dateTime,
         location: payload.infraction.location,
-        speedLimit: payload.infraction.speedLimit,
-        measuredSpeed: payload.infraction.measuredSpeed,
-        consideredSpeed: payload.infraction.consideredSpeed,
+        speedLimit: payload.infraction.speedLimit ?? payload.specificFacts?.speedLimit,
+        measuredSpeed: payload.infraction.measuredSpeed ?? payload.specificFacts?.measuredSpeed,
+        consideredSpeed: payload.infraction.consideredSpeed ?? payload.specificFacts?.consideredSpeed,
         speedMeasured: payload.infraction.speedMeasured,
         speedConsidered: payload.infraction.speedConsidered,
-        radarEquipmentId: payload.infraction.radarEquipmentId,
-        inmetroAferitionDate: payload.infraction.inmetroAferitionDate,
-        notificationExpeditionDate: payload.infraction.notificationExpeditionDate,
-        notificationDeliveryDate: payload.infraction.notificationDeliveryDate,
-        defenseDeadline: payload.infraction.defenseDeadline,
-        hasPreviousInfractionsLast12Months: payload.infraction.hasPreviousInfractionsLast12Months,
-        hasPsychomotorTerm: payload.infraction.hasPsychomotorTerm,
-        hasAgentDetailedObservations: payload.infraction.hasAgentDetailedObservations,
-        hasPhotoProof: payload.infraction.hasPhotoProof,
-        hasR19SignageProof: payload.infraction.hasR19SignageProof,
+        radarEquipmentId: payload.infraction.radarEquipmentId ?? payload.specificFacts?.radarEquipmentId,
+        inmetroAferitionDate: payload.infraction.inmetroAferitionDate ?? payload.specificFacts?.inmetroAferitionDate,
+        notificationExpeditionDate:
+          payload.infraction.notificationExpeditionDate ?? payload.identification?.notificationExpeditionDate,
+        notificationDeliveryDate: payload.infraction.notificationDeliveryDate ?? payload.identification?.notificationDeliveryDate,
+        defenseDeadline: payload.infraction.defenseDeadline ?? payload.identification?.defenseDeadline,
+        hasPreviousInfractionsLast12Months: mergedHasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: mergedHasPsychomotorTerm,
+        hasAgentDetailedObservations: mergedHasAgentDetailedObservations,
+        hasPhotoProof: mergedHasPhotoProof,
+        hasR19SignageProof: mergedHasR19SignageProof,
+        hasRegulatorySign: mergedHasRegulatorySign,
         formalFlawsDetected: [],
+        // Novos campos
+        refusedTest: mergedRefusedTest,
+        offeredRetest: mergedOfferedRetest,
+        cellphoneCircumstance: mergedCellphoneCircumstance,
+        yellowPhaseCrossing: mergedYellowPhaseCrossing,
+        emergencyPassage: mergedEmergencyPassage,
+        realDriverName: mergedRealDriverName,
+        realDriverCpf: mergedRealDriverCpf,
+        realDriverCnh: mergedRealDriverCnh,
+        indicationWithinDeadline: mergedIndicationWithinDeadline,
       },
       applicant: payload.applicant ? {
         applicantName: payload.applicant.name,
@@ -97,6 +145,121 @@ export class CanonicalMapper {
       isAnonymous: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Converte CaseDomain de volta para o contrato canônico do onboarding.
+   * Útil para edição do rascunho e para o dashboard do cidadão.
+   */
+  public static domainToOnboardingPayload(domain: CaseDomain): CanonicalOnboardingPayload {
+    const inf = domain.infraction;
+    const veh = domain.vehicle;
+    const app = domain.applicant;
+    return {
+      procedureType: domain.serviceType,
+      situation: (domain as any).situation,
+      processStage: domain.currentStage ? String(domain.currentStage) : undefined,
+      leadName: domain.clientName,
+      leadEmail: domain.clientEmail,
+      leadPhone: domain.clientPhone,
+      identification: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        autuadorBody: inf.autuadorBody,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline,
+      },
+      vehicle: {
+        plate: veh.plate,
+        brandModel: veh.brandModel,
+        renavam: veh.renavam,
+        chassis: veh.chassis,
+        year: veh.year,
+        color: veh.color,
+      },
+      infraction: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        description: inf.description,
+        ctbArticle: inf.ctbArticle,
+        severity: inf.severity,
+        points: inf.points,
+        fineAmount: inf.fineAmount,
+        autuadorBody: inf.autuadorBody,
+        dateTime: inf.dateTime,
+        location: inf.location,
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        speedMeasured: inf.speedMeasured,
+        speedConsidered: inf.speedConsidered,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline,
+        hasPreviousInfractionsLast12Months: inf.hasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        customFacts: app?.factsNarrative,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline,
+      },
+      specificFacts: {
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        isFirstInfractionLast12Months: inf.hasPreviousInfractionsLast12Months === undefined ? undefined : !inf.hasPreviousInfractionsLast12Months,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline,
+      },
+      evidence: domain.ocrAuxiliaryData ? {
+        ocrExtractedText: domain.ocrAuxiliaryData.extractedText,
+        ocrConfidence: domain.ocrAuxiliaryData.confidenceScore,
+      } : undefined,
+      applicant: app ? {
+        name: app.applicantName,
+        cpf: app.applicantCpf,
+        rg: app.applicantRg,
+        cnh: app.applicantCnh,
+        category: app.cnhCategory,
+        phone: app.applicantPhone,
+        email: app.applicantEmail,
+        addressStreet: app.addressStreet,
+        addressNumber: app.addressNumber,
+        addressComplement: app.addressComplement,
+        addressNeighborhood: app.addressNeighborhood,
+        addressZipCode: app.addressZipCode,
+        addressCityState: app.addressCityState,
+      } : undefined,
     };
   }
 
@@ -206,6 +369,22 @@ export class CanonicalMapper {
         notificationExpeditionDate: row.notification_expedition_date,
         defenseDeadline: row.defense_deadline,
         formalFlawsDetected: formalFlaws,
+        // Novos campos
+        hasPreviousInfractionsLast12Months: row.has_previous_infractions_last_12_months,
+        hasPsychomotorTerm: row.has_psychomotor_term,
+        hasAgentDetailedObservations: row.has_agent_detailed_observations,
+        hasPhotoProof: row.has_photo_proof,
+        hasR19SignageProof: row.has_r19_signage_proof,
+        hasRegulatorySign: row.has_regulatory_sign,
+        refusedTest: row.refused_test,
+        offeredRetest: row.offered_retest,
+        cellphoneCircumstance: row.cellphone_circumstance,
+        yellowPhaseCrossing: row.yellow_phase_crossing,
+        emergencyPassage: row.emergency_passage,
+        realDriverName: row.real_driver_name,
+        realDriverCpf: row.real_driver_cpf,
+        realDriverCnh: row.real_driver_cnh,
+        indicationWithinDeadline: row.indication_within_deadline,
       },
       analysis,
       applicant,
@@ -285,6 +464,22 @@ export class CanonicalMapper {
       paid_at: domain.paidAt || domain.dataPagamento,
       created_at: domain.createdAt || domain.criadoEm || new Date().toISOString(),
       updated_at: domain.updatedAt || domain.atualizadoEm || new Date().toISOString(),
+      // Novos campos
+      has_previous_infractions_last_12_months: infraction.hasPreviousInfractionsLast12Months,
+      has_psychomotor_term: infraction.hasPsychomotorTerm,
+      has_agent_detailed_observations: infraction.hasAgentDetailedObservations,
+      has_photo_proof: infraction.hasPhotoProof,
+      has_r19_signage_proof: infraction.hasR19SignageProof,
+      has_regulatory_sign: infraction.hasRegulatorySign,
+      refused_test: infraction.refusedTest,
+      offered_retest: infraction.offeredRetest,
+      cellphone_circumstance: infraction.cellphoneCircumstance,
+      yellow_phase_crossing: infraction.yellowPhaseCrossing,
+      emergency_passage: infraction.emergencyPassage,
+      real_driver_name: infraction.realDriverName,
+      real_driver_cpf: infraction.realDriverCpf,
+      real_driver_cnh: infraction.realDriverCnh,
+      indication_within_deadline: infraction.indicationWithinDeadline,
     };
   }
 }

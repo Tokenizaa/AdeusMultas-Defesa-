@@ -9,7 +9,7 @@ import { INFRACTION_CATALOG, InfractionCatalogItem } from '../../data/knowledge-
 import { ExpertRuleEngine } from '../rules/rule-engine';
 import { DocumentAssemblyEngine } from '../documents/document-assembly-engine';
 import { InfractionData, LegalArgumentDomain, CaseAnalysis, DefenseDraft, ProcedureType, SubmissionInstructions } from '../../types';
-import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
+import { ARGUMENTS_CATALOG, ArgumentModel } from '../arguments/arguments-catalog';
 import { ORGANS_DB, resolveProtocolInfo } from '../legal-base/organs';
 
 export class RagPipeline {
@@ -137,7 +137,7 @@ export class RagPipeline {
       address: string;
       cityState: string;
     },
-    selectedArguments: LegalArgumentDomain[],
+    selectedArguments: (ArgumentModel | LegalArgumentDomain)[],
     procedureType: ProcedureType = 'recurso_jari'
   ): DefenseDraft & { protocolInfo?: SubmissionInstructions } {
     const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);

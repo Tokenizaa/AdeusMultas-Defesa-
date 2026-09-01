@@ -10,6 +10,7 @@
  */
 
 import { logger } from '../observability/logger';
+import { configService } from '../config/config-service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +35,7 @@ export interface SendMediaParams {
   mimeType?: string;
   asDocument?: boolean;
   instanceName?: string;
+  mediaType?: 'image' | 'document' | 'audio' | 'video';
 }
 
 export interface WhatsAppMessageResult {
@@ -72,6 +74,8 @@ export interface WebhookPayload {
       extendedTextMessage?: { text?: string };
       imageMessage?: { caption?: string };
       documentMessage?: { fileName?: string };
+      audioMessage?: { mimetype?: string; url?: string };
+      videoMessage?: { caption?: string; mimetype?: string };
     };
     messageType?: string;
     messageTimestamp?: number;
@@ -84,13 +88,51 @@ export interface WebhookPayload {
 
 class WhatsAppService {
   private config: WhatsAppConfig;
+  // Nome de instancia descoberto dinamicamente (fallback quando
+  // EVOLUTION_INSTANCE_NAME nao casa com a instancia real — caso a Evolution
+  // exponha nome com case/token diferente do default). Cache em memoria.
+  private discoveredInstance: string | null = null;
 
   constructor() {
     this.config = {
-      apiUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
-      apiKey: process.env.EVOLUTION_API_KEY || '',
-      instanceName: process.env.EVOLUTION_INSTANCE_NAME || 'defesai',
+      apiUrl: configService.get('EVOLUTION_API_URL') || configService.get('NOTIF_WHATSAPP_API_URL') || 'http://localhost:8080',
+      apiKey: configService.get('EVOLUTION_API_KEY') || configService.get('NOTIF_WHATSAPP_API_KEY') || '',
+      instanceName: configService.get('EVOLUTION_INSTANCE_NAME') || 'defesai',
     };
+  }
+
+  /**
+   * Resolve o nome real da instancia na Evolution API, com descoberta aditiva.
+   * - Nome explicito (parametro) sempre respeitado.
+   * - Preferencia ao configurado (EVOLUTION_INSTANCE_NAME) quando bate com uma
+   *   instancia real (match case-insensitive — Evolution ignora case no lookup,
+   *   mas o default 'defesai' nao casa com 'Defesai' em endpoints que exijam exato).
+   * - Se o nome configurado nao existir como instancia real, usa o nome real
+   *   descoberto em /instance/fetchInstances. Cache em memoria (1 fetch).
+   * Resiliente a divergencia de case/token entre env e instancia registrada.
+   */
+  private async resolveInstanceName(instanceName?: string): Promise<string> {
+    if (instanceName) return instanceName;
+    if (this.discoveredInstance) return this.discoveredInstance;
+
+    const configured = this.config.instanceName || 'defesai';
+    try {
+      const instances = await this.makeRequest<any[]>('GET', '/instance/fetchInstances');
+      const list = Array.isArray(instances) ? instances : [];
+      const exact = list.find((i) => (i?.name || i?.instanceName) === configured);
+      if (exact) {
+        this.discoveredInstance = configured;
+      } else {
+        const ci = list.find(
+          (i) => (i?.name || i?.instanceName || '').toLowerCase() === configured.toLowerCase()
+        );
+        this.discoveredInstance = (ci?.name || ci?.instanceName) || configured;
+      }
+    } catch {
+      // Falha na descoberta: mantem config (getInstanceStatus ja reporta offline).
+      this.discoveredInstance = configured;
+    }
+    return this.discoveredInstance;
   }
 
   private get isConfigured(): boolean {
@@ -140,7 +182,7 @@ class WhatsAppService {
    * Send a text message via WhatsApp
    */
   async sendText(params: SendMessageParams): Promise<WhatsAppMessageResult> {
-    const instance = params.instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(params.instanceName);
 
     try {
       logger.info('whatsapp', 'whatsapp-service', 'send_text', 'Sending WhatsApp message', {
@@ -178,22 +220,35 @@ class WhatsAppService {
   }
 
   /**
-   * Send a media message (image, document, audio)
+   * Send a media message (image, document, audio, video)
    */
   async sendMedia(params: SendMediaParams): Promise<WhatsAppMessageResult> {
-    const instance = params.instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(params.instanceName);
+
+    // Determine media type for Evolution API
+    let mediaType: 'image' | 'document' | 'audio' | 'video' = 'image';
+    if (params.mediaType) {
+      mediaType = params.mediaType;
+    } else if (params.asDocument) {
+      mediaType = 'document';
+    } else if (params.mimeType?.startsWith('audio/')) {
+      mediaType = 'audio';
+    } else if (params.mimeType?.startsWith('video/')) {
+      mediaType = 'video';
+    }
 
     try {
       logger.info('whatsapp', 'whatsapp-service', 'send_media', 'Sending WhatsApp media', {
         to: params.to,
         instance,
         mimeType: params.mimeType,
+        mediaType,
       });
 
       const result = await this.makeRequest<any>('POST', `/message/sendMedia/${instance}`, {
         number: params.to,
-        mediatype: params.asDocument ? 'document' : 'image',
-        mimetype: params.mimeType || 'application/pdf',
+        mediatype: mediaType,
+        mimetype: params.mimeType || (mediaType === 'audio' ? 'audio/ogg' : mediaType === 'video' ? 'video/mp4' : 'application/pdf'),
         media: params.mediaUrl,
         caption: params.caption || '',
       });
@@ -211,6 +266,7 @@ class WhatsAppService {
       logger.error('whatsapp', 'whatsapp-service', 'send_media', 'WhatsApp media send failed', {
         error: errMsg,
         to: params.to,
+        mediaType,
       });
       return { success: false, error: errMsg };
     }
@@ -240,7 +296,7 @@ class WhatsAppService {
    * Get instance connection status
    */
   async getInstanceStatus(instanceName?: string): Promise<WhatsAppInstance | null> {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
 
     if (!this.isConfigured) {
       return {
@@ -282,7 +338,7 @@ class WhatsAppService {
    * Get QR code for connecting the instance
    */
   async getQrCode(instanceName?: string): Promise<string | null> {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
 
     if (!this.isConfigured) {
       return null;
@@ -308,11 +364,11 @@ class WhatsAppService {
     webhookUrl?: string,
     instanceName?: string
   ): Promise<{ success: boolean; url?: string; error?: string }> {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
     const targetUrl =
       webhookUrl ||
-      process.env.EVOLUTION_WEBHOOK_URL ||
-      `${process.env.APP_URL || ''}/api/webhooks/whatsapp`;
+      configService.get('EVOLUTION_WEBHOOK_URL') ||
+      `${configService.get('APP_URL') || ''}/api/webhooks/whatsapp`;
 
     if (!targetUrl) {
       return { success: false, error: 'URL do webhook não informada' };
@@ -324,7 +380,7 @@ class WhatsAppService {
         targetUrl,
       });
 
-      const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
+      const webhookSecret = configService.get('EVOLUTION_WEBHOOK_SECRET');
 
       const result = await this.makeRequest<any>('POST', `/webhook/set/${instance}`, {
         webhook: {
@@ -366,11 +422,11 @@ class WhatsAppService {
    * Get Webhook configuration for instance in Evolution API
    */
   async getWebhookConfig(instanceName?: string): Promise<any> {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
     if (!this.isConfigured) {
       return {
         enabled: false,
-        url: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
+        url: `${configService.get('APP_URL') || ''}/api/webhooks/whatsapp`,
         configured: false,
       };
     }
@@ -380,7 +436,7 @@ class WhatsAppService {
     } catch (err: any) {
       return {
         enabled: false,
-        url: `${process.env.APP_URL || ''}/api/webhooks/whatsapp`,
+        url: `${configService.get('APP_URL') || ''}/api/webhooks/whatsapp`,
         configured: this.isConfigured,
       };
     }
@@ -390,7 +446,7 @@ class WhatsAppService {
    * Parse incoming webhook payload from Evolution API
    */
   parseWebhook(payload: WebhookPayload): {
-    type: 'text' | 'image' | 'document' | 'audio' | 'unknown';
+    type: 'text' | 'image' | 'document' | 'audio' | 'video' | 'unknown';
     from: string;
     text: string;
     instance: string;
@@ -401,7 +457,7 @@ class WhatsAppService {
     const from = jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, '');
 
     let text = '';
-    let type: 'text' | 'image' | 'document' | 'audio' | 'unknown' = 'unknown';
+    let type: 'text' | 'image' | 'document' | 'audio' | 'video' | 'unknown' = 'unknown';
 
     if (data?.message?.conversation) {
       text = data.message.conversation;
@@ -415,6 +471,12 @@ class WhatsAppService {
     } else if (data?.message?.documentMessage?.fileName) {
       text = data.message.documentMessage.fileName;
       type = 'document';
+    } else if (data?.message?.audioMessage) {
+      text = '[Áudio recebido]';
+      type = 'audio';
+    } else if (data?.message?.videoMessage?.caption) {
+      text = data.message.videoMessage.caption;
+      type = 'video';
     }
 
     return {

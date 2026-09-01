@@ -1346,6 +1346,112 @@ class HealthService {
           };
         }
       }
+      case 'whatsapp':
+      case 'evolution': {
+        const testStart = Date.now();
+        const apiUrl = configService.get('EVOLUTION_API_URL');
+        const apiKey = configService.get('EVOLUTION_API_KEY');
+        const instanceName = configService.get('EVOLUTION_INSTANCE_NAME');
+        const testPhone = configService.get('EVOLUTION_TEST_PHONE');
+        const isConfigured = Boolean(apiUrl && apiKey && !String(apiKey).startsWith('PLACEHOLDER'));
+
+        if (!isConfigured) {
+          return {
+            serviceId: 'whatsapp',
+            serviceName: 'WhatsApp Evolution API',
+            status: 'warning',
+            latencyMs: null,
+            timestamp: new Date().toISOString(),
+            checks: [
+              { label: 'EVOLUTION_API_URL', passed: Boolean(apiUrl), detail: apiUrl || 'não configurada' },
+              { label: 'EVOLUTION_API_KEY', passed: Boolean(apiKey && !String(apiKey).startsWith('PLACEHOLDER')), detail: apiKey ? 'configurada' : 'ausente' },
+              { label: 'EVOLUTION_INSTANCE_NAME', passed: Boolean(instanceName), detail: instanceName || 'não configurada' },
+              { label: 'EVOLUTION_TEST_PHONE', passed: Boolean(testPhone), detail: testPhone || 'não configurado (obrigatório para teste real)' },
+            ],
+            message: 'Evolution API não configurada completamente. Configure as variáveis de ambiente para testar.',
+          };
+        }
+
+        try {
+          // Test 1: Check instance status
+          const statusResponse = await fetchWithTimeout(`${apiUrl}/instance/connectionState/${instanceName}`, {
+            method: 'GET',
+            headers: { apikey: apiKey },
+          });
+          const statusLatency = Date.now() - testStart;
+          const statusData = await statusResponse.json().catch(() => ({}));
+          const isConnected = statusData?.state === 'open' || statusData?.instance?.state === 'open';
+
+          if (!statusResponse.ok || !isConnected) {
+            return {
+              serviceId: 'whatsapp',
+              serviceName: 'WhatsApp Evolution API',
+              status: 'failed',
+              latencyMs: Date.now() - testStart,
+              timestamp: new Date().toISOString(),
+              checks: [
+                { label: 'Conexão com Evolution API', passed: statusResponse.ok, detail: `HTTP ${statusResponse.status}` },
+                { label: 'Instância Encontrada', passed: Boolean(statusData.instance), detail: instanceName },
+                { label: 'Status da Instância', passed: isConnected, detail: statusData.state || statusData.instance?.state || 'desconhecido' },
+              ],
+              message: `Instância WhatsApp não conectada: ${statusData.state || statusData.instance?.state || 'offline'}`,
+            };
+          }
+
+          // Test 2: Send test message if test phone is configured
+          let messageTestPassed = false;
+          let messageTestDetail = 'Telefone de teste não configurado (EVOLUTION_TEST_PHONE)';
+          let messageId = null;
+
+          if (testPhone) {
+            const msgResponse = await fetchWithTimeout(`${apiUrl}/message/sendText/${instanceName}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: apiKey },
+              body: JSON.stringify({
+                number: testPhone,
+                text: '🧪 Teste de integração DefesAi + Evolution API - conexão validada!',
+              }),
+            });
+            const msgData = await msgResponse.json().catch(() => ({}));
+            messageTestPassed = msgResponse.ok && Boolean(msgData.key?.id || msgData.id);
+            messageId = msgData.key?.id || msgData.id || null;
+            messageTestDetail = messageTestPassed
+              ? `Mensagem enviada para ${testPhone} (ID: ${messageId})`
+              : `Falha no envio: HTTP ${msgResponse.status} - ${JSON.stringify(msgData)}`;
+          }
+
+          return {
+            serviceId: 'whatsapp',
+            serviceName: 'WhatsApp Evolution API',
+            status: messageTestPassed ? 'passed' : 'warning',
+            latencyMs: Date.now() - testStart,
+            timestamp: new Date().toISOString(),
+            checks: [
+              { label: 'Conexão com Evolution API', passed: true, detail: `HTTP ${statusResponse.status} (${statusLatency}ms)` },
+              { label: 'Instância Encontrada', passed: true, detail: instanceName },
+              { label: 'Status da Instância', passed: isConnected, detail: 'CONECTADO (open)' },
+              { label: 'Envio de Mensagem de Teste', passed: messageTestPassed, detail: messageTestDetail },
+            ],
+            message: messageTestPassed
+              ? '✓ Evolution API conectada e envio de mensagem validado!'
+              : '⚠ Evolution API conectada, mas envio de teste não realizado (configure EVOLUTION_TEST_PHONE)',
+          };
+        } catch (error: unknown) {
+          return {
+            serviceId: 'whatsapp',
+            serviceName: 'WhatsApp Evolution API',
+            status: 'failed',
+            latencyMs: Date.now() - testStart,
+            timestamp: new Date().toISOString(),
+            checks: [
+              { label: 'Conexão com Evolution API', passed: false, detail: 'Erro de rede/timeout' },
+              { label: 'Instância Encontrada', passed: false, detail: instanceName },
+              { label: 'Status da Instância', passed: false, detail: 'Não foi possível consultar' },
+            ],
+            message: `Erro na conexão com Evolution API: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+      }
       default: {
         return {
           serviceId,

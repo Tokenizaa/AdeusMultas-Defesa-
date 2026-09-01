@@ -206,25 +206,16 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
 
               <div>
                 <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Havia placa de velocidade R-19 visível?
+                  Número do Equipamento / Laudo INMETRO
                 </label>
-                <select
-                  id="select-speed-sign"
-                  value={infractionData.hasR19SignageProof === false ? 'sem_placa' : infractionData.hasR19SignageProof === true ? 'placa_ok' : 'nao_informado'}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    onUpdateInfraction({
-                      ...infractionData,
-                      hasR19SignageProof: val === 'placa_ok' ? true : val === 'sem_placa' ? false : undefined,
-                      notes: val === 'sem_placa' ? 'sem_placa_visivel_art90' : val === 'placa_ok' ? 'placa_ok' : infractionData.notes?.replace('sem_placa_visivel_art90', '').replace('placa_ok', '') || '',
-                    });
-                  }}
-                  className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
-                >
-                  <option value="nao_informado">Não sei / Não informado</option>
-                  <option value="placa_ok">Sim, havia placa R-19 visível no trecho</option>
-                  <option value="sem_placa">Não havia placa ou estava encoberta/apagada (Art. 90 CTB)</option>
-                </select>
+                <input
+                  id="input-radar-equipment-id"
+                  type="text"
+                  value={infractionData.radarEquipmentId || ''}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, radarEquipmentId: e.target.value.toUpperCase() })}
+                  placeholder="Ex: 123456/2023"
+                  className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                />
               </div>
             </div>
           </div>
@@ -251,6 +242,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                         ...infractionData,
                         ctbArticle: 'Art. 165-A do CTB',
                         infractionCode: '516-91',
+                        refusedTest: true,
                         notes: 'recusa_bafometro',
                       });
                     }}
@@ -273,6 +265,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                         ...infractionData,
                         ctbArticle: 'Art. 165 do CTB',
                         infractionCode: '516-92',
+                        refusedTest: false,
                         notes: 'teste_positivo',
                       });
                     }}
@@ -326,14 +319,18 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   </label>
                   <select
                     id="select-reteste"
+                    value={infractionData.offeredRetest === true ? 'oferecido' : infractionData.offeredRetest === false ? 'nao_oferecido' : 'nao_informado'}
                     className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                     onChange={(e) => {
+                      const val = e.target.value;
                       onUpdateInfraction({
                         ...infractionData,
-                        notes: `${infractionData.notes || ''} | reteste_${e.target.value}`,
+                        offeredRetest: val === 'oferecido' ? true : val === 'nao_oferecido' ? false : undefined,
+                        notes: `${infractionData.notes || ''} | reteste_${val}`,
                       });
                     }}
                   >
+                    <option value="nao_informado">Não sei / Não informado</option>
                     <option value="nao_oferecido">Não foi oferecido reteste ou contraprova</option>
                     <option value="oferecido">Sim, foi oferecido</option>
                   </select>
@@ -357,6 +354,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </label>
               <select
                 id="select-celular-circunstancia"
+                value={infractionData.cellphoneCircumstance || ''}
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 onChange={(e) => {
                   const val = e.target.value;
@@ -364,11 +362,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                     ...infractionData,
                     ctbArticle: 'Art. 252, Parágrafo Único do CTB',
                     infractionCode: '736-62',
+                    cellphoneCircumstance: val || undefined,
                     hasAgentDetailedObservations: val === 'sem_abordagem' ? false : undefined,
                     notes: `celular_${val}`,
                   });
                 }}
               >
+                <option value="">Selecione a circunstância...</option>
                 <option value="suporte_gps">Aparelho fixado no suporte veicular (Navegação GPS / Waze)</option>
                 <option value="veiculo_parado_semaforo">Veículo imobilizado no semáforo / congestionamento</option>
                 <option value="sem_abordagem">Agente não parou o veículo (sem abordagem presencial)</option>
@@ -392,20 +392,47 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </label>
               <select
                 id="select-vermelho-motivo"
+                value={infractionData.yellowPhaseCrossing === true ? 'amarelo_rapido' : infractionData.emergencyPassage === true ? 'emergencia' : ''}
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 onChange={(e) => {
+                  const val = e.target.value;
                   onUpdateInfraction({
                     ...infractionData,
                     ctbArticle: 'Art. 208 do CTB',
                     infractionCode: '605-01',
-                    notes: `vermelho_${e.target.value}`,
+                    yellowPhaseCrossing: val === 'amarelo_rapido',
+                    emergencyPassage: val === 'emergencia',
+                    notes: `vermelho_${val}`,
                   });
                 }}
               >
+                <option value="">Selecione a circunstância...</option>
                 <option value="amarelo_rapido">Tempo da luz amarela excessivamente curto (frenagem perigosa)</option>
                 <option value="emergencia">Ceder passagem para ambulância / viatura policial (Art. 29, VII)</option>
                 <option value="noturno_seguranca">Madrugada / horário noturno por motivo de segurança pública</option>
                 <option value="cruzamento_travado">Veículo já havia iniciado a travessia antes do sinal vermelho</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                Há prova fotográfica do cruzamento (foto do semáforo)?
+              </label>
+              <select
+                id="select-photo-proof"
+                value={infractionData.hasPhotoProof === true ? 'sim' : infractionData.hasPhotoProof === false ? 'nao' : 'nao_informado'}
+                className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onUpdateInfraction({
+                    ...infractionData,
+                    hasPhotoProof: val === 'sim' ? true : val === 'nao' ? false : undefined,
+                  });
+                }}
+              >
+                <option value="nao_informado">Não sei / Não informado</option>
+                <option value="sim">Sim, há foto do semáforo/radar no local</option>
+                <option value="nao">Não há registro fotográfico</option>
               </select>
             </div>
           </div>
@@ -474,7 +501,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
 
         {/* Category: Indicação de Condutor */}
         {category === 'indicacao_condutor' && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
               <FileText className="w-4 h-4 text-[#155BCB]" />
               <span>Dados para Transferência da Autuação (Art. 257 § 7º CTB)</span>
@@ -484,6 +511,72 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               <p className="font-medium leading-relaxed">
                 O requerimento formal de indicação transfere a pontuação da CNH para o real infrator dentro do prazo tempestivo da Notificação de Autuação.
               </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                  Nome do Real Condutor *
+                </label>
+                <input
+                  id="input-real-driver-name"
+                  type="text"
+                  value={infractionData.realDriverName || ''}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, realDriverName: e.target.value.toUpperCase() })}
+                  placeholder="Ex: JOÃO DA SILVA"
+                  className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                  CPF do Real Condutor *
+                </label>
+                <input
+                  id="input-real-driver-cpf"
+                  type="text"
+                  value={infractionData.realDriverCpf || ''}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, realDriverCpf: e.target.value.replace(/\D/g, '') })}
+                  placeholder="Apenas números"
+                  className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                  CNH do Real Condutor *
+                </label>
+                <input
+                  id="input-real-driver-cnh"
+                  type="text"
+                  value={infractionData.realDriverCnh || ''}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, realDriverCnh: e.target.value.toUpperCase() })}
+                  placeholder="Ex: 12345678901"
+                  className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                  Indicação dentro do prazo da Notificação?
+                </label>
+                <select
+                  id="select-indication-deadline"
+                  value={infractionData.indicationWithinDeadline === true ? 'sim' : infractionData.indicationWithinDeadline === false ? 'nao' : 'nao_informado'}
+                  className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onUpdateInfraction({
+                      ...infractionData,
+                      indicationWithinDeadline: val === 'sim' ? true : val === 'nao' ? false : undefined,
+                    });
+                  }}
+                >
+                  <option value="nao_informado">Não sei / Não informado</option>
+                  <option value="sim">Sim, indiquei dentro do prazo da Notificação de Autuação</option>
+                  <option value="nao">Não, passou do prazo</option>
+                </select>
+              </div>
             </div>
           </div>
         )}

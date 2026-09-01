@@ -101,6 +101,46 @@ router.post('/communication/whatsapp/send-document', authenticateToken, async (r
 });
 
 /**
+ * POST /api/communication/whatsapp/send-media
+ * Send any media (image, document, audio, video) via WhatsApp
+ */
+router.post('/communication/whatsapp/send-media', authenticateToken, async (req, res) => {
+  try {
+    const { phone, mediaUrl, caption, mimeType, mediaType, asDocument } = req.body;
+
+    if (!phone || !mediaUrl) {
+      return res.status(400).json({ error: 'phone e mediaUrl são obrigatórios' });
+    }
+
+    const formattedPhone = phone.replace(/\D/g, '');
+
+    const result = await whatsappService.sendMedia({
+      to: formattedPhone,
+      mediaUrl,
+      caption,
+      mimeType,
+      asDocument,
+      mediaType,
+    });
+
+    if (result.success) {
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        destination: formattedPhone,
+      });
+    }
+
+    return res.status(502).json({
+      error: 'Falha no envio da mídia',
+      message: result.error,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Erro ao enviar mídia' });
+  }
+});
+
+/**
  * GET /api/communication/whatsapp/status
  * Check WhatsApp instance connection status
  */
@@ -251,6 +291,51 @@ router.get('/communication/whatsapp/webhook-config', authenticateToken, async (_
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/communication/whatsapp/test-message
+ * Send a test message to EVOLUTION_TEST_PHONE (admin only, for validation)
+ */
+router.post('/communication/whatsapp/test-message', requireAdmin, async (req, res) => {
+  try {
+    const testPhone = process.env.EVOLUTION_TEST_PHONE;
+    if (!testPhone) {
+      return res.status(400).json({
+        success: false,
+        error: 'EVOLUTION_TEST_PHONE não configurado no ambiente',
+      });
+    }
+
+    const { message } = req.body;
+    const testMessage = message || '🧪 Teste de integração DefesAi + Evolution API - se recebeu, está funcionando!';
+
+    const result = await whatsappService.sendText({
+      to: testPhone,
+      message: testMessage,
+    });
+
+    if (result.success) {
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        destination: testPhone,
+        message: testMessage,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      error: 'Falha no envio da mensagem de teste',
+      message: result.error,
+    });
+  } catch (error: any) {
+    logger.error('whatsapp', 'whatsapp-route', 'test_message_error', 'Erro no envio de mensagem de teste', {
+      error: error.message,
+    });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
