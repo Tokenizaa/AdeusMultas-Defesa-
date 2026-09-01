@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Sparkles,
   ShieldCheck,
@@ -116,46 +116,26 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
     const [step, setStep] = useState<number>(savedState?.step ?? 1);
     const wizardTopRef = useRef<HTMLDivElement>(null);
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Scroll to top of wizard on every step change
+// Scroll to top of wizard on every step change AND save state
     useEffect(() => {
         wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, [step]);
-
-    // Persist wizard state to localStorage with debouncing (to avoid excessive writes on typing)
-    useEffect(() => {
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-        
-        // Set new timeout to save state after delay
-        saveTimeoutRef.current = setTimeout(() => {
-            saveWizardState({
-                step,
-                leadName,
-                leadPhone,
-                situation,
-                processStage,
-                infractionCategory,
-                vehicleData,
-                infractionData,
-                caseAnalysis,
-                documentData,
-                savedCaseId,
-            });
-        }, 500); // 500ms delay
-        
-        // Cleanup function to clear timeout on unmount or before next run
-        return () => {
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-            }
-        };
+        saveWizardState({
+            step,
+            leadName,
+            leadPhone,
+            situation,
+            processStage,
+            infractionCategory,
+            vehicleData,
+            infractionData,
+            caseAnalysis,
+            documentData,
+            savedCaseId,
+        });
     }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
 
-  // Persist wizard state immediately before page unload (to catch refresh/navigation)
+    // Persist wizard state immediately before page unload (to catch refresh/navigation)
   useEffect(() => {
     const handleBeforeUnload = () => {
       saveWizardState({
@@ -248,11 +228,8 @@ const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseA
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
 
-  // Note: State persistence across refreshes is handled by the useEffect above that saves on state changes.
-// State is cleared explicitly in handleAuthSuccess after authentication.
-
-  // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
-  // advance to step 8 automatically (e.g., after email confirmation)
+// Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
+// advance to step 8 automatically (e.g., after email confirmation)
   useEffect(() => {
     if (savedState && (savedState.step === 6 || savedState.step === 7) && isAuthenticated && user) {
       setDocumentData((prev) => ({
