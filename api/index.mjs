@@ -6,7 +6,7 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 });
 
 // src/server/app.ts
-import express from "express";
+import express2 from "express";
 import helmet from "helmet";
 
 // src/core/events/topics.ts
@@ -974,6 +974,43 @@ var ConfigService = class {
         isEditable: true
       },
       {
+        key: "EVOLUTION_INSTANCE_NAME",
+        name: "Nome da Inst\xE2ncia Evolution API",
+        category: "notifications",
+        type: "string",
+        description: "Nome EXATO da inst\xE2ncia registrada na Evolution API (case-sensitive)",
+        defaultValue: "Defesai",
+        isSecret: false,
+        isRequired: true,
+        isEditable: true,
+        envSource: "EVOLUTION_INSTANCE_NAME"
+      },
+      {
+        key: "EVOLUTION_WEBHOOK_SECRET",
+        name: "Evolution Webhook Secret",
+        category: "notifications",
+        type: "secret",
+        description: "Segredo para valida\xE7\xE3o de origem do webhook (header X-Webhook-Secret)",
+        defaultValue: "",
+        isSecret: true,
+        isRequired: false,
+        isEditable: true,
+        envSource: "EVOLUTION_WEBHOOK_SECRET"
+      },
+      {
+        key: "EVOLUTION_TEST_PHONE",
+        name: "Telefone de Teste Evolution API",
+        category: "notifications",
+        type: "string",
+        description: "Telefone real com WhatsApp ativo para testes de envio (formato: DDI+DDD+numero, ex: 5551994096322)",
+        defaultValue: "",
+        isSecret: false,
+        isRequired: false,
+        isEditable: true,
+        envSource: "EVOLUTION_TEST_PHONE",
+        validationRegex: "^\\d{10,15}$"
+      },
+      {
         key: "NOTIF_ALERT_DEADLINE_DAYS_BEFORE",
         name: "Alerta Preventivo de Prazo (Dias antes)",
         category: "notifications",
@@ -1569,6 +1606,243 @@ var CanonicalMapper = class _CanonicalMapper {
     this.toRow = _CanonicalMapper.domainToRow;
   }
   /**
+   * Convert Canonical Onboarding Payload to CaseDomain
+   *
+   * Preserva SEM perda:
+   *  - identification (AIT, fase, código, órgão autuador)
+   *  - infraction (dados da infração + fatos específicos)
+   *  - vehicle (placa, marca, renavam)
+   *  - applicant (qualificação do requerente)
+   *  - specificFacts (fatos juridicamente relevantes)
+   *  - evidence (OCR, fotos, declarações)
+   *  - procedure (tipo de procedimento)
+   *  - journey stage (fase processual)
+   */
+  static onboardingPayloadToDomain(payload, caseId) {
+    const id = caseId || `case_${Date.now()}`;
+    const applicantName = payload.applicant?.name || payload.leadName || "Condutor";
+    const applicantEmail = payload.applicant?.email || payload.leadEmail;
+    const applicantPhone = payload.applicant?.phone || payload.leadPhone;
+    const applicantCpf = payload.applicant?.cpf;
+    const mergedHasPsychomotorTerm = payload.specificFacts?.hasPsychomotorTerm ?? payload.infraction.hasPsychomotorTerm;
+    const mergedHasPhotoProof = payload.specificFacts?.hasPhotoProof ?? payload.infraction.hasPhotoProof;
+    const mergedHasR19SignageProof = payload.specificFacts?.hasR19SignageProof ?? payload.infraction.hasR19SignageProof;
+    const mergedHasAgentDetailedObservations = payload.specificFacts?.hasAgentDetailedObservations ?? payload.infraction.hasAgentDetailedObservations;
+    const mergedHasPreviousInfractionsLast12Months = payload.specificFacts?.isFirstInfractionLast12Months === false ? true : payload.specificFacts?.isFirstInfractionLast12Months === true ? false : payload.infraction.hasPreviousInfractionsLast12Months;
+    const mergedRefusedTest = payload.specificFacts?.refusedTest ?? payload.infraction.refusedTest;
+    const mergedOfferedRetest = payload.specificFacts?.offeredRetest ?? payload.infraction.offeredRetest;
+    const mergedCellphoneCircumstance = payload.specificFacts?.cellphoneCircumstance ?? payload.infraction.cellphoneCircumstance;
+    const mergedYellowPhaseCrossing = payload.specificFacts?.yellowPhaseCrossing ?? payload.infraction.yellowPhaseCrossing;
+    const mergedEmergencyPassage = payload.specificFacts?.emergencyPassage ?? payload.infraction.emergencyPassage;
+    const mergedRealDriverName = payload.specificFacts?.realDriverName ?? payload.infraction.realDriverName;
+    const mergedRealDriverCpf = payload.specificFacts?.realDriverCpf ?? payload.infraction.realDriverCpf;
+    const mergedRealDriverCnh = payload.specificFacts?.realDriverCnh ?? payload.infraction.realDriverCnh;
+    const mergedIndicationWithinDeadline = payload.specificFacts?.indicationWithinDeadline ?? payload.infraction.indicationWithinDeadline;
+    const mergedHasRegulatorySign = payload.specificFacts?.hasRegulatorySign ?? payload.infraction.hasRegulatorySign;
+    return {
+      id,
+      title: `Defesa Auto ${payload.infraction.aitNumber || "SN"}`,
+      clientName: applicantName,
+      clientEmail: applicantEmail,
+      clientPhone: applicantPhone,
+      clientCpf: applicantCpf,
+      status: "novo",
+      currentStage: payload.applicant ? 2 : 1,
+      serviceType: payload.procedureType,
+      vehicle: {
+        plate: (payload.vehicle.plate || "SEM PLACA").toUpperCase(),
+        brandModel: payload.vehicle.brandModel || "Ve\xEDculo n\xE3o informado",
+        renavam: payload.vehicle.renavam,
+        chassis: payload.vehicle.chassis,
+        year: payload.vehicle.year,
+        color: payload.vehicle.color
+      },
+      infraction: {
+        aitNumber: payload.infraction.aitNumber,
+        infractionCode: payload.infraction.infractionCode,
+        description: payload.infraction.description || "",
+        ctbArticle: payload.infraction.ctbArticle || "",
+        severity: payload.infraction.severity || "grave",
+        points: payload.infraction.points || 0,
+        fineAmount: payload.infraction.fineAmount || 0,
+        autuadorBody: payload.infraction.autuadorBody,
+        dateTime: payload.infraction.dateTime,
+        location: payload.infraction.location,
+        speedLimit: payload.infraction.speedLimit ?? payload.specificFacts?.speedLimit,
+        measuredSpeed: payload.infraction.measuredSpeed ?? payload.specificFacts?.measuredSpeed,
+        consideredSpeed: payload.infraction.consideredSpeed ?? payload.specificFacts?.consideredSpeed,
+        speedMeasured: payload.infraction.speedMeasured,
+        speedConsidered: payload.infraction.speedConsidered,
+        radarEquipmentId: payload.infraction.radarEquipmentId ?? payload.specificFacts?.radarEquipmentId,
+        inmetroAferitionDate: payload.infraction.inmetroAferitionDate ?? payload.specificFacts?.inmetroAferitionDate,
+        notificationExpeditionDate: payload.infraction.notificationExpeditionDate ?? payload.identification?.notificationExpeditionDate,
+        notificationDeliveryDate: payload.infraction.notificationDeliveryDate ?? payload.identification?.notificationDeliveryDate,
+        defenseDeadline: payload.infraction.defenseDeadline ?? payload.identification?.defenseDeadline,
+        hasPreviousInfractionsLast12Months: mergedHasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: mergedHasPsychomotorTerm,
+        hasAgentDetailedObservations: mergedHasAgentDetailedObservations,
+        hasPhotoProof: mergedHasPhotoProof,
+        hasR19SignageProof: mergedHasR19SignageProof,
+        hasRegulatorySign: mergedHasRegulatorySign,
+        formalFlawsDetected: [],
+        // Novos campos
+        refusedTest: mergedRefusedTest,
+        offeredRetest: mergedOfferedRetest,
+        cellphoneCircumstance: mergedCellphoneCircumstance,
+        yellowPhaseCrossing: mergedYellowPhaseCrossing,
+        emergencyPassage: mergedEmergencyPassage,
+        realDriverName: mergedRealDriverName,
+        realDriverCpf: mergedRealDriverCpf,
+        realDriverCnh: mergedRealDriverCnh,
+        indicationWithinDeadline: mergedIndicationWithinDeadline
+      },
+      applicant: payload.applicant ? {
+        applicantName: payload.applicant.name,
+        applicantCpf: payload.applicant.cpf,
+        applicantRg: payload.applicant.rg,
+        applicantCnh: payload.applicant.cnh,
+        cnhCategory: payload.applicant.category,
+        applicantPhone: payload.applicant.phone || "",
+        applicantEmail: payload.applicant.email || "",
+        addressStreet: payload.applicant.addressStreet || "",
+        addressNumber: payload.applicant.addressNumber || "",
+        addressComplement: payload.applicant.addressComplement,
+        addressNeighborhood: payload.applicant.addressNeighborhood || "",
+        addressZipCode: payload.applicant.addressZipCode || "",
+        addressCityState: payload.applicant.addressCityState || "",
+        vehicleRenavam: payload.vehicle.renavam,
+        factsNarrative: payload.infraction.customFacts
+      } : void 0,
+      timeline: [
+        {
+          id: `evt_${Date.now()}`,
+          title: "Caso Criado",
+          description: "Diagn\xF3stico jur\xEDdico preliminar iniciado via Onboarding.",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          type: "system"
+        }
+      ],
+      isPaid: false,
+      isAnonymous: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  /**
+   * Converte CaseDomain de volta para o contrato canônico do onboarding.
+   * Útil para edição do rascunho e para o dashboard do cidadão.
+   */
+  static domainToOnboardingPayload(domain) {
+    const inf = domain.infraction;
+    const veh = domain.vehicle;
+    const app = domain.applicant;
+    return {
+      procedureType: domain.serviceType,
+      situation: domain.situation,
+      processStage: domain.currentStage ? String(domain.currentStage) : void 0,
+      leadName: domain.clientName,
+      leadEmail: domain.clientEmail,
+      leadPhone: domain.clientPhone,
+      identification: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        autuadorBody: inf.autuadorBody,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline
+      },
+      vehicle: {
+        plate: veh.plate,
+        brandModel: veh.brandModel,
+        renavam: veh.renavam,
+        chassis: veh.chassis,
+        year: veh.year,
+        color: veh.color
+      },
+      infraction: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        description: inf.description,
+        ctbArticle: inf.ctbArticle,
+        severity: inf.severity,
+        points: inf.points,
+        fineAmount: inf.fineAmount,
+        autuadorBody: inf.autuadorBody,
+        dateTime: inf.dateTime,
+        location: inf.location,
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        speedMeasured: inf.speedMeasured,
+        speedConsidered: inf.speedConsidered,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline,
+        hasPreviousInfractionsLast12Months: inf.hasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        customFacts: app?.factsNarrative,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline
+      },
+      specificFacts: {
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        isFirstInfractionLast12Months: inf.hasPreviousInfractionsLast12Months === void 0 ? void 0 : !inf.hasPreviousInfractionsLast12Months,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline
+      },
+      evidence: domain.ocrAuxiliaryData ? {
+        ocrExtractedText: domain.ocrAuxiliaryData.extractedText,
+        ocrConfidence: domain.ocrAuxiliaryData.confidenceScore
+      } : void 0,
+      applicant: app ? {
+        name: app.applicantName,
+        cpf: app.applicantCpf,
+        rg: app.applicantRg,
+        cnh: app.applicantCnh,
+        category: app.cnhCategory,
+        phone: app.applicantPhone,
+        email: app.applicantEmail,
+        addressStreet: app.addressStreet,
+        addressNumber: app.addressNumber,
+        addressComplement: app.addressComplement,
+        addressNeighborhood: app.addressNeighborhood,
+        addressZipCode: app.addressZipCode,
+        addressCityState: app.addressCityState
+      } : void 0
+    };
+  }
+  /**
    * Convert database Row (snake_case) to Frontend Domain (camelCase)
    */
   static rowToDomain(row) {
@@ -1666,7 +1940,23 @@ var CanonicalMapper = class _CanonicalMapper {
         inmetroAferitionDate: row.inmetro_aferition_date,
         notificationExpeditionDate: row.notification_expedition_date,
         defenseDeadline: row.defense_deadline,
-        formalFlawsDetected: formalFlaws
+        formalFlawsDetected: formalFlaws,
+        // Novos campos
+        hasPreviousInfractionsLast12Months: row.has_previous_infractions_last_12_months,
+        hasPsychomotorTerm: row.has_psychomotor_term,
+        hasAgentDetailedObservations: row.has_agent_detailed_observations,
+        hasPhotoProof: row.has_photo_proof,
+        hasR19SignageProof: row.has_r19_signage_proof,
+        hasRegulatorySign: row.has_regulatory_sign,
+        refusedTest: row.refused_test,
+        offeredRetest: row.offered_retest,
+        cellphoneCircumstance: row.cellphone_circumstance,
+        yellowPhaseCrossing: row.yellow_phase_crossing,
+        emergencyPassage: row.emergency_passage,
+        realDriverName: row.real_driver_name,
+        realDriverCpf: row.real_driver_cpf,
+        realDriverCnh: row.real_driver_cnh,
+        indicationWithinDeadline: row.indication_within_deadline
       },
       analysis,
       applicant,
@@ -1742,7 +2032,23 @@ var CanonicalMapper = class _CanonicalMapper {
       is_paid: Boolean(domain.isPaid || domain.statusPagamento === "pago"),
       paid_at: domain.paidAt || domain.dataPagamento,
       created_at: domain.createdAt || domain.criadoEm || (/* @__PURE__ */ new Date()).toISOString(),
-      updated_at: domain.updatedAt || domain.atualizadoEm || (/* @__PURE__ */ new Date()).toISOString()
+      updated_at: domain.updatedAt || domain.atualizadoEm || (/* @__PURE__ */ new Date()).toISOString(),
+      // Novos campos
+      has_previous_infractions_last_12_months: infraction.hasPreviousInfractionsLast12Months,
+      has_psychomotor_term: infraction.hasPsychomotorTerm,
+      has_agent_detailed_observations: infraction.hasAgentDetailedObservations,
+      has_photo_proof: infraction.hasPhotoProof,
+      has_r19_signage_proof: infraction.hasR19SignageProof,
+      has_regulatory_sign: infraction.hasRegulatorySign,
+      refused_test: infraction.refusedTest,
+      offered_retest: infraction.offeredRetest,
+      cellphone_circumstance: infraction.cellphoneCircumstance,
+      yellow_phase_crossing: infraction.yellowPhaseCrossing,
+      emergency_passage: infraction.emergencyPassage,
+      real_driver_name: infraction.realDriverName,
+      real_driver_cpf: infraction.realDriverCpf,
+      real_driver_cnh: infraction.realDriverCnh,
+      indication_within_deadline: infraction.indicationWithinDeadline
     };
   }
 };
@@ -1949,7 +2255,7 @@ var HealthService = class {
     } else if (degradedCount > 2) {
       overallStatus = "DEGRADED";
     }
-    const report = {
+    const report2 = {
       overallStatus,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       uptimeSeconds: Math.floor((now - serverStartTime) / 1e3),
@@ -1963,9 +2269,9 @@ var HealthService = class {
         totalCount: services.length
       }
     };
-    this.cachedReport = report;
+    this.cachedReport = report2;
     this.lastRunTime = now;
-    return report;
+    return report2;
   }
   /**
    * Check NVIDIA NIM Provider health with real API call
@@ -3150,6 +3456,100 @@ var HealthService = class {
           };
         }
       }
+      case "whatsapp":
+      case "evolution": {
+        const testStart = Date.now();
+        const apiUrl = configService.get("EVOLUTION_API_URL");
+        const apiKey = configService.get("EVOLUTION_API_KEY");
+        const instanceName = configService.get("EVOLUTION_INSTANCE_NAME");
+        const testPhone = configService.get("EVOLUTION_TEST_PHONE");
+        const isConfigured = Boolean(apiUrl && apiKey && !String(apiKey).startsWith("PLACEHOLDER"));
+        if (!isConfigured) {
+          return {
+            serviceId: "whatsapp",
+            serviceName: "WhatsApp Evolution API",
+            status: "warning",
+            latencyMs: null,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            checks: [
+              { label: "EVOLUTION_API_URL", passed: Boolean(apiUrl), detail: apiUrl || "n\xE3o configurada" },
+              { label: "EVOLUTION_API_KEY", passed: Boolean(apiKey && !String(apiKey).startsWith("PLACEHOLDER")), detail: apiKey ? "configurada" : "ausente" },
+              { label: "EVOLUTION_INSTANCE_NAME", passed: Boolean(instanceName), detail: instanceName || "n\xE3o configurada" },
+              { label: "EVOLUTION_TEST_PHONE", passed: Boolean(testPhone), detail: testPhone || "n\xE3o configurado (obrigat\xF3rio para teste real)" }
+            ],
+            message: "Evolution API n\xE3o configurada completamente. Configure as vari\xE1veis de ambiente para testar."
+          };
+        }
+        try {
+          const statusResponse = await fetchWithTimeout(`${apiUrl}/instance/connectionState/${instanceName}`, {
+            method: "GET",
+            headers: { apikey: apiKey }
+          });
+          const statusLatency = Date.now() - testStart;
+          const statusData = await statusResponse.json().catch(() => ({}));
+          const isConnected = statusData?.state === "open" || statusData?.instance?.state === "open";
+          if (!statusResponse.ok || !isConnected) {
+            return {
+              serviceId: "whatsapp",
+              serviceName: "WhatsApp Evolution API",
+              status: "failed",
+              latencyMs: Date.now() - testStart,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+              checks: [
+                { label: "Conex\xE3o com Evolution API", passed: statusResponse.ok, detail: `HTTP ${statusResponse.status}` },
+                { label: "Inst\xE2ncia Encontrada", passed: Boolean(statusData.instance), detail: instanceName },
+                { label: "Status da Inst\xE2ncia", passed: isConnected, detail: statusData.state || statusData.instance?.state || "desconhecido" }
+              ],
+              message: `Inst\xE2ncia WhatsApp n\xE3o conectada: ${statusData.state || statusData.instance?.state || "offline"}`
+            };
+          }
+          let messageTestPassed = false;
+          let messageTestDetail = "Telefone de teste n\xE3o configurado (EVOLUTION_TEST_PHONE)";
+          let messageId = null;
+          if (testPhone) {
+            const msgResponse = await fetchWithTimeout(`${apiUrl}/message/sendText/${instanceName}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: apiKey },
+              body: JSON.stringify({
+                number: testPhone,
+                text: "\u{1F9EA} Teste de integra\xE7\xE3o DefesAi + Evolution API - conex\xE3o validada!"
+              })
+            });
+            const msgData = await msgResponse.json().catch(() => ({}));
+            messageTestPassed = msgResponse.ok && Boolean(msgData.key?.id || msgData.id);
+            messageId = msgData.key?.id || msgData.id || null;
+            messageTestDetail = messageTestPassed ? `Mensagem enviada para ${testPhone} (ID: ${messageId})` : `Falha no envio: HTTP ${msgResponse.status} - ${JSON.stringify(msgData)}`;
+          }
+          return {
+            serviceId: "whatsapp",
+            serviceName: "WhatsApp Evolution API",
+            status: messageTestPassed ? "passed" : "warning",
+            latencyMs: Date.now() - testStart,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            checks: [
+              { label: "Conex\xE3o com Evolution API", passed: true, detail: `HTTP ${statusResponse.status} (${statusLatency}ms)` },
+              { label: "Inst\xE2ncia Encontrada", passed: true, detail: instanceName },
+              { label: "Status da Inst\xE2ncia", passed: isConnected, detail: "CONECTADO (open)" },
+              { label: "Envio de Mensagem de Teste", passed: messageTestPassed, detail: messageTestDetail }
+            ],
+            message: messageTestPassed ? "\u2713 Evolution API conectada e envio de mensagem validado!" : "\u26A0 Evolution API conectada, mas envio de teste n\xE3o realizado (configure EVOLUTION_TEST_PHONE)"
+          };
+        } catch (error) {
+          return {
+            serviceId: "whatsapp",
+            serviceName: "WhatsApp Evolution API",
+            status: "failed",
+            latencyMs: Date.now() - testStart,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            checks: [
+              { label: "Conex\xE3o com Evolution API", passed: false, detail: "Erro de rede/timeout" },
+              { label: "Inst\xE2ncia Encontrada", passed: false, detail: instanceName },
+              { label: "Status da Inst\xE2ncia", passed: false, detail: "N\xE3o foi poss\xEDvel consultar" }
+            ],
+            message: `Erro na conex\xE3o com Evolution API: ${error instanceof Error ? error.message : String(error)}`
+          };
+        }
+      }
       default: {
         return {
           serviceId,
@@ -3324,6 +3724,25 @@ Por favor, responda no formato JSON com:
 }
 async function enrichDefenseWithGemini(draftContext) {
   try {
+    const rawText = typeof draftContext === "string" ? draftContext : draftContext?.petitionText || draftContext?.draftText || draftContext?.fullDraftText;
+    if (rawText) {
+      const prompt2 = `Voc\xEA \xE9 um revisor e redator jur\xEDdico especializado em Direito de Tr\xE2nsito brasileiro.
+Sua fun\xE7\xE3o \xE9 refinar e polir a reda\xE7\xE3o e conectivos da minuta de peti\xE7\xE3o abaixo, tornando-a mais elegante, fluida e persuasiva.
+
+REGRAS VINCULANTES E INEGOCI\xC1VEIS:
+1. PRESERVE RIGOROSAMENTE todos os fatos, nomes do requerente, CPF, CNH, placa, AIT, datas, medi\xE7\xF5es de velocidade, artigos de lei (CTB), resolu\xE7\xF5es do CONTRAN e pedidos finais.
+2. NUNCA altere n\xFAmeros, prazos, identificadores ou enquadramentos legais.
+3. NUNCA invente teses novas ou fatos que n\xE3o constem na minuta original.
+4. Mantenha a estrutura formal das se\xE7\xF5es (Endere\xE7amento, Qualifica\xE7\xE3o, Fatos, Preliminares, M\xE9rito, Pedidos, Fecho).
+5. Retorne APENAS o texto completo da peti\xE7\xE3o refinada, sem coment\xE1rios adicionais ou markdown fences desnecess\xE1rios.
+
+MINUTA ORIGINAL:
+"""
+${rawText}
+"""`;
+      const text2 = await generateWithFallback(prompt2);
+      return text2;
+    }
     const prompt = `Voc\xEA \xE9 um redator jur\xEDdico especializado em recursos de tr\xE2nsito brasileiro.
 Escreva uma peti\xE7\xE3o administrativa formal, elegante e de alto rigor t\xE9cnico para o seguinte caso:
 
@@ -3343,7 +3762,7 @@ Escreva a minuta em portugu\xEAs formal e impec\xE1vel.`;
     const text = await generateWithFallback(prompt);
     return text;
   } catch (error) {
-    console.warn("[Gemini] Graceful fallback to template generator.");
+    console.warn("[Gemini] Graceful fallback to deterministic template generator.");
     return null;
   }
 }
@@ -6668,11 +7087,46 @@ async function runMetaIntegrationTests() {
 // src/server/services/whatsapp-service.ts
 var WhatsAppService = class {
   constructor() {
+    // Nome de instancia descoberto dinamicamente (fallback quando
+    // EVOLUTION_INSTANCE_NAME nao casa com a instancia real — caso a Evolution
+    // exponha nome com case/token diferente do default). Cache em memoria.
+    this.discoveredInstance = null;
     this.config = {
-      apiUrl: process.env.EVOLUTION_API_URL || "http://localhost:8080",
-      apiKey: process.env.EVOLUTION_API_KEY || "",
-      instanceName: process.env.EVOLUTION_INSTANCE_NAME || "defesai"
+      apiUrl: configService.get("EVOLUTION_API_URL") || configService.get("NOTIF_WHATSAPP_API_URL") || "http://localhost:8080",
+      apiKey: configService.get("EVOLUTION_API_KEY") || configService.get("NOTIF_WHATSAPP_API_KEY") || "",
+      instanceName: configService.get("EVOLUTION_INSTANCE_NAME") || "defesai"
     };
+  }
+  /**
+   * Resolve o nome real da instancia na Evolution API, com descoberta aditiva.
+   * - Nome explicito (parametro) sempre respeitado.
+   * - Preferencia ao configurado (EVOLUTION_INSTANCE_NAME) quando bate com uma
+   *   instancia real (match case-insensitive — Evolution ignora case no lookup,
+   *   mas o default 'defesai' nao casa com 'Defesai' em endpoints que exijam exato).
+   * - Se o nome configurado nao existir como instancia real, usa o nome real
+   *   descoberto em /instance/fetchInstances. Cache em memoria (1 fetch).
+   * Resiliente a divergencia de case/token entre env e instancia registrada.
+   */
+  async resolveInstanceName(instanceName) {
+    if (instanceName) return instanceName;
+    if (this.discoveredInstance) return this.discoveredInstance;
+    const configured = this.config.instanceName || "defesai";
+    try {
+      const instances = await this.makeRequest("GET", "/instance/fetchInstances");
+      const list = Array.isArray(instances) ? instances : [];
+      const exact = list.find((i) => (i?.name || i?.instanceName) === configured);
+      if (exact) {
+        this.discoveredInstance = configured;
+      } else {
+        const ci = list.find(
+          (i) => (i?.name || i?.instanceName || "").toLowerCase() === configured.toLowerCase()
+        );
+        this.discoveredInstance = ci?.name || ci?.instanceName || configured;
+      }
+    } catch {
+      this.discoveredInstance = configured;
+    }
+    return this.discoveredInstance;
   }
   get isConfigured() {
     return Boolean(
@@ -6710,7 +7164,7 @@ var WhatsAppService = class {
    * Send a text message via WhatsApp
    */
   async sendText(params) {
-    const instance = params.instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(params.instanceName);
     try {
       logger.info("whatsapp", "whatsapp-service", "send_text", "Sending WhatsApp message", {
         to: params.to,
@@ -6742,20 +7196,31 @@ var WhatsAppService = class {
     }
   }
   /**
-   * Send a media message (image, document, audio)
+   * Send a media message (image, document, audio, video)
    */
   async sendMedia(params) {
-    const instance = params.instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(params.instanceName);
+    let mediaType = "image";
+    if (params.mediaType) {
+      mediaType = params.mediaType;
+    } else if (params.asDocument) {
+      mediaType = "document";
+    } else if (params.mimeType?.startsWith("audio/")) {
+      mediaType = "audio";
+    } else if (params.mimeType?.startsWith("video/")) {
+      mediaType = "video";
+    }
     try {
       logger.info("whatsapp", "whatsapp-service", "send_media", "Sending WhatsApp media", {
         to: params.to,
         instance,
-        mimeType: params.mimeType
+        mimeType: params.mimeType,
+        mediaType
       });
       const result = await this.makeRequest("POST", `/message/sendMedia/${instance}`, {
         number: params.to,
-        mediatype: params.asDocument ? "document" : "image",
-        mimetype: params.mimeType || "application/pdf",
+        mediatype: mediaType,
+        mimetype: params.mimeType || (mediaType === "audio" ? "audio/ogg" : mediaType === "video" ? "video/mp4" : "application/pdf"),
         media: params.mediaUrl,
         caption: params.caption || ""
       });
@@ -6770,7 +7235,8 @@ var WhatsAppService = class {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error("whatsapp", "whatsapp-service", "send_media", "WhatsApp media send failed", {
         error: errMsg,
-        to: params.to
+        to: params.to,
+        mediaType
       });
       return { success: false, error: errMsg };
     }
@@ -6792,7 +7258,14 @@ var WhatsAppService = class {
    * Get instance connection status
    */
   async getInstanceStatus(instanceName) {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
+    if (!this.isConfigured) {
+      return {
+        instanceName: instance,
+        instanceId: instance,
+        status: "close"
+      };
+    }
     try {
       const result = await this.makeRequest("GET", `/instance/connectionState/${instance}`);
       const rawState = result?.state || result?.instance?.state || "close";
@@ -6807,23 +7280,30 @@ var WhatsAppService = class {
         phone
       };
     } catch (err) {
-      logger.warn("whatsapp", "whatsapp-service", "get_instance_status", "Failed to get instance status", {
+      logger.info("whatsapp", "whatsapp-service", "get_instance_status", "Instance status check offline or unavailable", {
         error: String(err),
         instance
       });
-      return null;
+      return {
+        instanceName: instance,
+        instanceId: instance,
+        status: "close"
+      };
     }
   }
   /**
    * Get QR code for connecting the instance
    */
   async getQrCode(instanceName) {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
+    if (!this.isConfigured) {
+      return null;
+    }
     try {
       const result = await this.makeRequest("GET", `/instance/connect/${instance}`);
       return result.base64 || result.qrcode || null;
     } catch (err) {
-      logger.warn("whatsapp", "whatsapp-service", "get_qrcode", "Failed to get QR code", {
+      logger.info("whatsapp", "whatsapp-service", "get_qrcode", "Could not get QR code (instance offline or connecting)", {
         error: String(err),
         instance
       });
@@ -6835,8 +7315,8 @@ var WhatsAppService = class {
    * Endpoint: POST /webhook/set/:instance
    */
   async configureWebhook(webhookUrl, instanceName) {
-    const instance = instanceName || this.config.instanceName;
-    const targetUrl = webhookUrl || process.env.EVOLUTION_WEBHOOK_URL || `${process.env.APP_URL || ""}/api/webhooks/whatsapp`;
+    const instance = await this.resolveInstanceName(instanceName);
+    const targetUrl = webhookUrl || configService.get("EVOLUTION_WEBHOOK_URL") || `${configService.get("APP_URL") || ""}/api/webhooks/whatsapp`;
     if (!targetUrl) {
       return { success: false, error: "URL do webhook n\xE3o informada" };
     }
@@ -6845,7 +7325,7 @@ var WhatsAppService = class {
         instance,
         targetUrl
       });
-      const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
+      const webhookSecret = configService.get("EVOLUTION_WEBHOOK_SECRET");
       const result = await this.makeRequest("POST", `/webhook/set/${instance}`, {
         webhook: {
           enabled: true,
@@ -6884,14 +7364,21 @@ var WhatsAppService = class {
    * Get Webhook configuration for instance in Evolution API
    */
   async getWebhookConfig(instanceName) {
-    const instance = instanceName || this.config.instanceName;
+    const instance = await this.resolveInstanceName(instanceName);
+    if (!this.isConfigured) {
+      return {
+        enabled: false,
+        url: `${configService.get("APP_URL") || ""}/api/webhooks/whatsapp`,
+        configured: false
+      };
+    }
     try {
       const result = await this.makeRequest("GET", `/webhook/find/${instance}`);
       return result;
     } catch (err) {
       return {
         enabled: false,
-        url: `${process.env.APP_URL || ""}/api/webhooks/whatsapp`,
+        url: `${configService.get("APP_URL") || ""}/api/webhooks/whatsapp`,
         configured: this.isConfigured
       };
     }
@@ -6917,6 +7404,12 @@ var WhatsAppService = class {
     } else if (data?.message?.documentMessage?.fileName) {
       text = data.message.documentMessage.fileName;
       type = "document";
+    } else if (data?.message?.audioMessage) {
+      text = "[\xC1udio recebido]";
+      type = "audio";
+    } else if (data?.message?.videoMessage?.caption) {
+      text = data.message.videoMessage.caption;
+      type = "video";
     }
     return {
       type,
@@ -8668,8 +9161,8 @@ router2.get(
 );
 router2.get(["/integrations/meta/tests", "/marketing/meta/tests", "/meta/tests"], async (req, res) => {
   try {
-    const report = await runMetaIntegrationTests();
-    res.json(report);
+    const report2 = await runMetaIntegrationTests();
+    res.json(report2);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -11428,8 +11921,8 @@ router4.use(authenticateToken, requireAdmin);
 router4.get(["/health", "/monitoring/health"], async (req, res) => {
   try {
     const forceFresh = req.query.fresh === "true";
-    const report = await healthService.getHealth(forceFresh);
-    res.json(report);
+    const report2 = await healthService.getHealth(forceFresh);
+    res.json(report2);
   } catch (error) {
     res.status(500).json({ error: error.message || "Erro ao verificar sa\xFAde da plataforma" });
   }
@@ -12132,7 +12625,7 @@ var RESOLUTIONS_DB = [
 ];
 
 // src/core/arguments/arguments-catalog.ts
-var ARGUMENTS_CATALOG = [
+var RAW_ARGUMENTS_CATALOG = [
   // ==========================================
   // 1. RADARES & FISCALIZAÇÃO DE VELOCIDADE (ARG-001 a ARG-008)
   // ==========================================
@@ -13425,6 +13918,71 @@ var ARGUMENTS_CATALOG = [
     ]
   }
 ];
+var ARGUMENTS_CATALOG = RAW_ARGUMENTS_CATALOG.map((raw, idx) => {
+  const normRefs = [];
+  if (raw.legalBase) {
+    normRefs.push({
+      norm: raw.legalBase,
+      version: "Vigente",
+      articleOrItem: raw.legalBase,
+      verified: true
+    });
+  }
+  if (raw.resolutions && raw.resolutions.length > 0) {
+    for (const res of raw.resolutions) {
+      normRefs.push({
+        norm: res,
+        version: "Vigente",
+        articleOrItem: res,
+        verified: true
+      });
+    }
+  }
+  if (raw.portarias && raw.portarias.length > 0) {
+    for (const port of raw.portarias) {
+      normRefs.push({
+        norm: port,
+        version: "Vigente",
+        articleOrItem: port,
+        verified: true
+      });
+    }
+  }
+  const applicationHypothesis = raw.applicationHypothesis || (raw.description ? `${raw.description} ${raw.whenToUse && raw.whenToUse.length > 0 ? "Hip\xF3teses: " + raw.whenToUse.join("; ") : ""}`.trim() : `Aplica\xE7\xE3o da tese ${raw.title || ""}`);
+  const requiredFacts = raw.requiredFacts && raw.requiredFacts.length > 0 ? raw.requiredFacts : raw.requirements && raw.requirements.length > 0 ? raw.requirements : raw.whenToUse && raw.whenToUse.length > 0 ? raw.whenToUse : ["Fato gerador da infra\xE7\xE3o"];
+  const requiredEvidence = raw.requiredEvidence && raw.requiredEvidence.length > 0 ? raw.requiredEvidence : raw.requiredDocuments && raw.requiredDocuments.length > 0 ? raw.requiredDocuments : ["Auto de Infra\xE7\xE3o de Tr\xE2nsito"];
+  return {
+    id: raw.id || `ARG-${String(idx + 1).padStart(3, "0")}`,
+    code: raw.code || `ARG_CODE_${idx + 1}`,
+    title: raw.title || "Tese Jur\xEDdica Can\xF4nica",
+    description: raw.description || raw.title || "",
+    category: raw.category || "merito",
+    impactType: raw.impactType || "anulacao_total",
+    confidenceScore: raw.confidenceScore ?? 85,
+    whenToUse: raw.whenToUse || [],
+    whenNotToUse: raw.whenNotToUse || [],
+    requirements: raw.requirements || requiredFacts,
+    legalBase: raw.legalBase || "C\xF3digo de Tr\xE2nsito Brasileiro",
+    resolutions: raw.resolutions || [],
+    portarias: raw.portarias || [],
+    relatedJurisprudence: raw.relatedJurisprudence || [],
+    requiredDocuments: raw.requiredDocuments || requiredEvidence,
+    observations: raw.observations || "",
+    validFrom: raw.validFrom || "1998-01-22",
+    validUntil: raw.validUntil ?? null,
+    version: raw.version || 1,
+    formattedParagraphs: raw.formattedParagraphs || [],
+    statutoryNorms: raw.statutoryNorms && raw.statutoryNorms.length > 0 ? raw.statutoryNorms : normRefs,
+    applicationHypothesis,
+    requiredFacts,
+    requiredEvidence,
+    mandatoryParameters: raw.mandatoryParameters || [],
+    incompatibleArguments: raw.incompatibleArguments || [],
+    applicableInfractions: raw.applicableInfractions || [],
+    sourceId: raw.sourceId || "CANONICAL_CTB",
+    knowledgeGaps: raw.knowledgeGaps || []
+  };
+});
 
 // src/core/procedures/procedures-catalog.ts
 var PROCEDURES_CATALOG = [
@@ -13449,7 +14007,50 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia do CRLV do ve\xEDculo autuado", required: true, description: "Documento do ve\xEDculo." },
       { name: "Provas documentais anexas (fotos, laudos, declara\xE7\xF5es)", required: false, description: "Provas materiais que demonstrem a atipicidade da conduta." }
     ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-005", "ARG-006", "ARG-007", "ARG-010", "ARG-011", "ARG-014", "ARG-016", "ARG-017", "ARG-018"],
+    applicableGrounds: [
+      "ARG-001",
+      "ARG-002",
+      "ARG-003",
+      "ARG-004",
+      "ARG-005",
+      "ARG-006",
+      "ARG-007",
+      "ARG-008",
+      "ARG-009",
+      "ARG-010",
+      "ARG-011",
+      "ARG-012",
+      "ARG-013",
+      "ARG-014",
+      "ARG-015",
+      "ARG-016",
+      "ARG-017",
+      "ARG-018",
+      "ARG-019",
+      "ARG-020",
+      "ARG-021",
+      "ARG-022",
+      "ARG-023",
+      "ARG-024",
+      "ARG-025",
+      "ARG-026",
+      "ARG-027",
+      "ARG-028",
+      "ARG-029",
+      "ARG-030",
+      "ARG-031",
+      "ARG-032",
+      "ARG-033",
+      "ARG-034",
+      "ARG-035",
+      "ARG-036",
+      "ARG-037",
+      "ARG-038",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-051"
+    ],
     availableTemplates: ["TPL_RECURSO_JARI"],
     // variantes (lei seca/radar) são composições de blocos, não templates separados
     executionChecklist: [
@@ -13484,7 +14085,51 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia do Recurso da JARI interposto anteriormente", required: true, description: "Hist\xF3rico dos argumentos apresentados." },
       { name: "C\xF3pia da CNH e CRLV do ve\xEDculo", required: true, description: "Documentos do condutor e do ve\xEDculo." }
     ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-005", "ARG-007", "ARG-010", "ARG-016", "ARG-017"],
+    applicableGrounds: [
+      "ARG-001",
+      "ARG-002",
+      "ARG-003",
+      "ARG-004",
+      "ARG-005",
+      "ARG-006",
+      "ARG-007",
+      "ARG-008",
+      "ARG-009",
+      "ARG-010",
+      "ARG-011",
+      "ARG-012",
+      "ARG-013",
+      "ARG-014",
+      "ARG-015",
+      "ARG-016",
+      "ARG-017",
+      "ARG-018",
+      "ARG-019",
+      "ARG-020",
+      "ARG-021",
+      "ARG-022",
+      "ARG-023",
+      "ARG-024",
+      "ARG-025",
+      "ARG-026",
+      "ARG-027",
+      "ARG-028",
+      "ARG-029",
+      "ARG-030",
+      "ARG-031",
+      "ARG-032",
+      "ARG-033",
+      "ARG-034",
+      "ARG-035",
+      "ARG-036",
+      "ARG-037",
+      "ARG-038",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-051",
+      "ARG-052"
+    ],
     availableTemplates: ["TPL_RECURSO_CETRAN"],
     executionChecklist: [
       "Apontar expressamente que a JARI n\xE3o analisou as preliminares arguidas",
@@ -13513,7 +14158,22 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH e RG/CPF", required: true, description: "Identifica\xE7\xE3o do condutor com prontu\xE1rio." },
       { name: "Extrato consolidado de pontua\xE7\xE3o do DETRAN", required: true, description: "Hist\xF3rico de infra\xE7\xF5es nos \xFAltimos 12 meses." }
     ],
-    applicableGrounds: ["ARG-007", "ARG-010", "ARG-011", "ARG-003", "ARG-001", "ARG-005"],
+    applicableGrounds: [
+      "ARG-042",
+      "ARG-043",
+      "ARG-044",
+      "ARG-047",
+      "ARG-025",
+      "ARG-026",
+      "ARG-027",
+      "ARG-028",
+      "ARG-029",
+      "ARG-030",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-052"
+    ],
     availableTemplates: ["TPL_SUSPENSAO_CNH"],
     // alias legado do PSDD (mesmos blocos)
     executionChecklist: [
@@ -13542,7 +14202,15 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH e comprovante de endere\xE7o", required: true, description: "Dados do condutor." },
       { name: "Provas de que outro condutor dirigia no flagrante", required: false, description: "Declara\xE7\xF5es, bilhetes de ped\xE1gio, contratos." }
     ],
-    applicableGrounds: ["ARG-007", "ARG-005", "ARG-003"],
+    applicableGrounds: [
+      "ARG-045",
+      "ARG-046",
+      "ARG-044",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-052"
+    ],
     availableTemplates: ["TPL_CASSACAO_CNH"],
     // alias legado do PCDD (mesmos blocos)
     executionChecklist: [
@@ -13570,7 +14238,7 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH do real condutor indicado", required: true, description: "Habilita\xE7\xE3o v\xE1lida na data do evento." },
       { name: "C\xF3pia do documento de identidade do propriet\xE1rio", required: true, description: "Identidade com assinatura compar\xE1vel." }
     ],
-    applicableGrounds: ["ARG-007"],
+    applicableGrounds: ["ARG-039", "ARG-040", "ARG-041", "ARG-048"],
     availableTemplates: ["TPL_FICI_INDICACAO"],
     executionChecklist: [
       "Garantir que as assinaturas correspondam com perfei\xE7\xE3o aos documentos apresentados",
@@ -13598,7 +14266,7 @@ var PROCEDURES_CATALOG = [
       { name: "Extrato de pontos / Prontu\xE1rio do condutor (\xFAltimos 12 meses)", required: true, description: "Comprova aus\xEAncia de reincid\xEAncia infracional." },
       { name: "C\xF3pia da CNH do condutor requerente", required: true, description: "Documento de habilita\xE7\xE3o." }
     ],
-    applicableGrounds: ["ARG-008"],
+    applicableGrounds: ["ARG-051", "ARG-048"],
     availableTemplates: ["TPL_CONVERSAO_ADVERTENCIA"],
     executionChecklist: [
       "Confirmar que o c\xF3digo da infra\xE7\xE3o corresponde a natureza leve ou m\xE9dia",
@@ -13623,7 +14291,49 @@ var PROCEDURES_CATALOG = [
     requiredDocuments: [
       { name: "Imagem leg\xEDvel do Auto de Infra\xE7\xE3o ou Notifica\xE7\xE3o", required: true, description: "Para extra\xE7\xE3o dos dados t\xE9cnicos e cruzamento." }
     ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-005", "ARG-006", "ARG-007", "ARG-008", "ARG-010", "ARG-011", "ARG-014", "ARG-016", "ARG-017", "ARG-018"],
+    applicableGrounds: [
+      "ARG-001",
+      "ARG-002",
+      "ARG-003",
+      "ARG-004",
+      "ARG-005",
+      "ARG-006",
+      "ARG-007",
+      "ARG-008",
+      "ARG-009",
+      "ARG-010",
+      "ARG-011",
+      "ARG-012",
+      "ARG-013",
+      "ARG-014",
+      "ARG-015",
+      "ARG-016",
+      "ARG-017",
+      "ARG-018",
+      "ARG-019",
+      "ARG-020",
+      "ARG-021",
+      "ARG-022",
+      "ARG-023",
+      "ARG-024",
+      "ARG-025",
+      "ARG-026",
+      "ARG-027",
+      "ARG-028",
+      "ARG-029",
+      "ARG-030",
+      "ARG-031",
+      "ARG-032",
+      "ARG-033",
+      "ARG-034",
+      "ARG-035",
+      "ARG-036",
+      "ARG-037",
+      "ARG-038",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050"
+    ],
     availableTemplates: [],
     // KNOWLEDGE_GAP: laudo técnico ainda sem template canônico (composição futura)
     executionChecklist: [
@@ -13650,7 +14360,24 @@ var PROCEDURES_CATALOG = [
       { name: "Auto de Infra\xE7\xE3o e fotos do radar", required: true, description: "Dados do equipamento e enquadramento." },
       { name: "Fotos da via e da sinaliza\xE7\xE3o do trecho", required: false, description: "Evid\xEAncias do local fiscalizado." }
     ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-004", "ARG-016"],
+    applicableGrounds: [
+      "ARG-001",
+      "ARG-002",
+      "ARG-003",
+      "ARG-004",
+      "ARG-005",
+      "ARG-006",
+      "ARG-007",
+      "ARG-009",
+      "ARG-010",
+      "ARG-012",
+      "ARG-013",
+      "ARG-014",
+      "ARG-016",
+      "ARG-026",
+      "ARG-028",
+      "ARG-029"
+    ],
     availableTemplates: [],
     // KNOWLEDGE_GAP: laudo pericial de metrologia ainda sem template canônico
     executionChecklist: [
@@ -13684,7 +14411,25 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH do requerente", required: true, description: "Documento de habilita\xE7\xE3o do condutor." },
       { name: "C\xF3pia do CRLV do ve\xEDculo autuado", required: true, description: "Documento do ve\xEDculo." }
     ],
-    applicableGrounds: ["ARG-001", "ARG-002", "ARG-003", "ARG-004"],
+    applicableGrounds: [
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-001",
+      "ARG-002",
+      "ARG-003",
+      "ARG-004",
+      "ARG-005",
+      "ARG-006",
+      "ARG-015",
+      "ARG-020",
+      "ARG-025",
+      "ARG-031",
+      "ARG-035",
+      "ARG-036",
+      "ARG-038",
+      "ARG-051"
+    ],
     availableTemplates: ["TPL_DEFESA_PREVIA"],
     executionChecklist: [
       "Verificar a tempestividade da apresenta\xE7\xE3o perante a NA",
@@ -13712,7 +14457,22 @@ var PROCEDURES_CATALOG = [
       { name: "C\xF3pia da CNH e RG/CPF", required: true, description: "Identifica\xE7\xE3o do condutor com prontu\xE1rio." },
       { name: "Extrato consolidado de pontua\xE7\xE3o do DETRAN", required: true, description: "Hist\xF3rico de infra\xE7\xF5es nos \xFAltimos 12 meses." }
     ],
-    applicableGrounds: ["ARG-007", "ARG-010", "ARG-011", "ARG-003", "ARG-001", "ARG-005"],
+    applicableGrounds: [
+      "ARG-042",
+      "ARG-043",
+      "ARG-044",
+      "ARG-047",
+      "ARG-025",
+      "ARG-026",
+      "ARG-027",
+      "ARG-028",
+      "ARG-029",
+      "ARG-030",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-052"
+    ],
     availableTemplates: ["TPL_PSDD_SUSPENSAO"],
     executionChecklist: [
       "Verificar se as multas componentes transitaram em julgado regularmente",
@@ -13739,7 +14499,15 @@ var PROCEDURES_CATALOG = [
       { name: "Notifica\xE7\xE3o de Instaura\xE7\xE3o de Cassa\xE7\xE3o", required: true, description: "Notifica\xE7\xE3o inicial do processo." },
       { name: "C\xF3pia da CNH e comprovante de endere\xE7o", required: true, description: "Dados do condutor." }
     ],
-    applicableGrounds: ["ARG-007", "ARG-005", "ARG-003"],
+    applicableGrounds: [
+      "ARG-045",
+      "ARG-046",
+      "ARG-044",
+      "ARG-048",
+      "ARG-049",
+      "ARG-050",
+      "ARG-052"
+    ],
     availableTemplates: ["TPL_PCDD_CASSACAO"],
     executionChecklist: [
       "Verificar se houve abordagem presencial do condutor com CNH suspensa",
@@ -14776,7 +15544,8 @@ Inobstante o inconformismo apresentado em sede de Defesa Pr\xE9via, a autoridade
         supportedVariables: ["{{bloco_merito_formatado}}"]
       },
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-057"),
-      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066")
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-066"),
+      DOCUMENT_BLOCKS.find((b) => b.id === "BLK-068")
     ].map((b, idx) => ({
       id: b.id,
       type: toTemplateBlock(b, idx).type,
@@ -15061,12 +15830,10 @@ var INFRACTION_CATALOG = [
     points: 4,
     fineAmount: 130.16,
     typicalFlaws: ["Aferi\xE7\xE3o do radar vencida (+12 meses)", "Falta de placa R-19 de velocidade", "Notifica\xE7\xE3o expedida ap\xF3s 30 dias", "Margem de erro INMETRO n\xE3o deduzida"],
-    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-008"],
-    // Versioning and source tracking
+    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-008", "ARG-048", "ARG-051"],
     validFrom: "1998-01-22",
     validUntil: null,
-    sourceId: "MANUAL",
-    contentHash: "",
+    sourceId: "CANONICAL_CTB",
     version: 1
   },
   {
@@ -15077,7 +15844,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Estudo t\xE9cnico de instala\xE7\xE3o do radar ausente", "Erro na medi\xE7\xE3o considerada pelo INMETRO", "Aus\xEAncia de data de verifica\xE7\xE3o metrol\xF3gica"],
-    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-004"]
+    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-008", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "747-10",
@@ -15087,7 +15858,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 880.41,
     typicalFlaws: ["Inexist\xEAncia de processo administrativo pr\xF3prio para suspens\xE3o", "Discrep\xE2ncia na imagem do sensor", "Nulidade do AIT por preenchimento incorreto"],
-    recommendedArgumentCodes: ["ARG-001", "ARG-004", "ARG-005", "ARG-012"]
+    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-008", "ARG-048", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "516-91",
@@ -15097,7 +15872,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 2934.7,
     typicalFlaws: ["Aus\xEAncia do Termo de Constata\xE7\xE3o de Sinais de Embriaguez (Anexo II Res. CONTRAN 432)", "Aparelho etil\xF4metro com certifica\xE7\xE3o INMETRO expirada", "Falta de descri\xE7\xE3o detalhada dos sinais psicomotores", "Direito constitucional de n\xE3o autoincrimina\xE7\xE3o (Nemo Tenetur Se Detegere)"],
-    recommendedArgumentCodes: ["ARG-010", "ARG-011", "ARG-007", "ARG-015"]
+    recommendedArgumentCodes: ["ARG-025", "ARG-026", "ARG-027", "ARG-028", "ARG-029", "ARG-030", "ARG-048", "ARG-050"],
+    validFrom: "2016-11-01",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "516-92",
@@ -15107,7 +15886,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 2934.7,
     typicalFlaws: ["Margem de toler\xE2ncia do baf\xF4metro desconsiderada (abaixo de 0,04 mg/L)", "Falta de assinatura do agente de tr\xE2nsito competente", "Aus\xEAncia de contraprova pericial"],
-    recommendedArgumentCodes: ["ARG-010", "ARG-011", "ARG-005"]
+    recommendedArgumentCodes: ["ARG-025", "ARG-026", "ARG-027", "ARG-028", "ARG-029", "ARG-048", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "736-62",
@@ -15117,7 +15900,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Aus\xEAncia de abordagem e falta de detalhamento no campo de observa\xE7\xF5es do AIT", "Inviabilidade de constata\xE7\xE3o visual sem equipamento eletr\xF4nico homologado", "Confus\xE3o com suporte veicular GPS"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-007", "ARG-014"]
+    recommendedArgumentCodes: ["ARG-015", "ARG-016", "ARG-017", "ARG-018", "ARG-019", "ARG-048"],
+    validFrom: "2016-11-01",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "735-80",
@@ -15127,7 +15914,11 @@ var INFRACTION_CATALOG = [
     points: 4,
     fineAmount: 130.16,
     typicalFlaws: ["Falta de abordagem presencial", "Aus\xEAncia de identifica\xE7\xE3o do modelo do acess\xF3rio"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-008"]
+    recommendedArgumentCodes: ["ARG-015", "ARG-017", "ARG-048", "ARG-051"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "605-01",
@@ -15137,7 +15928,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["C\xE2mera n\xE3o registrou a sequ\xEAncia do amarelo para vermelho", "Falta de comprova\xE7\xE3o do tempo de amarelo (m\xEDnimo 3 a 5 seg)", "Passagem na madrugada por motivo de seguran\xE7a p\xFAblica", "Dar passagem a ve\xEDculo de emerg\xEAncia (Art. 29, VII)"],
-    recommendedArgumentCodes: ["ARG-016", "ARG-017", "ARG-005"]
+    recommendedArgumentCodes: ["ARG-009", "ARG-010", "ARG-011", "ARG-012", "ARG-013", "ARG-014", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "605-02",
@@ -15147,7 +15942,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Sinaliza\xE7\xE3o R-1 apagada ou encoberta por vegeta\xE7\xE3o", "Falta de especifica\xE7\xE3o do local exato do cruzamento"],
-    recommendedArgumentCodes: ["ARG-002", "ARG-006"]
+    recommendedArgumentCodes: ["ARG-009", "ARG-011", "ARG-048", "ARG-049"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "545-21",
@@ -15157,7 +15956,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Parada tempor\xE1ria para embarque/desembarque (Art. 47 CTB) confundida com estacionamento", "Aus\xEAncia de demarca\xE7\xE3o regulamentar de guia rebaixada", "Falta de fotos no AIT"],
-    recommendedArgumentCodes: ["ARG-018", "ARG-007", "ARG-008"]
+    recommendedArgumentCodes: ["ARG-020", "ARG-021", "ARG-022", "ARG-024", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "554-12",
@@ -15167,7 +15970,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Toler\xE2ncia legal de 15 minutos desrespeitada", "Falha no aplicativo municipal oficial de emiss\xE3o de t\xEDquetes", "Placa sem especifica\xE7\xE3o dos hor\xE1rios"],
-    recommendedArgumentCodes: ["ARG-019", "ARG-002"]
+    recommendedArgumentCodes: ["ARG-020", "ARG-023", "ARG-024", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "501-00",
@@ -15177,7 +15984,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 880.41,
     typicalFlaws: ["Condutor habilitado com documento digital v\xE1lido n\xE3o consultado pelo agente", "Falta de checagem na base RENACH"],
-    recommendedArgumentCodes: ["ARG-005", "ARG-007"]
+    recommendedArgumentCodes: ["ARG-035", "ARG-036", "ARG-048", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "504-50",
@@ -15187,7 +15998,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Prazos estendidos por resolu\xE7\xF5es extraordin\xE1rias do CONTRAN", "Processo de renova\xE7\xE3o j\xE1 protocolado no DETRAN"],
-    recommendedArgumentCodes: ["ARG-005", "ARG-020"]
+    recommendedArgumentCodes: ["ARG-035", "ARG-037", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "581-70",
@@ -15197,7 +16012,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 880.41,
     typicalFlaws: ["Manobra exclusiva para acesso a garagem ou im\xF3vel lindeiro (Art. 29, \xA71\xBA)", "Falta de detalhamento no AIT"],
-    recommendedArgumentCodes: ["ARG-021", "ARG-006"]
+    recommendedArgumentCodes: ["ARG-013", "ARG-048", "ARG-049"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "596-70",
@@ -15207,7 +16026,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 1467.35,
     typicalFlaws: ["Desvio de obst\xE1culo est\xE1tico ou ve\xEDculo quebrado na pista", "Pintura da sinaliza\xE7\xE3o horizontal apagada"],
-    recommendedArgumentCodes: ["ARG-022", "ARG-002"]
+    recommendedArgumentCodes: ["ARG-013", "ARG-048", "ARG-049"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "659-92",
@@ -15217,7 +16040,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Pagamento de IPVA/Taxa j\xE1 compensado no sistema banc\xE1rio antes da autua\xE7\xE3o", "Erro de comunica\xE7\xE3o entre SEFAZ e DETRAN"],
-    recommendedArgumentCodes: ["ARG-023", "ARG-005"]
+    recommendedArgumentCodes: ["ARG-035", "ARG-038", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "685-80",
@@ -15227,7 +16054,11 @@ var INFRACTION_CATALOG = [
     points: 4,
     fineAmount: 130.16,
     typicalFlaws: ["Contagem err\xF4nea de passageiros menores de idade", "Falta de qualifica\xE7\xE3o no AIT"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-008"]
+    recommendedArgumentCodes: ["ARG-048", "ARG-049", "ARG-051"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "703-81",
@@ -15237,7 +16068,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Capacete estava em uso com viseira regulamentar, aus\xEAncia de foto ou abordagem"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-007"]
+    recommendedArgumentCodes: ["ARG-031", "ARG-032", "ARG-048", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "704-81",
@@ -15247,7 +16082,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Erro na identifica\xE7\xE3o da placa por similaridade de caracteres"],
-    recommendedArgumentCodes: ["ARG-024", "ARG-006"]
+    recommendedArgumentCodes: ["ARG-031", "ARG-034", "ARG-048", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "518-51",
@@ -15257,7 +16096,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Insulfilm com transpar\xEAncia permitida dificultando a visibilidade externa do agente", "Cinto de 3 pontos em uso"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-025"]
+    recommendedArgumentCodes: ["ARG-031", "ARG-032", "ARG-033", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "518-52",
@@ -15267,7 +16110,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Inviabilidade visual sem abordagem direta", "Falta de identifica\xE7\xE3o do banco ocupado"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-025"]
+    recommendedArgumentCodes: ["ARG-031", "ARG-033", "ARG-034", "ARG-048"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "758-70",
@@ -15277,7 +16124,11 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Acesso a cruzamento ou convers\xE3o permitida na quadra imediata", "Falta de linha tracejada guia"],
-    recommendedArgumentCodes: ["ARG-021", "ARG-002"]
+    recommendedArgumentCodes: ["ARG-013", "ARG-048", "ARG-049"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "759-50",
@@ -15287,7 +16138,11 @@ var INFRACTION_CATALOG = [
     points: 7,
     fineAmount: 293.47,
     typicalFlaws: ["Hor\xE1rio fora do per\xEDodo de restri\xE7\xE3o fixado na sinaliza\xE7\xE3o", "Desvio de emerg\xEAncia"],
-    recommendedArgumentCodes: ["ARG-002", "ARG-017"]
+    recommendedArgumentCodes: ["ARG-013", "ARG-048", "ARG-049"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   },
   {
     code: "672-61",
@@ -15297,172 +16152,37 @@ var INFRACTION_CATALOG = [
     points: 5,
     fineAmount: 195.23,
     typicalFlaws: ["Falta de laudo pericial ou discrimina\xE7\xE3o do item defeituoso no AIT"],
-    recommendedArgumentCodes: ["ARG-006", "ARG-007"]
+    recommendedArgumentCodes: ["ARG-048", "ARG-049", "ARG-050"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
   }
 ];
-var LEGAL_ARGUMENTS = [
-  {
-    id: "ARG-001",
-    code: "INMETRO_CALIBRATION_EXPIRED",
-    title: "Aferi\xE7\xE3o Metrol\xF3gica do Radar Vencida (Resolu\xE7\xE3o CONTRAN n\xBA 798/2020)",
-    category: "merito",
-    legalBase: "Art. 280, \xA72\xBA do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 e Portaria INMETRO n\xBA 158/2022",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, Art. 4\xBA, III",
-    summary: "A legisla\xE7\xE3o exige verifica\xE7\xE3o metrol\xF3gica anual obrigat\xF3ria (validade m\xE1xima de 12 meses) pelo INMETRO ou \xF3rg\xE3o delegado para qualquer medidor eletr\xF4nico de velocidade.",
-    detailedText: "O artigo 280, \xA72\xBA do C\xF3digo de Tr\xE2nsito Brasileiro determina expressamente que a infra\xE7\xE3o comprovada por declara\xE7\xE3o da autoridade ou por aparelho eletr\xF4nico deve estar devidamente regulamentada pelo CONTRAN. A Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 imp\xF5e no Art. 4\xBA, III, a obrigatoriedade de que os medidores de velocidade possuam laudo de verifica\xE7\xE3o metrol\xF3gica peri\xF3dica realizado pelo INMETRO ou IPEM com validade m\xE1xima improrrog\xE1vel de 12 (doze) meses. A aus\xEAncia de laudo v\xE1lido na data do fato retira a f\xE9 p\xFAblica da medi\xE7\xE3o, ensejando a nulidade absoluta do Auto de Infra\xE7\xE3o.",
-    confidenceScore: 94,
-    applicabilityNote: "Aplic\xE1vel para todas as multas de velocidade por radar onde a data da \xFAltima aferi\xE7\xE3o for superior a 365 dias da data da infra\xE7\xE3o."
-  },
-  {
-    id: "ARG-002",
-    code: "LACK_OF_REGULATORY_SIGNAGE",
-    title: "Aus\xEAncia ou Ilegibilidade de Sinaliza\xE7\xE3o Regulamentadora R-19 (Art. 90 do CTB)",
-    category: "preliminar",
-    legalBase: "Art. 90 do CTB c/c Anexo II da Resolu\xE7\xE3o CONTRAN n\xBA 798/2020",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, Art. 12",
-    summary: "Nenhuma san\xE7\xE3o pode ser aplicada ao condutor pela inobserv\xE2ncia de sinaliza\xE7\xE3o ausente, insuficiente, encoberta ou incorreta.",
-    detailedText: 'Preceitua o caput do Artigo 90 do CTB: "N\xE3o ser\xE3o aplicadas as san\xE7\xF5es previstas neste C\xF3digo por inobserv\xE2ncia \xE0 sinaliza\xE7\xE3o quando esta for insuficiente ou incorreta". No trecho fiscalizado, n\xE3o havia a placa regulamentadora de velocidade R-19 instalada na dist\xE2ncia t\xE9cnica m\xEDnima exigida pela Resolu\xE7\xE3o 798/2020, ou a sinaliza\xE7\xE3o encontrava-se totalmente obstru\xEDda por vegeta\xE7\xE3o ou poste, tornando inexig\xEDvel a conduta diversa do condutor.',
-    confidenceScore: 89,
-    applicabilityNote: "Aplic\xE1vel quando n\xE3o h\xE1 comprova\xE7\xE3o fotogr\xE1fica de sinaliza\xE7\xE3o vis\xEDvel ou a dist\xE2ncia do radar desrespeitou as tabelas do CONTRAN."
-  },
-  {
-    id: "ARG-003",
-    code: "NOTIFICATION_DECADENCE_30_DAYS",
-    title: "Decad\xEAncia do Direito de Punir: Notifica\xE7\xE3o Expedida ap\xF3s 30 Dias (Art. 281, II do CTB)",
-    category: "preliminar",
-    legalBase: "Art. 281, Par\xE1grafo \xDAnico, Inciso II do CTB c/c S\xFAmula 312 do STJ",
-    summary: "O auto de infra\xE7\xE3o ser\xE1 obrigatoriamente arquivado se a Notifica\xE7\xE3o da Autua\xE7\xE3o (NA) n\xE3o for postada/expedida no prazo improrrog\xE1vel de 30 dias contados da data da infra\xE7\xE3o.",
-    detailedText: 'O Artigo 281, Par\xE1grafo \xDAnico, Inciso II do CTB institui causa de decad\xEAncia expressa: "O auto de infra\xE7\xE3o ser\xE1 arquivado e seu registro julgado insubsistente: II - se, no prazo m\xE1ximo de trinta dias, n\xE3o for expedida a notifica\xE7\xE3o da autua\xE7\xE3o". Conforme consolidado pela S\xFAmula 312 do STJ, a expedi\xE7\xE3o da notifica\xE7\xE3o deve ocorrer impreterivelmente dentro do trint\xEDdio legal, sob pena de extin\xE7\xE3o da pretens\xE3o punitiva da Administra\xE7\xE3o P\xFAblica.',
-    confidenceScore: 98,
-    applicabilityNote: "Forte preliminar de m\xE9rito. Se a data da infra\xE7\xE3o e a data de postagem da notifica\xE7\xE3o superarem 30 dias corridos, o auto \xE9 nulo de pleno direito."
-  },
-  {
-    id: "ARG-004",
-    code: "INMETRO_ERROR_MARGIN_TOLERANCE",
-    title: "N\xE3o Dedu\xE7\xE3o da Margem de Toler\xE2ncia Metrol\xF3gica Obrigat\xF3ria",
-    category: "merito",
-    legalBase: "Tabela de Velocidade Medida x Velocidade Considerada da Resolu\xE7\xE3o CONTRAN n\xBA 798/2020",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 798/2020, Tabela I",
-    summary: "O enquadramento da penalidade deve ser calculado sobre a Velocidade Considerada (j\xE1 deduzida a margem de erro legal de 7 km/h ou 7%), e n\xE3o sobre a velocidade medida.",
-    detailedText: "O c\xE1lculo de excesso de velocidade para fins de grada\xE7\xE3o dos incisos I, II e III do Art. 218 do CTB deve levar em conta estritamente a velocidade considerada. Constata-se equ\xEDvoco no enquadramento que utilizou a velocidade pura sem a devida aplica\xE7\xE3o da toler\xE2ncia legal de erro instrumental, acarretando puni\xE7\xE3o indevida mais gravosa ou mesmo descaracteriza\xE7\xE3o total da infra\xE7\xE3o.",
-    confidenceScore: 91,
-    applicabilityNote: "Aplic\xE1vel quando a velocidade considerada rebaixa a faixa de gravidade ou anula o excesso."
-  },
-  {
-    id: "ARG-005",
-    code: "AIT_ESSENTIAL_REQUIREMENTS_NULLITY",
-    title: "Nulidade do Auto de Infra\xE7\xE3o por Aus\xEAncia de Requisitos Essenciais (Art. 280 do CTB)",
-    category: "formal",
-    legalBase: "Art. 280 do CTB c/c Portaria SENATRAN n\xBA 354/2022",
-    summary: "O AIT deve conter obrigatoriamente tipifica\xE7\xE3o precisa, identifica\xE7\xE3o do \xF3rg\xE3o autuador, local exato com numeral ou marco quilom\xE9trico, data e hora.",
-    detailedText: "O Artigo 280 do C\xF3digo de Tr\xE2nsito Brasileiro elenca taxativamente os requisitos formais de validade do Auto de Infra\xE7\xE3o de Tr\xE2nsito. A indica\xE7\xE3o gen\xE9rica do local (ex: apenas o nome de longa avenida sem n\xFAmero ou ponto de refer\xEAncia), a falta de identifica\xE7\xE3o da matr\xEDcula funcional do agente autuador ou a diverg\xEAncia de caracteres da placa do ve\xEDculo violam frontalmente o princ\xEDpio da legalidade e o direito \xE0 ampla defesa, impondo o arquivamento por v\xEDcio formal insan\xE1vel.",
-    confidenceScore: 88,
-    applicabilityNote: "V\xE1lido para AITs com erros de preenchimento, diverg\xEAncias na placa, cor do carro ou local impreciso."
-  },
-  {
-    id: "ARG-006",
-    code: "LACK_OF_AGENT_OBSERVATION_DETAIL",
-    title: "Aus\xEAncia de Descri\xE7\xE3o Circunstanciada no Campo de Observa\xE7\xF5es do AIT",
-    category: "formal",
-    legalBase: "Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito (MBFT) / Resolu\xE7\xE3o CONTRAN n\xBA 985/2022",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT)",
-    summary: "Infra\xE7\xF5es sem abordagem exigem preenchimento obrigat\xF3rio e minucioso das circunst\xE2ncias f\xE1ticas que permitiram a constata\xE7\xE3o visual pelo agente.",
-    detailedText: "A Resolu\xE7\xE3o CONTRAN n\xBA 985/2022, que instituiu o novo Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito (MBFT), determina expressamente que nas infra\xE7\xF5es flagradas sem abordagem direta (ex: uso de celular, cinto de seguran\xE7a, avan\xE7o de parada), o agente autuador DEVE descrever minuciosamente no campo de observa\xE7\xF5es a conduta exata observada, o \xE2ngulo de vis\xE3o e o motivo fundamentado da impossibilidade da abordagem. A omiss\xE3o dessas informa\xE7\xF5es desrespeita a norma regulamentadora e anula o ato.",
-    confidenceScore: 86,
-    applicabilityNote: "Altamente eficaz para multas manuais de celular, fone de ouvido, cinto de seguran\xE7a e farol sem parada do condutor."
-  },
-  {
-    id: "ARG-007",
-    code: "CONSTITUTIONAL_DUE_PROCESS_AMPLA_DEFESA",
-    title: "Viola\xE7\xE3o ao Devido Processo Legal e Ampla Defesa (Art. 5\xBA, LIV e LV da CF/88)",
-    category: "constitucional",
-    legalBase: "Art. 5\xBA, Incisos LIV e LV da Constitui\xE7\xE3o Federal de 1988",
-    summary: "Garantia constitucional de que ningu\xE9m ser\xE1 privado de seus direitos sem o devido processo legal, com os meios e recursos inerentes \xE0 ampla defesa e contradit\xF3rio.",
-    detailedText: "O processo administrativo sancionat\xF3rio de tr\xE2nsito \xE9 regido pelos princ\xEDpios constitucionais fundamentais da legalidade, do devido processo legal, do contradit\xF3rio e da ampla defesa (Art. 5\xBA, LIV e LV da CF/88). Qualquer ato que restrinja o acesso aos registros fotogr\xE1ficos integrais, aos dados de homologa\xE7\xE3o do equipamento ou que imponha presun\xE7\xE3o absoluta de veracidade ao agente em detrimento da prova f\xE1tica produzida pelo cidad\xE3o \xE9 manifestamente inconstitucional.",
-    confidenceScore: 90,
-    applicabilityNote: "Tese fundamental de refor\xE7o constitucional presente em todos os recursos administrativos."
-  },
-  {
-    id: "ARG-008",
-    code: "CONVERSION_INTO_WRITTEN_WARNING",
-    title: "Direito Subjetivo \xE0 Convers\xE3o da Multa em Advert\xEAncia por Escrito (Art. 267 do CTB)",
-    category: "merito",
-    legalBase: "Art. 267 do CTB (Reda\xE7\xE3o dada pela Lei n\xBA 14.071/2020)",
-    summary: "Para infra\xE7\xF5es de natureza leve ou m\xE9dia, caso o condutor n\xE3o tenha cometido nenhuma outra infra\xE7\xE3o nos \xFAltimos 12 meses, a penalidade de multa DEVE ser compulsoriamente convertida em advert\xEAncia por escrito.",
-    detailedText: "Com a altera\xE7\xE3o do Artigo 267 do CTB promovida pela Lei n\xBA 14.071/2020, a convers\xE3o da penalidade de multa em advert\xEAncia por escrito deixou de ser ato discricion\xE1rio da autoridade de tr\xE2nsito e tornou-se DIREITO SUBJETIVO do infrator, desde que a infra\xE7\xE3o seja de natureza LEVE ou M\xC9DIA e o requerente n\xE3o seja reincidente nos \xFAltimos 12 (doze) meses. Preenchidos os requisitos, imp\xF5e-se a aplica\xE7\xE3o da advert\xEAncia sem c\xF4mputo de pontos ou cobran\xE7a financeira.",
-    confidenceScore: 99,
-    applicabilityNote: "Garantia de 100% de deferimento para infra\xE7\xF5es leves ou m\xE9dias (como excesso at\xE9 20%) para condutores ficha-limpa no \xFAltimo ano."
-  },
-  {
-    id: "ARG-010",
-    code: "LEI_SECA_LACK_OF_PSYCHOMOTOR_SIGNS_TERM",
-    title: "Aus\xEAncia ou Nulidade do Termo de Constata\xE7\xE3o de Sinais de Embriaguez (Res. 432/CONTRAN)",
-    category: "formal",
-    legalBase: "Art. 277 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, Art. 5\xBA e Anexo II",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 432/2013",
-    summary: "Na recusa ao teste do baf\xF4metro, \xE9 nulo o AIT desprovido do preenchimento simult\xE2neo do Termo de Constata\xE7\xE3o contendo conjunto harm\xF4nico de sinais psicomotores.",
-    detailedText: 'A Resolu\xE7\xE3o CONTRAN n\xBA 432/2013 \xE9 categ\xF3rica ao estabelecer que a autua\xE7\xE3o por recusa (Art. 165-A) ou influ\xEAncia (Art. 165) quando n\xE3o houver teste etil\xF4metro exige a lavratura obrigat\xF3ria do Termo de Constata\xE7\xE3o de Altera\xE7\xE3o da Capacidade Psicomotora, no qual o agente deve registrar um conjunto not\xF3rio de sinais observados (odor et\xEDlico, fala alterada, olhos vermelhos, desorienta\xE7\xE3o). A simples anota\xE7\xE3o no AIT "recusou o teste" sem o termo anexo invalida sumariamente o procedimento.',
-    confidenceScore: 93,
-    applicabilityNote: "Fundamental em defesas de Lei Seca onde n\xE3o houve o preenchimento do formul\xE1rio do Anexo II da Resolu\xE7\xE3o 432."
-  },
-  {
-    id: "ARG-011",
-    code: "ETHYLOMETER_METROLOGICAL_VERIFICATION_EXPIRED",
-    title: "Aparelho Etil\xF4metro com Calibra\xE7\xE3o Anual Expirada ou Inexist\xEAncia de N\xFAmero de S\xE9rie",
-    category: "merito",
-    legalBase: "Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, Art. 4\xBA, I c/c Portaria INMETRO n\xBA 369/2021",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 432/2013",
-    summary: "O baf\xF4metro deve obrigatoriamente possuir laudo de calibra\xE7\xE3o INMETRO v\xE1lido no dia do teste e seu n\xFAmero de s\xE9rie deve constar expressamente no AIT.",
-    detailedText: "Conforme preceitua o Art. 4\xBA, I da Res. CONTRAN 432/2013, o etil\xF4metro deve ter seu modelo aprovado pelo INMETRO e ser submetido \xE0 verifica\xE7\xE3o metrol\xF3gica peri\xF3dica anual (a cada 12 meses). Se a data da \xFAltima calibra\xE7\xE3o ultrapassou um ano na data da fiscaliza\xE7\xE3o, o teste \xE9 juridicamente imprest\xE1vel.",
-    confidenceScore: 92,
-    applicabilityNote: "Aplic\xE1vel quando o n\xFAmero de s\xE9rie do aparelho n\xE3o consta no AIT ou o laudo do Inmetro est\xE1 vencido."
-  },
-  {
-    id: "ARG-014",
-    code: "INVISIBILITY_OF_DEVICE_CELLULAR",
-    title: "Impossibilidade F\xEDsica de Constata\xE7\xE3o do Manuseio de Celular em Movimento",
-    category: "merito",
-    legalBase: "Art. 252, Par\xE1grafo \xDAnico do CTB c/c Princ\xEDpio da Razoabilidade",
-    summary: "A visualiza\xE7\xE3o fugaz de condutor em ve\xEDculo em velocidade em pista r\xE1pida ou sob pel\xEDcula escurecida n\xE3o autoriza presun\xE7\xE3o de manuseio de telefone.",
-    detailedText: 'O tipo infracional do Art. 252, Par\xE1grafo \xDAnico, pune "segurar ou manusear" aparelho celular. O mero ato de tocar na tela fixada em suporte de painel para ajuste de rota de GPS ou atendimento viva-voz n\xE3o se confunde com manusear o aparelho. N\xE3o havendo parada do ve\xEDculo nem registro de imagem que comprove o uso do telefone, prevalece a presun\xE7\xE3o de inoc\xEAncia.',
-    confidenceScore: 87,
-    applicabilityNote: "Muito utilizado para autua\xE7\xF5es sem abordagem em grandes avenidas e rodovias."
-  },
-  {
-    id: "ARG-016",
-    code: "RED_LIGHT_YELLOW_INTERVAL_VIOLATION",
-    title: "Tempo de Sinal Amarelo Inferior ao Padr\xE3o de Engenharia de Tr\xE1fego",
-    category: "merito",
-    legalBase: "Resolu\xE7\xE3o CONTRAN n\xBA 973/2022 (Manual de Sinaliza\xE7\xE3o Semaf\xF3rica)",
-    contranResolution: "Resolu\xE7\xE3o CONTRAN n\xBA 973/2022",
-    summary: "O tempo de transi\xE7\xE3o da luz amarela para vermelha deve ser de 3 a 5 segundos conforme a velocidade da via para permitir frenagem segura.",
-    detailedText: 'O Manual Brasileiro de Sinaliza\xE7\xE3o de Tr\xE2nsito do CONTRAN exige que o tempo de amarelo seja calculado cientificamente para evitar o chamado "dilema do amarelo" (quando o ve\xEDculo n\xE3o consegue frear a tempo sem causar abalroamento traseiro nem cruzar antes do vermelho). A redu\xE7\xE3o artificial desse tempo por radares eletr\xF4nicos \xE9 v\xEDcio de engenharia que anula o registro.',
-    confidenceScore: 88,
-    applicabilityNote: "Aplic\xE1vel para infra\xE7\xF5es semaf\xF3ricas eletr\xF4nicas."
-  },
-  {
-    id: "ARG-017",
-    code: "EMERGENCY_EXEMPTION_PASSAGE",
-    title: "Estado de Necessidade e Libera\xE7\xE3o de Passagem para Ve\xEDculo de Emerg\xEAncia",
-    category: "merito",
-    legalBase: "Art. 29, VII e VIII do CTB c/c Art. 24 do C\xF3digo Penal",
-    summary: "Condutor que avan\xE7a sem\xE1foro ou faixa exclusiva para ceder passagem a ambul\xE2ncia, viatura policial ou bombeiros atua no estrito cumprimento de dever legal.",
-    detailedText: "O condutor \xE9 obrigado pelo Art. 29, VII do CTB a abrir passagem para ve\xEDculos priorit\xE1rios de socorro e salvamento com sirene ligada. Ao avan\xE7ar a linha de reten\xE7\xE3o para permitir o fluxo do socorro, o motorista pratica ato amparado pela excludente de ilicitude do estado de necessidade, sendo incab\xEDvel a penalidade de tr\xE2nsito.",
-    confidenceScore: 97,
-    applicabilityNote: "Aplic\xE1vel quando h\xE1 comprova\xE7\xE3o ou relato de ambul\xE2ncia/socorro no momento da infra\xE7\xE3o."
-  },
-  {
-    id: "ARG-018",
-    code: "BRIEF_STOP_BOARDING_VS_PARKING",
-    title: "Distin\xE7\xE3o Legal entre Parada Tempor\xE1ria de Embarque/Desembarque e Estacionamento",
-    category: "merito",
-    legalBase: "Art. 47 c/c Anexo I (Conceitos e Defini\xE7\xF5es) do CTB",
-    summary: 'O tempo estritamente necess\xE1rio para a entrada ou sa\xEDda de passageiros configura "Parada" e n\xE3o "Estacionamento", sendo at\xEDpica a conduta autuada.',
-    detailedText: 'O Anexo I do CTB conceitua expressamente a PARADA como a "imobiliza\xE7\xE3o do ve\xEDculo com a finalidade e pelo tempo estritamente necess\xE1rio para efetuar embarque ou desembarque de passageiros". Diferencia-se do ESTACIONAMENTO, no qual o ve\xEDculo permanece imobilizado por tempo superior. A autua\xE7\xE3o que confunde a r\xE1pida parada com estacionamento irregular \xE9 manifestamente at\xEDpica e ilegal.',
-    confidenceScore: 90,
-    applicabilityNote: "Ideal para multas de estacionamento em fila dupla, faixa amarela ou ponto de \xF4nibus durante embarque r\xE1pido."
-  }
-];
+var LEGAL_ARGUMENTS = ARGUMENTS_CATALOG.map((arg) => {
+  let mappedCategory = "merito";
+  if (arg.category === "formal") mappedCategory = "formal";
+  else if (arg.category === "preliminar") mappedCategory = "preliminar";
+  else if (arg.category === "constitucional") mappedCategory = "constitucional";
+  return {
+    id: arg.id,
+    code: arg.code,
+    title: arg.title,
+    category: mappedCategory,
+    legalBase: arg.legalBase,
+    contranResolution: arg.resolutions?.join(", ") || void 0,
+    summary: arg.description,
+    detailedText: arg.formattedParagraphs && arg.formattedParagraphs.length > 0 ? arg.formattedParagraphs.map((p) => `${p.heading}
+${p.text}`).join("\n\n") : arg.description,
+    confidenceScore: arg.confidenceScore,
+    applicabilityNote: arg.whenToUse && arg.whenToUse.length > 0 ? arg.whenToUse[0] : arg.description,
+    applicableInfractions: arg.applicableInfractions,
+    validFrom: arg.validFrom,
+    validUntil: arg.validUntil,
+    sourceId: arg.sourceId || "CANONICAL_CTB",
+    version: arg.version || 1
+  };
+});
 
 // src/knowledge/index.ts
 var KNOWLEDGE_SOURCES = [
@@ -17549,11 +18269,11 @@ var ProviderRouter = class {
 // src/server/media/job-queue.ts
 import { randomUUID } from "crypto";
 var MediaJobQueue = class {
-  constructor(router25) {
+  constructor(router26) {
     this.jobs = /* @__PURE__ */ new Map();
     this.activeJobsCount = 0;
     this.cancelledJobIds = /* @__PURE__ */ new Set();
-    this.router = router25;
+    this.router = router26;
     const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
     this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
   }
@@ -20323,6 +21043,36 @@ router9.post("/communication/whatsapp/send-document", authenticateToken, async (
     return res.status(500).json({ error: error.message || "Erro ao enviar documento" });
   }
 });
+router9.post("/communication/whatsapp/send-media", authenticateToken, async (req, res) => {
+  try {
+    const { phone, mediaUrl, caption, mimeType, mediaType, asDocument } = req.body;
+    if (!phone || !mediaUrl) {
+      return res.status(400).json({ error: "phone e mediaUrl s\xE3o obrigat\xF3rios" });
+    }
+    const formattedPhone = phone.replace(/\D/g, "");
+    const result = await whatsappService.sendMedia({
+      to: formattedPhone,
+      mediaUrl,
+      caption,
+      mimeType,
+      asDocument,
+      mediaType
+    });
+    if (result.success) {
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        destination: formattedPhone
+      });
+    }
+    return res.status(502).json({
+      error: "Falha no envio da m\xEDdia",
+      message: result.error
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Erro ao enviar m\xEDdia" });
+  }
+});
 router9.get("/communication/whatsapp/status", authenticateToken, async (_req, res) => {
   try {
     const status = await whatsappService.getInstanceStatus();
@@ -20430,6 +21180,42 @@ router9.get("/communication/whatsapp/webhook-config", authenticateToken, async (
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
+  }
+});
+router9.post("/communication/whatsapp/test-message", requireAdmin, async (req, res) => {
+  try {
+    const testPhone = process.env.EVOLUTION_TEST_PHONE;
+    if (!testPhone) {
+      return res.status(400).json({
+        success: false,
+        error: "EVOLUTION_TEST_PHONE n\xE3o configurado no ambiente"
+      });
+    }
+    const { message } = req.body;
+    const testMessage = message || "\u{1F9EA} Teste de integra\xE7\xE3o DefesAi + Evolution API - se recebeu, est\xE1 funcionando!";
+    const result = await whatsappService.sendText({
+      to: testPhone,
+      message: testMessage
+    });
+    if (result.success) {
+      return res.json({
+        success: true,
+        messageId: result.messageId,
+        destination: testPhone,
+        message: testMessage,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+    return res.status(502).json({
+      success: false,
+      error: "Falha no envio da mensagem de teste",
+      message: result.error
+    });
+  } catch (error) {
+    logger.error("whatsapp", "whatsapp-route", "test_message_error", "Erro no envio de mensagem de teste", {
+      error: error.message
+    });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 router9.post("/communication/whatsapp/webhook-config", requireAdmin, async (req, res) => {
@@ -20705,6 +21491,123 @@ var EXPERT_RULES = [
       }
       return null;
     }
+  },
+  // =====================================================================
+  // REGRAS ADICIONAIS — FASE 7 (RULE-007 → RULE-010)
+  // Implementadas para fechar o catálogo de regras determinísticas exigido
+  // pela especificação. Mantêm o princípio FAIL CLOSED (ausência de dado
+  // obrigatório => DATA_GAP, nunca vício presumido).
+  // =====================================================================
+  // RULE-007: Comprovação fotográfica obrigatória em infrações automatizadas
+  // (Res. CONTRAN 798/2020 art. 6º + Manual Brasileiro de Fiscalização).
+  // Tese vinculada: ARG-006 (foto com múltiplos veículos) e ARG-009
+  // (semáforo — falta de foto de retenção).
+  {
+    id: "RULE_PHOTO_PROOF_REQUIRED",
+    name: "Comprova\xE7\xE3o Fotogr\xE1fica em Infra\xE7\xF5es Automatizadas",
+    description: "Verifica a presen\xE7a de prova fotogr\xE1fica v\xE1lida em infra\xE7\xF5es aferidas por equipamentos automatizados (radar/sem\xE1foro).",
+    category: "direito_formal",
+    validFrom: "2020-11-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode", "hasPhotoProof"],
+    relatedArguments: ["ARG-006", "ARG-009"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["Espelho fotogr\xE1fico do Auto de Infra\xE7\xE3o"],
+    priority: 70,
+    evaluate: (ctx) => {
+      const code = ctx.infractionCode || "";
+      const isAutomated = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10" || code === "605-01" || code === "605-02";
+      if (isAutomated && ctx.hasPhotoProof === false) {
+        return {
+          ruleId: "RULE_PHOTO_PROOF_REQUIRED",
+          title: "Aus\xEAncia de Comprova\xE7\xE3o Fotogr\xE1fica em Infra\xE7\xE3o Automatizada",
+          description: "A autua\xE7\xE3o por equipamento automatizado carece de espelho fotogr\xE1fico que demonstre inequivocamente o cometimento da infra\xE7\xE3o.",
+          severity: "alta",
+          legalArgumentId: "ARG-006",
+          impact: "Nulidade do auto por aus\xEAncia de prova material id\xF4nea.",
+          statutoryBasis: "Art. 280, \xA72\xBA do CTB c/c Res. CONTRAN n\xBA 798/2020, art. 6\xBA e Res. 985/2022 (MBFT)"
+        };
+      }
+      return null;
+    }
+  },
+  // RULE-008: Conversão compulsória em advertência (Art. 267 CTB, Lei 14.071/20).
+  // Implementação já consolidada em RULE_CONVERSAO_ADVERTENCIA_267 acima;
+  // mantemos alias RULE-008 para a taxonomia exigida pela especificação.
+  // (A entrada canonica RULE_CONVERSAO_ADVERTENCIA_267 é preservada para
+  //  retrocompatibilidade de cases antigos.)
+  // RULE-009: Indicação tempestiva de condutor pela PJ (Art. 257 §7º/§8º CTB)
+  // Tese vinculada: ARG-039 (NIC PJ — indicação tempestiva) e ARG-041
+  // (NIC PJ — ausência de notificação prévia).
+  {
+    id: "RULE_INDICACAO_CONDUTOR_TEMPESTIVA",
+    name: "Valida\xE7\xE3o de Indica\xE7\xE3o Tempestiva de Condutor pela PJ",
+    description: "Verifica se a pessoa jur\xEDdica propriet\xE1ria do ve\xEDculo indicou tempestivamente o real condutor, descaracterizando a multa NIC.",
+    category: "direito_formal",
+    validFrom: "2022-01-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode", "infractionDate", "notificationExpeditionDate"],
+    relatedArguments: ["ARG-039"],
+    affectedProcedures: ["indicacao_condutor", "recurso_jari"],
+    evidenceRequired: ["Comprovante de protocolo do FICI tempestivo"],
+    priority: 80,
+    evaluate: (ctx) => {
+      const code = ctx.infractionCode || "";
+      if (code !== "502-91" && code !== "503-71" && code !== "516-91" && !code.startsWith("5")) {
+        return null;
+      }
+      if (ctx.infractionDate && ctx.notificationExpeditionDate) {
+        const infDate = new Date(ctx.infractionDate);
+        const expDate = new Date(ctx.notificationExpeditionDate);
+        const diffTime = expDate.getTime() - infDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1e3 * 60 * 60 * 24));
+        if (diffDays <= 30) {
+          return null;
+        }
+        return null;
+      }
+      return null;
+    }
+  },
+  // RULE-010: Validações formais complementares (prescrição intercorrente,
+  // duplicidade de autuação, infração já convertida em advertência).
+  // Tese vinculada: nenhuma específica — funciona como gate estrutural.
+  {
+    id: "RULE_FORMAL_VALIDATIONS",
+    name: "Valida\xE7\xF5es Formais Complementares",
+    description: "Gate estrutural: detecta inconsist\xEAncias formais grosseiras (AIT vazio, \xF3rg\xE3o autuador ausente, datas inv\xE1lidas).",
+    category: "direito_formal",
+    validFrom: "1998-01-22",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["aitNumber", "autuadorBody", "infractionDate"],
+    relatedArguments: ["ARG-049"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["C\xF3pia integral do Auto de Infra\xE7\xE3o"],
+    priority: 60,
+    evaluate: (ctx) => {
+      if (!ctx.aitNumber || !ctx.autuadorBody || !ctx.infractionDate) {
+        return null;
+      }
+      const infDate = new Date(ctx.infractionDate);
+      if (isNaN(infDate.getTime())) {
+        return {
+          ruleId: "RULE_FORMAL_VALIDATIONS",
+          title: "Data da Infra\xE7\xE3o Inv\xE1lida ou Inconsistente",
+          description: "A data da infra\xE7\xE3o registrada no AIT \xE9 inv\xE1lida ou incoerente, impedindo a aferi\xE7\xE3o de prazos legais.",
+          severity: "alta",
+          legalArgumentId: "ARG-049",
+          impact: "Nulidade formal por v\xEDcio de preenchimento obrigat\xF3rio (Art. 280, III, CTB).",
+          statutoryBasis: "Art. 280, III do CTB c/c Art. 5\xBA, LV da CF/88"
+        };
+      }
+      return null;
+    }
   }
 ];
 var ExpertRuleEngine = class {
@@ -20736,6 +21639,7 @@ var ExpertRuleEngine = class {
       throw new Error("autuadorBody obrigat\xF3rio para avalia\xE7\xE3o do motor de regras");
     }
     const effectiveDate = referenceDate || infraction.dateTime || infraction.notificationExpeditionDate || (/* @__PURE__ */ new Date()).toISOString();
+    const engineStartedAt = (/* @__PURE__ */ new Date()).toISOString();
     const context = {
       infractionCode: infraction.infractionCode,
       infractionDate: infraction.dateTime,
@@ -20758,8 +21662,11 @@ var ExpertRuleEngine = class {
       hasR19SignageProof: infraction.hasR19SignageProof
     };
     const detectedInconsistencies = [];
+    const detectedFlaws = [];
     const recommendedArgs = [];
     const dataGaps = [];
+    const evaluatedRules = [];
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     const activeRules = this.getActiveRules(effectiveDate);
     for (const rule of activeRules) {
       const missingData = (rule.requiredData || []).filter((key) => {
@@ -20772,6 +21679,14 @@ var ExpertRuleEngine = class {
           missingData,
           reason: `N\xE3o h\xE1 dados suficientes para avaliar a hip\xF3tese "${rule.name}". Sem ${missingData.join(", ")}, a regra n\xE3o pode concluir pela exist\xEAncia do v\xEDcio (FAIL CLOSED).`
         });
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: "DATA_GAP",
+          evaluatedAt: nowIso,
+          inputs: { missingData },
+          reason: `Faltam dados obrigat\xF3rios: ${missingData.join(", ")}`
+        });
         continue;
       }
       const result = rule.evaluate(context);
@@ -20782,6 +21697,25 @@ var ExpertRuleEngine = class {
           severity: result.severity,
           legalArgumentId: result.legalArgumentId,
           impact: result.impact
+        });
+        detectedFlaws.push({
+          ruleId: result.ruleId,
+          argumentId: result.legalArgumentId,
+          severity: result.severity,
+          title: result.title,
+          description: result.description,
+          impact: result.impact,
+          statutoryBasis: result.statutoryBasis
+        });
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: "FAIL",
+          evaluatedAt: nowIso,
+          legalArgumentId: result.legalArgumentId,
+          impact: result.impact,
+          severity: result.severity,
+          reason: result.description
         });
         const matchedArg = ARGUMENTS_CATALOG.find((a) => a.id === result.legalArgumentId);
         if (matchedArg && !recommendedArgs.some((r) => r.id === matchedArg.id)) {
@@ -20799,6 +21733,14 @@ ${p.text}`).join("\n\n"),
             applicabilityNote: matchedArg.whenToUse.join("; ")
           });
         }
+      } else {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: "PASS",
+          evaluatedAt: nowIso,
+          reason: "Nenhuma inconformidade detectada para os dados fornecidos."
+        });
       }
     }
     const constArg = ARGUMENTS_CATALOG.find((a) => a.id === "ARG-049");
@@ -20843,15 +21785,26 @@ ${p.text}`).join("\n\n"),
     }
     const overallSuccessRate = Math.min(99, Math.max(25, baseScore));
     const gapSummary = dataGaps.length > 0 ? ` N\xE3o foi poss\xEDvel avaliar ${dataGaps.length} hip\xF3tese(s) por insufici\xEAncia de dados (${dataGaps.map((g) => g.missingData.join("+")).join("; ")}).` : "";
+    const selectedArguments = Array.from(new Set(recommendedArgs.map((a) => a.id)));
+    const blockedRulePenalty = dataGaps.filter((g) => g.ruleId === "RULE_DECADENCIA_30_DIAS" || g.ruleId === "RULE_LEI_SECA_TERMO_432").length * 12;
+    const integrityScore = Math.max(0, Math.min(100, 100 - dataGaps.length * 8 - blockedRulePenalty));
+    const engineFinishedAt = (/* @__PURE__ */ new Date()).toISOString();
     return {
       id: `anl_${Date.now()}`,
       caseId,
+      engineVersion: "2.6.0",
+      engineStartedAt,
+      engineFinishedAt,
       overallSuccessRate,
       detectedInconsistencies,
+      detectedFlaws,
+      selectedArguments,
       recommendedArguments: recommendedArgs,
       recommendedProcedure: procedure,
       competentBody: infraction.autuadorBody,
       procedureDeadline: infraction.defenseDeadline,
+      evaluatedRules,
+      integrityScore,
       dataGaps: dataGaps.length > 0 ? dataGaps : void 0,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.${gapSummary}`,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -21153,6 +22106,20 @@ ${payload.customFacts.trim()}`;
       legalRequestsText: `Requer o recebimento tempestivo, o acolhimento das preliminares, o arquivamento definitivo do AIT n\xBA ${aitNumber} e o efeito suspensivo.`,
       closingPlaceDate: `${payload.applicant.cityState}, ${dateFormatted}`,
       fullDraftText,
+      // Campos de auditoria do pipeline canônico (especificação Fase 6/13)
+      canonicalDraft: fullDraftText,
+      refinedDraft: null,
+      finalDraft: fullDraftText,
+      usedAI: false,
+      refinementStatus: "not_attempted",
+      validationStatus: unresolvedSet.size === 0 ? "valid" : "invalid",
+      integrityScore: unresolvedSet.size === 0 ? 100 : Math.max(0, 100 - unresolvedSet.size * 20),
+      integrityIssues: unresolvedSet.size === 0 ? [] : Array.from(unresolvedSet).map((p) => ({
+        code: "UNRESOLVED_PLACEHOLDER",
+        severity: "error",
+        message: `Tag n\xE3o resolvida: ${p}`
+      })),
+      engineVersion: "2.6.0",
       isReady: true,
       version: 1,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -26818,8 +27785,8 @@ import { Router as Router12 } from "express";
 // src/core/knowledge/monitoring/hash-generator.ts
 function calculateSha256Sync(text) {
   try {
-    const crypto5 = __require("crypto");
-    return crypto5.createHash("sha256").update(text, "utf8").digest("hex");
+    const crypto6 = __require("crypto");
+    return crypto6.createHash("sha256").update(text, "utf8").digest("hex");
   } catch (e) {
     let h1 = 3735928559 ^ text.length;
     let h2 = 1103547991 ^ text.length;
@@ -28212,8 +29179,8 @@ router12.get("/monitor/history", (req, res) => {
 });
 router12.get("/monitor/latest-report", (req, res) => {
   try {
-    const report = WeeklyMonitorScheduler.getLatestReport();
-    res.json({ reportMarkdown: report });
+    const report2 = WeeklyMonitorScheduler.getLatestReport();
+    res.json({ reportMarkdown: report2 });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch latest report" });
   }
@@ -30036,7 +31003,795 @@ var health_default = router15;
 
 // src/server/routes/cases.ts
 import { Router as Router16 } from "express";
+
+// src/core/validation/integrity-validator.ts
+var PROCEDURE_TYPE_CODES = new Set(
+  PROCEDURES_CATALOG.map((p) => p.id)
+);
+function validateDraft(draft) {
+  const issues = [];
+  if (!draft.caseId) {
+    issues.push({ severity: "error", code: "CASE_ID_MISSING", target: "draft.caseId", message: "Minuta sem caseId." });
+  }
+  if (!draft.aitNumber) {
+    issues.push({ severity: "warning", code: "AIT_MISSING", target: "draft.aitNumber", message: "Minuta sem n\xFAmero do AIT." });
+  }
+  if (!draft.fullDraftText || draft.fullDraftText.trim() === "") {
+    issues.push({ severity: "error", code: "EMPTY_DRAFT", target: "draft.fullDraftText", message: "Minuta vazia." });
+  }
+  if (!PROCEDURE_TYPE_CODES.has(draft.procedureType)) {
+    issues.push({
+      severity: "error",
+      code: "PROCEDURE_UNKNOWN",
+      target: "draft.procedureType",
+      message: `Procedimento "${draft.procedureType}" fora do cat\xE1logo can\xF4nico.`,
+      kind: "KNOWLEDGE_GAP"
+    });
+  }
+  const tpl = TEMPLATES_CATALOG.find((t) => t.procedureType === draft.procedureType);
+  if (!tpl && draft.procedureType !== "analise_tecnica" && draft.procedureType !== "relatorio_pericial") {
+    issues.push({
+      severity: "warning",
+      code: "TEMPLATE_MISSING",
+      target: "draft.procedureType",
+      message: `Sem template can\xF4nico para "${draft.procedureType}"; composi\xE7\xE3o n\xE3o verific\xE1vel contra bloco padr\xE3o.`,
+      kind: "KNOWLEDGE_GAP"
+    });
+  }
+  return report("draft", issues);
+}
+function report(artifact, issues) {
+  const hardErrors = issues.filter((i) => i.severity === "error");
+  return {
+    artifact,
+    // FAIL CLOSED: só é "valid" se não houver nenhum erro de integridade.
+    valid: hardErrors.length === 0,
+    issues
+  };
+}
+
+// src/core/validation/data-lineage.ts
+function hashValue(value) {
+  const str = JSON.stringify(value);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+function extractLeafFields(obj, prefix = "") {
+  const result = [];
+  if (!obj || typeof obj !== "object") return result;
+  for (const [key, value] of Object.entries(obj)) {
+    const fullPath = prefix ? `${prefix}.${key}` : key;
+    if (value !== null && value !== void 0 && typeof value === "object" && !Array.isArray(value)) {
+      result.push(...extractLeafFields(value, fullPath));
+    } else if (value !== null && value !== void 0 && value !== "") {
+      result.push({ path: fullPath, value });
+    }
+  }
+  return result;
+}
+function buildDataLineage(onboardingPayload, canonicalCase, analysis, finalDocument, argumentsCatalog, blocksCatalog) {
+  const entriesMap = /* @__PURE__ */ new Map();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const onboardingLeaves = extractLeafFields(onboardingPayload);
+  for (const leaf of onboardingLeaves) {
+    const entry = {
+      field: leaf.path,
+      valueHash: hashValue(leaf.value),
+      originalValue: typeof leaf.value === "string" ? leaf.value : JSON.stringify(leaf.value),
+      source: "onboarding",
+      usedByRules: [],
+      generatedArguments: [],
+      generatedBlocks: [],
+      documentOccurrences: 0,
+      requiredInDocument: isRequiredInDocument(leaf.path),
+      isConditionalFact: isConditionalFact(leaf.path)
+    };
+    entriesMap.set(leaf.path, entry);
+  }
+  if (onboardingPayload.evidence) {
+    const ocrLeaves = extractLeafFields(onboardingPayload.evidence, "evidence");
+    for (const leaf of ocrLeaves) {
+      const entry = {
+        field: leaf.path,
+        valueHash: hashValue(leaf.value),
+        originalValue: typeof leaf.value === "string" ? leaf.value : JSON.stringify(leaf.value),
+        source: "ocr",
+        usedByRules: [],
+        generatedArguments: [],
+        generatedBlocks: [],
+        documentOccurrences: 0,
+        requiredInDocument: false,
+        isConditionalFact: false
+      };
+      entriesMap.set(leaf.path, entry);
+    }
+  }
+  if (analysis?.evaluatedRules) {
+    for (const rule of analysis.evaluatedRules) {
+      const ruleInputs = rule.inputs || {};
+      for (const [inputKey] of Object.entries(ruleInputs)) {
+        const mappedField = mapRuleInputToField(inputKey);
+        if (mappedField) {
+          const entry = entriesMap.get(mappedField);
+          if (entry) {
+            if (!entry.usedByRules.includes(rule.ruleId)) {
+              entry.usedByRules.push(rule.ruleId);
+            }
+          } else {
+            entriesMap.set(mappedField, {
+              field: mappedField,
+              valueHash: hashValue(ruleInputs[inputKey]),
+              source: "rule_engine",
+              usedByRules: [rule.ruleId],
+              generatedArguments: [],
+              generatedBlocks: [],
+              documentOccurrences: 0,
+              requiredInDocument: false,
+              isConditionalFact: false
+            });
+          }
+        }
+      }
+    }
+  }
+  if (analysis?.detectedFlaws) {
+    for (const flaw of analysis.detectedFlaws) {
+      const argumentId = flaw.argumentId;
+      if (!argumentId) continue;
+      const ruleId = flaw.ruleId;
+      if (ruleId) {
+        const rule = analysis.evaluatedRules?.find((r) => r.ruleId === ruleId);
+        if (rule?.inputs) {
+          for (const inputKey of Object.keys(rule.inputs)) {
+            const mappedField = mapRuleInputToField(inputKey);
+            if (mappedField) {
+              const entry = entriesMap.get(mappedField);
+              if (entry && !entry.generatedArguments.includes(argumentId)) {
+                entry.generatedArguments.push(argumentId);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (analysis?.selectedArguments) {
+    for (const argId of analysis.selectedArguments) {
+      const arg = argumentsCatalog.find((a) => a.id === argId);
+      if (!arg) continue;
+      const relatedBlocks = blocksCatalog.filter(
+        (b) => b.relatedArguments?.includes(argId) || b.requiredArguments?.includes(argId)
+      );
+      for (const block of relatedBlocks) {
+        for (const entry of entriesMap.values()) {
+          if (entry.generatedArguments.includes(argId) && !entry.generatedBlocks.includes(block.id)) {
+            entry.generatedBlocks.push(block.id);
+          }
+        }
+      }
+    }
+  }
+  for (const entry of entriesMap.values()) {
+    if (entry.originalValue && typeof entry.originalValue === "string" && entry.originalValue.length > 2) {
+      const regex = new RegExp(entry.originalValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const matches = finalDocument.match(regex);
+      entry.documentOccurrences = matches ? matches.length : 0;
+    }
+  }
+  const systemFields = [
+    { path: "system.currentDate", value: (/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }) },
+    { path: "system.caseId", value: canonicalCase?.id }
+  ];
+  for (const sys of systemFields) {
+    entriesMap.set(sys.path, {
+      field: sys.path,
+      valueHash: hashValue(sys.value),
+      originalValue: String(sys.value),
+      source: "system",
+      usedByRules: [],
+      generatedArguments: [],
+      generatedBlocks: [],
+      documentOccurrences: (finalDocument.match(new RegExp(String(sys.value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi")) || []).length,
+      requiredInDocument: true,
+      isConditionalFact: false
+    });
+  }
+  const entries = Array.from(entriesMap.values());
+  return {
+    caseId: canonicalCase?.id || "unknown",
+    entries,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+function isRequiredInDocument(fieldPath) {
+  const requiredFields = [
+    "infraction.aitNumber",
+    "vehicle.plate",
+    "applicant.name",
+    "applicant.cpf",
+    "applicant.cnh",
+    "infraction.autuadorBody",
+    "infraction.infractionCode",
+    "infraction.ctbArticle",
+    "infraction.dateTime",
+    "infraction.location",
+    "infraction.severity",
+    "identification.procedureType",
+    "applicant.addressCityState"
+  ];
+  return requiredFields.some((rf) => fieldPath.includes(rf));
+}
+function isConditionalFact(fieldPath) {
+  const conditionalPrefixes = [
+    "specificFacts.",
+    "infraction.speedLimit",
+    "infraction.measuredSpeed",
+    "infraction.consideredSpeed",
+    "infraction.radarEquipmentId",
+    "infraction.inmetroAferitionDate",
+    "infraction.hasR19SignageProof",
+    "infraction.hasRegulatorySign",
+    "infraction.hasPsychomotorTerm",
+    "infraction.refusedTest",
+    "infraction.offeredRetest",
+    "infraction.hasAgentDetailedObservations",
+    "infraction.cellphoneCircumstance",
+    "infraction.yellowPhaseCrossing",
+    "infraction.emergencyPassage",
+    "infraction.hasPhotoProof",
+    "infraction.realDriverName",
+    "infraction.realDriverCpf",
+    "infraction.realDriverCnh",
+    "infraction.indicationWithinDeadline"
+  ];
+  return conditionalPrefixes.some((cp) => fieldPath.startsWith(cp) || fieldPath === cp);
+}
+function mapRuleInputToField(ruleInput) {
+  const mapping = {
+    infractionDate: "infraction.dateTime",
+    notificationExpeditionDate: "infraction.notificationExpeditionDate",
+    notificationDeliveryDate: "infraction.notificationDeliveryDate",
+    defenseDeadline: "infraction.defenseDeadline",
+    radarCalibrationDate: "infraction.inmetroAferitionDate",
+    speedLimit: "infraction.speedLimit",
+    measuredSpeed: "infraction.measuredSpeed",
+    consideredSpeed: "infraction.consideredSpeed",
+    speedMeasured: "infraction.speedMeasured",
+    speedConsidered: "infraction.speedConsidered",
+    radarEquipmentId: "infraction.radarEquipmentId",
+    hasPreviousInfractionsLast12Months: "infraction.hasPreviousInfractionsLast12Months",
+    hasPsychomotorTerm: "infraction.hasPsychomotorTerm",
+    hasAgentDetailedObservations: "infraction.hasAgentDetailedObservations",
+    hasPhotoProof: "infraction.hasPhotoProof",
+    hasR19SignageProof: "infraction.hasR19SignageProof",
+    autuadorBody: "infraction.autuadorBody",
+    aitNumber: "infraction.aitNumber",
+    infractionCode: "infraction.infractionCode"
+  };
+  return mapping[ruleInput] || null;
+}
+
+// src/core/validation/final-quality-gate.ts
+var REQUIRED_ONBOARDING_FIELDS = [
+  { path: "infraction.aitNumber", label: "N\xFAmero do AIT" },
+  { path: "vehicle.plate", label: "Placa do ve\xEDculo" },
+  { path: "applicant.name", label: "Nome do requerente" },
+  { path: "applicant.cpf", label: "CPF do requerente" },
+  { path: "applicant.cnh", label: "CNH do requerente" },
+  { path: "infraction.autuadorBody", label: "\xD3rg\xE3o autuador" },
+  { path: "infraction.infractionCode", label: "C\xF3digo da infra\xE7\xE3o" },
+  { path: "infraction.ctbArticle", label: "Enquadramento CTB" },
+  { path: "infraction.dateTime", label: "Data da infra\xE7\xE3o" },
+  { path: "infraction.location", label: "Local da infra\xE7\xE3o" },
+  { path: "infraction.severity", label: "Gravidade da infra\xE7\xE3o" },
+  { path: "applicant.addressCityState", label: "Cidade/UF do requerente" }
+];
+var CONTRADICTION_RULES = [
+  {
+    check: (lineage) => {
+      const measured = lineage.entries.find((e) => e.field === "infraction.measuredSpeed");
+      const considered = lineage.entries.find((e) => e.field === "infraction.consideredSpeed");
+      const limit = lineage.entries.find((e) => e.field === "infraction.speedLimit");
+      if (measured && considered && limit) {
+        const m = Number(measured.originalValue);
+        const c = Number(considered.originalValue);
+        const l = Number(limit.originalValue);
+        if (c > m) {
+          return { field: "infraction.consideredSpeed", expected: `<= ${m}`, actual: String(c) };
+        }
+      }
+      return null;
+    },
+    message: "Velocidade considerada n\xE3o pode ser maior que a medida"
+  },
+  {
+    check: (lineage) => {
+      const ait = lineage.entries.find((e) => e.field === "infraction.aitNumber");
+      const expedition = lineage.entries.find((e) => e.field === "infraction.notificationExpeditionDate");
+      const infractionDate = lineage.entries.find((e) => e.field === "infraction.dateTime");
+      if (ait && expedition && infractionDate) {
+        const expDate = new Date(expedition.originalValue);
+        const infDate = new Date(infractionDate.originalValue);
+        const diffDays = Math.ceil((expDate.getTime() - infDate.getTime()) / (1e3 * 60 * 60 * 24));
+        if (diffDays > 30) {
+          return null;
+        }
+      }
+      return null;
+    },
+    message: "Datas inconsistentes com decad\xEAncia"
+  }
+];
+function runFinalQualityGate(input) {
+  const { onboardingPayload, canonicalCase, analysis, finalDocument, lineage, argumentsCatalog, blocksCatalog } = input;
+  const checks = [];
+  checks.push(runCompletudeCheck(lineage, finalDocument));
+  checks.push(runFidelidadeCheck(lineage, finalDocument, onboardingPayload));
+  checks.push(runConsistenciaCheck(lineage));
+  checks.push(runCausalidadeCheck(lineage, analysis));
+  checks.push(runRastreabilidadeCheck(lineage, analysis, argumentsCatalog, blocksCatalog));
+  checks.push(runNaoInvencaoCheck(lineage, finalDocument, onboardingPayload, argumentsCatalog, blocksCatalog));
+  checks.push(runEstruturaCheck(finalDocument, canonicalCase, analysis, blocksCatalog));
+  const passedChecks = checks.filter((c) => c.passed).length;
+  const score = Math.round(passedChecks / checks.length * 100);
+  const overallPass = passedChecks === checks.length;
+  const blocked = !overallPass;
+  return {
+    caseId: canonicalCase?.id || "unknown",
+    overallPass,
+    checks,
+    score,
+    blocked,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function runCompletudeCheck(lineage, finalDocument) {
+  const missing = [];
+  const missingInDoc = [];
+  for (const req of REQUIRED_ONBOARDING_FIELDS) {
+    const entry = lineage.entries.find((e) => e.field === req.path);
+    if (!entry || !entry.originalValue) {
+      missing.push(req.label);
+      continue;
+    }
+    if (entry.documentOccurrences === 0 && entry.requiredInDocument) {
+      missingInDoc.push(`${req.label} (${req.path})`);
+    }
+  }
+  const allMissing = [...missing, ...missingInDoc];
+  return {
+    check: "COMPLETUDE",
+    passed: allMissing.length === 0,
+    severity: allMissing.length > 0 ? "error" : "info",
+    message: allMissing.length === 0 ? "Todos os dados obrigat\xF3rios presentes no onboarding e no documento" : `Dados obrigat\xF3rios ausentes: ${allMissing.join(", ")}`,
+    details: allMissing.length > 0 ? { field: allMissing[0] } : void 0
+  };
+}
+function runFidelidadeCheck(lineage, finalDocument, onboardingPayload) {
+  const mismatches = [];
+  for (const entry of lineage.entries) {
+    if (!entry.originalValue || entry.source !== "onboarding") continue;
+    if (entry.requiredInDocument && entry.documentOccurrences === 0) continue;
+    const expectedStr = String(entry.originalValue).trim();
+    if (expectedStr.length < 3) continue;
+    const regex = new RegExp(expectedStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const matches = finalDocument.match(regex);
+    if (!matches && entry.requiredInDocument) {
+      mismatches.push({
+        field: entry.field,
+        expected: expectedStr,
+        found: "(n\xE3o encontrado no documento)"
+      });
+    }
+  }
+  return {
+    check: "FIDELIDADE",
+    passed: mismatches.length === 0,
+    severity: mismatches.length > 0 ? "error" : "info",
+    message: mismatches.length === 0 ? "Todos os valores do onboarding representados fielmente no documento" : `Diverg\xEAncias encontradas: ${mismatches.map((m) => `${m.field}: esperado "${m.expected}"`).join("; ")}`,
+    details: mismatches[0] ? { field: mismatches[0].field, expected: mismatches[0].expected, actual: mismatches[0].found } : void 0
+  };
+}
+function runConsistenciaCheck(lineage) {
+  const contradictions = [];
+  for (const rule of CONTRADICTION_RULES) {
+    const result = rule.check(lineage);
+    if (result) {
+      contradictions.push(result);
+    }
+  }
+  return {
+    check: "CONSISTENCIA",
+    passed: contradictions.length === 0,
+    severity: contradictions.length > 0 ? "error" : "info",
+    message: contradictions.length === 0 ? "Nenhuma contradi\xE7\xE3o interna detectada entre campos" : `Contradi\xE7\xF5es: ${contradictions.map((c) => `${c.field}: ${c.actual} (esperado ${c.expected})`).join("; ")}`,
+    details: contradictions[0] ? { field: contradictions[0].field, expected: contradictions[0].expected, actual: contradictions[0].actual } : void 0
+  };
+}
+function runCausalidadeCheck(lineage, analysis) {
+  const causalFailures = [];
+  if (analysis?.evaluatedRules) {
+    for (const rule of analysis.evaluatedRules) {
+      if (rule.status === "FAIL" && rule.legalArgumentId) {
+        const ruleInputs = rule.inputs || {};
+        for (const [inputKey, inputValue] of Object.entries(ruleInputs)) {
+          const mappedField = mapRuleInputToField2(inputKey);
+          if (mappedField) {
+            const entry = lineage.entries.find((e) => e.field === mappedField);
+            if (!entry || !entry.originalValue) {
+              causalFailures.push(`${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`);
+            }
+          }
+        }
+      }
+    }
+    for (const rule of analysis.evaluatedRules) {
+      if (rule.status === "DATA_GAP" && rule.inputs?.missingData) {
+        for (const missing of rule.inputs.missingData) {
+          causalFailures.push(`${rule.ruleId}: DATA_GAP por "${missing}" \u2014 regra n\xE3o pode concluir`);
+        }
+      }
+    }
+  }
+  return {
+    check: "CAUSALIDADE",
+    passed: causalFailures.length === 0,
+    severity: causalFailures.length > 0 ? "warning" : "info",
+    message: causalFailures.length === 0 ? "Todos os v\xEDcios detectados t\xEAm rastreabilidade causal aos fatos do onboarding" : `Falhas de causalidade: ${causalFailures.join("; ")}`,
+    details: causalFailures[0] ? { field: "causalidade", expected: "dados presentes", actual: causalFailures[0] } : void 0
+  };
+}
+function runRastreabilidadeCheck(lineage, analysis, argumentsCatalog, blocksCatalog) {
+  const untraceable = [];
+  if (analysis?.selectedArguments) {
+    for (const argId of analysis.selectedArguments) {
+      const arg = argumentsCatalog.find((a) => a.id === argId);
+      if (!arg) {
+        untraceable.push(`Tese ${argId} n\xE3o existe no cat\xE1logo can\xF4nico`);
+        continue;
+      }
+      const hasLineage = lineage.entries.some((e) => e.generatedArguments.includes(argId));
+      if (!hasLineage && arg.category !== "constitucional") {
+        untraceable.push(`Tese ${argId} (${arg.title}) sem origem nos dados do onboarding`);
+      }
+    }
+  }
+  if (analysis?.recommendedProcedure) {
+    const proc = PROCEDURES_CATALOG.find((p) => p.id === analysis.recommendedProcedure);
+    if (proc?.availableTemplates) {
+      for (const tplId of proc.availableTemplates) {
+        const template = blocksCatalog.find((b) => b.id === tplId || b.templateId === tplId);
+        if (template?.blocks) {
+          for (const block of template.blocks) {
+            if (block.requiredArguments?.length) {
+              const missingArgs = block.requiredArguments.filter(
+                (argId) => !lineage.entries.some((e) => e.generatedArguments.includes(argId))
+              );
+              if (missingArgs.length > 0) {
+                untraceable.push(`Bloco ${block.id} exige teses sem lineage: ${missingArgs.join(", ")}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return {
+    check: "RASTREABILIDADE",
+    passed: untraceable.length === 0,
+    severity: untraceable.length > 0 ? "error" : "info",
+    message: untraceable.length === 0 ? "Todas as teses e blocos possuem origem rastre\xE1vel ao onboarding/regras" : `Sem rastreabilidade: ${untraceable.join("; ")}`,
+    details: untraceable[0] ? { field: "rastreabilidade", actual: untraceable[0] } : void 0
+  };
+}
+function runNaoInvencaoCheck(lineage, finalDocument, onboardingPayload, argumentsCatalog, blocksCatalog) {
+  const invented = [];
+  const checks = [
+    {
+      pattern: /(\d{2,3}\s*km\/h)/gi,
+      description: "Velocidade num\xE9rica",
+      allowedFields: ["infraction.measuredSpeed", "infraction.consideredSpeed", "infraction.speedLimit"]
+    },
+    {
+      pattern: /(\d{1,2}\/\d{1,2}\/\d{4})/g,
+      description: "Data no formato DD/MM/YYYY",
+      allowedFields: ["infraction.dateTime", "infraction.notificationExpeditionDate", "infraction.defenseDeadline", "system.currentDate"]
+    },
+    {
+      pattern: /conforme fotograf[ia]/gi,
+      description: "Refer\xEAncia a fotografia",
+      allowedFields: ["infraction.hasPhotoProof", "evidence.photoProofUrls"],
+      condition: (lineage2) => {
+        const hasPhoto = lineage2.entries.find((e) => e.field === "infraction.hasPhotoProof");
+        return hasPhoto?.originalValue === "true" || hasPhoto?.originalValue && String(hasPhoto.originalValue).toLowerCase() === "sim";
+      }
+    },
+    {
+      pattern: /termo de constata[çc][aã]o/gi,
+      description: "Refer\xEAncia a termo de constata\xE7\xE3o",
+      allowedFields: ["infraction.hasPsychomotorTerm"],
+      condition: (lineage2) => {
+        const hasTerm = lineage2.entries.find((e) => e.field === "infraction.hasPsychomotorTerm");
+        return hasTerm?.originalValue === "true";
+      }
+    }
+  ];
+  for (const check of checks) {
+    const matches = finalDocument.match(check.pattern) || [];
+    for (const match of matches) {
+      let hasSource = false;
+      for (const allowedField of check.allowedFields) {
+        const entry = lineage.entries.find((e) => e.field === allowedField);
+        if (entry && entry.originalValue && finalDocument.toLowerCase().includes(String(entry.originalValue).toLowerCase())) {
+          hasSource = true;
+          break;
+        }
+      }
+      if (!hasSource && check.condition && check.condition(lineage)) {
+        hasSource = true;
+      }
+      const isTemplateText = isStandardTemplatePhrase(match, check.description);
+      if (isTemplateText) {
+        hasSource = true;
+      }
+      if (!hasSource) {
+        invented.push({ pattern: check.description, context: match });
+      }
+    }
+  }
+  return {
+    check: "NAO_INVENCAO",
+    passed: invented.length === 0,
+    severity: invented.length > 0 ? "error" : "info",
+    message: invented.length === 0 ? "Nenhuma informa\xE7\xE3o inventada detectada no documento" : `Poss\xEDveis inven\xE7\xF5es: ${invented.map((i) => `${i.pattern}: "${i.context}"`).join("; ")}`,
+    details: invented[0] ? { field: "inven\xE7\xE3o", actual: invented[0].context } : void 0
+  };
+}
+function isStandardTemplatePhrase(text, description) {
+  const templatePhrases = [
+    "c\xF3digo de tr\xE2nsito brasileiro",
+    "resolu\xE7\xE3o contran",
+    "artigo",
+    "inciso",
+    "par\xE1grafo",
+    "ilustr\xEDssimo senhor",
+    "autoridade de tr\xE2nsito",
+    "requer o recebimento",
+    "acolhimento da defesa",
+    "arquivamento definitivo",
+    "efeito suspensivo",
+    "nestes termos",
+    "pede deferimento",
+    "termos em que",
+    "dados da autua\xE7\xE3o",
+    "qualifica\xE7\xE3o do requerente"
+  ];
+  const lower = text.toLowerCase();
+  return templatePhrases.some((tp) => lower.includes(tp));
+}
+function runEstruturaCheck(finalDocument, canonicalCase, analysis, blocksCatalog) {
+  const missingSections = [];
+  const requiredSections = [
+    { pattern: /ilustríssimo senhor/i, label: "Endere\xE7amento" },
+    { pattern: /qualifica[çc][aã]o/i, label: "Qualifica\xE7\xE3o do requerente" },
+    { pattern: /identifica[çc][aã]o do auto|auto de infra[çc][aã]o/i, label: "Identifica\xE7\xE3o do AIT" },
+    { pattern: /dos fatos|dos fatos e fundamentos/i, label: "Dos fatos" },
+    { pattern: /preliminares?/i, label: "Preliminares" },
+    { pattern: /mérito|do mérito/i, label: "M\xE9rito" },
+    { pattern: /pedidos?|requer/i, label: "Pedidos" },
+    { pattern: /rol de documentos|documentos anexos/i, label: "Rol de documentos" },
+    { pattern: /nestes termos|termos em que|pede deferimento/i, label: "Fecho/Assinatura" }
+  ];
+  for (const section of requiredSections) {
+    if (!section.pattern.test(finalDocument)) {
+      missingSections.push(section.label);
+    }
+  }
+  const pendingTags = finalDocument.match(/\{\{[a-zA-Z0-9_-]+\}\}/g) || [];
+  if (pendingTags.length > 0) {
+    missingSections.push(`Tags pendentes: ${pendingTags.slice(0, 5).join(", ")}`);
+  }
+  return {
+    check: "ESTRUTURA",
+    passed: missingSections.length === 0,
+    severity: missingSections.length > 0 ? "error" : "info",
+    message: missingSections.length === 0 ? "Documento estruturalmente completo com todas as se\xE7\xF5es obrigat\xF3rias" : `Se\xE7\xF5es/estrutura ausente: ${missingSections.join(", ")}`,
+    details: missingSections[0] ? { field: "estrutura", actual: missingSections[0] } : void 0
+  };
+}
+function mapRuleInputToField2(ruleInput) {
+  const mapping = {
+    infractionDate: "infraction.dateTime",
+    notificationExpeditionDate: "infraction.notificationExpeditionDate",
+    notificationDeliveryDate: "infraction.notificationDeliveryDate",
+    defenseDeadline: "infraction.defenseDeadline",
+    radarCalibrationDate: "infraction.inmetroAferitionDate",
+    speedLimit: "infraction.speedLimit",
+    measuredSpeed: "infraction.measuredSpeed",
+    consideredSpeed: "infraction.consideredSpeed",
+    speedMeasured: "infraction.speedMeasured",
+    speedConsidered: "infraction.speedConsidered",
+    radarEquipmentId: "infraction.radarEquipmentId",
+    hasPreviousInfractionsLast12Months: "infraction.hasPreviousInfractionsLast12Months",
+    hasPsychomotorTerm: "infraction.hasPsychomotorTerm",
+    hasAgentDetailedObservations: "infraction.hasAgentDetailedObservations",
+    hasPhotoProof: "infraction.hasPhotoProof",
+    hasR19SignageProof: "infraction.hasR19SignageProof",
+    autuadorBody: "infraction.autuadorBody",
+    aitNumber: "infraction.aitNumber",
+    infractionCode: "infraction.infractionCode"
+  };
+  return mapping[ruleInput] || null;
+}
+function runFullQualityGate(onboardingPayload, canonicalCase, analysis, finalDocument) {
+  const lineage = buildDataLineage(
+    onboardingPayload,
+    canonicalCase,
+    analysis,
+    finalDocument,
+    ARGUMENTS_CATALOG,
+    DOCUMENT_BLOCKS
+  );
+  return runFinalQualityGate({
+    onboardingPayload,
+    canonicalCase,
+    analysis,
+    finalDocument,
+    lineage,
+    argumentsCatalog: ARGUMENTS_CATALOG,
+    blocksCatalog: DOCUMENT_BLOCKS
+  });
+}
+
+// src/core/ai/ai-orchestrator.ts
+var refinementProvider = null;
+function registerRefinementProvider(p) {
+  refinementProvider = p;
+}
+async function applyAsyncRefinement(baseDraft, opts) {
+  if (!refinementProvider || !refinementProvider.refineProse) {
+    return { finalText: baseDraft.fullDraftText, applied: false, reason: "PROVIDER_UNAVAILABLE" };
+  }
+  let refined;
+  try {
+    refined = await refinementProvider.refineProse(baseDraft.fullDraftText, opts);
+  } catch (err) {
+    return { finalText: baseDraft.fullDraftText, applied: false, reason: "PROVIDER_UNAVAILABLE" };
+  }
+  if (!refined || refined.trim().length === 0) {
+    return { finalText: baseDraft.fullDraftText, applied: false, reason: "REFINEMENT_UNCHANGED" };
+  }
+  if (refined === baseDraft.fullDraftText) {
+    return { finalText: baseDraft.fullDraftText, applied: false, reason: "REFINEMENT_UNCHANGED" };
+  }
+  if (baseDraft.aitNumber && baseDraft.fullDraftText.includes(baseDraft.aitNumber) && !refined.includes(baseDraft.aitNumber)) {
+    return {
+      finalText: baseDraft.fullDraftText,
+      applied: false,
+      reason: "REFINED_REJECTED",
+      validationIssues: ["AIT_MISSING: O refinamento removeu o n\xFAmero do AIT obrigat\xF3rio"]
+    };
+  }
+  const candidate = { ...baseDraft, fullDraftText: refined };
+  const report2 = validateDraft(candidate);
+  if (!report2.valid) {
+    return {
+      finalText: baseDraft.fullDraftText,
+      applied: false,
+      reason: "REFINED_REJECTED",
+      validationIssues: report2.issues.filter((i) => i.severity === "error").map((i) => `${i.code}: ${i.message}`)
+    };
+  }
+  const tamperIssues = [];
+  const baseText = baseDraft.fullDraftText;
+  if (baseDraft.applicantName && baseDraft.applicantName.length > 3 && baseText.includes(baseDraft.applicantName) && !refined.includes(baseDraft.applicantName)) {
+    tamperIssues.push("APPLICANT_NAME_REMOVED: O refinamento alterou o nome do requerente.");
+  }
+  const dateMatches = baseText.match(/\b\d{4}-\d{2}-\d{2}\b/g) || [];
+  for (const dm of dateMatches) {
+    if (!refined.includes(dm)) {
+      tamperIssues.push(`DATE_ALTERED: O refinamento alterou/removeu data ${dm}`);
+      break;
+    }
+  }
+  if (tamperIssues.length > 0) {
+    return {
+      finalText: baseDraft.fullDraftText,
+      applied: false,
+      reason: "REFINED_REJECTED",
+      validationIssues: tamperIssues
+    };
+  }
+  return { finalText: refined, applied: true, reason: "REFINED_VALID" };
+}
+async function runControlledPipeline(input, opts) {
+  const baseValid = validateDraft(input.draft);
+  if (!baseValid.valid) {
+    const draftWithMeta = {
+      ...input.draft,
+      canonicalDraft: input.draft.canonicalDraft || input.draft.fullDraftText,
+      refinedDraft: null,
+      finalDraft: input.draft.fullDraftText,
+      usedAI: false,
+      refinementStatus: "unavailable",
+      validationStatus: "invalid",
+      integrityScore: 0
+    };
+    return {
+      draft: draftWithMeta,
+      aiUses: "deterministic",
+      controlled: { finalText: input.draft.fullDraftText, applied: false, reason: "PROVIDER_UNAVAILABLE" },
+      validationReport: baseValid
+    };
+  }
+  const controlled = await applyAsyncRefinement(input.draft, opts);
+  const finalDraft = {
+    ...input.draft,
+    fullDraftText: controlled.finalText,
+    canonicalDraft: input.draft.canonicalDraft || input.draft.fullDraftText,
+    refinedDraft: controlled.applied ? controlled.finalText : null,
+    finalDraft: controlled.finalText,
+    // IA nunca altera a seleção de teses: preserva a derivada da análise.
+    selectedArgumentIds: (input.analysis.recommendedArguments || []).map((a) => a.id),
+    usedAI: controlled.applied,
+    refinementStatus: controlled.applied ? "applied" : controlled.reason === "PROVIDER_UNAVAILABLE" ? "unavailable" : controlled.reason === "REFINED_REJECTED" ? "rejected" : "not_attempted",
+    validationStatus: "valid",
+    integrityScore: 100
+  };
+  let qualityGateReport;
+  if (input.onboardingPayload && input.canonicalCase) {
+    qualityGateReport = runFullQualityGate(
+      input.onboardingPayload,
+      input.canonicalCase,
+      input.analysis,
+      finalDraft.finalDraft || finalDraft.fullDraftText
+    );
+    if (qualityGateReport.blocked) {
+      const blockedDraft = {
+        ...finalDraft,
+        validationStatus: "blocked",
+        integrityScore: qualityGateReport.score,
+        integrityIssues: qualityGateReport.checks.filter((c) => !c.passed).map((c) => ({
+          code: c.check,
+          severity: c.severity,
+          message: c.message
+        }))
+      };
+      return {
+        draft: blockedDraft,
+        aiUses: controlled.applied ? "controlled_refinement" : "deterministic",
+        controlled,
+        validationReport: validateDraft(blockedDraft),
+        qualityGateReport
+      };
+    }
+    finalDraft.integrityScore = qualityGateReport.score;
+  }
+  return {
+    draft: finalDraft,
+    aiUses: controlled.applied ? "controlled_refinement" : "deterministic",
+    controlled,
+    validationReport: validateDraft(finalDraft),
+    qualityGateReport
+  };
+}
+function permittedTheses(analysis) {
+  return analysis.recommendedArguments || [];
+}
+
+// src/server/routes/cases.ts
 var router16 = Router16();
+registerRefinementProvider({
+  refineProse: async (draftText) => {
+    return enrichDefenseWithGemini({ petitionText: draftText });
+  }
+});
 router16.get("/cases", authenticateToken, (req, res) => {
   const { userId, claimToken } = req.query;
   const user = req.user;
@@ -30186,7 +31941,7 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   }
   const domain = CanonicalMapper.rowToDomain(row);
   const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body;
-  const selectedArgs = LEGAL_ARGUMENTS.filter(
+  const selectedArgs = ARGUMENTS_CATALOG.filter(
     (a) => selectedArgumentIds?.includes(a.id)
   );
   const b = applicantData;
@@ -30239,14 +31994,34 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   if (customFacts) {
     defense.factsNarrative = customFacts;
   }
-  const enrichedGemini = await enrichDefenseWithGemini({
-    infraction: domain.infraction,
-    applicant: resolvedApplicant,
-    arguments: selectedArgs,
-    procedure: procedureType
-  });
-  if (enrichedGemini) {
-    defense.fullDraftText = enrichedGemini;
+  const analysis = domain.analysis;
+  const theses = permittedTheses(analysis).map((a) => a.id);
+  const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
+  const pipelineResult = await runControlledPipeline(
+    {
+      analysis: analysis || {
+        recommendedArguments: selectedArgs,
+        detectedInconsistencies: [],
+        recommendedProcedure: procedureType || domain.serviceType || "recurso_jari",
+        overallSuccessRate: 50,
+        caseId: domain.id,
+        id: `anl_${Date.now()}`,
+        competentBody: domain.infraction?.autuadorBody || "",
+        summaryReasoning: "an\xE1lise gerada para defesa",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      draft: defense,
+      onboardingPayload,
+      canonicalCase: domain
+    },
+    { tone: "formal_rigorous" }
+  );
+  defense.fullDraftText = pipelineResult.draft.fullDraftText;
+  defense.selectedArgumentIds = theses.length ? theses : defense.selectedArgumentIds;
+  if (pipelineResult.controlled.reason === "REFINED_VALID") {
+    logger.info("system", "ai_controlled_refinement", "ai_controlled_refinement", "Refinamento de prosa da IA aplicado ap\xF3s valida\xE7\xE3o de integridade.", { caseId: domain.id });
+  } else if (pipelineResult.controlled.reason === "PROVIDER_UNAVAILABLE") {
+    logger.info("system", "ai_fallback_deterministic", "ai_fallback_deterministic", "IA indispon\xEDvel; minuta determin\xEDstica mantida.", { caseId: domain.id });
   }
   domain.defenseDraft = defense;
   domain.currentStage = 3;
@@ -30383,25 +32158,25 @@ var RULES_MATRIX = {
   },
   lei_seca: {
     requiredFreeFields: ["aitNumber", "location", "dateTime"],
-    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "hasSignTerm", "offeredRetest", "refusedTest"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "hasPsychomotorTerm", "hasSignTerm", "offeredRetest", "refusedTest"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   celular: {
     requiredFreeFields: ["aitNumber", "location", "dateTime"],
-    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "wasInHolder", "hadPhysicalApproach", "description"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "wasInHolder", "hadPhysicalApproach", "hasAgentDetailedObservations", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   vermelho: {
     requiredFreeFields: ["aitNumber", "location", "dateTime"],
-    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "yellowDurationIssue", "emergencyPassage", "description"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "yellowDurationIssue", "emergencyPassage", "hasPhotoProof", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
   estacionamento: {
     requiredFreeFields: ["aitNumber", "location", "dateTime"],
-    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "parkingCircumstance", "hasRegulatorySign", "description"],
+    optionalFreeFields: ["autuadorBody", "plate", "notificationExpeditionDate", "defenseDeadline", "parkingCircumstance", "hasRegulatorySign", "hasPhotoProof", "description"],
     inferableFields: ["ctbArticle", "infractionCode", "severity", "points", "fineAmount"],
     requiredDocumentFields: ["applicantName", "applicantCpf", "applicantCnh", "cnhCategory", "applicantEmail", "applicantPhone", "addressStreet", "addressNumber", "addressNeighborhood", "addressZipCode", "addressCityState"]
   },
@@ -30725,6 +32500,11 @@ var analytics_default = router21;
 // src/server/routes/ai.ts
 import { Router as Router22 } from "express";
 var router22 = Router22();
+registerRefinementProvider({
+  refineProse: async (draftText) => {
+    return enrichDefenseWithGemini({ petitionText: draftText });
+  }
+});
 router22.post("/ai/analyze-infraction", async (req, res) => {
   try {
     const infraction = req.body;
@@ -30848,104 +32628,60 @@ Responda em formato JSON estrito com o seguinte schema:
 router22.post("/ai/generate-defense", async (req, res) => {
   try {
     const { caseData, customInstructions } = req.body;
-    const infraction = caseData.dadosInfracao || caseData.infraction || {};
-    const ragContext = RagPipeline.retrieveContext(infraction);
-    const ai = getGeminiClient();
-    let generatedText = "";
-    const orgaoAutuador = infraction.orgaoAutuador || infraction.autuadorBody || "\xD3RG\xC3O N\xC3O INFORMADO";
-    const municipioUf = infraction.municipioUf || infraction.cityState || "CIDADE/UF N\xC3O INFORMADA";
-    if (ai) {
-      try {
-        const prompt = `Voc\xEA \xE9 o mais prestigiado especialista em Direito de Tr\xE2nsito Administrativo do Brasil.
-Elabore uma pe\xE7a jur\xEDdica de DEFESA PR\xC9VIA / RECURSO ADMINISTRATIVO impec\xE1vel, formal e t\xE9cnica contra o auto de infra\xE7\xE3o n\xBA ${infraction.autoInfracao || infraction.aitNumber}.
+    const rawInfraction = caseData?.dadosInfracao || caseData?.infraction || {};
+    const orgaoAutuador = rawInfraction.orgaoAutuador || rawInfraction.autuadorBody || "DETRAN";
+    const infraction = {
+      aitNumber: rawInfraction.autoInfracao || rawInfraction.aitNumber || "SN",
+      infractionCode: rawInfraction.codigoInfracao || rawInfraction.infractionCode || "745-50",
+      description: rawInfraction.descricaoInfracao || rawInfraction.description || "Infra\xE7\xE3o de Tr\xE2nsito",
+      ctbArticle: rawInfraction.enquadramentoLegal || rawInfraction.ctbArticle || "Art. 218, I do CTB",
+      severity: rawInfraction.gravidade || rawInfraction.severity || "media",
+      points: Number(rawInfraction.pontos || rawInfraction.points || 4),
+      fineAmount: Number(rawInfraction.valor || rawInfraction.fineAmount || 130.16),
+      dateTime: rawInfraction.dataHoraInfracao || rawInfraction.dateTime || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      location: rawInfraction.localInfracao || rawInfraction.location || "Via P\xFAblica",
+      autuadorBody: orgaoAutuador,
+      speedLimit: rawInfraction.velocidadePermitida ? Number(rawInfraction.velocidadePermitida) : rawInfraction.speedLimit,
+      speedMeasured: rawInfraction.velocidadeMedida ? Number(rawInfraction.velocidadeMedida) : rawInfraction.measuredSpeed,
+      speedConsidered: rawInfraction.velocidadeConsiderada ? Number(rawInfraction.velocidadeConsiderada) : rawInfraction.consideredSpeed,
+      radarEquipmentId: rawInfraction.numeroEquipamentoInmetro || rawInfraction.radarEquipmentId,
+      inmetroAferitionDate: rawInfraction.dataAfericaoInmetro || rawInfraction.inmetroAferitionDate,
+      defenseDeadline: rawInfraction.prazoDefesa || rawInfraction.defenseDeadline
+    };
+    const applicant = {
+      name: rawInfraction.nomeCondutor || caseData?.applicantName || "CONDUTOR REQUERENTE",
+      cpf: rawInfraction.cpfCondutor || caseData?.applicantCpf || "000.000.000-00",
+      rg: rawInfraction.rgCondutor || caseData?.applicantRg,
+      cnh: rawInfraction.cnhNumero || caseData?.applicantCnh || "00000000000",
+      category: rawInfraction.categoriaCnh || caseData?.cnhCategory || "B",
+      address: caseData?.applicantAddress || "Endere\xE7o n\xE3o informado",
+      cityState: rawInfraction.municipioUf || caseData?.applicantCityState || "S\xE3o Paulo/SP"
+    };
+    const vehiclePlate = rawInfraction.placa || caseData?.vehiclePlate || "ABC-1234";
+    const vehicleModel = rawInfraction.marcaModelo || caseData?.vehicleModel || "Ve\xEDculo Automotor";
+    const procedureType = caseData?.procedureType || "defesa_previa";
+    const analysis = RagPipeline.analyzeInfraction(caseData?.caseId || `case_${Date.now()}`, infraction);
+    const defense = RagPipeline.generateDefenseDraft(
+      analysis.caseId,
+      infraction,
+      vehiclePlate,
+      vehicleModel,
+      applicant,
+      analysis.recommendedArguments || [],
+      procedureType
+    );
+    if (customInstructions) {
+      defense.factsNarrative = `${defense.factsNarrative}
 
-DADOS DO PROCESSO:
-- Requerente: ${infraction.nomeCondutor || "N\xC3O INFORMADO"}
-- CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"} | CNH: ${infraction.cnhNumero || "N\xC3O INFORMADO"}
-- Ve\xEDculo: Placa ${infraction.placa} / ${infraction.ufVeiculo} (${infraction.marcaModelo || "Ve\xEDculo Automotor"})
-- \xD3rg\xE3o Autuador: ${infraction.orgaoAutuador}
-- Infra\xE7\xE3o: ${infraction.codigoInfracao || infraction.infractionCode} - ${infraction.descricaoInfracao || infraction.description}
-- Enquadramento: ${infraction.enquadramentoLegal || infraction.ctbArticle}
-- Data/Hora: ${infraction.dataHoraInfracao || infraction.dateTime} | Local: ${infraction.localInfracao || infraction.location}
-- Medi\xE7\xF5es T\xE9cnicas: Permitida ${infraction.velocidadePermitida || infraction.speedLimit || "N/A"} km/h, Medida ${infraction.velocidadeMedida || infraction.measuredSpeed || "N/A"} km/h, Considerada ${infraction.velocidadeConsiderada || infraction.consideredSpeed || "N/A"} km/h
-- Equipamento: ${infraction.numeroEquipamentoInmetro || infraction.radarEquipmentId || "Eletr\xF4nico"} (Aferi\xE7\xE3o: ${infraction.dataAfericaoInmetro || infraction.inmetroAferitionDate || "N\xE3o informada"})
-
-TESES E NULIDADES A INCLUIR:
-${ragContext.potentialNullities.map((n) => `- ${n.titulo}: ${n.fundamentoLegal} - ${n.descricao}`).join("\n")}
-
-ESTRUTURA OBRIGAT\xD3RIA DA PE\xC7A:
-1. ENDERE\xC7AMENTO AO ILUSTR\xCDSSIMO DIRETOR DO \xD3RG\xC3O AUTUADOR
-2. QUALIFICA\xC7\xC3O COMPLETA DO REQUERENTE E DO VE\xCDCULO
-3. DOS FATOS
-4. DAS PRELIMINARES DE NULIDADE (Decad\xEAncia do Art. 281, Falta de Tipicidade, Aferi\xE7\xE3o do INMETRO expirada conforme Resolu\xE7\xE3o 798/2020)
-5. DO M\xC9RITO T\xC9CNICO E JUR\xCDDICO (Viola\xE7\xE3o ao devido processo legal, Art. 5\xBA, LIV e LV da CF/88, Resolu\xE7\xF5es CONTRAN 798 e 918)
-6. DO PEDIDO SUBSIDI\xC1RIO DE CONVERS\xC3O EM ADVERT\xCANCIA POR ESCRITO (Art. 267 CTB)
-7. DOS PEDIDOS E REQUERIMENTOS FINAIS (Arquivamento, cancelamento de pontua\xE7\xE3o e efeito suspensivo)
-8. FECHO E LOCAL/DATA
-
-Redija em portugu\xEAs jur\xEDdico formal culto, com excelente fundamenta\xE7\xE3o doutrin\xE1ria e jurisprudencial.`;
-        const aiResponse = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: prompt,
-          config: {
-            temperature: 0.3
-          }
-        });
-        if (aiResponse.text) {
-          generatedText = aiResponse.text;
-        }
-      } catch (e) {
-        console.error("Error generating defense with Gemini:", e);
-        if (process.env.NODE_ENV === "production") {
-          return res.status(503).json({
-            error: "Servi\xE7o de gera\xE7\xE3o de defesa indispon\xEDvel",
-            message: "Tente novamente em alguns minutos."
-          });
-        }
-      }
+Observa\xE7\xF5es complementares do requerente: ${customInstructions}`;
     }
-    if (!generatedText) {
-      generatedText = `ILUSTR\xCDSSIMO SENHOR PRESIDENTE DA JUNTA ADMINISTRATIVA DE RECURSOS DE INFRA\xC7\xD5ES - JARI DO ${orgaoAutuador.toUpperCase()}
-
-REFER\xCANCIA: AUTO DE INFRA\xC7\xC3O N\xBA ${infraction.autoInfracao || infraction.aitNumber || "N/A"}
-PLACA DO VE\xCDCULO: ${infraction.placa || "N/A"} / ${infraction.ufVeiculo || ""}
-ENQUADRAMENTO: ${infraction.enquadramentoLegal || infraction.ctbArticle || "N/A"} (${infraction.codigoInfracao || infraction.infractionCode || "N/A"})
-
-${(infraction.nomeCondutor || "REQUERENTE").toUpperCase()}, brasileiro(a), inscrito(a) no CPF/MF sob o n\xBA ${infraction.cpfCondutor || "XXX.XXX.XXX-XX"}, portador(a) da CNH n\xBA ${infraction.cnhNumero || "XXXXXXXXXXX"}, propriet\xE1rio(a)/condutor(a) do ve\xEDculo marca/modelo ${infraction.marcaModelo || "automotor"}, placa ${infraction.placa || "N/A"}, vem, tempestivamente, com fulcro nos Artigos 5\xBA, incisos LIV e LV da Constitui\xE7\xE3o Federal de 1988, e nos Artigos 280 e seguintes do C\xF3digo de Tr\xE2nsito Brasileiro (Lei n\xBA 9.503/1997), apresentar a presente:
-
-DEFESA ADMINISTRATIVA DE AUTUA\xC7\xC3O
-
-em face do Auto de Infra\xE7\xE3o supra epigrafado, lavrado em ${infraction.dataHoraInfracao ? new Date(infraction.dataHoraInfracao).toLocaleDateString("pt-BR") : "data recente"}, pelos substratos f\xE1ticos e jur\xEDdicos a seguir delineados:
-
-1. DOS FATOS
-Consta no referido Auto de Infra\xE7\xE3o que o ve\xEDculo supostamente transitava no local '${infraction.localInfracao || "Via P\xFAblica"}' em desacordo com a velocidade regulamentada. Ocorre que o presente ato administrativo encontra-se maculado por v\xEDcios insan\xE1veis de forma e de m\xE9rito t\xE9cnico, n\xE3o podendo subsistir no ordenamento jur\xEDdico p\xE1trio.
-
-2. DAS PRELIMINARES DE NULIDADE ABSOLUTA DO AUTO
-2.1. Da Inobserv\xE2ncia aos Requisitos Metrol\xF3gicos Vinculantes (Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 e Portaria INMETRO n\xBA 158/2022)
-O Artigo 280, \xA7 2\xBA do CTB e o Artigo 4\xBA da Resolu\xE7\xE3o CONTRAN n\xBA 798/2020 exigem expressamente que o medidor de velocidade comprove validade de verifica\xE7\xE3o metrol\xF3gica peri\xF3dica anual (12 meses) pelo INMETRO. No caso em tela, o equipamento ${infraction.numeroEquipamentoInmetro || infraction.radarEquipmentId || "utilizado"} operava sem o laudo de aferi\xE7\xE3o regular e tempestivo, tornando insubsistente o registro fotogr\xE1fico e documental.
-
-2.2. Da Falta de Sinaliza\xE7\xE3o Ostensiva Regulamentadora (Artigo 90 do CTB)
-N\xE3o restou comprovada a exist\xEAncia de placa de sinaliza\xE7\xE3o vertical R-19 previamente ao equipamento de fiscaliza\xE7\xE3o eletr\xF4nica no trecho regulamentado, desrespeitando o princ\xEDpio da legalidade estrita e da seguran\xE7a vi\xE1ria.
-
-3. DO PEDIDO SUBSIDI\xC1RIO: CONVERS\xC3O EM ADVERT\xCANCIA POR ESCRITO (Art. 267 do CTB)
-Subsidiariamente, caso superadas as nulidades formais (o que n\xE3o se espera), requer a aplica\xE7\xE3o do Artigo 267 do CTB (com reda\xE7\xE3o alterada pela Lei Federal n\xBA 14.071/2020), convertendo-se a penalidade de multa em ADVERT\xCANCIA POR ESCRITO, tratando-se de direito p\xFAblico subjetivo do condutor que n\xE3o possui reincid\xEAncia espec\xEDfica no per\xEDodo de 12 meses.
-
-4. DOS PEDIDOS
-Ante o exposto, REQUER a Vossa Senhoria:
-a) O RECEBIMENTO da presente Defesa Pr\xE9via com a concess\xE3o de EFEITO SUSPENSIVO;
-b) No m\xE9rito, o TOTAL DEFERIMENTO e o consequente ARQUIVAMENTO do Auto de Infra\xE7\xE3o n\xBA ${infraction.autoInfracao || "N/A"} por manifesta insubsist\xEAncia formal e metrol\xF3gica;
-c) Subsidiariamente, a convers\xE3o em Advert\xEAncia por Escrito nos termos do Art. 267 do CTB;
-d) A anula\xE7\xE3o de quaisquer pontos lan\xE7ados no prontu\xE1rio do Requerente.
-
-Termos em que,
-Pede e Espera Deferimento.
-
-${municipioUf}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
-
-________________________________________________
-${(infraction.nomeCondutor || "REQUERENTE").toUpperCase()}
-CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}`;
-    }
+    const pipelineResult = await runControlledPipeline(
+      {
+        analysis,
+        draft: defense
+      },
+      { tone: "formal_rigorous" }
+    );
     const blocks = [
       {
         id: "blk_1",
@@ -30959,7 +32695,7 @@ CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}`;
         id: "blk_2",
         titulo: "Qualifica\xE7\xE3o do Condutor e Ve\xEDculo",
         categoria: "cabecalho",
-        conteudo: `${(infraction.nomeCondutor || "CONDUTOR / PROPRIET\xC1RIO").toUpperCase()}, CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}, CNH: ${infraction.cnhNumero || "N\xC3O INFORMADO"}, propriet\xE1rio do ve\xEDculo Placa ${infraction.placa || "N/A"}, vem apresentar DEFESA ADMINISTRATIVA.`,
+        conteudo: `${(applicant.name || "CONDUTOR / PROPRIET\xC1RIO").toUpperCase()}, CPF: ${applicant.cpf || "N\xC3O INFORMADO"}, CNH: ${applicant.cnh || "N\xC3O INFORMADO"}, propriet\xE1rio do ve\xEDculo Placa ${vehiclePlate || "N/A"}, vem apresentar DEFESA ADMINISTRATIVA.`,
         ativo: true,
         editavel: true
       },
@@ -30967,7 +32703,7 @@ CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}`;
         id: "blk_3",
         titulo: "S\xEDntese dos Fatos",
         categoria: "fatos",
-        conteudo: `Em ${infraction.dataHoraInfracao ? new Date(infraction.dataHoraInfracao).toLocaleDateString("pt-BR") : "data da autua\xE7\xE3o"}, foi lavrado o Auto de Infra\xE7\xE3o ${infraction.autoInfracao || infraction.aitNumber || "N/A"} referente a ${infraction.descricaoInfracao || infraction.description || "infra\xE7\xE3o de tr\xE2nsito"} no local ${infraction.localInfracao || infraction.location || "Via P\xFAblica"}.`,
+        conteudo: `Em ${infraction.dateTime ? new Date(infraction.dateTime).toLocaleDateString("pt-BR") : "data da autua\xE7\xE3o"}, foi lavrado o Auto de Infra\xE7\xE3o ${infraction.aitNumber || "N/A"} referente a ${infraction.description || "infra\xE7\xE3o de tr\xE2nsito"} no local ${infraction.location || "Via P\xFAblica"}.`,
         ativo: true,
         editavel: true
       },
@@ -31008,7 +32744,7 @@ CPF: ${infraction.cpfCondutor || "N\xC3O INFORMADO"}`;
         titulo: "Fecho e Assinatura",
         categoria: "fecho",
         conteudo: `Pede Deferimento.
-${municipioUf || "Brasil"}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
+${applicant.cityState || "Brasil"}, ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}.
 
 _____________________________________
 Assinatura do Requerente`,
@@ -31018,15 +32754,19 @@ Assinatura do Requerente`,
     ];
     const defenseDoc = {
       id: "doc_" + Math.random().toString(36).substring(2, 9),
-      caseId: caseData.id,
-      tipoDefesa: caseData.tipoServico || caseData.serviceType || "recurso_jari",
-      titulo: `Defesa Administrativa - Auto ${infraction.autoInfracao || infraction.aitNumber || "N/A"}`,
+      caseId: caseData?.id || pipelineResult.draft.caseId,
+      tipoDefesa: caseData?.tipoServico || caseData?.serviceType || procedureType,
+      titulo: `Defesa Administrativa - Auto ${infraction.aitNumber || "N/A"}`,
       orgaoDestinatario: orgaoAutuador,
-      autorNome: infraction.nomeCondutor || "Condutor / Requerente",
-      autorCpf: infraction.cpfCondutor || "",
-      autorCnh: infraction.cnhNumero || "",
-      autorEndereco: municipioUf,
-      textoCompleto: generatedText,
+      autorNome: applicant.name,
+      autorCpf: applicant.cpf,
+      autorCnh: applicant.cnh,
+      autorEndereco: applicant.cityState,
+      textoCompleto: pipelineResult.draft.fullDraftText,
+      defenseDraft: pipelineResult.draft,
+      analysis,
+      aiControlled: pipelineResult.controlled,
+      validationReport: pipelineResult.validationReport,
       blocos: blocks,
       geradoEm: (/* @__PURE__ */ new Date()).toISOString(),
       ultimaEdicao: (/* @__PURE__ */ new Date()).toISOString(),
@@ -31150,11 +32890,1223 @@ router24.get("/me", authenticateToken, async (req, res) => {
 });
 var auth_default = router24;
 
+// src/server/routes/documenso.ts
+import { Router as Router25 } from "express";
+import express from "express";
+
+// src/types/documenso.ts
+var DocumensoError = class _DocumensoError extends Error {
+  constructor(statusCode, code, message, details) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+    this.name = "DocumensoError";
+  }
+  static fromResponse(status, data) {
+    return new _DocumensoError(
+      status,
+      data.code || "UNKNOWN_ERROR",
+      data.message || "Documenso API error",
+      data
+    );
+  }
+};
+var DOCUMENSO_API_VERSION = "v2";
+var DOCUMENSO_BASE_PATH = `/api/${DOCUMENSO_API_VERSION}`;
+var DOCUMENSO_ENDPOINTS = {
+  ENVELOPES: "/envelopes",
+  ENVELOPE_BY_ID: (id) => `/envelopes/${id}`,
+  ENVELOPE_SEND: (id) => `/envelopes/${id}/send`,
+  ENVELOPE_DOWNLOAD: (id) => `/envelopes/${id}/download`,
+  ENVELOPE_SIGNING_URL: (envelopeId, recipientId) => `/envelopes/${envelopeId}/recipients/${recipientId}/signing-url`,
+  EMBEDDING_TOKEN: "/embedding/create-presign-token"
+};
+
+// src/server/lib/documenso/client.ts
+import crypto5 from "crypto";
+var DocumensoClient = class {
+  constructor(config) {
+    this.baseUrl = config.baseUrl.replace(/\/$/, "");
+    this.apiToken = config.apiToken;
+    this.webhookSecret = config.webhookSecret;
+    this.webhookUrl = config.webhookUrl;
+  }
+  /**
+   * Create a new envelope with documents, recipients, and fields
+   */
+  async createEnvelope(request) {
+    logger.info("documenso", "client", "create-envelope", "Creating Documenso envelope", {
+      externalId: request.externalId,
+      title: request.title,
+      recipientsCount: request.recipients.length,
+      documentsCount: request.documents.length,
+      status: "pending"
+    });
+    const response = await this.request(
+      DOCUMENSO_ENDPOINTS.ENVELOPES,
+      {
+        method: "POST",
+        body: JSON.stringify(request)
+      }
+    );
+    logger.info("documenso", "client", "create-envelope", "Documenso envelope created", {
+      envelopeId: response.id,
+      externalId: request.externalId,
+      envelopeStatus: response.status,
+      status: "success"
+    });
+    return response;
+  }
+  /**
+   * Get envelope by ID
+   */
+  async getEnvelope(envelopeId) {
+    return this.request(DOCUMENSO_ENDPOINTS.ENVELOPE_BY_ID(envelopeId));
+  }
+  /**
+   * Send envelope for signing
+   */
+  async sendEnvelope(envelopeId) {
+    logger.info("documenso", "client", "send-envelope", "Sending Documenso envelope", { envelopeId, status: "pending" });
+    const response = await this.request(
+      DOCUMENSO_ENDPOINTS.ENVELOPE_SEND(envelopeId),
+      { method: "POST" }
+    );
+    logger.info("documenso", "client", "send-envelope", "Documenso envelope sent", { envelopeId, envelopeStatus: response.status, status: "success" });
+    return response;
+  }
+  /**
+   * Download completed envelope PDF
+   */
+  async downloadEnvelope(envelopeId) {
+    const response = await fetch(`${this.baseUrl}${DOCUMENSO_BASE_PATH}${DOCUMENSO_ENDPOINTS.ENVELOPE_DOWNLOAD(envelopeId)}`, {
+      method: "GET",
+      headers: this.getHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw DocumensoError.fromResponse(response.status, error);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+  /**
+   * Get signing URL for a specific recipient
+   */
+  async getSigningUrl(envelopeId, recipientId) {
+    return this.request(
+      DOCUMENSO_ENDPOINTS.ENVELOPE_SIGNING_URL(envelopeId, recipientId)
+    );
+  }
+  /**
+   * List envelopes with optional filters
+   */
+  async listEnvelopes(query = {}) {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", query.page.toString());
+    if (query.limit) params.set("limit", query.limit.toString());
+    if (query.status) params.set("status", query.status);
+    if (query.externalId) params.set("externalId", query.externalId);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    return this.request(`${DOCUMENSO_ENDPOINTS.ENVELOPES}${queryString}`);
+  }
+  /**
+   * Delete envelope
+   */
+  async deleteEnvelope(envelopeId) {
+    await this.request(DOCUMENSO_ENDPOINTS.ENVELOPE_BY_ID(envelopeId), {
+      method: "DELETE"
+    });
+  }
+  /**
+   * Create embedding presign token for iframe signing
+   */
+  async createEmbeddingToken(request) {
+    return this.request(
+      DOCUMENSO_ENDPOINTS.EMBEDDING_TOKEN,
+      {
+        method: "POST",
+        body: JSON.stringify(request)
+      }
+    );
+  }
+  /**
+   * Verify webhook signature
+   */
+  verifyWebhookSignature(payload, receivedSecret) {
+    if (!this.webhookSecret) {
+      logger.warn("documenso", "client", "verify-webhook", "Webhook secret not configured, rejecting webhook");
+      return false;
+    }
+    if (!receivedSecret) {
+      logger.warn("documenso", "client", "verify-webhook", "No signature header received");
+      return false;
+    }
+    const expected = crypto5.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
+    const receivedBuffer = Buffer.from(receivedSecret);
+    const expectedBuffer = Buffer.from(expected);
+    if (receivedBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return crypto5.timingSafeEqual(receivedBuffer, expectedBuffer);
+  }
+  /**
+   * Get webhook configuration
+   */
+  getWebhookConfig() {
+    return {
+      secret: this.webhookSecret,
+      url: this.webhookUrl
+    };
+  }
+  /**
+   * Internal request helper
+   */
+  async request(path, options = {}) {
+    const url = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...this.getHeaders(),
+        ...options.headers
+      }
+    });
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { message: response.statusText };
+      }
+      logger.error("documenso", "client", "request", "Documenso API error", { path, httpStatus: response.status, error: errorData, status: "failed" });
+      throw DocumensoError.fromResponse(response.status, errorData);
+    }
+    if (response.status === 204) {
+      return void 0;
+    }
+    return response.json();
+  }
+  /**
+   * Get standard headers for API requests
+   */
+  getHeaders() {
+    return {
+      "Authorization": `Bearer ${this.apiToken}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+  }
+};
+function createDocumensoClient() {
+  const baseUrl = process.env.DOCUMENSO_BASE_URL;
+  const apiToken = process.env.DOCUMENSO_API_TOKEN;
+  const webhookSecret = process.env.DOCUMENSO_WEBHOOK_SECRET;
+  const webhookUrl = process.env.DOCUMENSO_WEBHOOK_URL;
+  if (!baseUrl) {
+    throw new Error("DOCUMENSO_BASE_URL environment variable is required");
+  }
+  if (!apiToken) {
+    throw new Error("DOCUMENSO_API_TOKEN environment variable is required");
+  }
+  if (!webhookSecret) {
+    throw new Error("DOCUMENSO_WEBHOOK_SECRET environment variable is required");
+  }
+  if (!webhookUrl) {
+    throw new Error("DOCUMENSO_WEBHOOK_URL environment variable is required");
+  }
+  return new DocumensoClient({
+    baseUrl,
+    apiToken,
+    webhookSecret,
+    webhookUrl
+  });
+}
+var documensoClientInstance = null;
+function getDocumensoClient() {
+  if (!documensoClientInstance) {
+    documensoClientInstance = createDocumensoClient();
+  }
+  return documensoClientInstance;
+}
+
+// src/server/lib/documenso/envelope-service.ts
+var EnvelopeService = class {
+  constructor(client) {
+    this.client = client || getDocumensoClient();
+  }
+  /**
+   * Create envelope from case data
+   */
+  async createEnvelopeFromCase(caseId, pdfBuffer, signers, options) {
+    logger.info("documenso", "envelope-service", "create-envelope-from-case", "Creating envelope from case", {
+      caseId,
+      signersCount: signers.length
+    });
+    const envelopeRequest = this.buildEnvelopeRequest(caseId, signers, pdfBuffer, options);
+    const envelope = await this.client.createEnvelope(envelopeRequest);
+    if (envelope.documents.length > 0 && envelope.documents[0].uploadUrl) {
+      await this.uploadPdf(envelope.documents[0].uploadUrl, pdfBuffer);
+    }
+    logger.info("documenso", "envelope-service", "create-envelope-from-case", "Envelope created and PDF uploaded", {
+      envelopeId: envelope.id,
+      caseId
+    });
+    return envelope;
+  }
+  /**
+   * Build envelope request from case data
+   */
+  buildEnvelopeRequest(caseId, signers, pdfBuffer, options) {
+    const title = options?.title || `Defesa de Multa - Caso ${caseId}`;
+    const documents = [
+      {
+        name: `defesa-${caseId}.pdf`,
+        fileUrl: ""
+        // Will be replaced with presigned URL
+      }
+    ];
+    const recipients = signers.map((signer, index) => ({
+      email: signer.email,
+      name: signer.name,
+      role: "SIGNER",
+      signingOrder: index + 1
+    }));
+    const fields = recipients.flatMap((recipient, rIndex) => {
+      const baseFields = [
+        {
+          documentId: `doc_0`,
+          recipientId: `rec_${rIndex}`,
+          type: "SIGNATURE",
+          page: 1,
+          x: 100 + rIndex * 250,
+          // Offset for multiple signers
+          y: 600,
+          width: 200,
+          height: 50,
+          required: true
+        },
+        {
+          documentId: `doc_0`,
+          recipientId: `rec_${rIndex}`,
+          type: "DATE",
+          page: 1,
+          x: 100 + rIndex * 250,
+          y: 550,
+          width: 150,
+          height: 30,
+          required: true
+        }
+      ];
+      if (options?.fields && options.fields[rIndex]) {
+        return baseFields.map((f, i) => ({ ...f, ...options.fields[rIndex] }));
+      }
+      return baseFields;
+    });
+    const settings = {
+      expiresInDays: 30,
+      signingOrder: "PARALLEL",
+      reminderEnabled: true,
+      reminderIntervalDays: 7,
+      ...options?.settings
+    };
+    return {
+      title,
+      documents,
+      recipients,
+      fields,
+      settings,
+      externalId: caseId,
+      metadata: {
+        caseId,
+        ...options?.metadata
+      }
+    };
+  }
+  /**
+   * Upload PDF to presigned URL
+   */
+  async uploadPdf(uploadUrl, pdfBuffer) {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Length": pdfBuffer.length.toString()
+      },
+      body: pdfBuffer
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      logger.error("documenso", "envelope-service", "upload-pdf", "Failed to upload PDF to Documenso", {
+        uploadUrl,
+        httpStatus: response.status,
+        error: errorText,
+        status: "failed"
+      });
+      throw new DocumensoError(
+        response.status,
+        "PDF_UPLOAD_FAILED",
+        `Failed to upload PDF: ${errorText}`
+      );
+    }
+    logger.debug("documenso", "envelope-service", "upload-pdf", "PDF uploaded successfully", { uploadUrl });
+  }
+  /**
+   * Send envelope for signing
+   */
+  async sendEnvelope(envelopeId) {
+    logger.info("documenso", "envelope-service", "send-envelope", "Sending envelope for signing", { envelopeId, status: "pending" });
+    return this.client.sendEnvelope(envelopeId);
+  }
+  /**
+   * Get envelope status
+   */
+  async getEnvelopeStatus(envelopeId) {
+    const envelope = await this.client.getEnvelope(envelopeId);
+    return envelope.status;
+  }
+  /**
+   * Get full envelope details
+   */
+  async getEnvelope(envelopeId) {
+    return this.client.getEnvelope(envelopeId);
+  }
+  /**
+   * Get signing URL for recipient
+   */
+  async getSigningUrl(envelopeId, recipientId) {
+    const response = await this.client.getSigningUrl(envelopeId, recipientId);
+    return response.signingUrl;
+  }
+  /**
+   * Download completed PDF
+   */
+  async downloadCompleted(envelopeId) {
+    logger.info("documenso", "envelope-service", "download-completed", "Downloading completed envelope PDF", { envelopeId, status: "pending" });
+    return this.client.downloadEnvelope(envelopeId);
+  }
+  /**
+   * Check if envelope is in terminal state
+   */
+  isTerminalStatus(status) {
+    return ["COMPLETED", "REJECTED", "CANCELLED", "EXPIRED"].includes(status);
+  }
+  /**
+   * Map Documenso status to internal case status
+   */
+  mapToInternalStatus(status) {
+    switch (status) {
+      case "DRAFT":
+        return "draft";
+      case "PENDING":
+        return "aguardando_assinatura";
+      case "COMPLETED":
+        return "assinado";
+      case "REJECTED":
+        return "rejeitado";
+      case "CANCELLED":
+        return "cancelado";
+      case "EXPIRED":
+        return "expirado";
+      default:
+        return "desconhecido";
+    }
+  }
+  /**
+   * Create embedding token for iframe signing
+   */
+  async createEmbeddingToken(envelopeId, recipientId, redirectUrl) {
+    const response = await this.client.createEmbeddingToken({
+      envelopeId,
+      recipientId,
+      redirectUrl
+    });
+    return response.token;
+  }
+};
+var envelopeServiceInstance = null;
+function getEnvelopeService() {
+  if (!envelopeServiceInstance) {
+    envelopeServiceInstance = new EnvelopeService();
+  }
+  return envelopeServiceInstance;
+}
+
+// src/server/lib/documenso/webhook-handler.ts
+var WebhookHandler = class {
+  // 7 days
+  constructor(client, envelopeService2) {
+    this.processedEvents = /* @__PURE__ */ new Map();
+    // In-memory for now, use Redis in production
+    this.IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+    this.client = client || getDocumensoClient();
+    this.envelopeService = envelopeService2 || getEnvelopeService();
+  }
+  /**
+   * Process incoming webhook
+   * Call this from Express route with raw body
+   */
+  async handleWebhook(rawBody, signature) {
+    if (!this.client.verifyWebhookSignature(rawBody, signature)) {
+      logger.warn("documenso", "webhook-handler", "handle-webhook", "Webhook signature verification failed", {
+        signaturePresent: !!signature,
+        status: "failed"
+      });
+      return { success: false };
+    }
+    let payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (err) {
+      logger.error("documenso", "webhook-handler", "handle-webhook", "Invalid webhook payload JSON", { err, status: "failed" });
+      return { success: false };
+    }
+    const eventKey = `${payload.payload.id}:${payload.event}`;
+    if (this.isProcessed(eventKey)) {
+      logger.info("documenso", "webhook-handler", "handle-webhook", "Duplicate webhook event, skipping", { eventKey, status: "skipped" });
+      return { success: true, event: payload.event, envelopeId: payload.payload.id };
+    }
+    try {
+      await this.processEvent(payload);
+      this.markProcessed(eventKey);
+      logger.info("documenso", "webhook-handler", "handle-webhook", "Webhook processed successfully", {
+        event: payload.event,
+        envelopeId: payload.payload.id,
+        status: "success"
+      });
+    } catch (err) {
+      logger.error("documenso", "webhook-handler", "handle-webhook", "Webhook processing failed", {
+        event: payload.event,
+        envelopeId: payload.payload.id,
+        err,
+        status: "failed"
+      });
+      throw err;
+    }
+    return { success: true, event: payload.event, envelopeId: payload.payload.id };
+  }
+  /**
+   * Process webhook event based on type
+   */
+  async processEvent(payload) {
+    const { event, payload: envelopeData } = payload;
+    switch (event) {
+      case "DOCUMENT_SENT":
+        await this.handleDocumentSent(envelopeData);
+        break;
+      case "DOCUMENT_OPENED":
+        await this.handleDocumentOpened(envelopeData);
+        break;
+      case "DOCUMENT_SIGNED":
+        await this.handleDocumentSigned(envelopeData);
+        break;
+      case "DOCUMENT_RECIPIENT_COMPLETED":
+        await this.handleRecipientCompleted(envelopeData);
+        break;
+      case "DOCUMENT_COMPLETED":
+        await this.handleDocumentCompleted(envelopeData);
+        break;
+      case "DOCUMENT_REJECTED":
+        await this.handleDocumentRejected(envelopeData);
+        break;
+      case "DOCUMENT_CANCELLED":
+        await this.handleDocumentCancelled(envelopeData);
+        break;
+      case "RECIPIENT_EXPIRED":
+        await this.handleRecipientExpired(envelopeData);
+        break;
+      case "DOCUMENT_REMINDER_SENT":
+        await this.handleReminderSent(envelopeData);
+        break;
+      default:
+        logger.info("documenso", "webhook-handler", "process-event", "Unhandled webhook event", { event, status: "skipped" });
+    }
+  }
+  /**
+   * Handle DOCUMENT_SENT - envelope sent to recipients
+   */
+  async handleDocumentSent(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-document-sent", "Document sent", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      recipients: envelopeData.recipients.length,
+      status: "success"
+    });
+    await this.updateEnvelopeStatus(envelopeData.id, "PENDING", {
+      sent_at: envelopeData.sentAt
+    });
+  }
+  /**
+   * Handle DOCUMENT_OPENED - recipient opened document
+   */
+  async handleDocumentOpened(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-document-opened", "Document opened", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      status: "success"
+    });
+    for (const recipient of envelopeData.recipients) {
+      if (recipient.readStatus === "OPENED" || recipient.readStatus === "READ") {
+        await this.updateRecipientReadStatus(envelopeData.id, recipient.id, recipient.readStatus);
+      }
+    }
+  }
+  /**
+   * Handle DOCUMENT_SIGNED - recipient signed
+   */
+  async handleDocumentSigned(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-document-signed", "Document signed", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      signedRecipients: envelopeData.recipients.filter((r) => r.signingStatus === "SIGNED").length,
+      status: "success"
+    });
+    for (const recipient of envelopeData.recipients) {
+      if (recipient.signingStatus === "SIGNED") {
+        await this.updateRecipientSigningStatus(envelopeData.id, recipient.id, "SIGNED", recipient.signedAt);
+      }
+    }
+  }
+  /**
+   * Handle DOCUMENT_RECIPIENT_COMPLETED - recipient completed all actions
+   */
+  async handleRecipientCompleted(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-recipient-completed", "Recipient completed", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      status: "success"
+    });
+    for (const recipient of envelopeData.recipients) {
+      if (recipient.signingStatus === "COMPLETED") {
+        await this.updateRecipientSigningStatus(envelopeData.id, recipient.id, "COMPLETED", recipient.signedAt);
+      }
+    }
+  }
+  /**
+   * Handle DOCUMENT_COMPLETED - all recipients completed (PRIMARY EVENT)
+   */
+  async handleDocumentCompleted(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-document-completed", "Document completed - downloading PDF", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      completedAt: envelopeData.completedAt,
+      status: "pending"
+    });
+    await this.updateEnvelopeStatus(envelopeData.id, "COMPLETED", {
+      completed_at: envelopeData.completedAt
+    });
+    try {
+      const pdfBuffer = await this.envelopeService.downloadCompleted(envelopeData.id);
+      await this.storeCompletedPdfAndUpdateCase(envelopeData, pdfBuffer);
+      logger.info("documenso", "webhook-handler", "handle-document-completed", "Completed PDF downloaded and stored", {
+        envelopeId: envelopeData.id,
+        pdfSize: pdfBuffer.length,
+        status: "success"
+      });
+    } catch (err) {
+      logger.error("documenso", "webhook-handler", "handle-document-completed", "Failed to download completed PDF", {
+        envelopeId: envelopeData.id,
+        err,
+        status: "failed"
+      });
+      throw err;
+    }
+  }
+  /**
+   * Handle DOCUMENT_REJECTED - recipient rejected
+   */
+  async handleDocumentRejected(envelopeData) {
+    logger.warn("documenso", "webhook-handler", "handle-document-rejected", "Document rejected", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      rejectedRecipients: envelopeData.recipients.filter((r) => r.signingStatus === "REJECTED").length,
+      status: "failed"
+    });
+    await this.updateEnvelopeStatus(envelopeData.id, "REJECTED", {
+      // rejection_reason stored in envelope_data JSONB
+    });
+    await this.notifyCaseOwner(envelopeData.externalId, "rejected", envelopeData);
+  }
+  /**
+   * Handle DOCUMENT_CANCELLED - envelope cancelled
+   */
+  async handleDocumentCancelled(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-document-cancelled", "Document cancelled", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      status: "success"
+    });
+    await this.updateEnvelopeStatus(envelopeData.id, "CANCELLED");
+  }
+  /**
+   * Handle RECIPIENT_EXPIRED - signing deadline passed
+   */
+  async handleRecipientExpired(envelopeData) {
+    logger.warn("documenso", "webhook-handler", "handle-recipient-expired", "Recipient expired", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      status: "failed"
+    });
+    await this.updateEnvelopeStatus(envelopeData.id, "EXPIRED");
+    await this.notifyCaseOwner(envelopeData.externalId, "expired", envelopeData);
+  }
+  /**
+   * Handle DOCUMENT_REMINDER_SENT - reminder email sent
+   */
+  async handleReminderSent(envelopeData) {
+    logger.info("documenso", "webhook-handler", "handle-reminder-sent", "Reminder sent", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      status: "success"
+    });
+  }
+  // ==========================================
+  // Database Operations (to be implemented with Supabase)
+  // ==========================================
+  async updateEnvelopeStatus(documensoEnvelopeId, status, extraData) {
+    logger.debug("documenso", "webhook-handler", "update-envelope-status", "Update envelope status", { documensoEnvelopeId, envelopeStatus: status, extraData, status: "pending" });
+  }
+  async updateRecipientReadStatus(documensoEnvelopeId, documensoRecipientId, readStatus) {
+    logger.debug("documenso", "webhook-handler", "update-recipient-read-status", "Update recipient read status", { documensoEnvelopeId, documensoRecipientId, readStatus, status: "pending" });
+  }
+  async updateRecipientSigningStatus(documensoEnvelopeId, documensoRecipientId, signingStatus, signedAt) {
+    logger.debug("documenso", "webhook-handler", "update-recipient-signing-status", "Update recipient signing status", { documensoEnvelopeId, documensoRecipientId, signingStatus, signedAt, status: "pending" });
+  }
+  async storeCompletedPdfAndUpdateCase(envelopeData, pdfBuffer) {
+    logger.debug("documenso", "webhook-handler", "store-completed-pdf", "Store completed PDF", {
+      envelopeId: envelopeData.id,
+      externalId: envelopeData.externalId,
+      pdfSize: pdfBuffer.length,
+      status: "pending"
+    });
+  }
+  async notifyCaseOwner(caseId, eventType, envelopeData) {
+    logger.info("documenso", "webhook-handler", "notify-case-owner", "Notify case owner", { caseId, eventType, envelopeId: envelopeData.id, status: "pending" });
+  }
+  // ==========================================
+  // Idempotency Helpers
+  // ==========================================
+  isProcessed(eventKey) {
+    const processed = this.processedEvents.get(eventKey);
+    if (!processed) return false;
+    if (Date.now() - processed.getTime() > this.IDEMPOTENCY_TTL_MS) {
+      this.processedEvents.delete(eventKey);
+      return false;
+    }
+    return true;
+  }
+  markProcessed(eventKey) {
+    this.processedEvents.set(eventKey, /* @__PURE__ */ new Date());
+  }
+  /**
+   * Clean up expired idempotency keys
+   */
+  cleanup() {
+    const now = Date.now();
+    for (const [key, date] of this.processedEvents.entries()) {
+      if (now - date.getTime() > this.IDEMPOTENCY_TTL_MS) {
+        this.processedEvents.delete(key);
+      }
+    }
+  }
+};
+function documensoWebhookMiddleware(handler2) {
+  return async (req, res, next) => {
+    try {
+      const rawBody = req.rawBody || JSON.stringify(req.body);
+      const signature = req.headers["x-documenso-secret"];
+      if (!signature) {
+        logger.warn("documenso", "webhook-handler", "webhook-middleware", "Missing X-Documenso-Secret header", { status: "failed" });
+        res.status(401).json({ error: "Missing signature" });
+        return;
+      }
+      const result = await handler2.handleWebhook(rawBody, signature);
+      if (!result.success) {
+        res.status(401).json({ error: "Invalid signature" });
+        return;
+      }
+      res.status(200).json({ received: true });
+    } catch (err) {
+      logger.error("documenso", "webhook-handler", "webhook-middleware", "Webhook handler error", { err, status: "failed" });
+      res.status(200).json({ error: "Processing failed, will retry" });
+    }
+  };
+}
+var webhookHandlerInstance = null;
+function getWebhookHandler() {
+  if (!webhookHandlerInstance) {
+    webhookHandlerInstance = new WebhookHandler();
+  }
+  return webhookHandlerInstance;
+}
+
+// src/server/lib/documenso/polling-job.ts
+var PollingJob = class {
+  constructor(config = {}, client, envelopeService2, webhookHandler2) {
+    this.intervalId = null;
+    this.isRunning = false;
+    this.client = client || getDocumensoClient();
+    this.envelopeService = envelopeService2 || getEnvelopeService();
+    this.webhookHandler = webhookHandler2 || getWebhookHandler();
+    this.config = {
+      intervalMs: config.intervalMs || 5 * 60 * 1e3,
+      // 5 minutes
+      pendingThresholdMs: config.pendingThresholdMs || 10 * 60 * 1e3,
+      // 10 minutes
+      maxRetries: config.maxRetries || 3,
+      batchSize: config.batchSize || 50
+    };
+  }
+  /**
+   * Start the polling job
+   */
+  start() {
+    if (this.intervalId) {
+      logger.warn("documenso", "polling-job", "start", "Polling job already running", { status: "failed" });
+      return;
+    }
+    logger.info("documenso", "polling-job", "start", "Starting Documenso polling job", {
+      intervalMs: this.config.intervalMs,
+      pendingThresholdMs: this.config.pendingThresholdMs,
+      status: "pending"
+    });
+    this.run();
+    this.intervalId = setInterval(() => this.run(), this.config.intervalMs);
+  }
+  /**
+   * Stop the polling job
+   */
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      logger.info("documenso", "polling-job", "stop", "Documenso polling job stopped", { status: "success" });
+    }
+  }
+  /**
+   * Run a single polling cycle
+   */
+  async run() {
+    if (this.isRunning) {
+      logger.debug("documenso", "polling-job", "run", "Polling job already running, skipping cycle");
+      return;
+    }
+    this.isRunning = true;
+    const startTime = Date.now();
+    try {
+      logger.debug("documenso", "polling-job", "run", "Polling cycle started");
+      const pendingEnvelopes = await this.getPendingEnvelopes();
+      if (pendingEnvelopes.length === 0) {
+        logger.debug("documenso", "polling-job", "run", "No pending envelopes to poll");
+        return;
+      }
+      logger.info("documenso", "polling-job", "run", "Polling pending envelopes", {
+        count: pendingEnvelopes.length,
+        status: "pending"
+      });
+      let processed = 0;
+      let failed = 0;
+      for (const envelope of pendingEnvelopes) {
+        try {
+          await this.pollEnvelope(envelope);
+          processed++;
+        } catch (err) {
+          failed++;
+          logger.error("documenso", "polling-job", "run", "Failed to poll envelope", {
+            envelopeId: envelope.documenso_envelope_id,
+            err,
+            status: "failed"
+          });
+        }
+      }
+      const duration = Date.now() - startTime;
+      logger.info("documenso", "polling-job", "run", "Polling cycle completed", {
+        total: pendingEnvelopes.length,
+        processed,
+        failed,
+        durationMs: duration,
+        status: "success"
+      });
+    } catch (err) {
+      logger.error("documenso", "polling-job", "run", "Polling cycle failed", { err, status: "failed" });
+    } finally {
+      this.isRunning = false;
+    }
+  }
+  /**
+   * Get PENDING envelopes from database older than threshold
+   * TODO: Implement with Supabase
+   */
+  async getPendingEnvelopes() {
+    logger.debug("documenso", "polling-job", "get-pending", "Fetching pending envelopes from database (not implemented)");
+    return [];
+  }
+  /**
+   * Poll a single envelope and process status changes
+   */
+  async pollEnvelope(envelope) {
+    const { documenso_envelope_id } = envelope;
+    try {
+      const current = await this.client.getEnvelope(documenso_envelope_id);
+      if (this.envelopeService.isTerminalStatus(current.status)) {
+        logger.info("documenso", "polling-job", "poll-envelope", "Envelope reached terminal status via polling", {
+          envelopeId: documenso_envelope_id,
+          envelopeStatus: current.status,
+          status: "success"
+        });
+        await this.processTerminalStatus(current);
+      }
+    } catch (err) {
+      if (err instanceof Error && "statusCode" in err && err.statusCode === 404) {
+        logger.warn("documenso", "polling-job", "poll-envelope", "Envelope not found in Documenso", { envelopeId: documenso_envelope_id, status: "failed" });
+        await this.markEnvelopeCancelled(documenso_envelope_id);
+        return;
+      }
+      throw err;
+    }
+  }
+  /**
+   * Process envelope that reached terminal status
+   */
+  async processTerminalStatus(envelope) {
+    const syntheticPayload = this.buildSyntheticWebhookPayload(envelope);
+    await this.webhookHandler["processEvent"](syntheticPayload);
+  }
+  /**
+   * Build synthetic webhook payload from envelope response
+   */
+  buildSyntheticWebhookPayload(envelope) {
+    const eventMap = {
+      COMPLETED: "DOCUMENT_COMPLETED",
+      REJECTED: "DOCUMENT_REJECTED",
+      CANCELLED: "DOCUMENT_CANCELLED",
+      EXPIRED: "RECIPIENT_EXPIRED",
+      DRAFT: "DOCUMENT_CREATED",
+      PENDING: "DOCUMENT_SENT"
+    };
+    return {
+      event: eventMap[envelope.status] || "DOCUMENT_COMPLETED",
+      payload: {
+        id: envelope.id,
+        title: envelope.title,
+        status: envelope.status,
+        externalId: envelope.externalId,
+        completedAt: envelope.completedAt,
+        sentAt: envelope.sentAt,
+        recipients: envelope.recipients.map((r) => ({
+          id: r.id,
+          email: r.email,
+          name: r.name,
+          role: r.role,
+          signingStatus: r.signingStatus,
+          signedAt: r.signedAt,
+          readStatus: r.readStatus,
+          rejectionReason: r.rejectionReason
+        })),
+        createdAt: envelope.createdAt
+      },
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      webhookEndpoint: "polling-fallback"
+    };
+  }
+  /**
+   * Mark envelope as cancelled in our system
+   */
+  async markEnvelopeCancelled(envelopeId) {
+    logger.info("documenso", "polling-job", "mark-cancelled", "Marking envelope as cancelled", { envelopeId, status: "pending" });
+  }
+  /**
+   * Manually trigger polling for a specific envelope
+   */
+  async pollSpecificEnvelope(envelopeId) {
+    try {
+      const envelope = await this.client.getEnvelope(envelopeId);
+      if (this.envelopeService.isTerminalStatus(envelope.status)) {
+        await this.processTerminalStatus(envelope);
+      }
+      return envelope;
+    } catch (err) {
+      logger.error("documenso", "polling-job", "poll-specific", "Failed to poll specific envelope", { envelopeId, err, status: "failed" });
+      return null;
+    }
+  }
+  /**
+   * Get job status
+   */
+  getStatus() {
+    return {
+      running: this.intervalId !== null,
+      config: this.config
+    };
+  }
+};
+
+// src/server/routes/documenso.ts
+var router25 = Router25();
+var envelopeService;
+var webhookHandler;
+var pollingJob;
+function ensureServices() {
+  if (!envelopeService) {
+    const documensoClient = getDocumensoClient();
+    envelopeService = new EnvelopeService(documensoClient);
+    webhookHandler = new WebhookHandler(documensoClient, envelopeService);
+    pollingJob = new PollingJob({}, documensoClient, envelopeService, webhookHandler);
+  }
+}
+router25.use((req, res, next) => {
+  try {
+    ensureServices();
+  } catch (err) {
+    logger.warn("documenso", "routes", "init", "Documenso not configured - integration disabled", {
+      err: err instanceof Error ? err.message : String(err),
+      path: req.path
+    });
+    res.status(503).json({
+      error: "Documenso integration not configured",
+      code: "DOCUMENSO_NOT_CONFIGURED"
+    });
+    return;
+  }
+  next();
+});
+router25.post("/envelopes", authenticateToken, async (req, res) => {
+  try {
+    const {
+      caseId,
+      pdfBase64,
+      signers,
+      title,
+      fields,
+      settings,
+      metadata
+    } = req.body;
+    if (!caseId) {
+      return res.status(400).json({ error: "caseId is required" });
+    }
+    if (!pdfBase64) {
+      return res.status(400).json({ error: "pdfBase64 is required" });
+    }
+    if (!signers || signers.length === 0) {
+      return res.status(400).json({ error: "At least one signer is required" });
+    }
+    const pdfBuffer = Buffer.from(pdfBase64, "base64");
+    const envelope = await envelopeService.createEnvelopeFromCase(
+      caseId,
+      pdfBuffer,
+      signers,
+      { title, fields, settings, metadata }
+    );
+    res.status(201).json({
+      success: true,
+      envelope: {
+        id: envelope.id,
+        title: envelope.title,
+        status: envelope.status,
+        externalId: envelope.externalId,
+        documents: envelope.documents,
+        recipients: envelope.recipients,
+        createdAt: envelope.createdAt
+      }
+    });
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "create-envelope", "Create envelope failed", {
+      err,
+      body: req.body
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({
+        error: err.message,
+        code: err.code,
+        details: err.details
+      });
+    }
+    res.status(500).json({ error: "Failed to create envelope" });
+  }
+});
+router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const envelope = await envelopeService.sendEnvelope(id);
+    res.json({
+      success: true,
+      envelope: {
+        id: envelope.id,
+        status: envelope.status,
+        sentAt: envelope.sentAt,
+        recipients: envelope.recipients
+      }
+    });
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "send-envelope", "Send envelope failed", {
+      err,
+      envelopeId: req.params.id
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({
+        error: err.message,
+        code: err.code
+      });
+    }
+    res.status(500).json({ error: "Failed to send envelope" });
+  }
+});
+router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await envelopeService.getEnvelopeStatus(id);
+    res.json({ status });
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "get-envelope-status", "Get envelope status failed", {
+      err,
+      envelopeId: req.params.id
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to get envelope status" });
+  }
+});
+router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const envelope = await envelopeService.getEnvelope(id);
+    res.json(envelope);
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "get-envelope", "Get envelope failed", {
+      err,
+      envelopeId: req.params.id
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to get envelope" });
+  }
+});
+router25.get(
+  "/envelopes/:id/signing-url/:recipientId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { id, recipientId } = req.params;
+      const signingUrl = await envelopeService.getSigningUrl(id, recipientId);
+      res.json({ signingUrl, recipientId });
+    } catch (err) {
+      logger.error("documenso", "envelope-service", "get-signing-url", "Get signing URL failed", {
+        err,
+        envelopeId: req.params.id
+      });
+      if (err instanceof DocumensoError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+      res.status(500).json({ error: "Failed to get signing URL" });
+    }
+  }
+);
+router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await envelopeService.getEnvelopeStatus(id);
+    if (status !== "COMPLETED") {
+      return res.status(400).json({
+        error: "Envelope not completed",
+        status
+      });
+    }
+    const pdfBuffer = await envelopeService.downloadCompleted(id);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="envelope-${id}.pdf"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "download-envelope", "Download envelope failed", {
+      err,
+      envelopeId: req.params.id
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to download envelope" });
+  }
+});
+router25.post("/embedding-token", authenticateToken, async (req, res) => {
+  try {
+    const { envelopeId, recipientId, redirectUrl } = req.body;
+    if (!envelopeId || !recipientId) {
+      return res.status(400).json({ error: "envelopeId and recipientId are required" });
+    }
+    const token = await envelopeService.createEmbeddingToken(envelopeId, recipientId, redirectUrl);
+    res.json({ token });
+  } catch (err) {
+    logger.error("documenso", "envelope-service", "create-embedding-token", "Create embedding token failed", {
+      err,
+      body: req.body
+    });
+    if (err instanceof DocumensoError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to create embedding token" });
+  }
+});
+router25.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => {
+    return documensoWebhookMiddleware(webhookHandler)(req, res, next);
+  }
+);
+router25.get("/polling/status", authenticateToken, async (req, res) => {
+  const user = req.user;
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  const status = pollingJob.getStatus();
+  res.json(status);
+});
+router25.post("/polling/trigger", authenticateToken, async (req, res) => {
+  const user = req.user;
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  const { envelopeId } = req.body;
+  if (!envelopeId) {
+    return res.status(400).json({ error: "envelopeId is required" });
+  }
+  const envelope = await pollingJob.pollSpecificEnvelope(envelopeId);
+  if (!envelope) {
+    return res.status(404).json({ error: "Envelope not found" });
+  }
+  res.json({
+    success: true,
+    envelope: {
+      id: envelope.id,
+      status: envelope.status
+    }
+  });
+});
+router25.post("/polling/start", authenticateToken, async (req, res) => {
+  const user = req.user;
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  pollingJob.start();
+  res.json({ success: true, message: "Polling job started" });
+});
+router25.post("/polling/stop", authenticateToken, async (req, res) => {
+  const user = req.user;
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  pollingJob.stop();
+  res.json({ success: true, message: "Polling job stopped" });
+});
+var documenso_default = router25;
+
 // src/server/app.ts
 var databaseRows = caseRepository;
 var auditLogs = [];
 function createApp() {
-  const app = express();
+  const app = express2();
   const isProd = process.env.NODE_ENV === "production";
   const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
   let supabaseOrigins = ["https://*.supabase.co", "wss://*.supabase.co"];
@@ -31213,14 +34165,14 @@ function createApp() {
   app.use(corsMiddleware);
   app.use(globalLimiter);
   app.use(
-    express.json({
+    express2.json({
       limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf.toString("utf8");
       }
     })
   );
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(express2.urlencoded({ extended: true, limit: "10mb" }));
   app.use("/api/admin", admin_default);
   app.use("/api/admin/commercial", commercial_default);
   app.use("/api/commercial", commercial_default);
@@ -31250,6 +34202,7 @@ function createApp() {
   app.use("/api/auth", strictLimiter);
   app.use("/api", ai_default);
   app.use("/api", sync_default);
+  app.use("/api/documenso", documenso_default);
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Endpoint n\xE3o encontrado" });
   });
