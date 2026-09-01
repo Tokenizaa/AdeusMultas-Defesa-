@@ -97,30 +97,87 @@ interface OnboardingWizardProps {
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
-  onCaseReadyForCheckout,
-  onOpenKnowledge,
-  isAdmin: isAdminProp = false,
+    onCaseReadyForCheckout,
+    onOpenKnowledge,
+    isAdmin: isAdminProp = false,
 }) => {
-  const { navigate } = useRouter();
-  const { user, isAuthenticated, isAdmin: isAdminAuth } = useAuth();
-  const authFetch = useAuthFetch();
-  // Canal duplo de admin: prop explícita do pai (legado) OU sessão autenticada
-  // com role=admin (AuthContext). Corrige o caso em que App.tsx passa `isAdmin`
-  // mas o wizard lia uma prop inexistente (`isAdminFromParent`), deixando todos
-  // os botões de teste invisíveis.
-  const effectiveIsAdmin = isAdminProp || isAdminAuth;
+    const { navigate } = useRouter();
+    const { user, isAuthenticated, isAdmin: isAdminAuth } = useAuth();
+    const authFetch = useAuthFetch();
+    // Canal duplo de admin: prop explícita do pai (legado) OU sessão autenticada
+    // com role=admin (AuthContext). Corrige o caso em que App.tsx passa `isAdmin`
+    // mas o wizard lia uma prop inexistente (`isAdminFromParent`), deixando todos
+    // os botões de teste invisíveis.
+    const effectiveIsAdmin = isAdminProp || isAdminAuth;
 
-  // Load persisted wizard state if available (e.g., after email confirmation)
-  const savedState = loadWizardState();
+    // Load persisted wizard state if available (e.g., after email confirmation)
+    const savedState = loadWizardState();
 
-  // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
-  const [step, setStep] = useState<number>(savedState?.step ?? 1);
-  const wizardTopRef = useRef<HTMLDivElement>(null);
+    // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
+    const [step, setStep] = useState<number>(savedState?.step ?? 1);
+    const wizardTopRef = useRef<HTMLDivElement>(null);
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Scroll to top of wizard on every step change
+    // Scroll to top of wizard on every step change
+    useEffect(() => {
+        wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, [step]);
+
+    // Persist wizard state to localStorage with debouncing (to avoid excessive writes on typing)
+    useEffect(() => {
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+        
+        // Set new timeout to save state after delay
+        saveTimeoutRef.current = setTimeout(() => {
+            saveWizardState({
+                step,
+                leadName,
+                leadPhone,
+                situation,
+                processStage,
+                infractionCategory,
+                vehicleData,
+                infractionData,
+                caseAnalysis,
+                documentData,
+                savedCaseId,
+            });
+        }, 500); // 500ms delay
+        
+        // Cleanup function to clear timeout on unmount or before next run
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
+
+  // Persist wizard state immediately before page unload (to catch refresh/navigation)
   useEffect(() => {
-    wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [step]);
+    const handleBeforeUnload = () => {
+      saveWizardState({
+        step,
+        leadName,
+        leadPhone,
+        situation,
+        processStage,
+        infractionCategory,
+        vehicleData,
+        infractionData,
+        caseAnalysis,
+        documentData,
+        savedCaseId,
+      });
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
   const [leadName, setLeadName] = useState<string>(savedState?.leadName || user?.name || '');
@@ -191,12 +248,8 @@ const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseA
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
 
-  // Clear persisted state once loaded (fresh start for next visit)
-  useEffect(() => {
-    if (savedState) {
-      clearWizardState();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: State persistence across refreshes is handled by the useEffect above that saves on state changes.
+// State is cleared explicitly in handleAuthSuccess after authentication.
 
   // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
   // advance to step 8 automatically (e.g., after email confirmation)
