@@ -135,12 +135,29 @@ class WhatsAppService {
     return this.discoveredInstance;
   }
 
-  private get isConfigured(): boolean {
-    return Boolean(
-      this.config.apiUrl &&
-      this.config.apiKey &&
-      !this.config.apiKey.startsWith('PLACEHOLDER')
+  private get apiKey(): string {
+    return (
+      this.config.apiKey ||
+      configService.get('EVOLUTION_API_KEY') ||
+      configService.get('NOTIF_WHATSAPP_API_KEY') ||
+      process.env.EVOLUTION_API_KEY ||
+      ''
     );
+  }
+
+  private get apiUrl(): string {
+    return (
+      this.config.apiUrl ||
+      configService.get('EVOLUTION_API_URL') ||
+      configService.get('NOTIF_WHATSAPP_API_URL') ||
+      process.env.EVOLUTION_API_URL ||
+      'http://localhost:8080'
+    );
+  }
+
+  private get isConfigured(): boolean {
+    const key = this.apiKey;
+    return Boolean(this.apiUrl && key && !key.startsWith('PLACEHOLDER'));
   }
 
   private async makeRequest<T>(
@@ -152,10 +169,10 @@ class WhatsAppService {
       throw new Error('WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.');
     }
 
-    const url = `${this.config.apiUrl}${path}`;
+    const url = `${this.apiUrl}${path}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      apikey: this.config.apiKey,
+      apikey: this.apiKey,
     };
 
     const response = await fetch(url, {
@@ -178,20 +195,29 @@ class WhatsAppService {
     return response.json() as Promise<T>;
   }
 
+  private formatDestinationNumber(phone: string): string {
+    let digits = phone.replace(/\D/g, '');
+    if (digits.length === 10 || digits.length === 11) {
+      digits = `55${digits}`;
+    }
+    return digits;
+  }
+
   /**
    * Send a text message via WhatsApp
    */
   async sendText(params: SendMessageParams): Promise<WhatsAppMessageResult> {
     const instance = await this.resolveInstanceName(params.instanceName);
+    const targetNumber = this.formatDestinationNumber(params.to);
 
     try {
       logger.info('whatsapp', 'whatsapp-service', 'send_text', 'Sending WhatsApp message', {
-        to: params.to,
+        to: targetNumber,
         instance,
       });
 
       const result = await this.makeRequest<any>('POST', `/message/sendText/${instance}`, {
-        number: params.to,
+        number: targetNumber,
         text: params.message,
       });
 
@@ -199,7 +225,7 @@ class WhatsAppService {
 
       logger.info('whatsapp', 'whatsapp-service', 'send_text', 'WhatsApp message sent', {
         messageId,
-        to: params.to,
+        to: targetNumber,
         instance,
       });
 
@@ -213,7 +239,7 @@ class WhatsAppService {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error('whatsapp', 'whatsapp-service', 'send_text', 'WhatsApp send failed', {
         error: errMsg,
-        to: params.to,
+        to: targetNumber,
       });
       return { success: false, error: errMsg };
     }
@@ -224,6 +250,7 @@ class WhatsAppService {
    */
   async sendMedia(params: SendMediaParams): Promise<WhatsAppMessageResult> {
     const instance = await this.resolveInstanceName(params.instanceName);
+    const targetNumber = this.formatDestinationNumber(params.to);
 
     // Determine media type for Evolution API
     let mediaType: 'image' | 'document' | 'audio' | 'video' = 'image';
@@ -239,14 +266,14 @@ class WhatsAppService {
 
     try {
       logger.info('whatsapp', 'whatsapp-service', 'send_media', 'Sending WhatsApp media', {
-        to: params.to,
+        to: targetNumber,
         instance,
         mimeType: params.mimeType,
         mediaType,
       });
 
       const result = await this.makeRequest<any>('POST', `/message/sendMedia/${instance}`, {
-        number: params.to,
+        number: targetNumber,
         mediatype: mediaType,
         mimetype: params.mimeType || (mediaType === 'audio' ? 'audio/ogg' : mediaType === 'video' ? 'video/mp4' : 'application/pdf'),
         media: params.mediaUrl,
@@ -265,7 +292,7 @@ class WhatsAppService {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error('whatsapp', 'whatsapp-service', 'send_media', 'WhatsApp media send failed', {
         error: errMsg,
-        to: params.to,
+        to: targetNumber,
         mediaType,
       });
       return { success: false, error: errMsg };

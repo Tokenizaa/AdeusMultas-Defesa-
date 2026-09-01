@@ -1,4 +1,4 @@
-import { Lead, RawLead, ScrapeResult, QueryScrapeResult, SearchConfig, ScrapedForKey } from './types';
+import { Lead, RawLead, ScrapeResult, QueryScrapeResult, SearchConfig, ScrapedForKey, ScraperCallbacks, ScraperProgress } from './types';
 import { supabaseAdmin } from './supabase';
 import { classifyLead } from './classifier';
 import { normalizePhone, normalizeWebsite, normalizeEmail } from './normalizer';
@@ -362,20 +362,32 @@ async function updateCollectionRun(
 ): Promise<void> {
   try {
     const isTerminal = ['completed', 'failed', 'cancelled'].includes((updates.status || '') as string);
-    await supabaseAdmin
+    const payload: Record<string, unknown> = {
+      ...updates,
+      ...(isTerminal && { finished_at: new Date().toISOString() }),
+    };
+
+    const cleanPayload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== undefined) {
+        cleanPayload[key] = value;
+      }
+    }
+
+    const { error } = await supabaseAdmin
       .from('collection_runs')
-      .update({ ...updates, updated_at: new Date().toISOString(), ...(isTerminal && { finished_at: new Date().toISOString() }) })
+      .update(cleanPayload)
       .eq('id', runId);
+
+    if (error) {
+      logger.warn('Erro ao atualizar collection_run', { runId, error: error.message });
+    }
   } catch (err) {
     logger.warn('Erro ao atualizar collection_run', { runId, error: err instanceof Error ? err.message : err });
   }
 }
 
-export interface ScraperCallbacks {
-  onProgress?: (progress: { phase: string; discovered: number; processed: number; persisted: number; duplicates: number; errors: number }) => void;
-  onCheckCancel?: () => boolean;
-  onDriverCrash?: () => void;
-}
+export type { ScraperCallbacks, ScraperProgress };
 
 export interface ScrapeRunResult {
   source: string;
@@ -407,63 +419,116 @@ export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCal
   const session = new SeleniumSession({
     headless: true,
     args: [
+      '--headless',
       '--headless=new',
-      '--disable-blink-features=AutomationDetected',
-      '--no-sandbox',
       '--disable-gpu',
+      '--no-sandbox',
       '--disable-dev-shm-usage',
       '--window-size=1920,1080',
+      '--disable-blink-features=AutomationDetected',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-default-apps',
     ],
   });
 
   let scraper: GoogleMapsSeleniumScraper | null = null;
   let cancelled = false;
 
-  const scraperCallbacks = {
+  // Montar lista de locations a partir de cities ou states
+  const locations: string[] = [];
+  for (const city of config.cities || []) locations.push(city);
+  for (const state of config.states || []) locations.push(state);
+  if (locations.length === 0) locations.push('Brasil');
+
+  // Criar/atualizar registro de execução antes de iniciar
+  const collectionRun = collectionRunId
+    ? { id: collectionRunId }
+    : await createCollectionRun(config);
+  const runId = collectionRun?.id || null;
+  // Se collectionRunId foi passado, o job já foi criado com status 'running' pelo queue
+  if (collectionRunId && runId) {
+    await updateCollectionRun(runId, { status: 'running', updated_at: new Date().toISOString() });
+  }
+
+  // Carregar chaves existentes para deduplicação incremental cross-execução
+  const seenKeys = await loadExistingScrapedKeys();
+
+  // Resultado agregado final
+  const aggregated: ScrapeResult = {
+    source: 'google_maps',
+    query: config.queries.join(', '),
+    location: locations.join(', '),
+    totalFound: 0,
+    inserted: 0,
+    filled: 0,
+    duplicates: 0,
+    completeDuplicates: 0,
+    rejected: 0,
+    errors: [],
+    leads: [],
+  };
+
+  const queriesExecuted: Array<{ query: string; location: string; found: number; inserted: number; filled: number; duplicates: number; completeDuplicates: number; rejected: number; errors: string[] }> = [];
+
+  // Resumption: checar se este run já tem dados prévios salvos (recuperação de crash)
+  if (runId) {
+    try {
+      const { data: existingRun } = await supabaseAdmin
+        .from('collection_runs')
+        .select('*')
+        .eq('id', runId)
+        .maybeSingle();
+
+      if (existingRun && Array.isArray(existingRun.queries_executed) && existingRun.queries_executed.length > 0) {
+        queriesExecuted.push(...existingRun.queries_executed);
+        aggregated.totalFound = existingRun.results_found || 0;
+        aggregated.inserted = existingRun.new_leads || 0;
+        aggregated.duplicates = existingRun.duplicates || 0;
+        aggregated.rejected = existingRun.rejected || 0;
+        aggregated.errors = Array.isArray(existingRun.errors) ? existingRun.errors : [];
+        logger.info('Retomando job a partir de checkpoint persistido', {
+          runId,
+          executedQueries: queriesExecuted.length,
+          previousInserted: aggregated.inserted,
+        });
+      }
+    } catch (resumeErr) {
+      logger.warn('Aviso ao consultar estado para retomada:', { error: resumeErr });
+    }
+  }
+
+  const scraperCallbacks: ScraperCallbacks = {
     onProgress: callbacks.onProgress,
     onCheckCancel: () => cancelled || callbacks.onCheckCancel?.() || false,
     onDriverCrash: callbacks.onDriverCrash,
+    onCardExtracted: async (lead, index, total) => {
+      // Callback periódico por card para salvar progresso e manter heartbeat
+      callbacks.onProgress?.({
+        phase: 'details',
+        discovered: aggregated.totalFound,
+        processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected + index,
+        persisted: aggregated.inserted,
+        duplicates: aggregated.duplicates,
+        errors: aggregated.errors.length,
+      });
+
+      if (runId) {
+        await updateCollectionRun(runId, {
+          results_found: Math.max(aggregated.totalFound, total),
+          new_leads: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          rejected: aggregated.rejected,
+          updated_at: new Date().toISOString(),
+        }).catch(() => undefined);
+      }
+    },
   };
 
   try {
     await session.start();
     scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
-
-    // Montar lista de locations a partir de cities ou states
-    const locations: string[] = [];
-    for (const city of config.cities || []) locations.push(city);
-    for (const state of config.states || []) locations.push(state);
-    if (locations.length === 0) locations.push('Brasil');
-
-    // Criar/atualizar registro de execução antes de iniciar
-    const collectionRun = collectionRunId
-      ? { id: collectionRunId }
-      : await createCollectionRun(config);
-    const runId = collectionRun?.id || null;
-    // Se collectionRunId foi passado, o job já foi criado com status 'running' pelo queue
-    if (collectionRunId && runId) {
-      await updateCollectionRun(runId, { status: 'running' });
-    }
-
-    // Carregar chaves existentes para deduplicação incremental cross-execução
-    const seenKeys = await loadExistingScrapedKeys();
-
-    // Resultado agregado final
-    const aggregated: ScrapeResult = {
-      source: 'google_maps',
-      query: config.queries.join(', '),
-      location: locations.join(', '),
-      totalFound: 0,
-      inserted: 0,
-      filled: 0,
-      duplicates: 0,
-      completeDuplicates: 0,
-      rejected: 0,
-      errors: [],
-      leads: [],
-    };
-
-    const queriesExecuted: Array<{ query: string; location: string; found: number; inserted: number; filled: number; duplicates: number; completeDuplicates: number; rejected: number; errors: string[] }> = [];
 
     for (const q of config.queries) {
       for (const loc of locations) {
@@ -472,6 +537,15 @@ export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCal
           cancelled = true;
           logger.info('Coleta cancelada pelo usuário', { query: q, location: loc });
           break;
+        }
+
+        // Se query + location já foram concluídas antes do crash, pular (Idempotência)
+        const alreadyDone = queriesExecuted.some(
+          (eq) => (eq.query === q || eq.query === `${q} ${loc}`) && eq.location === loc
+        );
+        if (alreadyDone) {
+          logger.info('Query e localização já processadas anteriormente, pulando', { query: q, location: loc });
+          continue;
         }
 
         const scrapedFor: ScrapedForKey = {

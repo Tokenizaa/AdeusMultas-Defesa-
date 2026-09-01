@@ -117,48 +117,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const [step, setStep] = useState<number>(savedState?.step ?? 1);
     const wizardTopRef = useRef<HTMLDivElement>(null);
 
-// Scroll to top of wizard on every step change AND save state
-    useEffect(() => {
-        wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        saveWizardState({
-            step,
-            leadName,
-            leadPhone,
-            situation,
-            processStage,
-            infractionCategory,
-            vehicleData,
-            infractionData,
-            caseAnalysis,
-            documentData,
-            savedCaseId,
-        });
-    }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
-
-    // Persist wizard state immediately before page unload (to catch refresh/navigation)
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      saveWizardState({
-        step,
-        leadName,
-        leadPhone,
-        situation,
-        processStage,
-        infractionCategory,
-        vehicleData,
-        infractionData,
-        caseAnalysis,
-        documentData,
-        savedCaseId,
-      });
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
-
   // Lead Data (Collected in Step 3 for Visitor conversion)
   const [leadName, setLeadName] = useState<string>(savedState?.leadName || user?.name || '');
   const [leadPhone, setLeadPhone] = useState<string>(savedState?.leadPhone || user?.phone || '');
@@ -194,7 +152,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     formalFlawsDetected: [],
   });
 
-const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseAnalysis ?? {
+  const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseAnalysis ?? {
     id: `an_${Date.now()}`,
     caseId: `temp_${Date.now()}`,
     createdAt: new Date().toISOString(),
@@ -227,6 +185,48 @@ const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseA
   });
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
+
+  // Scroll to top of wizard on every step change AND save state
+  useEffect(() => {
+    wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    saveWizardState({
+      step,
+      leadName,
+      leadPhone,
+      situation,
+      processStage,
+      infractionCategory,
+      vehicleData,
+      infractionData,
+      caseAnalysis,
+      documentData,
+      savedCaseId,
+    });
+  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
+
+  // Persist wizard state immediately before page unload (to catch refresh/navigation)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveWizardState({
+        step,
+        leadName,
+        leadPhone,
+        situation,
+        processStage,
+        infractionCategory,
+        vehicleData,
+        infractionData,
+        caseAnalysis,
+        documentData,
+        savedCaseId,
+      });
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
 
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)

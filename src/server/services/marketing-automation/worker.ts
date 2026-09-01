@@ -171,20 +171,43 @@ export class MarketingAutomationWorker {
 
     const lead = lc.lead as any;
     const campaign = lc.campaign as any;
-    if (!lead.phone && !lead.whatsapp) {
+
+    // Safety guard: Não envia para leads com opt_out, já respondidos, convertidos ou esgotados
+    const TERMINAL_OR_RESPONDED = ['responded', 'converted', 'exhausted', 'opt_out', 'paused'];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === 'opt_out') {
+      logger.info(
+        `Lead campaign ${lc.id} status=${lc.status} (lead=${lead?.status}) — skipping outbound send and cancelling follow-ups`,
+        { module: 'worker', operation: 'handleSendMessage' }
+      );
+      // Remove da fila se sobrou algo
+      await supabaseAdmin.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
+      return;
+    }
+
+    if (!lead || (!lead.phone && !lead.whatsapp && !lead.phone_normalized)) {
       throw new Error('Lead sem telefone/WhatsApp.');
     }
 
-    const toPhone = (lead.whatsapp || lead.phone || '').replace(/\D/g, '');
-    if (!toPhone) {
+    let toPhone = (lead.whatsapp || lead.phone || lead.phone_normalized || '').replace(/\D/g, '');
+    if (!toPhone || toPhone.length < 10) {
       throw new Error('Telefone inválido.');
     }
 
-    const stepIndex = lc.current_step;
-    const steps = campaign.steps || [];
+    // Normaliza para formato BR com DDI 55
+    if (toPhone.length === 10 || toPhone.length === 11) {
+      toPhone = `55${toPhone}`;
+    }
+
+    const stepIndex = lc.current_step || 0;
+    const steps = campaign?.steps || [];
     const step = steps[stepIndex];
     if (!step) {
-      throw new Error('Step não encontrado na campanha.');
+      // Sem mais steps: marca como exhausted
+      await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .update({ status: 'exhausted', updated_at: new Date().toISOString() })
+        .eq('id', lead_campaign_id);
+      return;
     }
 
     const text = this.renderMessage(step.message || '', lead);
@@ -194,8 +217,6 @@ export class MarketingAutomationWorker {
       message: text,
       instanceName: configService.get('EVOLUTION_INSTANCE_NAME'),
     });
-
-    const messageId = result.messageId || `wamid_${Date.now()}`;
 
     // processed_count conta APENAS envios reais bem-sucedidos (não ticks).
     if (result.success) {
@@ -215,11 +236,16 @@ export class MarketingAutomationWorker {
       sent_at: new Date().toISOString(),
     });
 
-    // Guard: não rebaixar status 'responded' → 'sent' para leads B2B_RELATIONSHIP
-    // (ADR-013: cadence preserva 'responded' após resposta do parceiro)
-    const RESPONDED_OR_BEYOND = ['responded', 'converted', 'exhausted'];
-    if (RESPONDED_OR_BEYOND.includes(lc.status)) {
-      logger.info(`Lead campaign ${lc.id} status=${lc.status} — skipping downgrade to sent/exhausted`, { module: 'worker', operation: 'handleSendMessage' });
+    // Re-check pós-envio: se nesse meio tempo o lead respondeu, não rebaixa status
+    const RESPONDED_OR_BEYOND = ['responded', 'converted', 'exhausted', 'opt_out'];
+    const { data: currentLc } = await supabaseAdmin
+      .from('marketing_lead_campaigns')
+      .select('status')
+      .eq('id', lead_campaign_id)
+      .single();
+
+    if (currentLc && RESPONDED_OR_BEYOND.includes(currentLc.status)) {
+      logger.info(`Lead campaign ${lc.id} status=${currentLc.status} — skipping state overwrite`, { module: 'worker', operation: 'handleSendMessage' });
       return;
     }
 
@@ -261,7 +287,11 @@ export class MarketingAutomationWorker {
     }
 
     const lead = lc.lead as any;
-    const campaign = (lc as any).campaign;
+    const TERMINAL_OR_RESPONDED = ['responded', 'converted', 'exhausted', 'opt_out', 'paused'];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === 'opt_out') {
+      logger.info(`Lead campaign ${lc.id} em estado de parada (${lc.status}) — nenhum novo follow-up agendado`, { module: 'worker' });
+      return;
+    }
 
     const lastMessage = await supabaseAdmin
       .from('marketing_messages')

@@ -1,5 +1,5 @@
 import { Builder, Capabilities, WebDriver, WebElement, Key } from 'selenium-webdriver';
-import chrome from 'selenium-webdriver/chrome';
+import chrome from 'selenium-webdriver/chrome.js';
 import { logger } from '../logger';
 
 const USER_AGENT =
@@ -18,12 +18,17 @@ export class SeleniumSession {
     this.options = {
       headless: true,
       args: [
+        '--headless',
         '--headless=new',
-        '--disable-blink-features=AutomationDetected',
-        '--no-sandbox',
         '--disable-gpu',
+        '--no-sandbox',
         '--disable-dev-shm-usage',
         '--window-size=1920,1080',
+        '--disable-blink-features=AutomationDetected',
+        '--disable-extensions',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-default-apps',
       ],
       ...options,
     };
@@ -35,10 +40,15 @@ export class SeleniumSession {
     try {
       const caps = Capabilities.chrome();
       const opt = new chrome.Options();
-      opt.addArguments(...this.options.args || []);
+      const flagSet = new Set<string>(this.options.args || []);
       if (this.options.headless) {
-        opt.addArguments('--headless=new');
+        flagSet.add('--headless');
+        flagSet.add('--headless=new');
+        flagSet.add('--disable-gpu');
+        flagSet.add('--no-sandbox');
+        flagSet.add('--disable-dev-shm-usage');
       }
+      opt.addArguments(...Array.from(flagSet));
       opt.addArguments(`--user-agent=${USER_AGENT}`);
 
       this.driver = await new Builder()

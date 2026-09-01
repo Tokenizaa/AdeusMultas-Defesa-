@@ -33098,6 +33098,19 @@ var DocumensoClient = class {
     };
   }
 };
+function isDocumensoConfigured() {
+  const baseUrl = process.env.DOCUMENSO_BASE_URL;
+  const apiToken = process.env.DOCUMENSO_API_TOKEN;
+  const webhookSecret = process.env.DOCUMENSO_WEBHOOK_SECRET;
+  const webhookUrl = process.env.DOCUMENSO_WEBHOOK_URL;
+  if (!baseUrl || !apiToken || !webhookSecret || !webhookUrl) {
+    return false;
+  }
+  if (baseUrl.includes("your-") || apiToken.includes("your-") || webhookSecret.includes("your-") || webhookUrl.includes("your-domain")) {
+    return false;
+  }
+  return true;
+}
 function createDocumensoClient() {
   const baseUrl = process.env.DOCUMENSO_BASE_URL;
   const apiToken = process.env.DOCUMENSO_API_TOKEN;
@@ -33645,9 +33658,30 @@ var PollingJob = class {
   constructor(config = {}, client, envelopeService2, webhookHandler2) {
     this.intervalId = null;
     this.isRunning = false;
-    this.client = client || getDocumensoClient();
-    this.envelopeService = envelopeService2 || getEnvelopeService();
-    this.webhookHandler = webhookHandler2 || getWebhookHandler();
+    if (client) {
+      this.client = client;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.client = getDocumensoClient();
+      } catch {
+      }
+    }
+    if (envelopeService2) {
+      this.envelopeService = envelopeService2;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.envelopeService = getEnvelopeService();
+      } catch {
+      }
+    }
+    if (webhookHandler2) {
+      this.webhookHandler = webhookHandler2;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.webhookHandler = getWebhookHandler();
+      } catch {
+      }
+    }
     this.config = {
       intervalMs: config.intervalMs || 5 * 60 * 1e3,
       // 5 minutes
@@ -33661,6 +33695,10 @@ var PollingJob = class {
    * Start the polling job
    */
   start() {
+    if (!isDocumensoConfigured()) {
+      logger.info("documenso", "polling-job", "start", "Documenso not configured, polling job skipped", { status: "skipped" });
+      return;
+    }
     if (this.intervalId) {
       logger.warn("documenso", "polling-job", "start", "Polling job already running", { status: "failed" });
       return;
@@ -33745,6 +33783,7 @@ var PollingJob = class {
    * Poll a single envelope and process status changes
    */
   async pollEnvelope(envelope) {
+    if (!this.client || !this.envelopeService) return;
     const { documenso_envelope_id } = envelope;
     try {
       const current = await this.client.getEnvelope(documenso_envelope_id);
@@ -33769,6 +33808,7 @@ var PollingJob = class {
    * Process envelope that reached terminal status
    */
   async processTerminalStatus(envelope) {
+    if (!this.webhookHandler) return;
     const syntheticPayload = this.buildSyntheticWebhookPayload(envelope);
     await this.webhookHandler["processEvent"](syntheticPayload);
   }
@@ -33819,6 +33859,7 @@ var PollingJob = class {
    * Manually trigger polling for a specific envelope
    */
   async pollSpecificEnvelope(envelopeId) {
+    if (!this.client || !this.envelopeService) return null;
     try {
       const envelope = await this.client.getEnvelope(envelopeId);
       if (this.envelopeService.isTerminalStatus(envelope.status)) {
@@ -33848,6 +33889,9 @@ var webhookHandler;
 var pollingJob;
 function ensureServices() {
   if (!envelopeService) {
+    if (!isDocumensoConfigured()) {
+      throw new Error("Documenso environment variables are not configured");
+    }
     const documensoClient = getDocumensoClient();
     envelopeService = new EnvelopeService(documensoClient);
     webhookHandler = new WebhookHandler(documensoClient, envelopeService);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { marketingAutomationWorker } from '../services/marketing-automation/worker';
 import { supabaseAdmin } from '../../scraper-prospecting/supabase';
-import { scraperJobQueue } from '../services/scraper-job-queue';
+import { scrapeWorker } from '../services/scrape-worker';
 import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
 import { configService } from '../config/config-service';
@@ -609,7 +609,7 @@ router.get('/queue', async (_req, res) => {
       };
 
       // Criar job no queue (não executa sincronamente)
-      const job = await scraperJobQueue.createJob(config);
+      const job = await scrapeWorker.createJob(config);
 
       res.json({
         success: true,
@@ -626,7 +626,7 @@ router.get('/queue', async (_req, res) => {
   router.get('/scrape/:jobId', async (req, res) => {
     try {
       const { jobId } = req.params;
-      const job = await scraperJobQueue.getJob(jobId);
+      const job = await scrapeWorker.getJob(jobId);
 
       if (!job) {
         return res.status(404).json({ error: 'Job não encontrado' });
@@ -652,7 +652,7 @@ router.get('/queue', async (_req, res) => {
   router.post('/scrape/:jobId/cancel', async (req, res) => {
     try {
       const { jobId } = req.params;
-      const cancelled = await scraperJobQueue.cancelJob(jobId);
+      const cancelled = await scrapeWorker.cancelJob(jobId);
 
       if (!cancelled) {
         return res.status(400).json({ error: 'Não foi possível cancelar o job (não existe ou já finalizado)' });
@@ -704,7 +704,7 @@ router.get('/queue', async (_req, res) => {
 
   router.get('/scrapes', async (_req, res) => {
     try {
-      const jobs = await scraperJobQueue.listJobs(20);
+      const jobs = await scrapeWorker.listJobs(20);
       res.json({ jobs });
     } catch (err) {
       console.error('Erro no endpoint /scrapes:', err);

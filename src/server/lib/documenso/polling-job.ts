@@ -4,7 +4,7 @@
  * @see https://docs.documenso.com/docs/developers/examples/common-workflows
  */
 
-import { getDocumensoClient, DocumensoClient } from './client';
+import { getDocumensoClient, DocumensoClient, isDocumensoConfigured } from './client';
 import { getEnvelopeService, EnvelopeService } from './envelope-service';
 import { getWebhookHandler, WebhookHandler } from './webhook-handler';
 import { EnvelopeStatus, EnvelopeResponse, WebhookEvent, WebhookPayload } from '@/types/documenso';
@@ -25,9 +25,9 @@ export interface PollingJobConfig {
  * Runs periodically to catch any envelopes that didn't trigger webhooks
  */
 export class PollingJob {
-  private client: DocumensoClient;
-  private envelopeService: EnvelopeService;
-  private webhookHandler: WebhookHandler;
+  private client?: DocumensoClient;
+  private envelopeService?: EnvelopeService;
+  private webhookHandler?: WebhookHandler;
   private config: PollingJobConfig;
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
@@ -38,9 +38,36 @@ export class PollingJob {
     envelopeService?: EnvelopeService,
     webhookHandler?: WebhookHandler
   ) {
-    this.client = client || getDocumensoClient();
-    this.envelopeService = envelopeService || getEnvelopeService();
-    this.webhookHandler = webhookHandler || getWebhookHandler();
+    if (client) {
+      this.client = client;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.client = getDocumensoClient();
+      } catch {
+        // Ignore if unconfigured
+      }
+    }
+
+    if (envelopeService) {
+      this.envelopeService = envelopeService;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.envelopeService = getEnvelopeService();
+      } catch {
+        // Ignore if unconfigured
+      }
+    }
+
+    if (webhookHandler) {
+      this.webhookHandler = webhookHandler;
+    } else if (isDocumensoConfigured()) {
+      try {
+        this.webhookHandler = getWebhookHandler();
+      } catch {
+        // Ignore if unconfigured
+      }
+    }
+
     this.config = {
       intervalMs: config.intervalMs || 5 * 60 * 1000,        // 5 minutes
       pendingThresholdMs: config.pendingThresholdMs || 10 * 60 * 1000, // 10 minutes
@@ -53,6 +80,11 @@ export class PollingJob {
    * Start the polling job
    */
   start(): void {
+    if (!isDocumensoConfigured()) {
+      logger.info('documenso' as LogService, 'polling-job', 'start', 'Documenso not configured, polling job skipped', { status: 'skipped' });
+      return;
+    }
+
     if (this.intervalId) {
       logger.warn('documenso' as LogService, 'polling-job', 'start', 'Polling job already running', { status: 'failed' });
       return;
@@ -161,6 +193,7 @@ export class PollingJob {
    * Poll a single envelope and process status changes
    */
   private async pollEnvelope(envelope: { documenso_envelope_id: string; case_id: string }): Promise<void> {
+    if (!this.client || !this.envelopeService) return;
     const { documenso_envelope_id } = envelope;
 
     try {
@@ -194,6 +227,7 @@ export class PollingJob {
    * Process envelope that reached terminal status
    */
   private async processTerminalStatus(envelope: EnvelopeResponse): Promise<void> {
+    if (!this.webhookHandler) return;
     // Build synthetic webhook payload
     const syntheticPayload = this.buildSyntheticWebhookPayload(envelope);
 
@@ -252,6 +286,7 @@ export class PollingJob {
    * Manually trigger polling for a specific envelope
    */
   async pollSpecificEnvelope(envelopeId: string): Promise<EnvelopeResponse | null> {
+    if (!this.client || !this.envelopeService) return null;
     try {
       const envelope = await this.client.getEnvelope(envelopeId);
       if (this.envelopeService.isTerminalStatus(envelope.status)) {

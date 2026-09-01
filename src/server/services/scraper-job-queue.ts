@@ -72,7 +72,7 @@ export class ScraperJobQueue {
    * O job é inserido no banco com status 'queued'.
    */
   async createJob(config: SearchConfig): Promise<ScraperJob> {
-    const id = `scrape_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const id = randomUUID();
     const now = new Date().toISOString();
 
     const job: ScraperJob = {
@@ -161,13 +161,14 @@ export class ScraperJobQueue {
       return false;
     }
 
+    const cancelPayload = {
+      status: 'cancelled',
+      finished_at: new Date().toISOString(),
+    };
+
     const { error } = await supabaseAdmin
       .from('collection_runs')
-      .update({
-        status: 'cancelled',
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(cancelPayload)
       .eq('id', id);
 
     if (error) {
@@ -344,16 +345,24 @@ export class ScraperJobQueue {
       failed: 'error',
       cancelled: 'cancelled',
     };
+    const payload: Record<string, any> = {
+      status: jobToDbStatus[status] || status,
+      finished_at: ['completed', 'failed', 'cancelled'].includes(status)
+        ? new Date().toISOString()
+        : undefined,
+      ...extraFields,
+    };
+
+    const cleanPayload: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== undefined) {
+        cleanPayload[key] = value;
+      }
+    }
+
     const { error } = await supabaseAdmin
       .from('collection_runs')
-      .update({
-        status: jobToDbStatus[status] || status,
-        finished_at: ['completed', 'failed', 'cancelled'].includes(status)
-          ? new Date().toISOString()
-          : undefined,
-        updated_at: new Date().toISOString(),
-        ...extraFields,
-      })
+      .update(cleanPayload)
       .eq('id', jobId);
 
     if (error) {

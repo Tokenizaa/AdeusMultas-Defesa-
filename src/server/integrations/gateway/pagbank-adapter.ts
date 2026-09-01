@@ -156,6 +156,10 @@ export class PagBankAdapter implements PaymentGateway {
     // Delegar verificação de assinatura para o service existente
     const result = pagBankIntegration.processWebhook(rawBody, signature, payload as any);
 
+    if (!result.signatureValid) {
+      throw new Error('Assinatura HMAC inválida ou ausente');
+    }
+
     const firstCharge = payload.charges?.[0];
     const amountValue = firstCharge?.amount?.value || 0;
 
@@ -170,6 +174,7 @@ export class PagBankAdapter implements PaymentGateway {
       paidAt: firstCharge?.paid_at || undefined,
       rawPayload: body,
       isDuplicate: result.isDuplicate,
+      received: result.received ?? true,
     };
   }
 }

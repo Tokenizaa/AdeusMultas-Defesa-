@@ -58,6 +58,7 @@ describe('FASE 4 — PagBank Sandbox Real', () => {
   };
 
   it('deve criar ordem PIX real no PagBank Sandbox', async () => {
+    if (skipIfNoConfig()) return;
     console.log('[FASE 4] Criando ordem PIX...');
     
     const result = await pagbank.createPixOrder({
@@ -95,6 +96,7 @@ describe('FASE 4 — PagBank Sandbox Real', () => {
   }, 15000); // timeout 15s para chamada de API real
 
   it('deve persistir ordem no paymentRepository', async () => {
+    if (skipIfNoConfig()) return;
     // Verificar se a ordem foi persistida no Supabase via paymentRepository
     // O paymentRepository persiste de forma assíncrona (fire-and-forget)
     // Aguardar um pouco para a persistência
@@ -109,6 +111,7 @@ describe('FASE 4 — PagBank Sandbox Real', () => {
   });
 
   it('deve processar webhook de pagamento simulado', async () => {
+    if (skipIfNoConfig()) return;
     // Simular webhook do PagBank com status PAID
     const payload = {
       id: `evt_phase4_${Date.now()}`,
@@ -144,6 +147,7 @@ describe('FASE 4 — PagBank Sandbox Real', () => {
   });
 
   it('deve confirmar pagamento via confirmPayment', async () => {
+    if (skipIfNoConfig()) return;
     const result = pagbank.confirmPayment(createdOrderId);
     
     expect(result.success).toBe(true);
@@ -152,6 +156,7 @@ describe('FASE 4 — PagBank Sandbox Real', () => {
   });
 
   it('deve lidar com pagamento duplicado (idempotência)', async () => {
+    if (skipIfNoConfig()) return;
     // Usar MESMO payload para testar idempotência real
     const payload = {
       id: 'evt_phase4_idempotency_test', // ID FIXO para testar duplicata

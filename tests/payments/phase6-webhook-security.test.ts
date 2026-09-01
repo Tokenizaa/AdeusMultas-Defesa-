@@ -3,7 +3,7 @@
  * Idempotência, Spoofing, HMAC, IP Validation
  * Pode rodar em sandbox
  */
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import 'dotenv/config';
 import { processGatewayWebhook } from '../../src/server/integrations/gateway/webhook-handler';
 import { gatewayManager } from '../../src/server/integrations/gateway/gateway-manager';
@@ -17,6 +17,14 @@ gatewayManager.registerGateway(ggpixAdapter);
 
 describe('FASE 6 — Webhook Security', () => {
   const PAGBANK_SECRET = process.env.PAGBANK_WEBHOOK_SECRET || 'test_secret';
+
+  beforeAll(() => {
+    process.env.PAGBANK_WEBHOOK_SECRET = PAGBANK_SECRET;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   describe('PagBank — HMAC-SHA256', () => {
     const payload = {
@@ -77,16 +85,18 @@ describe('FASE 6 — Webhook Security', () => {
 
     it('deve detectar idempotência (mesmo event ID)', () => {
       const crypto = require('crypto');
-      const signature = `sha256=${crypto.createHmac('sha256', PAGBANK_SECRET).update(rawBody, 'utf8').digest('hex')}`;
+      const idempPayload = { ...payload, id: `evt_idemp_${Date.now()}` };
+      const idempRawBody = JSON.stringify(idempPayload);
+      const signature = `sha256=${crypto.createHmac('sha256', PAGBANK_SECRET).update(idempRawBody, 'utf8').digest('hex')}`;
 
-      const result1 = processGatewayWebhook('/api/webhooks/pagbank', rawBody, {
+      const result1 = processGatewayWebhook('/api/webhooks/pagbank', idempRawBody, {
         'x-hub-signature-256': signature,
-      }, payload);
+      }, idempPayload);
       expect(result1?.event?.isDuplicate).toBe(false);
 
-      const result2 = processGatewayWebhook('/api/webhooks/pagbank', rawBody, {
+      const result2 = processGatewayWebhook('/api/webhooks/pagbank', idempRawBody, {
         'x-hub-signature-256': signature,
-      }, payload);
+      }, idempPayload);
       expect(result2?.event?.received).toBe(true);
       expect(result2?.event?.isDuplicate).toBe(true);
     });

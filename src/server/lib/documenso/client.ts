@@ -242,6 +242,31 @@ export class DocumensoClient {
 }
 
 /**
+ * Check if Documenso environment variables are configured with valid values
+ */
+export function isDocumensoConfigured(): boolean {
+  const baseUrl = process.env.DOCUMENSO_BASE_URL;
+  const apiToken = process.env.DOCUMENSO_API_TOKEN;
+  const webhookSecret = process.env.DOCUMENSO_WEBHOOK_SECRET;
+  const webhookUrl = process.env.DOCUMENSO_WEBHOOK_URL;
+
+  if (!baseUrl || !apiToken || !webhookSecret || !webhookUrl) {
+    return false;
+  }
+
+  if (
+    baseUrl.includes('your-') ||
+    apiToken.includes('your-') ||
+    webhookSecret.includes('your-') ||
+    webhookUrl.includes('your-domain')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Create DocumensoClient from environment variables
  */
 export function createDocumensoClient(): DocumensoClient {

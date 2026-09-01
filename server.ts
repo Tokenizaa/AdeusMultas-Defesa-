@@ -30,7 +30,9 @@ import paymentsRoutes from './src/server/routes/payments';
 import notificationsRoutes from './src/server/routes/notifications';
 import knowledgeRoutes from './src/server/routes/knowledge';
 import marketingAutomationRoutes from './src/server/routes/marketing-automation';
+import scrapeRoutes from './src/server/routes/scrape';
 import { scraperJobQueue } from './src/server/services/scraper-job-queue';
+import { scrapeWorker } from './src/server/services/scrape-worker';
 import e2eTestsRoutes from './src/server/routes/e2e-tests';
 import { databaseRows } from './src/server/app';
 import { caseRepository } from './src/server/db/case-repository';
@@ -44,6 +46,8 @@ import { marketingMetricsCollector } from './src/server/workers/marketing-metric
 import { startMetaTokenRenewal } from './src/server/workers/meta-token-renewal.worker';
 import healthRoutes from './src/server/routes/health';
 import { logger } from './src/server/observability/logger';
+import documensoRoutes from './src/server/routes/documenso';
+import { isDocumensoConfigured } from './src/server/lib/documenso/client';
 import { startPollingJob } from './src/server/lib/documenso/polling-job';
 
 // Initialize legislation collectors
@@ -313,11 +317,12 @@ async function startServer() {
     console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
   }
 
-  // Iniciar worker de scraping (background, headless)
-  scraperJobQueue.startWorker();
+  // Iniciar worker de scraping assíncrono (BullMQ + Supabase heartbeat)
+  scrapeWorker.start();
 
   // Mount Modular API Routes First
-   app.use('/api/admin/commercial', commercialRoutes);
+  app.use('/api/scrape', scrapeRoutes);
+  app.use('/api/admin/commercial', commercialRoutes);
    app.use('/api/commercial', commercialRoutes);
    app.use('/api/admin', adminRoutes);
    app.use('/api/integrations', metaRoutes);
@@ -336,6 +341,7 @@ async function startServer() {
    app.use('/api/payments', paymentsRoutes);
    app.use('/api/notifications', notificationsRoutes);
    app.use('/api/knowledge', knowledgeRoutes);
+   app.use('/api/documenso', documensoRoutes);
    app.use('/api/health', healthRoutes);
    app.use('/api', e2eTestsRoutes);
    app.use('/api', healthRoutes);
@@ -1271,10 +1277,14 @@ app.get('/api/audit/logs', (req, res) => {
     } catch (workerErr) {
       // Silently ignore worker init errors in dev; workers are optional
     }
-    // Start Documenso polling job for webhook fallback
+    // Start Documenso polling job for webhook fallback (if configured)
     try {
-      startPollingJob();
-      logger.info('documenso' as any, 'server', 'startup', 'Documenso polling job started', { status: 'success' });
+      if (isDocumensoConfigured()) {
+        startPollingJob();
+        logger.info('documenso' as any, 'server', 'startup', 'Documenso polling job started', { status: 'success' });
+      } else {
+        logger.info('documenso' as any, 'server', 'startup', 'Documenso polling job skipped (not configured in environment)', { status: 'skipped' });
+      }
     } catch (pollingErr) {
       logger.error('documenso' as any, 'server', 'startup', 'Failed to start Documenso polling job', { err: pollingErr, status: 'failed' });
     }

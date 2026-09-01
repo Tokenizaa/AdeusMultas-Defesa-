@@ -163,6 +163,8 @@ export interface NormalizedWebhookEvent {
   rawPayload: unknown;
   /** Se é evento duplicado (já processado). */
   isDuplicate: boolean;
+  /** Se o evento foi recebido com sucesso. */
+  received?: boolean;
 }
 
 // ============================================================================

@@ -6,7 +6,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
 import { authenticateToken } from '../middleware/auth-middleware';
-import { getDocumensoClient, DocumensoClient } from '../lib/documenso/client';
+import { getDocumensoClient, DocumensoClient, isDocumensoConfigured } from '../lib/documenso/client';
 import { getEnvelopeService, EnvelopeService } from '../lib/documenso/envelope-service';
 import { getWebhookHandler, WebhookHandler, documensoWebhookMiddleware } from '../lib/documenso/webhook-handler';
 import { getPollingJob, PollingJob } from '../lib/documenso/polling-job';
@@ -27,6 +27,9 @@ let pollingJob: PollingJob;
 
 function ensureServices(): void {
   if (!envelopeService) {
+    if (!isDocumensoConfigured()) {
+      throw new Error('Documenso environment variables are not configured');
+    }
     const documensoClient = getDocumensoClient();
     envelopeService = new EnvelopeService(documensoClient);
     webhookHandler = new WebhookHandler(documensoClient, envelopeService);

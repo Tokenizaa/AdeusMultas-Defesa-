@@ -337,21 +337,22 @@ export class GGPIXAdapter implements PaymentGateway {
       throw new Error('Webhook GGPIXAPI rejeitado: IP de origem não autorizado');
     }
 
-    const payload = body as GGWebhookPayload;
+    const payload = (body && typeof body === 'object' ? body : {}) as Partial<GGWebhookPayload>;
 
     return {
-      gatewayEventId: `ggpix_${payload.transactionId}_${payload.status}_${Date.now()}`,
+      gatewayEventId: `ggpix_${payload.transactionId || 'evt'}_${payload.status || 'status'}_${Date.now()}`,
       gateway: 'ggpixapi',
-      gatewayTransactionId: payload.transactionId,
+      gatewayTransactionId: payload.transactionId || '',
       referenceId: payload.externalId || undefined,
-      status: mapGGPixStatus(payload.status),
+      status: mapGGPixStatus(payload.status || 'PENDING'),
       transactionType: payload.type || 'PIX_IN',
-      amountInCents: payload.amount,
+      amountInCents: payload.amount || 0,
       netAmountInCents: payload.netAmount,
       gatewayFeeInCents: payload.gatewayFee,
       paidAt: payload.paidAt,
       rawPayload: body,
       isDuplicate: false, // GGPIXAPI não tem HMAC, idempotência por externalId
+      received: true,
     };
   }
 }

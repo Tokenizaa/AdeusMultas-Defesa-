@@ -92,3 +92,19 @@ export interface ScraperLogger {
   warn(msg: string, meta?: Record<string, unknown>): void;
   error(msg: string, meta?: Record<string, unknown>): void;
 }
+
+export interface ScraperProgress {
+  phase: 'discovery' | 'details' | 'completed';
+  discovered: number;
+  processed: number;
+  persisted: number;
+  duplicates: number;
+  errors: number;
+}
+
+export interface ScraperCallbacks {
+  onProgress?: (progress: ScraperProgress) => void;
+  onCheckCancel?: () => boolean;
+  onDriverCrash?: () => void;
+  onCardExtracted?: (lead: RawLead, index: number, total: number) => Promise<void> | void;
+}

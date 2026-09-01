@@ -1,4 +1,4 @@
-import { RawLead, ScrapeResult, QueryScrapeResult, ScrapedForKey } from '../types';
+import { RawLead, ScrapeResult, QueryScrapeResult, ScrapedForKey, ScraperCallbacks, ScraperProgress } from '../types';
 import { SeleniumSession } from './session';
 import { Key, WebElement } from 'selenium-webdriver';
 import { extractCleanPhone, cleanPhoneFromTel } from '../normalizer';
@@ -56,21 +56,6 @@ interface DiscoveredCard {
   index: number;
 }
 
-interface ScraperProgress {
-  phase: 'discovery' | 'details' | 'completed';
-  discovered: number;
-  processed: number;
-  persisted: number;
-  duplicates: number;
-  errors: number;
-}
-
-interface ScraperCallbacks {
-  onProgress?: (progress: ScraperProgress) => void;
-  onCheckCancel?: () => boolean;
-  onDriverCrash?: () => void;
-}
-
 export class GoogleMapsSeleniumScraper {
   private session: SeleniumSession;
   private blocked = false;
@@ -83,6 +68,16 @@ export class GoogleMapsSeleniumScraper {
 
   setCallbacks(callbacks: ScraperCallbacks): void {
     this.callbacks = { ...this.callbacks, ...callbacks };
+  }
+
+  extractPlaceId(url: string): string | null {
+    if (!url) return null;
+    const match = url.match(/!1s([^!]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    const placeMatch = url.match(/place\/([^/@?]+)/);
+    return placeMatch ? decodeURIComponent(placeMatch[1]) : null;
   }
 
   async detectPageState(): Promise<{ status: string; reason: string }> {
@@ -368,6 +363,14 @@ export class GoogleMapsSeleniumScraper {
         }
 
         leads.push(enriched);
+
+        if (this.callbacks.onCardExtracted) {
+          try {
+            await this.callbacks.onCardExtracted(enriched, i + 1, discovered.length);
+          } catch (callbackErr) {
+            logger.warn('Aviso no callback onCardExtracted:', { error: callbackErr instanceof Error ? callbackErr.message : callbackErr });
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao extrair detalhe';
         errors.push(message);

@@ -111,13 +111,18 @@ export class PagBankIntegrationService {
     return (process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production';
   }
 
-/**
-    * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
-    * Validação oficial de assinatura de webhook do PagBank
-    * Cabeçalho: X-Hub-Signature-256 ou X-PagBank-Signature
-    */
+  private getWebhookSecret(): string {
+    return process.env.PAGBANK_WEBHOOK_SECRET || this.webhookSecret || '';
+  }
+
+  /**
+   * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
+   * Validação oficial de assinatura de webhook do PagBank
+   * Cabeçalho: X-Hub-Signature-256 ou X-PagBank-Signature
+   */
   private verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
-    if (!this.webhookSecret) {
+    const secret = this.getWebhookSecret();
+    if (!secret) {
       if (this.isProductionMode()) {
         logger.error('payments', 'pagbank', 'verify_webhook', 'CRITICAL: PAGBANK_WEBHOOK_SECRET não configurado em produção');
         return false; // BLOQUEAR em produção
@@ -133,7 +138,7 @@ export class PagBankIntegrationService {
 
     // PagBank usa X-Hub-Signature-256: sha256=<hash> formato
     const expectedSignature = `sha256=${crypto
-      .createHmac('sha256', this.webhookSecret)
+      .createHmac('sha256', secret)
       .update(rawBody, 'utf8')
       .digest('hex')}`;
 

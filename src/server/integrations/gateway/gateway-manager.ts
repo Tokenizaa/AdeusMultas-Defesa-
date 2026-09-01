@@ -75,9 +75,8 @@ function resolveActiveGatewayIdFromEnv(): GatewayId {
   if (isProduction) {
     return 'ggpixapi';
   }
-  // Em sandbox/dev: preferir 'test' gateway se disponível (não requer credenciais)
-  // Isso evita o erro "PagBank não está configurado" em desenvolvimento
-  return 'test';
+  // Em sandbox/dev: default é pagbank
+  return 'pagbank';
 }
 
 // ============================================================================

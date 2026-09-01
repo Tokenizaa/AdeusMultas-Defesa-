@@ -54,7 +54,8 @@ export async function persistProspectingResponse(
   try {
     // 1. Encontra lead cujo phone/whatsapp (normalizado) == remetente
     const { data: leads } = await client.from('marketing_leads').select('id, phone, whatsapp').limit(50);
-    const lead = (leads || []).find(
+    const leadList = Array.isArray(leads) ? leads : [];
+    const lead = leadList.find(
       (l: any) => normalizeBrPhone(l.phone) === inboundPhone || normalizeBrPhone(l.whatsapp) === inboundPhone
     );
     if (!lead) return none;
@@ -105,14 +106,32 @@ export async function persistProspectingResponse(
       inserted = true;
     }
 
-    // 5. Status responded — idempotente, sem downgrade de responded/converted/exhausted
+    // 5. Detecta se é opt-out ou resposta normal
+    const textLower = (incoming.text || '').trim().toLowerCase();
+    const isOptOut =
+      /^(sair|parar|stop|descadastrar|cancelar|não quero|nao quero|remover|optout|opt-out)$/i.test(textLower) ||
+      /(quero sair|me tire|pare de enviar|não me mande|nao me mande)/i.test(textLower);
+
     let statusUpdated = false;
-    if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
-      await client.from('marketing_lead_campaigns').update({ status: 'responded', updated_at: now }).eq('id', lc.id);
+    if (isOptOut) {
+      // Opt-out é estado terminal: atualiza lead e lead_campaign
+      await client.from('marketing_leads').update({ status: 'opt_out', updated_at: now }).eq('id', lead.id);
+      await client.from('marketing_lead_campaigns').update({ status: 'opt_out', updated_at: now }).eq('id', lc.id);
+      // Cancela quaisquer automações/follow-ups agendados
+      await client.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
       statusUpdated = true;
+      logger.info('messaging', 'prospecting', 'opt_out', `Lead ${lead.id} solicitou opt-out. Automações canceladas.`);
+    } else {
+      // Status responded — idempotente, sem downgrade de responded/converted/exhausted
+      if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
+        await client.from('marketing_lead_campaigns').update({ status: 'responded', updated_at: now }).eq('id', lc.id);
+        // Cancela follow-ups agendados porque o lead já respondeu
+        await client.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
+        statusUpdated = true;
+      }
+      logger.info('messaging', 'prospecting', 'responded', `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || 'whatsapp_evolution'}). Follow-ups pendentes cancelados.`);
     }
 
-    logger.info('messaging', 'prospecting', 'responded', `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || 'whatsapp_evolution'})`);
     return { matched: true, messageInserted: inserted, statusUpdated };
   } catch (err: any) {
     logger.warn('messaging', 'prospecting', 'responder_error', `Falha ao persistir resposta de prospecção: ${err.message}`);
