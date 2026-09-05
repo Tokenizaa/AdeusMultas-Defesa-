@@ -284,8 +284,8 @@ export class DocumentAssemblyEngine {
       '{{cpf_representante}}': payload.company?.representativeCpf || payload.applicant.cpf,
 
       // Formatted Multi-Argument Blocks
-      '{{bloco_preliminares_formatado}}': formattedPreliminaries || 'Inexistem preliminares de nulidade formal arguidas nesta oportunidade.',
-      '{{bloco_merito_formatado}}': formattedMerit || 'Demonstrada nos autos a manifesta atipicidade e insubsistência da autuação fiscal.',
+      '{{bloco_preliminares_formatado}}': formattedPreliminaries || '',
+      '{{bloco_merito_formatado}}': formattedMerit || '',
 
       // Direct Shorthand Aliases (User Request Phase 4.1)
       '{{nome}}': payload.applicant.name || '',
@@ -294,9 +294,9 @@ export class DocumentAssemblyEngine {
       '{{orgao}}': autuador.toUpperCase(),
       '{{cpf}}': payload.applicant.cpf || '',
       '{{cnh}}': payload.applicant.cnh || '',
-      '{{fundamentacao}}': formattedMerit || 'Fundamentação técnica e legal pautada no Código de Trânsito Brasileiro.',
+      '{{fundamentacao}}': formattedMerit || '',
       '{{argumentos}}': `${formattedPreliminaries ? `${formattedPreliminaries}\n\n` : ''}${formattedMerit}`,
-      '{{pedido}}': 'Requer o acolhimento da defesa, reconhecimento da insubsistência e cancelamento definitivo do Auto de Infração de Trânsito.',
+      '{{pedido}}': '',
     };
 
     // 6. Select Blocks: Use custom selected blocks or template default blocks
@@ -366,11 +366,11 @@ export class DocumentAssemblyEngine {
       vehicleModel: payload.vehicle.model,
       vehicleRenavam: payload.vehicle.renavam || '',
       aitNumber: aitNumber,
-      factsNarrative: payload.customFacts || `O Requerente tomou ciência do AIT nº ${aitNumber} referente à suposta infração do ${ctbArticle}. A autuação padece de vícios insanáveis de legalidade.`,
+      factsNarrative: payload.customFacts || '',
       selectedArgumentIds: activeArgIds,
       preliminaryArgumentsText: formattedPreliminaries,
       meritArgumentsText: formattedMerit,
-      legalRequestsText: `Requer o recebimento tempestivo, o acolhimento das preliminares, o arquivamento definitivo do AIT nº ${aitNumber} e o efeito suspensivo.`,
+      legalRequestsText: '',
       closingPlaceDate: `${payload.applicant.cityState}, ${dateFormatted}`,
       fullDraftText,
       // Campos de auditoria do pipeline canônico (especificação Fase 6/13)
@@ -387,7 +387,7 @@ export class DocumentAssemblyEngine {
         message: `Tag não resolvida: ${p}`,
       })),
       engineVersion: '2.6.0',
-      isReady: true,
+      isReady: unresolvedSet.size === 0,
       version: 1,
       updatedAt: new Date().toISOString(),
     };
