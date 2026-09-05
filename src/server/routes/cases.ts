@@ -101,7 +101,7 @@ router.get('/cases/:id', authenticateToken, (req, res) => {
   res.json(CanonicalMapper.rowToDomain(row));
 });
 
-router.post('/cases', authenticateToken, (req, res) => {
+router.post('/cases', authenticateToken, async (req, res) => {
   try {
     const domainData: CaseDomain = req.body;
     if (!domainData.id) {
@@ -165,7 +165,7 @@ router.post('/cases', authenticateToken, (req, res) => {
     }
 
     const row = CanonicalMapper.domainToRow(domainData);
-    databaseRows.set(row.id, row);
+    await databaseRows.set(row.id, row);
 
     eventBus.publish(EventTopics.CASE_CREATED, { caseId: domainData.id, isAnonymous: domainData.isAnonymous }, 'case_engine');
 
@@ -187,7 +187,7 @@ router.post('/cases', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/cases/:id', authenticateToken, (req, res) => {
+router.put('/cases/:id', authenticateToken, async (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: 'Caso não encontrado' });
@@ -219,7 +219,7 @@ router.put('/cases/:id', authenticateToken, (req, res) => {
     newRow.analysis_json = existingRow.analysis_json;
   }
   
-  databaseRows.set(req.params.id, newRow);
+  await databaseRows.set(req.params.id, newRow);
 
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, 'case_engine');
 
@@ -227,7 +227,7 @@ router.put('/cases/:id', authenticateToken, (req, res) => {
 });
 
 // Claim Anonymous Case (Modal Cadastro -> Link account)
-router.post('/cases/:id/claim', authenticateToken, (req, res) => {
+router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso anônimo não encontrado' });
@@ -277,7 +277,7 @@ router.post('/cases/:id/claim', authenticateToken, (req, res) => {
   });
 
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(domain.id, updatedRow);
+  await databaseRows.set(domain.id, updatedRow);
 
   eventBus.publish(EventTopics.CASE_CLAIMED, { caseId: domain.id, email }, 'auth_engine');
 
@@ -436,7 +436,7 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   });
 
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(domain.id, updatedRow);
+  await databaseRows.set(domain.id, updatedRow);
 
   eventBus.publish(EventTopics.DEFENSE_DRAFT_FINALIZED, { caseId: domain.id }, 'defense_engine');
 

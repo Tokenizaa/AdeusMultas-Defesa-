@@ -1389,13 +1389,16 @@ var CaseRepository = class {
   values() {
     return this.rows.values();
   }
-  /** Grava na memória (sempre) e persiste no Supabase (best-effort, async). */
-  set(id, row) {
+  /** Grava na memória APÓS persistência no Supabase com sucesso.
+   * FASE 7: Falha de banco = operação falha (FAIL CLOSED).
+   * Lança erro se persistência falhar — não grava em memória sem confirmação. */
+  async set(id, row) {
+    const payload = this.toPayload(row);
+    await this.persist(id, payload);
     this.rows.set(id, row);
-    this.persistAsync(id, this.toPayload(row));
   }
   // ==========================================
-  // Persistência Supabase (write-through)
+  // Persistência Supabase (write-through OBRIGATÓRIO)
   // ==========================================
   toPayload(row) {
     return {
@@ -1452,29 +1455,25 @@ var CaseRepository = class {
       updated_at: toDate(row.updated_at)
     };
   }
-  /** Loga e publica evento de auditoria para falha de persistência (best-effort, nunca lança). */
-  handlePersistFailure(id, message) {
-    logger.warn("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${message}`, {
-      caseId: id,
-      status: "failed",
-      errorCode: "SUPABASE_UPSERT"
-    });
-    eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
-      type: "persistence_failure",
-      caseId: id,
-      errorCode: "SUPABASE_UPSERT",
-      message
-    }, "case_repository");
-  }
-  async persistAsync(id, payload) {
-    if (!this.client) return;
-    try {
-      const { error } = await this.client.from("cases").upsert(payload);
-      if (error) {
-        this.handlePersistFailure(id, error.message);
-      }
-    } catch (err) {
-      this.handlePersistFailure(id, err?.message || err);
+  /** Persiste no Supabase. Lança erro se falhar (FAIL CLOSED). */
+  async persist(id, payload) {
+    if (!this.client) {
+      throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir caso ${id}`);
+    }
+    const { error } = await this.client.from("cases").upsert(payload);
+    if (error) {
+      logger.error("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${error.message}`, {
+        caseId: id,
+        status: "failed",
+        errorCode: "SUPABASE_UPSERT"
+      });
+      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
+        type: "persistence_failure",
+        caseId: id,
+        errorCode: "SUPABASE_UPSERT",
+        message: error.message
+      }, "case_repository");
+      throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
     }
   }
   /** Carrega do Supabase todos os casos persistidos (para warm-up opcional). */
@@ -18255,18 +18254,22 @@ var ProviderRouter = class {
   }
   /**
    * Decide e retorna o melhor provedor para a solicitação atual.
+   * FASE 6: mock provider NÃO é fallback em produção.
    */
   async resolveProvider(type, explicitProviderPreference) {
+    const isProduction = process.env.NODE_ENV === "production";
     if (explicitProviderPreference === "local") {
       if (await this.localProvider.isAvailable()) return this.localProvider;
     } else if (explicitProviderPreference === "remote") {
       if (await this.remoteProvider.isAvailable()) return this.remoteProvider;
     } else if (explicitProviderPreference === "dev_mock") {
-      return this.mockProvider;
+      if (!isProduction) return this.mockProvider;
+      throw new Error("dev_mock provider n\xE3o dispon\xEDvel em produ\xE7\xE3o");
     }
     const globalSetting = (process.env.MEDIA_PROVIDER || "auto").toLowerCase();
     if (globalSetting === "dev_mock") {
-      return this.mockProvider;
+      if (!isProduction) return this.mockProvider;
+      throw new Error("MEDIA_PROVIDER=dev_mock n\xE3o permitido em produ\xE7\xE3o");
     }
     let typeSetting = "auto";
     if (type === "image") {
@@ -18280,6 +18283,10 @@ var ProviderRouter = class {
     if (typeSetting === "remote" && await this.remoteProvider.isAvailable()) {
       return this.remoteProvider;
     }
+    if (typeSetting === "dev_mock") {
+      if (!isProduction) return this.mockProvider;
+      throw new Error("MEDIA_*_PROVIDER=dev_mock n\xE3o permitido em produ\xE7\xE3o");
+    }
     const hw = HardwareDetector.getHardwareInfo();
     if (process.env.MEDIA_LOCAL_ENABLED === "true" && hw.classification === "LOCAL_GPU_READY") {
       if (await this.localProvider.isAvailable()) {
@@ -18292,14 +18299,20 @@ var ProviderRouter = class {
     if (await this.localProvider.isAvailable()) {
       return this.localProvider;
     }
+    if (isProduction) {
+      throw new Error("Nenhum provedor de m\xEDdia real dispon\xEDvel. Configure MEDIA_REMOTE_ENABLED ou MEDIA_LOCAL_ENABLED.");
+    }
     return this.mockProvider;
   }
   getAvailableProviders() {
-    return [
+    const providers = [
       { id: this.remoteProvider.id, name: this.remoteProvider.name, kind: this.remoteProvider.kind },
-      { id: this.localProvider.id, name: this.localProvider.name, kind: this.localProvider.kind },
-      { id: this.mockProvider.id, name: this.mockProvider.name, kind: this.mockProvider.kind }
+      { id: this.localProvider.id, name: this.localProvider.name, kind: this.localProvider.kind }
     ];
+    if (process.env.NODE_ENV !== "production") {
+      providers.push({ id: this.mockProvider.id, name: this.mockProvider.name, kind: this.mockProvider.kind });
+    }
+    return providers;
   }
 };
 
@@ -27343,8 +27356,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         domain.serviceType = offerResult.offer.serviceType;
         domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
       }
     }
     logger.info("payments", "gateway", "create_credit_card_order", "Credit card order endpoint called", {
@@ -27445,8 +27457,7 @@ router11.post("/webhooks/pagbank", async (req, res) => {
           type: "payment"
         });
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
           caseId: domain.id,
@@ -27586,8 +27597,7 @@ router11.post("/simulate-payment", async (req, res) => {
       type: "payment"
     });
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(caseId, updatedRow);
-    caseRepository.set(caseId, updatedRow);
+    await caseRepository.set(caseId, updatedRow);
     try {
       const caseIdUuid = domainIdToUuid(domain.id);
       const supabaseForOrder = getSupabaseServerClient();
@@ -27667,7 +27677,7 @@ router11.post("/simulate-confirm", async (req, res) => {
   } catch {
   }
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(caseId, updatedRow);
+  await caseRepository.set(caseId, updatedRow);
   res.json({ success: true, case: domain });
 });
 router11.post("/sandbox/trigger-webhook", async (req, res) => {
@@ -27768,8 +27778,7 @@ router11.post("/webhooks/ggpix", async (req, res) => {
           type: "payment"
         });
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
         if (event.status === "PAID") {
           try {
             const paymentAmount2 = Number((event.amountInCents || 0) / 100);
@@ -30146,18 +30155,20 @@ var NotificationService = class {
   constructor() {
     this.subscriptions = /* @__PURE__ */ new Map();
     this.notificationHistory = [];
-    this.notificationHistory.push({
-      id: "notif_welcome_1",
-      userId: "usr_fariasnetto",
-      userEmail: "fariasnetto01@gmail.com",
-      title: "\u{1F6E1}\uFE0F Sistema de Alertas Ativado",
-      body: "Voc\xEA receber\xE1 notifica\xE7\xF5es instant\xE2neas sobre os prazos e julgamentos dos seus recursos.",
-      url: "/cases",
-      status: "defesa_pronta",
-      read: false,
-      createdAt: new Date(Date.now() - 36e5).toISOString(),
-      type: "system"
-    });
+    if (process.env.NODE_ENV !== "production") {
+      this.notificationHistory.push({
+        id: "notif_welcome_1",
+        userId: "usr_fariasnetto",
+        userEmail: "fariasnetto01@gmail.com",
+        title: "\u{1F6E1}\uFE0F Sistema de Alertas Ativado",
+        body: "Voc\xEA receber\xE1 notifica\xE7\xF5es instant\xE2neas sobre os prazos e julgamentos dos seus recursos.",
+        url: "/cases",
+        status: "defesa_pronta",
+        read: false,
+        createdAt: new Date(Date.now() - 36e5).toISOString(),
+        type: "system"
+      });
+    }
   }
   /**
    * Registers or updates a client push subscription
@@ -31887,7 +31898,7 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
   }
   res.json(CanonicalMapper.rowToDomain(row));
 });
-router16.post("/cases", authenticateToken, (req, res) => {
+router16.post("/cases", authenticateToken, async (req, res) => {
   try {
     const domainData = req.body;
     if (!domainData.id) {
@@ -31936,7 +31947,7 @@ router16.post("/cases", authenticateToken, (req, res) => {
       }
     }
     const row = CanonicalMapper.domainToRow(domainData);
-    databaseRows.set(row.id, row);
+    await databaseRows.set(row.id, row);
     eventBus.publish(EventTopics.CASE_CREATED, { caseId: domainData.id, isAnonymous: domainData.isAnonymous }, "case_engine");
     auditLogs.unshift({
       id: `audit_${Date.now()}`,
@@ -31954,7 +31965,7 @@ router16.post("/cases", authenticateToken, (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-router16.put("/cases/:id", authenticateToken, (req, res) => {
+router16.put("/cases/:id", authenticateToken, async (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -31974,11 +31985,11 @@ router16.put("/cases/:id", authenticateToken, (req, res) => {
   } else {
     newRow.analysis_json = existingRow.analysis_json;
   }
-  databaseRows.set(req.params.id, newRow);
+  await databaseRows.set(req.params.id, newRow);
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, "case_engine");
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
-router16.post("/cases/:id/claim", authenticateToken, (req, res) => {
+router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso an\xF4nimo n\xE3o encontrado" });
@@ -32013,7 +32024,7 @@ router16.post("/cases/:id/claim", authenticateToken, (req, res) => {
     type: "system"
   });
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(domain.id, updatedRow);
+  await databaseRows.set(domain.id, updatedRow);
   eventBus.publish(EventTopics.CASE_CLAIMED, { caseId: domain.id, email }, "auth_engine");
   res.json(domain);
 });
@@ -32133,7 +32144,7 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
     type: "defense"
   });
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(domain.id, updatedRow);
+  await databaseRows.set(domain.id, updatedRow);
   eventBus.publish(EventTopics.DEFENSE_DRAFT_FINALIZED, { caseId: domain.id }, "defense_engine");
   res.json({
     success: true,
@@ -32350,10 +32361,15 @@ var onboarding_default = router18;
 
 // src/server/routes/transit.ts
 import { Router as Router19 } from "express";
-
-// src/data/test-fixtures.ts
-var TRANSIT_DATABASE_REGISTRY = {
-  vehicles: [
+var router19 = Router19();
+router19.get("/transit-database/query", (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Servi\xE7o de consulta veicular n\xE3o dispon\xEDvel",
+      message: "Integra\xE7\xE3o com DETRAN em prepara\xE7\xE3o para produ\xE7\xE3o."
+    });
+  }
+  const mockVehicles = [
     {
       placa: "BRA2E19",
       chassi: "9BRBL48E8P0192841",
@@ -32382,8 +32398,8 @@ var TRANSIT_DATABASE_REGISTRY = {
       restricoes: "Aliena\xE7\xE3o Fiduci\xE1ria",
       ultimoLicenciamento: 2025
     }
-  ],
-  radarCertificates: [
+  ];
+  const mockRadarCertificates = [
     {
       equipamentoId: "INMETRO-RAD-883921",
       orgaoAutuador: "DETRAN-SP",
@@ -32391,7 +32407,6 @@ var TRANSIT_DATABASE_REGISTRY = {
       localInstalacao: "Av. das Na\xE7\xF5es Unidas, km 18.5 - Marginal Pinheiros",
       limiteVelocidade: 70,
       dataUltimaAfericao: "2025-04-10",
-      // Mais de 12 meses atrás!
       validadeAfericao: "2026-04-10",
       statusLaudo: "EXPIRADO_INVALIDO",
       numeroCertificadoInmetro: "INMETRO/DIMEL-SP-2025-09182",
@@ -32409,25 +32424,14 @@ var TRANSIT_DATABASE_REGISTRY = {
       numeroCertificadoInmetro: "INMETRO/DIMEL-RJ-2026-44120",
       motivoInvalidade: null
     }
-  ]
-};
-
-// src/server/routes/transit.ts
-var router19 = Router19();
-router19.get("/transit-database/query", (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(501).json({
-      error: "Servi\xE7o de consulta veicular n\xE3o dispon\xEDvel",
-      message: "Integra\xE7\xE3o com DETRAN em prepara\xE7\xE3o para produ\xE7\xE3o."
-    });
-  }
+  ];
   const { placa, autoInfracao } = req.query;
   const cleanPlaca = String(placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const foundVehicle = TRANSIT_DATABASE_REGISTRY.vehicles.find((v) => v.placa === cleanPlaca || cleanPlaca === "") || TRANSIT_DATABASE_REGISTRY.vehicles[0];
-  const radarMatch = TRANSIT_DATABASE_REGISTRY.radarCertificates[0];
+  const foundVehicle = mockVehicles.find((v) => v.placa === cleanPlaca || cleanPlaca === "") || mockVehicles[0];
+  const radarMatch = mockRadarCertificates[0];
   res.json({
     success: true,
-    source: "RENAINF / DETRAN Central API Gateway",
+    source: "RENAINF / DETRAN Central API Gateway (MOCK - DEV ONLY)",
     consultaEm: (/* @__PURE__ */ new Date()).toISOString(),
     veiculo: foundVehicle,
     situacaoCadastral: {
@@ -32453,11 +32457,37 @@ router19.get("/transit-database/inmetro-check", (req, res) => {
       message: "Integra\xE7\xE3o com INMETRO em prepara\xE7\xE3o para produ\xE7\xE3o."
     });
   }
+  const mockRadarCertificates = [
+    {
+      equipamentoId: "INMETRO-RAD-883921",
+      orgaoAutuador: "DETRAN-SP",
+      modeloRadar: "FISCAL-RADAR FX-3000 Fixe Laser",
+      localInstalacao: "Av. das Na\xE7\xF5es Unidas, km 18.5 - Marginal Pinheiros",
+      limiteVelocidade: 70,
+      dataUltimaAfericao: "2025-04-10",
+      validadeAfericao: "2026-04-10",
+      statusLaudo: "EXPIRADO_INVALIDO",
+      numeroCertificadoInmetro: "INMETRO/DIMEL-SP-2025-09182",
+      motivoInvalidade: "Vencido h\xE1 mais de 60 dias da data do cometimento."
+    },
+    {
+      equipamentoId: "INMETRO-RAD-119284",
+      orgaoAutuador: "PRF",
+      modeloRadar: "TRUCAM II Port\xE1til Laser",
+      localInstalacao: "BR-116, km 220 - Dutra Sul",
+      limiteVelocidade: 110,
+      dataUltimaAfericao: "2026-02-15",
+      validadeAfericao: "2027-02-15",
+      statusLaudo: "VIGENTE_REGULAR",
+      numeroCertificadoInmetro: "INMETRO/DIMEL-RJ-2026-44120",
+      motivoInvalidade: null
+    }
+  ];
   const { equipamentoId } = req.query;
-  const cert = TRANSIT_DATABASE_REGISTRY.radarCertificates.find((c) => c.equipamentoId === equipamentoId) || TRANSIT_DATABASE_REGISTRY.radarCertificates[0];
+  const cert = mockRadarCertificates.find((c) => c.equipamentoId === equipamentoId) || mockRadarCertificates[0];
   res.json({
     success: true,
-    origem: "Base Nacional de Metrologia Legal (INMETRO/IPEM)",
+    origem: "Base Nacional de Metrologia Legal (INMETRO/IPEM) (MOCK - DEV ONLY)",
     equipamento: cert,
     regularidade: cert.statusLaudo === "VIGENTE_REGULAR",
     alertaPerito: cert.statusLaudo === "EXPIRADO_INVALIDO" ? "Aferi\xE7\xE3o expirada! V\xEDcio metrol\xF3gico insan\xE1vel perante a Resolu\xE7\xE3o CONTRAN 798/2020." : "Equipamento com laudo metrol\xF3gico v\xE1lido."
@@ -32512,7 +32542,7 @@ router20.get("/governance/law-enforcement-verify", (req, res) => {
     orientacaoAgente: "Certid\xE3o de Efeito Suspensivo V\xE1lida nos termos do CTB."
   });
 });
-router20.post("/governance/manual-override", requireAdmin, (req, res) => {
+router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
   const { caseId, overrideField, oldValue, newValue, justification, specialistName } = req.body;
   const row = databaseRows.get(caseId);
   if (row) {
@@ -32525,7 +32555,7 @@ router20.post("/governance/manual-override", requireAdmin, (req, res) => {
       type: "system"
     });
     const updatedRow = CanonicalMapper.domainToRow(c);
-    databaseRows.set(caseId, updatedRow);
+    await databaseRows.set(caseId, updatedRow);
   }
   const auditEntry = {
     id: "aud_override_" + Math.random().toString(36).substring(2, 9),

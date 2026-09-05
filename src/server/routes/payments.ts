@@ -446,7 +446,6 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
         domain.serviceType = offerResult.offer.serviceType as any;
         domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
         await caseRepository.set(caseId, updatedRow);
       }
     }
@@ -585,7 +584,6 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
         });
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
         await caseRepository.set(caseId, updatedRow);
 
         commercialService.processPaymentConfirmationEvent({
@@ -743,7 +741,6 @@ router.post('/simulate-payment', async (req: Request, res: Response) => {
     });
 
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    databaseRows.set(caseId, updatedRow);
     await caseRepository.set(caseId, updatedRow);
 
     // Upsert em payment_orders
@@ -830,7 +827,7 @@ router.post('/simulate-confirm', async (req: Request, res: Response) => {
     domain.defenseDraft = generateDefenseDraftForDomain(domain);
   } catch {}
   const updatedRow = CanonicalMapper.domainToRow(domain);
-  databaseRows.set(caseId, updatedRow);
+  await caseRepository.set(caseId, updatedRow);
   res.json({ success: true, case: domain });
 });
 
@@ -952,7 +949,6 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
         });
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
-        databaseRows.set(caseId, updatedRow);
         await caseRepository.set(caseId, updatedRow);
 
         // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
