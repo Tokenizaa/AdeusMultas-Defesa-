@@ -2,6 +2,12 @@
  * @file auth-middleware.ts
  * Express JWT Authentication & Authorization Middleware
  * Validates Supabase JWTs, enforces auth on protected routes, and provides admin guard.
+ *
+ * P0 hardening: identidade/role NUNCA são derivadas de headers de cliente
+ * (x-user-id / x-user-role / x-user-email / x-user-name) nem de tokens
+ * sintáticos `local_*` — todos forjáveis. Em produção, somente um token
+ * validado pelo Supabase preenche req.user. Bypasses de desenvolvimento
+ * são explicitamente condicionados a NODE_ENV !== 'production'.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -25,10 +31,10 @@ declare global {
 
 /**
  * Middleware that validates the Supabase JWT from the Authorization header.
- * - Missing token → 401
- * - Invalid/expired token → 401
+ * - Missing token → 401 via requireAuth (req.user undefined)
+ * - Invalid/expired token → 401 via requireAuth (req.user undefined)
  * - Valid token → populates req.user and calls next()
- * - Dev mode without Supabase → pass-through with mock user
+ * - Dev/test only, never in production: mock fallback without Supabase or auto-login via ADMIN_TEST_LOGIN
  */
 export async function authenticateToken(
   req: Request,
@@ -42,36 +48,13 @@ export async function authenticateToken(
         ? authHeader.slice(7).trim()
         : null;
 
-    // 1. Check custom headers from client session
-    const headerUserId = req.headers['x-user-id'] as string;
-    const headerUserRole = req.headers['x-user-role'] as string;
-    const headerUserEmail = req.headers['x-user-email'] as string;
-    const headerUserName = req.headers['x-user-name'] as string;
+    // P0: headers x-user-* são forjáveis e NUNCA estabelecem identidade.
+    // Tokens `local_*` idem — são descartados como fonte de identidade.
+    // O único caminho para req.user é um token validado pelo Supabase
+    // (ou, em ambiente NÃO produtivo, um bypass explícito abaixo).
+    const isProduction = process.env.NODE_ENV === 'production';
 
-    if (headerUserId || headerUserEmail) {
-      req.user = {
-        id: headerUserId || 'usr_local',
-        email: headerUserEmail || 'usuario@www.defesai.shop',
-        role: headerUserRole || 'admin',
-        name: headerUserName ? decodeURIComponent(headerUserName) : 'Usuário DefesAi',
-      };
-      return next();
-    }
-
-    // 2. Check local session token format
-    if (token && token.startsWith('local_')) {
-      const parts = token.split('_');
-      const role = parts.length >= 3 ? parts[2] : (token.includes('admin') ? 'admin' : 'citizen');
-      req.user = {
-        id: token,
-        email: role === 'admin' ? 'admin@www.defesai.shop' : 'motorista@www.defesai.shop',
-        role,
-        name: role === 'admin' ? 'Administrador DefesAi' : 'Carlos Eduardo Silveira',
-      };
-      return next();
-    }
-
-    // 3. Supabase verification
+    // 1. Supabase verification — mecanismo real de autenticação.
     const supabase = getSupabaseServerClient();
 
     if (token && supabase) {
@@ -101,29 +84,33 @@ export async function authenticateToken(
       }
     }
 
-    // 4. Default fallback ONLY in non-production local development when Supabase is not configured
-    if (process.env.NODE_ENV !== 'production' && !supabase) {
-      req.user = {
-        id: 'usr_admin_defesai',
-        email: 'admin@www.defesai.shop',
-        role: 'admin',
-        name: 'Administrador DefesAi',
-      };
-      return next();
+    // 2. Bypasses de desenvolvimento/teste — NUNCA executados em produção.
+    //    Preservados apenas para os fluxos locais/E2E existentes.
+    if (!isProduction) {
+      // 2a. Fallback local quando Supabase não está configurado (dev).
+      if (!supabase) {
+        req.user = {
+          id: 'usr_admin_defesai',
+          email: 'admin@www.defesai.shop',
+          role: 'admin',
+          name: 'Administrador DefesAi',
+        };
+        return next();
+      }
+
+      // 2b. Auto-login explícito via ADMIN_TEST_LOGIN/ADMIN_TEST_PASSWORD do .env (E2E).
+      if (process.env.ADMIN_TEST_LOGIN && !req.user) {
+        req.user = {
+          id: 'usr_admin_e2e',
+          email: process.env.ADMIN_TEST_LOGIN,
+          role: 'admin',
+          name: 'Admin Teste (E2E)',
+        };
+        return next();
+      }
     }
 
-    // 5. DEV AUTO-LOGIN: usa ADMIN_TEST_LOGIN/ADMIN_TEST_PASSWORD do .env para bypass automático
-    if (process.env.NODE_ENV !== 'production' && process.env.ADMIN_TEST_LOGIN && !req.user) {
-      req.user = {
-        id: 'usr_admin_e2e',
-        email: process.env.ADMIN_TEST_LOGIN,
-        role: 'admin',
-        name: 'Admin Teste (E2E)',
-      };
-      return next();
-    }
-
-    // 5. Unauthenticated guest in production
+    // 3. Não autenticado — req.user permanece undefined.
     req.user = undefined;
     return next();
   } catch (err: any) {
