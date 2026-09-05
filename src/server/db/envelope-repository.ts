@@ -62,12 +62,15 @@ export class EnvelopeRepository {
     if (!this.client) {
       logger.error('supabase', 'envelope_repository', 'register', 'Supabase client não configurado', {
         documensoEnvelopeId,
-        status: 'no_client',
+        persistenceResult: 'no_client',
       });
       throw new Error('EnvelopeRepository: Supabase client não configurado — não é possível persistir ownership');
     }
 
-    const { data, error } = await this.client
+    // Cast through 'any' — Database type não inclui documenso_envelopes
+    // (schema gerado não reflete migrations adicionadas dinamicamente).
+    // O comportamento em runtime é correto; a tipagem statica é incompleta.
+    const { data, error } = await (this.client as any)
       .from('documenso_envelopes')
       .insert({
         documenso_envelope_id: documensoEnvelopeId,
@@ -85,7 +88,7 @@ export class EnvelopeRepository {
         documensoEnvelopeId,
         caseId,
         userId,
-        status: 'failed',
+        persistenceResult: 'failed',
       });
       throw new Error(`EnvelopeRepository: falha ao registrar ownership do envelope ${documensoEnvelopeId}: ${error.message}`);
     }
@@ -95,7 +98,7 @@ export class EnvelopeRepository {
       documensoEnvelopeId,
       caseId,
       userId,
-      status: 'success',
+      persistenceResult: 'success',
     });
 
     return data as EnvelopeRecord;
@@ -113,12 +116,13 @@ export class EnvelopeRepository {
       // Sem banco: fail closed — não podemos confirmar ownership
       logger.warn('supabase', 'envelope_repository', 'belongsToUser', 'Supabase client não configurado, fail-closed', {
         documensoEnvelopeId,
-        status: 'no_client',
+        persistenceResult: 'no_client',
       });
       return false;
     }
 
-    const { data, error } = await this.client
+    // Cast through 'any' — Database type não inclui documenso_envelopes
+    const { data, error } = await (this.client as any)
       .from('documenso_envelopes')
       .select('id, user_id')
       .eq('documenso_envelope_id', documensoEnvelopeId)
@@ -129,7 +133,7 @@ export class EnvelopeRepository {
       logger.error('supabase', 'envelope_repository', 'belongsToUser', `Erro ao verificar ownership: ${error.message}`, {
         documensoEnvelopeId,
         userId,
-        status: 'failed',
+        persistenceResult: 'failed',
       });
       return false;
     }
@@ -144,7 +148,8 @@ export class EnvelopeRepository {
   async getByDocumensoId(documensoEnvelopeId: string): Promise<EnvelopeRecord | null> {
     if (!this.client) return null;
 
-    const { data, error } = await this.client
+    // Cast through 'any' — Database type não inclui documenso_envelopes
+    const { data, error } = await (this.client as any)
       .from('documenso_envelopes')
       .select('*')
       .eq('documenso_envelope_id', documensoEnvelopeId)
@@ -165,7 +170,7 @@ export class EnvelopeRepository {
     if (!this.client) {
       logger.warn('supabase', 'envelope_repository', 'updateStatus', 'Supabase client não configurado — pulando update', {
         documensoEnvelopeId,
-        status,
+        persistenceResult: 'no_client',
       });
       return;
     }
@@ -174,7 +179,8 @@ export class EnvelopeRepository {
     if (extraData?.sent_at) updates.sent_at = extraData.sent_at;
     if (extraData?.completed_at) updates.completed_at = extraData.completed_at;
 
-    const { error } = await this.client
+    // Cast through 'any' — Database type não inclui documenso_envelopes
+    const { error } = await (this.client as any)
       .from('documenso_envelopes')
       .update(updates)
       .eq('documenso_envelope_id', documensoEnvelopeId);
