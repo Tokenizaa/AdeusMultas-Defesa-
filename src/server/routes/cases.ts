@@ -112,6 +112,10 @@ router.post('/cases', authenticateToken, (req, res) => {
     // userId vindo do body é IGNORADO; user_id deriva exclusivamente de req.user.
     delete (domainData as any).userId;
 
+    // P0 (Fase 3): o cliente NUNCA escolhe a autoridade jurídica.
+    // analysis vinda do body é IGNORADA; a análise é SEMPRE produzida pelo servidor.
+    delete (domainData as any).analysis;
+
     if (req.user?.id) {
       const uid = req.user.id;
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
@@ -130,8 +134,8 @@ router.post('/cases', authenticateToken, (req, res) => {
     }
     domainData.updatedAt = new Date().toISOString();
 
-    // Run legal RAG analysis (gratuita, sem minuta)
-    if (!domainData.analysis && domainData.infraction) {
+    // Run legal RAG analysis (gratuita, sem minuta) — SEMPRE pelo servidor.
+    if (domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
 
@@ -203,6 +207,18 @@ router.put('/cases/:id', authenticateToken, (req, res) => {
   // userId/user_id do body (mesmo `userId: "outro-usuario"`) é ignorado —
   // troca de ownership via PUT é impossível.
   newRow.user_id = existingRow.user_id;
+  
+  // P0 (Fase 3): a autoridade jurídica (analysis) é preservada do registro existente.
+  // O cliente NÃO pode substituir/injetar analysis via PUT.
+  // Se houver infraction nova, recalcular análise pelo servidor.
+  if (updatedDomain.infraction) {
+    newRow.analysis_json = JSON.stringify(
+      RagPipeline.analyzeInfraction(req.params.id, updatedDomain.infraction)
+    );
+  } else {
+    newRow.analysis_json = existingRow.analysis_json;
+  }
+  
   databaseRows.set(req.params.id, newRow);
 
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, 'case_engine');

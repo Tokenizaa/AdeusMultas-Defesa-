@@ -420,4 +420,283 @@ describe('Fase 3 — Autoridade Jurídica Canônica (produção)', () => {
     // Sem análise canônica → array vazio (FAIL CLOSED), NÃO o body do cliente
     expect(selectedArguments).toEqual([]);
   });
+
+  // ─── Testes adversariais de persistência de análise (Fase 3 — correção final) ───
+  // Prova a cadeia completa: CLIENTE → POST/PUT → persistência → generate-defense
+  // Uma análise jurídica enviada pelo cliente NÃO consegue chegar à geração da defesa.
+
+  it('13. POST /cases com analysis forjada → ARG-999 NÃO é persistido; análise do servidor é usada', async () => {
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_001, ARG_002],
+      recommendedProcedure: 'recurso_jari',
+    });
+
+    const postHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases' && l.route.methods.post);
+      if (!layer) throw new Error('rota POST /cases não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const req = makeReq({
+      body: {
+        id: 'case_new',
+        title: 'Novo Caso',
+        analysis: {
+          recommendedArguments: [ARG_999], // forjado pelo cliente
+          recommendedProcedure: 'procedimento-forjado',
+        },
+        infraction: { aitNumber: 'AIT123', autuadorBody: 'PRF', dateTime: new Date().toISOString() },
+        vehicle: { plate: 'ABC-1I23', brandModel: 'Teste' },
+        applicantData: { name: 'A', cpf: '000', cnh: '111', address: 'Rua X', cityState: 'SP' },
+      },
+    });
+    await authenticate(req, TOKEN_A);
+
+    const res = makeRes();
+    await postHandler(req, res, noopNext);
+
+    expect(res.statusCode).toBe(201);
+    // analyzeInfraction deve ter sido chamado (análise do servidor)
+    expect(analyzeMock).toHaveBeenCalled();
+    
+    // Verificar que a análise persistida é a do servidor, não a do cliente
+    const persisted = db.get('case_new');
+    const persistedAnalysis = JSON.parse(persisted.analysis_json || '{}');
+    expect(persistedAnalysis.recommendedArguments.map((a: any) => a.id)).toEqual(['ARG-001', 'ARG-002']);
+    expect(persistedAnalysis.recommendedProcedure).toBe('recurso_jari');
+    expect(persistedAnalysis.recommendedArguments.map((a: any) => a.id)).not.toContain('ARG-999');
+  });
+
+  it('14. POST /cases com analysis forjada + infração → generate-defense usa análise do servidor', async () => {
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_001],
+      recommendedProcedure: 'recurso_cetran',
+    });
+
+    const postHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases' && l.route.methods.post);
+      if (!layer) throw new Error('rota POST /cases não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const req = makeReq({
+      body: {
+        id: 'case_chain',
+        title: 'Chain Test',
+        analysis: {
+          recommendedArguments: [ARG_999],
+          recommendedProcedure: 'recurso_jari',
+        },
+        infraction: { aitNumber: 'AIT999', autuadorBody: 'DETRAN', dateTime: new Date().toISOString() },
+        vehicle: { plate: 'XYZ-1I23', brandModel: 'Chain' },
+      },
+    });
+    await authenticate(req, TOKEN_A);
+
+    const res = makeRes();
+    await postHandler(req, res, noopNext);
+
+    expect(res.statusCode).toBe(201);
+
+    // Agora chamar generate-defense no caso criado
+    const genReq = makeReq({
+      params: { id: 'case_chain' },
+      body: {
+        selectedArgumentIds: ['ARG-999'],
+        applicantData: { name: 'A', cpf: '000', cnh: '111', address: 'Rua X', cityState: 'SP' },
+      },
+    });
+    await authenticate(genReq, TOKEN_A);
+
+    const genRes = makeRes();
+    await generateDefenseHandler(genReq, genRes, noopNext);
+
+    expect(genRes.statusCode).toBe(200);
+    // generateDefenseDraft deve ter recebido a análise do servidor (ARG-001, recurso_cetran)
+    const callArgs = generateDraftMock.mock.calls[0];
+    const selectedArguments = callArgs[5] as Array<{ id: string }>;
+    const procedureType = callArgs[6] as string;
+    expect(selectedArguments.map((a) => a.id)).toEqual(['ARG-001']);
+    expect(procedureType).toBe('recurso_cetran');
+  });
+
+  it('15. PUT /cases/:id tentando substituir analysis → análise original permanece', async () => {
+    // Criar caso com análise do servidor
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_001],
+      recommendedProcedure: 'recurso_jari',
+    });
+    const postHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases' && l.route.methods.post);
+      if (!layer) throw new Error('rota POST /cases não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const createReq = makeReq({
+      body: {
+        id: 'case_put',
+        title: 'PUT Test',
+        infraction: { aitNumber: 'AITPUT', autuadorBody: 'PRF', dateTime: new Date().toISOString() },
+        vehicle: { plate: 'PUT-1I23', brandModel: 'Put' },
+      },
+    });
+    await authenticate(createReq, TOKEN_A);
+    const createRes = makeRes();
+    await postHandler(createReq, createRes, noopNext);
+    expect(createRes.statusCode).toBe(201);
+
+    const putHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases/:id' && l.route.methods.put);
+      if (!layer) throw new Error('rota PUT /cases/:id não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    // Tentar sobrescrever analysis via PUT
+    const putReq = makeReq({
+      params: { id: 'case_put' },
+      body: {
+        title: 'Atualizado',
+        analysis: {
+          recommendedArguments: [ARG_999], // forjado
+          recommendedProcedure: 'conversao_advertencia',
+        },
+      },
+    });
+    await authenticate(putReq, TOKEN_A);
+
+    const putRes = makeRes();
+    await putHandler(putReq, putRes, noopNext);
+
+    expect(putRes.statusCode).toBe(200);
+
+    // Análise deve permanecer a original (do servidor)
+    const updated = db.get('case_put');
+    const updatedAnalysis = JSON.parse(updated.analysis_json || '{}');
+    expect(updatedAnalysis.recommendedArguments.map((a: any) => a.id)).toEqual(['ARG-001']);
+    expect(updatedAnalysis.recommendedProcedure).toBe('recurso_jari');
+    expect(updatedAnalysis.recommendedArguments.map((a: any) => a.id)).not.toContain('ARG-999');
+  });
+
+  it('16. PUT /cases/:id tentando inserir ARG-999 em recommendedArguments → não entra', async () => {
+    // Criar caso primeiro
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_001],
+      recommendedProcedure: 'recurso_jari',
+    });
+    const postHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases' && l.route.methods.post);
+      if (!layer) throw new Error('rota POST /cases não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const createReq = makeReq({
+      body: {
+        id: 'case_put_inject',
+        title: 'PUT Inject Test',
+        infraction: { aitNumber: 'AITINJ', autuadorBody: 'PRF', dateTime: new Date().toISOString() },
+        vehicle: { plate: 'INJ-1I23', brandModel: 'Inject' },
+      },
+    });
+    await authenticate(createReq, TOKEN_A);
+    const createRes = makeRes();
+    await postHandler(createReq, createRes, noopNext);
+    expect(createRes.statusCode).toBe(201);
+
+    const putHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases/:id' && l.route.methods.put);
+      if (!layer) throw new Error('rota PUT /cases/:id não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const putReq = makeReq({
+      params: { id: 'case_put_inject' },
+      body: {
+        analysis: {
+          recommendedArguments: [{ id: 'ARG-999', name: 'Injected' }],
+          recommendedProcedure: 'recurso_jari',
+        },
+      },
+    });
+    await authenticate(putReq, TOKEN_A);
+
+    const putRes = makeRes();
+    await putHandler(putReq, putRes, noopNext);
+
+    expect(putRes.statusCode).toBe(200);
+
+    const updated = db.get('case_put_inject');
+    const updatedAnalysis = JSON.parse(updated.analysis_json || '{}');
+    expect(updatedAnalysis.recommendedArguments.map((a: any) => a.id)).toEqual(['ARG-001']);
+  });
+
+  it('17. PUT com nova infraction → análise recalculada pelo servidor (não cliente)', async () => {
+    // Primeiro criar o caso
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_001],
+      recommendedProcedure: 'recurso_jari',
+    });
+    const postHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases' && l.route.methods.post);
+      if (!layer) throw new Error('rota POST /cases não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    const createReq = makeReq({
+      body: {
+        id: 'case_put_new',
+        title: 'PUT Test New',
+        infraction: { aitNumber: 'AITPUTNEW', autuadorBody: 'PRF', dateTime: new Date().toISOString() },
+        vehicle: { plate: 'PUTNEW-1', brandModel: 'PutNew' },
+      },
+    });
+    await authenticate(createReq, TOKEN_A);
+    const createRes = makeRes();
+    await postHandler(createReq, createRes, noopNext);
+    expect(createRes.statusCode).toBe(201);
+
+    const putHandler = (() => {
+      const stack: any[] = (casesRouter as any).stack;
+      const layer = stack.find((l) => l.route && l.route.path === '/cases/:id' && l.route.methods.put);
+      if (!layer) throw new Error('rota PUT /cases/:id não encontrada');
+      return layer.route.stack[layer.route.stack.length - 1].handle;
+    })();
+
+    analyzeMock.mockReturnValue({
+      recommendedArguments: [ARG_002], // nova análise do servidor para nova infração
+      recommendedProcedure: 'recurso_jari',
+    });
+
+    const putReq = makeReq({
+      params: { id: 'case_put_new' },
+      body: {
+        title: 'Nova Infração',
+        analysis: { // tentiva de forjar análise para a nova infração
+          recommendedArguments: [ARG_999],
+          recommendedProcedure: 'conversao_advertencia',
+        },
+        infraction: { aitNumber: 'AITNEW', autuadorBody: 'PM', dateTime: new Date().toISOString() },
+      },
+    });
+    await authenticate(putReq, TOKEN_A);
+
+    const putRes = makeRes();
+    await putHandler(putReq, putRes, noopNext);
+
+    expect(putRes.statusCode).toBe(200);
+    // analyzeInfraction deve ter sido chamado com a nova infração
+    expect(analyzeMock).toHaveBeenCalled();
+
+    const updated = db.get('case_put_new');
+    const updatedAnalysis = JSON.parse(updated.analysis_json || '{}');
+    // Análise deve ser a recalculada pelo servidor (ARG-002), não a do cliente
+    expect(updatedAnalysis.recommendedArguments.map((a: any) => a.id)).toEqual(['ARG-002']);
+    expect(updatedAnalysis.recommendedArguments.map((a: any) => a.id)).not.toContain('ARG-999');
+  });
 });
