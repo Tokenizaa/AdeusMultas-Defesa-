@@ -70,7 +70,7 @@ router.get('/governance/law-enforcement-verify', (req, res) => {
  * POST /api/governance/manual-override
  * Specialist Manual Override with Cryptographic Audit Log
  */
-router.post('/governance/manual-override', requireAdmin, (req, res) => {
+router.post('/governance/manual-override', requireAdmin, async (req, res) => {
   const { caseId, overrideField, oldValue, newValue, justification, specialistName } = req.body;
   const row = databaseRows.get(caseId);
 
@@ -85,7 +85,7 @@ router.post('/governance/manual-override', requireAdmin, (req, res) => {
     });
 
     const updatedRow = CanonicalMapper.domainToRow(c);
-    databaseRows.set(caseId, updatedRow);
+    await databaseRows.set(caseId, updatedRow);
   }
 
   const auditEntry: AuditLogEntry = {

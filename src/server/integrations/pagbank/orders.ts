@@ -176,28 +176,28 @@ async function savePaymentToDatabase(
     },
   };
 
-  const { data: paymentDataResult, error: selectError } = await supabase
+  const { data: existing, error: selectError } = await supabase
     .from('payment_orders')
     .select('id')
     .eq('pagbank_order_id', order.id)
     .maybeSingle();
 
   if (selectError) {
-    throw new Error(`Failed to check existing payment: ${selectError.message}`);
-  }
+        throw new Error(`Falha ao verificar pagamento existente: ${selectError.message}`);
+    }
 
-  let dbError;
-  if (paymentDataResult) {
-    ({ error: dbError } = await supabase
+    let error;
+  if (existing) {
+    ({ error } = await supabase
       .from('payment_orders')
       .update(paymentData)
       .eq('pagbank_order_id', order.id));
   } else {
-    ({ error: dbError } = await supabase.from('payment_orders').insert(paymentData));
+    ({ error } = await supabase.from('payment_orders').insert(paymentData));
   }
 
-  if (dbError) {
-    throw new Error(`Falha ao persistir pagamento: ${dbError.message}`);
+  if (error) {
+    throw new Error(`Falha ao persistir pagamento: ${error.message}`);
   }
 
   console.log('[PagBank] Payment saved to database:', { orderId: order.id, caseId: data.caseId });
@@ -240,12 +240,12 @@ export async function criarPagamentoDefesa(data: DefesaPagamentoData): Promise<C
     }
   }
 
-  // Save to database (blocking)
+  // Save to database (non-blocking)
   const charge = order.charges[0];
-  if (!charge) {
-    throw new Error('Nenhum charge gerado para o pagamento - impossível persistir');
-  }
-  await savePaymentToDatabase(data, order, charge);
+   if (!charge) {
+     throw new Error("Falha ao criar cobrança: charge não gerado pelo PagBank");
+   }
+   await savePaymentToDatabase(data, order, charge);
 
   return { order, qrCode, pixCode, paymentUrl };
 }

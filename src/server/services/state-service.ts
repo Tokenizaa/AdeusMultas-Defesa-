@@ -3,6 +3,7 @@ import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { CaseDomain, CaseRow, AuditLogEntry } from '../../types';
 import { INITIAL_MARKETING_AGENTS, INITIAL_EDITORIAL_CONTENTS } from '../../data/marketing-agents-data';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
+import { logger } from '../observability/logger';
 
 // State service to hold in-memory data that was previously in server.ts global scope
 class StateService {
@@ -19,10 +20,12 @@ class StateService {
     this.auditLogs = [];
     
     // Seed initial data
-    this.seedInitialData();
+    this.seedInitialData().catch(err => {
+      logger.error('system', 'seed', 'seed', 'Failed to seed initial data', { error: err.message });
+    });
   }
 
-  private seedInitialData() {
+  private async seedInitialData() {
     // Seed data — APENAS em desenvolvimento
     if (process.env.NODE_ENV === 'production') {
       return;
@@ -99,7 +102,7 @@ class StateService {
     sampleDomain.defenseDraft = defense;
 
     const row = CanonicalMapper.domainToRow(sampleDomain);
-    this.databaseRows.set(row.id, row);
+    await this.databaseRows.set(row.id, row);
 
     // Initial audit log
     this.auditLogs.unshift({
