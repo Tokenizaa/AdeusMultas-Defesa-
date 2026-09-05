@@ -22,21 +22,26 @@ export class ProviderRouter {
 
   /**
    * Decide e retorna o melhor provedor para a solicitação atual.
+   * FASE 6: mock provider NÃO é fallback em produção.
    */
   public async resolveProvider(type: MediaType, explicitProviderPreference?: string): Promise<MediaProviderInterface> {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     // 1. Respeitar preferência explícita se solicitada
     if (explicitProviderPreference === 'local') {
       if (await this.localProvider.isAvailable()) return this.localProvider;
     } else if (explicitProviderPreference === 'remote') {
       if (await this.remoteProvider.isAvailable()) return this.remoteProvider;
     } else if (explicitProviderPreference === 'dev_mock') {
-      return this.mockProvider;
+      if (!isProduction) return this.mockProvider;
+      throw new Error('dev_mock provider não disponível em produção');
     }
 
     // 2. Checar variável global MEDIA_PROVIDER
     const globalSetting = (process.env.MEDIA_PROVIDER || 'auto').toLowerCase();
     if (globalSetting === 'dev_mock') {
-      return this.mockProvider;
+      if (!isProduction) return this.mockProvider;
+      throw new Error('MEDIA_PROVIDER=dev_mock não permitido em produção');
     }
 
     // 3. Checar variável específica por tipo de mídia
@@ -52,6 +57,10 @@ export class ProviderRouter {
     }
     if (typeSetting === 'remote' && (await this.remoteProvider.isAvailable())) {
       return this.remoteProvider;
+    }
+    if (typeSetting === 'dev_mock') {
+      if (!isProduction) return this.mockProvider;
+      throw new Error('MEDIA_*_PROVIDER=dev_mock não permitido em produção');
     }
 
     // 4. Modo AUTO: Decisão baseada em hardware e disponibilidade
@@ -74,15 +83,24 @@ export class ProviderRouter {
       return this.localProvider;
     }
 
-    // Fallback final para ambiente de desenvolvimento se nenhuma API estiver configurada
+    // FASE 6: Em produção, falha fechada — NUNCA dev_mock
+    if (isProduction) {
+      throw new Error('Nenhum provedor de mídia real disponível. Configure MEDIA_REMOTE_ENABLED ou MEDIA_LOCAL_ENABLED.');
+    }
+
+    // Fallback final APENAS em desenvolvimento
     return this.mockProvider;
   }
 
   public getAvailableProviders() {
-    return [
+    const providers = [
       { id: this.remoteProvider.id, name: this.remoteProvider.name, kind: this.remoteProvider.kind },
       { id: this.localProvider.id, name: this.localProvider.name, kind: this.localProvider.kind },
-      { id: this.mockProvider.id, name: this.mockProvider.name, kind: this.mockProvider.kind },
     ];
+    // Só expor mock em desenvolvimento
+    if (process.env.NODE_ENV !== 'production') {
+      providers.push({ id: this.mockProvider.id, name: this.mockProvider.name, kind: this.mockProvider.kind });
+    }
+    return providers;
   }
 }

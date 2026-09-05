@@ -35,19 +35,21 @@ class NotificationService {
   private notificationHistory: AppNotification[] = [];
 
   constructor() {
-    // Seed initial welcome notification for demo user
-    this.notificationHistory.push({
-      id: 'notif_welcome_1',
-      userId: 'usr_fariasnetto',
-      userEmail: 'fariasnetto01@gmail.com',
-      title: '🛡️ Sistema de Alertas Ativado',
-      body: 'Você receberá notificações instantâneas sobre os prazos e julgamentos dos seus recursos.',
-      url: '/cases',
-      status: 'defesa_pronta',
-      read: false,
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      type: 'system',
-    });
+    // Seed initial welcome notification for demo user — ONLY in development
+    if (process.env.NODE_ENV !== 'production') {
+      this.notificationHistory.push({
+        id: 'notif_welcome_1',
+        userId: 'usr_fariasnetto',
+        userEmail: 'fariasnetto01@gmail.com',
+        title: '🛡️ Sistema de Alertas Ativado',
+        body: 'Você receberá notificações instantâneas sobre os prazos e julgamentos dos seus recursos.',
+        url: '/cases',
+        status: 'defesa_pronta',
+        read: false,
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        type: 'system',
+      });
+    }
   }
 
   /**

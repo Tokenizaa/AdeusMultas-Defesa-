@@ -8,6 +8,12 @@
  * 5. Ciclo de vida desacoplado das rotas REST (/api/scrape, /api/scrape/:id, /api/scrape/:id/cancel, /api/scrape/:id/results).
  */
 
+// Mock env vars for scraper supabase client (required since Phase 6) — MUST BE BEFORE IMPORTS
+vi.hoisted(() => {
+  process.env.SUPABASE_URL = 'https://test.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+});
+
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import express, { Express } from 'express';
 import scrapeRoutes from '@/server/routes/scrape';

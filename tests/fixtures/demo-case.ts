@@ -1,9 +1,7 @@
-import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
+import { CanonicalMapper } from '../../../core/mappers/canonical-mapper';
 
 /**
- * Seed data for the demo case — used only at startup.
- * Injected into `databaseRows` (write-through to Supabase).
- *
+ * Seed data for the demo case — used only in tests.
  * Uses the legacy shape (dadosInfracao, analiseIA, historicoTimeline)
  * which CanonicalMapper.domainToRow() handles via backward-compat fallbacks.
  */
@@ -138,6 +136,7 @@ export const SAMPLE_CASE = {
 /**
  * Seed the sample case into `databaseRows` (write-through to Supabase).
  * Accepts anything with a `.set(id, row)` method (CaseRepository or Map).
+ * ONLY for tests.
  */
 export function seedDemoCase(databaseRows: { set(id: string, row: any): void }) {
   const row = CanonicalMapper.domainToRow(SAMPLE_CASE as any);

@@ -5,12 +5,10 @@ const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').tr
 const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 if (!url || !serviceRoleKey) {
-  logger.warn('Supabase environment variables missing for scraper service client.');
+  logger.error('Supabase environment variables missing for scraper service client.');
+  throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios para o scraper.');
 }
 
-const safeUrl = url.startsWith('http') ? url : 'https://placeholder.supabase.co';
-const safeKey = serviceRoleKey || 'placeholder-key';
-
-export const supabaseAdmin = createClient(safeUrl, safeKey, {
+export const supabaseAdmin = createClient(url, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });

@@ -7,7 +7,6 @@ import {
   setStoredSession,
   getStoredUsers,
   saveStoredUser,
-  DEMO_USERS,
 } from '../../lib/supabase';
 
 // Fetch user role from backend API (avoids direct user_profiles query which hits RLS)
@@ -26,12 +25,8 @@ async function fetchUserRoleFromBackend(userId: string): Promise<UserRole | unde
       if (stored.role) headers.set('x-user-role', stored.role);
       if (stored.email) headers.set('x-user-email', stored.email);
       if (stored.name) headers.set('x-user-name', encodeURIComponent(stored.name));
-      if (!headers.has('Authorization')) {
-        headers.set('Authorization', `Bearer local_${stored.id}_${stored.role}`);
-      }
+      // FASE 6: removido fallback local_ token — em produção só token Supabase válido
     }
-    // Sem identidade (visitante): não envia headers — endpoint responde 401 e
-    // o caller cai no fallback de user_metadata (comportamento preservado).
     const res = await fetch(`/api/auth/me`, { headers });
     if (res.ok) {
       const data = await res.json();
@@ -171,68 +166,17 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
       } catch (err: any) {
         console.error('Supabase signIn error:', err);
         setIsLoading(false);
-        return { success: false, error: 'Serviço de autenticação não configurado.' };
+        return { success: false, error: 'Erro ao autenticar. Tente novamente.' };
       }
     }
 
-    // 2. Local Fallback Authentication
-    await new Promise((r) => setTimeout(r, 300));
-    const allUsers = { ...DEMO_USERS, ...getStoredUsers() };
-    let found = allUsers[cleanEmail];
-
-    // Special auto-provisioning for platform administrator account (olfnetto@gmail.com)
-    if (!found && cleanEmail === 'olfnetto@gmail.com') {
-      const adminUser: AuthUser = {
-        id: 'usr_admin_olfnetto',
-        name: 'Netto (Administrador)',
-        email: 'olfnetto@gmail.com',
-        role: 'admin',
-        cpf: '000.111.222-99',
-        phone: '(11) 98888-7777',
-        cityState: 'São Paulo/SP',
-        createdAt: '2026-01-01T08:00:00.000Z',
-      };
-      saveStoredUser('olfnetto@gmail.com', adminUser, password || 'admin123');
-      found = { user: adminUser, passwordHash: password || 'admin123' };
-    }
-
-    // Special auto-provisioning for E2E test users (teste001@e2e.local..teste036@e2e.local)
-    if (!found && cleanEmail.match(/^teste\d{3}@e2e\.local$/)) {
-      const match = cleanEmail.match(/^teste(\d{3})@e2e\.local$/);
-      const numStr = match ? match[1] : '001';
-      const testUser: AuthUser = {
-        id: `usr_e2e_teste_${numStr}`,
-        name: `Teste ${numStr}`,
-        email: cleanEmail,
-        role: 'citizen',
-        cpf: `000.000.0${numStr.slice(-2)}-00`,
-        phone: `(11) 98000-${numStr}0`,
-        cnh: `00000000${numStr}`,
-        cityState: 'São Paulo/SP',
-        createdAt: '2026-08-30T10:00:00.000Z',
-      };
-      saveStoredUser(cleanEmail, testUser, 'E2E@2026Teste');
-      found = { user: testUser, passwordHash: 'E2E@2026Teste' };
-    }
-
-    if (!found) {
-      setIsLoading(false);
-      return { success: false, error: 'Credenciais inválidas. Para testar o painel admin, use admin@defesai.com.br / admin123 ou olfnetto@gmail.com' };
-    }
-
-    // Allow flexible test logins for known admins/test accounts if password is provided
-    const isSpecialAdmin = cleanEmail === 'olfnetto@gmail.com' || cleanEmail.startsWith('admin@');
-    const isPasswordValid = found.passwordHash === password || (isSpecialAdmin && password.length >= 4);
-
-    if (!isPasswordValid) {
-      setIsLoading(false);
-      return { success: false, error: 'Senha incorreta. Tente novamente ou use a recuperação de senha.' };
-    }
-
-    setUser(found.user);
-    setStoredSession(found.user);
+    // Supabase não configurado ou falhou — não há fallback local em produção.
+    // FAIL CLOSED: autenticação real obrigatória.
     setIsLoading(false);
-    return { success: true };
+    return {
+      success: false,
+      error: 'Serviço de autenticação não disponível. Configure Supabase para fazer login.',
+    };
   };
 
   const loginWithFacebook = async (): Promise<{ success: boolean; error?: string }> => {
@@ -335,32 +279,19 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
           return { success: true, requiresEmailConfirmation: true };
         }
       } catch (err: any) {
-        console.warn('Supabase signUp exception, falling back to local storage:', err);
+        console.error('Supabase signUp exception:', err);
+        setIsLoading(false);
+        return { success: false, error: 'Erro ao cadastrar. Tente novamente.' };
       }
     }
 
-    // 2. Local Fallback Sign Up
-    await new Promise((r) => setTimeout(r, 450));
-    const allUsers = getStoredUsers();
-    if (allUsers[cleanEmail]) {
-      setIsLoading(false);
-      return { success: false, error: 'Este e-mail já está cadastrado na plataforma.' };
-    }
-
-    const newUser: AuthUser = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      name: cleanName,
-      email: cleanEmail,
-      role: 'citizen',
-      phone: cleanPhone,
-      createdAt: new Date().toISOString(),
-    };
-
-    saveStoredUser(cleanEmail, newUser, password);
-    setUser(newUser);
-    setStoredSession(newUser);
+    // Supabase não configurado ou falhou — não há fallback local.
+    // FAIL CLOSED: cadastro real obrigatório.
     setIsLoading(false);
-    return { success: true };
+    return {
+      success: false,
+      error: 'Serviço de autenticação não disponível. Configure Supabase para cadastrar.',
+    };
   };
 
   const logout = async () => {
@@ -423,10 +354,10 @@ const resetPassword = async (email: string): Promise<{ success: boolean; message
     }
   }
 
-  await new Promise((r) => setTimeout(r, 400));
+  // Supabase não configurado — FAIL CLOSED
   return {
-    success: true,
-    message: `Instruções de redefinição de senha foram enviadas para ${cleanEmail}. Verifique também a pasta de spam ou lixo eletrônico.`,
+    success: false,
+    message: 'Serviço de recuperação de senha não disponível. Configure Supabase.',
   };
 };
 
