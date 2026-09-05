@@ -3,13 +3,12 @@
  * CaseRepository — Dual-Engine Persistence Layer (DefesAi)
  *
  * Mantém a API do antigo Map<string, CaseRow> do server.ts (get/set/values/size)
- * para que a integração seja 100% aditiva, e adiciona write-through best-effort
+ * para que a integração seja 100% aditiva, e adiciona write-through OBRIGATÓRIO
  * para a tabela public.cases no Supabase quando o servidor está configurado.
  *
- * Padrão: memória SEMPRE grava (fonte de leitura síncrona atual) + persistência
- * assíncrona no Postgres quando disponível. Nunca lança erros do banco para o
- * fluxo HTTP (try/catch silencioso, log em warn), preservando o comportamento
- * existente mesmo com Supabase fora do ar.
+ * Padrão (FASE 7 — Critical Persistence): memória grava APÓS persistência
+ * no Postgres com sucesso. Falha de banco = operação falha (FAIL CLOSED).
+ * Nunca retorna sucesso sem confirmação de persistência real.
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -71,14 +70,17 @@ export class CaseRepository {
     return this.rows.values();
   }
 
-  /** Grava na memória (sempre) e persiste no Supabase (best-effort, async). */
-  set(id: string, row: CaseRow): void {
+  /** Grava na memória APÓS persistência no Supabase com sucesso.
+   * FASE 7: Falha de banco = operação falha (FAIL CLOSED).
+   * Lança erro se persistência falhar — não grava em memória sem confirmação. */
+  async set(id: string, row: CaseRow): Promise<void> {
+    const payload = this.toPayload(row);
+    await this.persist(id, payload);
     this.rows.set(id, row);
-    this.persistAsync(id, this.toPayload(row));
   }
 
   // ==========================================
-  // Persistência Supabase (write-through)
+  // Persistência Supabase (write-through OBRIGATÓRIO)
   // ==========================================
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
@@ -137,30 +139,25 @@ export class CaseRepository {
     };
   }
 
-  /** Loga e publica evento de auditoria para falha de persistência (best-effort, nunca lança). */
-  private handlePersistFailure(id: string, message: unknown): void {
-    logger.warn('supabase', 'case_repository', 'persist', `Falha ao persistir caso ${id}: ${message}`, {
-      caseId: id,
-      status: 'failed',
-      errorCode: 'SUPABASE_UPSERT',
-    });
-    eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
-      type: 'persistence_failure',
-      caseId: id,
-      errorCode: 'SUPABASE_UPSERT',
-      message,
-    }, 'case_repository');
-  }
-
-  private async persistAsync(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
-    if (!this.client) return;
-    try {
-      const { error } = await this.client.from('cases').upsert(payload);
-      if (error) {
-        this.handlePersistFailure(id, error.message);
-      }
-    } catch (err: any) {
-      this.handlePersistFailure(id, err?.message || err);
+  /** Persiste no Supabase. Lança erro se falhar (FAIL CLOSED). */
+  private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
+    if (!this.client) {
+      throw new Error(`CaseRepository: Supabase client não configurado — não é possível persistir caso ${id}`);
+    }
+    const { error } = await this.client.from('cases').upsert(payload);
+    if (error) {
+      logger.error('supabase', 'case_repository', 'persist', `Falha ao persistir caso ${id}: ${error.message}`, {
+        caseId: id,
+        status: 'failed',
+        errorCode: 'SUPABASE_UPSERT',
+      });
+      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
+        type: 'persistence_failure',
+        caseId: id,
+        errorCode: 'SUPABASE_UPSERT',
+        message: error.message,
+      }, 'case_repository');
+      throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
     }
   }
 

@@ -325,7 +325,7 @@ class E2ETestRunnerService extends EventEmitter {
 
         // Salva no repositório
         const row = CanonicalMapper.domainToRow(testCaseDomain);
-        caseRepository.set(caseId, row);
+        await caseRepository.set(caseId, row);
         run.createdCases.push(caseId);
 
         // 2. Mapeamento e Montagem de Documento

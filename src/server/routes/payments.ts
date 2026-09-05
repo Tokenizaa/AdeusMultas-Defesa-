@@ -447,7 +447,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
         domain.commercialOfferId = offerResult.offer.commercialId;
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
       }
     }
 
@@ -586,7 +586,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
@@ -744,7 +744,7 @@ router.post('/simulate-payment', async (req: Request, res: Response) => {
 
     const updatedRow = CanonicalMapper.domainToRow(domain);
     databaseRows.set(caseId, updatedRow);
-    caseRepository.set(caseId, updatedRow);
+    await caseRepository.set(caseId, updatedRow);
 
     // Upsert em payment_orders
     try {
@@ -953,7 +953,7 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
         databaseRows.set(caseId, updatedRow);
-        caseRepository.set(caseId, updatedRow);
+        await caseRepository.set(caseId, updatedRow);
 
         // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
         if (event.status === 'PAID') {

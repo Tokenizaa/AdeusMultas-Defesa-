@@ -120,87 +120,83 @@ export interface CriarPagamentoResult {
 }
 
 // Save payment to Supabase database
+// FASE 7: Persistência OBRIGATÓRIA — falha de banco propaga erro (FAIL CLOSED)
 async function savePaymentToDatabase(
   data: DefesaPagamentoData,
   order: PagBankOrderResponse,
   charge: PagBankCharge
 ): Promise<void> {
   if (!data.userId) {
-    console.warn('[PagBank] No userId provided, skipping database save');
-    return;
+    throw new Error('[PagBank] userId obrigatório para persistência de pagamento');
   }
 
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
+  const { createClient } = await import('@supabase/supabase-js');
 
-    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!url || !serviceKey) {
-      console.warn('[PagBank] Supabase not configured, skipping database save');
-      return;
-    }
+  if (!url || !serviceKey) {
+    throw new Error('[PagBank] Supabase não configurado — não é possível persistir pagamento');
+  }
 
-    const supabase = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+  const supabase = createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
-    const pixData = order.qr_codes?.[0];
-    const paymentMethod = charge.payment_method.type;
+  const pixData = order.qr_codes?.[0];
+  const paymentMethod = charge.payment_method.type;
 
-    const paymentData = {
-      case_id: domainIdToUuid(data.caseId),
-      user_id: data.userId && /^[0-9a-f-]{36}$/i.test(data.userId) ? data.userId : null,
-      pagbank_order_id: order.id,
-      pagbank_charge_id: charge.id!,
-      pagbank_reference_id: order.reference_id,
-      amount_cents: charge.amount.value,
-      currency: charge.amount.currency,
-      payment_method: paymentMethod,
-      installments: charge.payment_method.installments || 1,
-      status: mapearStatusPagBank(charge.status || 'INITIAL') as any,
-      status_detail: charge.status,
-      pix_qr_code_id: pixData?.id,
-      pix_qr_code_text: pixData?.text,
-      pix_qr_code_image_url: pixData ? pagbankServer.getQRCodeImageUrl(pixData.id, 'png') : null,
-      payment_url: order.links.find((l) => l.rel === 'PAY')?.href || null,
-      paid_at: charge.paid_at || null,
-      metadata: {
-        order_created_at: order.created_at,
-        payment_response: charge.payment_response,
-        customer: order.customer
-          ? {
-              name: order.customer.name,
-              email: order.customer.email,
-              tax_id_masked: mascararCpfCnpj(order.customer.tax_id),
-            }
-          : undefined,
-      },
-    };
+  const paymentData = {
+    case_id: domainIdToUuid(data.caseId),
+    user_id: data.userId && /^[0-9a-f-]{36}$/i.test(data.userId) ? data.userId : null,
+    pagbank_order_id: order.id,
+    pagbank_charge_id: charge.id!,
+    pagbank_reference_id: order.reference_id,
+    amount_cents: charge.amount.value,
+    currency: charge.amount.currency,
+    payment_method: paymentMethod,
+    installments: charge.payment_method.installments || 1,
+    status: mapearStatusPagBank(charge.status || 'INITIAL') as any,
+    status_detail: charge.status,
+    pix_qr_code_id: pixData?.id,
+    pix_qr_code_text: pixData?.text,
+    pix_qr_code_image_url: pixData ? pagbankServer.getQRCodeImageUrl(pixData.id, 'png') : null,
+    payment_url: order.links.find((l) => l.rel === 'PAY')?.href || null,
+    paid_at: charge.paid_at || null,
+    metadata: {
+      order_created_at: order.created_at,
+      payment_response: charge.payment_response,
+      customer: order.customer
+        ? {
+            name: order.customer.name,
+            email: order.customer.email,
+            tax_id_masked: mascararCpfCnpj(order.customer.tax_id),
+          }
+        : undefined,
+    },
+  };
 
-    const { data: existing } = await supabase
+  const { data: existing } = await supabase
+    .from('payment_orders')
+    .select('id')
+    .eq('pagbank_order_id', order.id)
+    .maybeSingle();
+
+  let error;
+  if (existing) {
+    ({ error } = await supabase
       .from('payment_orders')
-      .select('id')
-      .eq('pagbank_order_id', order.id)
-      .maybeSingle();
-
-    let error;
-    if (existing) {
-      ({ error } = await supabase
-        .from('payment_orders')
-        .update(paymentData)
-        .eq('pagbank_order_id', order.id));
-    } else {
-      ({ error } = await supabase.from('payment_orders').insert(paymentData));
-    }
-
-    if (error) throw error;
-
-    console.log('[PagBank] Payment saved to database:', { orderId: order.id, caseId: data.caseId });
-  } catch (error) {
-    console.error('[PagBank] Database save error:', error);
-    // Don't throw - payment was created successfully in PagBank
+      .update(paymentData)
+      .eq('pagbank_order_id', order.id));
+  } else {
+    ({ error } = await supabase.from('payment_orders').insert(paymentData));
   }
+
+  if (error) {
+    throw new Error(`Falha ao persistir pagamento: ${error.message}`);
+  }
+
+  console.log('[PagBank] Payment saved to database:', { orderId: order.id, caseId: data.caseId });
 }
 
 export async function criarPagamentoDefesa(data: DefesaPagamentoData): Promise<CriarPagamentoResult> {
@@ -243,7 +239,7 @@ export async function criarPagamentoDefesa(data: DefesaPagamentoData): Promise<C
   // Save to database (non-blocking)
   const charge = order.charges[0];
   if (charge) {
-    savePaymentToDatabase(data, order, charge).catch(console.error);
+    await savePaymentToDatabase(data, order, charge);
   }
 
   return { order, qrCode, pixCode, paymentUrl };

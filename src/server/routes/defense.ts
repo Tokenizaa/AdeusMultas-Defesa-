@@ -145,7 +145,7 @@ router.post('/api/cases/:id/generate-defense', async (req, res) => {
     });
 
     const updatedRow = CanonicalMapper.domainToRow(domain);
-    caseRepository.set(domain.id, updatedRow);
+    await caseRepository.set(domain.id, updatedRow);
 
     eventBus.publish(EventTopics.DEFENSE_DRAFT_FINALIZED, { caseId: domain.id }, 'system');
 
