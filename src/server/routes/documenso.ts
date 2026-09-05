@@ -135,22 +135,24 @@ router.post('/envelopes', authenticateToken, async (req: Request, res: Response)
     // Convert base64 to buffer
     const pdfBuffer = Buffer.from(pdfBase64, 'base64');
 
-    // Create envelope
+    // Create envelope — domain ID (para título legível no Documenso)
+    const caseUuid = domainIdToUuid(caseId);
+    if (!caseUuid) {
+      return res.status(400).json({ error: 'ID do caso inválido' });
+    }
+
     const envelope = await envelopeService.createEnvelopeFromCase(
-      caseId,
+      caseId,   // domain ID: título legível "Defesa de Multa - Caso case_xxx"
       pdfBuffer,
       signers,
       { title, fields, settings, metadata }
     );
 
     // FASE 1.2 CORREÇÃO: persistir ownership em Supabase (sobrevive a restart/multi-instância)
-    const caseUuid = domainIdToUuid(caseId);
-    if (!caseUuid) {
-      return res.status(400).json({ error: 'ID do caso inválido' });
-    }
+    // externalId = UUID (não domain ID) para consistência com cases.id nos novos registros
     await envelopeRepository.register({
       documensoEnvelopeId: envelope.id,
-      externalId: caseId,
+      externalId: caseUuid,     // UUID: consistente para novos envelopes
       caseId: caseUuid,
       userId: req.user!.id,
       envelopeData: envelope,
