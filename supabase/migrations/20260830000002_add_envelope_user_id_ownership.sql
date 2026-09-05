@@ -62,12 +62,12 @@ CREATE POLICY "Service role update documenso_envelopes" ON documenso_envelopes
 -- 5a. Função UUID v5 (RFC 4122 §4.3) — espelha domainIdToUuid() do TypeScript
 -- Recebe domain ID (ex: 'case_xxx') e devolve UUID v5 determinístico.
 --
--- Notas técnicas:
--- - sha1(bytea) é built-in do PostgreSQL desde 9.0; retorna texto hexadecimal (40 chars).
--- - get_byte/set_byte operam sobre bytes individuais (0-255), usam INTEIROS decimais.
---   PostgreSQL NÃO suporta literais hex como 16#0F — usa inteiros (15, 80, 63, 128).
--- - Versão 5: byte[6] & 0x0F | 0x50 = &15 | 80
---   Variante RFC 4122: byte[8] & 0x3F | 0x80 = &63 | 128
+-- Funções pgcrypto usadas (documentação: https://www.postgresql.org/docs/current/pgcrypto.html):
+--   digest(data bytea, type text) → bytea  (SHA-1, retorna bytes crus, não hex string)
+--   get_byte(bytea, offset)      → int    (byte individual, 0-255)
+--   set_byte(bytea, offset, int) → bytea  (substitui byte individual)
+--   decode(text, encoding)       → bytea  (hex string → bytes)
+--   encode(bytea, encoding)      → text   (bytes → hex string)
 CREATE OR REPLACE FUNCTION domain_to_uuid(domain_id TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -78,25 +78,29 @@ DECLARE
     ns_hex TEXT := '6f0a9d2e8c474b3a9f15d7e0b2c4a681';
     ns_raw BYTEA;
     name_raw BYTEA;
-    sha_hex TEXT;
-    sha_raw BYTEA;
-    versioned BYTEA;
-    result UUID;
+    sha_bytes BYTEA;      -- 20 bytes crus (SHA-1 output)
+    versioned BYTEA;      -- 16 bytes após truncate
+    result TEXT;
 BEGIN
+    -- Converter namespace hex string → bytes crus
     ns_raw := decode(ns_hex, 'hex');
+    -- Converter domain ID string → bytes UTF-8
     name_raw := domain_id::BYTEA;
-    -- sha1(bytea) → texto hexadecimal (40 chars); concatenação bytea || bytea
-    sha_hex := sha1(ns_raw || name_raw);
-    -- Decode do hex string para bytea (20 bytes)
-    sha_raw := decode(sha_hex, 'hex');
-    -- Truncar para 16 bytes e ajustar versão=5 (bits 6) e variante RFC 4122 (bits 8)
-    -- & 15 = & 0x0F, | 80 = | 0x50  → versão 5
-    -- & 63 = & 0x3F, | 128 = | 0x80 → variante RFC 4122
-    versioned := decode(substring(sha_raw, 1, 16), 'hex');
+    -- SHA-1 de namespace || name — digest() retorna bytes crus (não hex string)
+    sha_bytes := digest(ns_raw || name_raw, 'sha1');
+    -- Truncar para 16 bytes e ajustar versão=5 (byte 6) + variante RFC 4122 (byte 8)
+    -- Versão 5: nibble superior do byte 6 = 5  → (byte & 15) | 80
+    -- Variante RFC 4122: nibble superior do byte 8 = 8  → (byte & 63) | 128
+    versioned := substring(sha_bytes, 1, 16);
     versioned := set_byte(versioned, 6, (get_byte(versioned, 6) & 15) | 80);
     versioned := set_byte(versioned, 8, (get_byte(versioned, 8) & 63) | 128);
-    result := ('{' || encode(versioned, 'hex') || '}')::UUID;
-    RETURN result;
+    -- Converter bytes → hex string → UUID formatado
+    result := encode(versioned, 'hex');
+    RETURN substr(result, 1, 8)  || '-' ||
+           substr(result, 9,  4)  || '-' ||
+           substr(result, 13, 4)  || '-' ||
+           substr(result, 17, 4)  || '-' ||
+           substr(result, 21);
 END;
 $$;
 
