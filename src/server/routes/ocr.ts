@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authenticateToken } from '../middleware/auth-middleware';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { analyzeTicketWithGemini } from '../gemini';
@@ -13,6 +14,8 @@ const router = Router();
  *
  * Analyze a traffic ticket image using real OCR (OCR.space → Google Vision fallback)
  *
+ * Requires authentication.
+ *
  * Body:
  *   - imageUrl?: string   — URL of the image to analyze
  *   - base64?: string     — Base64-encoded image data
@@ -22,7 +25,7 @@ const router = Router();
  * Production: Uses real OCR service (requires OCR_SPACE_API_KEY or GOOGLE_CLOUD_VISION_API_KEY)
  * Development: Falls back to preset-based mock if no API key configured
  */
-router.post('/ocr/analyze', async (req, res) => {
+router.post('/ocr/analyze', authenticateToken, async (req, res) => {
   try {
     const { imageUrl, base64, rawText, presetId } = req.body;
 

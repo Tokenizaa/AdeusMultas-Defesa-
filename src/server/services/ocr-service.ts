@@ -17,7 +17,97 @@
  * - Better date validation and formatting
  */
 
+import { isIP } from 'net';
+import { URL } from 'url';
 import { logger } from '../observability/logger';
+
+// ---------------------------------------------------------------------------
+// SSRF Protection — validate URLs before fetching
+// ---------------------------------------------------------------------------
+
+/** Maximum allowed download size in bytes (5MB) */
+const MAX_DOWNLOAD_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Validates that a URL is safe for fetching (no SSRF).
+ * - Only http/https schemes allowed
+ * - No private/internal IP addresses
+ * - No localhost or reserved hostnames
+ * - No credentials in URL
+ */
+function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string } {
+  let url: URL;
+  try {
+    url = new URL(inputUrl);
+  } catch {
+    return { valid: false, reason: 'URL malformada' };
+  }
+
+  // Only allow HTTP and HTTPS
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { valid: false, reason: `Esquema '${url.protocol}' não permitido — use http:// ou https://` };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  // Block credentials
+  if (url.username || url.password) {
+    return { valid: false, reason: 'Credenciais na URL não permitidas' };
+  }
+
+  // Block localhost variants
+  if (
+    hostname === 'localhost' ||
+    hostname === 'localhost.localdomain' ||
+    hostname === '[::1]' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('0.0.0.0') ||
+    hostname.endsWith('.local') ||
+    hostname === 'ip6-localhost' ||
+    hostname === 'ip6-loopback'
+  ) {
+    return { valid: false, reason: 'Host localhost/reservado não permitido' };
+  }
+
+  // Block internal/private IP ranges
+  const ip = isIP(hostname);
+  if (ip === 4) {
+    // IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+    const parts = hostname.split('.').map(Number);
+    if (parts[0] === 10) return { valid: false, reason: 'IP privado não permitido (10.x.x.x)' };
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
+      return { valid: false, reason: 'IP privado não permitido (172.16-31.x.x)' };
+    }
+    if (parts[0] === 192 && parts[1] === 168) {
+      return { valid: false, reason: 'IP privado não permitido (192.168.x.x)' };
+    }
+  } else if (ip === 6) {
+    // IPv6 private/uniquelocal: fc00::/7
+    if (hostname.startsWith('fc') || hostname.startsWith('fd') || hostname.startsWith('fe80')) {
+      return { valid: false, reason: 'IP privado IPv6 não permitido' };
+    }
+    // Block link-local
+    if (hostname.startsWith('fe80')) {
+      return { valid: false, reason: 'IP link-local não permitido' };
+    }
+  }
+
+  // Block obvious internal hostnames
+  const internalPatterns = [
+    'internal', 'intranet', 'private', 'corporate', 'dmz',
+    'gateway', 'router', 'switch', 'firewall', 'proxy',
+    'metadata.google', 'metadata.internal',
+    '169.254.169.254', // AWS/GCP metadata endpoint
+    '100.64.0.0/10', // Carrier-grade NAT
+  ];
+  for (const pattern of internalPatterns) {
+    if (hostname.includes(pattern)) {
+      return { valid: false, reason: `Hostname interno '${pattern}' não permitido` };
+    }
+  }
+
+  return { valid: true };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -768,6 +858,12 @@ class OcrService {
    * Tries providers in order: OCR.space → Google Vision
    */
   async analyzeImage(imageBase64: string): Promise<OcrResult> {
+    // Resource limit: base64 input should not exceed ~7MB (corresponds to ~5MB binary)
+    const MAX_BASE64_SIZE = 7 * 1024 * 1024;
+    if (imageBase64.length > MAX_BASE64_SIZE) {
+      throw new Error(`MAX_BASE64_SIZE_EXCEEDED: Payload base64 muito grande (${imageBase64.length} chars). Máximo: ${MAX_BASE64_SIZE} chars.`);
+    }
+
     const startTime = Date.now();
 
     // Try OCR.space first (free, 25K/month)
@@ -836,8 +932,15 @@ class OcrService {
 
   /**
    * Analyze from a URL (downloads the image first)
+   * Includes SSRF protection and size limits.
    */
   async analyzeFromUrl(imageUrl: string): Promise<OcrResult> {
+    // SSRF validation
+    const validation = validateFetchUrl(imageUrl);
+    if (!validation.valid) {
+      throw new Error(`SSRF_BLOCKED: ${validation.reason}`);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout || 30000);
 
@@ -849,11 +952,30 @@ class OcrService {
         throw new Error(`Failed to download image: ${response.status}`);
       }
 
+      // Check Content-Length header before downloading
+      const contentLength = response.headers.get('content-length');
+      if (contentLength) {
+        const size = parseInt(contentLength, 10);
+        if (size > MAX_DOWNLOAD_SIZE) {
+          throw new Error(`MAX_SIZE_EXCEEDED: Arquivo muito grande (${size} bytes). Máximo: ${MAX_DOWNLOAD_SIZE} bytes.`);
+        }
+      }
+
       const arrayBuffer = await response.arrayBuffer();
+
+      // Double-check downloaded size (in case header was missing/wrong)
+      if (arrayBuffer.byteLength > MAX_DOWNLOAD_SIZE) {
+        throw new Error(`MAX_SIZE_EXCEEDED: Arquivo muito grande (${arrayBuffer.byteLength} bytes). Máximo: ${MAX_DOWNLOAD_SIZE} bytes.`);
+      }
+
       const base64 = Buffer.from(arrayBuffer).toString('base64');
       return this.analyzeImage(base64);
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(timeoutId);
+      // Preserve SSRF_BLOCKED and MAX_SIZE_EXCEEDED messages
+      if (err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
+        throw err;
+      }
       throw err;
     }
   }
