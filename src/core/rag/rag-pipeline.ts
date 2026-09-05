@@ -12,6 +12,17 @@ import { InfractionData, LegalArgumentDomain, CaseAnalysis, DefenseDraft, Proced
 import { ARGUMENTS_CATALOG, ArgumentModel } from '../arguments/arguments-catalog';
 import { ORGANS_DB, resolveProtocolInfo } from '../legal-base/organs';
 
+/**
+ * Fase 8-P1B — Teses que exigem evidência explícita.
+ * Mapa de argumento → chave em `infraction.evidenceFlags` que deve ser `true`.
+ * Ausência de evidência explícita → tese não recomendada.
+ */
+const EVIDENCE_DEPENDENT_ARGUMENTS: Record<string, string> = {
+  'ARG-012': 'fotoRetencaoTrafego',
+  'ARG-019': 'manualVeiculoOuFotoPainel',
+  'ARG-020': 'fotoPlacaR6aAusente',
+};
+
 export class RagPipeline {
   /**
    * Find matching infraction in catalog by code or description
@@ -51,7 +62,17 @@ export class RagPipeline {
     
     // Matched legal arguments
     const matchedTeses = ARGUMENTS_CATALOG.filter((arg) => {
-      if (matchedInfraction?.recommendedArgumentCodes?.includes(arg.id)) return true;
+      if (matchedInfraction?.recommendedArgumentCodes?.includes(arg.id)) {
+        // Fase 8-P1B: teses que dependem de evidência explícita
+        if (EVIDENCE_DEPENDENT_ARGUMENTS[arg.id]) {
+          const key = EVIDENCE_DEPENDENT_ARGUMENTS[arg.id];
+          const evidence = infraction?.evidenceFlags?.[key];
+          if (evidence !== true) {
+            return false;
+          }
+        }
+        return true;
+      }
       if (infraction?.codigoInfracao?.startsWith('745') || infraction?.codigoInfracao?.startsWith('746')) {
         return arg.id === 'ARG-001' || arg.id === 'ARG-002' || arg.id === 'ARG-003';
       }
