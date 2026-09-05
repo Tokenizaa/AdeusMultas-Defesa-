@@ -140,7 +140,7 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                       }
                     }
 
-                    return allItems.map((item, idx) => {
+                    const evidenceEls = allItems.map((item, idx) => {
                       // Determina status por argumento
                       const statuses: ('PRESENTE' | 'AUSENTE' | 'PENDENTE')[] = item.argIds.map((argId) => {
                         // Se há dataGap para este argumento → AUSENTE
@@ -168,40 +168,62 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                         .map((id) => analysis.recommendedArguments.find((a) => a.id === id)?.title)
                         .filter(Boolean);
 
+                      const statusLabel = status === 'PRESENTE' ? 'Presente' : status === 'AUSENTE' ? 'Ausente' : 'Pendente';
                       return (
                         <div key={idx} className="flex items-start gap-2 text-[10px]">
                           {status === 'PRESENTE' ? (
-                            <CheckCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                            <CheckCheck
+                              className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"
+                              aria-label={statusLabel}
+                            />
                           ) : status === 'AUSENTE' ? (
-                            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                            <AlertCircle
+                              className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5"
+                              aria-label={statusLabel}
+                            />
                           ) : (
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <Clock
+                              className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5"
+                              aria-label={statusLabel}
+                            />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-slate-700 leading-snug">{item.req}</p>
+                            <p className="text-slate-700 leading-snug break-words">{item.req}</p>
                             <p className="text-slate-400 font-mono text-[9px] mt-0.5">
                               {argTitles.join(', ')}
                             </p>
+                            <span className="sr-only">Status: {statusLabel}</span>
                           </div>
                         </div>
                       );
                     });
+
+                    // DataGaps que ainda não estão representados na lista de evidências
+                    const argIdsInList = allItems.flatMap((i) => i.argIds);
+                    const unrepresentedGaps = (analysis.dataGaps || []).filter((g) => !argIdsInList.includes(g.ruleId));
+                    if (unrepresentedGaps.length > 0) {
+                      return (
+                        <>
+                          {evidenceEls}
+                          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-[10px] text-amber-700 font-bold flex items-center gap-1">
+                              <FileSearch className="w-3 h-3" />
+                              Pendências identificadas pela análise:
+                            </p>
+                            <ul className="mt-1 space-y-1">
+                              {unrepresentedGaps.map((gap, idx) => (
+                                <li key={idx} className="text-[10px] text-amber-600">
+                                  • {gap.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </>
+                      );
+                    }
+
+                    return evidenceEls;
                   })()}
-                  {analysis.dataGaps && analysis.dataGaps.length > 0 && (
-                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-[10px] text-amber-700 font-bold flex items-center gap-1">
-                        <FileSearch className="w-3 h-3" />
-                        Pendências identificadas pela análise:
-                      </p>
-                      <ul className="mt-1 space-y-1">
-                        {analysis.dataGaps.map((gap, idx) => (
-                          <li key={idx} className="text-[10px] text-amber-600">
-                            • {gap.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
