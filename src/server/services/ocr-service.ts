@@ -309,26 +309,38 @@ async function ssrfSafeFetch(
   return new Promise((resolve, reject) => {
     const timeoutMs = 30000;
     let socket: net.Socket;
+    let settled = false;
 
     const cleanup = () => {
       clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
       socket.destroy();
     };
 
-    const onAbort = () => {
-      cleanup();
-      reject(new Error('Request aborted'));
+    const safeReject = (err: Error) => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        reject(err);
+      }
     };
 
+    const safeResolve = (val: { body: NodeJS.ReadableStream; status: number; headers: http.IncomingHttpHeaders }) => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        resolve(val);
+      }
+    };
+
+    const onAbort = () => safeReject(new Error('Request aborted'));
+
     if (signal?.aborted) {
-      return reject(new Error('Request already aborted'));
+      return safeReject(new Error('Request already aborted'));
     }
     signal?.addEventListener('abort', onAbort, { once: true });
 
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Connection timeout'));
-    }, timeoutMs);
+    const timeout = setTimeout(() => safeReject(new Error('Connection timeout')), timeoutMs);
 
     if (isHTTPS) {
       // Connect directly to validatedIP; use hostname only for SNI (servername)
@@ -358,10 +370,15 @@ async function ssrfSafeFetch(
     const headers: http.IncomingHttpHeaders = {};
     let bodyBuffer = Buffer.alloc(0);
 
-    let dataHandler: (chunk: Buffer) => void;
-    let endHandler: () => void;
+    const errorHandler = (err: Error) => {
+      // ECONNREFUSED, ETIMEDOUT, ENETUNREACH, TLS errors, etc.
+      if (err.message?.includes('SSRF_BLOCKED') || err.message?.includes('MAX_SIZE_EXCEEDED')) {
+        return safeReject(err);
+      }
+      safeReject(new Error(`Connection error: ${err.message}`));
+    };
 
-    dataHandler = (chunk: Buffer) => {
+    const dataHandler = (chunk: Buffer) => {
       if (!headersReceived) {
         const str = bodyBuffer.length > 0 ? Buffer.concat([bodyBuffer, chunk]).toString('utf8') : chunk.toString('utf8');
         const headerEndIdx = str.indexOf('\r\n\r\n');
@@ -394,10 +411,7 @@ async function ssrfSafeFetch(
         if (contentLength) {
           const size = parseInt(contentLength, 10);
           if (size > MAX_DOWNLOAD_SIZE) {
-            clearTimeout(timeout);
-            signal?.removeEventListener('abort', onAbort);
-            socket.destroy();
-            return reject(new Error(
+            return safeReject(new Error(
               `MAX_SIZE_EXCEEDED: Content-Length ${size} exceeds limit ${MAX_DOWNLOAD_SIZE}`
             ));
           }
@@ -408,10 +422,7 @@ async function ssrfSafeFetch(
 
         // Check size limit after first chunk
         if (bytesReceived > MAX_DOWNLOAD_SIZE) {
-          clearTimeout(timeout);
-          signal?.removeEventListener('abort', onAbort);
-          socket.destroy();
-          return reject(new Error(
+          return safeReject(new Error(
             `MAX_SIZE_EXCEEDED: First chunk ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
           ));
         }
@@ -425,10 +436,7 @@ async function ssrfSafeFetch(
         const newBuffer = Buffer.concat([bodyBuffer, chunk]);
         bytesReceived = newBuffer.byteLength;
         if (bytesReceived > MAX_DOWNLOAD_SIZE) {
-          clearTimeout(timeout);
-          signal?.removeEventListener('abort', onAbort);
-          socket.destroy();
-          return reject(new Error(
+          return safeReject(new Error(
             `MAX_SIZE_EXCEEDED: Total ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
           ));
         }
@@ -436,20 +444,16 @@ async function ssrfSafeFetch(
       }
     };
 
-    endHandler = () => {
-      clearTimeout(timeout);
-      signal?.removeEventListener('abort', onAbort);
-      socket.destroy();
-
+    const endHandler = () => {
       // Convert buffer to readable stream
       const { Readable } = require('stream') as typeof import('stream');
       const readable = Readable.from(bodyBuffer);
-
-      resolve({ body: readable as unknown as NodeJS.ReadableStream, status: statusCode, headers });
+      safeResolve({ body: readable as unknown as NodeJS.ReadableStream, status: statusCode, headers });
     };
 
     socket.on('data', dataHandler);
     socket.on('end', endHandler);
+    socket.on('error', errorHandler);
   });
 }
 

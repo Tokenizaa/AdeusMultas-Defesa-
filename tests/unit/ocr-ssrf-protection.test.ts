@@ -246,3 +246,21 @@ describe('OCR SSRF Protection — Base64 Limits', () => {
     ).rejects.not.toThrow(/MAX_BASE64_SIZE_EXCEEDED/);
   });
 });
+
+describe('OCR SSRF Protection — Socket Error Handling', () => {
+  it('rejects on DNS failure without uncaught error', async () => {
+    const { ocrService } = await import('../../src/server/services/ocr-service');
+    // A hostname that will never resolve — DNS error triggers SSRF_BLOCKED
+    await expect(
+      ocrService.analyzeFromUrl('http://this-domain-definitely-does-not-exist-123456789.invalid/image.jpg')
+    ).rejects.toThrow(/SSRF_BLOCKED/i);
+  });
+
+  it('rejects private IP without uncaught error', async () => {
+    const { ocrService } = await import('../../src/server/services/ocr-service');
+    await expect(
+      ocrService.analyzeFromUrl('http://192.168.1.1/image.jpg')
+    ).rejects.toThrow(/SSRF_BLOCKED/i);
+  });
+
+});
