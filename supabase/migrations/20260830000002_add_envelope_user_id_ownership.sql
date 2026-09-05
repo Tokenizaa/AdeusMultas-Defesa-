@@ -14,6 +14,10 @@
 -- Namespace UUID v5 = DEFESAI_UUID_NAMESPACE = 6f0a9d2e-8c47-4b3a-9f15-d7e0b2c4a681
 -- (mesmo valor de src/server/db/uuid-v5.ts — sincronizado manualmente)
 
+-- 0. Garantir extensão pgcrypto (fornece sha1(), sha256(), digest(), etc.)
+-- Supabase já tem pgcrypto habilitado por padrão; IF NOT EXISTS é idempotente.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- 1. Adicionar coluna user_id para ownership direto
 ALTER TABLE documenso_envelopes
 ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES user_profiles(user_id) ON DELETE CASCADE;
@@ -57,6 +61,13 @@ CREATE POLICY "Service role update documenso_envelopes" ON documenso_envelopes
 
 -- 5a. Função UUID v5 (RFC 4122 §4.3) — espelha domainIdToUuid() do TypeScript
 -- Recebe domain ID (ex: 'case_xxx') e devolve UUID v5 determinístico.
+--
+-- Notas técnicas:
+-- - sha1(bytea) é built-in do PostgreSQL desde 9.0; retorna texto hexadecimal (40 chars).
+-- - get_byte/set_byte operam sobre bytes individuais (0-255), usam INTEIROS decimais.
+--   PostgreSQL NÃO suporta literais hex como 16#0F — usa inteiros (15, 80, 63, 128).
+-- - Versão 5: byte[6] & 0x0F | 0x50 = &15 | 80
+--   Variante RFC 4122: byte[8] & 0x3F | 0x80 = &63 | 128
 CREATE OR REPLACE FUNCTION domain_to_uuid(domain_id TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -67,18 +78,23 @@ DECLARE
     ns_hex TEXT := '6f0a9d2e8c474b3a9f15d7e0b2c4a681';
     ns_raw BYTEA;
     name_raw BYTEA;
+    sha_hex TEXT;
     sha_raw BYTEA;
     versioned BYTEA;
     result UUID;
 BEGIN
     ns_raw := decode(ns_hex, 'hex');
     name_raw := domain_id::BYTEA;
-    -- SHA-1(namespace_bytes || name_bytes)
-    sha_raw := decode(sha1(concat(ns_raw, name_raw)), 'hex');
-    -- Truncar 20 bytes → 16, ajustar versão=5 e variante=RFC 4122
+    -- sha1(bytea) → texto hexadecimal (40 chars); concatenação bytea || bytea
+    sha_hex := sha1(ns_raw || name_raw);
+    -- Decode do hex string para bytea (20 bytes)
+    sha_raw := decode(sha_hex, 'hex');
+    -- Truncar para 16 bytes e ajustar versão=5 (bits 6) e variante RFC 4122 (bits 8)
+    -- & 15 = & 0x0F, | 80 = | 0x50  → versão 5
+    -- & 63 = & 0x3F, | 128 = | 0x80 → variante RFC 4122
     versioned := decode(substring(sha_raw, 1, 16), 'hex');
-    versioned := set_byte(versioned, 6, (get_byte(versioned, 6) & 16#0F) | 16#50);
-    versioned := set_byte(versioned, 8, (get_byte(versioned, 8) & 16#3F) | 16#80);
+    versioned := set_byte(versioned, 6, (get_byte(versioned, 6) & 15) | 80);
+    versioned := set_byte(versioned, 8, (get_byte(versioned, 8) & 63) | 128);
     result := ('{' || encode(versioned, 'hex') || '}')::UUID;
     RETURN result;
 END;
