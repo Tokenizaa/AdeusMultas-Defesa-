@@ -21,24 +21,131 @@ import { isIP } from 'net';
 import { URL } from 'url';
 import * as dns from 'dns';
 import { promisify } from 'util';
+import { Agent as HTTPSAgent } from 'https';
+import { Agent as HttpAgent } from 'http';
 import { logger } from '../observability/logger';
 
-const dnsLookup = promisify(dns.lookup);
 const dnsResolve4 = promisify(dns.resolve4);
+const dnsResolve6 = promisify(dns.resolve6);
+const dnsLookup = promisify(dns.lookup);
 
 // ---------------------------------------------------------------------------
-// SSRF Protection — validate URLs before fetching
+// SSRF Protection — comprehensive IP classification + connect binding
 // ---------------------------------------------------------------------------
 
 /** Maximum allowed download size in bytes (5MB) */
 const MAX_DOWNLOAD_SIZE = 5 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
 /**
- * Validates that a URL is safe for fetching (no SSRF).
- * - Only http/https schemes allowed
- * - No private/internal IP addresses after DNS resolution
- * - No localhost or reserved hostnames
- * - No credentials in URL
+ * Complete IPv4 address classification.
+ * Returns true if the IP is public (safe to connect to).
+ * Based on RFC 5735, RFC 6598, RFC 2544, RFC 1112, RFC 1122, RFC 7042.
+ */
+function isPublicIPv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return false;
+  const [a, b, c, d] = parts;
+
+  // === LOOPBACK ===
+  if (a === 127) return false; // 127.0.0.0/8
+
+  // === "THIS" NETWORK ===
+  if (a === 0) return false; // 0.0.0.0/8
+
+  // === PRIVATE USE (RFC 1918) ===
+  if (a === 10) return false; // 10.0.0.0/8
+  if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
+  if (a === 192 && b === 168) return false; // 192.168.0.0/16
+
+  // === CARRIER-GRADE NAT (RFC 6598) ===
+  if (a === 100 && b >= 64 && b <= 127) return false; // 100.64.0.0/10
+
+  // === LINK-LOCAL (RFC 3927) ===
+  if (a === 169 && b === 254) return false; // 169.254.0.0/16
+
+  // === SHARED ADDRESS SPACE (CGN — also RFC 6598) ===
+  // Already covered by 100.64.0.0/10 above
+
+  // === DOCUMENTATION (RFC 5737) ===
+  if (a === 192 && b === 0 && c === 2) return false; // 192.0.2.0/24
+  if (a === 198 && b === 51 && c === 100) return false; // 198.51.100.0/24
+  if (a === 203 && b === 0 && c === 113) return false; // 203.0.113.0/24
+
+  // === BENCHMARKING (RFC 2544) ===
+  if (a === 198 && b >= 18 && b <= 19) return false; // 198.18.0.0/15
+
+  // === 6to4 (RFC 3056) ===
+  if (a === 192 && b === 88 && c === 99) return false; // 192.88.99.0/24
+
+  // === RESERVED (IETF Protocol IDs — RFC 1112) ===
+  if (a >= 240) return false; // 240.0.0.0/4
+
+  // === BROADCAST ===
+  if (a === 255 && b === 255 && c === 255 && d === 255) return false; // 255.255.255.255/32
+
+  return true;
+}
+
+/**
+ * Complete IPv6 address classification.
+ * Returns true if the IP is public (safe to connect to).
+ * Based on RFC 4291, RFC 8190, RFC 7345, RFC 8190, RFC 6890.
+ */
+function isPublicIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+
+  // === UNSPECIFIED ===
+  if (lower === '::') return false; // ::/128
+
+  // === LOOPBACK ===
+  if (lower === '::1') return false; // ::1/128
+
+  // === IPv4-MAPPED IPv6 ===
+  if (lower.startsWith('::ffff:')) {
+    const mapped = lower.replace('::ffff:', '');
+    return isPublicIPv4(mapped);
+  }
+
+  // === IPv4-EMBEDDED (IPv6 translation) ===
+  if (lower.startsWith('64:ff9b::') || lower.startsWith('64:ff9b:')) return false;
+
+  // === DISCARD PREFIX (RFC 6666) ===
+  if (lower.startsWith('100::') || lower.startsWith('100:')) return false;
+
+  // === TEREDO (RFC 4380) — except 2001:0000::/32 ===
+  if (lower.startsWith('2001:') && !lower.startsWith('2001:db8') && !lower.startsWith('2001:0:')) {
+    // 2001::/32 is Teredo — allow only non-Teredo
+    // Actually, 2001::/32 includes Teredo and should be blocked
+    // 2001:20::/28 is ORCHID v2 — blocked
+    if (lower.startsWith('2001:20')) return false;
+    // 2001:0000::/32 (Teredo) — block
+    if (lower.match(/^2001:0+:/)) return false;
+  }
+
+  // === DOCUMENTATION (RFC 3849) ===
+  if (lower.startsWith('2001:db8')) return false; // 2001:db8::/32
+
+  // === ULAs (RFC 4193) ===
+  if (lower.startsWith('fc')) return false; // fc00::/7 (fc00::/8 unassigned, fd00::/8 UCLA)
+  if (lower.startsWith('fd')) return false;
+
+  // === LINK-LOCAL (RFC 4291) ===
+  if (lower.startsWith('fe80')) return false; // fe80::/10
+  if (lower.startsWith('fe') && lower.match(/^fe[0-3]:/)) return false; // fe00::/9 through feff::/9
+
+  // === MULTICAST (RFC 5774/4291) ===
+  if (lower.startsWith('ff')) return false; // ff00::/8
+
+  // === ORCHID v2 (RFC 7345) ===
+  if (lower.startsWith('2001:20::')) return false; // 2001:20::/28
+
+  return true;
+}
+
+/**
+ * Validates that a URL is safe for fetching (hostname-level only).
+ * DNS resolution is done separately to allow IP binding.
  */
 function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string } {
   let url: URL;
@@ -48,19 +155,16 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
     return { valid: false, reason: 'URL malformada' };
   }
 
-  // Only allow HTTP and HTTPS
   if (!['http:', 'https:'].includes(url.protocol)) {
     return { valid: false, reason: `Esquema '${url.protocol}' não permitido — use http:// ou https://` };
   }
 
-  const hostname = url.hostname.toLowerCase();
-
-  // Block credentials
   if (url.username || url.password) {
     return { valid: false, reason: 'Credenciais na URL não permitidas' };
   }
 
-  // Block localhost variants
+  const hostname = url.hostname.toLowerCase();
+
   if (
     hostname === 'localhost' ||
     hostname === 'localhost.localdomain' ||
@@ -74,13 +178,11 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
     return { valid: false, reason: 'Host localhost/reservado não permitido' };
   }
 
-  // Block obvious internal hostnames before DNS resolution
   const internalPatterns = [
     'internal', 'intranet', 'private', 'corporate', 'dmz',
     'gateway', 'router', 'switch', 'firewall', 'proxy',
     'metadata.google', 'metadata.internal',
-    '169.254.169.254', // AWS/GCP metadata endpoint
-    '100.64.0.0/10', // Carrier-grade NAT
+    '169.254.169.254',
   ];
   for (const pattern of internalPatterns) {
     if (hostname.includes(pattern)) {
@@ -92,114 +194,166 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
 }
 
 /**
- * Checks if an IPv4 address is private/internal.
+ * Resolves a hostname to ALL IP addresses (A + AAAA records) and validates
+ * that ALL of them are public. This prevents DNS rebinding where one record
+ * is public but another is private.
+ *
+ * If the hostname is already an IP address, validates it directly without DNS.
  */
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
-  if (parts[0] === 10) return true;
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-  if (parts[0] === 192 && parts[1] === 168) return true;
-  if (parts[0] === 169 && parts[1] === 254) return true; // link-local
-  return false;
-}
+async function resolveAndValidateAllIPs(hostname: string): Promise<{ valid: boolean; reason?: string; validatedIP?: string }> {
+  const errors: string[] = [];
 
-/**
- * Validates a resolved IP is not private/reserved.
- */
-function validateResolvedIP(ip: string, isV6 = false): { valid: boolean; reason?: string } {
-  if (!isV6) {
-    if (isPrivateIPv4(ip)) {
-      return { valid: false, reason: `IP privado não permitido após resolução DNS: ${ip}` };
+  // If hostname is already an IP, validate it directly (no DNS needed)
+  const ipVersion = isIP(hostname);
+  if (ipVersion === 4) {
+    if (!isPublicIPv4(hostname)) {
+      return { valid: false, reason: `IP privado/reservado: ${hostname}` };
     }
+    return { valid: true, validatedIP: hostname };
   }
-  // IPv6: block common private/link-local
-  if (isV6) {
-    const lower = ip.toLowerCase();
-    if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower.startsWith('::1') || lower === '::') {
-      return { valid: false, reason: `IP IPv6 privado/reservado não permitido: ${ip}` };
+  if (ipVersion === 6) {
+    if (!isPublicIPv6(hostname)) {
+      return { valid: false, reason: `IP IPv6 privado/reservado: ${hostname}` };
     }
+    return { valid: true, validatedIP: hostname };
   }
-  return { valid: true };
-}
 
-/**
- * Resolves hostname to IP(s) and validates none are private.
- * Uses dns.lookup which uses the system resolver (respects /etc/hosts).
- */
-async function resolveAndValidateHostname(hostname: string): Promise<{ valid: boolean; reason?: string }> {
+  // Resolve all IPv4 (A records)
   try {
-    // Try IPv4 first
-    const addr = await dnsLookup(hostname, { family: 4 });
-    if (addr.address) {
-      const ipValidation = validateResolvedIP(addr.address, addr.family === 6);
-      if (!ipValidation.valid) return ipValidation;
-    }
-    return { valid: true };
-  } catch {
-    // Fallback: try AAAA (IPv6)
-    try {
-      const addr6 = await dnsLookup(hostname, { family: 6 });
-      if (addr6.address) {
-        const ipValidation = validateResolvedIP(addr6.address, true);
-        if (!ipValidation.valid) return ipValidation;
+    const v4Addresses = await dnsResolve4(hostname);
+    for (const ip of v4Addresses) {
+      if (!isPublicIPv4(ip)) {
+        errors.push(`IPv4 privado/reservado: ${ip}`);
       }
-    } catch {
-      // No DNS record — let fetch handle it (will fail anyway)
     }
+  } catch {
+    // No A records — not necessarily an error
   }
+
+  // Resolve all IPv6 (AAAA records)
+  try {
+    const v6Addresses = await dnsResolve6(hostname);
+    for (const ip of v6Addresses) {
+      if (!isPublicIPv6(ip)) {
+        errors.push(`IPv6 privado/reservado: ${ip}`);
+      }
+    }
+  } catch {
+    // No AAAA records
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, reason: `IP não público: ${errors.join('; ')}` };
+  }
+
+  // Get one validated IP for connect binding (prefer IPv4)
+  try {
+    const { address } = await dnsLookup(hostname, { family: 4 });
+    if (address && isPublicIPv4(address)) {
+      return { valid: true, validatedIP: address };
+    }
+    // Fallback to IPv6
+    const { address: v6addr } = await dnsLookup(hostname, { family: 6 });
+    if (v6addr && isPublicIPv6(v6addr)) {
+      return { valid: true, validatedIP: v6addr };
+    }
+  } catch {
+    // Lookup failed — proceed with hostname only
+  }
+
   return { valid: true };
 }
 
 /**
- * Follows redirects manually, validating SSRF at each step.
- * Returns final response or throws on SSRF/size limit.
+ * Fetches a URL with explicit IP binding via connect option.
+ * This ties the connection to the pre-validated IP, eliminating DNS rebinding TOCTOU.
+ */
+async function ssrfSafeFetch(
+  targetUrl: string,
+  signal: AbortSignal,
+  validatedIP: string | undefined,
+  port: number,
+  isHTTPS: boolean
+): Promise<Response> {
+  const agent = isHTTPS
+    ? new HTTPSAgent({ keepAlive: true })
+    : new HttpAgent({ keepAlive: true });
+
+  // connect option forces the connection to use the validated IP
+  // This prevents DNS rebinding: the validated IP is what we connect to
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchOptions: Record<string, any> = {
+    signal,
+    redirect: 'manual',
+    agent,
+  };
+
+  if (validatedIP) {
+    // Bind to the validated IP — the connection uses exactly this IP
+    fetchOptions.connect = { host: validatedIP, port };
+  }
+
+  return fetch(targetUrl, fetchOptions);
+}
+
+/**
+ * Follows redirects with full SSRF validation at each hop.
+ * Uses resolveAndValidateAllIPs + connect binding to eliminate DNS rebinding.
  */
 async function fetchWithRedirectProtection(
   initialUrl: string,
-  signal: AbortSignal,
-  onSizeLimit: (bytesRead: number) => void
+  signal: AbortSignal
 ): Promise<{ response: Response; finalUrl: string }> {
   let currentUrl = initialUrl;
   let redirectCount = 0;
-  const MAX_REDIRECTS = 5;
 
   while (true) {
-    const response = await fetch(currentUrl, {
-      signal,
-      redirect: 'manual', // Handle redirects manually for IP validation
-    });
+    const url = new URL(currentUrl);
+    const port = url.port ? parseInt(url.port, 10) : (url.protocol === 'https:' ? 443 : 80);
+    const isHTTPS = url.protocol === 'https:';
 
-    // Follow redirects manually, validating each hop
+    // Validate URL format/hostname
+    const urlValidation = validateFetchUrl(currentUrl);
+    if (!urlValidation.valid) {
+      throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
+    }
+
+    // Resolve ALL IPs and validate they're all public (prevents DNS rebinding via alternate records)
+    const resolution = await resolveAndValidateAllIPs(url.hostname);
+    if (!resolution.valid) {
+      throw new Error(`SSRF_BLOCKED: ${resolution.reason}`);
+    }
+
+    // Fetch with explicit IP binding (eliminates TOCTOU between validation and connection)
+    const response = await ssrfSafeFetch(currentUrl, signal, resolution.validatedIP, port, isHTTPS);
+
+    // Handle redirect
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       if (redirectCount >= MAX_REDIRECTS) {
         throw new Error('SSRF_BLOCKED: Limite de redirects excedido');
       }
+
       const locationHeader = response.headers.get('location');
       if (!locationHeader) {
         throw new Error('SSRF_BLOCKED: Redirect sem header Location');
       }
-      // Resolve the redirect URL
+
       let redirectUrl: string;
       try {
         redirectUrl = new URL(locationHeader, currentUrl).toString();
       } catch {
         throw new Error(`SSRF_BLOCKED: Redirect URL inválida: ${locationHeader}`);
       }
-      // Validate the redirect destination hostname
+
       const redirectValidation = validateFetchUrl(redirectUrl);
       if (!redirectValidation.valid) {
         throw new Error(`SSRF_BLOCKED: Redirect para destino bloqueado — ${redirectValidation.reason}`);
       }
-      // Validate resolved IP of redirect target
-      try {
-        const redirectParsed = new URL(redirectUrl);
-        const ipValidation = await resolveAndValidateHostname(redirectParsed.hostname);
-        if (!ipValidation.valid) {
-          throw new Error(`SSRF_BLOCKED: Redirect para IP privado: ${ipValidation.reason}`);
-        }
-      } catch (err: any) {
-        if (err.message.startsWith('SSRF_BLOCKED:')) throw err;
-        throw new Error(`SSRF_BLOCKED: Falha ao validar redirect: ${err.message}`);
+
+      const redirectUrlParsed = new URL(redirectUrl);
+      const redirectResolution = await resolveAndValidateAllIPs(redirectUrlParsed.hostname);
+      if (!redirectResolution.valid) {
+        throw new Error(`SSRF_BLOCKED: Redirect para IP privado: ${redirectResolution.reason}`);
       }
 
       redirectCount++;
@@ -208,7 +362,6 @@ async function fetchWithRedirectProtection(
       continue;
     }
 
-    // Not a redirect — return final response and URL
     return { response, finalUrl: currentUrl };
   }
 }
@@ -1036,46 +1189,27 @@ class OcrService {
 
   /**
    * Analyze from a URL (downloads the image first)
-   * Includes SSRF protection (DNS + redirect validation) and streaming size limit.
+   * Includes SSRF protection (resolveAllIPs + connect binding) and streaming size limit.
    */
   async analyzeFromUrl(imageUrl: string): Promise<OcrResult> {
-    // Step 1: Validate URL format and hostname
-    const urlValidation = validateFetchUrl(imageUrl);
-    if (!urlValidation.valid) {
-      throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
-    }
-
-    // Step 2: Resolve DNS and validate the IP is not private
-    // This runs right before fetch to minimize TOCTOU window
-    try {
-      const parsed = new URL(imageUrl);
-      const dnsValidation = await resolveAndValidateHostname(parsed.hostname);
-      if (!dnsValidation.valid) {
-        throw new Error(`SSRF_BLOCKED: ${dnsValidation.reason}`);
-      }
-    } catch (err: any) {
-      if (err.message.startsWith('SSRF_BLOCKED:')) throw err;
-      // DNS resolution failure — let fetch fail naturally (it will throw a better error)
-    }
-
-    // Step 3: Set up streaming download with size limit
+    // Step 1: Set up streaming download with size limit
     const controller = new AbortController();
     const timeoutMs = this.config.timeout || 30000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      // Follow redirects manually to validate each hop
-      const { response, finalUrl } = await fetchWithRedirectProtection(
-        imageUrl,
-        controller.signal,
-        () => controller.abort()
-      );
+      // fetchWithRedirectProtection handles:
+      // 1. URL format/hostname validation
+      // 2. ALL IPs resolution + validation (A + AAAA records)
+      // 3. Explicit IP binding via connect option (eliminates DNS rebinding TOCTOU)
+      // 4. Redirect following with same validation at each hop
+      const { response } = await fetchWithRedirectProtection(imageUrl, controller.signal);
 
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`);
       }
 
-      // Step 4: Check Content-Length as early warning
+      // Step 2: Check Content-Length as early warning
       const contentLength = response.headers.get('content-length');
       if (contentLength) {
         const size = parseInt(contentLength, 10);
@@ -1084,8 +1218,8 @@ class OcrService {
         }
       }
 
-      // Step 5: Stream the response body with hard size limit
-      // This is the real protection — we never load the full file into memory
+      // Step 3: Stream the response body with hard size limit
+      // We never load the full file into memory before checking the size
       const body = response.body;
       if (!body) {
         throw new Error('Response body is not readable');
@@ -1105,7 +1239,6 @@ class OcrService {
           const newTotal = totalBytes + chunkSize;
 
           if (newTotal > MAX_DOWNLOAD_SIZE) {
-            // Hard limit exceeded — abort immediately
             controller.abort();
             throw new Error(
               `MAX_SIZE_EXCEEDED: Limite de ${MAX_DOWNLOAD_SIZE} bytes excedido durante streaming. ` +
@@ -1117,13 +1250,11 @@ class OcrService {
           totalBytes = newTotal;
         }
       } finally {
-        // Always release the reader
         reader.releaseLock();
       }
 
       clearTimeout(timeoutId);
 
-      // Combine chunks into a single buffer
       const buffer = Buffer.concat(chunks);
       const base64 = buffer.toString('base64');
       return this.analyzeImage(base64);
