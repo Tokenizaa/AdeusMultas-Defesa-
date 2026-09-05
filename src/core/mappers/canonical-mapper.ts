@@ -114,6 +114,8 @@ export class CanonicalMapper {
         realDriverCpf: mergedRealDriverCpf,
         realDriverCnh: mergedRealDriverCnh,
         indicationWithinDeadline: mergedIndicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (preserva dados antigos se ausente)
+        evidenceFlags: payload.infraction.evidenceFlags,
       },
       applicant: payload.applicant ? {
         applicantName: payload.applicant.name,
@@ -217,6 +219,8 @@ export class CanonicalMapper {
         realDriverCpf: inf.realDriverCpf,
         realDriverCnh: inf.realDriverCnh,
         indicationWithinDeadline: inf.indicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (roundtrip)
+        evidenceFlags: inf.evidenceFlags,
       },
       specificFacts: {
         speedLimit: inf.speedLimit,
@@ -330,6 +334,19 @@ export class CanonicalMapper {
       }
     }
 
+    // Fase 8-P1A — Evidência explícita (preserva ausência = compatível com dados antigos)
+    let evidenceFlags: { [key: string]: boolean } | undefined = undefined;
+    if (row.evidence_json) {
+      try {
+        const parsed = JSON.parse(row.evidence_json);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          evidenceFlags = parsed as { [key: string]: boolean };
+        }
+      } catch (e) {
+        evidenceFlags = undefined;
+      }
+    }
+
     return {
       id: row.id,
       title: row.title || `Recurso Auto ${row.ait_number}`,
@@ -385,6 +402,8 @@ export class CanonicalMapper {
         realDriverCpf: row.real_driver_cpf,
         realDriverCnh: row.real_driver_cnh,
         indicationWithinDeadline: row.indication_within_deadline,
+        // Fase 8-P1A — Evidência explícita (preserva ausência = compatível com dados antigos)
+        evidenceFlags,
       },
       analysis,
       applicant,
@@ -456,6 +475,8 @@ export class CanonicalMapper {
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : undefined,
       applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : undefined,
       ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : undefined,
+      // Fase 8-P1A — Evidência explícita (mapa chave → booleano)
+      evidence_json: infraction.evidenceFlags ? JSON.stringify(infraction.evidenceFlags) : undefined,
       commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),

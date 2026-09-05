@@ -92,7 +92,8 @@ describe('Persistência de pagamento - falhas', () => {
     mockSupabase.select.mockReturnThis();
     mockSupabase.eq.mockReturnThis();
     mockSupabase.maybeSingle.mockResolvedValue({ data: null, error: null });
-    mockSupabase.update.mockResolvedValue({ error: null });
+    // update é encadeado: update().eq() — precisa retornar um objeto com eq
+    mockSupabase.update.mockReturnValue({ eq: () => Promise.resolve({ error: null }) });
     mockSupabase.insert.mockResolvedValue({ error: null });
     // Reset pagbankServer.createOrder
     pagbankServer.createOrder.mockResolvedValue(mockOrder);
@@ -116,7 +117,8 @@ describe('Persistência de pagamento - falhas', () => {
     const updateError = new Error('UPDATE failed');
     // Simulate existing row found
     mockSupabase.maybeSingle.mockResolvedValueOnce({ data: { id: 'existing' }, error: null });
-    mockSupabase.update.mockResolvedValueOnce({ error: updateError });
+    // update().eq() deve retornar erro
+    mockSupabase.update.mockReturnValueOnce({ eq: () => Promise.resolve({ error: updateError }) });
 
     await expect(
       criarPagamentoDefesa(baseData)
@@ -145,4 +147,4 @@ describe('Persistência de pagamento - falhas', () => {
       criarPagamentoDefesa(baseData)
     ).rejects.toThrow(/Falha ao criar cobrança/);
   });
-}
+});

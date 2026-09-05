@@ -103,6 +103,15 @@ export interface InfractionData {
   ocrConfidence?: number;
   photoProofUrls?: string[];
   notes?: string;
+
+  /**
+   * Fase 8-P1A — Captura explícita de evidência.
+   * Mapa de chaves de evidência para valor booleano.
+   * A presença do campo é opcional e preserva compatibilidade com dados antigos.
+   * Nenhum valor é inferido automaticamente: a chave só é considerada
+   * "com evidência" quando explicitamente fornecida como `true`.
+   */
+  evidenceFlags?: { [key: string]: boolean };
 }
 
 export interface LegalArgumentDomain {
@@ -423,6 +432,12 @@ export interface CanonicalOnboardingPayload {
     realDriverCpf?: string;
     realDriverCnh?: string;
     indicationWithinDeadline?: boolean;
+
+    /**
+     * Fase 8-P1A — Evidências explícitas (mapa chave → booleano).
+     * Opcional. A ausência é compatível com dados antigos.
+     */
+    evidenceFlags?: { [key: string]: boolean };
   };
 
   /**
@@ -774,6 +789,11 @@ export interface CaseRow {
   protocol_info_json?: string;
   applicant_json?: string;
   ocr_auxiliary_json?: string;
+  /**
+   * Fase 8-P1A — Evidências explícitas (mapa chave → booleano).
+   * Armazenado como JSON para preservar o domínio sem criar colunas extras.
+   */
+  evidence_json?: string;
   commercial_offer_id?: string;
   timeline_json?: string;
   is_anonymous: boolean;
