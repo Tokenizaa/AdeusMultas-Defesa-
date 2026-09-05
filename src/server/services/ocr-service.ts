@@ -21,6 +21,7 @@ import * as net from 'net';
 import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
+import * as dns from 'dns';
 import { URL } from 'url';
 import { isIP } from 'net';
 import { logger } from '../observability/logger';
@@ -38,13 +39,6 @@ const dnsResolve6 = (hostname: string): Promise<string[]> =>
     dns.resolve6(hostname, (err, addresses) => {
       if (err) reject(err);
       else resolve(addresses || []);
-    });
-  });
-const dnsLookupOne = (hostname: string): Promise<string> =>
-  new Promise((resolve, reject) => {
-    dns.lookup(hostname, (err, address) => {
-      if (err) reject(err);
-      else resolve(address);
     });
   });
 
@@ -96,6 +90,9 @@ function isPublicIPv4(ip: string): boolean {
 
   // === 6to4 (RFC 3056) ===
   if (a === 192 && b === 88 && c === 99) return false; // 192.88.99.0/24
+
+  // === MULTICAST (RFC 5774) ===
+  if (a >= 224 && a <= 239) return false; // 224.0.0.0/4
 
   // === RESERVED (IETF Protocol IDs — RFC 1112) ===
   if (a >= 240) return false; // 240.0.0.0/4
@@ -306,18 +303,20 @@ async function ssrfSafeFetch(
   hostname: string,
   port: number,
   isHTTPS: boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  path: string = '/'
 ): Promise<{ body: NodeJS.ReadableStream; status: number; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const timeoutMs = 30000;
-    const timeout = setTimeout(() => {
-      socket.destroy();
-      reject(new Error('Connection timeout'));
-    }, timeoutMs);
+    let socket: net.Socket;
 
-    const onAbort = () => {
+    const cleanup = () => {
       clearTimeout(timeout);
       socket.destroy();
+    };
+
+    const onAbort = () => {
+      cleanup();
       reject(new Error('Request aborted'));
     };
 
@@ -326,9 +325,30 @@ async function ssrfSafeFetch(
     }
     signal?.addEventListener('abort', onAbort, { once: true });
 
-    const socket = isHTTPS
-      ? tls.connect({ host: hostname, port, servername: hostname }, onConnect)
-      : net.connect({ host: validatedIP, port }, onConnect);
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Connection timeout'));
+    }, timeoutMs);
+
+    if (isHTTPS) {
+      // Connect directly to validatedIP; use hostname only for SNI (servername)
+      socket = tls.connect(
+        { host: validatedIP, port, servername: hostname },
+        () => {
+          clearTimeout(timeout);
+          socket.write(
+            `GET ${path} HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
+          );
+        }
+      );
+    } else {
+      socket = net.connect({ host: validatedIP, port }, () => {
+        clearTimeout(timeout);
+        socket.write(
+          `GET ${path} HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
+        );
+      });
+    }
 
     socket.setKeepAlive(true, 10000);
 
@@ -338,23 +358,8 @@ async function ssrfSafeFetch(
     const headers: http.IncomingHttpHeaders = {};
     let bodyBuffer = Buffer.alloc(0);
 
-    function onConnect() {
-      // Build HTTP request with the REAL hostname in the Host header
-      // This ensures SNI (for HTTPS) and correct routing on the server
-      const req = isHTTPS
-        ? (socket as tls.TLSSocket).starttls(
-            `GET / HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
-          )
-        : socket;
-
-      req.write(
-        `GET / HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
-      );
-    }
-
     let dataHandler: (chunk: Buffer) => void;
     let endHandler: () => void;
-    let errorHandler: (err: Error) => void;
 
     dataHandler = (chunk: Buffer) => {
       if (!headersReceived) {
@@ -443,18 +448,8 @@ async function ssrfSafeFetch(
       resolve({ body: readable as unknown as NodeJS.ReadableStream, status: statusCode, headers });
     };
 
-    errorHandler = (err: Error) => {
-      clearTimeout(timeout);
-      signal?.removeEventListener('abort', onAbort);
-      if (err.message?.includes('SSRF_BLOCKED') || err.message?.includes('MAX_SIZE_EXCEEDED')) {
-        return reject(err);
-      }
-      reject(new Error(`Connection error: ${err.message}`));
-    };
-
     socket.on('data', dataHandler);
     socket.on('end', endHandler);
-    socket.on('error', errorHandler);
   });
 }
 
@@ -507,7 +502,7 @@ async function fetchWithRedirectProtection(
     // The Host header carries the real hostname for routing/SNI
     let result: { body: NodeJS.ReadableStream; status: number; headers: http.IncomingHttpHeaders };
     try {
-      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal);
+      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal, url.pathname + url.search);
     } catch (err: any) {
       if (err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
         throw err;
