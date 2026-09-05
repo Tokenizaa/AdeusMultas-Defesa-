@@ -28,7 +28,7 @@
 
 | ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
 |----|------|----------|--------|-------------|-----------|-----|------------|
-| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | IMPLEMENTED | — | 3 problemas → 3 correções: (1) `authenticateToken` adicionado em `src/server/routes/ocr.ts`; (2) SSRF protection com `validateFetchUrl` em `src/server/services/ocr-service.ts` (bloqueia private IPs, localhost, esquemas não-HTTP, metadata endpoints); (3) Limites de recursos: 5MB max download, 7MB max base64 | 1d4e0e86a20f70333376a706b38e40b2f12ee14c | Upload real não implementado — apenas nome do arquivo é enviado (não conteúdo). Severidades: Missing auth=Medium, SSRF=High, Upload não implementado=Low |
+| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | IMPLEMENTED | — | 3 problemas → correções: (1) `authenticateToken` em `src/server/routes/ocr.ts`; (2) SSRF protection: streaming 5MB, validação DNS, proteção redirect, bloqueia private IPs/localhost/metadata endpoints (SHA `f66a7cf`); (3) Limite 7MB base64 | f66a7cfd0c4e6a5c2ee6b71eb76743da9fcccd4f | Upload real não implementado — apenas nome do arquivo enviado. Severidades: Missing auth=Medium, SSRF=High, Upload não implementado=Low |
 | 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | PENDING | 1.1 | — | — | — |
 | 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | PENDING | 1.2 | — | — | — |
 | 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | PENDING | 1.3 | — | — | — |
