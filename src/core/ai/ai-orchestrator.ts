@@ -222,29 +222,34 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
     integrityScore: 100,
   };
 
-  // 4. FASE 8 — Quality Gate de Reconciliação Integral (se dados disponíveis).
-  // FAIL CLOSED: se gate bloquear, LANÇA ERRO — não retorna draft, não salva, não avança.
-  if (input.onboardingPayload && input.canonicalCase) {
-    const qualityGateReport = runFullQualityGate(
-      input.onboardingPayload,
-      input.canonicalCase,
-      input.analysis,
-      finalDraft.finalDraft || finalDraft.fullDraftText
-    );
-
-    // Se gate bloquear: ERRO — não entrega documento, não persiste, não avança.
-    if (qualityGateReport.blocked) {
-      const failedChecks = qualityGateReport.checks
-        .filter((c) => !c.passed)
-        .map((c) => `${c.check}: ${c.message}`)
-        .join('; ');
-      throw new Error(`Quality Gate BLOCKED: ${failedChecks}`);
-    }
-
-    // Gate passou: atualizar score de integridade com score do gate.
-    finalDraft.integrityScore = qualityGateReport.score;
-    finalDraft.qualityGateReport = qualityGateReport;
+  // 4. FASE 8 — Quality Gate de Reconciliação Integral (OBRIGATÓRIO).
+  // FAIL CLOSED: se gate bloquear ou se dados essenciais ausentes, LANÇA ERRO.
+  
+  // Dados essenciais ausentes = falha imediata (FAIL CLOSED)
+  if (!input.onboardingPayload || !input.canonicalCase) {
+    throw new Error('Quality Gate BLOCKED: COMPLETUDE: Dados obrigatórios para Quality Gate ausentes: onboardingPayload ou canonicalCase');
   }
+
+  // Dados presentes, executar Quality Gate normalmente
+  const qualityGateReport = runFullQualityGate(
+    input.onboardingPayload,
+    input.canonicalCase,
+    input.analysis,
+    finalDraft.finalDraft || finalDraft.fullDraftText
+  );
+
+  // Se gate bloquear: ERRO — não entrega documento, não persiste, não avança.
+  if (qualityGateReport.blocked) {
+    const failedChecks = qualityGateReport.checks
+      .filter((c) => !c.passed)
+      .map((c) => `${c.check}: ${c.message}`)
+      .join('; ');
+    throw new Error(`Quality Gate BLOCKED: ${failedChecks}`);
+  }
+
+  // Gate passou: atualizar score de integridade com score do gate.
+  finalDraft.integrityScore = qualityGateReport.score;
+  finalDraft.qualityGateReport = qualityGateReport;
 
   return {
     draft: finalDraft,

@@ -5621,30 +5621,7 @@ async function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization || req.headers.Authorization;
     const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
-    const headerUserId = req.headers["x-user-id"];
-    const headerUserRole = req.headers["x-user-role"];
-    const headerUserEmail = req.headers["x-user-email"];
-    const headerUserName = req.headers["x-user-name"];
-    if (headerUserId || headerUserEmail) {
-      req.user = {
-        id: headerUserId || "usr_local",
-        email: headerUserEmail || "usuario@www.defesai.shop",
-        role: headerUserRole || "admin",
-        name: headerUserName ? decodeURIComponent(headerUserName) : "Usu\xE1rio DefesAi"
-      };
-      return next();
-    }
-    if (token && token.startsWith("local_")) {
-      const parts = token.split("_");
-      const role = parts.length >= 3 ? parts[2] : token.includes("admin") ? "admin" : "citizen";
-      req.user = {
-        id: token,
-        email: role === "admin" ? "admin@www.defesai.shop" : "motorista@www.defesai.shop",
-        role,
-        name: role === "admin" ? "Administrador DefesAi" : "Carlos Eduardo Silveira"
-      };
-      return next();
-    }
+    const isProduction = process.env.NODE_ENV === "production";
     const supabase = getSupabaseServerClient();
     if (token && supabase) {
       try {
@@ -5671,23 +5648,25 @@ async function authenticateToken(req, res, next) {
         );
       }
     }
-    if (process.env.NODE_ENV !== "production" && !supabase) {
-      req.user = {
-        id: "usr_admin_defesai",
-        email: "admin@www.defesai.shop",
-        role: "admin",
-        name: "Administrador DefesAi"
-      };
-      return next();
-    }
-    if (process.env.NODE_ENV !== "production" && process.env.ADMIN_TEST_LOGIN && !req.user) {
-      req.user = {
-        id: "usr_admin_e2e",
-        email: process.env.ADMIN_TEST_LOGIN,
-        role: "admin",
-        name: "Admin Teste (E2E)"
-      };
-      return next();
+    if (!isProduction) {
+      if (!supabase) {
+        req.user = {
+          id: "usr_admin_defesai",
+          email: "admin@www.defesai.shop",
+          role: "admin",
+          name: "Administrador DefesAi"
+        };
+        return next();
+      }
+      if (process.env.ADMIN_TEST_LOGIN && !req.user) {
+        req.user = {
+          id: "usr_admin_e2e",
+          email: process.env.ADMIN_TEST_LOGIN,
+          role: "admin",
+          name: "Admin Teste (E2E)"
+        };
+        return next();
+      }
     }
     req.user = void 0;
     return next();
@@ -7128,19 +7107,24 @@ var WhatsAppService = class {
     }
     return this.discoveredInstance;
   }
+  get apiKey() {
+    return this.config.apiKey || configService.get("EVOLUTION_API_KEY") || configService.get("NOTIF_WHATSAPP_API_KEY") || process.env.EVOLUTION_API_KEY || "";
+  }
+  get apiUrl() {
+    return this.config.apiUrl || configService.get("EVOLUTION_API_URL") || configService.get("NOTIF_WHATSAPP_API_URL") || process.env.EVOLUTION_API_URL || "http://localhost:8080";
+  }
   get isConfigured() {
-    return Boolean(
-      this.config.apiUrl && this.config.apiKey && !this.config.apiKey.startsWith("PLACEHOLDER")
-    );
+    const key = this.apiKey;
+    return Boolean(this.apiUrl && key && !key.startsWith("PLACEHOLDER"));
   }
   async makeRequest(method, path, body) {
     if (!this.isConfigured) {
       throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
     }
-    const url = `${this.config.apiUrl}${path}`;
+    const url = `${this.apiUrl}${path}`;
     const headers = {
       "Content-Type": "application/json",
-      apikey: this.config.apiKey
+      apikey: this.apiKey
     };
     const response = await fetch(url, {
       method,
@@ -7160,24 +7144,32 @@ var WhatsAppService = class {
     }
     return response.json();
   }
+  formatDestinationNumber(phone) {
+    let digits = phone.replace(/\D/g, "");
+    if (digits.length === 10 || digits.length === 11) {
+      digits = `55${digits}`;
+    }
+    return digits;
+  }
   /**
    * Send a text message via WhatsApp
    */
   async sendText(params) {
     const instance = await this.resolveInstanceName(params.instanceName);
+    const targetNumber = this.formatDestinationNumber(params.to);
     try {
       logger.info("whatsapp", "whatsapp-service", "send_text", "Sending WhatsApp message", {
-        to: params.to,
+        to: targetNumber,
         instance
       });
       const result = await this.makeRequest("POST", `/message/sendText/${instance}`, {
-        number: params.to,
+        number: targetNumber,
         text: params.message
       });
       const messageId = result.key?.id || result.id || `wamid_${Date.now()}`;
       logger.info("whatsapp", "whatsapp-service", "send_text", "WhatsApp message sent", {
         messageId,
-        to: params.to,
+        to: targetNumber,
         instance
       });
       return {
@@ -7190,7 +7182,7 @@ var WhatsAppService = class {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error("whatsapp", "whatsapp-service", "send_text", "WhatsApp send failed", {
         error: errMsg,
-        to: params.to
+        to: targetNumber
       });
       return { success: false, error: errMsg };
     }
@@ -7200,6 +7192,7 @@ var WhatsAppService = class {
    */
   async sendMedia(params) {
     const instance = await this.resolveInstanceName(params.instanceName);
+    const targetNumber = this.formatDestinationNumber(params.to);
     let mediaType = "image";
     if (params.mediaType) {
       mediaType = params.mediaType;
@@ -7212,13 +7205,13 @@ var WhatsAppService = class {
     }
     try {
       logger.info("whatsapp", "whatsapp-service", "send_media", "Sending WhatsApp media", {
-        to: params.to,
+        to: targetNumber,
         instance,
         mimeType: params.mimeType,
         mediaType
       });
       const result = await this.makeRequest("POST", `/message/sendMedia/${instance}`, {
-        number: params.to,
+        number: targetNumber,
         mediatype: mediaType,
         mimetype: params.mimeType || (mediaType === "audio" ? "audio/ogg" : mediaType === "video" ? "video/mp4" : "application/pdf"),
         media: params.mediaUrl,
@@ -7235,7 +7228,7 @@ var WhatsAppService = class {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error("whatsapp", "whatsapp-service", "send_media", "WhatsApp media send failed", {
         error: errMsg,
-        to: params.to,
+        to: targetNumber,
         mediaType
       });
       return { success: false, error: errMsg };
@@ -7440,7 +7433,8 @@ async function persistProspectingResponse(incoming, client = getSupabaseServerCl
   if (!inboundPhone) return none;
   try {
     const { data: leads } = await client.from("marketing_leads").select("id, phone, whatsapp").limit(50);
-    const lead = (leads || []).find(
+    const leadList = Array.isArray(leads) ? leads : [];
+    const lead = leadList.find(
       (l) => normalizeBrPhone(l.phone) === inboundPhone || normalizeBrPhone(l.whatsapp) === inboundPhone
     );
     if (!lead) return none;
@@ -7472,12 +7466,23 @@ async function persistProspectingResponse(incoming, client = getSupabaseServerCl
       }
       inserted = true;
     }
+    const textLower = (incoming.text || "").trim().toLowerCase();
+    const isOptOut = /^(sair|parar|stop|descadastrar|cancelar|não quero|nao quero|remover|optout|opt-out)$/i.test(textLower) || /(quero sair|me tire|pare de enviar|não me mande|nao me mande)/i.test(textLower);
     let statusUpdated = false;
-    if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
-      await client.from("marketing_lead_campaigns").update({ status: "responded", updated_at: now }).eq("id", lc.id);
+    if (isOptOut) {
+      await client.from("marketing_leads").update({ status: "opt_out", updated_at: now }).eq("id", lead.id);
+      await client.from("marketing_lead_campaigns").update({ status: "opt_out", updated_at: now }).eq("id", lc.id);
+      await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
       statusUpdated = true;
+      logger.info("messaging", "prospecting", "opt_out", `Lead ${lead.id} solicitou opt-out. Automa\xE7\xF5es canceladas.`);
+    } else {
+      if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
+        await client.from("marketing_lead_campaigns").update({ status: "responded", updated_at: now }).eq("id", lc.id);
+        await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+        statusUpdated = true;
+      }
+      logger.info("messaging", "prospecting", "responded", `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || "whatsapp_evolution"}). Follow-ups pendentes cancelados.`);
     }
-    logger.info("messaging", "prospecting", "responded", `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || "whatsapp_evolution"})`);
     return { matched: true, messageInserted: inserted, statusUpdated };
   } catch (err) {
     logger.warn("messaging", "prospecting", "responder_error", `Falha ao persistir resposta de prospec\xE7\xE3o: ${err.message}`);
@@ -15434,7 +15439,23 @@ function toTemplateBlock(b, idx) {
 function buildSuspensaoBlocks() {
   return [
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-004"),
+    {
+      id: "BLK_QUALIFICACAO_PSDD_HEADER",
+      type: "applicant_qualification",
+      title: "Qualifica\xE7\xE3o do Requerente - Cabe\xE7alho PSDD",
+      isMandatory: true,
+      contentTemplate: `QUALIFICA\xC7\xC3O DO REQUERENTE`,
+      supportedVariables: []
+    },
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-010"),
+    {
+      id: "BLK_IDENTIFICACAO_AUTO_PSDD_HEADER",
+      type: "facts_narrative",
+      title: "Identifica\xE7\xE3o do Auto de Infra\xE7\xE3o - Cabe\xE7alho PSDD",
+      isMandatory: true,
+      contentTemplate: `IDENTIFICA\xC7\xC3O DO AUTO DE INFRA\xC7\xC3O`,
+      supportedVariables: []
+    },
     DOCUMENT_BLOCKS.find((b) => b.id === "BLK-022"),
     {
       id: "BLK_PRELIMINARES_PSDD",
@@ -15751,7 +15772,23 @@ Tratando-se de infra\xE7\xE3o de gravidade {{gravidade_infracao}} e comprovada a
     ],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-001"),
+      {
+        id: "BLK_QUALIFICACAO_HEADER",
+        type: "applicant_qualification",
+        title: "Qualifica\xE7\xE3o do Requerente - Cabe\xE7alho",
+        isMandatory: true,
+        contentTemplate: `QUALIFICA\xC7\xC3O DO REQUERENTE`,
+        supportedVariables: []
+      },
       DOCUMENT_BLOCKS.find((b) => b.id === "BLK-008"),
+      {
+        id: "BLK_IDENTIFICACAO_AUTO_HEADER",
+        type: "facts_narrative",
+        title: "Identifica\xE7\xE3o do Auto de Infra\xE7\xE3o - Cabe\xE7alho",
+        isMandatory: true,
+        contentTemplate: `IDENTIFICA\xC7\xC3O DO AUTO DE INFRA\xC7\xC3O`,
+        supportedVariables: []
+      },
       {
         id: "BLK_FATOS_DEFESA_PREVIA",
         type: "facts_narrative",
@@ -21715,7 +21752,11 @@ var ExpertRuleEngine = class {
           legalArgumentId: result.legalArgumentId,
           impact: result.impact,
           severity: result.severity,
-          reason: result.description
+          reason: result.description,
+          inputs: rule.requiredData.reduce((acc, key) => {
+            acc[key] = context[key];
+            return acc;
+          }, {})
         });
         const matchedArg = ARGUMENTS_CATALOG.find((a) => a.id === result.legalArgumentId);
         if (matchedArg && !recommendedArgs.some((r) => r.id === matchedArg.id)) {
@@ -21757,6 +21798,29 @@ ${p.text}`).join("\n\n"),
 ${p.text}`).join("\n\n"),
         confidenceScore: constArg.confidenceScore,
         applicabilityNote: constArg.whenToUse.join("; ")
+      });
+      detectedFlaws.push({
+        ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
+        argumentId: "ARG-049",
+        severity: "alta",
+        title: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
+        description: "Inje\xE7\xE3o obrigat\xF3ria de tese constitucional de garantia do contradit\xF3rio e ampla defesa",
+        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
+        statutoryBasis: "Art. 5\xBA, LIV e LV da CF/88 c/c S\xFAmula 312 do STJ"
+      });
+      evaluatedRules.push({
+        ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
+        name: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
+        status: "FAIL",
+        evaluatedAt: nowIso,
+        legalArgumentId: "ARG-049",
+        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
+        severity: "alta",
+        reason: "Inje\xE7\xE3o obrigat\xF3ria de tese constitucional de garantia do contradit\xF3rio",
+        inputs: {
+          notificationExpeditionDate: context.notificationExpeditionDate,
+          notificationDeliveryDate: context.notificationDeliveryDate
+        }
       });
     }
     let procedure = "recurso_jari";
@@ -22037,8 +22101,8 @@ ${body}`;
       "{{nome_representante}}": payload.company?.representativeName || payload.applicant.name,
       "{{cpf_representante}}": payload.company?.representativeCpf || payload.applicant.cpf,
       // Formatted Multi-Argument Blocks
-      "{{bloco_preliminares_formatado}}": formattedPreliminaries || "Inexistem preliminares de nulidade formal arguidas nesta oportunidade.",
-      "{{bloco_merito_formatado}}": formattedMerit || "Demonstrada nos autos a manifesta atipicidade e insubsist\xEAncia da autua\xE7\xE3o fiscal.",
+      "{{bloco_preliminares_formatado}}": formattedPreliminaries || "",
+      "{{bloco_merito_formatado}}": formattedMerit || "",
       // Direct Shorthand Aliases (User Request Phase 4.1)
       "{{nome}}": payload.applicant.name || "",
       "{{placa}}": (payload.vehicle.plate || "").toUpperCase(),
@@ -22046,11 +22110,11 @@ ${body}`;
       "{{orgao}}": autuador.toUpperCase(),
       "{{cpf}}": payload.applicant.cpf || "",
       "{{cnh}}": payload.applicant.cnh || "",
-      "{{fundamentacao}}": formattedMerit || "Fundamenta\xE7\xE3o t\xE9cnica e legal pautada no C\xF3digo de Tr\xE2nsito Brasileiro.",
+      "{{fundamentacao}}": formattedMerit || "",
       "{{argumentos}}": `${formattedPreliminaries ? `${formattedPreliminaries}
 
 ` : ""}${formattedMerit}`,
-      "{{pedido}}": "Requer o acolhimento da defesa, reconhecimento da insubsist\xEAncia e cancelamento definitivo do Auto de Infra\xE7\xE3o de Tr\xE2nsito."
+      "{{pedido}}": ""
     };
     let blocksToAssemble = [];
     if (payload.selectedBlockIds && payload.selectedBlockIds.length > 0) {
@@ -22099,11 +22163,11 @@ ${payload.customFacts.trim()}`;
       vehicleModel: payload.vehicle.model,
       vehicleRenavam: payload.vehicle.renavam || "",
       aitNumber,
-      factsNarrative: payload.customFacts || `O Requerente tomou ci\xEAncia do AIT n\xBA ${aitNumber} referente \xE0 suposta infra\xE7\xE3o do ${ctbArticle}. A autua\xE7\xE3o padece de v\xEDcios insan\xE1veis de legalidade.`,
+      factsNarrative: payload.customFacts || "",
       selectedArgumentIds: activeArgIds,
       preliminaryArgumentsText: formattedPreliminaries,
       meritArgumentsText: formattedMerit,
-      legalRequestsText: `Requer o recebimento tempestivo, o acolhimento das preliminares, o arquivamento definitivo do AIT n\xBA ${aitNumber} e o efeito suspensivo.`,
+      legalRequestsText: "",
       closingPlaceDate: `${payload.applicant.cityState}, ${dateFormatted}`,
       fullDraftText,
       // Campos de auditoria do pipeline canônico (especificação Fase 6/13)
@@ -22120,7 +22184,7 @@ ${payload.customFacts.trim()}`;
         message: `Tag n\xE3o resolvida: ${p}`
       })),
       engineVersion: "2.6.0",
-      isReady: true,
+      isReady: unresolvedSet.size === 0,
       version: 1,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
@@ -25852,13 +25916,17 @@ var PagBankIntegrationService = class {
   isProductionMode() {
     return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
   }
+  getWebhookSecret() {
+    return process.env.PAGBANK_WEBHOOK_SECRET || this.webhookSecret || "";
+  }
   /**
-      * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
-      * Validação oficial de assinatura de webhook do PagBank
-      * Cabeçalho: X-Hub-Signature-256 ou X-PagBank-Signature
-      */
+   * Verifica a assinatura do webhook do PagBank usando HMAC-SHA256
+   * Validação oficial de assinatura de webhook do PagBank
+   * Cabeçalho: X-Hub-Signature-256 ou X-PagBank-Signature
+   */
   verifyWebhookSignature(rawBody, signatureHeader) {
-    if (!this.webhookSecret) {
+    const secret = this.getWebhookSecret();
+    if (!secret) {
       if (this.isProductionMode()) {
         logger.error("payments", "pagbank", "verify_webhook", "CRITICAL: PAGBANK_WEBHOOK_SECRET n\xE3o configurado em produ\xE7\xE3o");
         return false;
@@ -25870,7 +25938,7 @@ var PagBankIntegrationService = class {
       logger.warn("payments", "pagbank", "verify_webhook", "Missing signature header");
       return false;
     }
-    const expectedSignature = `sha256=${crypto4.createHmac("sha256", this.webhookSecret).update(rawBody, "utf8").digest("hex")}`;
+    const expectedSignature = `sha256=${crypto4.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex")}`;
     const receivedSignature = signatureHeader.startsWith("sha256=") ? signatureHeader : `sha256=${signatureHeader}`;
     if (expectedSignature.length !== receivedSignature.length) {
       logger.warn("payments", "pagbank", "verify_webhook", "Signature length mismatch", {
@@ -26388,6 +26456,9 @@ var PagBankAdapter = class {
     const payload = body;
     const signature = headers["x-hub-signature-256"] || headers["x-pagbank-signature"] || headers["x-authenticity-token"];
     const result = pagBankIntegration.processWebhook(rawBody, signature, payload);
+    if (!result.signatureValid) {
+      throw new Error("Assinatura HMAC inv\xE1lida ou ausente");
+    }
     const firstCharge = payload.charges?.[0];
     const amountValue = firstCharge?.amount?.value || 0;
     return {
@@ -26400,7 +26471,8 @@ var PagBankAdapter = class {
       amountInCents: amountValue,
       paidAt: firstCharge?.paid_at || void 0,
       rawPayload: body,
-      isDuplicate: result.isDuplicate
+      isDuplicate: result.isDuplicate,
+      received: result.received ?? true
     };
   }
 };
@@ -26611,21 +26683,22 @@ var GGPIXAdapter = class {
     if (!validateWebhookSourceIp(headers, config.webhookAllowedIps)) {
       throw new Error("Webhook GGPIXAPI rejeitado: IP de origem n\xE3o autorizado");
     }
-    const payload = body;
+    const payload = body && typeof body === "object" ? body : {};
     return {
-      gatewayEventId: `ggpix_${payload.transactionId}_${payload.status}_${Date.now()}`,
+      gatewayEventId: `ggpix_${payload.transactionId || "evt"}_${payload.status || "status"}_${Date.now()}`,
       gateway: "ggpixapi",
-      gatewayTransactionId: payload.transactionId,
+      gatewayTransactionId: payload.transactionId || "",
       referenceId: payload.externalId || void 0,
-      status: mapGGPixStatus(payload.status),
+      status: mapGGPixStatus(payload.status || "PENDING"),
       transactionType: payload.type || "PIX_IN",
-      amountInCents: payload.amount,
+      amountInCents: payload.amount || 0,
       netAmountInCents: payload.netAmount,
       gatewayFeeInCents: payload.gatewayFee,
       paidAt: payload.paidAt,
       rawPayload: body,
-      isDuplicate: false
+      isDuplicate: false,
       // GGPIXAPI não tem HMAC, idempotência por externalId
+      received: true
     };
   }
 };
@@ -26742,7 +26815,7 @@ function resolveActiveGatewayIdFromEnv() {
   if (isProduction) {
     return "ggpixapi";
   }
-  return "test";
+  return "pagbank";
 }
 var GatewayManager = class {
   constructor() {
@@ -31217,11 +31290,9 @@ function isRequiredInDocument(fieldPath) {
     "applicant.cpf",
     "applicant.cnh",
     "infraction.autuadorBody",
-    "infraction.infractionCode",
     "infraction.ctbArticle",
     "infraction.dateTime",
     "infraction.location",
-    "infraction.severity",
     "identification.procedureType",
     "applicant.addressCityState"
   ];
@@ -31365,13 +31436,14 @@ function runCompletudeCheck(lineage, finalDocument) {
     }
   }
   const allMissing = [...missing, ...missingInDoc];
-  return {
+  const result = {
     check: "COMPLETUDE",
     passed: allMissing.length === 0,
     severity: allMissing.length > 0 ? "error" : "info",
     message: allMissing.length === 0 ? "Todos os dados obrigat\xF3rios presentes no onboarding e no documento" : `Dados obrigat\xF3rios ausentes: ${allMissing.join(", ")}`,
     details: allMissing.length > 0 ? { field: allMissing[0] } : void 0
   };
+  return result;
 }
 function runFidelidadeCheck(lineage, finalDocument, onboardingPayload) {
   const mismatches = [];
@@ -31428,13 +31500,6 @@ function runCausalidadeCheck(lineage, analysis) {
               causalFailures.push(`${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`);
             }
           }
-        }
-      }
-    }
-    for (const rule of analysis.evaluatedRules) {
-      if (rule.status === "DATA_GAP" && rule.inputs?.missingData) {
-        for (const missing of rule.inputs.missingData) {
-          causalFailures.push(`${rule.ruleId}: DATA_GAP por "${missing}" \u2014 regra n\xE3o pode concluir`);
         }
       }
     }
@@ -31744,41 +31809,27 @@ async function runControlledPipeline(input, opts) {
     validationStatus: "valid",
     integrityScore: 100
   };
-  let qualityGateReport;
-  if (input.onboardingPayload && input.canonicalCase) {
-    qualityGateReport = runFullQualityGate(
-      input.onboardingPayload,
-      input.canonicalCase,
-      input.analysis,
-      finalDraft.finalDraft || finalDraft.fullDraftText
-    );
-    if (qualityGateReport.blocked) {
-      const blockedDraft = {
-        ...finalDraft,
-        validationStatus: "blocked",
-        integrityScore: qualityGateReport.score,
-        integrityIssues: qualityGateReport.checks.filter((c) => !c.passed).map((c) => ({
-          code: c.check,
-          severity: c.severity,
-          message: c.message
-        }))
-      };
-      return {
-        draft: blockedDraft,
-        aiUses: controlled.applied ? "controlled_refinement" : "deterministic",
-        controlled,
-        validationReport: validateDraft(blockedDraft),
-        qualityGateReport
-      };
-    }
-    finalDraft.integrityScore = qualityGateReport.score;
+  if (!input.onboardingPayload || !input.canonicalCase) {
+    throw new Error("Quality Gate BLOCKED: COMPLETUDE: Dados obrigat\xF3rios para Quality Gate ausentes: onboardingPayload ou canonicalCase");
   }
+  const qualityGateReport = runFullQualityGate(
+    input.onboardingPayload,
+    input.canonicalCase,
+    input.analysis,
+    finalDraft.finalDraft || finalDraft.fullDraftText
+  );
+  if (qualityGateReport.blocked) {
+    const failedChecks = qualityGateReport.checks.filter((c) => !c.passed).map((c) => `${c.check}: ${c.message}`).join("; ");
+    throw new Error(`Quality Gate BLOCKED: ${failedChecks}`);
+  }
+  finalDraft.integrityScore = qualityGateReport.score;
+  finalDraft.qualityGateReport = qualityGateReport;
   return {
     draft: finalDraft,
     aiUses: controlled.applied ? "controlled_refinement" : "deterministic",
     controlled,
     validationReport: validateDraft(finalDraft),
-    qualityGateReport
+    qualityGateReport: finalDraft.qualityGateReport
   };
 }
 function permittedTheses(analysis) {
@@ -31792,20 +31843,35 @@ registerRefinementProvider({
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
+function canAccessCase(user, row) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (!row.user_id) return false;
+  return row.user_id === user.id || !!user.email && row.user_id === user.email;
+}
+function denyCaseAccess(user, res) {
+  if (!user) {
+    res.status(401).json({ error: "N\xE3o autenticado" });
+    return true;
+  }
+  res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
+  return true;
+}
 router16.get("/cases", authenticateToken, (req, res) => {
   const { userId, claimToken } = req.query;
   const user = req.user;
   let allRows = Array.from(databaseRows.values());
-  if (user && user.role !== "admin" && user.id !== "dev_user") {
+  if (user && user.role !== "admin") {
     const userSpecific = allRows.filter(
-      (r) => r.user_id === user.id || r.user_id === user.email
+      (r) => r.user_id === user.id || user.email && r.user_id === user.email
     );
     allRows = userSpecific;
-  } else if (userId) {
-    const userSpecific = allRows.filter((r) => r.user_id === userId);
-    allRows = userSpecific;
-  } else if (claimToken) {
+  } else if (user?.role === "admin" && userId) {
+    allRows = allRows.filter((r) => r.user_id === userId);
+  } else if (!user && claimToken) {
     allRows = allRows.filter((r) => r.claim_token === claimToken);
+  } else if (!user) {
+    allRows = [];
   }
   const domains = allRows.map((r) => CanonicalMapper.rowToDomain(r));
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -31816,12 +31882,8 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
   }
-  const user = req.user;
-  if (user && user.role !== "admin" && row.user_id) {
-    const ownsCase = row.user_id === user.id || row.user_id === user.email;
-    if (!ownsCase) {
-      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
-    }
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
   }
   res.json(CanonicalMapper.rowToDomain(row));
 });
@@ -31831,7 +31893,9 @@ router16.post("/cases", authenticateToken, (req, res) => {
     if (!domainData.id) {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
-    if (!domainData.userId && req.user?.id) {
+    delete domainData.userId;
+    delete domainData.analysis;
+    if (req.user?.id) {
       const uid = req.user.id;
       const isUuid3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
       const isEmail = uid.includes("@");
@@ -31846,7 +31910,7 @@ router16.post("/cases", authenticateToken, (req, res) => {
       domainData.createdAt = (/* @__PURE__ */ new Date()).toISOString();
     }
     domainData.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    if (!domainData.analysis && domainData.infraction) {
+    if (domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
     if ((domainData.isPaid || domainData.status === "defesa_pronta") && !domainData.defenseDraft && domainData.applicant) {
@@ -31890,17 +31954,25 @@ router16.post("/cases", authenticateToken, (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-router16.put("/cases/:id", (req, res) => {
+router16.put("/cases/:id", authenticateToken, (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+  }
+  if (!canAccessCase(req.user, existingRow)) {
+    return denyCaseAccess(req.user, res);
   }
   const updatedDomain = req.body;
   updatedDomain.id = req.params.id;
   updatedDomain.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
-  if (!newRow.user_id && existingRow.user_id) {
-    newRow.user_id = existingRow.user_id;
+  newRow.user_id = existingRow.user_id;
+  if (updatedDomain.infraction) {
+    newRow.analysis_json = JSON.stringify(
+      RagPipeline.analyzeInfraction(req.params.id, updatedDomain.infraction)
+    );
+  } else {
+    newRow.analysis_json = existingRow.analysis_json;
   }
   databaseRows.set(req.params.id, newRow);
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, "case_engine");
@@ -31911,6 +31983,19 @@ router16.post("/cases/:id/claim", authenticateToken, (req, res) => {
   if (!row) {
     return res.status(404).json({ error: "Caso an\xF4nimo n\xE3o encontrado" });
   }
+  if (!req.user?.id) {
+    return res.status(401).json({ error: "N\xE3o autenticado" });
+  }
+  const isOwner = row.user_id === req.user.id || req.user.email && row.user_id === req.user.email;
+  if (row.user_id && !isOwner) {
+    return res.status(403).json({ error: "Caso j\xE1 vinculado a outro usu\xE1rio" });
+  }
+  if (!row.user_id) {
+    const { claimToken } = req.body;
+    if (!row.claim_token || claimToken !== row.claim_token) {
+      return res.status(403).json({ error: "Token de claim inv\xE1lido ou ausente" });
+    }
+  }
   const { name, email, phone, cpf } = req.body;
   const domain = CanonicalMapper.rowToDomain(row);
   domain.clientName = name || domain.clientName;
@@ -31919,9 +32004,7 @@ router16.post("/cases/:id/claim", authenticateToken, (req, res) => {
   domain.clientCpf = cpf || domain.clientCpf;
   domain.isAnonymous = false;
   domain.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  if (req.user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
-    domain.userId = req.user.id;
-  }
+  domain.userId = req.user.id;
   domain.timeline.push({
     id: `tl_${Date.now()}`,
     title: "Cadastro Conclu\xEDdo",
@@ -31934,16 +32017,19 @@ router16.post("/cases/:id/claim", authenticateToken, (req, res) => {
   eventBus.publish(EventTopics.CASE_CLAIMED, { caseId: domain.id, email }, "auth_engine");
   res.json(domain);
 });
-router16.post("/cases/:id/generate-defense", async (req, res) => {
+router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
   }
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
+  }
   const domain = CanonicalMapper.rowToDomain(row);
-  const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body;
-  const selectedArgs = ARGUMENTS_CATALOG.filter(
-    (a) => selectedArgumentIds?.includes(a.id)
-  );
+  const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
+  const canonicalAnalysis = domain.analysis;
+  const canonicalArguments = canonicalAnalysis?.recommendedArguments || [];
+  const canonicalProcedure = canonicalAnalysis?.recommendedProcedure || domain.serviceType || "recurso_jari";
   const b = applicantData;
   const resolvedApplicant = b && (b.name !== void 0 || b.applicantName !== void 0) ? {
     name: b.name || b.applicantName || "",
@@ -31988,36 +32074,48 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
     domain.vehicle.plate,
     domain.vehicle.brandModel,
     resolvedApplicant,
-    selectedArgs.length > 0 ? selectedArgs : domain.analysis?.recommendedArguments || [],
-    procedureType || domain.serviceType
+    canonicalArguments,
+    canonicalProcedure
   );
   if (customFacts) {
     defense.factsNarrative = customFacts;
   }
-  const analysis = domain.analysis;
-  const theses = permittedTheses(analysis).map((a) => a.id);
+  const theses = permittedTheses(canonicalAnalysis).map((a) => a.id);
   const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
-  const pipelineResult = await runControlledPipeline(
-    {
-      analysis: analysis || {
-        recommendedArguments: selectedArgs,
-        detectedInconsistencies: [],
-        recommendedProcedure: procedureType || domain.serviceType || "recurso_jari",
-        overallSuccessRate: 50,
-        caseId: domain.id,
-        id: `anl_${Date.now()}`,
-        competentBody: domain.infraction?.autuadorBody || "",
-        summaryReasoning: "an\xE1lise gerada para defesa",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  let pipelineResult;
+  try {
+    pipelineResult = await runControlledPipeline(
+      {
+        analysis: canonicalAnalysis || {
+          recommendedArguments: canonicalArguments,
+          detectedInconsistencies: [],
+          recommendedProcedure: canonicalProcedure,
+          overallSuccessRate: 50,
+          caseId: domain.id,
+          id: `anl_${Date.now()}`,
+          competentBody: domain.infraction?.autuadorBody || "",
+          summaryReasoning: "an\xE1lise gerada para defesa",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        draft: defense,
+        onboardingPayload,
+        canonicalCase: domain
       },
-      draft: defense,
-      onboardingPayload,
-      canonicalCase: domain
-    },
-    { tone: "formal_rigorous" }
-  );
+      { tone: "formal_rigorous" }
+    );
+  } catch (err) {
+    if (err.message?.startsWith("Quality Gate BLOCKED:")) {
+      logger.warn("system", "quality-gate", "blocked", err.message, { caseId: domain.id });
+      return res.status(422).json({
+        error: "Documento n\xE3o atende aos crit\xE9rios de qualidade obrigat\xF3rios.",
+        details: err.message.replace("Quality Gate BLOCKED: ", ""),
+        code: "QUALITY_GATE_BLOCKED"
+      });
+    }
+    throw err;
+  }
   defense.fullDraftText = pipelineResult.draft.fullDraftText;
-  defense.selectedArgumentIds = theses.length ? theses : defense.selectedArgumentIds;
+  defense.selectedArgumentIds = theses.length ? theses : canonicalArguments.map((a) => a.id);
   if (pipelineResult.controlled.reason === "REFINED_VALID") {
     logger.info("system", "ai_controlled_refinement", "ai_controlled_refinement", "Refinamento de prosa da IA aplicado ap\xF3s valida\xE7\xE3o de integridade.", { caseId: domain.id });
   } else if (pipelineResult.controlled.reason === "PROVIDER_UNAVAILABLE") {
@@ -32030,7 +32128,7 @@ router16.post("/cases/:id/generate-defense", async (req, res) => {
   domain.timeline.push({
     id: `tl_def_${Date.now()}`,
     title: "Peti\xE7\xE3o Administrativa Atualizada",
-    description: `Minuta da ${procedureType || "defesa"} estruturada com ${selectedArgs.length} teses jur\xEDdicas.`,
+    description: `Minuta da ${canonicalProcedure} estruturada com ${canonicalArguments.length} teses jur\xEDdicas can\xF4nicas.`,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     type: "defense"
   });

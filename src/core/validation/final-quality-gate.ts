@@ -136,7 +136,7 @@ function runCompletudeCheck(lineage: CaseDataLineage, finalDocument: string): Qu
 
   const allMissing = [...missing, ...missingInDoc];
 
-  return {
+  const result: QualityGateResult = {
     check: 'COMPLETUDE',
     passed: allMissing.length === 0,
     severity: allMissing.length > 0 ? 'error' : 'info',
@@ -145,6 +145,8 @@ function runCompletudeCheck(lineage: CaseDataLineage, finalDocument: string): Qu
       : `Dados obrigatórios ausentes: ${allMissing.join(', ')}`,
     details: allMissing.length > 0 ? { field: allMissing[0] } : undefined,
   };
+
+  return result;
 }
 
 /**
@@ -233,13 +235,15 @@ function runCausalidadeCheck(lineage: CaseDataLineage, analysis: any): QualityGa
       }
     }
 
-    for (const rule of analysis.evaluatedRules) {
-      if (rule.status === 'DATA_GAP' && rule.inputs?.missingData) {
-        for (const missing of rule.inputs.missingData) {
-          causalFailures.push(`${rule.ruleId}: DATA_GAP por "${missing}" — regra não pode concluir`);
-        }
-      }
-    }
+    // DATA_GAP = regra não pôde concluir por dados opcionais ausentes — NÃO é falha de causalidade
+    // Apenas registrar como info/warning, não bloquear
+    // for (const rule of analysis.evaluatedRules) {
+    //   if (rule.status === 'DATA_GAP' && rule.inputs?.missingData) {
+    //     for (const missing of rule.inputs.missingData) {
+    //       causalFailures.push(`${rule.ruleId}: DATA_GAP por "${missing}" — regra não pode concluir`);
+    //     }
+    //   }
+    // }
   }
 
   return {

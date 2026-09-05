@@ -79,7 +79,23 @@ function toTemplateBlock(b: RawBlock, idx: number): TemplateBlock {
 function buildSuspensaoBlocks() {
   return [
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-004')!,
+    {
+      id: 'BLK_QUALIFICACAO_PSDD_HEADER',
+      type: 'applicant_qualification',
+      title: 'Qualificação do Requerente - Cabeçalho PSDD',
+      isMandatory: true,
+      contentTemplate: `QUALIFICAÇÃO DO REQUERENTE`,
+      supportedVariables: [],
+    },
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-010')!,
+    {
+      id: 'BLK_IDENTIFICACAO_AUTO_PSDD_HEADER',
+      type: 'facts_narrative',
+      title: 'Identificação do Auto de Infração - Cabeçalho PSDD',
+      isMandatory: true,
+      contentTemplate: `IDENTIFICAÇÃO DO AUTO DE INFRAÇÃO`,
+      supportedVariables: [],
+    },
     DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-022')!,
     {
       id: 'BLK_PRELIMINARES_PSDD',
@@ -376,7 +392,23 @@ export const TEMPLATES_CATALOG: DocumentTemplateModel[] = [
     ],
     blocks: [
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-001')!,
+      {
+        id: 'BLK_QUALIFICACAO_HEADER',
+        type: 'applicant_qualification',
+        title: 'Qualificação do Requerente - Cabeçalho',
+        isMandatory: true,
+        contentTemplate: `QUALIFICAÇÃO DO REQUERENTE`,
+        supportedVariables: [],
+      },
       DOCUMENT_BLOCKS.find((b) => b.id === 'BLK-008')!,
+      {
+        id: 'BLK_IDENTIFICACAO_AUTO_HEADER',
+        type: 'facts_narrative',
+        title: 'Identificação do Auto de Infração - Cabeçalho',
+        isMandatory: true,
+        contentTemplate: `IDENTIFICAÇÃO DO AUTO DE INFRAÇÃO`,
+        supportedVariables: [],
+      },
       {
         id: 'BLK_FATOS_DEFESA_PREVIA',
         type: 'facts_narrative',

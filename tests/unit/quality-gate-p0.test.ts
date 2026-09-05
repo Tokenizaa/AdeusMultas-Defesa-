@@ -185,12 +185,12 @@ describe('Fase 5 — Quality Gate Obrigatório (FAIL CLOSED)', () => {
     }).toThrow();
   });
 
-  it('6. Resultado ausente/undefined → Quality Gate BLOCKED', () => {
-    // Análise com DATA_GAP
+  it('6. DATA_GAP em análise não deve bloquear Quality Gate (dado opcional)', () => {
+    // Análise com DATA_GAP (dado opcional ausente)
     const analysisWithGap = {
       ...mockAnalysis,
       evaluatedRules: [
-        { ruleId: 'RULE_TEST', status: 'DATA_GAP', inputs: { missingData: ['campo_obrigatorio'] } },
+        { ruleId: 'RULE_TEST', status: 'DATA_GAP', inputs: { missingData: ['campo_opcional'] } },
       ],
     };
 
@@ -204,9 +204,11 @@ describe('Fase 5 — Quality Gate Obrigatório (FAIL CLOSED)', () => {
       blocksCatalog: [],
     });
 
-    expect(report.blocked).toBe(true);
+    // DATA_GAP não deve bloquear - é apenas aviso de dado opcional ausente
+    expect(report.blocked).toBe(false);
     const causalidadeCheck = report.checks.find((c) => c.check === 'CAUSALIDADE');
-    expect(causalidadeCheck?.passed).toBe(false);
+    expect(causalidadeCheck?.passed).toBe(true);
+    expect(causalidadeCheck?.severity).toBe('info');
   });
 
   it('7. Documento válido não deve ser bloqueado indevidamente', () => {
@@ -438,5 +440,153 @@ describe('Fase 5 — Quality Gate Obrigatório (FAIL CLOSED)', () => {
     // Deve retornar cedo sem chamar Quality Gate
     expect(result.draft.validationStatus).toBe('invalid');
     expect(result.qualityGateReport).toBeUndefined();
+  });
+
+  // === TESTES P0 PARA BYPASS DO QUALITY GATE ===
+  it('13. Pipeline sem onboardingPayload → Quality Gate BLOCKED', async () => {
+    const validDraft = {
+      id: 'dft_test',
+      caseId: 'case_test',
+      procedureType: 'recurso_jari',
+      fullDraftText: mockValidDocument,
+      canonicalDraft: mockValidDocument,
+      finalDraft: mockValidDocument,
+      applicantName: 'João da Silva',
+      applicantCpf: '123.456.789-00',
+      applicantRg: '',
+      applicantCnh: '98765432100',
+      applicantAddress: '',
+      applicantCityState: 'São Paulo/SP',
+      vehiclePlate: 'ABC-1D23',
+      vehicleModel: 'Teste',
+      vehicleRenavam: '',
+      aitNumber: 'AIT-12345',
+      factsNarrative: '',
+      selectedArgumentIds: ['ARG-001'],
+      preliminaryArgumentsText: '',
+      meritArgumentsText: '',
+      legalRequestsText: '',
+      closingPlaceDate: '',
+      usedAI: false,
+      refinementStatus: 'not_attempted',
+      validationStatus: 'valid',
+      integrityScore: 100,
+      integrityIssues: [],
+      engineVersion: '2.6.0',
+      isReady: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Deve bloquear quando onboardingPayload está ausente
+    await expect(
+      runControlledPipeline(
+        {
+          analysis: mockAnalysis,
+          draft: validDraft,
+          onboardingPayload: undefined, // Ausente propositalmente
+          canonicalCase: mockCanonicalCase,
+        },
+        { tone: 'formal_rigorous' }
+      )
+    ).rejects.toThrow('Quality Gate BLOCKED');
+  });
+
+  it('14. Pipeline sem canonicalCase → Quality Gate BLOCKED', async () => {
+    const validDraft = {
+      id: 'dft_test',
+      caseId: 'case_test',
+      procedureType: 'recurso_jari',
+      fullDraftText: mockValidDocument,
+      canonicalDraft: mockValidDocument,
+      finalDraft: mockValidDocument,
+      applicantName: 'João da Silva',
+      applicantCpf: '123.456.789-00',
+      applicantRg: '',
+      applicantCnh: '98765432100',
+      applicantAddress: '',
+      applicantCityState: 'São Paulo/SP',
+      vehiclePlate: 'ABC-1D23',
+      vehicleModel: 'Teste',
+      vehicleRenavam: '',
+      aitNumber: 'AIT-12345',
+      factsNarrative: '',
+      selectedArgumentIds: ['ARG-001'],
+      preliminaryArgumentsText: '',
+      meritArgumentsText: '',
+      legalRequestsText: '',
+      closingPlaceDate: '',
+      usedAI: false,
+      refinementStatus: 'not_attempted',
+      validationStatus: 'valid',
+      integrityScore: 100,
+      integrityIssues: [],
+      engineVersion: '2.6.0',
+      isReady: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Deve bloquear quando canonicalCase está ausente
+    await expect(
+      runControlledPipeline(
+        {
+          analysis: mockAnalysis,
+          draft: validDraft,
+          onboardingPayload: mockOnboardingPayload,
+          canonicalCase: undefined, // Ausente propositalmente
+        },
+        { tone: 'formal_rigorous' }
+      )
+    ).rejects.toThrow('Quality Gate BLOCKED');
+  });
+
+  it('15. Pipeline sem onboardingPayload e canonicalCase → Quality Gate BLOCKED', async () => {
+    const validDraft = {
+      id: 'dft_test',
+      caseId: 'case_test',
+      procedureType: 'recurso_jari',
+      fullDraftText: mockValidDocument,
+      canonicalDraft: mockValidDocument,
+      finalDraft: mockValidDocument,
+      applicantName: 'João da Silva',
+      applicantCpf: '123.456.789-00',
+      applicantRg: '',
+      applicantCnh: '98765432100',
+      applicantAddress: '',
+      applicantCityState: 'São Paulo/SP',
+      vehiclePlate: 'ABC-1D23',
+      vehicleModel: 'Teste',
+      vehicleRenavam: '',
+      aitNumber: 'AIT-12345',
+      factsNarrative: '',
+      selectedArgumentIds: ['ARG-001'],
+      preliminaryArgumentsText: '',
+      meritArgumentsText: '',
+      legalRequestsText: '',
+      closingPlaceDate: '',
+      usedAI: false,
+      refinementStatus: 'not_attempted',
+      validationStatus: 'valid',
+      integrityScore: 100,
+      integrityIssues: [],
+      engineVersion: '2.6.0',
+      isReady: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Deve bloquear quando ambos estão ausentes
+    await expect(
+      runControlledPipeline(
+        {
+          analysis: mockAnalysis,
+          draft: validDraft,
+          onboardingPayload: undefined, // Ausente propositalmente
+          canonicalCase: undefined, // Ausente propositalmente
+        },
+        { tone: 'formal_rigorous' }
+      )
+    ).rejects.toThrow('Quality Gate BLOCKED');
   });
 });

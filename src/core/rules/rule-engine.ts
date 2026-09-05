@@ -557,6 +557,10 @@ export class ExpertRuleEngine {
           impact: result.impact,
           severity: result.severity,
           reason: result.description,
+          inputs: rule.requiredData.reduce((acc: Record<string, unknown>, key) => {
+            acc[key] = context[key];
+            return acc;
+          }, {}),
         });
 
         const matchedArg = ARGUMENTS_CATALOG.find((a) => a.id === result.legalArgumentId);
@@ -599,6 +603,33 @@ export class ExpertRuleEngine {
         detailedText: constArg.formattedParagraphs.map((p) => `${p.heading}\n${p.text}`).join('\n\n'),
         confidenceScore: constArg.confidenceScore,
         applicabilityNote: constArg.whenToUse.join('; '),
+      });
+
+      // Add detectedFlaw for lineage traceability (ARG-049 is injected as constitutional guarantee)
+      detectedFlaws.push({
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        argumentId: 'ARG-049',
+        severity: 'alta',
+        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        description: 'Injeção obrigatória de tese constitucional de garantia do contraditório e ampla defesa',
+        impact: 'Nulidade do processo por ausência de dupla notificação',
+        statutoryBasis: 'Art. 5º, LIV e LV da CF/88 c/c Súmula 312 do STJ',
+      });
+
+      // Add evaluatedRule for lineage traceability
+      evaluatedRules.push({
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        status: 'FAIL',
+        evaluatedAt: nowIso,
+        legalArgumentId: 'ARG-049',
+        impact: 'Nulidade do processo por ausência de dupla notificação',
+        severity: 'alta',
+        reason: 'Injeção obrigatória de tese constitucional de garantia do contraditório',
+        inputs: {
+          notificationExpeditionDate: context.notificationExpeditionDate,
+          notificationDeliveryDate: context.notificationDeliveryDate,
+        },
       });
     }
 

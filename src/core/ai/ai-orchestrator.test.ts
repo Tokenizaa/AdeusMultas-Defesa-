@@ -8,6 +8,35 @@ import {
 import { DefenseDraft } from '../../types';
 
 function baseDraft(overrides?: Partial<DefenseDraft>): DefenseDraft {
+  const fullDraftText = `
+ILUSTRÍSSIMO SENHOR DIRETOR DA AUTORIDADE DE TRÂNSITO DO(A) DETRAN-SP
+
+QUALIFICAÇÃO DO REQUERENTE
+João Silva, brasileiro, CPF 12345678900, CNH 12345678900
+
+IDENTIFICAÇÃO DO AUTO DE INFRAÇÃO
+AIT nº AIT-99, artigo 218 do CTB, código 745-50, DETRAN-SP, 2024-01-15T10:30:00Z, Av. Paulista, 1000, grave
+
+DOS FATOS
+A autuação padece de vícios. Placa ABC-1234.
+
+PRELIMINARES
+Preliminares.
+
+MÉRITO
+Mérito.
+
+PEDIDOS
+Requer anulação.
+
+ROL DE DOCUMENTOS
+1. Cópia da NP
+
+NESTES TERMOS
+Pede deferimento.
+São Paulo/SP, 15/01/2026
+`.trim();
+
   return {
     id: 'dft_1',
     caseId: 'case_x',
@@ -27,7 +56,9 @@ function baseDraft(overrides?: Partial<DefenseDraft>): DefenseDraft {
     meritArgumentsText: 'Mérito.',
     legalRequestsText: 'Requer anulação.',
     closingPlaceDate: 'São Paulo/SP, 15/01/2026',
-    fullDraftText: 'TEXTO DETERMINÍSTICO ORIGINAL COM FUNDAMENTAÇÃO.',
+    fullDraftText,
+    canonicalDraft: fullDraftText,
+    finalDraft: fullDraftText,
     ...overrides,
   };
 }
@@ -51,6 +82,28 @@ function baseAnalysis() {
   };
 }
 
+// Mock data for Quality Gate required parameters (matching the structure expected by final-quality-gate)
+const mockOnboardingPayload = {
+  infraction: { 
+    aitNumber: 'AIT-99', 
+    autuadorBody: 'DETRAN-SP', 
+    infractionCode: '745-50', 
+    ctbArticle: '218', 
+    dateTime: '2024-01-15T10:30:00Z', 
+    location: 'Av. Paulista, 1000', 
+    severity: 'grave',
+    measuredSpeed: '80',
+    consideredSpeed: '73',
+    speedLimit: '60',
+    hasPhotoProof: 'false',
+    hasPsychomotorTerm: 'false',
+  },
+  vehicle: { plate: 'ABC-1234' },
+  applicant: { name: 'João Silva', cpf: '12345678900', cnh: '12345678900', addressCityState: 'São Paulo/SP' },
+};
+
+const mockCanonicalCase = { id: 'case_x' };
+
 describe('Controlled AI Orchestrator — Fase 6', () => {
   afterEach(() => {
     registerRefinementProvider({});
@@ -58,7 +111,7 @@ describe('Controlled AI Orchestrator — Fase 6', () => {
 
   it('keeps deterministic draft when no refinement provider is registered', async () => {
     const draft = baseDraft();
-    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft });
+    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft, onboardingPayload: mockOnboardingPayload, canonicalCase: mockCanonicalCase });
     expect(res.aiUses).toBe('deterministic');
     expect(res.draft.fullDraftText).toBe(draft.fullDraftText);
   });
@@ -68,7 +121,7 @@ describe('Controlled AI Orchestrator — Fase 6', () => {
       refineProse: async (text) => `${text}\n\n[Prosa refinada pela IA — mantém os fatos]`,
     });
     const draft = baseDraft();
-    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft });
+    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft, onboardingPayload: mockOnboardingPayload, canonicalCase: mockCanonicalCase });
     expect(res.aiUses).toBe('controlled_refinement');
     expect(res.controlled.applied).toBe(true);
     expect(res.draft.fullDraftText).toContain('Prosa refinada pela IA');
@@ -81,7 +134,7 @@ describe('Controlled AI Orchestrator — Fase 6', () => {
       refineProse: async () => '', // IA produz texto vazio/alucinação
     });
     const draft = baseDraft();
-    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft });
+    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft, onboardingPayload: mockOnboardingPayload, canonicalCase: mockCanonicalCase });
     expect(res.aiUses).toBe('deterministic');
     expect(res.draft.fullDraftText).toBe(draft.fullDraftText);
     expect(res.controlled.reason).toBe('REFINEMENT_UNCHANGED');
@@ -92,7 +145,7 @@ describe('Controlled AI Orchestrator — Fase 6', () => {
       refineProse: async () => { throw new Error('gemini 503'); },
     });
     const draft = baseDraft();
-    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft });
+    const res = await runControlledPipeline({ analysis: baseAnalysis() as any, draft, onboardingPayload: mockOnboardingPayload, canonicalCase: mockCanonicalCase });
     expect(res.aiUses).toBe('deterministic');
     expect(res.controlled.reason).toBe('PROVIDER_UNAVAILABLE');
     expect(res.draft.fullDraftText).toBe(draft.fullDraftText);

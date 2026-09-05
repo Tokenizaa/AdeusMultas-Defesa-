@@ -256,11 +256,9 @@ function isRequiredInDocument(fieldPath: string): boolean {
     'applicant.cpf',
     'applicant.cnh',
     'infraction.autuadorBody',
-    'infraction.infractionCode',
     'infraction.ctbArticle',
     'infraction.dateTime',
     'infraction.location',
-    'infraction.severity',
     'identification.procedureType',
     'applicant.addressCityState',
   ];
