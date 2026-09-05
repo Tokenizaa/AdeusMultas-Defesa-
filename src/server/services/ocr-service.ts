@@ -19,7 +19,12 @@
 
 import { isIP } from 'net';
 import { URL } from 'url';
+import * as dns from 'dns';
+import { promisify } from 'util';
 import { logger } from '../observability/logger';
+
+const dnsLookup = promisify(dns.lookup);
+const dnsResolve4 = promisify(dns.resolve4);
 
 // ---------------------------------------------------------------------------
 // SSRF Protection — validate URLs before fetching
@@ -31,7 +36,7 @@ const MAX_DOWNLOAD_SIZE = 5 * 1024 * 1024;
 /**
  * Validates that a URL is safe for fetching (no SSRF).
  * - Only http/https schemes allowed
- * - No private/internal IP addresses
+ * - No private/internal IP addresses after DNS resolution
  * - No localhost or reserved hostnames
  * - No credentials in URL
  */
@@ -69,30 +74,7 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
     return { valid: false, reason: 'Host localhost/reservado não permitido' };
   }
 
-  // Block internal/private IP ranges
-  const ip = isIP(hostname);
-  if (ip === 4) {
-    // IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-    const parts = hostname.split('.').map(Number);
-    if (parts[0] === 10) return { valid: false, reason: 'IP privado não permitido (10.x.x.x)' };
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
-      return { valid: false, reason: 'IP privado não permitido (172.16-31.x.x)' };
-    }
-    if (parts[0] === 192 && parts[1] === 168) {
-      return { valid: false, reason: 'IP privado não permitido (192.168.x.x)' };
-    }
-  } else if (ip === 6) {
-    // IPv6 private/uniquelocal: fc00::/7
-    if (hostname.startsWith('fc') || hostname.startsWith('fd') || hostname.startsWith('fe80')) {
-      return { valid: false, reason: 'IP privado IPv6 não permitido' };
-    }
-    // Block link-local
-    if (hostname.startsWith('fe80')) {
-      return { valid: false, reason: 'IP link-local não permitido' };
-    }
-  }
-
-  // Block obvious internal hostnames
+  // Block obvious internal hostnames before DNS resolution
   const internalPatterns = [
     'internal', 'intranet', 'private', 'corporate', 'dmz',
     'gateway', 'router', 'switch', 'firewall', 'proxy',
@@ -107,6 +89,128 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
   }
 
   return { valid: true };
+}
+
+/**
+ * Checks if an IPv4 address is private/internal.
+ */
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  if (parts[0] === 169 && parts[1] === 254) return true; // link-local
+  return false;
+}
+
+/**
+ * Validates a resolved IP is not private/reserved.
+ */
+function validateResolvedIP(ip: string, isV6 = false): { valid: boolean; reason?: string } {
+  if (!isV6) {
+    if (isPrivateIPv4(ip)) {
+      return { valid: false, reason: `IP privado não permitido após resolução DNS: ${ip}` };
+    }
+  }
+  // IPv6: block common private/link-local
+  if (isV6) {
+    const lower = ip.toLowerCase();
+    if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower.startsWith('::1') || lower === '::') {
+      return { valid: false, reason: `IP IPv6 privado/reservado não permitido: ${ip}` };
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Resolves hostname to IP(s) and validates none are private.
+ * Uses dns.lookup which uses the system resolver (respects /etc/hosts).
+ */
+async function resolveAndValidateHostname(hostname: string): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    // Try IPv4 first
+    const addr = await dnsLookup(hostname, { family: 4 });
+    if (addr.address) {
+      const ipValidation = validateResolvedIP(addr.address, addr.family === 6);
+      if (!ipValidation.valid) return ipValidation;
+    }
+    return { valid: true };
+  } catch {
+    // Fallback: try AAAA (IPv6)
+    try {
+      const addr6 = await dnsLookup(hostname, { family: 6 });
+      if (addr6.address) {
+        const ipValidation = validateResolvedIP(addr6.address, true);
+        if (!ipValidation.valid) return ipValidation;
+      }
+    } catch {
+      // No DNS record — let fetch handle it (will fail anyway)
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Follows redirects manually, validating SSRF at each step.
+ * Returns final response or throws on SSRF/size limit.
+ */
+async function fetchWithRedirectProtection(
+  initialUrl: string,
+  signal: AbortSignal,
+  onSizeLimit: (bytesRead: number) => void
+): Promise<{ response: Response; finalUrl: string }> {
+  let currentUrl = initialUrl;
+  let redirectCount = 0;
+  const MAX_REDIRECTS = 5;
+
+  while (true) {
+    const response = await fetch(currentUrl, {
+      signal,
+      redirect: 'manual', // Handle redirects manually for IP validation
+    });
+
+    // Follow redirects manually, validating each hop
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      if (redirectCount >= MAX_REDIRECTS) {
+        throw new Error('SSRF_BLOCKED: Limite de redirects excedido');
+      }
+      const locationHeader = response.headers.get('location');
+      if (!locationHeader) {
+        throw new Error('SSRF_BLOCKED: Redirect sem header Location');
+      }
+      // Resolve the redirect URL
+      let redirectUrl: string;
+      try {
+        redirectUrl = new URL(locationHeader, currentUrl).toString();
+      } catch {
+        throw new Error(`SSRF_BLOCKED: Redirect URL inválida: ${locationHeader}`);
+      }
+      // Validate the redirect destination hostname
+      const redirectValidation = validateFetchUrl(redirectUrl);
+      if (!redirectValidation.valid) {
+        throw new Error(`SSRF_BLOCKED: Redirect para destino bloqueado — ${redirectValidation.reason}`);
+      }
+      // Validate resolved IP of redirect target
+      try {
+        const redirectParsed = new URL(redirectUrl);
+        const ipValidation = await resolveAndValidateHostname(redirectParsed.hostname);
+        if (!ipValidation.valid) {
+          throw new Error(`SSRF_BLOCKED: Redirect para IP privado: ${ipValidation.reason}`);
+        }
+      } catch (err: any) {
+        if (err.message.startsWith('SSRF_BLOCKED:')) throw err;
+        throw new Error(`SSRF_BLOCKED: Falha ao validar redirect: ${err.message}`);
+      }
+
+      redirectCount++;
+      currentUrl = redirectUrl;
+      response.body?.cancel().catch(() => {});
+      continue;
+    }
+
+    // Not a redirect — return final response and URL
+    return { response, finalUrl: currentUrl };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -932,27 +1036,46 @@ class OcrService {
 
   /**
    * Analyze from a URL (downloads the image first)
-   * Includes SSRF protection and size limits.
+   * Includes SSRF protection (DNS + redirect validation) and streaming size limit.
    */
   async analyzeFromUrl(imageUrl: string): Promise<OcrResult> {
-    // SSRF validation
-    const validation = validateFetchUrl(imageUrl);
-    if (!validation.valid) {
-      throw new Error(`SSRF_BLOCKED: ${validation.reason}`);
+    // Step 1: Validate URL format and hostname
+    const urlValidation = validateFetchUrl(imageUrl);
+    if (!urlValidation.valid) {
+      throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
     }
 
+    // Step 2: Resolve DNS and validate the IP is not private
+    // This runs right before fetch to minimize TOCTOU window
+    try {
+      const parsed = new URL(imageUrl);
+      const dnsValidation = await resolveAndValidateHostname(parsed.hostname);
+      if (!dnsValidation.valid) {
+        throw new Error(`SSRF_BLOCKED: ${dnsValidation.reason}`);
+      }
+    } catch (err: any) {
+      if (err.message.startsWith('SSRF_BLOCKED:')) throw err;
+      // DNS resolution failure — let fetch fail naturally (it will throw a better error)
+    }
+
+    // Step 3: Set up streaming download with size limit
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout || 30000);
+    const timeoutMs = this.config.timeout || 30000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(imageUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      // Follow redirects manually to validate each hop
+      const { response, finalUrl } = await fetchWithRedirectProtection(
+        imageUrl,
+        controller.signal,
+        () => controller.abort()
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`);
       }
 
-      // Check Content-Length header before downloading
+      // Step 4: Check Content-Length as early warning
       const contentLength = response.headers.get('content-length');
       if (contentLength) {
         const size = parseInt(contentLength, 10);
@@ -961,19 +1084,52 @@ class OcrService {
         }
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-
-      // Double-check downloaded size (in case header was missing/wrong)
-      if (arrayBuffer.byteLength > MAX_DOWNLOAD_SIZE) {
-        throw new Error(`MAX_SIZE_EXCEEDED: Arquivo muito grande (${arrayBuffer.byteLength} bytes). Máximo: ${MAX_DOWNLOAD_SIZE} bytes.`);
+      // Step 5: Stream the response body with hard size limit
+      // This is the real protection — we never load the full file into memory
+      const body = response.body;
+      if (!body) {
+        throw new Error('Response body is not readable');
       }
 
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      const reader = body.getReader();
+      const chunks: Uint8Array[] = [];
+      let totalBytes = 0;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          const chunkSize = value.byteLength;
+          const newTotal = totalBytes + chunkSize;
+
+          if (newTotal > MAX_DOWNLOAD_SIZE) {
+            // Hard limit exceeded — abort immediately
+            controller.abort();
+            throw new Error(
+              `MAX_SIZE_EXCEEDED: Limite de ${MAX_DOWNLOAD_SIZE} bytes excedido durante streaming. ` +
+              `Bytes lidos: ${newTotal}. Abortando antes de memory exhaustion.`
+            );
+          }
+
+          chunks.push(value);
+          totalBytes = newTotal;
+        }
+      } finally {
+        // Always release the reader
+        reader.releaseLock();
+      }
+
+      clearTimeout(timeoutId);
+
+      // Combine chunks into a single buffer
+      const buffer = Buffer.concat(chunks);
+      const base64 = buffer.toString('base64');
       return this.analyzeImage(base64);
     } catch (err: any) {
       clearTimeout(timeoutId);
-      // Preserve SSRF_BLOCKED and MAX_SIZE_EXCEEDED messages
-      if (err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
+      if (err.name === 'AbortError' || err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
         throw err;
       }
       throw err;
