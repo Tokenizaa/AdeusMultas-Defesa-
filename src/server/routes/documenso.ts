@@ -11,6 +11,8 @@ import { getEnvelopeService, EnvelopeService } from '../lib/documenso/envelope-s
 import { getWebhookHandler, WebhookHandler, documensoWebhookMiddleware } from '../lib/documenso/webhook-handler';
 import { getPollingJob, PollingJob } from '../lib/documenso/polling-job';
 import { caseRepository } from '../db/case-repository';
+import { envelopeRepository } from '../db/envelope-repository';
+import { domainIdToUuid } from '../db/uuid-v5';
 import {
   CreateEnvelopeRequest,
   EnvelopeStatus,
@@ -25,9 +27,9 @@ let envelopeService: EnvelopeService;
 let webhookHandler: WebhookHandler;
 let pollingJob: PollingJob;
 
-// In-memory envelope ownership registry: envelopeId → { caseId, userId }
-// FASE 1.2: prevents one user accessing another's envelope via IDOR.
-const envelopeOwnership = new Map<string, { caseId: string; userId: string }>();
+// FASE 1.2 CORREÇÃO: envelopeOwnership era Map em memória (perdido em restart).
+// Substituído por persistência em Supabase via envelopeRepository.
+// Permite authorization sobreviver a restarts e funcionar em multi-instância.
 
 // Centralized case ownership check (mirrors cases.ts)
 export function canAccessCase(user: AuthenticatedUser | undefined, row: any): boolean {
@@ -42,13 +44,18 @@ function denyAccess(user: AuthenticatedUser | undefined, res: Response): boolean
   res.status(403).json({ error: 'Você não tem permissão para acessar este recurso' }); return true;
 }
 
-// Authorize envelope access: check user owns the case the envelope belongs to
-function authorizeEnvelope(envelopeId: string, user: AuthenticatedUser | undefined): boolean {
-  const meta = envelopeOwnership.get(envelopeId);
-  if (!meta) return false; // unknown envelope
-  const row = caseRepository.get(meta.caseId);
-  if (!row) return false;
-  return canAccessCase(user, row);
+/**
+ * Authorize envelope access via persisted ownership in Supabase.
+ *
+ * FASE 1.2 CORREÇÃO: usa envelopeRepository.belongsToUser() que consulta o banco,
+ * não mais o Map em memória.
+ * - Admin bypass: admins podem acessar qualquer envelope.
+ * - Fail closed: envelope não encontrado no banco → false.
+ */
+async function authorizeEnvelope(envelopeId: string, user: AuthenticatedUser | undefined): Promise<boolean> {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return envelopeRepository.belongsToUser(envelopeId, user.id);
 }
 
 function ensureServices(): void {
@@ -136,10 +143,17 @@ router.post('/envelopes', authenticateToken, async (req: Request, res: Response)
       { title, fields, settings, metadata }
     );
 
-    // FASE 1.2: register envelope ownership to prevent IDOR on other endpoints
-    envelopeOwnership.set(envelope.id, {
-      caseId,
+    // FASE 1.2 CORREÇÃO: persistir ownership em Supabase (sobrevive a restart/multi-instância)
+    const caseUuid = domainIdToUuid(caseId);
+    if (!caseUuid) {
+      return res.status(400).json({ error: 'ID do caso inválido' });
+    }
+    await envelopeRepository.register({
+      documensoEnvelopeId: envelope.id,
+      externalId: caseId,
+      caseId: caseUuid,
       userId: req.user!.id,
+      envelopeData: envelope,
     });
 
     res.status(201).json({
@@ -180,8 +194,8 @@ router.post('/envelopes/:id/send', authenticateToken, async (req: Request, res: 
   try {
     const { id } = req.params;
 
-    // FASE 1.2: authorize envelope ownership
-    if (!authorizeEnvelope(id, req.user)) {
+    // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+    if (!(await authorizeEnvelope(id, req.user))) {
       return denyAccess(req.user, res);
     }
 
@@ -221,8 +235,8 @@ router.get('/envelopes/:id/status', authenticateToken, async (req: Request, res:
   try {
     const { id } = req.params;
 
-    // FASE 1.2: authorize envelope ownership
-    if (!authorizeEnvelope(id, req.user)) {
+    // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+    if (!(await authorizeEnvelope(id, req.user))) {
       return denyAccess(req.user, res);
     }
 
@@ -251,8 +265,8 @@ router.get('/envelopes/:id', authenticateToken, async (req: Request, res: Respon
   try {
     const { id } = req.params;
 
-    // FASE 1.2: authorize envelope ownership
-    if (!authorizeEnvelope(id, req.user)) {
+    // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+    if (!(await authorizeEnvelope(id, req.user))) {
       return denyAccess(req.user, res);
     }
 
@@ -284,8 +298,8 @@ router.get(
     try {
       const { id, recipientId } = req.params;
 
-      // FASE 1.2: authorize envelope ownership
-      if (!authorizeEnvelope(id, req.user)) {
+      // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+      if (!(await authorizeEnvelope(id, req.user))) {
         return denyAccess(req.user, res);
       }
 
@@ -315,8 +329,8 @@ router.get('/envelopes/:id/download', authenticateToken, async (req: Request, re
   try {
     const { id } = req.params;
 
-    // FASE 1.2: authorize envelope ownership before downloading PDF
-    if (!authorizeEnvelope(id, req.user)) {
+    // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+    if (!(await authorizeEnvelope(id, req.user))) {
       return denyAccess(req.user, res);
     }
 
@@ -361,8 +375,8 @@ router.post('/embedding-token', authenticateToken, async (req: Request, res: Res
       return res.status(400).json({ error: 'envelopeId and recipientId are required' });
     }
 
-    // FASE 1.2: authorize envelope ownership
-    if (!authorizeEnvelope(envelopeId, req.user)) {
+    // FASE 1.2 CORREÇÃO: authorization via banco (supervive a restart)
+    if (!(await authorizeEnvelope(envelopeId, req.user))) {
       return denyAccess(req.user, res);
     }
 

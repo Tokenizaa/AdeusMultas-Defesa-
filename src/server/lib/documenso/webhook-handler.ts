@@ -15,6 +15,7 @@ import {
 } from '@/types/documenso';
 import { logger, LogService } from '@/server/observability/logger';
 import { Request, Response, NextFunction } from 'express';
+import { envelopeRepository } from '../../db/envelope-repository';
 
 // Type for processed webhook events (stored in Redis/DB for idempotency)
 interface ProcessedWebhookEvent {
@@ -309,8 +310,21 @@ export class WebhookHandler {
     status: EnvelopeStatus,
     extraData?: Partial<DocumensoEnvelopeRecord>
   ): Promise<void> {
-    // TODO: Implement with Supabase
-    logger.debug('documenso' as LogService, 'webhook-handler', 'update-envelope-status', 'Update envelope status', { documensoEnvelopeId, envelopeStatus: status, extraData, status: 'pending' });
+    // FASE 1.2 CORREÇÃO: persistir status real em Supabase (antes era no-op)
+    try {
+      await envelopeRepository.updateStatus(documensoEnvelopeId, status, {
+        sent_at: extraData?.sent_at as string | undefined,
+        completed_at: extraData?.completed_at as string | undefined,
+      });
+    } catch (err) {
+      logger.error('documenso' as LogService, 'webhook-handler', 'update-envelope-status', 'Falha ao persistir status do envelope', {
+        documensoEnvelopeId,
+        envelopeStatus: status,
+        err,
+        status: 'failed',
+      });
+      throw err; // re-throw para não perder o evento
+    }
   }
 
   private async updateRecipientReadStatus(
