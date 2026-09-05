@@ -282,11 +282,14 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   }
 
   const domain = CanonicalMapper.rowToDomain(row);
-  const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body;
+  const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
 
-  const selectedArgs = ARGUMENTS_CATALOG.filter((a) =>
-    selectedArgumentIds?.includes(a.id)
-  );
+  // P0 (Fase 3): autoridade jurídica canônica — o servidor é a única fonte de teses.
+  // selectedArgumentIds do body é IGNORADO (compatibilidade API: aceita mas não usa).
+  // procedimento do body é IGNORADO se houver recommendedProcedure na análise canônica.
+  const canonicalAnalysis = domain.analysis as any;
+  const canonicalArguments = (canonicalAnalysis?.recommendedArguments as any) || [];
+  const canonicalProcedure = canonicalAnalysis?.recommendedProcedure || domain.serviceType || 'recurso_jari';
 
   // Dados de qualificação do requerente DEVEM vir do onboarding real (body ou
   // domain.applicant). NUNCA fabricar CNH/cidade. FAIL CLOSED: ausentes → erro.
@@ -335,14 +338,15 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
     };
   }
 
+  // Geração da minuta SOMENTE com teses canônicas derivadas da análise do servidor.
   let defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
     domain.vehicle.plate,
     domain.vehicle.brandModel,
     resolvedApplicant,
-    selectedArgs.length > 0 ? selectedArgs : (domain.analysis?.recommendedArguments as any) || [],
-    procedureType || domain.serviceType
+    canonicalArguments,
+    canonicalProcedure
   );
 
   if (customFacts) {
@@ -352,18 +356,18 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   // ===== IA Controlada subordinada ao motor (Fase 6) =====
   // Fluxo: determinístico -> IA refina prosa -> validador de integridade -> final.
   // IA nunca decide tese; teses derivam da análise e do catálogo.
-  const analysis = domain.analysis as any;
-  const theses = permittedTheses(analysis).map((a: any) => a.id);
+  // A análise autoritativa é a canônica do domínio (servidor), nunca a do request.
+  const theses = permittedTheses(canonicalAnalysis).map((a: any) => a.id);
 
   // FASE 8: Obter payload de onboarding para quality gate
   const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
 
   const pipelineResult = await runControlledPipeline(
     {
-      analysis: analysis || {
-        recommendedArguments: selectedArgs,
+      analysis: canonicalAnalysis || {
+        recommendedArguments: canonicalArguments,
         detectedInconsistencies: [],
-        recommendedProcedure: procedureType || domain.serviceType || 'recurso_jari',
+        recommendedProcedure: canonicalProcedure,
         overallSuccessRate: 50,
         caseId: domain.id,
         id: `anl_${Date.now()}`,
@@ -379,7 +383,8 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   );
 
   defense.fullDraftText = pipelineResult.draft.fullDraftText;
-  defense.selectedArgumentIds = (theses.length ? theses : defense.selectedArgumentIds);
+  // selectedArgumentIds no response reflete APENAS a seleção autorizada pelo servidor.
+  defense.selectedArgumentIds = theses.length ? theses : canonicalArguments.map((a: any) => a.id);
 
   if (pipelineResult.controlled.reason === 'REFINED_VALID') {
     logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
@@ -395,7 +400,7 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   domain.timeline.push({
     id: `tl_def_${Date.now()}`,
     title: 'Petição Administrativa Atualizada',
-    description: `Minuta da ${procedureType || 'defesa'} estruturada com ${selectedArgs.length} teses jurídicas.`,
+    description: `Minuta da ${canonicalProcedure} estruturada com ${canonicalArguments.length} teses jurídicas canônicas.`,
     timestamp: new Date().toISOString(),
     type: 'defense',
   });
