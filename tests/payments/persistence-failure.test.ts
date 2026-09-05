@@ -63,6 +63,16 @@ describe('Persistência de pagamento - falhas', () => {
     notificationUrl: undefined,
   };
 
+  const mockCharge: PagBankCharge = {
+    id: 'charge_123',
+    status: 'PAID',
+    reference_id: 'charge-defesa_case_123-123',
+    amount: { value: 89.90, currency: 'BRL' },
+    payment_method: { type: 'PIX' },
+    created_at: new Date().toISOString(),
+    paid_at: new Date().toISOString(),
+  };
+
   const mockOrder: PagBankOrderResponse = {
     id: 'order_123',
     status: 'PAID',
@@ -72,16 +82,7 @@ describe('Persistência de pagamento - falhas', () => {
     reference_id: 'defesa_case_123',
     links: [{ rel: 'PAY', href: 'https://pagbank.com/pay/order_123' }],
     created_at: new Date().toISOString(),
-  };
-
-  const mockCharge: PagBankCharge = {
-    id: 'charge_123',
-    status: 'PAID',
-    reference_id: 'charge-defesa_case_123-123',
-    amount: { value: 89.90, currency: 'BRL' },
-    payment_method: { type: 'PIX' },
-    created_at: new Date().toISOString(),
-    paid_at: new Date().toISOString(),
+    charges: [mockCharge],
   };
 
   beforeEach(() => {
