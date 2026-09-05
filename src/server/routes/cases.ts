@@ -1,19 +1,19 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { databaseRows, auditLogs } from '../app';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
 import { eventBus, EventTopics } from '../../core/events/topics';
-import { CaseDomain } from '../../types';
 import { enrichDefenseWithGemini } from '../gemini';
-import { authenticateToken } from '../middleware/auth-middleware';
+import { authenticateToken, AuthenticatedUser } from '../middleware/auth-middleware';
 import {
   registerRefinementProvider,
   runControlledPipeline,
   permittedTheses,
 } from '../../core/ai/ai-orchestrator';
 import { logger } from '../observability/logger';
+import { CaseDomain, CaseRow } from '../../types';
 
 const router = Router();
 
@@ -24,27 +24,59 @@ registerRefinementProvider({
   },
 });
 
+// ─── Regra central de autorização de casos (Fase 2 / IDOR) ───
+// FAIL CLOSED:
+// - sem usuário autenticado → sem acesso;
+// - caso sem user_id → inacessível a usuários não-admin (ausência de owner
+//   NUNCA é autorização);
+// - identidade vem exclusivamente de req.user (validada pelo middleware),
+//   nunca de headers, query ou body controlados pelo cliente.
+// - admin tem acesso total.
+function canAccessCase(user: AuthenticatedUser | undefined, row: CaseRow): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (!row.user_id) return false;
+  // Compatibilidade com email: identidade derivada de req.user (validada), nunca do cliente.
+  return row.user_id === user.id || (!!user.email && row.user_id === user.email);
+}
+
+// Resposta uniforme 401 (sem identidade) / 403 (sem permissão). Retorna true se negou.
+function denyCaseAccess(
+  user: AuthenticatedUser | undefined,
+  res: Response
+): boolean {
+  if (!user) {
+    res.status(401).json({ error: 'Não autenticado' });
+    return true;
+  }
+  res.status(403).json({ error: 'Você não tem permissão para acessar este caso' });
+  return true;
+}
+
 // Cases CRUD & Lifecycle Endpoints
 
-// GET /api/cases — with anti-IDOR: citizens only see their own cases
+// GET /api/cases — anti-IDOR: cidadãos veem somente os próprios casos.
 router.get('/cases', authenticateToken, (req, res) => {
   const { userId, claimToken } = req.query;
   const user = req.user;
 
   let allRows = Array.from(databaseRows.values());
 
-  // Non-admin users only see their own cases — FAIL CLOSED: no fallback to all rows
-  if (user && user.role !== 'admin' && user.id !== 'dev_user') {
-    // Match both UUID and email formats for user_id
+  if (user && user.role !== 'admin') {
+    // Cidadão: somente casos próprios — FAIL CLOSED: sem match → lista vazia.
     const userSpecific = allRows.filter((r) =>
-      r.user_id === user.id || r.user_id === user.email
+      r.user_id === user.id || (user.email && r.user_id === user.email)
     );
-    allRows = userSpecific; // FAIL CLOSED: if no match, return empty (not all rows)
-  } else if (userId) {
-    const userSpecific = allRows.filter((r) => r.user_id === userId);
-    allRows = userSpecific; // FAIL CLOSED
-  } else if (claimToken) {
+    allRows = userSpecific;
+  } else if (user?.role === 'admin' && userId) {
+    // Admin: filtro opcional por dono (identidade do cliente não é usada aqui).
+    allRows = allRows.filter((r) => r.user_id === userId);
+  } else if (!user && claimToken) {
+    // Fluxo anônimo legítimo: claim token como prova de posse.
     allRows = allRows.filter((r) => r.claim_token === claimToken);
+  } else if (!user) {
+    // FAIL CLOSED: visitante sem claim token não lista casos.
+    allRows = [];
   }
 
   const domains: CaseDomain[] = allRows.map((r) => CanonicalMapper.rowToDomain(r));
@@ -53,20 +85,17 @@ router.get('/cases', authenticateToken, (req, res) => {
   res.json(domains);
 });
 
-// GET /api/cases/:id — with anti-IDOR protection
+// GET /api/cases/:id — proteção anti-IDOR via regra central
 router.get('/cases/:id', authenticateToken, (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso não encontrado' });
   }
 
-  // IDOR Protection: non-admin users can only access their own cases
-  const user = req.user;
-  if (user && user.role !== 'admin' && row.user_id) {
-    const ownsCase = row.user_id === user.id || row.user_id === user.email;
-    if (!ownsCase) {
-      return res.status(403).json({ error: 'Você não tem permissão para acessar este caso' });
-    }
+  // Regra central de autorização: proprietário → 200, admin → 200,
+  // outro usuário → 403, sem identidade válida → 401.
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
   }
 
   res.json(CanonicalMapper.rowToDomain(row));
@@ -79,16 +108,18 @@ router.post('/cases', authenticateToken, (req, res) => {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
 
-    // Ownership fallback: carimba userId a partir da sessão autenticada.
-    // Aceita tanto UUID quanto email (olfnetto@gmail.com).
-    if (!domainData.userId && req.user?.id) {
+    // P0 (Fase 2): o cliente NUNCA escolhe o proprietário.
+    // userId vindo do body é IGNORADO; user_id deriva exclusivamente de req.user.
+    delete (domainData as any).userId;
+
+    if (req.user?.id) {
       const uid = req.user.id;
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
       const isEmail = uid.includes('@');
       if (isUuid || isEmail) {
         domainData.userId = uid;
       }
-      // Fallback: also stamp email if available
+      // Fallback: também stamp email se disponível
       if (req.user.email && !domainData.userId) {
         domainData.userId = req.user.email;
       }
@@ -152,10 +183,15 @@ router.post('/cases', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/cases/:id', (req, res) => {
+router.put('/cases/:id', authenticateToken, (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: 'Caso não encontrado' });
+  }
+
+  // P0 (Fase 2): autorização ANTES de qualquer alteração.
+  if (!canAccessCase(req.user, existingRow)) {
+    return denyCaseAccess(req.user, res);
   }
 
   const updatedDomain: CaseDomain = req.body;
@@ -163,11 +199,10 @@ router.put('/cases/:id', (req, res) => {
   updatedDomain.updatedAt = new Date().toISOString();
 
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
-  // Preserva o dono original quando o payload de update não carrega userId
-  // (evita apagar cases.user_id via write-through em updates parciais/antigos).
-  if (!newRow.user_id && existingRow.user_id) {
-    newRow.user_id = existingRow.user_id;
-  }
+  // P0: o proprietário é preservado SEMPRE a partir do registro existente.
+  // userId/user_id do body (mesmo `userId: "outro-usuario"`) é ignorado —
+  // troca de ownership via PUT é impossível.
+  newRow.user_id = existingRow.user_id;
   databaseRows.set(req.params.id, newRow);
 
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, 'case_engine');
@@ -182,6 +217,29 @@ router.post('/cases/:id/claim', authenticateToken, (req, res) => {
     return res.status(404).json({ error: 'Caso anônimo não encontrado' });
   }
 
+  // P0 (Fase 2): claim exige identidade autenticada — após o claim,
+  // user_id deriva exclusivamente de req.user.
+  if (!req.user?.id) {
+    return res.status(401).json({ error: 'Não autenticado' });
+  }
+
+  const isOwner =
+    row.user_id === req.user.id || (req.user.email && row.user_id === req.user.email);
+
+  // Caso já vinculado a outro usuário → negar SEMPRE (inclusive admin).
+  if (row.user_id && !isOwner) {
+    return res.status(403).json({ error: 'Caso já vinculado a outro usuário' });
+  }
+
+  // Caso anônimo → claim somente mediante claim_token válido como prova de posse.
+  // Email/CPF/nome enviados pelo cliente NÃO são prova de posse.
+  if (!row.user_id) {
+    const { claimToken } = req.body;
+    if (!row.claim_token || claimToken !== row.claim_token) {
+      return res.status(403).json({ error: 'Token de claim inválido ou ausente' });
+    }
+  }
+
   const { name, email, phone, cpf } = req.body;
   const domain = CanonicalMapper.rowToDomain(row);
   domain.clientName = name || domain.clientName;
@@ -192,11 +250,7 @@ router.post('/cases/:id/claim', authenticateToken, (req, res) => {
   domain.updatedAt = new Date().toISOString();
 
   // Claim autenticado vincula o caso ao dono da sessão (cases.user_id).
-  // Retrocompatível: sem req.user (convidado em produção), mantém comportamento antigo.
-  if (req.user?.id
-      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
-    domain.userId = req.user.id;
-  }
+  domain.userId = req.user.id;
 
   domain.timeline.push({
     id: `tl_${Date.now()}`,
@@ -215,10 +269,16 @@ router.post('/cases/:id/claim', authenticateToken, (req, res) => {
 });
 
 // Defense Generation & AI Enrichment
-router.post('/cases/:id/generate-defense', async (req, res) => {
+router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso não encontrado' });
+  }
+
+  // P0 (Fase 2): autorização ANTES de qualquer processamento
+  // (RAG, minuta, IA, alteração do caso). Usuário A no caso de B → rejeitado.
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
   }
 
   const domain = CanonicalMapper.rowToDomain(row);
