@@ -310,11 +310,12 @@ async function ssrfSafeFetch(
     const timeoutMs = 30000;
     let socket: net.Socket;
     let settled = false;
+    let timeout: NodeJS.Timeout | undefined; // declared early so cleanup() is safe before initialization
 
     const cleanup = () => {
-      clearTimeout(timeout);
+      if (timeout !== undefined) clearTimeout(timeout);
       signal?.removeEventListener('abort', onAbort);
-      socket.destroy();
+      socket?.destroy();
     };
 
     const safeReject = (err: Error) => {
@@ -340,7 +341,7 @@ async function ssrfSafeFetch(
     }
     signal?.addEventListener('abort', onAbort, { once: true });
 
-    const timeout = setTimeout(() => safeReject(new Error('Connection timeout')), timeoutMs);
+    timeout = setTimeout(() => safeReject(new Error('Connection timeout')), timeoutMs);
 
     if (isHTTPS) {
       // Connect directly to validatedIP; use hostname only for SNI (servername)
