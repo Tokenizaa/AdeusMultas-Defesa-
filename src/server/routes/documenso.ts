@@ -5,11 +5,12 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
-import { authenticateToken } from '../middleware/auth-middleware';
+import { authenticateToken, AuthenticatedUser } from '../middleware/auth-middleware';
 import { getDocumensoClient, DocumensoClient, isDocumensoConfigured } from '../lib/documenso/client';
 import { getEnvelopeService, EnvelopeService } from '../lib/documenso/envelope-service';
 import { getWebhookHandler, WebhookHandler, documensoWebhookMiddleware } from '../lib/documenso/webhook-handler';
 import { getPollingJob, PollingJob } from '../lib/documenso/polling-job';
+import { caseRepository } from '../db/case-repository';
 import {
   CreateEnvelopeRequest,
   EnvelopeStatus,
@@ -20,10 +21,35 @@ import { logger, LogService } from '@/server/observability/logger';
 const router = Router();
 
 // Lazy initialization: services created on first request, not at import time.
-// Prevents app crash when DOCUMENSO_* env vars are not set (e.g. staging without Documenso).
 let envelopeService: EnvelopeService;
 let webhookHandler: WebhookHandler;
 let pollingJob: PollingJob;
+
+// In-memory envelope ownership registry: envelopeId → { caseId, userId }
+// FASE 1.2: prevents one user accessing another's envelope via IDOR.
+const envelopeOwnership = new Map<string, { caseId: string; userId: string }>();
+
+// Centralized case ownership check (mirrors cases.ts)
+export function canAccessCase(user: AuthenticatedUser | undefined, row: any): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (!row.user_id) return false;
+  return row.user_id === user.id || (!!user.email && row.user_id === user.email);
+}
+
+function denyAccess(user: AuthenticatedUser | undefined, res: Response): boolean {
+  if (!user) { res.status(401).json({ error: 'Não autenticado' }); return true; }
+  res.status(403).json({ error: 'Você não tem permissão para acessar este recurso' }); return true;
+}
+
+// Authorize envelope access: check user owns the case the envelope belongs to
+function authorizeEnvelope(envelopeId: string, user: AuthenticatedUser | undefined): boolean {
+  const meta = envelopeOwnership.get(envelopeId);
+  if (!meta) return false; // unknown envelope
+  const row = caseRepository.get(meta.caseId);
+  if (!row) return false;
+  return canAccessCase(user, row);
+}
 
 function ensureServices(): void {
   if (!envelopeService) {
@@ -90,6 +116,15 @@ router.post('/envelopes', authenticateToken, async (req: Request, res: Response)
       return res.status(400).json({ error: 'At least one signer is required' });
     }
 
+    // FASE 1.2: authorize that authenticated user owns this case
+    const caseRow = caseRepository.get(caseId);
+    if (!caseRow) {
+      return res.status(404).json({ error: 'Caso não encontrado' });
+    }
+    if (!canAccessCase(req.user, caseRow)) {
+      return denyAccess(req.user, res);
+    }
+
     // Convert base64 to buffer
     const pdfBuffer = Buffer.from(pdfBase64, 'base64');
 
@@ -100,6 +135,12 @@ router.post('/envelopes', authenticateToken, async (req: Request, res: Response)
       signers,
       { title, fields, settings, metadata }
     );
+
+    // FASE 1.2: register envelope ownership to prevent IDOR on other endpoints
+    envelopeOwnership.set(envelope.id, {
+      caseId,
+      userId: req.user!.id,
+    });
 
     res.status(201).json({
       success: true,
@@ -139,6 +180,11 @@ router.post('/envelopes/:id/send', authenticateToken, async (req: Request, res: 
   try {
     const { id } = req.params;
 
+    // FASE 1.2: authorize envelope ownership
+    if (!authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
+
     const envelope = await envelopeService.sendEnvelope(id);
 
     res.json({
@@ -175,6 +221,11 @@ router.get('/envelopes/:id/status', authenticateToken, async (req: Request, res:
   try {
     const { id } = req.params;
 
+    // FASE 1.2: authorize envelope ownership
+    if (!authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
+
     const status = await envelopeService.getEnvelopeStatus(id);
 
     res.json({ status });
@@ -199,6 +250,11 @@ router.get('/envelopes/:id/status', authenticateToken, async (req: Request, res:
 router.get('/envelopes/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // FASE 1.2: authorize envelope ownership
+    if (!authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
 
     const envelope = await envelopeService.getEnvelope(id);
 
@@ -228,6 +284,11 @@ router.get(
     try {
       const { id, recipientId } = req.params;
 
+      // FASE 1.2: authorize envelope ownership
+      if (!authorizeEnvelope(id, req.user)) {
+        return denyAccess(req.user, res);
+      }
+
       const signingUrl = await envelopeService.getSigningUrl(id, recipientId);
 
       res.json({ signingUrl, recipientId });
@@ -253,6 +314,11 @@ router.get(
 router.get('/envelopes/:id/download', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // FASE 1.2: authorize envelope ownership before downloading PDF
+    if (!authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
 
     // Check if envelope is completed
     const status = await envelopeService.getEnvelopeStatus(id);
@@ -293,6 +359,11 @@ router.post('/embedding-token', authenticateToken, async (req: Request, res: Res
 
     if (!envelopeId || !recipientId) {
       return res.status(400).json({ error: 'envelopeId and recipientId are required' });
+    }
+
+    // FASE 1.2: authorize envelope ownership
+    if (!authorizeEnvelope(envelopeId, req.user)) {
+      return denyAccess(req.user, res);
     }
 
     const token = await envelopeService.createEmbeddingToken(envelopeId, recipientId, redirectUrl);

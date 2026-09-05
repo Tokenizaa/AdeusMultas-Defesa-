@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
@@ -13,8 +13,26 @@ import {
 } from '../../core/ai/ai-orchestrator';
 import { logger } from '../observability/logger';
 import { CaseDomain } from '../../types';
+import { authenticateToken, AuthenticatedUser } from '../middleware/auth-middleware';
 
 const router = Router();
+
+// Centralized case ownership check (mirrors cases.ts)
+function canAccessCase(user: AuthenticatedUser | undefined, row: any): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (!row.user_id) return false;
+  return row.user_id === user.id || (!!user.email && row.user_id === user.email);
+}
+
+function denyCaseAccess(user: AuthenticatedUser | undefined, res: Response): boolean {
+  if (!user) {
+    res.status(401).json({ error: 'Não autenticado' });
+    return true;
+  }
+  res.status(403).json({ error: 'Você não tem permissão para acessar este caso' });
+  return true;
+}
 
 // ===== IA Controlada (Fase 6) =====
 // A IA atua SOMENTE como refinadora de prosa sobre a minuta determinística.
@@ -33,11 +51,16 @@ function ensureRefinementProviderRegistered() {
 ensureRefinementProviderRegistered();
 
 // Defense Generation & AI Enrichment
-router.post('/api/cases/:id/generate-defense', async (req, res) => {
+router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, res) => {
   try {
     const row = caseRepository.get(req.params.id);
     if (!row) {
       return res.status(404).json({ error: 'Caso não encontrado' });
+    }
+
+    // FASE 1.2: authorization BEFORE any operation on the case
+    if (!canAccessCase(req.user, row)) {
+      return denyCaseAccess(req.user, res);
     }
 
     const domain = CanonicalMapper.rowToDomain(row);
