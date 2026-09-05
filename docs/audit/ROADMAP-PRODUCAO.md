@@ -28,7 +28,7 @@
 
 | ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
 |----|------|----------|--------|-------------|-----------|-----|------------|
-| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | PENDING | — | — | — | — |
+| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | FINDING | — | 3 problemas: (1) Endpoint `/api/ocr/analyze` sem autenticação — `src/server/routes/ocr.ts:25` sem `authenticateToken`; (2) SSRF em `analyzeFromUrl` — `src/server/services/ocr-service.ts:845` faz fetch de URL fornecida pelo usuário sem validação; (3) Upload não funcional — frontend envia apenas `file.name` como texto, sem arquivo real | — | Severidades: Missing auth=Medium, SSRF=High, Upload não implementado=Low (funcionalidade inexistente) |
 | 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | PENDING | 1.1 | — | — | — |
 | 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | PENDING | 1.2 | — | — | — |
 | 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | PENDING | 1.3 | — | — | — |
