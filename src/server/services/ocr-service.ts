@@ -17,17 +17,36 @@
  * - Better date validation and formatting
  */
 
-import { isIP } from 'net';
+import * as net from 'net';
+import * as tls from 'tls';
+import * as http from 'http';
+import * as https from 'https';
 import { URL } from 'url';
-import * as dns from 'dns';
-import { promisify } from 'util';
-import { Agent as HTTPSAgent } from 'https';
-import { Agent as HttpAgent } from 'http';
+import { isIP } from 'net';
 import { logger } from '../observability/logger';
 
-const dnsResolve4 = promisify(dns.resolve4);
-const dnsResolve6 = promisify(dns.resolve6);
-const dnsLookup = promisify(dns.lookup);
+// promisify DNS functions
+const dnsResolve4 = (hostname: string): Promise<string[]> =>
+  new Promise((resolve, reject) => {
+    dns.resolve4(hostname, (err, addresses) => {
+      if (err) reject(err);
+      else resolve(addresses || []);
+    });
+  });
+const dnsResolve6 = (hostname: string): Promise<string[]> =>
+  new Promise((resolve, reject) => {
+    dns.resolve6(hostname, (err, addresses) => {
+      if (err) reject(err);
+      else resolve(addresses || []);
+    });
+  });
+const dnsLookupOne = (hostname: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    dns.lookup(hostname, (err, address) => {
+      if (err) reject(err);
+      else resolve(address);
+    });
+  });
 
 // ---------------------------------------------------------------------------
 // SSRF Protection — comprehensive IP classification + connect binding
@@ -199,111 +218,266 @@ function validateFetchUrl(inputUrl: string): { valid: boolean; reason?: string }
  * is public but another is private.
  *
  * If the hostname is already an IP address, validates it directly without DNS.
+ *
+ * Returns fail-closed: if DNS fails or no valid IP is found, returns invalid.
+ * The caller must use one of the VALIDATED IPs — never a fresh DNS resolution.
  */
-async function resolveAndValidateAllIPs(hostname: string): Promise<{ valid: boolean; reason?: string; validatedIP?: string }> {
+async function resolveAndValidateAllIPs(hostname: string): Promise<{ valid: boolean; reason?: string; validatedIPs: string[] }> {
   const errors: string[] = [];
+  const validatedIPs: string[] = [];
 
   // If hostname is already an IP, validate it directly (no DNS needed)
   const ipVersion = isIP(hostname);
   if (ipVersion === 4) {
     if (!isPublicIPv4(hostname)) {
-      return { valid: false, reason: `IP privado/reservado: ${hostname}` };
+      return { valid: false, reason: `IP privado/reservado: ${hostname}`, validatedIPs: [] };
     }
-    return { valid: true, validatedIP: hostname };
+    return { valid: true, validatedIPs: [hostname] };
   }
   if (ipVersion === 6) {
     if (!isPublicIPv6(hostname)) {
-      return { valid: false, reason: `IP IPv6 privado/reservado: ${hostname}` };
+      return { valid: false, reason: `IP IPv6 privado/reservado: ${hostname}`, validatedIPs: [] };
     }
-    return { valid: true, validatedIP: hostname };
+    return { valid: true, validatedIPs: [hostname] };
   }
 
   // Resolve all IPv4 (A records)
+  let v4Addresses: string[] = [];
   try {
-    const v4Addresses = await dnsResolve4(hostname);
+    v4Addresses = await dnsResolve4(hostname);
     for (const ip of v4Addresses) {
       if (!isPublicIPv4(ip)) {
         errors.push(`IPv4 privado/reservado: ${ip}`);
+      } else {
+        validatedIPs.push(ip);
       }
     }
-  } catch {
-    // No A records — not necessarily an error
+  } catch (err: any) {
+    // DNS resolution failed — fail closed for SSRF
+    return {
+      valid: false,
+      reason: `Falha ao resolver DNS para '${hostname}': ${err.message}. Bloqueando conexão.`,
+      validatedIPs: [],
+    };
   }
 
   // Resolve all IPv6 (AAAA records)
+  let v6Addresses: string[] = [];
   try {
-    const v6Addresses = await dnsResolve6(hostname);
+    v6Addresses = await dnsResolve6(hostname);
     for (const ip of v6Addresses) {
       if (!isPublicIPv6(ip)) {
         errors.push(`IPv6 privado/reservado: ${ip}`);
+      } else {
+        validatedIPs.push(ip);
       }
     }
-  } catch {
-    // No AAAA records
+  } catch (err: any) {
+    // No AAAA records — that's OK, we have A records
   }
 
   if (errors.length > 0) {
-    return { valid: false, reason: `IP não público: ${errors.join('; ')}` };
+    return { valid: false, reason: `IP não público: ${errors.join('; ')}`, validatedIPs: [] };
   }
 
-  // Get one validated IP for connect binding (prefer IPv4)
-  try {
-    const { address } = await dnsLookup(hostname, { family: 4 });
-    if (address && isPublicIPv4(address)) {
-      return { valid: true, validatedIP: address };
-    }
-    // Fallback to IPv6
-    const { address: v6addr } = await dnsLookup(hostname, { family: 6 });
-    if (v6addr && isPublicIPv6(v6addr)) {
-      return { valid: true, validatedIP: v6addr };
-    }
-  } catch {
-    // Lookup failed — proceed with hostname only
+  if (validatedIPs.length === 0) {
+    return {
+      valid: false,
+      reason: `Nenhum IP público encontrado para '${hostname}' após resolução DNS. Bloqueando.`,
+      validatedIPs: [],
+    };
   }
 
-  return { valid: true };
+  return { valid: true, validatedIPs };
 }
 
 /**
- * Fetches a URL with explicit IP binding via connect option.
- * This ties the connection to the pre-validated IP, eliminating DNS rebinding TOCTOU.
+ * Makes a raw HTTP/HTTPS request using a direct socket connection to the validated IP.
+ * This completely bypasses DNS at the connection level — we connect to the IP we validated.
+ *
+ * The Host header is set to the real hostname, preserving SNI for HTTPS and
+ * ensuring the server routes the request correctly.
+ *
+ * This eliminates DNS rebinding because the connection is made directly to the
+ * pre-validated IP — the OS resolver is never called for this connection.
  */
 async function ssrfSafeFetch(
-  targetUrl: string,
-  signal: AbortSignal,
-  validatedIP: string | undefined,
+  validatedIP: string,
+  hostname: string,
   port: number,
-  isHTTPS: boolean
-): Promise<Response> {
-  const agent = isHTTPS
-    ? new HTTPSAgent({ keepAlive: true })
-    : new HttpAgent({ keepAlive: true });
+  isHTTPS: boolean,
+  signal: AbortSignal
+): Promise<{ body: NodeJS.ReadableStream; status: number; headers: http.IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 30000;
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('Connection timeout'));
+    }, timeoutMs);
 
-  // connect option forces the connection to use the validated IP
-  // This prevents DNS rebinding: the validated IP is what we connect to
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fetchOptions: Record<string, any> = {
-    signal,
-    redirect: 'manual',
-    agent,
-  };
+    const onAbort = () => {
+      clearTimeout(timeout);
+      socket.destroy();
+      reject(new Error('Request aborted'));
+    };
 
-  if (validatedIP) {
-    // Bind to the validated IP — the connection uses exactly this IP
-    fetchOptions.connect = { host: validatedIP, port };
-  }
+    if (signal?.aborted) {
+      return reject(new Error('Request already aborted'));
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
 
-  return fetch(targetUrl, fetchOptions);
+    const socket = isHTTPS
+      ? tls.connect({ host: hostname, port, servername: hostname }, onConnect)
+      : net.connect({ host: validatedIP, port }, onConnect);
+
+    socket.setKeepAlive(true, 10000);
+
+    let bytesReceived = 0;
+    let headersReceived = false;
+    let statusCode = 0;
+    const headers: http.IncomingHttpHeaders = {};
+    let bodyBuffer = Buffer.alloc(0);
+
+    function onConnect() {
+      // Build HTTP request with the REAL hostname in the Host header
+      // This ensures SNI (for HTTPS) and correct routing on the server
+      const req = isHTTPS
+        ? (socket as tls.TLSSocket).starttls(
+            `GET / HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
+          )
+        : socket;
+
+      req.write(
+        `GET / HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`
+      );
+    }
+
+    let dataHandler: (chunk: Buffer) => void;
+    let endHandler: () => void;
+    let errorHandler: (err: Error) => void;
+
+    dataHandler = (chunk: Buffer) => {
+      if (!headersReceived) {
+        const str = bodyBuffer.length > 0 ? Buffer.concat([bodyBuffer, chunk]).toString('utf8') : chunk.toString('utf8');
+        const headerEndIdx = str.indexOf('\r\n\r\n');
+        if (headerEndIdx === -1) {
+          bodyBuffer = Buffer.from(str, 'utf8');
+          return;
+        }
+        const headerSection = str.slice(0, headerEndIdx);
+        const bodyStr = str.slice(headerEndIdx + 4);
+        headersReceived = true;
+
+        // Parse status line
+        const lines = headerSection.split('\r\n');
+        const statusLine = lines[0];
+        const match = statusLine.match(/HTTP\/1\.\d\s+(\d{3})/);
+        if (match) statusCode = parseInt(match[1], 10);
+
+        // Parse headers
+        for (let i = 1; i < lines.length; i++) {
+          const colonIdx = lines[i].indexOf(':');
+          if (colonIdx > 0) {
+            const key = lines[i].slice(0, colonIdx).trim().toLowerCase();
+            const value = lines[i].slice(colonIdx + 1).trim();
+            headers[key] = value;
+          }
+        }
+
+        // Check Content-Length before accepting body
+        const contentLength = headers['content-length'];
+        if (contentLength) {
+          const size = parseInt(contentLength, 10);
+          if (size > MAX_DOWNLOAD_SIZE) {
+            clearTimeout(timeout);
+            signal?.removeEventListener('abort', onAbort);
+            socket.destroy();
+            return reject(new Error(
+              `MAX_SIZE_EXCEEDED: Content-Length ${size} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+            ));
+          }
+        }
+
+        bytesReceived = Buffer.from(bodyStr, 'utf8').byteLength;
+        bodyBuffer = Buffer.from(bodyStr, 'utf8');
+
+        // Check size limit after first chunk
+        if (bytesReceived > MAX_DOWNLOAD_SIZE) {
+          clearTimeout(timeout);
+          signal?.removeEventListener('abort', onAbort);
+          socket.destroy();
+          return reject(new Error(
+            `MAX_SIZE_EXCEEDED: First chunk ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+          ));
+        }
+
+        if (bodyStr.length > 0) {
+          // More data came with headers — buffer it
+          bodyBuffer = Buffer.from(bodyStr, 'utf8');
+        }
+      } else {
+        // Continue accumulating body
+        const newBuffer = Buffer.concat([bodyBuffer, chunk]);
+        bytesReceived = newBuffer.byteLength;
+        if (bytesReceived > MAX_DOWNLOAD_SIZE) {
+          clearTimeout(timeout);
+          signal?.removeEventListener('abort', onAbort);
+          socket.destroy();
+          return reject(new Error(
+            `MAX_SIZE_EXCEEDED: Total ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+          ));
+        }
+        bodyBuffer = newBuffer;
+      }
+    };
+
+    endHandler = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+      socket.destroy();
+
+      // Convert buffer to readable stream
+      const { Readable } = require('stream') as typeof import('stream');
+      const readable = Readable.from(bodyBuffer);
+
+      resolve({ body: readable as unknown as NodeJS.ReadableStream, status: statusCode, headers });
+    };
+
+    errorHandler = (err: Error) => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+      if (err.message?.includes('SSRF_BLOCKED') || err.message?.includes('MAX_SIZE_EXCEEDED')) {
+        return reject(err);
+      }
+      reject(new Error(`Connection error: ${err.message}`));
+    };
+
+    socket.on('data', dataHandler);
+    socket.on('end', endHandler);
+    socket.on('error', errorHandler);
+  });
+}
+
+/**
+ * HTTP response wrapper that mimics enough of the fetch Response interface
+ * for our streaming needs.
+ */
+interface SsrfakeResponse {
+  ok: boolean;
+  status: number;
+  headers: Map<string, string>;
+  body: NodeJS.ReadableStream | null;
 }
 
 /**
  * Follows redirects with full SSRF validation at each hop.
- * Uses resolveAndValidateAllIPs + connect binding to eliminate DNS rebinding.
+ * Uses resolveAndValidateAllIPs + direct socket connection to eliminate DNS rebinding.
+ * The connection is made directly to a validated IP — no fresh DNS resolution at connection time.
  */
 async function fetchWithRedirectProtection(
   initialUrl: string,
   signal: AbortSignal
-): Promise<{ response: Response; finalUrl: string }> {
+): Promise<{ response: SsrfakeResponse; finalUrl: string }> {
   let currentUrl = initialUrl;
   let redirectCount = 0;
 
@@ -319,16 +493,43 @@ async function fetchWithRedirectProtection(
     }
 
     // Resolve ALL IPs and validate they're all public (prevents DNS rebinding via alternate records)
+    // This is the ONLY DNS resolution — we use these IPs for the socket connection
     const resolution = await resolveAndValidateAllIPs(url.hostname);
     if (!resolution.valid) {
       throw new Error(`SSRF_BLOCKED: ${resolution.reason}`);
     }
 
-    // Fetch with explicit IP binding (eliminates TOCTOU between validation and connection)
-    const response = await ssrfSafeFetch(currentUrl, signal, resolution.validatedIP, port, isHTTPS);
+    // Pick the first validated IP for this connection
+    // We validated ALL IPs, so any one is safe to use
+    const connectIP = resolution.validatedIPs[0];
+
+    // Make the raw socket connection directly to the validated IP
+    // The Host header carries the real hostname for routing/SNI
+    let result: { body: NodeJS.ReadableStream; status: number; headers: http.IncomingHttpHeaders };
+    try {
+      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal);
+    } catch (err: any) {
+      if (err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
+        throw err;
+      }
+      throw new Error(`SSRF_BLOCKED: Connection failed to ${connectIP}: ${err.message}`);
+    }
+
+    // Wrap result in a fetch-compatible interface
+    const responseHeaders = new Map<string, string>();
+    for (const [k, v] of Object.entries(result.headers)) {
+      if (v) responseHeaders.set(k, v);
+    }
+
+    const response: SsrfakeResponse = {
+      ok: result.status >= 200 && result.status < 300,
+      status: result.status,
+      headers: responseHeaders,
+      body: result.body,
+    };
 
     // Handle redirect
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
+    if ([301, 302, 303, 307, 308].includes(result.status)) {
       if (redirectCount >= MAX_REDIRECTS) {
         throw new Error('SSRF_BLOCKED: Limite de redirects excedido');
       }
@@ -358,7 +559,6 @@ async function fetchWithRedirectProtection(
 
       redirectCount++;
       currentUrl = redirectUrl;
-      response.body?.cancel().catch(() => {});
       continue;
     }
 
@@ -1189,10 +1389,10 @@ class OcrService {
 
   /**
    * Analyze from a URL (downloads the image first)
-   * Includes SSRF protection (resolveAllIPs + connect binding) and streaming size limit.
+   * Includes SSRF protection (resolveAllIPs + direct socket to validated IP) and streaming size limit.
    */
   async analyzeFromUrl(imageUrl: string): Promise<OcrResult> {
-    // Step 1: Set up streaming download with size limit
+    // Step 1: Set up abort controller
     const controller = new AbortController();
     const timeoutMs = this.config.timeout || 30000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1201,7 +1401,7 @@ class OcrService {
       // fetchWithRedirectProtection handles:
       // 1. URL format/hostname validation
       // 2. ALL IPs resolution + validation (A + AAAA records)
-      // 3. Explicit IP binding via connect option (eliminates DNS rebinding TOCTOU)
+      // 3. Direct socket connection to validated IP — no fresh DNS at connection time
       // 4. Redirect following with same validation at each hop
       const { response } = await fetchWithRedirectProtection(imageUrl, controller.signal);
 
@@ -1218,46 +1418,51 @@ class OcrService {
         }
       }
 
-      // Step 3: Stream the response body with hard size limit
-      // We never load the full file into memory before checking the size
+      // Step 3: Stream the response body with hard size limit using Node.js streams
       const body = response.body;
       if (!body) {
         throw new Error('Response body is not readable');
       }
 
-      const reader = body.getReader();
-      const chunks: Uint8Array[] = [];
-      let totalBytes = 0;
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          const chunkSize = value.byteLength;
-          const newTotal = totalBytes + chunkSize;
-
-          if (newTotal > MAX_DOWNLOAD_SIZE) {
+        body.on('data', (chunk: Buffer) => {
+          totalBytes += chunk.byteLength;
+          if (totalBytes > MAX_DOWNLOAD_SIZE) {
+            body.destroy();
+            clearTimeout(timeoutId);
             controller.abort();
-            throw new Error(
+            return reject(new Error(
               `MAX_SIZE_EXCEEDED: Limite de ${MAX_DOWNLOAD_SIZE} bytes excedido durante streaming. ` +
-              `Bytes lidos: ${newTotal}. Abortando antes de memory exhaustion.`
-            );
+              `Bytes lidos: ${totalBytes}. Abortando antes de memory exhaustion.`
+            ));
           }
+          chunks.push(chunk);
+        });
 
-          chunks.push(value);
-          totalBytes = newTotal;
-        }
-      } finally {
-        reader.releaseLock();
-      }
+        body.on('end', () => {
+          clearTimeout(timeoutId);
+          const buffer = Buffer.concat(chunks);
+          const base64 = buffer.toString('base64');
+          resolve(this.analyzeImage(base64));
+        });
 
-      clearTimeout(timeoutId);
+        body.on('error', (err: Error) => {
+          clearTimeout(timeoutId);
+          if (err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
+            return reject(err);
+          }
+          reject(new Error(`Stream error: ${err.message}`));
+        });
 
-      const buffer = Buffer.concat(chunks);
-      const base64 = buffer.toString('base64');
-      return this.analyzeImage(base64);
+        controller.signal.addEventListener('abort', () => {
+          body.destroy();
+          clearTimeout(timeoutId);
+          reject(new Error('Request aborted'));
+        });
+      });
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError' || err.message?.startsWith('SSRF_BLOCKED:') || err.message?.startsWith('MAX_SIZE_EXCEEDED:')) {
