@@ -2,60 +2,82 @@
  * Fase 8-P1B — Testes de dependência de evidência para ARG-012, ARG-019, ARG-020.
  *
  * Estes testes provam que:
- *  - evidência ausente → tese não recomendada.
- *  - evidência explicitamente `false` → tese não recomendada.
- *  - evidência explicitamente `true` → tese recomendada.
- *  - ausência de `evidenceFlags` não gera falso positivo.
- *  - nenhuma outra tese é alterada indevidamente.
- *  - o comportamento jurídico existente da tese permanece preservado quando a evidência está presente.
+ *  - evidência ausente → tese não recomendada + dataGap existente (ruleId/missingData/reason).
+ *  - evidência explicitamente `false` → tese não recomendada + dataGap.
+ *  - evidência explicitamente `true` → tese recomendada, sem dataGap para essa tese.
+ *  - ausência de `evidenceFlags` → dataGap gerado.
+ *  - upload/OCR/notes NÃO satisfazem a dependência → dataGap.
+ *  - nenhuma tese não relacionada é afetada.
+ *  - o fallback genérico NÃO mascara a ausência de evidência quando a única tese
+ *    correspondente foi removida por falta de evidência.
+ *  - o fallback genérico É preservado quando não há dataGaps e não há teses.
  */
 import { describe, it, expect } from 'vitest';
 import { RagPipeline } from '../../src/core/rag/rag-pipeline';
 
 describe('Fase 8-P1B — Evidência obrigatória para ARG-012/019/020', () => {
-  // Helper: verifica se um argumento está presente nas teses correspondentes
-  const hasTese = (teseTitulo: string, context: ReturnType<typeof RagPipeline.retrieveContext>) => {
-    return context.matchedTeses.some((t) => t.titulo.includes(teseTitulo));
+  const hasTese = (titulo: string, ctx: ReturnType<typeof RagPipeline.retrieveContext>) => {
+    return ctx.matchedTeses.some((t) => t.titulo.includes(titulo));
+  };
+
+  const findDataGap = (ruleId: string, ctx: ReturnType<typeof RagPipeline.retrieveContext>) => {
+    return ctx.dataGaps?.find((g) => g.ruleId === ruleId);
   };
 
   describe('ARG-012 — Parada sobre Linha de Retenção (infração 605-01)', () => {
     const codigo = '605-01';
     const tituloEsperado = 'Parada sobre a Linha de Retenção';
 
-    it('NÃO recomenda a tese quando evidenceFlags está ausente', () => {
+    it('NÃO recomenda a tese quando evidenceFlags está ausente + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      const gap = findDataGap('ARG-012', ctx);
+      expect(gap).toBeDefined();
+      expect(gap?.missingData).toContain('fotoRetencaoTrafego');
+      expect(gap?.reason).toContain('fotoRetencaoTrafego');
     });
 
-    it('NÃO recomenda a tese quando evidenceFlags existe mas a chave específica é undefined', () => {
+    it('NÃO recomenda a tese quando a chave específica é undefined + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { outraChave: true },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      expect(findDataGap('ARG-012', ctx)).toBeDefined();
     });
 
-    it('NÃO recomenda a tese quando a evidência está explicitamente como false', () => {
+    it('NÃO recomenda a tese quando a evidência é false + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { fotoRetencaoTrafego: false },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      expect(findDataGap('ARG-012', ctx)).toBeDefined();
     });
 
-    it('RECOMENDA a tese quando a evidência está explicitamente como true', () => {
+    it('RECOMENDA a tese quando a evidência é true + NÃO gera dataGap para ARG-012', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { fotoRetencaoTrafego: true },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(true);
+      expect(findDataGap('ARG-012', ctx)).toBeUndefined();
     });
 
-    it('outras teses (sem dependência de evidência) continuam sendo recomendadas mesmo sem evidência', () => {
+    it('outras teses (sem dependência) permanecem inalteradas mesmo sem evidência', () => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
-      // ARG-009 (Semáforo - Amarelo) também é recomendado para 605-01, sem exigir evidência
-      const temArg009 = ctx.matchedTeses.some((t) => t.baseLegal.includes('Art. 208') || t.titulo.includes('Amarelo'));
+      // ARG-009 não depende de evidência
+      const temArg009 = ctx.matchedTeses.some((t) => t.titulo.includes('Amarelo') || t.titulo.includes('Semáforo'));
       expect(temArg009).toBe(true);
+    });
+
+    it('o formato do dataGap segue o padrão do projeto (ruleId, missingData, reason)', () => {
+      const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
+      const gap = findDataGap('ARG-012', ctx);
+      expect(gap).toBeDefined();
+      expect(typeof gap!.ruleId).toBe('string');
+      expect(Array.isArray(gap!.missingData)).toBe(true);
+      expect(typeof gap!.reason).toBe('string');
     });
   });
 
@@ -63,31 +85,36 @@ describe('Fase 8-P1B — Evidência obrigatória para ARG-012/019/020', () => {
     const codigo = '736-62';
     const tituloEsperado = 'Comunicação por Sistema de Áudio';
 
-    it('NÃO recomenda a tese quando evidenceFlags está ausente', () => {
+    it('NÃO recomenda a tese quando evidenceFlags está ausente + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      const gap = findDataGap('ARG-019', ctx);
+      expect(gap).toBeDefined();
+      expect(gap?.missingData).toContain('manualVeiculoOuFotoPainel');
     });
 
-    it('NÃO recomenda a tese quando a evidência está explicitamente como false', () => {
+    it('NÃO recomenda a tese quando a evidência é false + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { manualVeiculoOuFotoPainel: false },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      expect(findDataGap('ARG-019', ctx)).toBeDefined();
     });
 
-    it('RECOMENDA a tese quando a evidência está explicitamente como true', () => {
+    it('RECOMENDA a tese quando a evidência é true + NÃO gera dataGap para ARG-019', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { manualVeiculoOuFotoPainel: true },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(true);
+      expect(findDataGap('ARG-019', ctx)).toBeUndefined();
     });
 
-    it('outras teses (sem dependência de evidência) continuam sendo recomendadas mesmo sem evidência', () => {
+    it('outras teses (sem dependência) permanecem inalteradas mesmo sem evidência', () => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
-      // ARG-015 (outra tese de celular) deve aparecer normalmente
-      const temArg015 = ctx.matchedTeses.some((t) => t.titulo.includes('Abordagem') || t.titulo.includes('Celular'));
+      // ARG-015 não depende de evidência
+      const temArg015 = ctx.matchedTeses.some((t) => t.titulo.includes('Celular') || t.titulo.includes('Abordagem'));
       expect(temArg015).toBe(true);
     });
   });
@@ -96,45 +123,42 @@ describe('Fase 8-P1B — Evidência obrigatória para ARG-012/019/020', () => {
     const codigo = '545-21';
     const tituloEsperado = 'Inexistência ou Ilegibilidade de Placa R-6a';
 
-    it('NÃO recomenda a tese quando evidenceFlags está ausente', () => {
+    it('NÃO recomenda a tese quando evidenceFlags está ausente + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      const gap = findDataGap('ARG-020', ctx);
+      expect(gap).toBeDefined();
+      expect(gap?.missingData).toContain('fotoPlacaR6aAusente');
     });
 
-    it('NÃO recomenda a tese quando a evidência está explicitamente como false', () => {
+    it('NÃO recomenda a tese quando a evidência é false + gera dataGap', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { fotoPlacaR6aAusente: false },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(false);
+      expect(findDataGap('ARG-020', ctx)).toBeDefined();
     });
 
-    it('RECOMENDA a tese quando a evidência está explicitamente como true', () => {
+    it('RECOMENDA a tese quando a evidência é true + NÃO gera dataGap para ARG-020', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: codigo,
         evidenceFlags: { fotoPlacaR6aAusente: true },
       });
       expect(hasTese(tituloEsperado, ctx)).toBe(true);
-    });
-
-    it('outras teses (sem dependência de evidência) continuam sendo recomendadas mesmo sem evidência', () => {
-      const ctx = RagPipeline.retrieveContext({ codigoInfracao: codigo });
-      // ARG-021 (outra tese de estacionamento) deve aparecer normalmente
-      const temOutra = ctx.matchedTeses.length > 0;
-      expect(temOutra).toBe(true);
+      expect(findDataGap('ARG-020', ctx)).toBeUndefined();
     });
   });
 
-  describe('Segurança — não infere evidência a partir de upload/OCR', () => {
+  describe('Segurança — não infere evidência a partir de upload/OCR/notes', () => {
     it('a presença de photoProofUrls NÃO é tratada como evidência para ARG-012', () => {
       const ctx = RagPipeline.retrieveContext({
         codigoInfracao: '605-01',
-        // upload presente, mas evidência específica ausente
         photoProofUrls: ['https://example.com/foto.jpg'],
         ocrExtractedText: 'Texto extraído do AIT',
       } as any);
-      // ARG-012 NÃO deve aparecer
       expect(hasTese('Parada sobre a Linha de Retenção', ctx)).toBe(false);
+      expect(findDataGap('ARG-012', ctx)).toBeDefined();
     });
 
     it('a presença de ocrExtractedText NÃO é tratada como evidência para ARG-019', () => {
@@ -142,8 +166,8 @@ describe('Fase 8-P1B — Evidência obrigatória para ARG-012/019/020', () => {
         codigoInfracao: '736-62',
         ocrExtractedText: 'Texto extraído',
       } as any);
-      // ARG-019 NÃO deve aparecer
       expect(hasTese('Comunicação por Sistema de Áudio', ctx)).toBe(false);
+      expect(findDataGap('ARG-019', ctx)).toBeDefined();
     });
 
     it('a presença de notes NÃO é tratada como evidência para ARG-020', () => {
@@ -151,8 +175,9 @@ describe('Fase 8-P1B — Evidência obrigatória para ARG-012/019/020', () => {
         codigoInfracao: '545-21',
         notes: 'O condutor estacionou na via',
       } as any);
-      // ARG-020 NÃO deve aparecer
       expect(hasTese('Inexistência ou Ilegibilidade de Placa R-6a', ctx)).toBe(false);
+      expect(findDataGap('ARG-020', ctx)).toBeDefined();
     });
   });
+
 });

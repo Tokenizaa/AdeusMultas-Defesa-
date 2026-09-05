@@ -57,9 +57,17 @@ export class RagPipeline {
       enderecoFisico: string;
       prazoDias: number;
     };
+    dataGaps?: {
+      ruleId: string;
+      missingData: string[];
+      reason: string;
+    }[];
   } {
     const matchedInfraction = this.findInfraction(infraction?.codigoInfracao || infraction?.descricaoInfracao || '');
-    
+
+    // Fase 8-P1B: coleta dataGaps quando evidência obrigatória está ausente
+    const dataGaps: { ruleId: string; missingData: string[]; reason: string }[] = [];
+
     // Matched legal arguments
     const matchedTeses = ARGUMENTS_CATALOG.filter((arg) => {
       if (matchedInfraction?.recommendedArgumentCodes?.includes(arg.id)) {
@@ -68,6 +76,11 @@ export class RagPipeline {
           const key = EVIDENCE_DEPENDENT_ARGUMENTS[arg.id];
           const evidence = infraction?.evidenceFlags?.[key];
           if (evidence !== true) {
+            dataGaps.push({
+              ruleId: arg.id,
+              missingData: [key],
+              reason: `Evidência obrigatória ausente para a tese ${arg.id}: esperado evidenceFlags[${key}] === true`,
+            });
             return false;
           }
         }
@@ -121,16 +134,31 @@ export class RagPipeline {
         }
       : undefined;
 
-    return {
-      matchedTeses: matchedTeses.length > 0 ? matchedTeses : [
+    // Decide matchedTeses final:
+    // - Se houve matches removidos por evidência ausente, NÃO usar fallback genérico.
+    // - Se a infração não foi reconhecida e não há teses, usar fallback genérico (preservado).
+    let finalMatchedTeses: Array<{ titulo: string; baseLegal: string; categoria: string; resolucoes?: string[] }>;
+    if (matchedTeses.length > 0) {
+      finalMatchedTeses = matchedTeses;
+    } else if (dataGaps.length > 0) {
+      // Evidência ausente mascarou teses -> não devolver tese genérica.
+      finalMatchedTeses = [];
+    } else {
+      // Sem matches e sem dataGaps -> fallback genérico preservado.
+      finalMatchedTeses = [
         {
           titulo: 'Aferição Metrológica do Radar Vencida (Res. 798/2020)',
           baseLegal: 'Art. 280, §2º do CTB e Portaria INMETRO 158/2022',
           categoria: 'merito',
         }
-      ],
+      ];
+    }
+
+    return {
+      matchedTeses: finalMatchedTeses,
       potentialNullities,
       organInfo,
+      dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
     };
   }
 
