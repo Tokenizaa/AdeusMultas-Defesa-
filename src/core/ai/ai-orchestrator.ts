@@ -172,6 +172,7 @@ export interface PipelineResult {
 /**
  * Fluxo completo determinístico -> IA -> validador -> final (Fase 6).
  * IA refinamento só entra se passar na validação; caso contrário, determinístico.
+ * Quality Gate BLOCKED = lança erro (FAIL CLOSED) — não retorna draft bloqueado.
  */
 export async function runControlledPipeline(input: PipelineInput, opts?: { tone?: string }): Promise<PipelineResult> {
   // 1. Base determinística validada.
@@ -222,40 +223,27 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
   };
 
   // 4. FASE 8 — Quality Gate de Reconciliação Integral (se dados disponíveis).
-  let qualityGateReport: QualityGateReport | undefined;
+  // FAIL CLOSED: se gate bloquear, LANÇA ERRO — não retorna draft, não salva, não avança.
   if (input.onboardingPayload && input.canonicalCase) {
-    qualityGateReport = runFullQualityGate(
+    const qualityGateReport = runFullQualityGate(
       input.onboardingPayload,
       input.canonicalCase,
       input.analysis,
       finalDraft.finalDraft || finalDraft.fullDraftText
     );
 
-    // Se gate bloquear, não entregar documento — retornar erro estruturado.
+    // Se gate bloquear: ERRO — não entrega documento, não persiste, não avança.
     if (qualityGateReport.blocked) {
-      const blockedDraft: DefenseDraft = {
-        ...finalDraft,
-        validationStatus: 'blocked',
-        integrityScore: qualityGateReport.score,
-        integrityIssues: qualityGateReport.checks
-          .filter((c) => !c.passed)
-          .map((c) => ({
-            code: c.check,
-            severity: c.severity,
-            message: c.message,
-          })),
-      };
-      return {
-        draft: blockedDraft,
-        aiUses: controlled.applied ? 'controlled_refinement' : 'deterministic',
-        controlled,
-        validationReport: validateDraft(blockedDraft),
-        qualityGateReport,
-      };
+      const failedChecks = qualityGateReport.checks
+        .filter((c) => !c.passed)
+        .map((c) => `${c.check}: ${c.message}`)
+        .join('; ');
+      throw new Error(`Quality Gate BLOCKED: ${failedChecks}`);
     }
 
     // Gate passou: atualizar score de integridade com score do gate.
     finalDraft.integrityScore = qualityGateReport.score;
+    finalDraft.qualityGateReport = qualityGateReport;
   }
 
   return {
@@ -263,7 +251,7 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
     aiUses: controlled.applied ? 'controlled_refinement' : 'deterministic',
     controlled,
     validationReport: validateDraft(finalDraft),
-    qualityGateReport,
+    qualityGateReport: finalDraft.qualityGateReport,
   };
 }
 

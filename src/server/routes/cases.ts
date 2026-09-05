@@ -378,25 +378,39 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   // FASE 8: Obter payload de onboarding para quality gate
   const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
 
-  const pipelineResult = await runControlledPipeline(
-    {
-      analysis: canonicalAnalysis || {
-        recommendedArguments: canonicalArguments,
-        detectedInconsistencies: [],
-        recommendedProcedure: canonicalProcedure,
-        overallSuccessRate: 50,
-        caseId: domain.id,
-        id: `anl_${Date.now()}`,
-        competentBody: domain.infraction?.autuadorBody || '',
-        summaryReasoning: 'análise gerada para defesa',
-        createdAt: new Date().toISOString(),
+  let pipelineResult: any;
+  try {
+    pipelineResult = await runControlledPipeline(
+      {
+        analysis: canonicalAnalysis || {
+          recommendedArguments: canonicalArguments,
+          detectedInconsistencies: [],
+          recommendedProcedure: canonicalProcedure,
+          overallSuccessRate: 50,
+          caseId: domain.id,
+          id: `anl_${Date.now()}`,
+          competentBody: domain.infraction?.autuadorBody || '',
+          summaryReasoning: 'análise gerada para defesa',
+          createdAt: new Date().toISOString(),
+        },
+        draft: defense,
+        onboardingPayload,
+        canonicalCase: domain,
       },
-      draft: defense,
-      onboardingPayload,
-      canonicalCase: domain,
-    },
-    { tone: 'formal_rigorous' }
-  );
+      { tone: 'formal_rigorous' }
+    );
+  } catch (err: any) {
+    // FAIL CLOSED (Fase 5): Quality Gate BLOCKED → não salva, não avança, retorna erro.
+    if (err.message?.startsWith('Quality Gate BLOCKED:')) {
+      logger.warn('system', 'quality-gate', 'blocked', err.message, { caseId: domain.id });
+      return res.status(422).json({
+        error: 'Documento não atende aos critérios de qualidade obrigatórios.',
+        details: err.message.replace('Quality Gate BLOCKED: ', ''),
+        code: 'QUALITY_GATE_BLOCKED',
+      });
+    }
+    throw err;
+  }
 
   defense.fullDraftText = pipelineResult.draft.fullDraftText;
   // selectedArgumentIds no response reflete APENAS a seleção autorizada pelo servidor.

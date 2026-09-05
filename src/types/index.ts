@@ -612,6 +612,11 @@ export interface DefenseDraft {
    * Versão do motor/assembly que produziu a minuta (rastreabilidade).
    */
   engineVersion?: string;
+   /**
+    * Relatório do Quality Gate (Fase 8).
+    * Preenchido apenas quando onboardingPayload e canonicalCase estão disponíveis.
+    */
+   qualityGateReport?: QualityGateReport;
 }
 
 /**
