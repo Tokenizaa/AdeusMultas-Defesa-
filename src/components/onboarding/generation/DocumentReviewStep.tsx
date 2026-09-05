@@ -105,38 +105,88 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                   Evidências Necessárias:
                 </span>
                 <div className="space-y-2">
-                  {analysis.recommendedArguments.flatMap((arg) => {
-                    const argModel = ARGUMENTS_CATALOG.find((a) => a.id === arg.id);
-                    if (!argModel) return [];
-                    return [
-                      ...(argModel.requiredDocuments || []).map((req) => ({ req, argTitle: arg.title })),
-                      ...(argModel.requirements || []).map((req) => ({ req, argTitle: arg.title })),
-                    ];
-                  }).reduce((acc, item) => {
-                    if (!acc.some((i) => i.req === item.req)) acc.push(item);
-                    return acc;
-                  }, [] as { req: string; argTitle: string }[]).map((item) => {
-                    const gap = analysis.dataGaps?.find((g) =>
-                      item.req.toLowerCase().includes(g.missingData[0]?.toLowerCase()) ||
-                      g.reason.toLowerCase().includes(item.req.toLowerCase().substring(0, 20))
-                    );
-                    const status: 'PRESENTE' | 'AUSENTE' | 'PENDENTE' = gap ? 'AUSENTE' : 'PENDENTE';
-                    return { ...item, status };
-                  }).map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-[10px]">
-                      {item.status === 'PRESENTE' ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      ) : item.status === 'AUSENTE' ? (
-                        <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                      ) : (
-                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-slate-700 leading-snug">{item.req}</p>
-                        <p className="text-slate-400 font-mono text-[9px] mt-0.5">Tese: {item.argTitle}</p>
-                      </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    // Mapa canônico: argumento → chave de evidenceFlag (P1B)
+                    const ARG_EVIDENCE_KEY: Record<string, string> = {
+                      'ARG-012': 'fotoRetencaoTrafego',
+                      'ARG-019': 'manualVeiculoOuFotoPainel',
+                      'ARG-020': 'fotoPlacaR6aAusente',
+                    };
+
+                    // Items com argumento e texto
+                    type EvidenceItem = { req: string; argIds: string[] };
+                    const allItems: EvidenceItem[] = [];
+
+                    for (const arg of analysis.recommendedArguments) {
+                      const argModel = ARGUMENTS_CATALOG.find((a) => a.id === arg.id);
+                      if (!argModel) continue;
+                      // requiredDocuments são evidências documentais (mapeáveis para flags)
+                      for (const req of argModel.requiredDocuments || []) {
+                        const existing = allItems.find((i) => i.req === req);
+                        if (existing) {
+                          if (!existing.argIds.includes(arg.id)) existing.argIds.push(arg.id);
+                        } else {
+                          allItems.push({ req, argIds: [arg.id] });
+                        }
+                      }
+                      // requirements são condições, não evidências documentais → ficam como pendentes
+                      for (const req of argModel.requirements || []) {
+                        const existing = allItems.find((i) => i.req === req);
+                        if (existing) {
+                          if (!existing.argIds.includes(arg.id)) existing.argIds.push(arg.id);
+                        } else {
+                          allItems.push({ req, argIds: [arg.id] });
+                        }
+                      }
+                    }
+
+                    return allItems.map((item, idx) => {
+                      // Determina status por argumento
+                      const statuses: ('PRESENTE' | 'AUSENTE' | 'PENDENTE')[] = item.argIds.map((argId) => {
+                        // Se há dataGap para este argumento → AUSENTE
+                        const hasGap = analysis.dataGaps?.some((g) => g.ruleId === argId);
+                        if (hasGap) return 'AUSENTE' as const;
+                        // Se há flag definida para este argumento
+                        const flagKey = ARG_EVIDENCE_KEY[argId];
+                        if (flagKey !== undefined) {
+                          const flagValue = infractionData.evidenceFlags?.[flagKey];
+                          if (flagValue === true) return 'PRESENTE' as const;
+                          if (flagValue === false) return 'AUSENTE' as const;
+                        }
+                        return 'PENDENTE' as const;
+                      });
+
+                      // Se ao menos um argumento tem a evidência presente → PRESENTE
+                      // Se ao menos um tem AUSENTE (gap ou false) e nenhum PRESENTE → AUSENTE
+                      // Senão → PENDENTE
+                      const hasPresente = statuses.includes('PRESENTE');
+                      const hasAusente = statuses.includes('AUSENTE');
+                      const status: 'PRESENTE' | 'AUSENTE' | 'PENDENTE' =
+                        hasPresente ? 'PRESENTE' : hasAusente ? 'AUSENTE' : 'PENDENTE';
+
+                      const argTitles = item.argIds
+                        .map((id) => analysis.recommendedArguments.find((a) => a.id === id)?.title)
+                        .filter(Boolean);
+
+                      return (
+                        <div key={idx} className="flex items-start gap-2 text-[10px]">
+                          {status === 'PRESENTE' ? (
+                            <CheckCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                          ) : status === 'AUSENTE' ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                          ) : (
+                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-slate-700 leading-snug">{item.req}</p>
+                            <p className="text-slate-400 font-mono text-[9px] mt-0.5">
+                              {argTitles.join(', ')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                   {analysis.dataGaps && analysis.dataGaps.length > 0 && (
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
                       <p className="text-[10px] text-amber-700 font-bold flex items-center gap-1">
