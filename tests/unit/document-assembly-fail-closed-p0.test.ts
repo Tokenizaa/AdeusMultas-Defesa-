@@ -15,6 +15,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DocumentAssemblyEngine } from '@/core/documents/document-assembly-engine';
 import { ARGUMENTS_CATALOG } from '@/core/arguments/arguments-catalog';
+import { DocumentBlockModel } from '@/core/templates/document-blocks';
+
+// ─── hoisted mock para DOCUMENT_BLOCKS ───
+const mockBlocks = vi.hoisted(() => [
+  {
+    id: 'BLK-TEST-UNRESOLVED',
+    title: 'Test Unresolved',
+    contentTemplate: 'Conteúdo com {{PLACEHOLDER_NAO_EXISTENTE}} aqui.',
+    recommendedProcedures: ['recurso_jari'],
+  } as DocumentBlockModel,
+  {
+    id: 'BLK-TEST-UNRESOLVED-2',
+    title: 'Test Unresolved 2',
+    contentTemplate: 'Outro {{PLACEHOLDER_NAO_EXISTENTE_2}} aqui.',
+    recommendedProcedures: ['recurso_jari'],
+  } as DocumentBlockModel,
+]);
+
+vi.mock('@/core/templates/document-blocks', async (orig) => {
+  const actual = await orig<typeof import('@/core/templates/document-blocks')>();
+  return {
+    ...actual,
+    DOCUMENT_BLOCKS: [...actual.DOCUMENT_BLOCKS, ...mockBlocks],
+  };
+});
 
 // ─── Mocks mínimos ───
 const mockPayloadBase = {
@@ -83,23 +108,24 @@ describe('Fase 4 — DocumentAssemblyEngine FAIL CLOSED', () => {
   });
 
   it('5. Placeholder não resolvido → validation.isValid === false', () => {
-    // Criar payload que deixará placeholder não resolvido
-    // Usando um block customizado com placeholder inexistente
+    // Usa bloco mockado com placeholder inexistente
     const draft = DocumentAssemblyEngine.assemble({
       ...mockPayloadBase,
-      selectedBlockIds: ['BLK-001'], // bloco que existe
+      selectedBlockIds: ['BLK-TEST-UNRESOLVED'],
     });
-    // Com payload base completo, não deve ter placeholders não resolvidos
-    expect(draft.validation.isValid).toBe(true);
+    expect(draft.validation.isValid).toBe(false);
+    expect(draft.validation.unresolvedPlaceholders).toContain('{{PLACEHOLDER_NAO_EXISTENTE}}');
   });
 
   it('6. Placeholder não resolvido → isReady === false', () => {
-    // Simular caso com placeholder não resolvido
-    // Forçar placeholder não resolvido via block custom
-    const draft = DocumentAssemblyEngine.assemble(mockPayloadBase);
-    // Com payload completo, isReady deve ser true
-    expect(draft.isReady).toBe(true);
-    expect(draft.validation.isValid).toBe(true);
+    // Usa segundo bloco mockado com placeholder inexistente
+    const draft = DocumentAssemblyEngine.assemble({
+      ...mockPayloadBase,
+      selectedBlockIds: ['BLK-TEST-UNRESOLVED-2'],
+    });
+    expect(draft.isReady).toBe(false);
+    expect(draft.validation.isValid).toBe(false);
+    expect(draft.validation.unresolvedPlaceholders).toContain('{{PLACEHOLDER_NAO_EXISTENTE_2}}');
   });
 
   it('7. Assembly totalmente válido → validation.isValid === true e isReady === true', () => {
