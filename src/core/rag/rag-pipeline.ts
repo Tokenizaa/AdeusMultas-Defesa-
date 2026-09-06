@@ -208,7 +208,12 @@ export class RagPipeline {
   }
 
   /**
-   * Generate complete, formatted legal defense draft petition via Document Assembly Engine
+   * Generate complete, formatted legal defense draft petition via Document Assembly Engine.
+   *
+   * Authorization is ALWAYS recomputed from the canonical analysis of the infraction.
+   * The selectedArguments parameter is retained for API compatibility but can no longer
+   * authorize legal content. This prevents callers from bypassing the Fase 3.5 chain by
+   * passing arbitrary IDs directly into DocumentAssemblyEngine.
    */
   public static generateDefenseDraft(
     caseId: string,
@@ -228,7 +233,11 @@ export class RagPipeline {
     procedureType: ProcedureType = 'recurso_jari'
   ): DefenseDraft & { protocolInfo?: SubmissionInstructions } {
     const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
-    
+
+    // Authorization source is the canonical server-side analysis, never the caller's
+    // selectedArguments. The parameter remains only for backwards-compatible callers.
+    const canonicalAnalysis = this.analyzeInfraction(caseId, infraction);
+
     // Calculate days elapsed for decadence rule
     let daysElapsed: number | undefined;
     if (infraction.dateTime && infraction.notificationExpeditionDate) {
@@ -237,7 +246,7 @@ export class RagPipeline {
       const diffTime = expDate.getTime() - infDate.getTime();
       daysElapsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
-    
+
     const draft = DocumentAssemblyEngine.assemble({
       caseId,
       procedureType,
@@ -248,6 +257,7 @@ export class RagPipeline {
       },
       applicant: applicantData,
       selectedArgumentIds: selectedArguments.map((a) => a.id),
+      analysis: canonicalAnalysis,
       dates: {
         infractionDate: infraction.dateTime,
         expeditionDate: infraction.notificationExpeditionDate,
