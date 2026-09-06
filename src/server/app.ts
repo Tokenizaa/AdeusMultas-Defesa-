@@ -4,6 +4,7 @@ import path from 'path';
 import { caseRepository } from './db/case-repository';
 import type { AuditLogEntry } from '../types';
 import { CanonicalMapper } from '../core/mappers/canonical-mapper';
+import { authenticateToken } from './middleware/auth-middleware';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
 
@@ -96,30 +97,15 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // FASE 2 — Broken Object Property Level Authorization / Mass Assignment.
-  // PUT /cases/:id may only bind fields explicitly intended for user editing.
-  // Server-authoritative state is reconstructed from the persisted canonical case.
   const editableCaseFields = new Set([
-    'title',
-    'clientName',
-    'clientEmail',
-    'clientPhone',
-    'clientCpf',
-    'vehicle',
-    'infraction',
-    'applicant',
-    'nominatedDriver',
-    'company',
-    'processNumbers',
-    'specificFacts',
-    'evidence',
-    'ocrAuxiliaryData',
-    'commercialOfferId',
-    'serviceType',
+    'title', 'clientName', 'clientEmail', 'clientPhone', 'clientCpf',
+    'vehicle', 'infraction', 'applicant', 'nominatedDriver', 'company',
+    'processNumbers', 'specificFacts', 'evidence', 'ocrAuxiliaryData',
+    'commercialOfferId', 'serviceType',
   ]);
 
   app.use('/api', (req, _res, next) => {
     if (req.method !== 'PUT') return next();
-
     const match = req.path.match(/^\/cases\/([^/]+)$/);
     if (!match) return next();
 
@@ -132,9 +118,7 @@ export function createApp() {
     const existingDomain = CanonicalMapper.rowToDomain(existingRow);
     const sanitized: Record<string, unknown> = {};
     for (const field of editableCaseFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
-        sanitized[field] = req.body[field];
-      }
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
     }
 
     req.body = {
@@ -158,8 +142,17 @@ export function createApp() {
       createdAt: existingDomain.createdAt,
       updatedAt: existingDomain.updatedAt,
     };
-
     return next();
+  });
+
+  // FASE 2.5 — payment mutation/status endpoints are never anonymous.
+  // Public exceptions: commercial price lookup and verified gateway webhooks.
+  // This prevents PAYMENT_MODE=sandbox from becoming an authentication bypass.
+  app.use('/api/payments', (req, res, next) => {
+    const isPublicPriceLookup = req.method === 'GET' && req.path === '/resolve-price';
+    const isGatewayWebhook = req.path.startsWith('/webhooks/');
+    if (isPublicPriceLookup || isGatewayWebhook) return next();
+    return authenticateToken(req, res, next);
   });
 
   app.use('/api/admin', adminRoutes);
@@ -170,7 +163,6 @@ export function createApp() {
   app.use('/api/settings', settingsRoutes);
   app.use('/api/logs', logsRoutes);
   app.use('/api/media', mediaRoutes);
-
   app.use('/api/integrations', metaRoutes);
   app.use('/api', metaRoutes);
   app.use('/api/marketing', marketingRoutes);
