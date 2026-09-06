@@ -66,7 +66,7 @@ export default defineConfig({
    * introduced by this configuration.
    */
   webServer: {
-    command: 'SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=e2e-test-service-role-key VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev',
+    command: 'SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=e2e-test-service-role-key SUPABASE_ANON_KEY=e2e-test-anon-key VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 120000,
