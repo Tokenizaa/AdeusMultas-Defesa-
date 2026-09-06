@@ -132,7 +132,9 @@ describe('DocumentAssemblyEngine validation', () => {
 
   // ===== Fase 4: composição dirigida pela análise estruturada =====
 
-  it('should derive arguments ONLY from detected rule inconsistencies when analysis is present', () => {
+  // FASE 3.4: recommendedArguments é a ÚNICA fonte de teses para o documento.
+  // detectedInconsistencies é apenas metadata de análise — nunca alimenta o documento.
+  it('should NOT derive arguments from detectedInconsistencies — only recommendedArguments (FASE 3.4)', () => {
     const analysis = {
       id: 'anl_x',
       caseId: 'case_123',
@@ -146,7 +148,7 @@ describe('DocumentAssemblyEngine validation', () => {
           impact: 'Anulação do AIT.',
         },
       ],
-      recommendedArguments: [],
+      recommendedArguments: [], // FASE 3.4: única autoridade é empty
       recommendedProcedure: 'recurso_jari' as const,
       competentBody: 'DETRAN-SP',
       summaryReasoning: 'x',
@@ -156,9 +158,8 @@ describe('DocumentAssemblyEngine validation', () => {
       ...validPayload,
       analysis: analysis as any,
     });
-    expect(result.validation.appliedArgumentCount).toBe(2); // ARG-025 (detectado) + ARG-049 (garantia)
-    expect(result.meritArgumentsText).toContain('SINAIS PSICOMOTORES');
-    expect(result.preliminaryArgumentsText).toContain('DUPLA NOTIFICAÇÃO');
+    // recommendedArguments é a fonte; empty = nenhum argumento no documento
+    expect(result.validation.appliedArgumentCount).toBe(0);
   });
 
   it('should flag procedure mismatch when analysis recommends a different procedure', () => {
@@ -189,7 +190,9 @@ describe('DocumentAssemblyEngine validation', () => {
     expect(result.validation.procedureMismatch).toBe(true);
   });
 
-  it('should not invent arguments when analysis detects no inconsistencies', () => {
+  // FASE 3.4: sem recommendedArguments, nada é injetado automaticamente.
+  // ARG-049 não é mais auto-injetado pelo DocumentAssemblyEngine.
+  it('should NOT auto-inject ARG-049 when recommendedArguments is empty (FASE 3.4)', () => {
     const analysis = {
       id: 'anl_z',
       caseId: 'case_123',
@@ -205,9 +208,8 @@ describe('DocumentAssemblyEngine validation', () => {
       ...validPayload,
       analysis: analysis as any,
     });
-    // Sem inconsistências: apenas a garantia constitucional entra, nada inventado.
-    expect(result.validation.appliedArgumentCount).toBe(1);
-    expect(result.preliminaryArgumentsText).toContain('DUPLA NOTIFICAÇÃO');
+    // FASE 3.4: recommendedArguments é a única fonte; empty = nenhum argumento.
+    expect(result.validation.appliedArgumentCount).toBe(0);
   });
 
   // ===== Fase 8: evidências das teses detectadas entram no rol de documentos =====
