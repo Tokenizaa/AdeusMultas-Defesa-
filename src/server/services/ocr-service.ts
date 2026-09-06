@@ -518,7 +518,7 @@ async function fetchWithRedirectProtection(
     // Wrap result in a fetch-compatible interface
     const responseHeaders = new Map<string, string>();
     for (const [k, v] of Object.entries(result.headers)) {
-      if (v) responseHeaders.set(k, v);
+      if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(',') : v);
     }
 
     const response: SsrfakeResponse = {
@@ -1431,7 +1431,7 @@ class OcrService {
         body.on('data', (chunk: Buffer) => {
           totalBytes += chunk.byteLength;
           if (totalBytes > MAX_DOWNLOAD_SIZE) {
-            body.destroy();
+            (body as any).destroy?.() ?? controller.abort();
             clearTimeout(timeoutId);
             controller.abort();
             return reject(new Error(
@@ -1458,7 +1458,7 @@ class OcrService {
         });
 
         controller.signal.addEventListener('abort', () => {
-          body.destroy();
+          (body as any).destroy?.() ?? controller.abort();
           clearTimeout(timeoutId);
           reject(new Error('Request aborted'));
         });

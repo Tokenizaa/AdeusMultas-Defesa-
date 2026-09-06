@@ -5,8 +5,39 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const FIXTURES_DIR = path.join(__dirname, 'e2e-fixtures');
+
+// ---------------------------------------------------------------------------
+// Shared test data (used by onboarding.spec.ts and comprehensive-onboarding.spec.ts)
+// These must live in a non-spec file so both specs can import them.
+// ---------------------------------------------------------------------------
+export const testUser = {
+  name: 'João Pereira Lima',
+  phone: '(11) 98765-4321',
+  email: 'carlos.silveira@email.com',
+  cpf: '123.456.789-09',
+  cnh: '05492817492',
+};
+
+export const testVehicle = {
+  plate: 'BRA2E19',
+  brandModel: 'Honda Civic 2020',
+  renavam: '123456789',
+  year: '2020',
+  color: 'Prata',
+};
+
+export const testInfraction = {
+  aitNumber: '1B892014',
+  infractionCode: '745-50', // Art. 218 I - speeding up to 20%
+  autuadorBody: 'DETRAN-SP',
+  dateTime: '2024-01-15',
+};
 
 // Create directory if not exists
 fs.mkdirSync(FIXTURES_DIR, { recursive: true });
@@ -357,8 +388,9 @@ export function generateAllTestFixtures(testCases: any[]): void {
   console.log('All test fixtures generated successfully!');
 }
 
-// CLI execution
-if (require.main === module) {
+// CLI execution — guard for ESM compatibility
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
   const testCases = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-results', process.argv[2] || 'latest', 'initial-state.json'), 'utf8'));
   generateAllTestFixtures(testCases.cases);
 }
