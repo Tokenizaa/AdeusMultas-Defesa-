@@ -58,6 +58,65 @@ describe('FASE 3.6 — RagPipeline defense-generation authorization', () => {
     expect(draft.selectedArgumentIds).toEqual(authorizedIds);
   });
 
+  // ── Adversarial: argument content must not reach fullDraftText ─────────────────
+
+  it('adversarial: selectedArgumentIds ARG-025 content is absent from fullDraftText', () => {
+    // ARG-025 (Lei Seca / Recusa ao Etilômetro) is NOT a valid argument for
+    // a radar speed infraction (745-50). Its distinctive heading must not appear
+    // in the assembled document even if injected via selectedArguments.
+    const ARG_025_HEADING = 'Da Obrigatoriedade Formal do Termo de Constatação de Sinais';
+    const ARG_025_TITLE = 'INEXISTÊNCIA DE TERMO DE CONSTATÇÃO DE SINAIS PSICOMOTORES';
+
+    const analysis = RagPipeline.analyzeInfraction('case_fase_36_text', INFRACTION);
+    const authorizedIds = analysis.recommendedArguments.map((a) => a.id);
+    expect(authorizedIds).not.toContain('ARG-025'); // pre-condition: not authorized
+
+    const draft = RagPipeline.generateDefenseDraft(
+      'case_fase_36_text',
+      INFRACTION,
+      'ABC-1D23',
+      'Honda Civic',
+      APPLICANT,
+      [{ id: 'ARG-025' } as any], // adversarial injection
+      'recurso_jari'
+    );
+
+    // P1: selectedArgumentIds must not contain ARG-025
+    expect(draft.selectedArgumentIds).not.toContain('ARG-025');
+    expect(draft.selectedArgumentIds).toEqual(authorizedIds);
+
+    // P2: fullDraftText must not contain ARG-025 content (adversarial artifact test)
+    // Uses distinctive heading from formattedParagraphs[0].heading
+    expect(draft.fullDraftText).not.toContain(ARG_025_HEADING);
+    expect(draft.fullDraftText).not.toContain(ARG_025_TITLE);
+  });
+
+  // ── Tampering: valid catalog ID not in recommendedArguments cannot self-authorize ─
+
+  it('adversarial: valid catalog ID not in recommendedArguments is blocked at assembly', () => {
+    // Use ARG-003 (Radar Estudo Técnico Ausente) — valid catalog ID but not
+    // in recommendedArguments for this radar-speed-only analysis.
+    // A tampered caller trying to use ARG-003 as self-authorization must be blocked.
+    const analysis = RagPipeline.analyzeInfraction('case_fase_36_tamper', INFRACTION);
+    const authorizedIds = analysis.recommendedArguments.map((a) => a.id);
+    expect(authorizedIds).not.toContain('ARG-003'); // pre-condition: not authorized
+
+    const draft = RagPipeline.generateDefenseDraft(
+      'case_fase_36_tamper',
+      INFRACTION,
+      'ABC-1D23',
+      'Honda Civic',
+      APPLICANT,
+      [{ id: 'ARG-003' } as any], // valid catalog ID but not authorized
+      'recurso_jari'
+    );
+
+    // ARG-003 is valid in the catalog but was NOT in recommendedArguments
+    expect(draft.selectedArgumentIds).not.toContain('ARG-003');
+    // The draft must reflect only what the canonical analysis authorized
+    expect(draft.selectedArgumentIds).toEqual(authorizedIds);
+  });
+
   it('uses the same canonical authorization when selectedArguments is empty', () => {
     const analysis = RagPipeline.analyzeInfraction('case_fase_36_empty', INFRACTION);
     const draft = RagPipeline.generateDefenseDraft(
