@@ -6,15 +6,13 @@ import { DocumensoClient } from '@/server/lib/documenso/client';
 import { DocumensoError } from '@/types/documenso';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock fetch globally
-global.fetch = vi.fn();
-
 describe('DocumensoClient', () => {
   let client: DocumensoClient;
-  const mockFetch = fetch as ReturnType<typeof vi.fn>;
+  let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
     client = new DocumensoClient({
       baseUrl: 'https://documenso.example.com',
       apiToken: 'test-token',
