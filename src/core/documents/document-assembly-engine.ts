@@ -79,8 +79,8 @@ export interface DocumentAssemblyPayload {
   customFacts?: string;
   /**
    * Análise jurídica estruturada (Fase 4): quando presente, a seleção de teses
-   * deriva SOMENTE dos vícios detectados pelo motor de regras — nunca de lista
-   * livre. Ausente => comportamento legado (procedure.applicableGrounds).
+   * deriva SOMENTE dos argumentos recomendados pela análise canônica.
+   * Ausente => comportamento legado (procedure.applicableGrounds).
    */
   analysis?: CaseAnalysis;
 }
@@ -114,17 +114,14 @@ export class DocumentAssemblyEngine {
     }
 
     // 3. Resolve Arguments (Preliminaries vs Merits)
-    //    Fase 4: análise estruturada comanda a seleção — somente teses cujo vício
-    //    foi DETECTADO entram. Sem análise, mantém-se o caminho legado.
+    //    When analysis exists, ONLY its canonical recommended arguments authorize
+    //    legal content. Client-selected arguments cannot re-enter this path.
     let activeArgIds: string[];
     if (payload.analysis) {
-      // Fase 4: análise comanda a seleção; vazia => nenhuma tese (nada inventado).
-      activeArgIds = Array.from(new Set(payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean) as string[]));
-      // Garantias constitucionais são sempre aplicáveis (devido processo legal).
-      const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
-      if (constArg && !activeArgIds.includes('ARG-049')) {
-        activeArgIds.push('ARG-049');
-      }
+      const canonicalArgumentIds = new Set(ARGUMENTS_CATALOG.map((argument) => argument.id));
+      activeArgIds = payload.analysis.recommendedArguments
+        .filter((argument) => canonicalArgumentIds.has(argument.id))
+        .map((argument) => argument.id);
     } else if (payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0) {
       activeArgIds = payload.selectedArgumentIds;
     } else {
