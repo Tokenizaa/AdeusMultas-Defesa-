@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import path from 'path';
 import { caseRepository } from './db/case-repository';
 import type { AuditLogEntry } from '../types';
+import { CanonicalMapper } from '../core/mappers/canonical-mapper';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
 
@@ -34,38 +35,18 @@ import authRoutes from './routes/auth';
 import documensoRoutes from './routes/documenso';
 import { metaIntegration } from './integrations/meta';
 
-// ---------------------------------------------------------------------------
-// Shared instances (imported by route modules via '../app')
-// ---------------------------------------------------------------------------
 export const databaseRows = caseRepository;
 export const auditLogs: AuditLogEntry[] = [];
 
-// ---------------------------------------------------------------------------
-// createApp() — factory that wires middleware + all routes
-// ---------------------------------------------------------------------------
 export function createApp() {
   const app = express();
-
-  // Security headers
-  // GOV.BR 08-seguranca: CSP + X-Frame-Options + nosniff + HSTS.
-  // CSP cobre os consumidores reais do bundle browser:
-  //   - Google Fonts (index.html: fonts.googleapis.com css2 + fonts.gstatic.com)
-  //   - Supabase JS (src/lib/supabase.ts ← VITE_SUPABASE_URL / SUPABASE_URL)
-  //   - Firebase Auth (src/lib/google-auth.ts: identitytoolkit/securetoken/installations)
-  //   - Google Drive REST (src/core/integrations/google-drive-service.ts)
-  //   - Imagens remotas (api.qrserver.com, stc.pagseguro.uol.com.br, images.unsplash.com → https:)
   const isProd = process.env.NODE_ENV === 'production';
-  const supabaseEnvUrl =
-    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
   let supabaseOrigins = ['https://*.supabase.co', 'wss://*.supabase.co'];
   try {
     if (supabaseEnvUrl.startsWith('https://')) {
       const { host } = new URL(supabaseEnvUrl);
-      supabaseOrigins = [
-        `https://${host}`,
-        `wss://${host}`,
-        ...supabaseOrigins,
-      ];
+      supabaseOrigins = [`https://${host}`, `wss://${host}`, ...supabaseOrigins];
     }
   } catch {
     // URL malformada no env: mantém apenas o wildcard
@@ -77,22 +58,13 @@ export function createApp() {
         useDefaults: true,
         directives: {
           defaultSrc: ["'self'"],
-          // Dev: @vitejs/plugin-react injeta preamble react-refresh inline;
-          // Prod build do Vite só emite scripts externos hashados.
-          // Nota: 'unsafe-inline' em scriptSrc só existe em dev por causa do
-          // preamble inline do plugin-react; upgrade path = nonce gerado no server +
-          // transformIndexHtml. Em prod fica 'self' puro. Idem ws:/wss: para HMR.
           scriptSrc: ["'self'", ...(isProd ? [] : ["'unsafe-inline'"])],
-          styleSrc: [
-            "'self'",
-            "'unsafe-inline'",
-            'https://fonts.googleapis.com',
-          ],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
           fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
           imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
           connectSrc: [
             "'self'",
-            ...(isProd ? [] : ['ws:', 'wss:']), // Vite HMR (dev)
+            ...(isProd ? [] : ['ws:', 'wss:']),
             ...supabaseOrigins,
             'https://identitytoolkit.googleapis.com',
             'https://securetoken.googleapis.com',
@@ -107,22 +79,12 @@ export function createApp() {
         },
       },
       crossOriginEmbedderPolicy: false,
-      strictTransportSecurity: isProd
-        ? { maxAge: 31536000, includeSubDomains: true }
-        : false,
+      strictTransportSecurity: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
     })
   );
 
-  // CORS
   app.use(corsMiddleware);
-
-  // Rate limiting
   app.use(globalLimiter);
-
-  // Body parsing
-  // verify: anexa `req.rawBody` (bytes brutos como string) para verificacao de
-  // assinatura HMAC em webhooks (ex: Evolution API /api/webhooks/whatsapp).
-  // Aditivo — nao altera o parse nem o req.body; apenas captura o buffer.
   app.use(
     express.json({
       limit: '10mb',
@@ -133,10 +95,73 @@ export function createApp() {
   );
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // ----- Modular API Routes -----
+  // FASE 2 — Broken Object Property Level Authorization / Mass Assignment.
+  // PUT /cases/:id may only bind fields explicitly intended for user editing.
+  // Server-authoritative state is reconstructed from the persisted canonical case.
+  const editableCaseFields = new Set([
+    'title',
+    'clientName',
+    'clientEmail',
+    'clientPhone',
+    'clientCpf',
+    'vehicle',
+    'infraction',
+    'applicant',
+    'nominatedDriver',
+    'company',
+    'processNumbers',
+    'specificFacts',
+    'evidence',
+    'ocrAuxiliaryData',
+    'commercialOfferId',
+    'serviceType',
+  ]);
 
-  // ─── Routers with global requireAdmin — mount ONLY at specific prefix ───
-  // (Dual-mount at /api was blocking ALL subsequent routes via requireAdmin)
+  app.use('/api', (req, _res, next) => {
+    if (req.method !== 'PUT') return next();
+
+    const match = req.path.match(/^\/cases\/([^/]+)$/);
+    if (!match) return next();
+
+    const caseId = decodeURIComponent(match[1]);
+    const existingRow = databaseRows.get(caseId);
+    if (!existingRow || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return next();
+    }
+
+    const existingDomain = CanonicalMapper.rowToDomain(existingRow);
+    const sanitized: Record<string, unknown> = {};
+    for (const field of editableCaseFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        sanitized[field] = req.body[field];
+      }
+    }
+
+    req.body = {
+      ...existingDomain,
+      ...sanitized,
+      id: existingDomain.id,
+      userId: existingDomain.userId,
+      status: existingDomain.status,
+      currentStage: existingDomain.currentStage,
+      isPaid: existingDomain.isPaid,
+      paidAt: existingDomain.paidAt,
+      payment: existingDomain.payment,
+      analysis: existingDomain.analysis,
+      defenseDraft: existingDomain.defenseDraft,
+      documentGenerationStatus: existingDomain.documentGenerationStatus,
+      protocolInfo: existingDomain.protocolInfo,
+      submissionInstructions: existingDomain.submissionInstructions,
+      timeline: existingDomain.timeline,
+      claimToken: existingDomain.claimToken,
+      isAnonymous: existingDomain.isAnonymous,
+      createdAt: existingDomain.createdAt,
+      updatedAt: existingDomain.updatedAt,
+    };
+
+    return next();
+  });
+
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin/commercial', commercialRoutes);
   app.use('/api/commercial', commercialRoutes);
@@ -146,7 +171,6 @@ export function createApp() {
   app.use('/api/logs', logsRoutes);
   app.use('/api/media', mediaRoutes);
 
-  // ─── Routers with per-route auth (safe to mount at /api) ─────────────────
   app.use('/api/integrations', metaRoutes);
   app.use('/api', metaRoutes);
   app.use('/api/marketing', marketingRoutes);
@@ -157,41 +181,18 @@ export function createApp() {
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/auth', authRoutes);
-
-  // Health check
   app.use('/api', healthRoutes);
-
-  // Cases CRUD
   app.use('/api', casesRoutes);
-
-  // Audit logs
   app.use('/api', auditRoutes);
-
-  // Onboarding rules
   app.use('/api', onboardingRoutes);
-
-  // Transit database queries
   app.use('/api', transitRoutes);
-
-  // Governance (law-enforcement, manual-override)
   app.use('/api', governanceRoutes);
-
-  // Analytics dashboard
   app.use('/api', analyticsRoutes);
-
-  // AI endpoints (rate-limited via strictLimiter)
   app.use('/api/ai', strictLimiter);
   app.use('/api/auth', strictLimiter);
   app.use('/api', aiRoutes);
-
-  // Sync
   app.use('/api', syncRoutes);
-
-  // Documenso integration
   app.use('/api/documenso', documensoRoutes);
-
-  // API 404 fallback — garante que nenhum endpoint /api/* responda HTML
-  // (evita "Expected JSON response" no cliente quando a rota não existe).
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint não encontrado' });
   });
