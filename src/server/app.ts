@@ -4,7 +4,7 @@ import path from 'path';
 import { caseRepository } from './db/case-repository';
 import type { AuditLogEntry } from '../types';
 import { CanonicalMapper } from '../core/mappers/canonical-mapper';
-import { authenticateToken } from './middleware/auth-middleware';
+import { authenticateToken, requireAdmin } from './middleware/auth-middleware';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
 
@@ -156,7 +156,10 @@ export function createApp() {
   });
 
   app.use('/api/admin', adminRoutes);
-  app.use('/api/admin/commercial', commercialRoutes);
+  // The same commercial router is also mounted publicly at /api/commercial.
+  // This mount is therefore explicitly protected so every /api/admin/commercial
+  // operation (including GET/reporting endpoints) requires an authenticated admin.
+  app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api/agents', agentsRoutes);
   app.use('/api/monitoring', monitoringRoutes);
