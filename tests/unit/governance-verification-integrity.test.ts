@@ -7,7 +7,7 @@ describe('governance verification integrity', () => {
 
   it('returns a negative result when no persisted case matches', () => {
     expect(source).toContain("verified: false");
-    expect(source).toContain("case not found");
+    expect(source).toContain("caso não encontrado");
   });
 
   it('does not contain fabricated development verification data', () => {
