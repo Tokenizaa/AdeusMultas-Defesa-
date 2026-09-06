@@ -140,20 +140,18 @@ export class CaseRepository {
   }
 
   /**
-   * Persiste no Supabase. Lança erro apenas em falhas reais de banco.
+   * Persiste no Supabase com FAIL CLOSED em produção.
    *
-   * Fail-graceful quando Supabase não está configurado (E2E/dev):
-   * - `loadAllFromSupabase()` já retorna [] quando client é null
-   * - `set()` agora também retorna sem lançar, permitindo operação in-memory
-   * - O servidor continua funcionando em E2E sem Supabase
-   *
-   * Produção: comportamento inalterado — client sempre existe,
-   * qualquer erro de banco é real e deve bloquear.
+   * Quando o Supabase não está configurado, o modo in-memory é permitido
+   * somente fora de produção para suportar E2E/dev isolados. Em produção,
+   * ausência do cliente é uma falha de infraestrutura e bloqueia a operação.
    */
   private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
     if (!this.client) {
-      // E2E/dev: Supabase não configurado — warn mas não bloqueia.
-      // Dados ficam em memória; reinício perde (comportamento já esperado em dev).
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`CaseRepository: Supabase client não configurado — não é possível persistir caso ${id}`);
+      }
+
       logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória (E2E/dev)`, {
         caseId: id,
         persistenceResult: 'skipped_no_client',
@@ -192,10 +190,6 @@ export class CaseRepository {
     }
 
     const rows: CaseRow[] = (data || []).map((c) => ({
-      // Chave em memória volta a ser o id ORIGINAL do domínio: app_ref guarda
-      // o id sintético (`case_*`) que gerou a linha — restaura links antigos
-      // (GET/PUT/claim por id) após cold-start. Linhas sem app_ref (legado ou
-      // ids já-UUID) usam a própria PK.
       id: c.app_ref ?? c.id,
       title: c.title,
       client_name: c.client_name,
