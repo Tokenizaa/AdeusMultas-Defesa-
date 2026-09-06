@@ -34,7 +34,7 @@ export default defineConfig({
   expect: {
     /**
      * Maximum time expect() should wait for the condition to be met.
-     * For example in `await expect(locator).toHaveText();`
+     * For example: await expect(locator).toHaveText();
      */
     timeout: 10000
   },
@@ -71,11 +71,17 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests.
-     Supabase env vars are emptied so the app uses the deterministic
-     localStorage-auth fallback (no external network calls). */
+  /*
+   * Run the local dev server before starting the tests.
+   *
+   * The application intentionally fails fast when the scraper is started
+   * without its required Supabase credentials. CI/E2E must therefore provide
+   * isolated test-only placeholders so importing the scraper does not abort
+   * the web server. No production credentials or external Supabase access are
+   * introduced by this configuration.
+   */
   webServer: {
-    command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev',
+    command: 'SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=e2e-test-service-role-key SUPABASE_ANON_KEY=e2e-test-anon-key VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 120000,

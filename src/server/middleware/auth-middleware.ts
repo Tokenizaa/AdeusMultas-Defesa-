@@ -30,6 +30,45 @@ declare global {
 }
 
 /**
+ * P0 mass-assignment guard for case creation.
+ * The existing /api/cases handler remains responsible for RAG, persistence,
+ * events and lifecycle. This boundary only strips server-authoritative fields
+ * before the handler can bind the request body to CaseDomain.
+ */
+function sanitizeCaseCreateBody(req: Request): void {
+  if (req.method !== 'POST' || req.baseUrl !== '/api' || req.path !== '/cases') return;
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+
+  const editableCaseFields = new Set([
+    'title',
+    'clientName',
+    'clientEmail',
+    'clientPhone',
+    'clientCpf',
+    'vehicle',
+    'infraction',
+    'applicant',
+    'nominatedDriver',
+    'company',
+    'processNumbers',
+    'specificFacts',
+    'evidence',
+    'ocrAuxiliaryData',
+    'commercialOfferId',
+    'serviceType',
+  ]);
+
+  const sanitized: Record<string, unknown> = {};
+  for (const field of editableCaseFields) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      sanitized[field] = req.body[field];
+    }
+  }
+
+  req.body = sanitized;
+}
+
+/**
  * Middleware that validates the Supabase JWT from the Authorization header.
  * - Missing token → 401 via requireAuth (req.user undefined)
  * - Invalid/expired token → 401 via requireAuth (req.user undefined)
@@ -72,6 +111,7 @@ export async function authenticateToken(
             role,
             name: user.user_metadata?.name,
           };
+          sanitizeCaseCreateBody(req);
           return next();
         }
       } catch (err: any) {
@@ -97,6 +137,7 @@ export async function authenticateToken(
           role: 'admin',
           name: 'Administrador DefesAi',
         };
+        sanitizeCaseCreateBody(req);
         return next();
       }
 
@@ -108,6 +149,7 @@ export async function authenticateToken(
           role: 'admin',
           name: 'Admin Teste (E2E)',
         };
+        sanitizeCaseCreateBody(req);
         return next();
       }
     }
