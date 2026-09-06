@@ -9,7 +9,7 @@ beforeAll(() => {
 
     // The WeeklyMonitorService uses this dedicated UA. Keep the unit/audit gate
     // deterministic without weakening tests for unrelated network consumers.
-    if (userAgent.includes('DefesaAI Legal Monitor/2026.1')) {
+    if (userAgent.includes('DefesAi Legal Monitor/2026.1')) {
       const url = typeof input === 'string'
         ? input
         : input instanceof URL
