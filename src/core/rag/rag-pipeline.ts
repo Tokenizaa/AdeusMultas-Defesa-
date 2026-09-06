@@ -163,10 +163,48 @@ export class RagPipeline {
   }
 
   /**
-   * Run comprehensive legal heuristic analysis on infraction data via Expert Rule Engine
+   * Run comprehensive legal heuristic analysis on infraction data via Expert Rule Engine.
+   *
+   * FASE 3.2 — Evidence → Analysis (FAIL CLOSED):
+   * After the rule engine produces its result, evidence-dependent arguments
+   * (ARG-012, ARG-019, ARG-020) are filtered out if their required evidence
+   * flag is absent or false. A corresponding dataGap is emitted so the client
+   * knows what evidence would unlock the thesis.
    */
   public static analyzeInfraction(caseId: string, infraction: InfractionData): CaseAnalysis {
-    return ExpertRuleEngine.evaluate(caseId, infraction);
+    const result = ExpertRuleEngine.evaluate(caseId, infraction);
+
+    // FASE 3.2: evidence dependency enforcement — filter arguments + emit dataGaps
+    const evidenceFlags = infraction.evidenceFlags ?? {};
+    const additionalGaps: NonNullable<CaseAnalysis['dataGaps']> = [];
+    const filteredRecommendedArgs = result.recommendedArguments.filter((arg) => {
+      const evidenceKey = EVIDENCE_DEPENDENT_ARGUMENTS[arg.id];
+      if (!evidenceKey) return true; // not evidence-dependent, keep it
+      if (evidenceFlags[evidenceKey] !== true) {
+        additionalGaps.push({
+          ruleId: arg.id,
+          missingData: [evidenceKey],
+          reason: `Evidência obrigatória ausente para a tese ${arg.id}: esperado evidenceFlags[${evidenceKey}] === true`,
+        });
+        return false; // remove thesis — evidence not confirmed
+      }
+      return true;
+    });
+
+    // Merge dataGaps: engine's own gaps + evidence gaps
+    const mergedDataGaps = [
+      ...(result.dataGaps ?? []),
+      ...additionalGaps,
+    ];
+
+    return {
+      ...result,
+      recommendedArguments: filteredRecommendedArgs,
+      selectedArguments: result.selectedArguments?.filter(
+        (id) => !EVIDENCE_DEPENDENT_ARGUMENTS[id] || evidenceFlags[EVIDENCE_DEPENDENT_ARGUMENTS[id]] === true
+      ),
+      dataGaps: mergedDataGaps.length > 0 ? mergedDataGaps : undefined,
+    };
   }
 
   /**
