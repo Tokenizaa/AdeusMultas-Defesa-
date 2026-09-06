@@ -64,12 +64,12 @@ describe('Fase 7: Critical Persistence Failures', () => {
   describe('1. CaseRepository persistence failures', () => {
     beforeEach(() => {
       vi.clearAllMocks();
-      // Clear the in-memory storage before each test
       caseRepository['rows'].clear();
     });
 
     afterEach(() => {
       vi.restoreAllMocks();
+      delete process.env.NODE_ENV;
     });
 
     it('should throw error on INSERT failure', async () => {
@@ -85,12 +85,10 @@ describe('Fase 7: Critical Persistence Failures', () => {
         .rejects
         .toThrow('Falha ao persistir caso case_test_123: Database connection failed');
 
-      // Verify nothing was stored in memory (FAIL CLOSED)
       expect(caseRepository.get(mockCase.id)).toBeUndefined();
     });
 
     it('should throw error on UPDATE failure', async () => {
-      // First insert a case
       const mockSupabaseSuccess = {
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockResolvedValue({ data: [mockCase], error: null }),
@@ -101,7 +99,6 @@ describe('Fase 7: Critical Persistence Failures', () => {
       await caseRepository.set(mockCase.id, mockCase);
       expect(caseRepository.get(mockCase.id)).toBeDefined();
 
-      // Now mock an UPDATE failure
       const mockSupabaseFail = {
         from: vi.fn().mockReturnValue({
           upsert: vi.fn().mockResolvedValue({ error: new Error('Constraint violation') }),
@@ -115,23 +112,18 @@ describe('Fase 7: Critical Persistence Failures', () => {
         .rejects
         .toThrow('Falha ao persistir caso case_test_123: Constraint violation');
 
-      // Verify the update did NOT happen in memory (FAIL CLOSED)
       const storedCase = caseRepository.get(mockCase.id);
       expect(storedCase).toBeDefined();
-      expect(storedCase?.title).toBe('Test Case'); // Original value, not updated
+      expect(storedCase?.title).toBe('Test Case');
     });
 
-    it('should warn and continue in-memory when Supabase client not configured (E2E/dev)', async () => {
+    it('should warn and continue in-memory when Supabase client not configured outside production', async () => {
+      process.env.NODE_ENV = 'test';
       vi.spyOn(caseRepository, 'client', 'get').mockReturnValue(null);
       const warnSpy = vi.spyOn(logger, 'warn');
 
-      // Should NOT throw — persists in-memory only for E2E/dev scenarios
       await expect(caseRepository.set(mockCase.id, mockCase)).resolves.toBeUndefined();
-
-      // Case should still be stored in-memory
       expect(caseRepository.get(mockCase.id)).toEqual(mockCase);
-
-      // Should have logged a warning about skipped persistence
       expect(warnSpy).toHaveBeenCalledWith(
         'supabase',
         'case_repository',
@@ -139,6 +131,17 @@ describe('Fase 7: Critical Persistence Failures', () => {
         expect.stringContaining('Supabase não configurado'),
         expect.objectContaining({ caseId: mockCase.id, persistenceResult: 'skipped_no_client' }),
       );
+    });
+
+    it('should fail closed when Supabase client is unavailable in production', async () => {
+      process.env.NODE_ENV = 'production';
+      vi.spyOn(caseRepository, 'client', 'get').mockReturnValue(null);
+
+      await expect(caseRepository.set(mockCase.id, mockCase))
+        .rejects
+        .toThrow('CaseRepository: Supabase client não configurado — não é possível persistir caso case_test_123');
+
+      expect(caseRepository.get(mockCase.id)).toBeUndefined();
     });
   });
 
@@ -176,25 +179,20 @@ describe('Fase 7: Critical Persistence Failures', () => {
     it('should throw error on payment SELECT failure', async () => {
       // This test would require mocking the internal supabase client creation
       // This is trickier since it's created inside the function
-      // For now, we'll test via integration or skip this specific unit test
-      // The key fix is already applied in the code
     });
 
     it('should throw error on payment INSERT failure', async () => {
       // This test would require mocking the internal supabase client creation
-      // The key improvement is that we now await and throw instead of swallowing errors
     });
 
     it('should throw error when no charge is generated', async () => {
       // This is harder to test unit-wise since buildCharge always returns a charge
-      // But we've added the protection anyway
     });
   });
 
   describe('3. Payment charge validation', () => {
     it('should validate that buildCharge always returns a charge', () => {
       // This is more of a code review item than a runtime test
-      // buildCharge() always returns a valid PagBankCharge object
     });
   });
 });
