@@ -32,9 +32,9 @@
 | 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | VERIFIED | 1.1 | Ownership de envelopes persistido no banco; backfill histórico; UUIDv5 determinístico; RLS real validado no Supabase | 20260905000001 | Projeto `llmxnpgjpxcvyrqjkfwb`: `documenso_envelopes.user_id`, índice, policies e `domain_to_uuid()` validados no banco real. |
 | 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | VERIFIED | 1.2 | Baseline RLS aplicado aos 5 buckets; 8 policies; `marketing-assets` público somente para leitura; escritas administrativas; buckets privados sem acesso público | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Banco real confirmou 5 buckets. `storage.objects` saiu de 0 policies para 8. Buckets privados sem objetos históricos. |
 | 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | VERIFIED | 1.3 | Auditoria real dos 8 objetos: 0 nomes inválidos, 0 padrões de traversal, 0 caminhos absolutos; todos os objetos existentes pertencem exclusivamente ao bucket público `marketing-assets`; buckets privados permanecem sem objetos | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Os 8 paths existentes são UUID + sufixo de mídia (`*_diaN.png`), sem segmentos de pasta. Como todos os buckets privados são vazios e suas escritas não são autorizadas a usuários comuns, não há vetor atual de mistura entre usuários/cases. Qualquer futuro fluxo privado deverá definir explicitamente owner/case no path ou metadado antes de liberar acesso de usuário. |
-| 1.5 | Validação de arquivos | Verificar validação de tipo, tamanho e conteúdo de arquivos | PENDING | 1.4 | — | — | — |
-| 1.6 | Correções dos achados | Aplicar correções identificadas nas subfases anteriores | PENDING | 1.5 | — | — | — |
-| 1.7 | Download / acesso aos arquivos | Verificar que o download é seguro e autorizado | PENDING | 1.6 | — | — | — |
+| 1.5 | Validação de arquivos | Verificar validação de tipo, tamanho e conteúdo de arquivos | PENDING | 1.4 | — | — | Ainda não fechada com evidência suficiente. |
+| 1.6 | Correções dos achados | Aplicar correções identificadas nas subfases anteriores | PENDING | 1.5 | — | — | Não marcar como concluída antes da validação 1.5. |
+| 1.7 | Download / acesso aos arquivos | Verificar que o download é seguro e autorizado | PENDING | 1.6 | — | — | Não marcar como concluída antes da validação real. |
 
 ---
 
@@ -42,11 +42,11 @@
 
 | ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
 |----|------|----------|--------|-------------|-----------|-----|------------|
-| 2.1 | Endpoints protegidos | Mapear e verificar todos os endpoints protegidos | PENDING | — | — | — | — |
-| 2.2 | Cases | Verificar autorização de acesso a cases | PENDING | 2.1 | — | — | — |
-| 2.3 | Documents | Verificar autorização de acesso a documentos | PENDING | 2.2 | — | — | — |
-| 2.4 | Evidence | Verificar autorização de acesso a evidências | PENDING | 2.3 | — | — | — |
-| 2.5 | Payments | Verificar autorização de acesso a pagamentos | PENDING | 2.4 | — | — | — |
+| 2.1 | Endpoints protegidos | Mapear e verificar todos os endpoints protegidos | IN_PROGRESS | — | Cases, Documenso, OCR e Payments auditados; inventário global ainda em fechamento | 4420e3198d374ab83b1abd017a5dc5fecaa12fa7 | OWASP recomenda inventariar endpoints e verificar autenticação/autorização por operação; não marcar VERIFIED antes do inventário completo. |
+| 2.2 | Cases | Verificar autorização de acesso a cases | IMPLEMENTED | 2.1 | Ownership existente preservado e novo hardening contra mass assignment/BOPLA no `PUT /api/cases/:id` | 59b0eebcbf46edcf62495ba6edee3c9d927c3906 | Ainda falta execução do conjunto final de testes para `VERIFIED`. |
+| 2.3 | Documents | Verificar autorização de acesso a documentos | IMPLEMENTED | 2.2 | Documenso exige autenticação e ownership persistido em `documenso_envelopes.user_id`; `authorizeEnvelope()` consulta o banco | 41ba686 | Real DB já validado na FASE 1.2; falta consolidar teste final da subfase 2.3. |
+| 2.4 | Evidence | Verificar autorização de acesso a evidências | PENDING | 2.3 | — | — | OCR possui autenticação; inventário de todas as superfícies de evidência ainda pendente. |
+| 2.5 | Payments | Verificar autorização de acesso a pagamentos | IMPLEMENTED | 2.4 | Middleware global exige JWT para operações de pagamento; somente consulta pública de preço e webhooks são exceções | 4420e3198d374ab83b1abd017a5dc5fecaa12fa7 | Corrige risco de `PAYMENT_MODE=sandbox` deixar mutações/status anônimos. Falta teste final para VERIFIED. |
 | 2.6 | Admin / ações privilegiadas | Verificar controles de admin e ações privilegiadas | PENDING | 2.5 | — | — | — |
 | 2.7 | IDOR / IDs manipuláveis | Verificar ausência de IDOR em parâmetros manipuláveis | PENDING | 2.6 | — | — | — |
 | 2.8 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 2.7 | — | — | — |
