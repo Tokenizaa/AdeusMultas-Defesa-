@@ -12,6 +12,7 @@ export default defineConfig({
       'tests/payments/**/*.test.ts',
       'tests/unit/**/*.test.ts',
     ],
+    setupFiles: ['./tests/vitest-network.setup.ts'],
     environment: 'node',
     fileParallelism: false,
     globals: true,
