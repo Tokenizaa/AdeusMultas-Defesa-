@@ -15,6 +15,7 @@
 import { DefenseDraft, CaseAnalysis, LegalArgumentDomain, QualityGateReport } from '../../types';
 import { validateDraft } from '../validation/integrity-validator';
 import { runFullQualityGate } from '../validation/final-quality-gate';
+import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 
 export interface AiRefinementProvider {
   /**
@@ -262,5 +263,6 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
 
 // Re-export utilitário: teses permitidas (só do catálogo / análise).
 export function permittedTheses(analysis: CaseAnalysis): LegalArgumentDomain[] {
-  return analysis.recommendedArguments || [];
+  const recommendedIds = new Set((analysis.recommendedArguments ?? []).map((argument) => argument.id));
+  return ARGUMENTS_CATALOG.filter((argument) => recommendedIds.has(argument.id)) as LegalArgumentDomain[];
 }
