@@ -160,7 +160,15 @@ export function createApp() {
   // This mount is therefore explicitly protected so every /api/admin/commercial
   // operation (including GET/reporting endpoints) requires an authenticated admin.
   app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
-  app.use('/api/commercial', commercialRoutes);
+  // Public commercial operations are still authenticated. In production, any
+  // client-supplied userId must match the authenticated identity; it cannot be
+  // used to impersonate another customer for coupons/eligibility/referrals.
+  app.use('/api/commercial', authenticateToken, (req, res, next) => {
+    if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) {
+      return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
+    }
+    next();
+  }, commercialRoutes);
   app.use('/api/agents', agentsRoutes);
   app.use('/api/monitoring', monitoringRoutes);
   app.use('/api/settings', settingsRoutes);
