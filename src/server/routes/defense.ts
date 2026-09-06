@@ -2,8 +2,6 @@ import { Router, Response } from 'express';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
-import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
-import { caseRepository } from '../db/case-repository';
 import { auditService } from '../services/audit-service';
 import { enrichDefenseWithGemini } from '../gemini';
 import {
@@ -36,8 +34,6 @@ function denyCaseAccess(user: AuthenticatedUser | undefined, res: Response): boo
 
 // ===== IA Controlada (Fase 6) =====
 // A IA atua SOMENTE como refinadora de prosa sobre a minuta determinística.
-// preserveRegister: registrado uma única vez; o orquestrador valida a saída e
-// descarta o texto de IA se a integridade falhar (mantém a minuta determinística).
 let providerRegistered = false;
 function ensureRefinementProviderRegistered() {
   if (providerRegistered) return;
@@ -58,45 +54,51 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Caso não encontrado' });
     }
 
-    // FASE 1.2: authorization BEFORE any operation on the case
     if (!canAccessCase(req.user, row)) {
       return denyCaseAccess(req.user, res);
     }
 
     const domain = CanonicalMapper.rowToDomain(row);
-    const { procedureType, selectedArgumentIds, applicantData, customFacts } = req.body;
+    const analysis = domain.analysis as any;
 
-    const selectedArgs = ARGUMENTS_CATALOG.filter((a) =>
-      selectedArgumentIds?.includes(a.id)
-    );
+    // Legal authority is server-owned. The request cannot select procedure,
+    // legal arguments, analysis, or applicant identity for the defense.
+    if (!analysis || !Array.isArray(analysis.recommendedArguments)) {
+      return res.status(409).json({
+        error: 'Análise jurídica canônica indisponível. Não é possível gerar a defesa com autoridade jurídica incompleta.',
+      });
+    }
 
-    // Dados de qualificação do requerente DEVEM vir do onboarding real (body ou
-    // domain.applicant). NUNCA fabricar CNH/cidade. FAIL CLOSED: ausentes → erro.
-    const b = applicantData as any;
-    const resolvedApplicant = (b && (b.name !== undefined || b.applicantName !== undefined))
+    const procedureType = analysis.recommendedProcedure || domain.serviceType;
+    if (!procedureType) {
+      return res.status(409).json({
+        error: 'Procedimento jurídico canônico indisponível. Não é possível gerar a defesa.',
+      });
+    }
+
+    // Applicant qualification is also canonical case data. Ignore applicantData
+    // supplied by the client so another identity cannot be injected into a case.
+    const a = domain.applicant;
+    const resolvedApplicant = a
       ? {
-          name: b.name || b.applicantName || '',
-          cpf: b.cpf || b.applicantCpf || '',
-          rg: b.rg || b.applicantRg,
-          cnh: b.cnh || b.applicantCnh || '',
-          category: b.category || b.cnhCategory,
-          address: b.address || (b.addressStreet ? `${b.addressStreet}, ${b.addressNumber || ''}` : ''),
-          cityState: b.cityState || b.addressCityState || '',
+          name: a.applicantName,
+          cpf: a.applicantCpf,
+          rg: a.applicantRg,
+          cnh: a.applicantCnh,
+          category: a.cnhCategory,
+          address: `${a.addressStreet}, ${a.addressNumber || ''}`,
+          cityState: a.addressCityState,
         }
-      : domain.applicant
-        ? {
-            name: domain.applicant.applicantName,
-            cpf: domain.applicant.applicantCpf,
-            rg: domain.applicant.applicantRg,
-            cnh: domain.applicant.applicantCnh,
-            category: domain.applicant.cnhCategory,
-            address: `${domain.applicant.addressStreet}, ${domain.applicant.addressNumber || ''}`,
-            cityState: domain.applicant.addressCityState,
-          }
-        : undefined;
+      : undefined;
 
     if (!resolvedApplicant || !resolvedApplicant.name || !resolvedApplicant.cpf || !resolvedApplicant.cnh || !resolvedApplicant.address || !resolvedApplicant.cityState) {
       return res.status(400).json({ error: 'Dados de qualificação do requerente incompletos. Preencha os dados complementares antes de gerar a defesa.' });
+    }
+
+    // Only arguments permitted by the server-side legal analysis may enter the draft.
+    const permittedArguments = permittedTheses(analysis);
+    if (!Array.isArray(permittedArguments)) {
+      return res.status(409).json({ error: 'Teses jurídicas permitidas indisponíveis. Geração bloqueada.' });
     }
 
     let defense = RagPipeline.generateDefenseDraft(
@@ -105,38 +107,23 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
       domain.vehicle.plate,
       domain.vehicle.brandModel,
       resolvedApplicant,
-      selectedArgs.length > 0 ? selectedArgs : (domain.analysis?.recommendedArguments as any) || [],
-      procedureType || domain.serviceType
+      permittedArguments as any,
+      procedureType
     );
 
-    if (customFacts) {
-      defense.factsNarrative = customFacts;
+    // customFacts are user-provided factual context only; they never select
+    // legal authority, procedure, applicant, or theses. Bound the input size.
+    if (typeof req.body?.customFacts === 'string' && req.body.customFacts.length <= 10000) {
+      defense.factsNarrative = req.body.customFacts;
     }
 
-    // ===== IA Controlada subordinada ao motor (Fase 6) =====
-    // Fluxo: determinístico -> IA refina prosa -> validador -> final.
-    // IA nunca decide tese; teses derivam da análise (permittedTheses).
-    const analysis = domain.analysis as any;
-    const theses = permittedTheses(analysis).map((a: any) => a.id);
-    // Reforça: a minuta já foi montada pelo RagPipeline com as teses selecionadas;
-    // o orquestrador apenas refina prosa e garante integridade.
-
-    // FASE 8: Obter payload de onboarding para quality gate
+    // ===== IA Controlada subordinada ao motor =====
+    const theses = permittedArguments.map((a: any) => a.id);
     const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
 
     const pipelineResult = await runControlledPipeline(
       {
-        analysis: analysis || {
-          recommendedArguments: [],
-          detectedInconsistencies: [],
-          recommendedProcedure: procedureType || domain.serviceType || 'recurso_jari',
-          overallSuccessRate: 50,
-          caseId: domain.id,
-          id: `anl_${Date.now()}`,
-          competentBody: domain.infraction?.autuadorBody || '',
-          summaryReasoning: 'análise indisponível',
-          createdAt: new Date().toISOString(),
-        },
+        analysis,
         draft: defense,
         onboardingPayload,
         canonicalCase: domain,
@@ -145,8 +132,7 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
     );
 
     defense.fullDraftText = pipelineResult.draft.fullDraftText;
-    // Nunca sobrescrever as teses determinísticas com escolha de IA.
-    defense.selectedArgumentIds = (theses.length ? theses : defense.selectedArgumentIds);
+    defense.selectedArgumentIds = theses.length ? theses : defense.selectedArgumentIds;
 
     if (pipelineResult.controlled.reason === 'REFINED_VALID') {
       logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
@@ -162,7 +148,7 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
     domain.timeline.push({
       id: `tl_def_${Date.now()}`,
       title: 'Petição Administrativa Atualizada',
-      description: `Minuta da ${procedureType || 'defesa'} estruturada com ${selectedArgs.length} teses jurídicas.`,
+      description: `Minuta da ${procedureType} estruturada com ${theses.length} teses jurídicas.`,
       timestamp: new Date().toISOString(),
       type: 'defense',
     });
@@ -172,13 +158,12 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
 
     eventBus.publish(EventTopics.DEFENSE_DRAFT_FINALIZED, { caseId: domain.id }, 'system');
 
-    logger.info('system', 'defense_generated', 'defense_generated', `Defesa gerada para o caso ${domain.id} com ${selectedArgs.length} teses jurídicas.`, {
+    logger.info('system', 'defense_generated', 'defense_generated', `Defesa gerada para o caso ${domain.id} com ${theses.length} teses jurídicas.`, {
       caseId: domain.id,
       stage: domain.currentStage,
       procedureType,
     });
 
-    // Audit log for defense generation
     auditService.addAuditLog({
       id: `audit_${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -187,7 +172,7 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
       action: 'DEFENSE_GENERATED',
       targetResource: domain.id,
       ipHash: '9f83c68a765b1c44',
-      details: `Defesa gerada para o caso ${domain.id} com ${selectedArgs.length} teses jurídicas.`,
+      details: `Defesa gerada para o caso ${domain.id} com ${theses.length} teses jurídicas.`,
       gdprCompliant: true,
     });
 
