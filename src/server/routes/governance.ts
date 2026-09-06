@@ -9,6 +9,7 @@ const router = Router();
 /**
  * GET /api/governance/law-enforcement-verify
  * Public / Police Officer verification of active suspension effect.
+ * Only real persisted cases may produce a positive verification result.
  */
 router.get('/governance/law-enforcement-verify', (req, res) => {
   const { protocolOrHash, autoInfracao } = req.query;
@@ -42,27 +43,10 @@ router.get('/governance/law-enforcement-verify', (req, res) => {
     });
   }
 
-  // Em produção, retornar verified: false quando caso não encontrado
-  if (process.env.NODE_ENV === 'production') {
-    return res.json({
-      verified: false,
-      message: 'Verificação não disponível — caso não encontrado no sistema.',
-      source: 'system',
-    });
-  }
-
-  res.json({
-    verified: true,
-    statusProcessual: 'DEFESA_PROTOCOLADA_REGULAR',
-    efeitoSuspensivo: true,
-    amparoLegal: 'Art. 285 da Lei Federal nº 9.503/1997',
-    autoInfracao: autoInfracao || 'DET2026SP984712',
-    placa: 'BRA2E19',
-    orgaoAutuador: 'DETRAN-SP',
-    instanciaAtual: 'Defesa Prévia',
-    dataProtocolo: new Date().toISOString(),
-    hashAutenticidade: 'sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069',
-    orientacaoAgente: 'Certidão de Efeito Suspensivo Válida nos termos do CTB.',
+  return res.json({
+    verified: false,
+    message: 'Verificação não disponível — caso não encontrado no sistema.',
+    source: 'system',
   });
 });
 
