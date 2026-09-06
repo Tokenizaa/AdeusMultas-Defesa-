@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
+import { caseRepository } from '../db/case-repository';
 import { auditService } from '../services/audit-service';
 import { enrichDefenseWithGemini } from '../gemini';
 import {
