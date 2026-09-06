@@ -125,7 +125,9 @@ export class DocumentAssemblyEngine {
     } else if (payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0) {
       activeArgIds = payload.selectedArgumentIds;
     } else {
-      activeArgIds = procedure.applicableGrounds;
+      // FASE 3.5 — P0-07: sem análise e sem selectedArgumentIds, a autorização é
+      // explicitamente VAZIA. procedure.applicableGrounds NÃO é fallback.
+      activeArgIds = [];
     }
 
     const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
