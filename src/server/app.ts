@@ -108,7 +108,6 @@ export function createApp() {
     if (req.method !== 'PUT') return next();
     const match = req.path.match(/^\/cases\/([^/]+)$/);
     if (!match) return next();
-
     const caseId = decodeURIComponent(match[1]);
     const existingRow = databaseRows.get(caseId);
     if (!existingRow || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return next();
@@ -143,7 +142,6 @@ export function createApp() {
     return next();
   });
 
-  // Payment mutation/status endpoints are never anonymous.
   app.use('/api/payments', (req, res, next) => {
     const isPublicPriceLookup = req.method === 'GET' && req.path === '/resolve-price';
     const isGatewayWebhook = req.path.startsWith('/webhooks/');
@@ -154,8 +152,6 @@ export function createApp() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
 
-  // Public commercial operations remain authenticated. In production, client-supplied
-  // userId must match the authenticated identity.
   app.use('/api/commercial', authenticateToken, (req, res, next) => {
     if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) {
       return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
@@ -163,26 +159,21 @@ export function createApp() {
     next();
   }, commercialRoutes);
 
-  // WhatsApp sends require authentication and, for non-admins, ownership of the case.
   app.use('/api/communication', authenticateToken, (req, res, next) => {
     const isSendAction = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
     if (!isSendAction || req.user?.role === 'admin') return next();
-
     const caseId = req.body?.caseId;
     if (!caseId || typeof caseId !== 'string') {
       return res.status(403).json({ error: 'caseId é obrigatório para envio de WhatsApp por usuário não administrador.' });
     }
-
     const row = databaseRows.get(caseId);
     const ownerId = row?.user_id;
     if (!row || !ownerId || ownerId !== req.user?.id) {
       return res.status(403).json({ error: 'Você não tem permissão para enviar mensagens neste caso.' });
     }
-
     return next();
   });
 
-  // Marketing mutations are administrative operations; public GET status remains available.
   app.use('/api/marketing', (req, res, next) => {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
     return authenticateToken(req, res, (err?: any) => {
@@ -191,7 +182,6 @@ export function createApp() {
     });
   });
 
-  // Notification mutations/history require authentication. VAPID public key remains public.
   app.use('/api/notifications', (req, res, next) => {
     if (req.method === 'GET' && req.path === '/vapid-key') return next();
     return authenticateToken(req, res, (err?: any) => {
@@ -207,6 +197,17 @@ export function createApp() {
         }
       }
       next();
+    });
+  });
+
+  // Meta management, publishing and insights are privileged operations.
+  // Webhooks and OAuth callbacks remain public integration endpoints.
+  app.use('/api', (req, res, next) => {
+    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
+    if (!metaAdminPath) return next();
+    return authenticateToken(req, res, (err?: any) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
     });
   });
 
