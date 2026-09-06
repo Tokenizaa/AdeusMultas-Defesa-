@@ -120,7 +120,7 @@ function makeReq(overrides: Record<string, unknown> = {}): Request {
   return req as Request;
 }
 
-function row(id: string, userId?: string, claimToken?: string) {
+function row(id: string, userId?: string, claimToken?: string, evidenceJson?: object) {
   return {
     id,
     title: `Caso ${id}`,
@@ -146,6 +146,7 @@ function row(id: string, userId?: string, claimToken?: string) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     user_id: userId,
+    evidence_json: evidenceJson ? JSON.stringify(evidenceJson) : undefined,
   };
 }
 
@@ -448,5 +449,71 @@ describe('Fase 2 — autorização de casos (produção)', () => {
     const resTok = makeRes();
     await listHandler(reqTok, resTok, noopNext);
     expect((resTok.body as any[]).map((c) => c.id)).toEqual(['case_anon']);
+  });
+});
+
+describe('Fase 3.1-P1 — Evidence ownership boundary (Case → Evidence)', () => {
+  /**
+   * evidence_json é coluna dentro de cases — a proteção de ownership de Case
+   * cobre Evidence automaticamente. Estes testes verificam explicitamente o path.
+   */
+
+  it('K. usuário B não consegue GET evidence_json do caso de A (IDOR bloqueado)', async () => {
+    const evidenceA = { fotoRetencaoTrafego: true, manualVeiculoOuFotoPainel: false };
+    db.set('case_a', row('case_a', USER_A.id, undefined, evidenceA));
+    const req = makeReq({ params: { id: 'case_a' } });
+    await authenticate(req, 'TOKEN_B');
+
+    const res = makeRes();
+    await getHandler(req, res, noopNext);
+
+    // 403 — ownership do caso não permite acesso
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('L. usuário B não consegue PUT evidence_json no caso de A (modificação cruzada)', async () => {
+    db.set('case_a', row('case_a', USER_A.id));
+    const req = makeReq({
+      params: { id: 'case_a' },
+      body: {
+        title: 'Atualizado por atacante',
+        infraction: {
+          evidenceFlags: { fotoRetencaoTrafego: true },
+        },
+      },
+    });
+    await authenticate(req, 'TOKEN_B');
+
+    const res = makeRes();
+    await putHandler(req, res, noopNext);
+
+    expect(res.statusCode).toBe(403);
+    // evidence_json original intacto — não sofreu modificação
+    expect(db.get('case_a').evidence_json).toBeUndefined();
+  });
+
+  it('M. usuário A consegue ler e atualizar evidenceFlags no próprio caso', async () => {
+    const evidenceInicial = { fotoRetencaoTrafego: false };
+    db.set('case_a', row('case_a', USER_A.id, undefined, evidenceInicial));
+    const req = makeReq({
+      params: { id: 'case_a' },
+      body: {
+        title: 'Caso com evidência',
+        infraction: {
+          evidenceFlags: { fotoRetencaoTrafego: true },
+        },
+      },
+    });
+    await authenticate(req, 'TOKEN_A');
+
+    const res = makeRes();
+    await putHandler(req, res, noopNext);
+
+    expect(res.statusCode).toBe(200);
+    // Proprietário consegue atualizar — owner é preservado
+    expect(db.get('case_a').user_id).toBe(USER_A.id);
+    expect(db.get('case_a').evidence_json).toBeDefined();
+    const parsed = JSON.parse(db.get('case_a').evidence_json as string);
+    expect(parsed.fotoRetencaoTrafego).toBe(true);
   });
 });
