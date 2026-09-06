@@ -1,18 +1,19 @@
 import { Router } from 'express';
 import { databaseRows } from '../app';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
-import { authenticateToken } from '../middleware/auth-middleware';
+import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
 /**
  * GET /api/analytics/dashboard
  * Performance & Business Analytics Dashboard — real metrics from caseRepository.
+ * This is an administrative business-analytics surface and must not expose
+ * cross-user case aggregates to ordinary authenticated users.
  */
-router.get('/analytics/dashboard', authenticateToken, (req, res) => {
+router.get('/analytics/dashboard', authenticateToken, requireAdmin, (req, res) => {
   const allCases = Array.from(databaseRows.values()).map((r) => CanonicalMapper.rowToDomain(r));
 
-  // Métricas REAIS calculadas do banco de dados
   const totalProcessed = allCases.length;
   const paidCases = allCases.filter(
     (c) =>
@@ -22,7 +23,6 @@ router.get('/analytics/dashboard', authenticateToken, (req, res) => {
       c.status === 'defesa_pronta'
   );
 
-  // Taxa de deferimento baseada em cases com análise
   const analyzedCases = allCases.filter((c) => c.analysis || c.analiseIA);
   const successfulCases = analyzedCases.filter((c) => {
     const score = c.analysis?.overallSuccessRate || c.analiseIA?.scoreDeferimento || 0;
@@ -33,13 +33,10 @@ router.get('/analytics/dashboard', authenticateToken, (req, res) => {
       ? Number(((successfulCases.length / analyzedCases.length) * 100).toFixed(1))
       : 0;
 
-  // MRR baseado em pagamentos confirmados
   const mrr = paidCases.reduce((sum, c) => sum + (c.payment?.amount || 89.9), 0);
 
-  // Economia gerada estimada (R$ 240 por caso processado)
   const economiasGeradasEstimadas = totalProcessed * 240.0;
 
-  // Distribuição por órgão real
   const orgaosMap = new Map<string, { count: number; success: number }>();
   allCases.forEach((c) => {
     const orgao = c.infraction?.autuadorBody || 'Não informado';
@@ -59,7 +56,6 @@ router.get('/analytics/dashboard', authenticateToken, (req, res) => {
     .sort((a, b) => b.percentual - a.percentual)
     .slice(0, 5);
 
-  // Top infrações real
   const infracaoMap = new Map<string, { nome: string; count: number; gravidade: string }>();
   allCases.forEach((c) => {
     const code = c.infraction?.infractionCode || 'N/A';
