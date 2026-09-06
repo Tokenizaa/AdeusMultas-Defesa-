@@ -15,8 +15,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Upgrade npm (Arborist fix)
+        run: npm install --global npm@11.6.0
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: Run unit/audit tests (vitest)
         run: npm run test:unit
       - name: Typecheck
@@ -32,8 +34,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Upgrade npm (Arborist fix)
+        run: npm install --global npm@11.6.0
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run E2E (Playwright)
