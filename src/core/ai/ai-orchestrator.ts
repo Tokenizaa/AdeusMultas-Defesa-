@@ -263,6 +263,6 @@ export async function runControlledPipeline(input: PipelineInput, opts?: { tone?
 
 // Re-export utilitário: teses permitidas (só do catálogo / análise).
 export function permittedTheses(analysis: CaseAnalysis): LegalArgumentDomain[] {
-  const recommendedIds = new Set((analysis.recommendedArguments ?? []).map((argument) => argument.id));
-  return ARGUMENTS_CATALOG.filter((argument) => recommendedIds.has(argument.id)) as LegalArgumentDomain[];
+  const canonicalIds = new Set(ARGUMENTS_CATALOG.map((argument) => argument.id));
+  return (analysis.recommendedArguments ?? []).filter((argument) => canonicalIds.has(argument.id));
 }
