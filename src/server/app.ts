@@ -111,9 +111,7 @@ export function createApp() {
 
     const caseId = decodeURIComponent(match[1]);
     const existingRow = databaseRows.get(caseId);
-    if (!existingRow || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
-      return next();
-    }
+    if (!existingRow || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return next();
 
     const existingDomain = CanonicalMapper.rowToDomain(existingRow);
     const sanitized: Record<string, unknown> = {};
@@ -145,7 +143,7 @@ export function createApp() {
     return next();
   });
 
-  // FASE 2.5 — payment mutation/status endpoints are never anonymous.
+  // Payment mutation/status endpoints are never anonymous.
   app.use('/api/payments', (req, res, next) => {
     const isPublicPriceLookup = req.method === 'GET' && req.path === '/resolve-price';
     const isGatewayWebhook = req.path.startsWith('/webhooks/');
@@ -154,11 +152,10 @@ export function createApp() {
   });
 
   app.use('/api/admin', adminRoutes);
-  // Every admin-commercial operation is protected at the mount boundary.
   app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
 
-  // Public commercial endpoints remain authenticated. In production, a client
-  // supplied userId must match the authenticated identity.
+  // Public commercial operations remain authenticated. In production, client-supplied
+  // userId must match the authenticated identity.
   app.use('/api/commercial', authenticateToken, (req, res, next) => {
     if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) {
       return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
@@ -166,10 +163,9 @@ export function createApp() {
     next();
   }, commercialRoutes);
 
-  // WhatsApp management actions are authenticated. For message/document/media
-  // sends, non-admin users must bind the action to a case they own.
+  // WhatsApp sends require authentication and, for non-admins, ownership of the case.
   app.use('/api/communication', authenticateToken, (req, res, next) => {
-    const isSendAction = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path.replace(/^\/communication\//, ''));
+    const isSendAction = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
     if (!isSendAction || req.user?.role === 'admin') return next();
 
     const caseId = req.body?.caseId;
@@ -192,6 +188,25 @@ export function createApp() {
     return authenticateToken(req, res, (err?: any) => {
       if (err) return next(err);
       return requireAdmin(req, res, next);
+    });
+  });
+
+  // Notification mutations/history require authentication. VAPID public key remains public.
+  app.use('/api/notifications', (req, res, next) => {
+    if (req.method === 'GET' && req.path === '/vapid-key') return next();
+    return authenticateToken(req, res, (err?: any) => {
+      if (err) return next(err);
+      if (req.user?.role !== 'admin') {
+        const requestedUserId = req.body?.userId;
+        const requestedEmail = req.body?.userEmail || req.body?.email;
+        if (requestedUserId !== undefined && requestedUserId !== req.user?.id) {
+          return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
+        }
+        if (requestedEmail !== undefined && requestedEmail !== req.user?.email) {
+          return res.status(403).json({ error: 'Email não corresponde ao usuário autenticado.' });
+        }
+      }
+      next();
     });
   });
 
