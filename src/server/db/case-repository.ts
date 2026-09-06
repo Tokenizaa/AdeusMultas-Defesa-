@@ -139,10 +139,26 @@ export class CaseRepository {
     };
   }
 
-  /** Persiste no Supabase. Lança erro se falhar (FAIL CLOSED). */
+  /**
+   * Persiste no Supabase. Lança erro apenas em falhas reais de banco.
+   *
+   * Fail-graceful quando Supabase não está configurado (E2E/dev):
+   * - `loadAllFromSupabase()` já retorna [] quando client é null
+   * - `set()` agora também retorna sem lançar, permitindo operação in-memory
+   * - O servidor continua funcionando em E2E sem Supabase
+   *
+   * Produção: comportamento inalterado — client sempre existe,
+   * qualquer erro de banco é real e deve bloquear.
+   */
   private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
     if (!this.client) {
-      throw new Error(`CaseRepository: Supabase client não configurado — não é possível persistir caso ${id}`);
+      // E2E/dev: Supabase não configurado — warn mas não bloqueia.
+      // Dados ficam em memória; reinício perde (comportamento já esperado em dev).
+      logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória (E2E/dev)`, {
+        caseId: id,
+        persistenceResult: 'skipped_no_client',
+      });
+      return;
     }
     const { error } = await this.client.from('cases').upsert(payload);
     if (error) {

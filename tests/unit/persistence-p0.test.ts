@@ -10,6 +10,7 @@ import { caseRepository } from '@/server/db/case-repository';
 import { PagBankIntegrationService } from '@/server/integrations/pagbank';
 import type { CaseRow } from '@/server/types';
 import { CriarPagamentoResult } from '@/server/integrations/pagbank/orders';
+import { logger } from '@/server/observability/logger';
 
 describe('Fase 7: Critical Persistence Failures', () => {
   const mockCase: CaseRow = {
@@ -120,14 +121,24 @@ describe('Fase 7: Critical Persistence Failures', () => {
       expect(storedCase?.title).toBe('Test Case'); // Original value, not updated
     });
 
-    it('should throw error when Supabase client not configured', async () => {
+    it('should warn and continue in-memory when Supabase client not configured (E2E/dev)', async () => {
       vi.spyOn(caseRepository, 'client', 'get').mockReturnValue(null);
+      const warnSpy = vi.spyOn(logger, 'warn');
 
-      await expect(caseRepository.set(mockCase.id, mockCase))
-        .rejects
-        .toThrow('CaseRepository: Supabase client não configurado — não é possível persistir caso case_test_123');
+      // Should NOT throw — persists in-memory only for E2E/dev scenarios
+      await expect(caseRepository.set(mockCase.id, mockCase)).resolves.toBeUndefined();
 
-      expect(caseRepository.get(mockCase.id)).toBeUndefined();
+      // Case should still be stored in-memory
+      expect(caseRepository.get(mockCase.id)).toEqual(mockCase);
+
+      // Should have logged a warning about skipped persistence
+      expect(warnSpy).toHaveBeenCalledWith(
+        'supabase',
+        'case_repository',
+        'persist',
+        expect.stringContaining('Supabase não configurado'),
+        expect.objectContaining({ caseId: mockCase.id, persistenceResult: 'skipped_no_client' }),
+      );
     });
   });
 
