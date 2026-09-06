@@ -146,8 +146,6 @@ export function createApp() {
   });
 
   // FASE 2.5 — payment mutation/status endpoints are never anonymous.
-  // Public exceptions: commercial price lookup and verified gateway webhooks.
-  // This prevents PAYMENT_MODE=sandbox from becoming an authentication bypass.
   app.use('/api/payments', (req, res, next) => {
     const isPublicPriceLookup = req.method === 'GET' && req.path === '/resolve-price';
     const isGatewayWebhook = req.path.startsWith('/webhooks/');
@@ -156,19 +154,47 @@ export function createApp() {
   });
 
   app.use('/api/admin', adminRoutes);
-  // The same commercial router is also mounted publicly at /api/commercial.
-  // This mount is therefore explicitly protected so every /api/admin/commercial
-  // operation (including GET/reporting endpoints) requires an authenticated admin.
+  // Every admin-commercial operation is protected at the mount boundary.
   app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
-  // Public commercial operations are still authenticated. In production, any
-  // client-supplied userId must match the authenticated identity; it cannot be
-  // used to impersonate another customer for coupons/eligibility/referrals.
+
+  // Public commercial endpoints remain authenticated. In production, a client
+  // supplied userId must match the authenticated identity.
   app.use('/api/commercial', authenticateToken, (req, res, next) => {
     if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) {
       return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
     }
     next();
   }, commercialRoutes);
+
+  // WhatsApp management actions are authenticated. For message/document/media
+  // sends, non-admin users must bind the action to a case they own.
+  app.use('/api/communication', authenticateToken, (req, res, next) => {
+    const isSendAction = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path.replace(/^\/communication\//, ''));
+    if (!isSendAction || req.user?.role === 'admin') return next();
+
+    const caseId = req.body?.caseId;
+    if (!caseId || typeof caseId !== 'string') {
+      return res.status(403).json({ error: 'caseId é obrigatório para envio de WhatsApp por usuário não administrador.' });
+    }
+
+    const row = databaseRows.get(caseId);
+    const ownerId = row?.user_id;
+    if (!row || !ownerId || ownerId !== req.user?.id) {
+      return res.status(403).json({ error: 'Você não tem permissão para enviar mensagens neste caso.' });
+    }
+
+    return next();
+  });
+
+  // Marketing mutations are administrative operations; public GET status remains available.
+  app.use('/api/marketing', (req, res, next) => {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+    return authenticateToken(req, res, (err?: any) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
+    });
+  });
+
   app.use('/api/agents', agentsRoutes);
   app.use('/api/monitoring', monitoringRoutes);
   app.use('/api/settings', settingsRoutes);
