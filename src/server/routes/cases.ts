@@ -236,15 +236,35 @@ router.delete('/cases/:id', authenticateToken, async (req, res) => {
     return denyCaseAccess(req.user, res);
   }
 
-  // Anonimiza campos pessoais — mantém estrutura para auditoria
+  // Anonimiza TODOS os campos que contêm dados pessoais (LGPD Art. 5 I).
+  // Campos de infração/veículo são mantidos porque descrevem o evento
+  // de violação (não identificam diretamente uma pessoa).
   const anonymizedRow: typeof row = {
     ...row,
+    // Identificação pessoal direta
     client_name: '[REMOVIDO]',
     client_email: undefined,
     client_phone: undefined,
     client_cpf: undefined,
+    // Vinculação a conta
+    user_id: undefined,
+    // Dados processuais que podem conter PII
     applicant_json: undefined,
     defense_draft_json: undefined,
+    analysis_json: undefined,
+    evidence_json: undefined,
+    ocr_auxiliary_json: undefined,
+    timeline_json: undefined,
+    claim_token: undefined,
+    commercial_offer_id: undefined,
+    formal_flaws_json: undefined,
+    protocol_info_json: undefined,
+    // Condutor real (quando aplicável — pode ter CNH/Cpf do verdadeiro motorista)
+    real_driver_name: undefined,
+    real_driver_cpf: undefined,
+    real_driver_cnh: undefined,
+    // Contexto do celular (pode conter identificadores)
+    cellphone_circumstance: undefined,
     updated_at: new Date().toISOString(),
   };
 

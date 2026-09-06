@@ -144,8 +144,8 @@ class StructuredLogger {
     sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, 'AIza••••••••');
     // Mask full CPF numbers
     sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, '***.$2.***-**');
-    // Mask full CNH numbers (11 digits + category: 00123456789AB)
-    sanitized = sanitized.replace(/\b(\d{2})\d{7}(\d{4}[A-Z]{2})\b/g, '**.*******$2');
+    // Mask full CNH numbers (11 digits + 2 category letters: 00123456789AB)
+    sanitized = sanitized.replace(/\b(\d{11})([A-Z]{2})\b/g, '***********$2');
     // Mask RG numbers (typically 2-3 digits followed by dash and check digit, e.g. 12.345.678-9)
     sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, '**.***.***-*');
     return sanitized;
@@ -161,9 +161,9 @@ class StructuredLogger {
 
   private maskCnh(cnh: string): string {
     // CNH format: up to 11 digits + 2 category letters (e.g. 00123456789AB)
-    const clean = cnh.replace(/\D/g, '');
-    if (clean.length >= 9) {
-      return `*******${clean.slice(-4)}`;
+    const match = cnh.match(/^(\d{11})([A-Z]{2})$/);
+    if (match) {
+      return `***********${match[2]}`;
     }
     return '****.******************';
   }
