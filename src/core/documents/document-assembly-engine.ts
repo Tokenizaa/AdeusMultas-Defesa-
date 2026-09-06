@@ -130,7 +130,9 @@ export class DocumentAssemblyEngine {
       activeArgIds = [];
     }
 
-    const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
+    const matchedArguments: typeof ARGUMENTS_CATALOG[number][] = activeArgIds
+      .map((id) => ARGUMENTS_CATALOG.find((a) => a.id === id))
+      .filter(Boolean) as typeof ARGUMENTS_CATALOG[number][];
     const preliminaryArgs = matchedArguments.filter(
       (a) => a.category === 'preliminar' || a.category === 'formal'
     );

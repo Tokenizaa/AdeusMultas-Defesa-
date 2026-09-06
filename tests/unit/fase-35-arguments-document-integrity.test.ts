@@ -188,6 +188,27 @@ describe('FASE 3.5 — Arguments → Document integrity', () => {
       });
       expect(result.selectedArgumentIds).toEqual(['ARG-003', 'ARG-001', 'ARG-002']);
     });
+
+    it('P0-06: fullDraftText reflects recommendedArguments order for same-category arguments', () => {
+      // ARG-001 (merito) and ARG-003 (merito) share the same category, so they are NOT
+      // split into separate sections — the engine preserves their relative order.
+      // This verifies that within a category, input order governs text order.
+      const analysis = makeAnalysis(['ARG-003', 'ARG-001']); // merit + merit
+      const result = DocumentAssemblyEngine.assemble({
+        ...BASE_PAYLOAD,
+        analysis,
+      });
+
+      const arg003 = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-003')!;
+      const arg001 = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-001')!;
+
+      // ARG-003 title appears BEFORE ARG-001 title in the text
+      const idx003 = result.fullDraftText.indexOf(arg003.title.toUpperCase());
+      const idx001 = result.fullDraftText.indexOf(arg001.title.toUpperCase());
+      expect(idx003).toBeLessThan(idx001);
+      // selectedArgumentIds also preserves the same order
+      expect(result.selectedArgumentIds).toEqual(['ARG-003', 'ARG-001']);
+    });
   });
 
   describe('P0-07 — No legal fallback when authorization is empty', () => {

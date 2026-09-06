@@ -98,7 +98,25 @@ router.get('/cases/:id', authenticateToken, (req, res) => {
     return denyCaseAccess(req.user, res);
   }
 
-  res.json(CanonicalMapper.rowToDomain(row));
+  const domain = CanonicalMapper.rowToDomain(row);
+
+  // FASE 3.5 — Read sanitization: se defenseDraft foi persistido com análise,
+  // re-aplica permittedTheses para garantir que selectedArgumentIds não foi
+  // adulterado na camada de persistência. Isso fecha o buraco onde um agente
+  // interno ou falha de integridade modificaria defense_draft_json diretamente.
+  if (domain.defenseDraft && domain.analysis) {
+    const authorizedTheses = permittedTheses(domain.analysis);
+    const authorizedIds = new Set(authorizedTheses.map((t) => t.id));
+    const sanitizedIds = domain.defenseDraft.selectedArgumentIds.filter((id) =>
+      authorizedIds.has(id)
+    );
+    domain.defenseDraft = {
+      ...domain.defenseDraft,
+      selectedArgumentIds: sanitizedIds,
+    };
+  }
+
+  res.json(domain);
 });
 
 router.post('/cases', authenticateToken, async (req, res) => {
