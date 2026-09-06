@@ -124,6 +124,10 @@ class StructuredLogger {
         cleaned[k] = '••••[PROTEGIDO]••••';
       } else if (k === 'cpf' || k === 'clientCpf' || k === 'applicantCpf') {
         cleaned[k] = typeof v === 'string' ? this.maskCpf(v) : v;
+      } else if (k === 'cnh' || k === 'clientCnh' || k === 'applicantCnh') {
+        cleaned[k] = typeof v === 'string' ? this.maskCnh(v) : v;
+      } else if (k === 'rg' || k === 'clientRg' || k === 'applicantRg') {
+        cleaned[k] = typeof v === 'string' ? this.maskRg(v) : v;
       } else {
         cleaned[k] = this.sanitize(v);
       }
@@ -140,6 +144,10 @@ class StructuredLogger {
     sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, 'AIza••••••••');
     // Mask full CPF numbers
     sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, '***.$2.***-**');
+    // Mask full CNH numbers (11 digits + category: 00123456789AB)
+    sanitized = sanitized.replace(/\b(\d{2})\d{7}(\d{4}[A-Z]{2})\b/g, '**.*******$2');
+    // Mask RG numbers (typically 2-3 digits followed by dash and check digit, e.g. 12.345.678-9)
+    sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, '**.***.***-*');
     return sanitized;
   }
 
@@ -147,6 +155,24 @@ class StructuredLogger {
     const clean = cpf.replace(/\D/g, '');
     if (clean.length === 11) {
       return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
+    }
+    return '***.***.***-**';
+  }
+
+  private maskCnh(cnh: string): string {
+    // CNH format: up to 11 digits + 2 category letters (e.g. 00123456789AB)
+    const clean = cnh.replace(/\D/g, '');
+    if (clean.length >= 9) {
+      return `*******${clean.slice(-4)}`;
+    }
+    return '****.******************';
+  }
+
+  private maskRg(rg: string): string {
+    // RG format: up to 9 digits + check digit (e.g. 12.345.678-9)
+    const clean = rg.replace(/\D/g, '');
+    if (clean.length >= 7) {
+      return `***.${clean.slice(3, 7)}.***-*`;
     }
     return '***.***.***-**';
   }

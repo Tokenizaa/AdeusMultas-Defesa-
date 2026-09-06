@@ -10,6 +10,7 @@ export const EventTopics = {
   CASE_UPDATED: 'case.updated',
   CASE_CLAIMED: 'case.claimed',
   CASE_STAGE_CHANGED: 'case.stage_changed',
+  CASE_DELETED: 'case.deleted',
 
   // OCR & Analysis
   OCR_UPLOADED: 'ocr.uploaded',

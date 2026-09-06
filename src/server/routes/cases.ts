@@ -222,6 +222,51 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
 
+// DELETE /cases/:id — LGPD Art. 18: direito à eliminação
+// Os dados pessoais são anonimizados; a estrutura do caso permanece para
+// fins de auditoria e conformidade legal. LGPD Art. 4 permite anonimização
+// como alternativa à exclusão total.
+router.delete('/cases/:id', authenticateToken, async (req, res) => {
+  const row = databaseRows.get(req.params.id);
+  if (!row) {
+    return res.status(404).json({ error: 'Caso não encontrado' });
+  }
+
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
+  }
+
+  // Anonimiza campos pessoais — mantém estrutura para auditoria
+  const anonymizedRow: typeof row = {
+    ...row,
+    client_name: '[REMOVIDO]',
+    client_email: undefined,
+    client_phone: undefined,
+    client_cpf: undefined,
+    applicant_json: undefined,
+    defense_draft_json: undefined,
+    updated_at: new Date().toISOString(),
+  };
+
+  await databaseRows.set(req.params.id, anonymizedRow);
+
+  auditLogs.unshift({
+    id: `audit_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    actor: req.user?.email || req.user?.id || 'unknown',
+    role: req.user?.role === 'admin' ? 'admin' : 'citizen',
+    action: 'CASE_ANONYMIZED',
+    targetResource: req.params.id,
+    ipHash: '9f83c68a765b1c41',
+    details: 'Caso anonimizado via requisição LGPD Art. 18 — dados pessoais removidos.',
+    gdprCompliant: true,
+  });
+
+  eventBus.publish(EventTopics.CASE_DELETED, { caseId: req.params.id }, 'case_engine');
+
+  res.json({ success: true, message: 'Dados pessoais removidos. Caso retido para conformidade legal.' });
+});
+
 router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
