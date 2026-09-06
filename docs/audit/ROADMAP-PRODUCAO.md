@@ -28,10 +28,10 @@
 
 | ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
 |----|------|----------|--------|-------------|-----------|-----|------------|
-| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | IMPLEMENTED | — | 3 problemas → correções: (1) `authenticateToken` em `src/server/routes/ocr.ts`; (2) SSRF protection definitiva: raw sockets (net/tls), HTTPS conecta em validatedIP com servername=hostname (SNI), validação IPv4 completa (127.0.0.0/8, 0.0.0.0/8, RFC1918, CGN, link-local, benchmarking, documentação, multicast 224/4, reserved), IPv6 completa (loopback, IPv4-mapped, ULA, link-local, multicast, Teredo, ORCHID, discard), resolveAllIPs (valida TODOS os registros A+AAAA, fail-closed on DNS error), TOCTOU eliminado (mesmo IP validado é usado no socket), path+query preservados; (3) Limite 7MB base64, streaming 5MB, redirect manual | 427083f7d9a3278fc22f0cb30a4d2de40bea03f8 | Upload real não implementado — apenas nome do arquivo enviado. Severidades: Missing auth=Medium, SSRF=High, Upload não implementado=Low |
-| 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | IMPLEMENTED | 1.1 | 3 correções (4 commits): (1) IDOR generate-defense sem auth; (2) Map envelopeOwnership→banco; (3) backfill envelopes históricos + sintaxe SQL UUIDv5. 11 testes novos (envelope-repository, UUIDv5 consistency). 629/629 testes. 3 erros TS pré-existentes (ocr-service). | 4ad85de | Authorization verificada: generate-defense, envelopes Documenso (6 endpoints). user_id do JWT, nunca do body. belongsToUser via Supabase (sobrevive a restart). Backfill UUIDv5 via digest() pgcrypto. RLS policies atualizadas. |
-| 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | PENDING | 1.2 | — | — | — |
-| 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | PENDING | 1.3 | — | — | — |
+| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | IMPLEMENTED | — | 3 problemas → correções: (1) `authenticateToken` em `src/server/routes/ocr.ts`; (2) SSRF protection definitiva: raw sockets (net/tls), HTTPS conecta em validatedIP com servername=hostname (SNI), validação IPv4 completa, IPv6 completa, resolveAllIPs, TOCTOU eliminado, path+query preservados; (3) limites e redirects | 427083f7d9a3278fc22f0cb30a4d2de40bea03f8 | Upload real não implementado — apenas nome do arquivo enviado. |
+| 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | VERIFIED | 1.1 | Ownership de envelopes persistido no banco; backfill histórico; UUIDv5 determinístico; RLS real validado no Supabase | 20260905000001 | Projeto `llmxnpgjpxcvyrqjkfwb`: `documenso_envelopes.user_id`, índice, policies e `domain_to_uuid()` validados no banco real. |
+| 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | VERIFIED | 1.2 | Baseline RLS aplicado aos 5 buckets; 8 policies; `marketing-assets` público somente para leitura; escritas administrativas; buckets privados sem acesso público | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Banco real confirmou 5 buckets. `storage.objects` saiu de 0 policies para 8. Buckets privados sem objetos históricos. |
+| 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | VERIFIED | 1.3 | Auditoria real dos 8 objetos: 0 nomes inválidos, 0 padrões de traversal, 0 caminhos absolutos; todos os objetos existentes pertencem exclusivamente ao bucket público `marketing-assets`; buckets privados permanecem sem objetos | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Os 8 paths existentes são UUID + sufixo de mídia (`*_diaN.png`), sem segmentos de pasta. Como todos os buckets privados são vazios e suas escritas não são autorizadas a usuários comuns, não há vetor atual de mistura entre usuários/cases. Qualquer futuro fluxo privado deverá definir explicitamente owner/case no path ou metadado antes de liberar acesso de usuário. |
 | 1.5 | Validação de arquivos | Verificar validação de tipo, tamanho e conteúdo de arquivos | PENDING | 1.4 | — | — | — |
 | 1.6 | Correções dos achados | Aplicar correções identificadas nas subfases anteriores | PENDING | 1.5 | — | — | — |
 | 1.7 | Download / acesso aos arquivos | Verificar que o download é seguro e autorizado | PENDING | 1.6 | — | — | — |
@@ -62,7 +62,7 @@
 | 3.3 | Analysis → Arguments | Verificar integridade da cadeia Analysis → Arguments | PENDING | 3.2 | — | — | — |
 | 3.4 | Arguments → Document | Verificar integridade da cadeia Arguments → Document | PENDING | 3.3 | — | — | — |
 | 3.5 | Document → Persistence | Verificar integridade da persistência de documentos | PENDING | 3.4 | — | — | — |
-| 3.6 | Client → Server trust boundary | Verificar边界 de confiança Client ↔ Server | PENDING | 3.5 | — | — | — |
+| 3.6 | Client → Server trust boundary | Verificar limite de confiança Client ↔ Server | PENDING | 3.5 | — | — | — |
 | 3.7 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 3.6 | — | — | — |
 
 ---
@@ -139,3 +139,4 @@
 - Cada atualização de status deve incluir evidência concreta.
 - SHAs devem ser registrados apenas quando uma correção for implementada e verificada.
 - Não inventar resultados — registrar apenas o que foi efetivamente realizado.
+- Storage: operações sobre objetos devem usar a API de Storage; consultas SQL são somente para evidência/auditoria. As policies RLS são versionadas em migrations.
