@@ -14,33 +14,23 @@ import {
 } from '../../core/ai/ai-orchestrator';
 import { logger } from '../observability/logger';
 import { CaseDomain, CaseRow } from '../../types';
+import { computeDefenseIntegrityHash, hasValidDefenseIntegrity } from '../../core/documents/defense-integrity';
 
 const router = Router();
 
-// Garantir registro do provider de refinamento controlado
 registerRefinementProvider({
   refineProse: async (draftText: string) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   },
 });
 
-// ─── Regra central de autorização de casos (Fase 2 / IDOR) ───
-// FAIL CLOSED:
-// - sem usuário autenticado → sem acesso;
-// - caso sem user_id → inacessível a usuários não-admin (ausência de owner
-//   NUNCA é autorização);
-// - identidade vem exclusivamente de req.user (validada pelo middleware),
-//   nunca de headers, query ou body controlados pelo cliente.
-// - admin tem acesso total.
 function canAccessCase(user: AuthenticatedUser | undefined, row: CaseRow): boolean {
   if (!user) return false;
   if (user.role === 'admin') return true;
   if (!row.user_id) return false;
-  // Compatibilidade com email: identidade derivada de req.user (validada), nunca do cliente.
   return row.user_id === user.id || (!!user.email && row.user_id === user.email);
 }
 
-// Resposta uniforme 401 (sem identidade) / 403 (sem permissão). Retorna true se negou.
 function denyCaseAccess(
   user: AuthenticatedUser | undefined,
   res: Response
@@ -53,67 +43,67 @@ function denyCaseAccess(
   return true;
 }
 
-// Cases CRUD & Lifecycle Endpoints
-
-// GET /api/cases — anti-IDOR: cidadãos veem somente os próprios casos.
 router.get('/cases', authenticateToken, (req, res) => {
   const { userId, claimToken } = req.query;
   const user = req.user;
-
   let allRows = Array.from(databaseRows.values());
 
   if (user && user.role !== 'admin') {
-    // Cidadão: somente casos próprios — FAIL CLOSED: sem match → lista vazia.
     const userSpecific = allRows.filter((r) =>
       r.user_id === user.id || (user.email && r.user_id === user.email)
     );
     allRows = userSpecific;
   } else if (user?.role === 'admin' && userId) {
-    // Admin: filtro opcional por dono (identidade do cliente não é usada aqui).
     allRows = allRows.filter((r) => r.user_id === userId);
   } else if (!user && claimToken) {
-    // Fluxo anônimo legítimo: claim token como prova de posse.
     allRows = allRows.filter((r) => r.claim_token === claimToken);
   } else if (!user) {
-    // FAIL CLOSED: visitante sem claim token não lista casos.
     allRows = [];
   }
 
   const domains: CaseDomain[] = allRows.map((r) => CanonicalMapper.rowToDomain(r));
-  // Sort newest first
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });
 
-// GET /api/cases/:id — proteção anti-IDOR via regra central
 router.get('/cases/:id', authenticateToken, (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso não encontrado' });
   }
 
-  // Regra central de autorização: proprietário → 200, admin → 200,
-  // outro usuário → 403, sem identidade válida → 401.
   if (!canAccessCase(req.user, row)) {
     return denyCaseAccess(req.user, res);
   }
 
   const domain = CanonicalMapper.rowToDomain(row);
 
-  // FASE 3.5 — Read sanitization: se defenseDraft foi persistido com análise,
-  // re-aplica permittedTheses para garantir que selectedArgumentIds não foi
-  // adulterado na camada de persistência. Isso fecha o buraco onde um agente
-  // interno ou falha de integridade modificaria defense_draft_json diretamente.
   if (domain.defenseDraft && domain.analysis) {
+    const draft = domain.defenseDraft as any;
+
+    // FASE 3.7 — fail closed: legacy/tampered artifacts without a valid
+    // deterministic fingerprint are never returned as a valid legal document.
+    if (!hasValidDefenseIntegrity(draft, domain.analysis as any)) {
+      domain.defenseDraft = undefined;
+      return res.status(409).json({
+        error: 'Documento de defesa inválido ou adulterado. Gere novamente a defesa antes de consultá-la.',
+        code: 'DEFENSE_INTEGRITY_FAILED',
+      });
+    }
+
     const authorizedTheses = permittedTheses(domain.analysis);
     const authorizedIds = new Set(authorizedTheses.map((t) => t.id));
     const sanitizedIds = domain.defenseDraft.selectedArgumentIds.filter((id) =>
       authorizedIds.has(id)
     );
-    domain.defenseDraft = {
-      ...domain.defenseDraft,
-      selectedArgumentIds: sanitizedIds,
-    };
+
+    if (sanitizedIds.length !== domain.defenseDraft.selectedArgumentIds.length) {
+      domain.defenseDraft = undefined;
+      return res.status(409).json({
+        error: 'Documento de defesa contém teses não autorizadas pela análise jurídica canônica.',
+        code: 'DEFENSE_AUTHORIZATION_FAILED',
+      });
+    }
   }
 
   res.json(domain);
@@ -126,12 +116,7 @@ router.post('/cases', authenticateToken, async (req, res) => {
       domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     }
 
-    // P0 (Fase 2): o cliente NUNCA escolhe o proprietário.
-    // userId vindo do body é IGNORADO; user_id deriva exclusivamente de req.user.
     delete (domainData as any).userId;
-
-    // P0 (Fase 3): o cliente NUNCA escolhe a autoridade jurídica.
-    // analysis vinda do body é IGNORADA; a análise é SEMPRE produzida pelo servidor.
     delete (domainData as any).analysis;
 
     if (req.user?.id) {
@@ -141,7 +126,6 @@ router.post('/cases', authenticateToken, async (req, res) => {
       if (isUuid || isEmail) {
         domainData.userId = uid;
       }
-      // Fallback: também stamp email se disponível
       if (req.user.email && !domainData.userId) {
         domainData.userId = req.user.email;
       }
@@ -152,13 +136,10 @@ router.post('/cases', authenticateToken, async (req, res) => {
     }
     domainData.updatedAt = new Date().toISOString();
 
-    // Run legal RAG analysis (gratuita, sem minuta) — SEMPRE pelo servidor.
     if (domainData.infraction) {
       domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
     }
 
-    // Se o caso já é pago e os dados de qualificação reais do requerente estão presentes,
-    // gera deterministicamente a minuta da defesa sem fabricar dados.
     if ((domainData.isPaid || domainData.status === 'defesa_pronta') && !domainData.defenseDraft && domainData.applicant) {
       const a = domainData.applicant;
       if (a.applicantName && a.applicantCpf && a.applicantCnh && a.addressStreet && a.addressCityState) {
@@ -178,6 +159,10 @@ router.post('/cases', authenticateToken, async (req, res) => {
           },
           domainData.analysis?.recommendedArguments || [],
           domainData.serviceType || 'recurso_jari'
+        );
+        (domainData.defenseDraft as any).integrityHash = computeDefenseIntegrityHash(
+          domainData.defenseDraft as any,
+          domainData.analysis as any
         );
       }
     }
@@ -211,7 +196,6 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
     return res.status(404).json({ error: 'Caso não encontrado' });
   }
 
-  // P0 (Fase 2): autorização ANTES de qualquer alteração.
   if (!canAccessCase(req.user, existingRow)) {
     return denyCaseAccess(req.user, res);
   }
@@ -221,14 +205,8 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   updatedDomain.updatedAt = new Date().toISOString();
 
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
-  // P0: o proprietário é preservado SEMPRE a partir do registro existente.
-  // userId/user_id do body (mesmo `userId: "outro-usuario"`) é ignorado —
-  // troca de ownership via PUT é impossível.
   newRow.user_id = existingRow.user_id;
-  
-  // P0 (Fase 3): a autoridade jurídica (analysis) é preservada do registro existente.
-  // O cliente NÃO pode substituir/injetar analysis via PUT.
-  // Se houver infraction nova, recalcular análise pelo servidor.
+
   if (updatedDomain.infraction) {
     newRow.analysis_json = JSON.stringify(
       RagPipeline.analyzeInfraction(req.params.id, updatedDomain.infraction)
@@ -236,7 +214,7 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   } else {
     newRow.analysis_json = existingRow.analysis_json;
   }
-  
+
   await databaseRows.set(req.params.id, newRow);
 
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, 'case_engine');
@@ -244,15 +222,12 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
 
-// Claim Anonymous Case (Modal Cadastro -> Link account)
 router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso anônimo não encontrado' });
   }
 
-  // P0 (Fase 2): claim exige identidade autenticada — após o claim,
-  // user_id deriva exclusivamente de req.user.
   if (!req.user?.id) {
     return res.status(401).json({ error: 'Não autenticado' });
   }
@@ -260,13 +235,10 @@ router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   const isOwner =
     row.user_id === req.user.id || (req.user.email && row.user_id === req.user.email);
 
-  // Caso já vinculado a outro usuário → negar SEMPRE (inclusive admin).
   if (row.user_id && !isOwner) {
     return res.status(403).json({ error: 'Caso já vinculado a outro usuário' });
   }
 
-  // Caso anônimo → claim somente mediante claim_token válido como prova de posse.
-  // Email/CPF/nome enviados pelo cliente NÃO são prova de posse.
   if (!row.user_id) {
     const { claimToken } = req.body;
     if (!row.claim_token || claimToken !== row.claim_token) {
@@ -282,8 +254,6 @@ router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   domain.clientCpf = cpf || domain.clientCpf;
   domain.isAnonymous = false;
   domain.updatedAt = new Date().toISOString();
-
-  // Claim autenticado vincula o caso ao dono da sessão (cases.user_id).
   domain.userId = req.user.id;
 
   domain.timeline.push({
@@ -302,15 +272,12 @@ router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
   res.json(domain);
 });
 
-// Defense Generation & AI Enrichment
 router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Caso não encontrado' });
   }
 
-  // P0 (Fase 2): autorização ANTES de qualquer processamento
-  // (RAG, minuta, IA, alteração do caso). Usuário A no caso de B → rejeitado.
   if (!canAccessCase(req.user, row)) {
     return denyCaseAccess(req.user, res);
   }
@@ -318,15 +285,10 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   const domain = CanonicalMapper.rowToDomain(row);
   const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
 
-  // P0 (Fase 3): autoridade jurídica canônica — o servidor é a única fonte de teses.
-  // selectedArgumentIds do body é IGNORADO (compatibilidade API: aceita mas não usa).
-  // procedimento do body é IGNORADO se houver recommendedProcedure na análise canônica.
   const canonicalAnalysis = domain.analysis as any;
   const canonicalArguments = (canonicalAnalysis?.recommendedArguments as any) || [];
   const canonicalProcedure = canonicalAnalysis?.recommendedProcedure || domain.serviceType || 'recurso_jari';
 
-  // Dados de qualificação do requerente DEVEM vir do onboarding real (body ou
-  // domain.applicant). NUNCA fabricar CNH/cidade. FAIL CLOSED: ausentes → erro.
   const b = applicantData as any;
   const resolvedApplicant = (b && (b.name !== undefined || b.applicantName !== undefined))
     ? {
@@ -372,7 +334,6 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
     };
   }
 
-  // Geração da minuta SOMENTE com teses canônicas derivadas da análise do servidor.
   let defense = RagPipeline.generateDefenseDraft(
     domain.id,
     domain.infraction,
@@ -387,13 +348,7 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
     defense.factsNarrative = customFacts;
   }
 
-  // ===== IA Controlada subordinada ao motor (Fase 6) =====
-  // Fluxo: determinístico -> IA refina prosa -> validador de integridade -> final.
-  // IA nunca decide tese; teses derivam da análise e do catálogo.
-  // A análise autoritativa é a canônica do domínio (servidor), nunca a do request.
   const theses = permittedTheses(canonicalAnalysis).map((a: any) => a.id);
-
-  // FASE 8: Obter payload de onboarding para quality gate
   const onboardingPayload = CanonicalMapper.domainToOnboardingPayload(domain);
 
   let pipelineResult: any;
@@ -418,7 +373,6 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
       { tone: 'formal_rigorous' }
     );
   } catch (err: any) {
-    // FAIL CLOSED (Fase 5): Quality Gate BLOCKED → não salva, não avança, retorna erro.
     if (err.message?.startsWith('Quality Gate BLOCKED:')) {
       logger.warn('system', 'quality-gate', 'blocked', err.message, { caseId: domain.id });
       return res.status(422).json({
@@ -431,8 +385,11 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   }
 
   defense.fullDraftText = pipelineResult.draft.fullDraftText;
-  // selectedArgumentIds no response reflete APENAS a seleção autorizada pelo servidor.
   defense.selectedArgumentIds = theses.length ? theses : canonicalArguments.map((a: any) => a.id);
+  (defense as any).integrityHash = computeDefenseIntegrityHash(
+    defense as any,
+    canonicalAnalysis as any
+  );
 
   if (pipelineResult.controlled.reason === 'REFINED_VALID') {
     logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
