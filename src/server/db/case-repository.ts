@@ -85,12 +85,7 @@ export class CaseRepository {
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
     return {
-      // PK uuid: id sintético do domínio (`case_*`) é mapeado para UUID v5
-      // determinístico (mesmo id → mesmo UUID → upsert idempotente entre
-      // restarts/instâncias). Ids já-UUID passam intactos.
       id: domainIdToUuid(row.id) ?? undefined,
-      // Rastro do id de domínio original: permite hidratação e lookup pós-cold-start
-      // pelo id sintético antigo (índice único parcial cases_app_ref_key).
       app_ref: isUuid(row.id) ? null : row.id,
       title: row.title,
       client_name: row.client_name,
@@ -129,6 +124,7 @@ export class CaseRepository {
       defense_draft_json: parseJson(row.defense_draft_json, null),
       protocol_info_json: parseJson(row.protocol_info_json, null),
       ocr_auxiliary_json: parseJson((row as any).ocr_auxiliary_json, null),
+      evidence_json: parseJson(row.evidence_json, null),
       timeline_json: parseJson(row.timeline_json, []),
       is_anonymous: row.is_anonymous,
       claim_token: row.claim_token ?? null,
@@ -136,7 +132,7 @@ export class CaseRepository {
       paid_at: toDate(row.paid_at),
       created_at: toDate(row.created_at),
       updated_at: toDate(row.updated_at),
-    };
+    } as Database['public']['Tables']['cases']['Insert'];
   }
 
   /**
@@ -227,6 +223,8 @@ export class CaseRepository {
       analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : undefined,
       defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : undefined,
       protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : undefined,
+      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : undefined,
+      evidence_json: (c as any).evidence_json ? JSON.stringify((c as any).evidence_json) : undefined,
       timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : undefined,
       is_anonymous: c.is_anonymous,
       claim_token: c.claim_token ?? undefined,
