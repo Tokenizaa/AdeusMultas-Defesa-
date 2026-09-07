@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { parseQueryParams } from './queryParams';
 
 export interface RouteMatch {
   path: string;
@@ -24,20 +25,6 @@ function parsePath(pathname: string): { path: string; search: string } {
     path: path || '/',
     search,
   };
-}
-
-function parseQueryParams(searchStr: string): Record<string, string> {
-  if (!searchStr) return {};
-  const params: Record<string, string> = {};
-  const query = searchStr.startsWith('?') ? searchStr.slice(1) : searchStr;
-  const pairs = query.split('&');
-  for (const pair of pairs) {
-    const [key, val] = pair.split('=');
-    if (key) {
-      params[decodeURIComponent(key)] = decodeURIComponent(val || '');
-    }
-  }
-  return params;
 }
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
