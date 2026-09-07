@@ -19,7 +19,6 @@ import { logger } from '../observability/logger';
 import { getSupabaseServerClient } from './supabase-server';
 import { domainIdToUuid } from './uuid-v5';
 
-/** Converte string JSON da row em valor tipado para JSONB (null-safe). */
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
@@ -29,7 +28,6 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-/** Converte ISO/date string em Date para coluna timestamptz (null-safe). */
 function toDate(value?: string | null): string | null {
   if (!value) return null;
   const d = new Date(value);
@@ -40,23 +38,22 @@ function toNumeric(value?: number | null): number | null {
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
 }
 
-/**
- * Valida formato UUID v4-ish — mesmo padrão usado por payment-repository.
- * Evita persistir ids mock de dev (ex.: 'usr_admin_defesai') que violariam
- * o tipo uuid da coluna cases.user_id e derrubariam o upsert inteiro.
- */
 function isUuid(value?: string | null): boolean {
   return typeof value === 'string'
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+/**
+ * In-memory persistence is an explicit opt-in escape hatch for isolated unit/dev
+ * work. It must never be silently selected by an E2E or production-like run.
+ */
+function allowInMemoryPersistence(): boolean {
+  return process.env.ALLOW_IN_MEMORY_CASE_PERSISTENCE === 'true';
+}
+
 export class CaseRepository {
   private rows: Map<string, CaseRow> = new Map();
   private client: SupabaseClient<Database> | null = getSupabaseServerClient();
-
-  // ==========================================
-  // API compatível com Map<string, CaseRow>
-  // ==========================================
 
   get size(): number {
     return this.rows.size;
@@ -70,18 +67,11 @@ export class CaseRepository {
     return this.rows.values();
   }
 
-  /** Grava na memória APÓS persistência no Supabase com sucesso.
-   * FASE 7: Falha de banco = operação falha (FAIL CLOSED).
-   * Lança erro se persistência falhar — não grava em memória sem confirmação. */
   async set(id: string, row: CaseRow): Promise<void> {
     const payload = this.toPayload(row);
     await this.persist(id, payload);
     this.rows.set(id, row);
   }
-
-  // ==========================================
-  // Persistência Supabase (write-through OBRIGATÓRIO)
-  // ==========================================
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
     return {
@@ -135,25 +125,22 @@ export class CaseRepository {
     } as Database['public']['Tables']['cases']['Insert'];
   }
 
-  /**
-   * Persiste no Supabase com FAIL CLOSED em produção.
-   *
-   * Quando o Supabase não está configurado, o modo in-memory é permitido
-   * somente fora de produção para suportar E2E/dev isolados. Em produção,
-   * ausência do cliente é uma falha de infraestrutura e bloqueia a operação.
-   */
   private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
     if (!this.client) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error(`CaseRepository: Supabase client não configurado — não é possível persistir caso ${id}`);
+      if (allowInMemoryPersistence()) {
+        logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
+          caseId: id,
+          persistenceResult: 'explicit_in_memory_fallback',
+        });
+        return;
       }
 
-      logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória (E2E/dev)`, {
-        caseId: id,
-        persistenceResult: 'skipped_no_client',
-      });
-      return;
+      throw new Error(
+        `CaseRepository: Supabase client não configurado — persistência real obrigatória para o caso ${id}. ` +
+        'Para testes unitários/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.'
+      );
     }
+
     const { error } = await this.client.from('cases').upsert(payload);
     if (error) {
       logger.error('supabase', 'case_repository', 'persist', `Falha ao persistir caso ${id}: ${error.message}`, {
@@ -171,9 +158,11 @@ export class CaseRepository {
     }
   }
 
-  /** Carrega do Supabase todos os casos persistidos (para warm-up opcional). */
   async loadAllFromSupabase(): Promise<CaseRow[]> {
-    if (!this.client) return [];
+    if (!this.client) {
+      if (allowInMemoryPersistence()) return [];
+      throw new Error('CaseRepository: Supabase client não configurado — cold start não pode ser considerado persistente.');
+    }
 
     const { data, error } = await this.client
       .from('cases')
@@ -181,8 +170,10 @@ export class CaseRepository {
       .order('created_at', { ascending: false });
 
     if (error) {
-      logger.warn('supabase', 'case_repository', 'loadAll', `Falha ao carregar casos: ${error.message}`);
-      return [];
+      logger.error('supabase', 'case_repository', 'loadAll', `Falha ao carregar casos: ${error.message}`, {
+        errorCode: 'SUPABASE_LOAD_ALL',
+      });
+      throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
     }
 
     const rows: CaseRow[] = (data || []).map((c) => ({
