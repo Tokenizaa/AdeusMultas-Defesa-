@@ -52,7 +52,7 @@ import { startPollingJob } from './src/server/lib/documenso/polling-job';
 
 // Initialize legislation collectors
 import { contranCollector } from './src/server/services/legislation-collector';
-contranCollector.start();
+if (process.env.NODE_ENV !== 'production') contranCollector.start();
 
 // Initialize Gemini SDK with User-Agent header as required
 const getGenAI = () => {
