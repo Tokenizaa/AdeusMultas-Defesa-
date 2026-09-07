@@ -320,6 +320,78 @@
 
 ---
 
+## FASE 8 — Auditoria Operacional de Produção / Vercel
+
+| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
+|----|------|----------|--------|-------------|-----------|-----|------------|
+| 8.1 | Deployment / build | Verificar deployment Production, commit, build e warnings | VERIFIED | FASE 7 | Deployment `dpl_7ts5xoqUXCv2xWSUj9yrfDcjokc8` READY no commit `751632b6d279d48844dfecbd1e7d5e42da1309a2`; build concluído | 751632b6d279d48844dfecbd1e7d5e42da1309a2 | Bundle grande e `memory` ignorado são P2, não bloqueadores atuais. |
+| 8.2 | Runtime / 5xx | Verificar erros reais do deployment Production | VERIFIED | 8.1 | Nenhum 5xx atual observado na janela auditada; `/api/index` respondeu 401 conforme proteção | 751632b6d279d48844dfecbd1e7d5e42da1309a2 | Logs de runtime possuem warnings/erros de validação do `express-rate-limit`. |
+| 8.3 | Trust Proxy / rate limiting | Determinar topologia real de proxies e impacto no `req.ip`/rate limiting | BLOCKED | 8.2 | Produção registra `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` e `ERR_ERL_FORWARDED_HEADER`; Express mantém `trust proxy=false` | — | Não aplicar `trust proxy=1/2` sem evidência da cadeia real. `KNOWLEDGE_GAP` até comprovação. |
+| 8.4 | IA / NVIDIA / fallback | Provar se NVIDIA é obrigatório e se o fallback de IA funciona em Production | BLOCKED | 8.2 | Runtime registra `[NVIDIA Key Rotator] No valid NVIDIA API keys found`; fallback ainda não comprovado operacionalmente | — | Não acessar/expor secrets. Classificar somente após teste seguro do pipeline. |
+| 8.5 | Environment Production | Verificar targets e existência de variáveis críticas sem revelar valores | BLOCKED | 8.4 | Valores não devem ser lidos; targets/nomes ainda precisam ser comprovados com evidência segura | — | Vercel exige redeploy para novas variáveis surtirem efeito. citeturn0search1 |
+| 8.6 | Payments Production | Comprovar modo Production, gateway efetivo, webhook e idempotência | BLOCKED | 8.5 | Código está protegido; estado real do ambiente Production ainda não comprovado | — | Não usar credenciais reais nem modificar configuração durante auditoria. |
+| 8.7 | Source maps / headers / exposure | Verificar exposição pública e headers de segurança | VERIFIED | 8.1 | Source map não foi exposto publicamente no path auditado; headers de segurança presentes | — | Continuar sem alteração enquanto não houver evidência de exposição. |
+| 8.8 | Correções | Aplicar somente correções comprovadas nos achados 8.3–8.7 | PENDING | 8.7 | — | — | Não corrigir por tentativa. Um único commit por execução corretiva. |
+| 8.9 | Fechamento / GO-NO-GO | Consolidar evidências e decidir estado operacional | PENDING | 8.8 | — | — | `GO WITH LIMITATION` enquanto houver bloqueios externos não comprovados. |
+
+### Instruções básicas — FASE 8
+
+**8.1 — Deployment / build**
+- Confirmar projeto Vercel, deployment Production, branch e SHA.
+- Conferir build logs completos.
+- Registrar warnings relevantes sem tratá-los como falhas automaticamente.
+
+**8.2 — Runtime / 5xx**
+- Consultar runtime errors agrupados.
+- Consultar 5xx por deployment/rota.
+- Diferenciar erro funcional, warning de dependência e falha de infraestrutura.
+- Não declarar PASS apenas porque a página principal retorna 200.
+
+**8.3 — Trust Proxy / rate limiting**
+- Provar a cadeia real `cliente → proxy(s) → Vercel → Express`.
+- Verificar `X-Forwarded-For`, `Forwarded`, `req.ip` e configuração Express.
+- Não usar `trust proxy=1` ou `2` sem comprovação.
+- Se a topologia não puder ser comprovada: `KNOWLEDGE_GAP` / `BLOCKED`.
+
+**8.4 — IA / NVIDIA / fallback**
+- Mapear provider selection e fallback no código.
+- Confirmar se NVIDIA é obrigatório ou apenas preferencial.
+- Verificar se 9Router/outro fallback existe.
+- Executar somente teste seguro e não destrutivo do pipeline em Production.
+- Nunca acessar ou expor valores de secrets.
+
+**8.5 — Environment Production**
+- Verificar nomes e targets de variáveis críticas, sem valores.
+- Não usar `.env.example` como prova do ambiente real.
+- Registrar `KNOWLEDGE_GAP` se a conexão não permitir comprovação segura.
+- Lembrar que alterações de environment exigem novo deployment para surtirem efeito. citeturn0search1
+
+**8.6 — Payments Production**
+- Comprovar `PAYMENT_MODE`, gateway efetivo, webhook e idempotência pelo comportamento seguro do sistema.
+- Não usar valores reais.
+- Não transformar sandbox em Production durante auditoria.
+
+**8.7 — Source maps / headers / exposure**
+- Testar paths públicos conhecidos.
+- Conferir CSP/HSTS/X-Content-Type-Options e demais headers efetivamente aplicados.
+- Não alterar headers sem evidência de necessidade.
+
+**8.8 — Correções**
+- Corrigir somente achados comprovados.
+- Adicionar testes para cada correção.
+- Executar `npm run test:unit`, `npm run lint`, `npx tsc --noEmit` e `npm run build` quando houver alteração de código.
+- Revisar `git diff`.
+- Criar UM ÚNICO commit por execução corretiva e push para `main`.
+- Após push, verificar novo deployment Vercel.
+
+**8.9 — Fechamento / GO-NO-GO**
+- Separar `PASS`, `P1`, `P2`, `BLOCKED` e `KNOWLEDGE_GAP`.
+- Não converter bloqueio externo em PASS.
+- Registrar SHA completo e deployment quando houver correção.
+- Não iniciar Fase 9 sem decisão explícita.
+
+---
+
 ## Notas
 
 - Este arquivo é a **fonte de verdade** do andamento das fases.
@@ -327,4 +399,4 @@
 - SHAs devem ser registrados apenas quando uma correção for implementada e verificada.
 - Não inventar resultados — registrar apenas o que foi efetivamente realizado.
 - Storage: operações sobre objetos devem usar a API de Storage; consultas SQL são somente para evidência/auditoria. As policies RLS são versionadas em migrations.
-- As instruções adicionadas nas FASES 5–7 são orientação operacional básica; não substituem a auditoria concreta nem autorizam mudanças fora do escopo da subfase.
+- As instruções adicionadas nas FASES 5–8 são orientação operacional básica; não substituem a auditoria concreta nem autorizam mudanças fora do escopo da subfase.
