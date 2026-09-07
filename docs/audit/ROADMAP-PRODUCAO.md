@@ -181,6 +181,30 @@
 
 ---
 
+# FASE 9 — Auditoria e Hardening Frontend
+
+**STATUS: BLOCKED — P0/P1 encontrados; não iniciar UX/visual antes de fechar segurança de identidade e dados locais.**
+
+| ID | Status | Prioridade | Descrição | Evidência |
+|---|---|---|---|---|
+| 9.1 Credenciais locais | BLOCKED | P0 | Remover armazenamento de senha/credential material no browser | `AuthContext.tsx` chama `saveStoredUser(..., password)`; `supabase.ts` persiste o valor em `localStorage` sob `defesai_registered_users_v1` |
+| 9.2 Identidade sintética | BLOCKED | P0/P1 | Eliminar `x-user-*` e `Bearer local_<id>_<role>` do cliente de produção | `src/lib/api/client.ts` e `src/lib/authFetch.ts` ainda montam headers/tokens sintéticos |
+| 9.3 Sessão cacheada | BLOCKED | P1 | Cache local não pode conceder `isAuthenticated`/`isAdmin` | `AuthContext.tsx` recupera `getStoredSession()`; `RouterContext.tsx` usa o estado resultante nos guards |
+| 9.4 PII no wizard | BLOCKED | P1 | Reduzir/remover PII e dados jurídicos do localStorage | `OnboardingWizard.tsx` persiste `CaseDocumentData`, veículo, infração e `CaseAnalysis` em `defesai_wizard_state` |
+| 9.5 Segundo sistema de identidade | BLOCKED | P1 | Remover lookup/login baseado em usuários locais | `AccountVerificationGate.tsx` usa `getStoredUsers()` e `localStorage` para decidir conta e usuário |
+| 9.6 DTO/reconciliação | PENDING | P1 | Mutação de case deve usar DTO mínimo e server-truth | `App.tsx` envia `CaseDomain` completo em `PUT` e ignora erro de persistência |
+| 9.7 Load de cases | PENDING | P1 | Não buscar `/api/cases` no shell público nem fazer retries desnecessários | `App.tsx` chama `loadCases()` no mount global |
+| 9.8 Query parser | PENDING | P2 | Migrar parser manual para `URLSearchParams` e testar entradas malformadas | `RouterContext.tsx` usa `split('&')`, `split('=')` e `decodeURIComponent()` manualmente |
+| 9.9 Acessibilidade | NOT_VERIFIED | P2 | Validar teclado, foco, labels, contraste e leitores de tela | `AdminLayout`/`UserLayout` já possuem `AccessibilityBar` e landmarks, mas não há fechamento automatizado |
+| 9.10 UX/UI | NOT_AUDITED | P2 | Matriz de fluxos, estados, responsividade e regressão visual | Não existe evidência consolidada nas fases anteriores |
+| 9.11 Browser E2E | BLOCKED | P1 | Executar matriz real de fluxos críticos com serviços externos disponíveis | Suítes Playwright existem; FASE 6 registrou bloqueio por credenciais/serviços externos |
+
+**Evidência de cobertura positiva:** Issue #2 P0 já migrou `InboxView`, `use-marketing-service`, `MediaStudioView`, `ProspectingCollectionTab` e `meta-client.ts` para `authFetch`, além de substituir exports via `window.open` por Blob + Authorization. Isso fecha o problema específico daquela issue, mas não fecha o contrato global do `authFetch`. SHA: `85761b7611e419759d3f38344deb563a5ab38aa8`. 
+
+**Relatório completo:** `docs/audit/FASE-9-AUDITORIA-FRONTEND.md` — SHA do commit de auditoria `ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a`.
+
+---
+
 # P0 TRANSVERSAIS — Hardening posterior ao roadmap original
 
 Estas correções atravessam mais de uma fase e devem permanecer registradas mesmo não sendo uma nova fase numerada.
@@ -208,8 +232,10 @@ Estas correções atravessam mais de uma fase e devem permanecer registradas mes
 | Testes / RC | **VERIFIED COM LIMITAÇÃO E2E EXTERNA** |
 | Auditoria final | **GO WITH LIMITATION** |
 | Produção/Vercel | **PARTIAL / BLOCKED** — evidências reais 8.3–8.6 pendentes |
+| **Frontend** | **BLOCKED** — FASE 9 aberta por achados P0/P1 |
 | Issue #2 P0 | **VERIFIED** — `85761b7` |
-| Último commit funcional antes deste documento | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
+| Último commit funcional antes da auditoria frontend | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
+| Último commit de documentação | **`ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a`** |
 
 ## Última sequência crítica
 
@@ -223,6 +249,7 @@ FASE 7 GO          → d355939a
 FASE 8 correções   → 751632b6 / f72f9d8
 Issue #3 P0        → 7927c809
 Issue #2 P0        → 85761b76
+FASE 9 auditoria   → ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a
 ```
 
 ## Regra para próximas atualizações
@@ -232,4 +259,5 @@ Issue #2 P0        → 85761b76
 3. Toda correção deve registrar SHA completo, resultado dos testes e evidência.
 4. Não usar o título da mensagem de commit como única prova; verificar conteúdo e testes.
 5. Alterações de onboarding de outro agente (`OnboardingWizard.tsx`, `AnalysisProcessingStep.tsx` e testes associados) permanecem fora deste roadmap até auditoria própria.
-6. O próximo trabalho prioritário é fechar os gaps objetivos de FASE 1, consolidar o inventário global da FASE 2 e resolver as evidências externas da FASE 8.
+6. Prioridade imediata: **FASE 9.1–9.5 (P0/P1 frontend)**, sem iniciar refatoração UX/visual antes de remover credenciais, identidade sintética, sessão local e PII local.
+7. Em paralelo, manter os gaps de FASE 1, FASE 2 e FASE 8 como pendências independentes.
