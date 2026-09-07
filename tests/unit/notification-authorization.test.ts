@@ -7,11 +7,12 @@ describe('notification authorization boundary', () => {
 
   it('requires authentication for notification operations except the public VAPID key', () => {
     expect(source).toContain("if (req.method === 'GET' && req.path === '/vapid-key') return next();");
-    expect(source).toContain("return authenticateToken(req, res");
+    expect(source).toContain("return authenticateToken(req,res");
   });
 
   it('blocks non-admin cross-user notification targeting', () => {
-    expect(source).toContain("requestedUserId !== undefined && requestedUserId !== req.user?.id");
-    expect(source).toContain("requestedEmail !== undefined && requestedEmail !== req.user?.email");
+    expect(source).toContain("if(req.body?.userId!==undefined&&req.body.userId!==req.user?.id)");
+    expect(source).toContain("if(req.body?.userEmail!==undefined&&req.body.userEmail!==req.user?.email)");
+    expect(source).toContain("req.user?.role !== 'admin'");
   });
 });
