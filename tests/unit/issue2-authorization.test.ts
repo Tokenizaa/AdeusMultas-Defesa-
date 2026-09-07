@@ -37,11 +37,11 @@ describe('Issue #2 — canonical authorization boundaries', () => {
     const exportTab = read('src/components/marketing/prospecting/ProspectingCollectionTab.tsx');
 
     expect(inbox).toContain('useAuthFetch');
-    expect(inbox).not.toMatch(/fetch\\(.*inbox/);
+    expect(inbox).not.toMatch(/fetch\(.*inbox/);
     expect(marketing).toContain('useAuthFetch');
-    expect(marketing).not.toMatch(/await fetch\\(/);
+    expect(marketing).not.toMatch(/await fetch\(/);
     expect(meta).toContain("import { authFetch } from '../../lib/authFetch'");
-    expect(meta).not.toMatch(/await fetch\\(/);
+    expect(meta).not.toMatch(/await fetch\(/);
     expect(exportTab).toContain('authFetch(`/api/marketing/automation/export/');
     expect(exportTab).toContain('createObjectURL');
     expect(exportTab).not.toContain('window.open(`/api/marketing/automation/export/');
