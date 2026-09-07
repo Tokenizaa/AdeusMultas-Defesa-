@@ -69,6 +69,12 @@ function AppContent() {
   const [whatsAppTargetCaseId, setWhatsAppTargetCaseId] = useState<string>('');
 
   const loadCases = async (retryCount = 0) => {
+    if (!isAuthenticated) {
+      setCases([]);
+      setActiveCase(null);
+      return;
+    }
+
     try {
       const data = await api.get<CaseDomain[]>('/api/cases');
       if (Array.isArray(data)) {
@@ -79,15 +85,15 @@ function AppContent() {
       }
     } catch (err) {
       console.warn('Could not fetch cases from server, retrying in background...', err);
-      if (retryCount < 3) {
+      if (retryCount < 3 && isAuthenticated) {
         setTimeout(() => loadCases(retryCount + 1), 1000 * (retryCount + 1));
       }
     }
   };
 
   useEffect(() => {
-    loadCases();
-  }, []);
+    void loadCases();
+  }, [isAuthenticated]);
 
   // FIX 2 — invalidação de cache: quando qualquer fluxo (wizard, checkout)
   // persiste um caso no servidor, refazemos o fetch canônico para que
@@ -95,11 +101,13 @@ function AppContent() {
   // caso imediatamente, sem depender de reload manual.
   useEffect(() => {
     const handleCasesChanged = () => {
-      loadCases();
+      if (isAuthenticated) {
+        void loadCases();
+      }
     };
     window.addEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
     return () => window.removeEventListener(CASES_CHANGED_EVENT, handleCasesChanged);
-  }, []);
+  }, [isAuthenticated]);
 
   // Sync activeCase if URL params has an ID
   useEffect(() => {
