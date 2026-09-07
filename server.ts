@@ -318,8 +318,10 @@ async function startServer() {
     console.warn(`[warmup] Falha no warmup comercial: ${warmupErr?.message || warmupErr}`);
   }
 
-  // Iniciar worker de scraping assíncrono (BullMQ + Supabase heartbeat)
-  scrapeWorker.start();
+  // Iniciar worker de scraping assíncrono (BullMQ + Supabase heartbeat).
+  // Em produção serverless cada cold-start iniciaria o polling novamente —
+  // o collector segue o mesmo padrão (mesmo sem efeito no bundle serverless).
+  if (process.env.NODE_ENV !== 'production') scrapeWorker.start();
 
   // Mount Modular API Routes First
   app.use('/api/scrape', scrapeRoutes);

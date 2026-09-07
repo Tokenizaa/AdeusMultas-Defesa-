@@ -16,6 +16,7 @@ var EventTopics = {
   CASE_UPDATED: "case.updated",
   CASE_CLAIMED: "case.claimed",
   CASE_STAGE_CHANGED: "case.stage_changed",
+  CASE_DELETED: "case.deleted",
   // OCR & Analysis
   OCR_UPLOADED: "ocr.uploaded",
   OCR_PROCESSING: "ocr.processing",
@@ -156,6 +157,16 @@ var StructuredLogger = class {
         cleaned[k] = "\u2022\u2022\u2022\u2022[PROTEGIDO]\u2022\u2022\u2022\u2022";
       } else if (k === "cpf" || k === "clientCpf" || k === "applicantCpf") {
         cleaned[k] = typeof v === "string" ? this.maskCpf(v) : v;
+      } else if (k === "cnh" || k === "clientCnh" || k === "applicantCnh") {
+        cleaned[k] = typeof v === "string" ? this.maskCnh(v) : v;
+      } else if (k === "rg" || k === "clientRg" || k === "applicantRg") {
+        cleaned[k] = typeof v === "string" ? this.maskRg(v) : v;
+      } else if (k === "phone" || k === "cellphone" || k === "contactPhone" || k === "senderPhone" || k === "from" || k === "to") {
+        cleaned[k] = typeof v === "string" ? this.maskPhone(v) : v;
+      } else if (k === "email" || k === "senderEmail" || k === "contactEmail") {
+        cleaned[k] = typeof v === "string" ? this.maskEmail(v) : v;
+      } else if (k === "placa" || k === "licensePlate" || k === "plate") {
+        cleaned[k] = typeof v === "string" ? this.maskPlate(v) : v;
       } else {
         cleaned[k] = this.sanitize(v);
       }
@@ -166,7 +177,12 @@ var StructuredLogger = class {
     let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
     sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
     sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
-    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-**");
+    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-$4");
+    sanitized = sanitized.replace(/\b(\d{11})([A-Z]{2})\b/g, "***********$2");
+    sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, "**.***.***-*");
+    sanitized = sanitized.replace(/\b(\d{2})\s?9?\s?(\d{4})\s?(\d{4})\b/g, "(**) *****-$3");
+    sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "***@***.***");
+    sanitized = sanitized.replace(/\b[A-Z]{3}[-]?\d{4}\b/g, "***-****");
     return sanitized;
   }
   maskCpf(cpf) {
@@ -175,6 +191,41 @@ var StructuredLogger = class {
       return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
     }
     return "***.***.***-**";
+  }
+  maskCnh(cnh) {
+    const match = cnh.match(/^(\d{11})([A-Z]{2})$/);
+    if (match) {
+      return `***********${match[2]}`;
+    }
+    return "****.******************";
+  }
+  maskRg(rg) {
+    const clean = rg.replace(/\D/g, "");
+    if (clean.length >= 7) {
+      return `***.${clean.slice(3, 7)}.***-*`;
+    }
+    return "***.***.***-**";
+  }
+  maskPhone(phone) {
+    const clean = phone.replace(/\D/g, "");
+    if (clean.length >= 10) {
+      return `(**) *****-${clean.slice(-4)}`;
+    }
+    return "(**) *****-****";
+  }
+  maskEmail(email) {
+    const atIdx = email.indexOf("@");
+    if (atIdx > 2) {
+      return `${email.slice(0, 2)}***@***.***`;
+    }
+    return "***@***.***";
+  }
+  maskPlate(plate) {
+    const clean = plate.replace(/[-]/g, "");
+    if (clean.length === 7) {
+      return "***-****";
+    }
+    return "***-****";
   }
   /**
    * Primary entry point for structured log emission
@@ -1402,12 +1453,7 @@ var CaseRepository = class {
   // ==========================================
   toPayload(row) {
     return {
-      // PK uuid: id sintético do domínio (`case_*`) é mapeado para UUID v5
-      // determinístico (mesmo id → mesmo UUID → upsert idempotente entre
-      // restarts/instâncias). Ids já-UUID passam intactos.
       id: domainIdToUuid(row.id) ?? void 0,
-      // Rastro do id de domínio original: permite hidratação e lookup pós-cold-start
-      // pelo id sintético antigo (índice único parcial cases_app_ref_key).
       app_ref: isUuid2(row.id) ? null : row.id,
       title: row.title,
       client_name: row.client_name,
@@ -1446,6 +1492,7 @@ var CaseRepository = class {
       defense_draft_json: parseJson(row.defense_draft_json, null),
       protocol_info_json: parseJson(row.protocol_info_json, null),
       ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null),
+      evidence_json: parseJson(row.evidence_json, null),
       timeline_json: parseJson(row.timeline_json, []),
       is_anonymous: row.is_anonymous,
       claim_token: row.claim_token ?? null,
@@ -1455,10 +1502,23 @@ var CaseRepository = class {
       updated_at: toDate(row.updated_at)
     };
   }
-  /** Persiste no Supabase. Lança erro se falhar (FAIL CLOSED). */
+  /**
+   * Persiste no Supabase com FAIL CLOSED em produção.
+   *
+   * Quando o Supabase não está configurado, o modo in-memory é permitido
+   * somente fora de produção para suportar E2E/dev isolados. Em produção,
+   * ausência do cliente é uma falha de infraestrutura e bloqueia a operação.
+   */
   async persist(id, payload) {
     if (!this.client) {
-      throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir caso ${id}`);
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir caso ${id}`);
+      }
+      logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria (E2E/dev)`, {
+        caseId: id,
+        persistenceResult: "skipped_no_client"
+      });
+      return;
     }
     const { error } = await this.client.from("cases").upsert(payload);
     if (error) {
@@ -1485,10 +1545,6 @@ var CaseRepository = class {
       return [];
     }
     const rows = (data || []).map((c) => ({
-      // Chave em memória volta a ser o id ORIGINAL do domínio: app_ref guarda
-      // o id sintético (`case_*`) que gerou a linha — restaura links antigos
-      // (GET/PUT/claim por id) após cold-start. Linhas sem app_ref (legado ou
-      // ids já-UUID) usam a própria PK.
       id: c.app_ref ?? c.id,
       title: c.title,
       client_name: c.client_name,
@@ -1526,6 +1582,8 @@ var CaseRepository = class {
       analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : void 0,
       defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : void 0,
       protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : void 0,
+      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : void 0,
+      evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : void 0,
       timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : void 0,
       is_anonymous: c.is_anonymous,
       claim_token: c.claim_token ?? void 0,
@@ -1541,60 +1599,6 @@ var CaseRepository = class {
   }
 };
 var caseRepository = new CaseRepository();
-
-// src/server/config/cors.ts
-import cors from "cors";
-var PORT = 3e3;
-var allowedOrigins = [
-  process.env.CLIENT_URL,
-  "http://localhost:5173",
-  "http://localhost:3000",
-  `http://localhost:${PORT}`,
-  process.env.PRODUCTION_URL,
-  "https://www.defesai.shop"
-].filter(Boolean);
-function isOriginAllowed(origin) {
-  if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
-  if (origin.endsWith(".run.app")) return true;
-  if (origin.endsWith(".google.com") || origin.endsWith(".googleusercontent.com")) return true;
-  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return true;
-  if (process.env.NODE_ENV !== "production") return true;
-  return false;
-}
-var corsMiddleware = cors({
-  origin: (origin, callback) => {
-    if (!origin || isOriginAllowed(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-user-id", "x-user-role", "x-user-email", "x-user-name"]
-});
-
-// src/server/middleware/rate-limit.ts
-import rateLimit from "express-rate-limit";
-var globalLimiter = process.env.NODE_ENV !== "production" ? (_req, _res, next) => next() : rateLimit({
-  windowMs: 15 * 60 * 1e3,
-  // 15 minutes
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Muitas requisi\xE7\xF5es. Tente novamente em 15 minutos." }
-});
-var strictLimiter = rateLimit({
-  windowMs: 15 * 60 * 1e3,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Limite de requisi\xE7\xF5es excedido para este servi\xE7o." }
-});
-
-// src/server/routes/admin.ts
-import { Router } from "express";
 
 // src/core/mappers/canonical-mapper.ts
 var CanonicalMapper = class _CanonicalMapper {
@@ -1693,7 +1697,9 @@ var CanonicalMapper = class _CanonicalMapper {
         realDriverName: mergedRealDriverName,
         realDriverCpf: mergedRealDriverCpf,
         realDriverCnh: mergedRealDriverCnh,
-        indicationWithinDeadline: mergedIndicationWithinDeadline
+        indicationWithinDeadline: mergedIndicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (preserva dados antigos se ausente)
+        evidenceFlags: payload.infraction.evidenceFlags
       },
       applicant: payload.applicant ? {
         applicantName: payload.applicant.name,
@@ -1795,7 +1801,9 @@ var CanonicalMapper = class _CanonicalMapper {
         realDriverName: inf.realDriverName,
         realDriverCpf: inf.realDriverCpf,
         realDriverCnh: inf.realDriverCnh,
-        indicationWithinDeadline: inf.indicationWithinDeadline
+        indicationWithinDeadline: inf.indicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (roundtrip)
+        evidenceFlags: inf.evidenceFlags
       },
       specificFacts: {
         speedLimit: inf.speedLimit,
@@ -1901,6 +1909,17 @@ var CanonicalMapper = class _CanonicalMapper {
         ocrAuxiliaryData = void 0;
       }
     }
+    let evidenceFlags = void 0;
+    if (row.evidence_json) {
+      try {
+        const parsed = JSON.parse(row.evidence_json);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          evidenceFlags = parsed;
+        }
+      } catch (e) {
+        evidenceFlags = void 0;
+      }
+    }
     return {
       id: row.id,
       title: row.title || `Recurso Auto ${row.ait_number}`,
@@ -1955,7 +1974,9 @@ var CanonicalMapper = class _CanonicalMapper {
         realDriverName: row.real_driver_name,
         realDriverCpf: row.real_driver_cpf,
         realDriverCnh: row.real_driver_cnh,
-        indicationWithinDeadline: row.indication_within_deadline
+        indicationWithinDeadline: row.indication_within_deadline,
+        // Fase 8-P1A — Evidência explícita (preserva ausência = compatível com dados antigos)
+        evidenceFlags
       },
       analysis,
       applicant,
@@ -2024,6 +2045,8 @@ var CanonicalMapper = class _CanonicalMapper {
       protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : void 0,
       applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : void 0,
       ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : void 0,
+      // Fase 8-P1A — Evidência explícita (mapa chave → booleano)
+      evidence_json: infraction.evidenceFlags ? JSON.stringify(infraction.evidenceFlags) : void 0,
       commercial_offer_id: domain.commercialOfferId,
       timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
       is_anonymous: Boolean(domain.isAnonymous),
@@ -2051,6 +2074,197 @@ var CanonicalMapper = class _CanonicalMapper {
     };
   }
 };
+
+// src/server/middleware/auth-middleware.ts
+function sanitizeCaseCreateBody(req) {
+  if (req.method !== "POST" || req.baseUrl !== "/api" || req.path !== "/cases") return;
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) return;
+  const editableCaseFields = /* @__PURE__ */ new Set([
+    "title",
+    "clientName",
+    "clientEmail",
+    "clientPhone",
+    "clientCpf",
+    "vehicle",
+    "infraction",
+    "applicant",
+    "nominatedDriver",
+    "company",
+    "processNumbers",
+    "specificFacts",
+    "evidence",
+    "ocrAuxiliaryData",
+    "commercialOfferId",
+    "serviceType"
+  ]);
+  const sanitized = {};
+  for (const field of editableCaseFields) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      sanitized[field] = req.body[field];
+    }
+  }
+  req.body = sanitized;
+}
+async function authenticateToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+    const isProduction = process.env.NODE_ENV === "production";
+    const supabase = getSupabaseServerClient();
+    if (token && supabase) {
+      try {
+        const {
+          data: { user },
+          error
+        } = await supabase.auth.getUser(token);
+        if (user && !error) {
+          const role = user.user_metadata?.role || "citizen";
+          req.user = {
+            id: user.id,
+            email: user.email || "",
+            role,
+            name: user.user_metadata?.name
+          };
+          sanitizeCaseCreateBody(req);
+          return next();
+        }
+      } catch (err) {
+        logger.warn(
+          "auth",
+          "middleware",
+          "token_verify_fail",
+          `Falha ao validar token: ${err.message}`
+        );
+      }
+    }
+    if (!isProduction) {
+      if (!supabase) {
+        req.user = {
+          id: "usr_admin_defesai",
+          email: "admin@www.defesai.shop",
+          role: "admin",
+          name: "Administrador DefesAi"
+        };
+        sanitizeCaseCreateBody(req);
+        return next();
+      }
+      if (process.env.ADMIN_TEST_LOGIN && !req.user) {
+        req.user = {
+          id: "usr_admin_e2e",
+          email: process.env.ADMIN_TEST_LOGIN,
+          role: "admin",
+          name: "Admin Teste (E2E)"
+        };
+        sanitizeCaseCreateBody(req);
+        return next();
+      }
+    }
+    req.user = void 0;
+    return next();
+  } catch (err) {
+    logger.error("auth", "middleware", "unexpected_error", `Erro no auth: ${err.message}`);
+    req.user = void 0;
+    return next();
+  }
+}
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    res.status(401).json({ error: "N\xE3o autorizado. Fa\xE7a login para continuar." });
+    return;
+  }
+  next();
+}
+function requireAdmin(req, res, next) {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
+    return;
+  }
+  if (user.role !== "admin") {
+    logger.warn(
+      "auth",
+      "middleware",
+      "admin_access_denied",
+      `Tentativa de acesso admin por usu\xE1rio n\xE3o autorizado (${user.email})`
+    );
+    res.status(403).json({ error: "Acesso restrito a administradores" });
+    return;
+  }
+  next();
+}
+
+// src/server/config/cors.ts
+import cors from "cors";
+var PORT = 3e3;
+var allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  `http://localhost:${PORT}`,
+  process.env.PRODUCTION_URL,
+  "https://www.defesai.shop"
+].filter(Boolean);
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (origin.endsWith(".run.app")) return true;
+  if (origin.endsWith(".google.com") || origin.endsWith(".googleusercontent.com")) return true;
+  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return true;
+  if (process.env.NODE_ENV !== "production") return true;
+  return false;
+}
+var corsMiddleware = cors({
+  origin: (origin, callback) => {
+    if (!origin || isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-user-id", "x-user-role", "x-user-email", "x-user-name"]
+});
+
+// src/server/middleware/rate-limit.ts
+import rateLimit from "express-rate-limit";
+var globalLimiter = process.env.NODE_ENV !== "production" ? (_req, _res, next) => next() : rateLimit({
+  windowMs: 15 * 60 * 1e3,
+  // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas requisi\xE7\xF5es. Tente novamente em 15 minutos." }
+});
+var strictRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1e3,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Limite de requisi\xE7\xF5es excedido para este servi\xE7o." }
+});
+var strictLimiter = (req, res, next) => {
+  strictRateLimiter(req, res, (rateLimitError) => {
+    if (rateLimitError) {
+      next(rateLimitError);
+      return;
+    }
+    if (req.baseUrl === "/api/ai") {
+      authenticateToken(req, res, (authError) => {
+        if (authError) {
+          next(authError);
+          return;
+        }
+        requireAuth(req, res, next);
+      });
+      return;
+    }
+    next();
+  });
+};
+
+// src/server/routes/admin.ts
+import { Router } from "express";
 
 // src/server/observability/metrics-service.ts
 var MetricsService = class {
@@ -5615,85 +5829,6 @@ var MetaIntegrationBridge = class {
 };
 var metaIntegration = new MetaIntegrationBridge();
 
-// src/server/middleware/auth-middleware.ts
-async function authenticateToken(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
-    const isProduction = process.env.NODE_ENV === "production";
-    const supabase = getSupabaseServerClient();
-    if (token && supabase) {
-      try {
-        const {
-          data: { user },
-          error
-        } = await supabase.auth.getUser(token);
-        if (user && !error) {
-          const role = user.user_metadata?.role || "citizen";
-          req.user = {
-            id: user.id,
-            email: user.email || "",
-            role,
-            name: user.user_metadata?.name
-          };
-          return next();
-        }
-      } catch (err) {
-        logger.warn(
-          "auth",
-          "middleware",
-          "token_verify_fail",
-          `Falha ao validar token: ${err.message}`
-        );
-      }
-    }
-    if (!isProduction) {
-      if (!supabase) {
-        req.user = {
-          id: "usr_admin_defesai",
-          email: "admin@www.defesai.shop",
-          role: "admin",
-          name: "Administrador DefesAi"
-        };
-        return next();
-      }
-      if (process.env.ADMIN_TEST_LOGIN && !req.user) {
-        req.user = {
-          id: "usr_admin_e2e",
-          email: process.env.ADMIN_TEST_LOGIN,
-          role: "admin",
-          name: "Admin Teste (E2E)"
-        };
-        return next();
-      }
-    }
-    req.user = void 0;
-    return next();
-  } catch (err) {
-    logger.error("auth", "middleware", "unexpected_error", `Erro no auth: ${err.message}`);
-    req.user = void 0;
-    return next();
-  }
-}
-function requireAdmin(req, res, next) {
-  const user = req.user;
-  if (!user) {
-    res.status(401).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
-    return;
-  }
-  if (user.role !== "admin") {
-    logger.warn(
-      "auth",
-      "middleware",
-      "admin_access_denied",
-      `Tentativa de acesso admin por usu\xE1rio n\xE3o autorizado (${user.email})`
-    );
-    res.status(403).json({ error: "Acesso restrito a administradores" });
-    return;
-  }
-  next();
-}
-
 // src/server/routes/admin.ts
 var router = Router();
 router.use(authenticateToken, requireAdmin);
@@ -7565,8 +7700,12 @@ var EvolutionWhatsAppAdapter = class {
         text,
         mediaUrl,
         mediaType,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        rawPayload
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+        // rawPayload removido: LGPD FASE 4.6 — o payload original da Evolution API
+        // contém pushName + remoteJid + conteúdo integral da mensagem que já estão
+        // capturados nos campos normalizados acima (senderName, externalContactId,
+        // text, mediaUrl). Persistir o webhook completo sem necessidade expõe
+        // PII de signatários sem finalidade — dado duplicado, sem necessidade.
       });
     } catch (err) {
       logger.error("messaging", "adapter_evolution", "normalize_error", `Falha ao normalizar Evolution WhatsApp: ${err.message}`);
@@ -7642,8 +7781,11 @@ var MetaMessengerAdapter = class {
               text,
               mediaUrl,
               mediaType,
-              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
-              rawPayload: msgEvent
+              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString()
+              // rawPayload removido: LGPD FASE 4.6 — msgEvent contém o objeto
+              // original do Meta com sender PSID, conteúdo e anexos; todos os
+              // campos relevantes já estão nos campos normalizados (senderId,
+              // text, mediaUrl). Persistir o objeto completo é dado duplicado.
             });
           }
         }
@@ -7658,8 +7800,10 @@ var MetaMessengerAdapter = class {
                 externalContactId: `fb_lead_${leadgenId}`,
                 senderName: `Lead An\xFAncio Facebook (#${leadgenId?.slice?.(-4) || "Novo"})`,
                 text: `Lead capturado via An\xFAncio Meta (Formul\xE1rio: ${value.form_id || "Principal"}). Solicitando atendimento sobre recurso de multa.`,
-                timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-                rawPayload: change
+                timestamp: (/* @__PURE__ */ new Date()).toISOString()
+                // rawPayload removido: LGPD FASE 4.6 — change contém o objeto
+                // completo do webhook LeadGen (form_id, leadgen_id, page_id).
+                // Nenhum campo do change é usado fora dos já normalizados acima.
               });
             }
           }
@@ -7732,8 +7876,10 @@ var InstagramDirectAdapter = class {
               text,
               mediaUrl,
               mediaType,
-              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
-              rawPayload: msgEvent
+              timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString()
+              // rawPayload removido: LGPD FASE 4.6 — msgEvent contém o objeto
+              // completo do Instagram com sender PSID e conteúdo; tudo já está
+              // nos campos normalizados (senderId, text, mediaUrl).
             });
           }
         }
@@ -7799,8 +7945,12 @@ var MetaWhatsAppCloudAdapter = class {
                 externalContactId: fromPhone,
                 senderName,
                 text,
-                timestamp: new Date(Number(msg.timestamp) * 1e3 || Date.now()).toISOString(),
-                rawPayload: msg
+                timestamp: new Date(Number(msg.timestamp) * 1e3 || Date.now()).toISOString()
+                // rawPayload removido: LGPD FASE 4.6 — msg contém o objeto
+                // completo do WhatsApp Cloud com phone, pushName, conteúdo e
+                // anexos; tudo já está nos campos normalizados (senderId,
+                // senderName, text, mediaUrl). Persistir o msg completo é
+                // dado duplicado que expõe PII sem necessidade.
               });
             }
           }
@@ -8247,7 +8397,11 @@ var MessagingService = class {
       mediaType: incoming.mediaType,
       status: "delivered",
       externalMessageId: incoming.externalMessageId,
-      rawMetadata: incoming.rawPayload,
+      // rawMetadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload. O webhook completo da Evolution API/Meta era persistido sem
+      // necessidade, duplicando senderId, senderName, text e mediaUrl que já
+      // estão em campos normalizados. Remover elimina exposição de PII de
+      // signatários sem impacto em nenhuma lógica de negócio.
       createdAt: now
     };
     const convMessages = this.messages.get(conversation.id) || [];
@@ -8818,7 +8972,9 @@ var MessagingService = class {
       media_type: m.mediaType ?? null,
       status: m.status,
       external_message_id: m.externalMessageId ?? null,
-      raw_metadata: m.rawMetadata ?? null,
+      // raw_metadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload, mapMessage() não persiste mais rawMetadata, e mapMessageRow()
+      // não deve repassar um campo que não existe mais na写入 nem no retorno.
       metadata: { mapId: m.id },
       created_at: m.createdAt
     };
@@ -8837,7 +8993,9 @@ var MessagingService = class {
       mediaType: row.media_type ?? void 0,
       status: row.status,
       externalMessageId: row.external_message_id ?? void 0,
-      rawMetadata: row.raw_metadata ?? void 0,
+      // rawMetadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload; mapMessage() não persiste mais rawMetadata; mapMessageRow()
+      // é read-path e não precisa repassar um campo que não é mais写入.
       createdAt: row.created_at
     };
   }
@@ -21187,8 +21345,9 @@ var handleWebhook = async (req, res) => {
       return;
     }
     const parsed = whatsappService.parseWebhook(payload);
+    const phoneMasked = parsed.from ? `****${parsed.from.slice(-4)}` : void 0;
     logger.info("whatsapp", "whatsapp_webhook", "incoming", "WhatsApp message received via Evolution API", {
-      from: parsed.from,
+      from: phoneMasked,
       type: parsed.type,
       instance: parsed.instance
     });
@@ -21196,12 +21355,12 @@ var handleWebhook = async (req, res) => {
     eventBus.publish(
       EventTopics.WHATSAPP_WEBHOOK_RECEIVED || "whatsapp.webhook_received",
       {
-        from: parsed.from,
-        text: parsed.text,
+        from: parsed.from ? `****${parsed.from.slice(-4)}` : void 0,
         type: parsed.type,
         instance: parsed.instance,
-        messageId: parsed.messageId,
-        rawPayload: payload
+        messageId: parsed.messageId
+        // rawPayload removido: LGPD FASE 4.6 — webhook completo não é consumido
+        // por nenhum subscriber; expor o payload integral desnecessário.
       },
       "whatsapp_webhook"
     );
@@ -21969,17 +22128,14 @@ var DocumentAssemblyEngine = class {
     }
     let activeArgIds;
     if (payload.analysis) {
-      activeArgIds = Array.from(new Set(payload.analysis.detectedInconsistencies.map((i) => i.legalArgumentId).filter(Boolean)));
-      const constArg = ARGUMENTS_CATALOG.find((a) => a.id === "ARG-049");
-      if (constArg && !activeArgIds.includes("ARG-049")) {
-        activeArgIds.push("ARG-049");
-      }
+      const canonicalArgumentIds = new Set(ARGUMENTS_CATALOG.map((argument) => argument.id));
+      activeArgIds = payload.analysis.recommendedArguments.filter((argument) => canonicalArgumentIds.has(argument.id)).map((argument) => argument.id);
     } else if (payload.selectedArgumentIds && payload.selectedArgumentIds.length > 0) {
       activeArgIds = payload.selectedArgumentIds;
     } else {
-      activeArgIds = procedure.applicableGrounds;
+      activeArgIds = [];
     }
-    const matchedArguments = ARGUMENTS_CATALOG.filter((a) => activeArgIds.includes(a.id));
+    const matchedArguments = activeArgIds.map((id) => ARGUMENTS_CATALOG.find((a) => a.id === id)).filter(Boolean);
     const preliminaryArgs = matchedArguments.filter(
       (a) => a.category === "preliminar" || a.category === "formal"
     );
@@ -24825,6 +24981,11 @@ function resolveProtocolInfo(autuadorAbbreviation, referenceDate) {
 }
 
 // src/core/rag/rag-pipeline.ts
+var EVIDENCE_DEPENDENT_ARGUMENTS = {
+  "ARG-012": "fotoRetencaoTrafego",
+  "ARG-019": "manualVeiculoOuFotoPainel",
+  "ARG-020": "fotoPlacaR6aAusente"
+};
 var RagPipeline = class {
   /**
    * Find matching infraction in catalog by code or description
@@ -24841,8 +25002,23 @@ var RagPipeline = class {
    */
   static retrieveContext(infraction) {
     const matchedInfraction = this.findInfraction(infraction?.codigoInfracao || infraction?.descricaoInfracao || "");
+    const dataGaps = [];
     const matchedTeses = ARGUMENTS_CATALOG.filter((arg) => {
-      if (matchedInfraction?.recommendedArgumentCodes?.includes(arg.id)) return true;
+      if (matchedInfraction?.recommendedArgumentCodes?.includes(arg.id)) {
+        if (EVIDENCE_DEPENDENT_ARGUMENTS[arg.id]) {
+          const key = EVIDENCE_DEPENDENT_ARGUMENTS[arg.id];
+          const evidence = infraction?.evidenceFlags?.[key];
+          if (evidence !== true) {
+            dataGaps.push({
+              ruleId: arg.id,
+              missingData: [key],
+              reason: `Evid\xEAncia obrigat\xF3ria ausente para a tese ${arg.id}: esperado evidenceFlags[${key}] === true`
+            });
+            return false;
+          }
+        }
+        return true;
+      }
       if (infraction?.codigoInfracao?.startsWith("745") || infraction?.codigoInfracao?.startsWith("746")) {
         return arg.id === "ARG-001" || arg.id === "ARG-002" || arg.id === "ARG-003";
       }
@@ -24882,29 +25058,77 @@ var RagPipeline = class {
       enderecoFisico: organMatch.physicalAddress,
       prazoDias: organMatch.standardDeadlineDays
     } : void 0;
-    return {
-      matchedTeses: matchedTeses.length > 0 ? matchedTeses : [
+    let finalMatchedTeses;
+    if (matchedTeses.length > 0) {
+      finalMatchedTeses = matchedTeses;
+    } else if (dataGaps.length > 0) {
+      finalMatchedTeses = [];
+    } else {
+      finalMatchedTeses = [
         {
           titulo: "Aferi\xE7\xE3o Metrol\xF3gica do Radar Vencida (Res. 798/2020)",
           baseLegal: "Art. 280, \xA72\xBA do CTB e Portaria INMETRO 158/2022",
           categoria: "merito"
         }
-      ],
+      ];
+    }
+    return {
+      matchedTeses: finalMatchedTeses,
       potentialNullities,
-      organInfo
+      organInfo,
+      dataGaps: dataGaps.length > 0 ? dataGaps : void 0
     };
   }
   /**
-   * Run comprehensive legal heuristic analysis on infraction data via Expert Rule Engine
+   * Run comprehensive legal heuristic analysis on infraction data via Expert Rule Engine.
+   *
+   * FASE 3.2 — Evidence → Analysis (FAIL CLOSED):
+   * After the rule engine produces its result, evidence-dependent arguments
+   * (ARG-012, ARG-019, ARG-020) are filtered out if their required evidence
+   * flag is absent or false. A corresponding dataGap is emitted so the client
+   * knows what evidence would unlock the thesis.
    */
   static analyzeInfraction(caseId, infraction) {
-    return ExpertRuleEngine.evaluate(caseId, infraction);
+    const result = ExpertRuleEngine.evaluate(caseId, infraction);
+    const evidenceFlags = infraction.evidenceFlags ?? {};
+    const additionalGaps = [];
+    const filteredRecommendedArgs = result.recommendedArguments.filter((arg) => {
+      const evidenceKey = EVIDENCE_DEPENDENT_ARGUMENTS[arg.id];
+      if (!evidenceKey) return true;
+      if (evidenceFlags[evidenceKey] !== true) {
+        additionalGaps.push({
+          ruleId: arg.id,
+          missingData: [evidenceKey],
+          reason: `Evid\xEAncia obrigat\xF3ria ausente para a tese ${arg.id}: esperado evidenceFlags[${evidenceKey}] === true`
+        });
+        return false;
+      }
+      return true;
+    });
+    const mergedDataGaps = [
+      ...result.dataGaps ?? [],
+      ...additionalGaps
+    ];
+    return {
+      ...result,
+      recommendedArguments: filteredRecommendedArgs,
+      selectedArguments: result.selectedArguments?.filter(
+        (id) => !EVIDENCE_DEPENDENT_ARGUMENTS[id] || evidenceFlags[EVIDENCE_DEPENDENT_ARGUMENTS[id]] === true
+      ),
+      dataGaps: mergedDataGaps.length > 0 ? mergedDataGaps : void 0
+    };
   }
   /**
-   * Generate complete, formatted legal defense draft petition via Document Assembly Engine
+   * Generate complete, formatted legal defense draft petition via Document Assembly Engine.
+   *
+   * Authorization is ALWAYS recomputed from the canonical analysis of the infraction.
+   * The selectedArguments parameter is retained for API compatibility but can no longer
+   * authorize legal content. This prevents callers from bypassing the Fase 3.5 chain by
+   * passing arbitrary IDs directly into DocumentAssemblyEngine.
    */
   static generateDefenseDraft(caseId, infraction, vehiclePlate, vehicleModel, applicantData, selectedArguments, procedureType = "recurso_jari") {
     const protocolInfo = resolveProtocolInfo(infraction.autuadorBody);
+    const canonicalAnalysis = this.analyzeInfraction(caseId, infraction);
     let daysElapsed;
     if (infraction.dateTime && infraction.notificationExpeditionDate) {
       const infDate = new Date(infraction.dateTime);
@@ -24922,6 +25146,7 @@ var RagPipeline = class {
       },
       applicant: applicantData,
       selectedArgumentIds: selectedArguments.map((a) => a.id),
+      analysis: canonicalAnalysis,
       dates: {
         infractionDate: infraction.dateTime,
         expeditionDate: infraction.notificationExpeditionDate,
@@ -24940,6 +25165,362 @@ var RagPipeline = class {
 };
 
 // src/server/services/ocr-service.ts
+import * as net from "net";
+import * as tls from "tls";
+import * as dns from "dns";
+import { URL as URL2 } from "url";
+import { isIP } from "net";
+var dnsResolve4 = (hostname) => new Promise((resolve, reject) => {
+  dns.resolve4(hostname, (err, addresses) => {
+    if (err) reject(err);
+    else resolve(addresses || []);
+  });
+});
+var dnsResolve6 = (hostname) => new Promise((resolve, reject) => {
+  dns.resolve6(hostname, (err, addresses) => {
+    if (err) reject(err);
+    else resolve(addresses || []);
+  });
+});
+var MAX_DOWNLOAD_SIZE = 5 * 1024 * 1024;
+var MAX_REDIRECTS = 5;
+function isPublicIPv4(ip) {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return false;
+  const [a, b, c, d] = parts;
+  if (a === 127) return false;
+  if (a === 0) return false;
+  if (a === 10) return false;
+  if (a === 172 && b >= 16 && b <= 31) return false;
+  if (a === 192 && b === 168) return false;
+  if (a === 100 && b >= 64 && b <= 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 192 && b === 0 && c === 2) return false;
+  if (a === 198 && b === 51 && c === 100) return false;
+  if (a === 203 && b === 0 && c === 113) return false;
+  if (a === 198 && b >= 18 && b <= 19) return false;
+  if (a === 192 && b === 88 && c === 99) return false;
+  if (a >= 224 && a <= 239) return false;
+  if (a >= 240) return false;
+  if (a === 255 && b === 255 && c === 255 && d === 255) return false;
+  return true;
+}
+function isPublicIPv6(ip) {
+  const lower = ip.toLowerCase();
+  if (lower === "::") return false;
+  if (lower === "::1") return false;
+  if (lower.startsWith("::ffff:")) {
+    const mapped = lower.replace("::ffff:", "");
+    return isPublicIPv4(mapped);
+  }
+  if (lower.startsWith("64:ff9b::") || lower.startsWith("64:ff9b:")) return false;
+  if (lower.startsWith("100::") || lower.startsWith("100:")) return false;
+  if (lower.startsWith("2001:") && !lower.startsWith("2001:db8") && !lower.startsWith("2001:0:")) {
+    if (lower.startsWith("2001:20")) return false;
+    if (lower.match(/^2001:0+:/)) return false;
+  }
+  if (lower.startsWith("2001:db8")) return false;
+  if (lower.startsWith("fc")) return false;
+  if (lower.startsWith("fd")) return false;
+  if (lower.startsWith("fe80")) return false;
+  if (lower.startsWith("fe") && lower.match(/^fe[0-3]:/)) return false;
+  if (lower.startsWith("ff")) return false;
+  if (lower.startsWith("2001:20::")) return false;
+  return true;
+}
+function validateFetchUrl(inputUrl) {
+  let url;
+  try {
+    url = new URL2(inputUrl);
+  } catch {
+    return { valid: false, reason: "URL malformada" };
+  }
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return { valid: false, reason: `Esquema '${url.protocol}' n\xE3o permitido \u2014 use http:// ou https://` };
+  }
+  if (url.username || url.password) {
+    return { valid: false, reason: "Credenciais na URL n\xE3o permitidas" };
+  }
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname === "localhost.localdomain" || hostname === "[::1]" || hostname === "127.0.0.1" || hostname.startsWith("0.0.0.0") || hostname.endsWith(".local") || hostname === "ip6-localhost" || hostname === "ip6-loopback") {
+    return { valid: false, reason: "Host localhost/reservado n\xE3o permitido" };
+  }
+  const internalPatterns = [
+    "internal",
+    "intranet",
+    "private",
+    "corporate",
+    "dmz",
+    "gateway",
+    "router",
+    "switch",
+    "firewall",
+    "proxy",
+    "metadata.google",
+    "metadata.internal",
+    "169.254.169.254"
+  ];
+  for (const pattern of internalPatterns) {
+    if (hostname.includes(pattern)) {
+      return { valid: false, reason: `Hostname interno '${pattern}' n\xE3o permitido` };
+    }
+  }
+  return { valid: true };
+}
+async function resolveAndValidateAllIPs(hostname) {
+  const errors = [];
+  const validatedIPs = [];
+  const ipVersion = isIP(hostname);
+  if (ipVersion === 4) {
+    if (!isPublicIPv4(hostname)) {
+      return { valid: false, reason: `IP privado/reservado: ${hostname}`, validatedIPs: [] };
+    }
+    return { valid: true, validatedIPs: [hostname] };
+  }
+  if (ipVersion === 6) {
+    if (!isPublicIPv6(hostname)) {
+      return { valid: false, reason: `IP IPv6 privado/reservado: ${hostname}`, validatedIPs: [] };
+    }
+    return { valid: true, validatedIPs: [hostname] };
+  }
+  let v4Addresses = [];
+  try {
+    v4Addresses = await dnsResolve4(hostname);
+    for (const ip of v4Addresses) {
+      if (!isPublicIPv4(ip)) {
+        errors.push(`IPv4 privado/reservado: ${ip}`);
+      } else {
+        validatedIPs.push(ip);
+      }
+    }
+  } catch (err) {
+    return {
+      valid: false,
+      reason: `Falha ao resolver DNS para '${hostname}': ${err.message}. Bloqueando conex\xE3o.`,
+      validatedIPs: []
+    };
+  }
+  let v6Addresses = [];
+  try {
+    v6Addresses = await dnsResolve6(hostname);
+    for (const ip of v6Addresses) {
+      if (!isPublicIPv6(ip)) {
+        errors.push(`IPv6 privado/reservado: ${ip}`);
+      } else {
+        validatedIPs.push(ip);
+      }
+    }
+  } catch (err) {
+  }
+  if (errors.length > 0) {
+    return { valid: false, reason: `IP n\xE3o p\xFAblico: ${errors.join("; ")}`, validatedIPs: [] };
+  }
+  if (validatedIPs.length === 0) {
+    return {
+      valid: false,
+      reason: `Nenhum IP p\xFAblico encontrado para '${hostname}' ap\xF3s resolu\xE7\xE3o DNS. Bloqueando.`,
+      validatedIPs: []
+    };
+  }
+  return { valid: true, validatedIPs };
+}
+async function ssrfSafeFetch(validatedIP, hostname, port, isHTTPS, signal, path = "/") {
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 3e4;
+    let socket;
+    let settled = false;
+    let timeout;
+    const cleanup = () => {
+      if (timeout !== void 0) clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      socket?.destroy();
+    };
+    const safeReject = (err) => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        reject(err);
+      }
+    };
+    const safeResolve = (val) => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        resolve(val);
+      }
+    };
+    const onAbort = () => safeReject(new Error("Request aborted"));
+    if (signal?.aborted) {
+      return safeReject(new Error("Request already aborted"));
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    timeout = setTimeout(() => safeReject(new Error("Connection timeout")), timeoutMs);
+    if (isHTTPS) {
+      socket = tls.connect(
+        { host: validatedIP, port, servername: hostname },
+        () => {
+          clearTimeout(timeout);
+          socket.write(
+            `GET ${path} HTTP/1.1\r
+Host: ${hostname}\r
+Connection: close\r
+\r
+`
+          );
+        }
+      );
+    } else {
+      socket = net.connect({ host: validatedIP, port }, () => {
+        clearTimeout(timeout);
+        socket.write(
+          `GET ${path} HTTP/1.1\r
+Host: ${hostname}\r
+Connection: close\r
+\r
+`
+        );
+      });
+    }
+    socket.setKeepAlive(true, 1e4);
+    let bytesReceived = 0;
+    let headersReceived = false;
+    let statusCode = 0;
+    const headers = {};
+    let bodyBuffer = Buffer.alloc(0);
+    const errorHandler = (err) => {
+      if (err.message?.includes("SSRF_BLOCKED") || err.message?.includes("MAX_SIZE_EXCEEDED")) {
+        return safeReject(err);
+      }
+      safeReject(new Error(`Connection error: ${err.message}`));
+    };
+    const dataHandler = (chunk) => {
+      if (!headersReceived) {
+        const str = bodyBuffer.length > 0 ? Buffer.concat([bodyBuffer, chunk]).toString("utf8") : chunk.toString("utf8");
+        const headerEndIdx = str.indexOf("\r\n\r\n");
+        if (headerEndIdx === -1) {
+          bodyBuffer = Buffer.from(str, "utf8");
+          return;
+        }
+        const headerSection = str.slice(0, headerEndIdx);
+        const bodyStr = str.slice(headerEndIdx + 4);
+        headersReceived = true;
+        const lines = headerSection.split("\r\n");
+        const statusLine = lines[0];
+        const match = statusLine.match(/HTTP\/1\.\d\s+(\d{3})/);
+        if (match) statusCode = parseInt(match[1], 10);
+        for (let i = 1; i < lines.length; i++) {
+          const colonIdx = lines[i].indexOf(":");
+          if (colonIdx > 0) {
+            const key = lines[i].slice(0, colonIdx).trim().toLowerCase();
+            const value = lines[i].slice(colonIdx + 1).trim();
+            headers[key] = value;
+          }
+        }
+        const contentLength = headers["content-length"];
+        if (contentLength) {
+          const size = parseInt(contentLength, 10);
+          if (size > MAX_DOWNLOAD_SIZE) {
+            return safeReject(new Error(
+              `MAX_SIZE_EXCEEDED: Content-Length ${size} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+            ));
+          }
+        }
+        bytesReceived = Buffer.from(bodyStr, "utf8").byteLength;
+        bodyBuffer = Buffer.from(bodyStr, "utf8");
+        if (bytesReceived > MAX_DOWNLOAD_SIZE) {
+          return safeReject(new Error(
+            `MAX_SIZE_EXCEEDED: First chunk ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+          ));
+        }
+        if (bodyStr.length > 0) {
+          bodyBuffer = Buffer.from(bodyStr, "utf8");
+        }
+      } else {
+        const newBuffer = Buffer.concat([bodyBuffer, chunk]);
+        bytesReceived = newBuffer.byteLength;
+        if (bytesReceived > MAX_DOWNLOAD_SIZE) {
+          return safeReject(new Error(
+            `MAX_SIZE_EXCEEDED: Total ${bytesReceived} exceeds limit ${MAX_DOWNLOAD_SIZE}`
+          ));
+        }
+        bodyBuffer = newBuffer;
+      }
+    };
+    const endHandler = () => {
+      const { Readable } = __require("stream");
+      const readable = Readable.from(bodyBuffer);
+      safeResolve({ body: readable, status: statusCode, headers });
+    };
+    socket.on("data", dataHandler);
+    socket.on("end", endHandler);
+    socket.on("error", errorHandler);
+  });
+}
+async function fetchWithRedirectProtection(initialUrl, signal) {
+  let currentUrl = initialUrl;
+  let redirectCount = 0;
+  while (true) {
+    const url = new URL2(currentUrl);
+    const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
+    const isHTTPS = url.protocol === "https:";
+    const urlValidation = validateFetchUrl(currentUrl);
+    if (!urlValidation.valid) {
+      throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
+    }
+    const resolution = await resolveAndValidateAllIPs(url.hostname);
+    if (!resolution.valid) {
+      throw new Error(`SSRF_BLOCKED: ${resolution.reason}`);
+    }
+    const connectIP = resolution.validatedIPs[0];
+    let result;
+    try {
+      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal, url.pathname + url.search);
+    } catch (err) {
+      if (err.message?.startsWith("SSRF_BLOCKED:") || err.message?.startsWith("MAX_SIZE_EXCEEDED:")) {
+        throw err;
+      }
+      throw new Error(`SSRF_BLOCKED: Connection failed to ${connectIP}: ${err.message}`);
+    }
+    const responseHeaders = /* @__PURE__ */ new Map();
+    for (const [k, v] of Object.entries(result.headers)) {
+      if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(",") : v);
+    }
+    const response = {
+      ok: result.status >= 200 && result.status < 300,
+      status: result.status,
+      headers: responseHeaders,
+      body: result.body
+    };
+    if ([301, 302, 303, 307, 308].includes(result.status)) {
+      if (redirectCount >= MAX_REDIRECTS) {
+        throw new Error("SSRF_BLOCKED: Limite de redirects excedido");
+      }
+      const locationHeader = response.headers.get("location");
+      if (!locationHeader) {
+        throw new Error("SSRF_BLOCKED: Redirect sem header Location");
+      }
+      let redirectUrl;
+      try {
+        redirectUrl = new URL2(locationHeader, currentUrl).toString();
+      } catch {
+        throw new Error(`SSRF_BLOCKED: Redirect URL inv\xE1lida: ${locationHeader}`);
+      }
+      const redirectValidation = validateFetchUrl(redirectUrl);
+      if (!redirectValidation.valid) {
+        throw new Error(`SSRF_BLOCKED: Redirect para destino bloqueado \u2014 ${redirectValidation.reason}`);
+      }
+      const redirectUrlParsed = new URL2(redirectUrl);
+      const redirectResolution = await resolveAndValidateAllIPs(redirectUrlParsed.hostname);
+      if (!redirectResolution.valid) {
+        throw new Error(`SSRF_BLOCKED: Redirect para IP privado: ${redirectResolution.reason}`);
+      }
+      redirectCount++;
+      currentUrl = redirectUrl;
+      continue;
+    }
+    return { response, finalUrl: currentUrl };
+  }
+}
 var PLATE_PATTERNS = [
   // Mercosul format: ABC1D23
   /[A-Z]{3}\s?\d[A-Z0-9]\d{2}/g,
@@ -25466,6 +26047,10 @@ var OcrService = class {
    * Tries providers in order: OCR.space → Google Vision
    */
   async analyzeImage(imageBase64) {
+    const MAX_BASE64_SIZE = 7 * 1024 * 1024;
+    if (imageBase64.length > MAX_BASE64_SIZE) {
+      throw new Error(`MAX_BASE64_SIZE_EXCEEDED: Payload base64 muito grande (${imageBase64.length} chars). M\xE1ximo: ${MAX_BASE64_SIZE} chars.`);
+    }
     const startTime = Date.now();
     try {
       logger.info("ocr", "ocr-service", "analyze_image", "Attempting OCR.space provider");
@@ -25523,21 +26108,67 @@ var OcrService = class {
   }
   /**
    * Analyze from a URL (downloads the image first)
+   * Includes SSRF protection (resolveAllIPs + direct socket to validated IP) and streaming size limit.
    */
   async analyzeFromUrl(imageUrl) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout || 3e4);
+    const timeoutMs = this.config.timeout || 3e4;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(imageUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const { response } = await fetchWithRedirectProtection(imageUrl, controller.signal);
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`);
       }
-      const arrayBuffer = await response.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
-      return this.analyzeImage(base64);
+      const contentLength = response.headers.get("content-length");
+      if (contentLength) {
+        const size = parseInt(contentLength, 10);
+        if (size > MAX_DOWNLOAD_SIZE) {
+          throw new Error(`MAX_SIZE_EXCEEDED: Arquivo muito grande (${size} bytes). M\xE1ximo: ${MAX_DOWNLOAD_SIZE} bytes.`);
+        }
+      }
+      const body = response.body;
+      if (!body) {
+        throw new Error("Response body is not readable");
+      }
+      return new Promise((resolve, reject) => {
+        const chunks = [];
+        let totalBytes = 0;
+        body.on("data", (chunk) => {
+          totalBytes += chunk.byteLength;
+          if (totalBytes > MAX_DOWNLOAD_SIZE) {
+            body.destroy?.() ?? controller.abort();
+            clearTimeout(timeoutId);
+            controller.abort();
+            return reject(new Error(
+              `MAX_SIZE_EXCEEDED: Limite de ${MAX_DOWNLOAD_SIZE} bytes excedido durante streaming. Bytes lidos: ${totalBytes}. Abortando antes de memory exhaustion.`
+            ));
+          }
+          chunks.push(chunk);
+        });
+        body.on("end", () => {
+          clearTimeout(timeoutId);
+          const buffer = Buffer.concat(chunks);
+          const base64 = buffer.toString("base64");
+          resolve(this.analyzeImage(base64));
+        });
+        body.on("error", (err) => {
+          clearTimeout(timeoutId);
+          if (err.message?.startsWith("SSRF_BLOCKED:") || err.message?.startsWith("MAX_SIZE_EXCEEDED:")) {
+            return reject(err);
+          }
+          reject(new Error(`Stream error: ${err.message}`));
+        });
+        controller.signal.addEventListener("abort", () => {
+          body.destroy?.() ?? controller.abort();
+          clearTimeout(timeoutId);
+          reject(new Error("Request aborted"));
+        });
+      });
     } catch (err) {
       clearTimeout(timeoutId);
+      if (err.name === "AbortError" || err.message?.startsWith("SSRF_BLOCKED:") || err.message?.startsWith("MAX_SIZE_EXCEEDED:")) {
+        throw err;
+      }
       throw err;
     }
   }
@@ -25562,7 +26193,7 @@ var ocrService = new OcrService();
 
 // src/server/routes/ocr.ts
 var router10 = Router10();
-router10.post("/ocr/analyze", async (req, res) => {
+router10.post("/ocr/analyze", authenticateToken, async (req, res) => {
   try {
     const { imageUrl, base64, rawText, presetId } = req.body;
     if (imageUrl || base64) {
@@ -27487,6 +28118,12 @@ router11.post("/webhooks/pagbank", async (req, res) => {
   }
 });
 router11.post("/simulate-payment", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
+      message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
+    });
+  }
   try {
     const { caseId, amount, paymentMethod = "pix", gateway = "pagbank" } = req.body;
     if (!caseId) {
@@ -30792,12 +31429,8 @@ router14.post("/unsubscribe", (req, res) => {
 });
 router14.get("/history", authenticateToken, (req, res) => {
   try {
-    const userEmail = req.query.email || req.query.userEmail;
     const user = req.user;
-    if (user && user.role !== "admin" && userEmail && userEmail !== user.email) {
-      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar notifica\xE7\xF5es de outro usu\xE1rio" });
-    }
-    const effectiveEmail = userEmail || user?.email;
+    const effectiveEmail = user?.email;
     if (!effectiveEmail) {
       return res.status(400).json({ error: "Email do usu\xE1rio \xE9 obrigat\xF3rio" });
     }
@@ -31087,6 +31720,180 @@ var health_default = router15;
 
 // src/server/routes/cases.ts
 import { Router as Router16 } from "express";
+
+// src/server/db/envelope-repository.ts
+var EnvelopeRepository = class {
+  constructor() {
+    this.client = getSupabaseServerClient();
+  }
+  /**
+   * Registra ownership de um envelope recém-criado.
+   * Chamado por POST /api/documenso/envelopes após criar o envelope no Documenso.
+   *
+   * Fail closed: se o banco não estiver disponível, lança erro (não cria Map fallback).
+   */
+  async register({
+    documensoEnvelopeId,
+    externalId,
+    caseId,
+    userId,
+    envelopeData
+  }) {
+    if (!this.client) {
+      logger.error("supabase", "envelope_repository", "register", "Supabase client n\xE3o configurado", {
+        documensoEnvelopeId,
+        persistenceResult: "no_client"
+      });
+      throw new Error("EnvelopeRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir ownership");
+    }
+    const { data, error } = await this.client.from("documenso_envelopes").insert({
+      documenso_envelope_id: documensoEnvelopeId,
+      external_id: externalId,
+      case_id: caseId,
+      user_id: userId,
+      status: "DRAFT",
+      envelope_data: envelopeData ?? {}
+    }).select().single();
+    if (error) {
+      logger.error("supabase", "envelope_repository", "register", `Falha ao registrar envelope: ${error.message}`, {
+        documensoEnvelopeId,
+        caseId,
+        userId,
+        persistenceResult: "failed"
+      });
+      throw new Error(`EnvelopeRepository: falha ao registrar ownership do envelope ${documensoEnvelopeId}: ${error.message}`);
+    }
+    logger.info("supabase", "envelope_repository", "register", "Envelope ownership persistido", {
+      id: data.id,
+      documensoEnvelopeId,
+      caseId,
+      userId,
+      persistenceResult: "success"
+    });
+    return data;
+  }
+  /**
+   * Verifica se o usuário tem ownership sobre o envelope (via user_id direto).
+   * Retorna true se o envelope existe E pertence ao userId.
+   *
+   * Fail closed: envelope desconhecido → false.
+   * Esta é a base da autorização em todas as rotas Documenso.
+   */
+  async belongsToUser(documensoEnvelopeId, userId) {
+    if (!this.client) {
+      logger.warn("supabase", "envelope_repository", "belongsToUser", "Supabase client n\xE3o configurado, fail-closed", {
+        documensoEnvelopeId,
+        persistenceResult: "no_client"
+      });
+      return false;
+    }
+    const { data, error } = await this.client.from("documenso_envelopes").select("id, user_id").eq("documenso_envelope_id", documensoEnvelopeId).eq("user_id", userId).maybeSingle();
+    if (error) {
+      logger.error("supabase", "envelope_repository", "belongsToUser", `Erro ao verificar ownership: ${error.message}`, {
+        documensoEnvelopeId,
+        userId,
+        persistenceResult: "failed"
+      });
+      return false;
+    }
+    return !!data;
+  }
+  /**
+   * Busca registro de envelope por documenso_envelope_id.
+   * Usado pelo webhook handler para atualizar status.
+   */
+  async getByDocumensoId(documensoEnvelopeId) {
+    if (!this.client) return null;
+    const { data, error } = await this.client.from("documenso_envelopes").select("*").eq("documenso_envelope_id", documensoEnvelopeId).maybeSingle();
+    if (error || !data) return null;
+    return data;
+  }
+  /**
+   * Anonimiza envelope_data JSONB — remove PII de signatários (email + name).
+   * LGPD Art. 18: direito à eliminação; Art. 4: anonimização suficiente.
+   * Preserva a estrutura do envelope para auditoria; remove dados pessoais.
+   */
+  anonymizeEnvelopeData(envelopeData) {
+    if (!envelopeData || typeof envelopeData !== "object") {
+      return envelopeData;
+    }
+    const anonymized = JSON.parse(JSON.stringify(envelopeData));
+    if (Array.isArray(anonymized.recipients)) {
+      anonymized.recipients = anonymized.recipients.map((recipient) => ({
+        ...recipient,
+        email: void 0,
+        name: "[REMOVIDO]"
+      }));
+    }
+    return anonymized;
+  }
+  /**
+   * Remove PII de signatários de envelope_data para todos os envelopes de um caso.
+   * Chamado pelo DELETE /cases/:id antes da cascade delete do envelope.
+   */
+  async anonymizeEnvelopesByCaseId(caseId) {
+    if (!this.client) {
+      logger.warn("supabase", "envelope_repository", "anonymizeEnvelopesByCaseId", "Supabase client n\xE3o configurado \u2014 pulando anonimiza\xE7\xE3o", {
+        caseId
+      });
+      return;
+    }
+    const { data: envelopes, error } = await this.client.from("documenso_envelopes").select("id, envelope_data").eq("case_id", caseId);
+    if (error) {
+      logger.error("supabase", "envelope_repository", "anonymizeEnvelopesByCaseId", `Erro ao buscar envelopes: ${error.message}`, {
+        caseId,
+        persistenceResult: "failed"
+      });
+      return;
+    }
+    if (!envelopes || envelopes.length === 0) {
+      logger.info("supabase", "envelope_repository", "anonymizeEnvelopesByCaseId", "Nenhum envelope encontrado para o caso", { caseId });
+      return;
+    }
+    for (const envelope of envelopes) {
+      const anonymizedData = this.anonymizeEnvelopeData(envelope.envelope_data);
+      const { error: updateError } = await this.client.from("documenso_envelopes").update({ envelope_data: anonymizedData }).eq("id", envelope.id);
+      if (updateError) {
+        logger.error("supabase", "envelope_repository", "anonymizeEnvelopesByCaseId", `Falha ao anonimizar envelope ${envelope.id}: ${updateError.message}`, {
+          caseId,
+          envelopeId: envelope.id,
+          persistenceResult: "failed"
+        });
+      } else {
+        logger.info("supabase", "envelope_repository", "anonymizeEnvelopesByCaseId", "Envelope anonimizado", {
+          caseId,
+          envelopeId: envelope.id,
+          persistenceResult: "success"
+        });
+      }
+    }
+  }
+  /**
+   * Atualiza status do envelope (chamado pelo webhook handler).
+   */
+  async updateStatus(documensoEnvelopeId, status, extraData) {
+    if (!this.client) {
+      logger.warn("supabase", "envelope_repository", "updateStatus", "Supabase client n\xE3o configurado \u2014 pulando update", {
+        documensoEnvelopeId,
+        persistenceResult: "no_client"
+      });
+      return;
+    }
+    const updates = { status };
+    if (extraData?.sent_at) updates.sent_at = extraData.sent_at;
+    if (extraData?.completed_at) updates.completed_at = extraData.completed_at;
+    const { error } = await this.client.from("documenso_envelopes").update(updates).eq("documenso_envelope_id", documensoEnvelopeId);
+    if (error) {
+      logger.error("supabase", "envelope_repository", "updateStatus", `Falha ao atualizar status: ${error.message}`, {
+        documensoEnvelopeId,
+        envelopeStatus: status,
+        persistenceResult: "failed"
+      });
+      throw new Error(`EnvelopeRepository: falha ao atualizar status do envelope ${documensoEnvelopeId}: ${error.message}`);
+    }
+  }
+};
+var envelopeRepository = new EnvelopeRepository();
 
 // src/core/validation/integrity-validator.ts
 var PROCEDURE_TYPE_CODES = new Set(
@@ -31844,7 +32651,26 @@ async function runControlledPipeline(input, opts) {
   };
 }
 function permittedTheses(analysis) {
-  return analysis.recommendedArguments || [];
+  const canonicalIds = new Set(ARGUMENTS_CATALOG.map((argument) => argument.id));
+  return (analysis.recommendedArguments ?? []).filter((argument) => canonicalIds.has(argument.id));
+}
+
+// src/core/documents/defense-integrity.ts
+import { createHash as createHash3 } from "node:crypto";
+function computeDefenseIntegrityHash(draft, analysis) {
+  const payload = {
+    fullDraftText: draft.fullDraftText ?? "",
+    selectedArgumentIds: Array.isArray(draft.selectedArgumentIds) ? draft.selectedArgumentIds : [],
+    procedureType: draft.procedureType ?? "",
+    analysisId: analysis?.id ?? "",
+    recommendedProcedure: analysis?.recommendedProcedure ?? "",
+    recommendedArgumentIds: Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments.map((argument) => argument.id ?? "") : []
+  };
+  return createHash3("sha256").update(JSON.stringify(payload), "utf8").digest("hex");
+}
+function hasValidDefenseIntegrity(draft, analysis) {
+  if (!draft.integrityHash) return false;
+  return draft.integrityHash === computeDefenseIntegrityHash(draft, analysis);
 }
 
 // src/server/routes/cases.ts
@@ -31896,7 +32722,30 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
   if (!canAccessCase(req.user, row)) {
     return denyCaseAccess(req.user, res);
   }
-  res.json(CanonicalMapper.rowToDomain(row));
+  const domain = CanonicalMapper.rowToDomain(row);
+  if (domain.defenseDraft && domain.analysis) {
+    const draft = domain.defenseDraft;
+    if (!hasValidDefenseIntegrity(draft, domain.analysis)) {
+      domain.defenseDraft = void 0;
+      return res.status(409).json({
+        error: "Documento de defesa inv\xE1lido ou adulterado. Gere novamente a defesa antes de consult\xE1-la.",
+        code: "DEFENSE_INTEGRITY_FAILED"
+      });
+    }
+    const authorizedTheses = permittedTheses(domain.analysis);
+    const authorizedIds = new Set(authorizedTheses.map((t) => t.id));
+    const sanitizedIds = domain.defenseDraft.selectedArgumentIds.filter(
+      (id) => authorizedIds.has(id)
+    );
+    if (sanitizedIds.length !== domain.defenseDraft.selectedArgumentIds.length) {
+      domain.defenseDraft = void 0;
+      return res.status(409).json({
+        error: "Documento de defesa cont\xE9m teses n\xE3o autorizadas pela an\xE1lise jur\xEDdica can\xF4nica.",
+        code: "DEFENSE_AUTHORIZATION_FAILED"
+      });
+    }
+  }
+  res.json(domain);
 });
 router16.post("/cases", authenticateToken, async (req, res) => {
   try {
@@ -31944,6 +32793,10 @@ router16.post("/cases", authenticateToken, async (req, res) => {
           domainData.analysis?.recommendedArguments || [],
           domainData.serviceType || "recurso_jari"
         );
+        domainData.defenseDraft.integrityHash = computeDefenseIntegrityHash(
+          domainData.defenseDraft,
+          domainData.analysis
+        );
       }
     }
     const row = CanonicalMapper.domainToRow(domainData);
@@ -31988,6 +32841,59 @@ router16.put("/cases/:id", authenticateToken, async (req, res) => {
   await databaseRows.set(req.params.id, newRow);
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, "case_engine");
   res.json(CanonicalMapper.rowToDomain(newRow));
+});
+router16.delete("/cases/:id", authenticateToken, async (req, res) => {
+  const row = databaseRows.get(req.params.id);
+  if (!row) {
+    return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+  }
+  if (!canAccessCase(req.user, row)) {
+    return denyCaseAccess(req.user, res);
+  }
+  const anonymizedRow = {
+    ...row,
+    // Identificação pessoal direta
+    client_name: "[REMOVIDO]",
+    client_email: void 0,
+    client_phone: void 0,
+    client_cpf: void 0,
+    // Vinculação a conta
+    user_id: void 0,
+    // Dados processuais que podem conter PII
+    applicant_json: void 0,
+    defense_draft_json: void 0,
+    analysis_json: void 0,
+    evidence_json: void 0,
+    ocr_auxiliary_json: void 0,
+    timeline_json: void 0,
+    claim_token: void 0,
+    commercial_offer_id: void 0,
+    formal_flaws_json: void 0,
+    protocol_info_json: void 0,
+    // Condutor real (quando aplicável — pode ter CNH/Cpf do verdadeiro motorista)
+    real_driver_name: void 0,
+    real_driver_cpf: void 0,
+    real_driver_cnh: void 0,
+    // Contexto do celular (pode conter identificadores)
+    cellphone_circumstance: void 0,
+    updated_at: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  await databaseRows.set(req.params.id, anonymizedRow);
+  const caseUuid = row.id;
+  await envelopeRepository.anonymizeEnvelopesByCaseId(caseUuid);
+  auditLogs.unshift({
+    id: `audit_${Date.now()}`,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    actor: req.user?.email || req.user?.id || "unknown",
+    role: req.user?.role === "admin" ? "admin" : "citizen",
+    action: "CASE_ANONYMIZED",
+    targetResource: req.params.id,
+    ipHash: "9f83c68a765b1c41",
+    details: "Caso anonimizado via requisi\xE7\xE3o LGPD Art. 18 \u2014 dados pessoais removidos.",
+    gdprCompliant: true
+  });
+  eventBus.publish(EventTopics.CASE_DELETED, { caseId: req.params.id }, "case_engine");
+  res.json({ success: true, message: "Dados pessoais removidos. Caso retido para conformidade legal." });
 });
 router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
@@ -32127,6 +33033,10 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
   }
   defense.fullDraftText = pipelineResult.draft.fullDraftText;
   defense.selectedArgumentIds = theses.length ? theses : canonicalArguments.map((a) => a.id);
+  defense.integrityHash = computeDefenseIntegrityHash(
+    defense,
+    canonicalAnalysis
+  );
   if (pipelineResult.controlled.reason === "REFINED_VALID") {
     logger.info("system", "ai_controlled_refinement", "ai_controlled_refinement", "Refinamento de prosa da IA aplicado ap\xF3s valida\xE7\xE3o de integridade.", { caseId: domain.id });
   } else if (pipelineResult.controlled.reason === "PROVIDER_UNAVAILABLE") {
@@ -32157,10 +33067,11 @@ var cases_default = router16;
 // src/server/routes/audit.ts
 import { Router as Router17 } from "express";
 var router17 = Router17();
-router17.get("/audit-logs", (req, res) => {
+router17.use(authenticateToken, requireAdmin);
+router17.get("/audit-logs", (_req, res) => {
   res.json(auditLogs);
 });
-router17.get("/audit/logs", (req, res) => {
+router17.get("/audit/logs", (_req, res) => {
   res.json({ logs: auditLogs.slice(0, 50) });
 });
 var audit_default = router17;
@@ -32521,25 +33432,10 @@ router20.get("/governance/law-enforcement-verify", (req, res) => {
       orientacaoAgente: "Condutor com efeito suspensivo regular ativo. Vedada imposi\xE7\xE3o de restri\xE7\xE3o de licenciamento ou bloqueio de CNH at\xE9 tr\xE2nsito em julgado administrativo."
     });
   }
-  if (process.env.NODE_ENV === "production") {
-    return res.json({
-      verified: false,
-      message: "Verifica\xE7\xE3o n\xE3o dispon\xEDvel \u2014 caso n\xE3o encontrado no sistema.",
-      source: "system"
-    });
-  }
-  res.json({
-    verified: true,
-    statusProcessual: "DEFESA_PROTOCOLADA_REGULAR",
-    efeitoSuspensivo: true,
-    amparoLegal: "Art. 285 da Lei Federal n\xBA 9.503/1997",
-    autoInfracao: autoInfracao || "DET2026SP984712",
-    placa: "BRA2E19",
-    orgaoAutuador: "DETRAN-SP",
-    instanciaAtual: "Defesa Pr\xE9via",
-    dataProtocolo: (/* @__PURE__ */ new Date()).toISOString(),
-    hashAutenticidade: "sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
-    orientacaoAgente: "Certid\xE3o de Efeito Suspensivo V\xE1lida nos termos do CTB."
+  return res.json({
+    verified: false,
+    message: "Verifica\xE7\xE3o n\xE3o dispon\xEDvel \u2014 caso n\xE3o encontrado no sistema.",
+    source: "system"
   });
 });
 router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
@@ -32576,7 +33472,7 @@ var governance_default = router20;
 // src/server/routes/analytics.ts
 import { Router as Router21 } from "express";
 var router21 = Router21();
-router21.get("/analytics/dashboard", authenticateToken, (req, res) => {
+router21.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
   const allCases = Array.from(databaseRows.values()).map((r) => CanonicalMapper.rowToDomain(r));
   const totalProcessed = allCases.length;
   const paidCases = allCases.filter(
@@ -33705,7 +34601,20 @@ var WebhookHandler = class {
   // Database Operations (to be implemented with Supabase)
   // ==========================================
   async updateEnvelopeStatus(documensoEnvelopeId, status, extraData) {
-    logger.debug("documenso", "webhook-handler", "update-envelope-status", "Update envelope status", { documensoEnvelopeId, envelopeStatus: status, extraData, status: "pending" });
+    try {
+      await envelopeRepository.updateStatus(documensoEnvelopeId, status, {
+        sent_at: extraData?.sent_at,
+        completed_at: extraData?.completed_at
+      });
+    } catch (err) {
+      logger.error("documenso", "webhook-handler", "update-envelope-status", "Falha ao persistir status do envelope", {
+        documensoEnvelopeId,
+        envelopeStatus: status,
+        err,
+        status: "failed"
+      });
+      throw err;
+    }
   }
   async updateRecipientReadStatus(documensoEnvelopeId, documensoRecipientId, readStatus) {
     logger.debug("documenso", "webhook-handler", "update-recipient-read-status", "Update recipient read status", { documensoEnvelopeId, documensoRecipientId, readStatus, status: "pending" });
@@ -34015,6 +34924,25 @@ var router25 = Router25();
 var envelopeService;
 var webhookHandler;
 var pollingJob;
+function canAccessCase2(user, row) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (!row.user_id) return false;
+  return row.user_id === user.id || !!user.email && row.user_id === user.email;
+}
+function denyAccess(user, res) {
+  if (!user) {
+    res.status(401).json({ error: "N\xE3o autenticado" });
+    return true;
+  }
+  res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este recurso" });
+  return true;
+}
+async function authorizeEnvelope(envelopeId, user) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return envelopeRepository.belongsToUser(envelopeId, user.id);
+}
 function ensureServices() {
   if (!envelopeService) {
     if (!isDocumensoConfigured()) {
@@ -34062,13 +34990,33 @@ router25.post("/envelopes", authenticateToken, async (req, res) => {
     if (!signers || signers.length === 0) {
       return res.status(400).json({ error: "At least one signer is required" });
     }
+    const caseRow = caseRepository.get(caseId);
+    if (!caseRow) {
+      return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+    }
+    if (!canAccessCase2(req.user, caseRow)) {
+      return denyAccess(req.user, res);
+    }
     const pdfBuffer = Buffer.from(pdfBase64, "base64");
+    const caseUuid = domainIdToUuid(caseId);
+    if (!caseUuid) {
+      return res.status(400).json({ error: "ID do caso inv\xE1lido" });
+    }
     const envelope = await envelopeService.createEnvelopeFromCase(
       caseId,
+      // domain ID: título legível "Defesa de Multa - Caso case_xxx"
       pdfBuffer,
       signers,
       { title, fields, settings, metadata }
     );
+    await envelopeRepository.register({
+      documensoEnvelopeId: envelope.id,
+      externalId: caseUuid,
+      // UUID: consistente para novos envelopes
+      caseId: caseUuid,
+      userId: req.user.id,
+      envelopeData: envelope
+    });
     res.status(201).json({
       success: true,
       envelope: {
@@ -34082,9 +35030,12 @@ router25.post("/envelopes", authenticateToken, async (req, res) => {
       }
     });
   } catch (err) {
+    const { signers: _signers, pdfBase64: _pdf, ...safeBody } = req.body;
     logger.error("documenso", "envelope-service", "create-envelope", "Create envelope failed", {
       err,
-      body: req.body
+      caseId: req.body?.caseId,
+      signerCount: Array.isArray(req.body?.signers) ? req.body.signers.length : void 0,
+      ...safeBody
     });
     if (err instanceof DocumensoError) {
       return res.status(err.statusCode).json({
@@ -34099,6 +35050,9 @@ router25.post("/envelopes", authenticateToken, async (req, res) => {
 router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!await authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
     const envelope = await envelopeService.sendEnvelope(id);
     res.json({
       success: true,
@@ -34126,6 +35080,9 @@ router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
 router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!await authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
     const status = await envelopeService.getEnvelopeStatus(id);
     res.json({ status });
   } catch (err) {
@@ -34142,6 +35099,9 @@ router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
 router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!await authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
     const envelope = await envelopeService.getEnvelope(id);
     res.json(envelope);
   } catch (err) {
@@ -34161,6 +35121,9 @@ router25.get(
   async (req, res) => {
     try {
       const { id, recipientId } = req.params;
+      if (!await authorizeEnvelope(id, req.user)) {
+        return denyAccess(req.user, res);
+      }
       const signingUrl = await envelopeService.getSigningUrl(id, recipientId);
       res.json({ signingUrl, recipientId });
     } catch (err) {
@@ -34178,6 +35141,9 @@ router25.get(
 router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!await authorizeEnvelope(id, req.user)) {
+      return denyAccess(req.user, res);
+    }
     const status = await envelopeService.getEnvelopeStatus(id);
     if (status !== "COMPLETED") {
       return res.status(400).json({
@@ -34206,6 +35172,9 @@ router25.post("/embedding-token", authenticateToken, async (req, res) => {
     const { envelopeId, recipientId, redirectUrl } = req.body;
     if (!envelopeId || !recipientId) {
       return res.status(400).json({ error: "envelopeId and recipientId are required" });
+    }
+    if (!await authorizeEnvelope(envelopeId, req.user)) {
+      return denyAccess(req.user, res);
     }
     const token = await envelopeService.createEmbeddingToken(envelopeId, recipientId, redirectUrl);
     res.json({ token });
@@ -34285,11 +35254,7 @@ function createApp() {
   try {
     if (supabaseEnvUrl.startsWith("https://")) {
       const { host } = new URL(supabaseEnvUrl);
-      supabaseOrigins = [
-        `https://${host}`,
-        `wss://${host}`,
-        ...supabaseOrigins
-      ];
+      supabaseOrigins = [`https://${host}`, `wss://${host}`, ...supabaseOrigins];
     }
   } catch {
   }
@@ -34300,23 +35265,13 @@ function createApp() {
         useDefaults: true,
         directives: {
           defaultSrc: ["'self'"],
-          // Dev: @vitejs/plugin-react injeta preamble react-refresh inline;
-          // Prod build do Vite só emite scripts externos hashados.
-          // Nota: 'unsafe-inline' em scriptSrc só existe em dev por causa do
-          // preamble inline do plugin-react; upgrade path = nonce gerado no server +
-          // transformIndexHtml. Em prod fica 'self' puro. Idem ws:/wss: para HMR.
           scriptSrc: ["'self'", ...isProd ? [] : ["'unsafe-inline'"]],
-          styleSrc: [
-            "'self'",
-            "'unsafe-inline'",
-            "https://fonts.googleapis.com"
-          ],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
           fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: [
             "'self'",
             ...isProd ? [] : ["ws:", "wss:"],
-            // Vite HMR (dev)
             ...supabaseOrigins,
             "https://identitytoolkit.googleapis.com",
             "https://securetoken.googleapis.com",
@@ -34345,9 +35300,119 @@ function createApp() {
     })
   );
   app.use(express2.urlencoded({ extended: true, limit: "10mb" }));
+  const editableCaseFields = /* @__PURE__ */ new Set([
+    "title",
+    "clientName",
+    "clientEmail",
+    "clientPhone",
+    "clientCpf",
+    "vehicle",
+    "infraction",
+    "applicant",
+    "nominatedDriver",
+    "company",
+    "processNumbers",
+    "specificFacts",
+    "evidence",
+    "ocrAuxiliaryData",
+    "commercialOfferId",
+    "serviceType"
+  ]);
+  app.use("/api", (req, _res, next) => {
+    if (req.method !== "PUT") return next();
+    const match = req.path.match(/^\/cases\/([^/]+)$/);
+    if (!match) return next();
+    const caseId = decodeURIComponent(match[1]);
+    const existingRow = databaseRows.get(caseId);
+    if (!existingRow || !req.body || typeof req.body !== "object" || Array.isArray(req.body)) return next();
+    const existingDomain = CanonicalMapper.rowToDomain(existingRow);
+    const sanitized = {};
+    for (const field of editableCaseFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
+    }
+    req.body = {
+      ...existingDomain,
+      ...sanitized,
+      id: existingDomain.id,
+      userId: existingDomain.userId,
+      status: existingDomain.status,
+      currentStage: existingDomain.currentStage,
+      isPaid: existingDomain.isPaid,
+      paidAt: existingDomain.paidAt,
+      payment: existingDomain.payment,
+      analysis: existingDomain.analysis,
+      defenseDraft: existingDomain.defenseDraft,
+      documentGenerationStatus: existingDomain.documentGenerationStatus,
+      protocolInfo: existingDomain.protocolInfo,
+      submissionInstructions: existingDomain.submissionInstructions,
+      timeline: existingDomain.timeline,
+      claimToken: existingDomain.claimToken,
+      isAnonymous: existingDomain.isAnonymous,
+      createdAt: existingDomain.createdAt,
+      updatedAt: existingDomain.updatedAt
+    };
+    return next();
+  });
+  app.use("/api/payments", (req, res, next) => {
+    const isPublicPriceLookup = req.method === "GET" && req.path === "/resolve-price";
+    const isGatewayWebhook = req.path.startsWith("/webhooks/");
+    if (isPublicPriceLookup || isGatewayWebhook) return next();
+    return authenticateToken(req, res, next);
+  });
   app.use("/api/admin", admin_default);
-  app.use("/api/admin/commercial", commercial_default);
-  app.use("/api/commercial", commercial_default);
+  app.use("/api/admin/commercial", authenticateToken, requireAdmin, commercial_default);
+  app.use("/api/commercial", authenticateToken, (req, res, next) => {
+    if (isProd && req.body?.userId !== void 0 && req.body.userId !== req.user?.id) {
+      return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
+    }
+    next();
+  }, commercial_default);
+  app.use("/api/communication", authenticateToken, (req, res, next) => {
+    const isSendAction = req.method === "POST" && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
+    if (!isSendAction || req.user?.role === "admin") return next();
+    const caseId = req.body?.caseId;
+    if (!caseId || typeof caseId !== "string") {
+      return res.status(403).json({ error: "caseId \xE9 obrigat\xF3rio para envio de WhatsApp por usu\xE1rio n\xE3o administrador." });
+    }
+    const row = databaseRows.get(caseId);
+    const ownerId = row?.user_id;
+    if (!row || !ownerId || ownerId !== req.user?.id) {
+      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para enviar mensagens neste caso." });
+    }
+    return next();
+  });
+  app.use("/api/marketing", (req, res, next) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    return authenticateToken(req, res, (err) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
+    });
+  });
+  app.use("/api/notifications", (req, res, next) => {
+    if (req.method === "GET" && req.path === "/vapid-key") return next();
+    return authenticateToken(req, res, (err) => {
+      if (err) return next(err);
+      if (req.user?.role !== "admin") {
+        const requestedUserId = req.body?.userId;
+        const requestedEmail = req.body?.userEmail || req.body?.email;
+        if (requestedUserId !== void 0 && requestedUserId !== req.user?.id) {
+          return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
+        }
+        if (requestedEmail !== void 0 && requestedEmail !== req.user?.email) {
+          return res.status(403).json({ error: "Email n\xE3o corresponde ao usu\xE1rio autenticado." });
+        }
+      }
+      next();
+    });
+  });
+  app.use("/api", (req, res, next) => {
+    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
+    if (!metaAdminPath) return next();
+    return authenticateToken(req, res, (err) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
+    });
+  });
   app.use("/api/agents", agents_default);
   app.use("/api/monitoring", monitoring_default);
   app.use("/api/settings", settings_default);
