@@ -8,7 +8,6 @@ import { authenticateToken, requireAdmin } from './middleware/auth-middleware';
 import { corsMiddleware } from './config/cors';
 import { globalLimiter, strictLimiter } from './middleware/rate-limit';
 
-// Route modules
 import adminRoutes from './routes/admin';
 import metaRoutes from './routes/meta';
 import commercialRoutes from './routes/commercial';
@@ -21,6 +20,8 @@ import whatsappRoutes from './routes/whatsapp';
 import ocrRoutes from './routes/ocr';
 import paymentsRoutes from './routes/payments';
 import knowledgeRoutes from './routes/knowledge';
+import marketingAutomationRoutes from './routes/marketing-automation';
+import scrapeRoutes from './routes/scrape';
 import mediaRoutes from './routes/media';
 import notificationsRoutes from './routes/notifications';
 import healthRoutes from './routes/health';
@@ -50,220 +51,75 @@ export function createApp() {
       const { host } = new URL(supabaseEnvUrl);
       supabaseOrigins = [`https://${host}`, `wss://${host}`, ...supabaseOrigins];
     }
-  } catch {
-    // URL malformada no env: mantém apenas o wildcard
-  }
-  app.use(
-    helmet({
-      frameguard: false,
-      contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", ...(isProd ? [] : ["'unsafe-inline'"])],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-          imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-          connectSrc: [
-            "'self'",
-            ...(isProd ? [] : ['ws:', 'wss:']),
-            ...supabaseOrigins,
-            'https://identitytoolkit.googleapis.com',
-            'https://securetoken.googleapis.com',
-            'https://firebaseinstallations.googleapis.com',
-            'https://firebaselogging-pa.googleapis.com',
-            'https://www.googleapis.com',
-          ],
-          workerSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          frameAncestors: ["'self'"],
-        },
-      },
-      crossOriginEmbedderPolicy: false,
-      strictTransportSecurity: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
-    })
-  );
-
+  } catch {}
+  app.use(helmet({ frameguard: false, contentSecurityPolicy: { useDefaults: true, directives: {
+    defaultSrc: ["'self'"], scriptSrc: ["'self'", ...(isProd ? [] : ["'unsafe-inline'"])],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https:'], connectSrc: ["'self'", ...(isProd ? [] : ['ws:', 'wss:']), ...supabaseOrigins, 'https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com', 'https://firebaseinstallations.googleapis.com', 'https://firebaselogging-pa.googleapis.com', 'https://www.googleapis.com'],
+    workerSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'self'"],
+  }}, crossOriginEmbedderPolicy: false, strictTransportSecurity: isProd ? { maxAge: 31536000, includeSubDomains: true } : false }));
   app.use(corsMiddleware);
   app.use(globalLimiter);
-  app.use(
-    express.json({
-      limit: '10mb',
-      verify: (req, _res, buf) => {
-        (req as any).rawBody = buf.toString('utf8');
-      },
-    })
-  );
+  app.use(express.json({ limit: '10mb', verify: (req, _res, buf) => { (req as any).rawBody = buf.toString('utf8'); } }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // FASE 2 — Broken Object Property Level Authorization / Mass Assignment.
-  const editableCaseFields = new Set([
-    'title', 'clientName', 'clientEmail', 'clientPhone', 'clientCpf',
-    'vehicle', 'infraction', 'applicant', 'nominatedDriver', 'company',
-    'processNumbers', 'specificFacts', 'evidence', 'ocrAuxiliaryData',
-    'commercialOfferId', 'serviceType',
-  ]);
-
+  const editableCaseFields = new Set(['title','clientName','clientEmail','clientPhone','clientCpf','vehicle','infraction','applicant','nominatedDriver','company','processNumbers','specificFacts','evidence','ocrAuxiliaryData','commercialOfferId','serviceType']);
   app.use('/api', (req, _res, next) => {
     if (req.method !== 'PUT') return next();
     const match = req.path.match(/^\/cases\/([^/]+)$/);
     if (!match) return next();
-    const caseId = decodeURIComponent(match[1]);
-    const existingRow = databaseRows.get(caseId);
+    const existingRow = databaseRows.get(decodeURIComponent(match[1]));
     if (!existingRow || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return next();
-
     const existingDomain = CanonicalMapper.rowToDomain(existingRow);
     const sanitized: Record<string, unknown> = {};
-    for (const field of editableCaseFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
-    }
-
-    req.body = {
-      ...existingDomain,
-      ...sanitized,
-      id: existingDomain.id,
-      userId: existingDomain.userId,
-      status: existingDomain.status,
-      currentStage: existingDomain.currentStage,
-      isPaid: existingDomain.isPaid,
-      paidAt: existingDomain.paidAt,
-      payment: existingDomain.payment,
-      analysis: existingDomain.analysis,
-      defenseDraft: existingDomain.defenseDraft,
-      documentGenerationStatus: existingDomain.documentGenerationStatus,
-      protocolInfo: existingDomain.protocolInfo,
-      submissionInstructions: existingDomain.submissionInstructions,
-      timeline: existingDomain.timeline,
-      claimToken: existingDomain.claimToken,
-      isAnonymous: existingDomain.isAnonymous,
-      createdAt: existingDomain.createdAt,
-      updatedAt: existingDomain.updatedAt,
-    };
-    return next();
+    for (const field of editableCaseFields) if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
+    req.body = { ...existingDomain, ...sanitized, id: existingDomain.id, userId: existingDomain.userId, status: existingDomain.status, currentStage: existingDomain.currentStage, isPaid: existingDomain.isPaid, paidAt: existingDomain.paidAt, payment: existingDomain.payment, analysis: existingDomain.analysis, defenseDraft: existingDomain.defenseDraft, documentGenerationStatus: existingDomain.documentGenerationStatus, protocolInfo: existingDomain.protocolInfo, submissionInstructions: existingDomain.submissionInstructions, timeline: existingDomain.timeline, claimToken: existingDomain.claimToken, isAnonymous: existingDomain.isAnonymous, createdAt: existingDomain.createdAt, updatedAt: existingDomain.updatedAt };
+    next();
   });
-
   app.use('/api/payments', (req, res, next) => {
-    const isPublicPriceLookup = req.method === 'GET' && req.path === '/resolve-price';
-    const isGatewayWebhook = req.path.startsWith('/webhooks/');
-    if (isPublicPriceLookup || isGatewayWebhook) return next();
+    if ((req.method === 'GET' && req.path === '/resolve-price') || req.path.startsWith('/webhooks/')) return next();
     return authenticateToken(req, res, next);
   });
-
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin/commercial', authenticateToken, requireAdmin, commercialRoutes);
+  app.use('/api/commercial', authenticateToken, (req,res,next) => { if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) return res.status(403).json({error:'userId não corresponde ao usuário autenticado.'}); next(); }, commercialRoutes);
+  app.use('/api/communication', authenticateToken, (req,res,next) => { const send = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path); if (!send || req.user?.role === 'admin') return next(); const caseId=req.body?.caseId; const row=caseId ? databaseRows.get(caseId) : undefined; if (!caseId || !row || row.user_id !== req.user?.id) return res.status(403).json({error:'Você não tem permissão para enviar mensagens neste caso.'}); next(); });
+  app.use('/api/marketing', (req,res,next) => { if (req.method === 'GET' && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) return authenticateToken(req,res,(err?:any)=>err?next(err):requireAdmin(req,res,next)); next(); });
+  app.use('/api/marketing', (req,res,next) => ['POST','PUT','PATCH','DELETE'].includes(req.method) ? authenticateToken(req,res,(err?:any)=>err?next(err):requireAdmin(req,res,next)) : next());
+  app.use('/api/notifications', (req,res,next) => { if (req.method === 'GET' && req.path === '/vapid-key') return next(); return authenticateToken(req,res,(err?:any)=>{ if(err)return next(err); if(req.user?.role !== 'admin'){if(req.body?.userId!==undefined&&req.body.userId!==req.user?.id)return res.status(403).json({error:'userId não corresponde ao usuário autenticado.'});if(req.body?.userEmail!==undefined&&req.body.userEmail!==req.user?.email)return res.status(403).json({error:'Email não corresponde ao usuário autenticado.'});} next(); }); });
+  app.use('/api', (req,res,next) => { const privileged=/^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path); if(!privileged)return next(); return authenticateToken(req,res,(err?:any)=>err?next(err):requireAdmin(req,res,next)); });
 
-  app.use('/api/commercial', authenticateToken, (req, res, next) => {
-    if (isProd && req.body?.userId !== undefined && req.body.userId !== req.user?.id) {
-      return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
-    }
-    next();
-  }, commercialRoutes);
-
-  app.use('/api/communication', authenticateToken, (req, res, next) => {
-    const isSendAction = req.method === 'POST' && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
-    if (!isSendAction || req.user?.role === 'admin') return next();
-    const caseId = req.body?.caseId;
-    if (!caseId || typeof caseId !== 'string') {
-      return res.status(403).json({ error: 'caseId é obrigatório para envio de WhatsApp por usuário não administrador.' });
-    }
-    const row = databaseRows.get(caseId);
-    const ownerId = row?.user_id;
-    if (!row || !ownerId || ownerId !== req.user?.id) {
-      return res.status(403).json({ error: 'Você não tem permissão para enviar mensagens neste caso.' });
-    }
-    return next();
-  });
-
-  app.use('/api/marketing', (req, res, next) => {
-    // GETs que expõem PII (conversas inbox, mensagens, leads, export) exigem admin.
-    if (req.method === 'GET' && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
-      return authenticateToken(req, res, (err?: any) => {
-        if (err) return next(err);
-        return requireAdmin(req, res, next);
-      });
-    }
-    return next();
-  });
-
-  app.use('/api/marketing', (req, res, next) => {
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
-    return authenticateToken(req, res, (err?: any) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
-
-  app.use('/api/notifications', (req, res, next) => {
-    if (req.method === 'GET' && req.path === '/vapid-key') return next();
-    return authenticateToken(req, res, (err?: any) => {
-      if (err) return next(err);
-      if (req.user?.role !== 'admin') {
-        const requestedUserId = req.body?.userId;
-        const requestedEmail = req.body?.userEmail || req.body?.email;
-        if (requestedUserId !== undefined && requestedUserId !== req.user?.id) {
-          return res.status(403).json({ error: 'userId não corresponde ao usuário autenticado.' });
-        }
-        if (requestedEmail !== undefined && requestedEmail !== req.user?.email) {
-          return res.status(403).json({ error: 'Email não corresponde ao usuário autenticado.' });
-        }
-      }
-      next();
-    });
-  });
-
-  // Meta management, publishing and insights are privileged operations.
-  // Webhooks and OAuth callbacks remain public integration endpoints.
-  app.use('/api', (req, res, next) => {
-    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path);
-    if (!metaAdminPath) return next();
-    return authenticateToken(req, res, (err?: any) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
-
-  // Meta webhook history and diagnostics expose integration state — admin only.
-  // (Webhook ingestion endpoints themselves remain public for provider callbacks.)
-  app.use('/api', (req, res, next) => {
-    const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
-    if (!metaAdminAuxPath) return next();
-    return authenticateToken(req, res, (err?: any) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
-
-  app.use('/api/agents', agentsRoutes);
-  app.use('/api/monitoring', monitoringRoutes);
-  app.use('/api/settings', settingsRoutes);
-  app.use('/api/logs', logsRoutes);
-  app.use('/api/media', mediaRoutes);
-  app.use('/api/integrations', metaRoutes);
-  app.use('/api', metaRoutes);
-  app.use('/api/marketing', marketingRoutes);
-  app.use('/api/communication', whatsappRoutes);
-  app.use('/api', whatsappRoutes);
-  app.use('/api/ocr', ocrRoutes);
-  app.use('/api/payments', paymentsRoutes);
-  app.use('/api/knowledge', knowledgeRoutes);
-  app.use('/api/notifications', notificationsRoutes);
-  app.use('/api/auth', authRoutes);
+  app.use('/api/admin', strictLimiter);
   app.use('/api', healthRoutes);
-  app.use('/api', casesRoutes);
+  app.use('/api', authRoutes);
   app.use('/api', auditRoutes);
+  app.use('/api', casesRoutes);
+  app.use('/api', aiRoutes);
+  app.use('/api', knowledgeRoutes);
   app.use('/api', onboardingRoutes);
   app.use('/api', transitRoutes);
   app.use('/api', governanceRoutes);
   app.use('/api', analyticsRoutes);
-  app.use('/api/ai', strictLimiter);
-  app.use('/api/auth', strictLimiter);
-  app.use('/api', aiRoutes);
   app.use('/api', syncRoutes);
-  app.use('/api/documenso', documensoRoutes);
-  app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'Endpoint não encontrado' });
-  });
+  app.use('/api', metaRoutes);
+  app.use('/api', marketingAutomationRoutes);
+  app.use('/api', scrapeRoutes);
+  app.use('/api', adminRoutes);
+  app.use('/api', commercialRoutes);
+  app.use('/api', monitoringRoutes);
+  app.use('/api', settingsRoutes);
+  app.use('/api', logsRoutes);
+  app.use('/api', marketingRoutes);
+  app.use('/api', agentsRoutes);
+  app.use('/api', whatsappRoutes);
+  app.use('/api', ocrRoutes);
+  app.use('/api', paymentsRoutes);
+  app.use('/api', mediaRoutes);
+  app.use('/api', notificationsRoutes);
+  app.use('/api', documensoRoutes);
 
+  app.get('/api/meta/status', async (_req,res)=>res.json(await metaIntegration.getStatus()));
+  app.get('/api/marketing/meta/status', async (_req,res)=>res.json(await metaIntegration.getStatus()));
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => { console.error('[api] unhandled error', err); if(res.headersSent)return; res.status(500).json({error:'Internal server error'}); });
   return app;
 }
