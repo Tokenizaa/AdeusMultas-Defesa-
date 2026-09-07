@@ -5,6 +5,7 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
 import { eventBus, EventTopics } from '../../core/events/topics';
+import { envelopeRepository } from '../db/envelope-repository';
 import { enrichDefenseWithGemini } from '../gemini';
 import { authenticateToken, AuthenticatedUser } from '../middleware/auth-middleware';
 import {
@@ -269,6 +270,13 @@ router.delete('/cases/:id', authenticateToken, async (req, res) => {
   };
 
   await databaseRows.set(req.params.id, anonymizedRow);
+
+  // FASE 4.5 P0: anonimiza envelope_data dos envelopes Documenso antes da cascade delete.
+  // envelope_data contém recipients[].email + .name (PII de signatários — terceiros).
+  // A cascade delete remove o registro fisicamente, mas o PII pode persistir em backups
+  // e ambientes de staging entre a anonimização do caso e a deleção física.
+  const caseUuid = row.id;
+  await envelopeRepository.anonymizeEnvelopesByCaseId(caseUuid);
 
   auditLogs.unshift({
     id: `audit_${Date.now()}`,

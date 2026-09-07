@@ -160,6 +160,83 @@ export class EnvelopeRepository {
   }
 
   /**
+   * Anonimiza envelope_data JSONB — remove PII de signatários (email + name).
+   * LGPD Art. 18: direito à eliminação; Art. 4: anonimização suficiente.
+   * Preserva a estrutura do envelope para auditoria; remove dados pessoais.
+   */
+  private anonymizeEnvelopeData(envelopeData: any): any {
+    if (!envelopeData || typeof envelopeData !== 'object') {
+      return envelopeData;
+    }
+
+    // Deep-clone para não mutar o original
+    const anonymized = JSON.parse(JSON.stringify(envelopeData));
+
+    if (Array.isArray(anonymized.recipients)) {
+      anonymized.recipients = anonymized.recipients.map((recipient: any) => ({
+        ...recipient,
+        email: undefined,
+        name: '[REMOVIDO]',
+      }));
+    }
+
+    return anonymized;
+  }
+
+  /**
+   * Remove PII de signatários de envelope_data para todos os envelopes de um caso.
+   * Chamado pelo DELETE /cases/:id antes da cascade delete do envelope.
+   */
+  async anonymizeEnvelopesByCaseId(caseId: string): Promise<void> {
+    if (!this.client) {
+      logger.warn('supabase', 'envelope_repository', 'anonymizeEnvelopesByCaseId', 'Supabase client não configurado — pulando anonimização', {
+        caseId,
+      });
+      return;
+    }
+
+    const { data: envelopes, error } = await (this.client as any)
+      .from('documenso_envelopes')
+      .select('id, envelope_data')
+      .eq('case_id', caseId);
+
+    if (error) {
+      logger.error('supabase', 'envelope_repository', 'anonymizeEnvelopesByCaseId', `Erro ao buscar envelopes: ${error.message}`, {
+        caseId,
+        persistenceResult: 'failed',
+      });
+      return;
+    }
+
+    if (!envelopes || envelopes.length === 0) {
+      logger.info('supabase', 'envelope_repository', 'anonymizeEnvelopesByCaseId', 'Nenhum envelope encontrado para o caso', { caseId });
+      return;
+    }
+
+    for (const envelope of envelopes) {
+      const anonymizedData = this.anonymizeEnvelopeData(envelope.envelope_data);
+      const { error: updateError } = await (this.client as any)
+        .from('documenso_envelopes')
+        .update({ envelope_data: anonymizedData })
+        .eq('id', envelope.id);
+
+      if (updateError) {
+        logger.error('supabase', 'envelope_repository', 'anonymizeEnvelopesByCaseId', `Falha ao anonimizar envelope ${envelope.id}: ${updateError.message}`, {
+          caseId,
+          envelopeId: envelope.id,
+          persistenceResult: 'failed',
+        });
+      } else {
+        logger.info('supabase', 'envelope_repository', 'anonymizeEnvelopesByCaseId', 'Envelope anonimizado', {
+          caseId,
+          envelopeId: envelope.id,
+          persistenceResult: 'success',
+        });
+      }
+    }
+  }
+
+  /**
    * Atualiza status do envelope (chamado pelo webhook handler).
    */
   async updateStatus(
