@@ -8,33 +8,42 @@
 - [x] Plano reduzido a 8 fases
 - [x] Fase 1 — congelamento
 - [x] Fase 2 — definir o que fica
-- [ ] Fase 3 — novo contrato
-- [ ] Fase 4 — nova arquitetura
-- [ ] Fase 5 — reescrita
-- [ ] Fase 6 — integrações reais
+- [x] Fase 3 — novo contrato
+- [x] Fase 4 — nova arquitetura
+- [x] Fase 5 — reescrita inicial da UI
+- [ ] Fase 6 — integrações reais (em execução)
 - [ ] Fase 7 — validação completa
 - [ ] Fase 8 — ativação e remoção do legado
 
-## Entregável da Fase 2
+## F6 — integração real em execução
 
-`docs/audit/ONBOARDING-REBUILD-F2-DEFINICAO.md`
+Entregue neste bloco:
 
-A Fase 2 separou requisitos reais, regras indispensáveis e UX útil do comportamento acidental do legado. O resultado é uma especificação para o greenfield; nenhum código legado foi reutilizado.
+- API greenfield isolada em `/api/onboarding-v2/*`.
+- Criação de rascunho anônimo com `claimToken` real.
+- Autorização por usuário autenticado ou claim token.
+- Upload real de imagem pelo onboarding novo.
+- OCR real conectado ao `ocrService`.
+- Dados extraídos persistidos no caso canônico através do `CanonicalMapper`.
+- Metadados do OCR persistidos em `ocrAuxiliaryData`.
+- Falhas de OCR bloqueiam o avanço e não são convertidas em sucesso.
+- Adapter HTTP mantém a fronteira aplicação → API; a UI não faz chamadas HTTP de negócio diretamente.
 
-## Decisões principais
+Documento detalhado: `docs/audit/ONBOARDING-REBUILD-F6-INTEGRACAO.md`.
 
-- O caso canônico e seus dados essenciais permanecem como fundamento do fluxo.
-- Coleta condicional permanece como requisito, mas será reimplementada por regras explícitas.
-- Análise jurídica canônica permanece no backend/domínio; frontend não é autoridade jurídica independente.
-- Evidências/OCR permanecem como necessidade, mas somente conteúdo real será aceito como evidência.
-- Qualificação do requerente permanece necessária para geração.
-- Pagamento e geração serão tratados como estados distintos e verificáveis.
-- Claim será baseado em token real e contrato único.
-- Persistência do caso será fonte de verdade; browser storage não será autoridade de negócio.
-- UX mobile-first, fluxo guiado, navegação segura e revisão antes da geração permanecem como princípios.
-- Timers de simulação, scores sem calibração apresentados como probabilidade, fallbacks silenciosos, duplicações, compatibilidades históricas e etapas sem justificativa foram descartados.
-- Quantidade e nomenclatura dos steps permanecem abertas para a Fase 3.
+## Pendências F6
 
-## Próxima fase
+- PDF real com pipeline compatível de extração/OCR.
+- Claim autenticado definitivo após login.
+- Qualificação persistida no contrato novo.
+- Pagamento real.
+- Geração real do documento.
+- Testes automatizados do fluxo anônimo + claim + OCR.
 
-**FASE 3 — DESENHAR O NOVO CONTRATO**
+## Regra arquitetural
+
+O legado continua congelado e fora da implementação do novo onboarding. Nenhum componente, hook ou serviço do onboarding antigo é dependência do `onboarding-v2`.
+
+## Validação
+
+Os commits deste bloco ainda não possuem execução CI registrada. Não considerar F6 validada até build, testes e fluxo E2E serem executados.
