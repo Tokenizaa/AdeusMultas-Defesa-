@@ -16,77 +16,38 @@ Não iniciar outra issue.
 
 O schema real de `public.user_profiles` possui `user_id uuid` e não possui `id`.
 
-`src/server/routes/admin.ts` atualmente consulta:
+`src/server/routes/admin.ts` atualmente consulta `user_profiles` com `id` inexistente e o PUT usa esse identificador para localizar o perfil.
 
-```ts
-.from('user_profiles')
-.select('id, email, name, role, cpf, created_at, updated_at')
-```
-
-E o PUT usa o identificador retornado para localizar o perfil.
-
-`src/server/routes/payments.ts` atualmente cria PIX com:
-
-```ts
-payer: {
-  name: customerName || 'Condutor DefesAi',
-  email: customerEmail || 'contato@www.defesai.shop',
-  document: (customerCpf || '12345678909').replace(/\D/g, ''),
-}
-```
-
-O mesmo padrão de fallback fictício existe no caminho de cartão de crédito.
+`src/server/routes/payments.ts` atualmente cria PIX com fallbacks fictícios de nome, email e CPF. O mesmo padrão existe no caminho de cartão.
 
 ## Correção 1 — admin users
 
-Arquivo:
-
-`src/server/routes/admin.ts`
-
-Alterar somente o necessário:
+Arquivo: `src/server/routes/admin.ts`
 
 - trocar `id` por `user_id` nas consultas de `user_profiles`;
-- quando a resposta pública da API precisar do campo `id`, mapear explicitamente `user_id -> id` no DTO, sem alterar o banco;
+- quando a resposta pública precisar do campo `id`, mapear explicitamente `user_id -> id` somente no DTO;
 - qualquer `.eq('id', ...)` sobre `user_profiles` deve virar `.eq('user_id', ...)`;
-- manter `email`, `name`, `role`, `cpf`, `created_at`, `updated_at`.
-
-Não criar coluna `id`.
+- manter `email`, `name`, `role`, `cpf`, `created_at`, `updated_at`;
+- não criar coluna `id`.
 
 ## Correção 2 — PIX fail-closed
 
-Arquivo:
+Arquivo: `src/server/routes/payments.ts`
 
-`src/server/routes/payments.ts`
-
-Na rota:
-
-```text
-POST /pagbank/orders
-POST /pix/create
-```
-
-Antes de `gateway.createPix()`:
+Na rota `POST /pagbank/orders` / `POST /pix/create`, antes de `gateway.createPix()`:
 
 - `customerName` obrigatório;
 - `customerEmail` obrigatório e com validação mínima de formato;
 - `customerCpf` obrigatório após normalização, com 11 dígitos;
-- se qualquer dado estiver ausente/inválido → HTTP 400;
-- não chamar o gateway quando a validação falhar;
-- remover os três fallbacks fictícios.
+- ausência/invalidez → HTTP 400;
+- não chamar gateway quando a validação falhar;
+- remover todos os fallbacks fictícios.
 
-Usar somente os dados fornecidos pelo cliente/caso.
-
-Não usar outro dado sintético como substituto.
+Usar somente dados reais fornecidos pelo cliente/caso.
 
 ## Correção 3 — cartão de crédito
 
-Na rota:
-
-```text
-POST /credit-card/create
-```
-
-Aplicar a mesma regra aos dados do `customer` enviados para PagBank:
+Na rota `POST /credit-card/create`, aplicar a mesma validação ao `customer` enviado para PagBank:
 
 - nome obrigatório;
 - email obrigatório e minimamente válido;
@@ -97,15 +58,15 @@ Aplicar a mesma regra aos dados do `customer` enviados para PagBank:
 
 ## Validação de CPF
 
-Não criar uma nova biblioteca.
+Não adicionar biblioteca.
 
-Se já existir helper de CPF no projeto, reutilizar.
+Se já existir helper de CPF, reutilizar.
 
-Se não existir, nesta fase validar somente presença + normalização + 11 dígitos. Não criar regra adicional de negócio.
+Se não existir, nesta fase validar somente presença + normalização + 11 dígitos.
 
 ## Testes P0
 
-Criar testes unitários/rota seguindo o padrão de testes já existente.
+Criar testes seguindo o padrão existente.
 
 ### Admin
 
@@ -121,7 +82,7 @@ Criar testes unitários/rota seguindo o padrão de testes já existente.
 7. email inválido → 400.
 8. ausência de `customerCpf` → 400.
 9. CPF com quantidade inválida de dígitos → 400.
-10. dados válidos → gateway é chamado com exatamente os dados fornecidos.
+10. dados válidos → gateway chamado com exatamente os dados fornecidos.
 11. nenhum fallback contém `Condutor DefesAi`.
 12. nenhum fallback contém `contato@www.defesai.shop`.
 13. nenhum fallback contém `12345678909`.
@@ -129,7 +90,7 @@ Criar testes unitários/rota seguindo o padrão de testes já existente.
 
 ### Cartão
 
-15. mesmos testes 5–14 para `POST /credit-card/create`, exceto a regra específica de gateway.
+15. mesmos testes 5–14 para `POST /credit-card/create`, respeitando a regra específica de gateway.
 
 ## Teste adversarial obrigatório
 
@@ -152,8 +113,6 @@ createCreditCardOrder NÃO chamado
 ```
 
 ## Gates
-
-Executar:
 
 ```bash
 npm run test:unit
