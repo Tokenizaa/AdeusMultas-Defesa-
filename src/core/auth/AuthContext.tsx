@@ -3,37 +3,26 @@ import { AuthUser, UserRole, AuthState } from '../../types/auth';
 import {
   supabase,
   isSupabaseConfigured,
-  getStoredSession,
   setStoredSession,
-  getStoredUsers,
-  saveStoredUser,
 } from '../../lib/supabase';
 
-// Fetch user role from backend API (avoids direct user_profiles query which hits RLS)
-async function fetchUserRoleFromBackend(userId: string): Promise<UserRole | undefined> {
+// Fetch user role from backend API (avoids direct user_profiles query which hits RLS).
+// The backend receives identity exclusively from the real Supabase access token.
+async function fetchUserRoleFromBackend(): Promise<UserRole | undefined> {
   try {
-    const headers = new Headers();
-    if (supabase) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        headers.set('Authorization', `Bearer ${session.access_token}`);
-      }
-    }
-    const stored = getStoredSession();
-    if (stored) {
-      if (stored.id) headers.set('x-user-id', stored.id);
-      if (stored.role) headers.set('x-user-role', stored.role);
-      if (stored.email) headers.set('x-user-email', stored.email);
-      if (stored.name) headers.set('x-user-name', encodeURIComponent(stored.name));
-      // FASE 6: removido fallback local_ token — em produção só token Supabase válido
-    }
-    const res = await fetch(`/api/auth/me`, { headers });
+    if (!supabase) return undefined;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return undefined;
+
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
     if (res.ok) {
       const data = await res.json();
       return data.role as UserRole;
     }
   } catch {
-    // Fallback handled by caller
+    // Caller remains fail-closed when the authoritative session is unavailable.
   }
   return undefined;
 }
@@ -53,130 +42,110 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Initialize auth state
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setUser(null);
+      setStoredSession(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let mounted = true;
+
+    async function applySession(sessionUser: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>['user'] | null) {
+      if (!mounted) return;
+      if (!sessionUser) {
+        setUser(null);
+        setStoredSession(null);
+        return;
+      }
+
+      const roleFromProfile = await fetchUserRoleFromBackend();
+      if (!mounted) return;
+
+      const role = (roleFromProfile ?? (sessionUser.user_metadata?.role as UserRole)) ?? 'citizen';
+      const authUser: AuthUser = {
+        id: sessionUser.id,
+        name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Usuário',
+        email: sessionUser.email || '',
+        role,
+        cpf: sessionUser.user_metadata?.cpf,
+        phone: sessionUser.user_metadata?.phone,
+        cnh: sessionUser.user_metadata?.cnh,
+        createdAt: sessionUser.created_at,
+      };
+      setUser(authUser);
+      // Cache is informational only; it is never used to authenticate or authorize.
+      setStoredSession(authUser);
+    }
+
     async function initAuth() {
       setIsLoading(true);
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-if (session?.user) {
-        // Get role from backend API (avoids RLS on user_profiles)
-        const roleFromProfile = await fetchUserRoleFromBackend(session.user.id);
-        
-        const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
-             const authUser: AuthUser = {
-               id: session.user.id,
-               name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
-               email: session.user.email || '',
-               role: role,
-               cpf: session.user.user_metadata?.cpf,
-               phone: session.user.user_metadata?.phone,
-               cnh: session.user.user_metadata?.cnh,
-               createdAt: session.user.created_at,
-             };
-             setUser(authUser);
-             setStoredSession(authUser);
-           } else {
-             const cached = getStoredSession();
-             if (cached) setUser(cached);
-           }
-
-          // Subscribe to Supabase auth events
-const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-          if (session?.user) {
-            // Get role from backend API (avoids RLS on user_profiles)
-            const roleFromProfile = await fetchUserRoleFromBackend(session.user.id);
-            
-            const role = (roleFromProfile ?? (session.user.user_metadata?.role as UserRole)) ?? 'citizen';
-               const authUser: AuthUser = {
-                 id: session.user.id,
-                 name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
-                 email: session.user.email || '',
-                 role: role,
-                 cpf: session.user.user_metadata?.cpf,
-                 phone: session.user.user_metadata?.phone,
-                 cnh: session.user.user_metadata?.cnh,
-                 createdAt: session.user.created_at,
-               };
-               setUser(authUser);
-               setStoredSession(authUser);
-             } else {
-               setUser(null);
-               setStoredSession(null);
-             }
-          });
-
-          return () => {
-            subscription.unsubscribe();
-          };
-        } catch (err) {
-          console.error('Supabase getSession error:', err);
-          const cached = getStoredSession();
-          if (cached) setUser(cached);
-        } finally {
-          setIsLoading(false);
+      try {
+        const { data: { session } } = await supabase!.auth.getSession();
+        await applySession(session?.user ?? null);
+      } catch (err) {
+        console.error('Supabase getSession error:', err);
+        if (mounted) {
+          setUser(null);
+          setStoredSession(null);
         }
-      } else {
-        // Fallback to local storage session
-        const cached = getStoredSession();
-        if (cached) {
-          setUser(cached);
-        }
-        setIsLoading(false);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
     }
 
     initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await applySession(session?.user ?? null);
+      if (mounted) setIsLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. If Supabase is configured, attempt real authentication
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
-
-        if (error) {
-          console.warn('Supabase login failed, trying local fallback:', error.message);
-          // Fall through to local fallback instead of failing hard
-        } else if (data.user) {
-           // Get role from backend API (avoids RLS on user_profiles)
-           const roleFromProfile = await fetchUserRoleFromBackend(data.user.id);
-           
-           const role = (roleFromProfile ?? (data.user.user_metadata?.role as UserRole)) ?? 'citizen';
-           const authUser: AuthUser = {
-             id: data.user.id,
-             name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário',
-             email: data.user.email || '',
-             role: role,
-             createdAt: data.user.created_at,
-           };
-           setUser(authUser);
-           setStoredSession(authUser);
-           setIsLoading(false);
-           return { success: true };
-         }
-      } catch (err: any) {
-        console.error('Supabase signIn error:', err);
-        setIsLoading(false);
-        return { success: false, error: 'Erro ao autenticar. Tente novamente.' };
-      }
+    if (!isSupabaseConfigured || !supabase) {
+      setIsLoading(false);
+      return { success: false, error: 'Serviço de autenticação não disponível. Configure Supabase para fazer login.' };
     }
 
-    // Supabase não configurado ou falhou — não há fallback local em produção.
-    // FAIL CLOSED: autenticação real obrigatória.
-    setIsLoading(false);
-    return {
-      success: false,
-      error: 'Serviço de autenticação não disponível. Configure Supabase para fazer login.',
-    };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error || !data.user) {
+        setIsLoading(false);
+        return { success: false, error: error?.message || 'Não foi possível autenticar.' };
+      }
+
+      const roleFromProfile = await fetchUserRoleFromBackend();
+      const role = (roleFromProfile ?? (data.user.user_metadata?.role as UserRole)) ?? 'citizen';
+      const authUser: AuthUser = {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário',
+        email: data.user.email || '',
+        role,
+        createdAt: data.user.created_at,
+      };
+      setUser(authUser);
+      setStoredSession(authUser);
+      setIsLoading(false);
+      return { success: true };
+    } catch (err: any) {
+      console.error('Supabase signIn error:', err);
+      setIsLoading(false);
+      return { success: false, error: 'Erro ao autenticar. Tente novamente.' };
+    }
   };
 
   const loginWithFacebook = async (): Promise<{ success: boolean; error?: string }> => {
@@ -186,15 +155,11 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
-        options: {
-          redirectTo: `${window.location.origin}/`,
-        },
+        options: { redirectTo: `${window.location.origin}/` },
       });
       if (error) {
-        console.warn('Facebook OAuth error:', error.message);
         return { success: false, error: error.message || 'Erro ao autenticar com Facebook.' };
       }
-      // OAuth redirect is handled by Supabase — user will be redirected
       return { success: true };
     } catch (err: any) {
       console.error('Facebook login exception:', err);
@@ -212,91 +177,74 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
       setIsLoading(false);
       return { success: false, error: 'Por favor, informe seu nome completo.' };
     }
-
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setIsLoading(false);
       return { success: false, error: 'Por favor, informe um e-mail válido.' };
     }
-
     if (password.length < 6) {
       setIsLoading(false);
       return { success: false, error: 'A senha deve ter no mínimo 6 caracteres.' };
     }
-
-    // 1. Supabase real sign up if configured
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              name: cleanName,
-              role: 'citizen',
-              phone: cleanPhone,
-            },
-          },
-        });
-
-        if (error) {
-          console.warn('Supabase signUp failed, falling back to local storage:', error.message);
-          // NÃO retorna erro — cai para fallback local automaticamente
-        } else if (data.user) {
-          // Garante que o perfil do usuário existe no banco (user_profiles)
-          const { error: profileError } = await supabase
-            .from('user_profiles')
-            .insert({
-              user_id: data.user.id,
-              name: cleanName,
-              email: cleanEmail,
-              phone: cleanPhone,
-              role: 'citizen',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            });
-
-          if (profileError) {
-            console.error('Supabase user_profiles insert failed:', profileError);
-          }
-
-          if (data.session) {
-            const authUser: AuthUser = {
-              id: data.user.id,
-              name: cleanName,
-              email: cleanEmail,
-              role: 'citizen',
-              phone: cleanPhone,
-              createdAt: new Date().toISOString(),
-            };
-            setUser(authUser);
-            setStoredSession(authUser);
-            saveStoredUser(cleanEmail, authUser, password);
-            setIsLoading(false);
-            return { success: true };
-          }
-
-          setIsLoading(false);
-          return { success: true, requiresEmailConfirmation: true };
-        }
-      } catch (err: any) {
-        console.error('Supabase signUp exception:', err);
-        setIsLoading(false);
-        return { success: false, error: 'Erro ao cadastrar. Tente novamente.' };
-      }
+    if (!isSupabaseConfigured || !supabase) {
+      setIsLoading(false);
+      return { success: false, error: 'Serviço de autenticação não disponível. Configure Supabase para cadastrar.' };
     }
 
-    // Supabase não configurado ou falhou — não há fallback local.
-    // FAIL CLOSED: cadastro real obrigatório.
-    setIsLoading(false);
-    return {
-      success: false,
-      error: 'Serviço de autenticação não disponível. Configure Supabase para cadastrar.',
-    };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: { name: cleanName, role: 'citizen', phone: cleanPhone },
+        },
+      });
+
+      if (error || !data.user) {
+        setIsLoading(false);
+        return { success: false, error: error?.message || 'Não foi possível cadastrar.' };
+      }
+
+      const { error: profileError } = await supabase.from('user_profiles').insert({
+        user_id: data.user.id,
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        role: 'citizen',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+      if (profileError) {
+        console.error('Supabase user_profiles insert failed:', profileError);
+      }
+
+      if (data.session) {
+        const authUser: AuthUser = {
+          id: data.user.id,
+          name: cleanName,
+          email: cleanEmail,
+          role: 'citizen',
+          phone: cleanPhone,
+          createdAt: new Date().toISOString(),
+        };
+        setUser(authUser);
+        setStoredSession(authUser);
+        setIsLoading(false);
+        return { success: true };
+      }
+
+      setIsLoading(false);
+      return { success: true, requiresEmailConfirmation: true };
+    } catch (err: any) {
+      console.error('Supabase signUp exception:', err);
+      setIsLoading(false);
+      return { success: false, error: 'Erro ao cadastrar. Tente novamente.' };
+    }
   };
 
   const logout = async () => {
     setIsLoading(true);
-    if (isSupabaseConfigured && supabase) {
+    if (supabase) {
       try {
         await supabase.auth.signOut();
       } catch (err) {
@@ -309,57 +257,43 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event
   };
 
   const updateProfile = async (data: Partial<AuthUser>) => {
-    if (!user) return;
-    const updated = { ...user, ...data };
-    setUser(updated);
-    setStoredSession(updated);
+    if (!user || !supabase) return;
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.auth.updateUser({
-          data: {
-            name: updated.name,
-            cpf: updated.cpf,
-            phone: updated.phone,
-            cnh: updated.cnh,
-            cityState: updated.cityState,
-            role: updated.role,
-          },
-        });
-      } catch (err) {
-        console.error('Supabase updateUser error:', err);
-      }
-    }
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: data.name ?? user.name,
+          cpf: data.cpf ?? user.cpf,
+          phone: data.phone ?? user.phone,
+          cnh: data.cnh ?? user.cnh,
+          cityState: data.cityState ?? user.cityState,
+          role: user.role,
+        },
+      });
+      if (error) throw error;
 
-    // Also update in local storage
-    const allUsers = getStoredUsers();
-    const emailKey = user.email.toLowerCase();
-    if (allUsers[emailKey]) {
-      allUsers[emailKey].user = updated;
-      localStorage.setItem('defesai_registered_users_v1', JSON.stringify(allUsers));
+      const updated = { ...user, ...data, role: user.role };
+      setUser(updated);
+      setStoredSession(updated);
+    } catch (err) {
+      console.error('Supabase updateUser error:', err);
+      throw err;
     }
   };
 
-const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-  const cleanEmail = email.trim().toLowerCase();
-  if (isSupabaseConfigured && supabase) {
+  const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: false, message: 'Serviço de recuperação de senha não disponível. Configure Supabase.' };
+    }
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
-      if (error) {
-        return { success: false, message: error.message };
-      }
+      if (error) return { success: false, message: error.message };
       return { success: true, message: 'Link de recuperação enviado para o seu e-mail! Verifique também a pasta de spam ou lixo eletrônico.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Erro ao solicitar recuperação.' };
     }
-  }
-
-  // Supabase não configurado — FAIL CLOSED
-  return {
-    success: false,
-    message: 'Serviço de recuperação de senha não disponível. Configure Supabase.',
   };
-};
 
   const role = user?.role || null;
   const isAuthenticated = Boolean(user);
@@ -388,8 +322,6 @@ const resetPassword = async (email: string): Promise<{ success: boolean; message
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
