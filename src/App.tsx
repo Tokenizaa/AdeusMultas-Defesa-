@@ -133,10 +133,27 @@ function AppContent() {
     navigate(`/cases/${caseItem.id}`);
   };
 
-  const handleUpdateCase = (updated: CaseDomain) => {
+  const handleUpdateCase = async (updated: CaseDomain) => {
+    const previousCase = cases.find((c) => c.id === updated.id) ?? activeCase;
+
+    // Optimistic UI is allowed, but persistence must use the minimum DTO and
+    // server-truth must win after the mutation. Do not send the full CaseDomain.
     setActiveCase(updated);
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-    api.put(`/api/cases/${updated.id}`, updated).catch(console.error);
+
+    try {
+      await api.put(`/api/cases/${updated.id}`, {
+        defenseDraft: updated.defenseDraft,
+      });
+      await loadCases();
+    } catch (error) {
+      console.error('Could not persist case update:', error);
+      if (previousCase) {
+        setActiveCase(previousCase);
+        setCases((prev) => prev.map((c) => (c.id === previousCase.id ? previousCase : c)));
+      }
+      alert('Não foi possível salvar as alterações do caso. Tente novamente.');
+    }
   };
 
   const handleOpenWhatsAppModal = (caseId: string) => {
