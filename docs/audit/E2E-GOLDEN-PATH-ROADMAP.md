@@ -1,14 +1,13 @@
 # E2E GOLDEN PATH — ROADMAP DE AUDITORIA E EXECUÇÃO
 
 **Produto:** Adeus Multa  
-**Objetivo:** provar uma jornada vertical real, coerente e auditável, do primeiro acesso do usuário ao documento final persistido.  
-**Regra:** uma fase por vez. Cada fase termina com evidência, atualização deste documento e commit próprio.
+**Objetivo:** provar uma jornada vertical real, coerente e auditável, do primeiro acesso ao documento final persistido.
 
----
+## Regra operacional
 
-# 1. VISÃO GERAL
+Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz commit e para. A próxima fase só é liberada após revisão dos auditores.
 
-A execução será conduzida em fases independentes para evitar que investigação, correção, automação e validação sejam misturadas.
+## Fluxo oficial
 
 ```text
 FASE 0 — MAPEAMENTO FORENSE
@@ -23,392 +22,175 @@ FASE 4 — GOLDEN PATH PLAYWRIGHT
         ↓
 FASE 5 — VALIDAÇÃO DE PERSISTÊNCIA E DOCUMENTO
         ↓
-FASE 6 — HARDENING / REGRESSÃO DO GOLDEN PATH
+FASE 6 — HARDENING / REGRESSÃO
         ↓
 FASE 7 — MATRIZ DE SERVIÇOS E VARIAÇÕES
         ↓
-FASE 8 — GATE FINAL E HANDOFF PARA AUDITORIA
+FASE 8 — GATE FINAL E HANDOFF
 ```
 
-**Importante:** nenhuma fase deve pular a anterior sem registrar formalmente o motivo.
+---
+
+# FASE 0 — MAPEAMENTO FORENSE
+
+**Objetivo:** reconstruir o fluxo real sem alterar produto.
+
+Mapear rotas, autenticação, onboarding, estado, selectors, APIs, payloads, persistência, análise, pagamento, geração, storage, mocks/fallbacks e testes existentes.
+
+**Regra:** read-only.
+
+**Artefato esperado:** `docs/audit/E2E-CONTRACT-MAP.md`
+
+**Status:** 🟡 EXECUTADA PELO AGENTE / EVIDÊNCIA ORIGINAL NÃO RECUPERÁVEL
+
+O agente reportou `f29adc0`, mas esse SHA não está resolvível na referência GitHub auditada. Portanto, as contagens informadas pelo agente não são consideradas evidência independente.
+
+**Auditoria independente:** `docs/audit/PHASE-0-INDEPENDENT-AUDIT.md`
 
 ---
 
-# 2. FASE 0 — MAPEAMENTO FORENSE
+# FASE 1 — AUDITORIA DE CONTRATOS E DATA LINEAGE
 
-## Objetivo
+**Objetivo:** confrontar o fluxo real sem corrigir ainda.
 
-Descobrir como o produto realmente funciona hoje, sem alterar o sistema.
-
-## O que será feito
-
-- mapear primeira rota e primeiro acesso;
-- mapear autenticação e sessão;
-- reconstruir a ordem real do onboarding;
-- identificar componentes, hooks e estado;
-- identificar todos os campos e validações;
-- mapear selectors existentes;
-- mapear APIs, payloads e respostas;
-- mapear criação e persistência do caso;
-- mapear repositories, stores e fontes de verdade;
-- mapear análise;
-- mapear pagamento e autorização;
-- mapear geração do documento;
-- mapear storage e URL final;
-- localizar mocks, fixtures, fakes e fallbacks;
-- catalogar os testes existentes e o que cada um realmente prova.
-
-## Regra
-
-**READ-ONLY.** Não corrigir código, testes, banco ou configuração.
-
-## Saída
-
-`docs/audit/E2E-CONTRACT-MAP.md`
-
-## Critério de conclusão
-
-Mapa factual suficiente para reconstruir o fluxo sem depender de tentativa e erro no navegador.
-
-## Commit
-
-`docs(audit): map e2e product contract`
-
-## Status atual
-
-**🟢 EXECUTADA PELO AGENTE LOCAL**
-
-Commit reportado pelo agente:
-
-`f29adc0 — docs(audit): map e2e product contract`
-
-Resultado reportado:
-
-- 🟢 13 itens confirmados;
-- 🔴 10 gaps;
-- 🟡 8 riscos;
-- ⚫ 8 itens não verificados;
-- 📊 mapa concluído em 100%.
-
-Documento produzido:
-
-`docs/audit/E2E-CONTRACT-MAP.md`
-
-### Auditoria independente
-
-**🟠 PENDENTE DE REVISÃO**
-
-O fato de o agente declarar a Fase 0 concluída não significa que os auditores já validaram o conteúdo. A próxima ação dos auditores é revisar o mapa e confrontá-lo com o código/commit.
-
----
-
-# 3. FASE 1 — AUDITORIA DE CONTRATOS E DATA LINEAGE
-
-## Objetivo
-
-Confrontar o mapa da Fase 0 e descobrir onde a cadeia quebra ou possui contratos incoerentes.
-
-## O que será feito
-
-Para cada etapa, confrontar:
-
-`UI → state → API → backend → persistência → consumidor seguinte`
-
-Validar especialmente:
-
-- user ID;
-- case ID;
-- dados do caso;
-- analysis ID;
-- payment ID;
-- document ID;
-- autorização para geração;
-- relação caso/usuário;
-- relação pagamento/caso;
-- relação documento/caso;
-- conteúdo do documento versus dados de entrada.
-
-Investigar explicitamente divergências como:
-
-`casesStore ≠ caseRepository`
-
-ou qualquer equivalente encontrado no código atual.
-
-## Regra
-
-**Ainda não corrigir.** O objetivo é produzir diagnóstico e causa-raiz antes da implementação.
-
-## Saída
-
-Atualização de `docs/audit/E2E-GOLDEN-PATH-AUDIT.md` com:
-
-- 🟢 confirmado;
-- 🔴 bloqueadores;
-- 🟡 riscos;
-- ⚫ não verificável;
-- primeira divergência do lineage;
-- camada responsável;
-- correção recomendada.
-
-## Commit
-
-`docs(audit): identify golden path contract gaps`
-
----
-
-# 4. FASE 2 — CORREÇÃO DOS BLOQUEADORES
-
-## Objetivo
-
-Corrigir os defeitos reais encontrados nas Fases 0–1 sem mascará-los nos testes.
-
-## O que será feito
-
-- corrigir fonte de verdade divergente;
-- corrigir contratos frontend/backend;
-- corrigir persistência;
-- corrigir autorização;
-- corrigir fluxo de pagamento;
-- corrigir lineage de análise;
-- corrigir geração/documento;
-- remover fallbacks produtivos indevidos;
-- corrigir outros bloqueadores comprovados.
-
-Usar os agentes especializados existentes:
-
-- `@frontend`
-- `@backend`
-- `@banco`
-- `@architecture-test`
-- `@qualidade`
-
-## Regra
-
-Não adaptar o teste para aceitar o defeito.
-
-Não criar fake data para contornar integração.
-
-Cada correção deve ter evidência e teste apropriado.
-
-## Saída
-
-Código corrigido + testes de regressão direcionados + atualização da auditoria.
-
-## Commit
-
-Mensagem conforme a correção, por exemplo:
-
-`fix(e2e): align case payment and document lineage`
-
----
-
-# 5. FASE 3 — PREPARAÇÃO DO AMBIENTE E TEST DATA
-
-## Objetivo
-
-Preparar uma execução E2E real, determinística e segura.
-
-## O que será feito
-
-- validar servidor local;
-- validar build/runtime necessário;
-- validar usuário de teste;
-- validar autenticação real;
-- definir dados exclusivos do Golden Path;
-- garantir isolamento dos dados;
-- verificar acesso às fontes de persistência;
-- definir captura de requests/responses;
-- configurar tracing/screenshots/video quando necessário;
-- confirmar selectors estáveis;
-- remover dependências de dados manuais não reproduzíveis.
-
-## Regra
-
-Não usar credenciais reais no repositório.
-
-Não registrar secrets, tokens ou dados pessoais em evidências.
-
-## Critério de conclusão
-
-O ambiente deve estar pronto para executar a jornada sem alterações improvisadas durante o teste.
-
-## Commit
-
-Somente se houver alterações versionáveis de infraestrutura/test harness.
-
----
-
-# 6. FASE 4 — GOLDEN PATH PLAYWRIGHT
-
-## Objetivo
-
-Executar a primeira jornada vertical real do produto.
-
-## Fluxo-alvo
+Validar:
 
 ```text
-primeiro acesso
-→ autenticação
-→ serviço
-→ dados
-→ caso
-→ análise
-→ pagamento
-→ autorização
-→ geração
-→ documento
+USER
+ ↓
+CASE
+ ↓
+SUPABASE / COLD START
+ ↓
+ANALYSIS
+ ↓
+PAYMENT
+ ↓
+WEBHOOK
+ ↓
+AUTHORIZATION
+ ↓
+DEFENSE DRAFT
+ ↓
+DOCUMENT
+ ↓
+STORAGE
 ```
 
-A sequência exata deve respeitar o fluxo real descoberto nas fases anteriores.
+Acompanhar obrigatoriamente `user_id`, `case_id`, `analysis_id`, `payment_id` e `document_id`.
 
-## O que será comprovado
+Investigar ownership, UUID mapping, payment reference, fonte de verdade, webhook e geração pós-pagamento.
 
-- usuário real de teste;
-- case ID real;
-- dados fornecidos pelo usuário;
-- analysis ID;
-- payment ID;
-- document ID;
-- preservação da identidade dos dados;
-- ausência de fallback/fake no caminho produtivo;
-- estado final acessível.
+**Regra:** diagnóstico primeiro; não corrigir produto.
 
-## Regra
-
-Teste verde isolado não equivale a Golden Path PASS.
-
-## Saída
-
-Teste Playwright definitivo + artifacts + relatório de execução.
-
-## Commit
-
-`test(e2e): establish real product golden path`
+**Status:** 🟠 PENDING
 
 ---
 
-# 7. FASE 5 — VALIDAÇÃO DE PERSISTÊNCIA E DOCUMENTO
+# FASE 2 — CORREÇÃO DOS BLOQUEADORES
 
-## Objetivo
+**Objetivo:** corrigir defeitos comprovados sem mascará-los nos testes.
 
-Provar que o resultado exibido no frontend é o mesmo resultado persistido no sistema.
+### Correções emergenciais já aplicadas após a auditoria independente
 
-## O que será feito
+#### 🟢 Persistência de casos
 
-Validar diretamente, conforme acesso disponível:
+`src/server/db/case-repository.ts`
 
-- caso no banco;
-- usuário relacionado;
-- dados do caso;
-- análise relacionada;
-- pagamento relacionado;
-- status de autorização;
-- documento persistido;
-- document ID;
-- relação documento/caso/usuário;
-- storage;
-- URL final;
-- conteúdo mínimo do documento;
-- correspondência entre dados de entrada e documento final.
+O fallback em memória deixou de ser implícito. Agora somente ocorre quando:
 
-## Regra anti-fallback
+`ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`
 
-Se o documento apresentar dados diferentes dos fornecidos no Golden Path, é `🔴 FAIL`, mesmo que a interface e o Playwright estejam verdes.
+Sem Supabase e sem essa flag, a operação falha explicitamente. Falha no carregamento do Supabase também não é convertida silenciosamente em lista vazia.
 
-## Saída
+Commit:
 
-Evidência de lineage completo:
+`8a1a1cf2b0559e53c7a3e35ca0de86cbc41d30a9`
 
-`user → case → analysis → payment → document`
+#### 🟢 Identidade canônica do usuário
 
-## Commit
+`src/server/routes/cases.ts`
 
-Atualização de auditoria/evidências e correções adicionais, se necessárias.
+Casos autenticados agora exigem `user.id` UUID canônico. Ownership não usa mais email como segunda identidade. Criação e claim gravam o UUID autenticado como `userId`.
 
----
+#### 🟢 IDs de caso não previsíveis
 
-# 8. FASE 6 — HARDENING / REGRESSÃO DO GOLDEN PATH
+A criação de caso passou de combinação `Date.now() + Math.random()` para `crypto.randomUUID()`.
 
-## Objetivo
+Commit:
 
-Garantir que a correção não seja frágil e que o Golden Path continue reproduzível.
+`f5d70687f545411d06ac793dc12a7ad6738ea2f3`
 
-## O que será feito
+### 🔴 Bloqueadores ainda não corrigidos
 
-- rerun do Golden Path limpo;
-- verificar isolamento de dados;
-- verificar estabilidade dos selectors;
-- eliminar waits/retries artificiais;
-- verificar comportamento de erro;
-- verificar que não existem regressões introduzidas pelas correções;
-- confirmar que testes não dependem de estado residual.
+- PagBank com gate administrativo precisa ser resolvido como contrato de produto;
+- geração automática pós-pagamento ainda pode deixar pagamento confirmado sem documento;
+- claim token ainda precisa ser auditado e, se necessário, substituído por token criptograficamente aleatório;
+- webhook/persistência de `payment_orders` ainda precisa de contrato transacional/idempotente comprovado;
+- análise dual ainda precisa ser confrontada;
+- TestFillButton e demais riscos de exposição ainda precisam ser confirmados.
 
-## Regra
+**Importante:** as correções emergenciais acima não equivalem à conclusão da Fase 1. Elas foram aplicadas porque eram problemas suficientemente claros para correção segura.
 
-Não transformar o teste em uma coleção de retries para esconder instabilidade.
-
-## Saída
-
-Golden Path reproduzível e documentado.
+**Status:** 🟡 PARCIAL — correções emergenciais aplicadas; diagnóstico completo ainda pendente.
 
 ---
 
-# 9. FASE 7 — MATRIZ DE SERVIÇOS E VARIAÇÕES
+# FASE 3 — PREPARAÇÃO DO AMBIENTE E TEST DATA
 
-## Objetivo
+Preparar servidor, usuário real de teste, dados exclusivos, isolamento, acesso ao banco, captura de requests/responses, tracing e selectors estáveis.
 
-Somente depois de uma jornada vertical comprovadamente funcional, expandir a cobertura.
+Não versionar credenciais.
 
-## O que será feito
+**Status:** 🟠 PENDING
 
-Expandir progressivamente para:
+---
 
-- serviços;
-- tipos de procedimento;
-- categorias de infração;
-- UFs suportadas;
-- órgãos;
-- cenários de pagamento;
-- cenários de análise;
-- variações de documento.
+# FASE 4 — GOLDEN PATH PLAYWRIGHT
 
-A matriz deve respeitar a cobertura real do produto e não criar falsa impressão de cobertura nacional.
+Executar uma única jornada vertical real:
 
-## Regra
+`primeiro acesso → auth → serviço → dados → case → análise → pagamento → autorização → geração → documento`
 
-Não expandir para dezenas de combinações enquanto o Golden Path base estiver quebrado.
+O teste só pode ser considerado PASS quando os IDs e dados forem preservados de ponta a ponta.
 
-## Saída
+**Status:** 🟠 PENDING
 
-Matriz de cobertura com:
+---
+
+# FASE 5 — VALIDAÇÃO DE PERSISTÊNCIA E DOCUMENTO
+
+Provar no banco/storage que o caso, análise, pagamento e documento pertencem ao mesmo usuário/caso e que o conteúdo final corresponde aos dados de entrada.
+
+**Status:** 🟠 PENDING
+
+---
+
+# FASE 6 — HARDENING / REGRESSÃO
+
+Reexecutar o Golden Path em estado limpo, eliminar retries artificiais, validar isolamento e estabilidade.
+
+**Status:** 🟠 PENDING
+
+---
+
+# FASE 7 — MATRIZ DE SERVIÇOS E VARIAÇÕES
+
+Expandir somente após o Golden Path base estar comprovado, respeitando a cobertura real de serviços, procedimentos, UFs e órgãos.
+
+Classificação:
 
 `SUPPORTED / PARTIAL / UNSUPPORTED / NOT_TESTED`
 
+**Status:** 🟠 PENDING
+
 ---
 
-# 10. FASE 8 — GATE FINAL E HANDOFF PARA AUDITORIA
+# FASE 8 — GATE FINAL E HANDOFF
 
-## Objetivo
+Consolidar auditoria, correções, testes, evidências, lineage, matriz e limitações.
 
-Produzir o estado final auditável no GitHub.
-
-## O que será feito
-
-Consolidar:
-
-- mapa do contrato;
-- auditoria;
-- correções;
-- testes;
-- evidências;
-- lineage;
-- matriz de cobertura;
-- limitações conhecidas;
-- commits relevantes.
-
-## Critério de PASS FINAL
-
-Só declarar Golden Path aprovado se houver evidência simultânea de:
+Golden Path final só pode ser 🟢 PASS se houver evidência de:
 
 ```text
 🟢 usuário autenticado
@@ -426,104 +208,54 @@ Só declarar Golden Path aprovado se houver evidência simultânea de:
 🟢 ausência de fallback/fake
 ```
 
-## Saída
-
-Relatório final de auditoria + referência dos commits.
+**Status:** 🟠 PENDING
 
 ---
 
-# 11. PROTOCOLO VISUAL OBRIGATÓRIO
-
-Todos os agentes envolvidos devem utilizar:
+# PROTOCOLO VISUAL
 
 - 🟢 `PASS` — comprovado;
 - 🔴 `FAIL` — defeito concreto;
-- 🟡 `WARNING` — risco não bloqueante;
-- 🟠 `PENDING` — ainda não executado/comprovado;
+- 🟡 `WARNING` — risco;
+- 🟠 `PENDING` — não comprovado;
 - ⚫ `BLOCKED` — dependência externa;
-- 🔵 `INFO` — descoberta relevante.
+- 🔵 `INFO` — descoberta.
 
-Todo relatório de fase deve começar com um resumo visual:
-
-```text
-# 🔎 FASE N — RESULTADO
-
-## 🟢 CONFIRMADO
-## 🔴 BLOQUEADORES
-## 🟡 RISCOS
-## 🟠 PENDÊNCIAS
-## ⚫ BLOQUEADO
-## 📊 PROGRESSO
-## 🎯 PRÓXIMA AÇÃO
-```
-
-Nunca usar `PASS` somente porque build, TypeScript ou um teste isolado passou.
+Nunca usar PASS apenas porque build, TypeScript ou teste isolado passou.
 
 ---
 
-# 12. PROTOCOLO DE ATUALIZAÇÃO DESTE ROADMAP
+# ESTADO ATUAL
 
-Este arquivo é o **documento mestre de coordenação** da auditoria.
-
-## O agente local deve atualizar
-
-Ao terminar cada fase:
-
-1. marcar o status da fase;
-2. registrar data/commit;
-3. registrar principais evidências;
-4. registrar bloqueadores;
-5. registrar próxima fase;
-6. não apagar histórico anterior.
-
-## Auditor externo deve atualizar
-
-Após revisar cada commit no GitHub, a auditoria pode acrescentar:
-
-- validação independente;
-- divergências encontradas na revisão;
-- status de auditoria;
-- observações que o agente local não poderia confirmar.
-
-## Nunca fazer
-
-- marcar uma fase como PASS sem evidência;
-- apagar FAIL para deixar o roadmap verde;
-- misturar conclusões de fases futuras em fases ainda não executadas.
-
----
-
-# 13. ESTADO ATUAL
-
-| Fase | Status | Commit | Auditoria |
+| Fase | Status | Evidência/Commit | Auditoria |
 |---|---|---|---|
-| Fase 0 — Mapeamento Forense | 🟢 EXECUTADA | `f29adc0` | 🟠 PENDENTE |
-| Fase 1 — Contratos/Data Lineage | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 2 — Correção dos Bloqueadores | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 3 — Ambiente/Test Data | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 4 — Golden Path Playwright | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 0 — Mapeamento | 🟡 Executada / evidência original não recuperável | `f29adc0` reportado | 🟡 Parcial |
+| Fase 1 — Contratos/Lineage | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 2 — Correções | 🟡 Parcial / emergencial | `8a1a1cf`, `f5d7068` | 🟠 PENDING |
+| Fase 3 — Ambiente | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 4 — Golden Path | 🟠 PENDING | — | 🟠 PENDING |
 | Fase 5 — Persistência/Documento | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 6 — Hardening/Regressão | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 7 — Matriz de Serviços | 🟠 PENDING | — | 🟠 PENDING |
-| Fase 8 — Gate Final/Handoff | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 6 — Hardening | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 7 — Matriz | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 8 — Gate Final | 🟠 PENDING | — | 🟠 PENDING |
 
 ---
 
-# 14. REGRA OPERACIONAL PARA O AGENTE LOCAL
+# REGRA PARA O AGENTE LOCAL
 
-O agente local deve consultar este documento **antes de iniciar qualquer fase**.
+Antes de qualquer execução, consultar este documento.
 
-Ele deve executar **somente a fase explicitamente delegada**.
+Executar somente a fase delegada.
 
-Ao terminar:
+Ao terminar uma fase:
 
 1. atualizar este roadmap;
-2. produzir os artefatos da fase;
-3. executar as validações previstas;
-4. fazer o commit da fase;
-5. informar o SHA;
+2. produzir os artefatos;
+3. validar o resultado;
+4. fazer commit;
+5. informar SHA;
 6. parar.
 
-A próxima fase será liberada somente após revisão do resultado.
+O agente não deve avançar automaticamente para a próxima fase.
 
-**Este roadmap é a referência operacional compartilhada entre o agente local e os auditores.**
+**Este arquivo é a referência operacional compartilhada entre agente local e auditores.**
