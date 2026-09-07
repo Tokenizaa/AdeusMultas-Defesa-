@@ -62,28 +62,31 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     document.documentElement.style.fontSize = `${16 * fontSizeMultiplier}px`;
   }, [fontSizeMultiplier]);
 
-  // Global Keyboard Shortcuts (eMAG / GOV.BR: Alt + 1, Alt + 2, Alt + 3, Alt + 4)
+  // Global Keyboard Shortcuts (eMAG / GOV.BR: Alt + 1, Alt + 2, Alt + 3, Alt + 4).
+  // Targets are persistent and focusable even when the menu/search UI is collapsed.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
         switch (e.key) {
-          case '1':
+          case '1': {
             e.preventDefault();
-            const mainContent = document.getElementById('main-content');
+            const mainContent = document.getElementById('conteudo-principal');
             if (mainContent) {
               mainContent.focus();
               mainContent.scrollIntoView({ behavior: 'smooth' });
             }
             break;
-          case '2':
+          }
+          case '2': {
             e.preventDefault();
-            const mainMenu = document.getElementById('main-menu');
-            if (mainMenu) {
-              mainMenu.focus();
-              mainMenu.scrollIntoView({ behavior: 'smooth' });
+            const menuTrigger = document.getElementById('menu-navegacao-trigger');
+            if (menuTrigger) {
+              menuTrigger.focus();
+              menuTrigger.scrollIntoView({ behavior: 'smooth' });
             }
             break;
-          case '3':
+          }
+          case '3': {
             e.preventDefault();
             const mainSearch = document.getElementById('main-search') as HTMLInputElement | null;
             if (mainSearch) {
@@ -91,14 +94,16 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
               mainSearch.scrollIntoView({ behavior: 'smooth' });
             }
             break;
-          case '4':
+          }
+          case '4': {
             e.preventDefault();
-            const footer = document.getElementById('footer');
+            const footer = document.getElementById('rodape');
             if (footer) {
               footer.focus();
               footer.scrollIntoView({ behavior: 'smooth' });
             }
             break;
+          }
         }
       }
     };
