@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { AuthUser, UserRole, AuthState } from '../../types/auth';
 import {
   supabase,
@@ -52,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let mounted = true;
 
-    async function applySession(sessionUser: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>['user'] | null) {
+    async function applySession(sessionUser: SupabaseUser | null) {
       if (!mounted) return;
       if (!sessionUser) {
         setUser(null);
