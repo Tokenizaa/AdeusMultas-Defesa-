@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 import {
   Sparkles,
   Image as ImageIcon,
@@ -26,6 +27,7 @@ interface MediaStudioViewProps {
 }
 
 export const MediaStudioView: React.FC<MediaStudioViewProps> = ({ onContentCreated }) => {
+  const authFetch = useAuthFetch();
   const [activeTab, setActiveTab] = useState<'image' | 'video' | 'week'>('image');
 
   // --- Image Generation State (gemini-3-pro-image-preview) ---
@@ -252,7 +254,7 @@ export const MediaStudioView: React.FC<MediaStudioViewProps> = ({ onContentCreat
     setWeekSuccessMsg(null);
 
     try {
-      const res = await fetch('/api/marketing/generate-week', {
+      const res = await authFetch('/api/marketing/generate-week', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

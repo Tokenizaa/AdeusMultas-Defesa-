@@ -6112,7 +6112,7 @@ router.get("/admin/e2e-tests/stats", async (req, res) => {
   try {
     const supabase = getSupabaseServerClient();
     const [usersCount, casesCount, runsCount] = await Promise.all([
-      supabase.from("user_profiles").select("id", { count: "exact" }),
+      supabase.from("user_profiles").select("user_id", { count: "exact" }),
       supabase.from("cases").select("id", { count: "exact" }),
       supabase.from("e2e_test_runs").select("id", { count: "exact" })
     ]);
@@ -27800,6 +27800,13 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       userId,
       couponCode
     } = req.body;
+    const cleanCpf = (customerCpf || "").replace(/\D/g, "");
+    if (cleanCpf.length !== 11) {
+      return res.status(400).json({
+        error: "CPF do pagador \xE9 obrigat\xF3rio para cria\xE7\xE3o do pagamento PIX.",
+        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
+      });
+    }
     const offerResult = resolveOffer({
       serviceType,
       userId,
@@ -27826,7 +27833,7 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       payer: {
         name: customerName || "Condutor DefesAi",
         email: customerEmail || "contato@www.defesai.shop",
-        document: (customerCpf || "12345678909").replace(/\D/g, "")
+        document: cleanCpf
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
@@ -27919,6 +27926,13 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         hint: "Informe serviceType v\xE1lido (ex: recurso_jari)."
       });
     }
+    const cleanCpfCC = (customerCpf || "").replace(/\D/g, "");
+    if (cleanCpfCC.length !== 11) {
+      return res.status(400).json({
+        error: "CPF do pagador \xE9 obrigat\xF3rio para pagamento com cart\xE3o de cr\xE9dito.",
+        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
+      });
+    }
     const offerResult = resolveOffer({
       serviceType,
       userId,
@@ -27965,7 +27979,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       customer: {
         name: customerName || "Condutor DefesAi",
         email: customerEmail || "contato@www.defesai.shop",
-        taxId: (customerCpf || "12345678909").replace(/\D/g, "")
+        taxId: cleanCpfCC
       },
       amount: offerResult.offer.price,
       installments: Number(installments),
@@ -35382,6 +35396,15 @@ function createApp() {
     return next();
   });
   app.use("/api/marketing", (req, res, next) => {
+    if (req.method === "GET" && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
+      return authenticateToken(req, res, (err) => {
+        if (err) return next(err);
+        return requireAdmin(req, res, next);
+      });
+    }
+    return next();
+  });
+  app.use("/api/marketing", (req, res, next) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
     return authenticateToken(req, res, (err) => {
       if (err) return next(err);
@@ -35408,6 +35431,14 @@ function createApp() {
   app.use("/api", (req, res, next) => {
     const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
     if (!metaAdminPath) return next();
+    return authenticateToken(req, res, (err) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
+    });
+  });
+  app.use("/api", (req, res, next) => {
+    const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
+    if (!metaAdminAuxPath) return next();
     return authenticateToken(req, res, (err) => {
       if (err) return next(err);
       return requireAdmin(req, res, next);

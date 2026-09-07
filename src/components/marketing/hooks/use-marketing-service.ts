@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  MarketingAgentState, 
-  EditorialContentItem, 
+import {
+  MarketingAgentState,
+  EditorialContentItem,
   MetaAccountState,
   BrandIdentityConfig
 } from '../../../types';
-import { 
-  getMetaStatus, 
-  publishToMeta, 
-  connectMetaWithToken, 
-  disconnectMeta 
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
+import {
+  getMetaStatus,
+  publishToMeta,
+  connectMetaWithToken,
+  disconnectMeta
 } from '../../../core/integrations/meta-client';
 
 // Types for our hook
@@ -97,6 +98,8 @@ interface UseMarketingServiceReturn {
  * Separates business logic from UI presentation
  */
 export const useMarketingService = (): UseMarketingServiceReturn => {
+  const authFetch = useAuthFetch();
+
   // State
   const [agents, setAgents] = useState<MarketingAgentState[]>([]);
   const [contents, setContents] = useState<EditorialContentItem[]>([]);
@@ -139,7 +142,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
       setIsLoadingAgents(true);
       setIsLoadingContents(true);
       
-      const res = await fetch('/api/marketing/status');
+      const res = await authFetch('/api/marketing/status');
       const data = await res.json();
       
       setAgents(data.agents || []);
@@ -164,7 +167,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   // Criação manual de conteúdo
   const createManualContent = useCallback(async (initialData?: Partial<EditorialContentItem>) => {
     try {
-      const res = await fetch('/api/marketing/contents', {
+      const res = await authFetch('/api/marketing/contents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +197,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
 
   // Edição de texto/título com registro de versão (editor + macros IA)
   const updateContentFields = useCallback(async (id: string, fields: Partial<EditorialContentItem>, versionNote?: { agent?: string; author?: string; changes?: string }) => {
-    const res = await fetch(`/api/marketing/contents/${id}`, {
+    const res = await authFetch(`/api/marketing/contents/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...fields, versionNote }),
@@ -208,7 +211,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   }, []);
 
   const fetchContentVersions = useCallback(async (id: string) => {
-    const res = await fetch(`/api/marketing/contents/${id}/versions`);
+    const res = await authFetch(`/api/marketing/contents/${id}/versions`);
     if (res.ok) {
       const data = await res.json();
       if (data.success) return data.versions;
@@ -218,7 +221,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
 
   // Mudança de status via drag & drop no kanban (intervenção manual explícita)
   const updateContentStatus = useCallback(async (id: string, status: 'rascunho' | 'aprovado_qualidade' | 'reprovado_qualidade' | 'agendado' | 'publicado') => {
-    const res = await fetch(`/api/marketing/contents/${id}`, {
+    const res = await authFetch(`/api/marketing/contents/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -249,7 +252,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   const runCycleTick = useCallback(async () => {
     setIsRunningCycle(true);
     try {
-      const res = await fetch('/api/marketing/cycle-tick', { method: 'POST' });
+      const res = await authFetch('/api/marketing/cycle-tick', { method: 'POST' });
       const data = await res.json();
       
       if (data.success) {
@@ -268,7 +271,7 @@ export const useMarketingService = (): UseMarketingServiceReturn => {
   const generateContent = useCallback(async (theme: string, channel: string, format: string) => {
     setIsGeneratingContent(true);
     try {
-      const res = await fetch('/api/marketing/generate-content', {
+      const res = await authFetch('/api/marketing/generate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

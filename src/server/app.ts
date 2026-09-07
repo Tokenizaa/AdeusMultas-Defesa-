@@ -176,6 +176,17 @@ export function createApp() {
   });
 
   app.use('/api/marketing', (req, res, next) => {
+    // GETs que expõem PII (conversas inbox, mensagens, leads, export) exigem admin.
+    if (req.method === 'GET' && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
+      return authenticateToken(req, res, (err?: any) => {
+        if (err) return next(err);
+        return requireAdmin(req, res, next);
+      });
+    }
+    return next();
+  });
+
+  app.use('/api/marketing', (req, res, next) => {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
     return authenticateToken(req, res, (err?: any) => {
       if (err) return next(err);
@@ -206,6 +217,17 @@ export function createApp() {
   app.use('/api', (req, res, next) => {
     const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path);
     if (!metaAdminPath) return next();
+    return authenticateToken(req, res, (err?: any) => {
+      if (err) return next(err);
+      return requireAdmin(req, res, next);
+    });
+  });
+
+  // Meta webhook history and diagnostics expose integration state — admin only.
+  // (Webhook ingestion endpoints themselves remain public for provider callbacks.)
+  app.use('/api', (req, res, next) => {
+    const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
+    if (!metaAdminAuxPath) return next();
     return authenticateToken(req, res, (err?: any) => {
       if (err) return next(err);
       return requireAdmin(req, res, next);

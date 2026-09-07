@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 import {
   Bot,
   Search,
@@ -51,6 +52,7 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
   isLoading,
   scrapeResult,
 }) => {
+  const authFetch = useAuthFetch();
   const [selectedQuery, setSelectedQuery] = useState<string>(PRESET_QUERIES[0]);
   const [customQuery, setCustomQuery] = useState<string>('');
   const [useCustomQuery, setUseCustomQuery] = useState<boolean>(false);
@@ -67,13 +69,13 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
     setCollectionRunId(runId);
     pollRef.current = window.setInterval(async () => {
       try {
-        const res = await fetch(`/api/marketing/automation/leads?source=google_maps&pageSize=1`);
+        const res = await authFetch(`/api/marketing/automation/leads?source=google_maps&pageSize=1`);
         if (res.ok) {
           const data = await res.json();
           const total = data.total || (Array.isArray(data.data) ? data.data.length : 0);
           setFreshCount(total);
         }
-        const runRes = await fetch(`/api/marketing/automation/collection-runs/${runId}`);
+        const runRes = await authFetch(`/api/marketing/automation/collection-runs/${runId}`);
         if (runRes.ok) {
           const run = await runRes.json();
           setCollectionStatus(run.status);
@@ -115,9 +117,28 @@ export const ProspectingCollectionTab: React.FC<ProspectingCollectionTabProps> =
     setCity(c);
   };
 
-  const downloadXlsx = () => {
+  const downloadXlsx = async () => {
     if (!collectionRunId) return;
-    window.open(`/api/marketing/automation/export/${collectionRunId}`, '_blank');
+    // Download via Blob para carregar o header Authorization (export exige admin).
+    try {
+      const res = await authFetch(`/api/marketing/automation/export/${collectionRunId}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const disposition = res.headers.get('content-disposition') || '';
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        const filename = match?.[1] || `leads-${collectionRunId}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      // download falhou silenciosamente; usuário pode tentar novamente
+    }
   };
 
   return (

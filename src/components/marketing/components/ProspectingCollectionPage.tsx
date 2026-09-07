@@ -478,9 +478,28 @@ export const ProspectingCollectionPage: React.FC = () => {
               </div>
               {jobStatus.collectionRunId && jobStatus.status === 'completed' && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const url = `/api/marketing/automation/export/${jobStatus.collectionRunId}`;
-                    window.open(url, '_blank');
+                    // Download via Blob para carregar header Authorization (export exige admin).
+                    try {
+                      const res = await authFetch(url);
+                      if (res.ok) {
+                        const blob = await res.blob();
+                        const disposition = res.headers.get('content-disposition') || '';
+                        const match = disposition.match(/filename="?([^";]+)"?/);
+                        const filename = match?.[1] || `leads-${jobStatus.collectionRunId}.xlsx`;
+                        const objUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = objUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(objUrl);
+                      }
+                    } catch {
+                      // download falhou silenciosamente
+                    }
                   }}
                   className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
                   title="Baixar XLSX desta coleta"

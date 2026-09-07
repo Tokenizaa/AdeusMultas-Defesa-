@@ -35,6 +35,7 @@ import { scraperJobQueue } from './src/server/services/scraper-job-queue';
 import { scrapeWorker } from './src/server/services/scrape-worker';
 import e2eTestsRoutes from './src/server/routes/e2e-tests';
 import { databaseRows } from './src/server/app';
+import { authenticateToken, requireAdmin } from './src/server/middleware/auth-middleware';
 import { caseRepository } from './src/server/db/case-repository';
 import { commercialService } from './src/server/commercial/commercial-service';
 import { LEGAL_ARGUMENTS } from './src/data/knowledge-base';
@@ -332,6 +333,44 @@ async function startServer() {
    app.use('/api/monitoring', monitoringRoutes);
    app.use('/api/settings', settingsRoutes);
    app.use('/api/logs', logsRoutes);
+
+   // ── Autorização Marketing / Meta / Inbox / Automação ──────────────────
+   // Alinha o entry Node com o app.ts (serverless): mutações de Marketing,
+   // GETs com PII (inbox, leads, export) e endpoints Meta privilegiados exigem
+   // admin. Webhooks e callbacks OAuth permanecem públicos.
+   app.use('/api/marketing', (req, res, next) => {
+     // GETs que expõem PII (conversas inbox, mensagens, leads, export) exigem admin.
+     if (req.method === 'GET' && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
+       return authenticateToken(req, res, (err?: any) => {
+         if (err) return next(err);
+         return requireAdmin(req, res, next);
+       });
+     }
+     return next();
+   });
+   app.use('/api/marketing', (req, res, next) => {
+     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+     return authenticateToken(req, res, (err?: any) => {
+       if (err) return next(err);
+       return requireAdmin(req, res, next);
+     });
+   });
+   app.use('/api', (req, res, next) => {
+     const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
+     if (!metaAdminPath) return next();
+     return authenticateToken(req, res, (err?: any) => {
+       if (err) return next(err);
+       return requireAdmin(req, res, next);
+     });
+   });
+   app.use('/api', (req, res, next) => {
+     const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
+     if (!metaAdminAuxPath) return next();
+     return authenticateToken(req, res, (err?: any) => {
+       if (err) return next(err);
+       return requireAdmin(req, res, next);
+     });
+   });
    app.use('/api/marketing/automation', marketingAutomationRoutes);
    app.use('/api/marketing', marketingRoutes);
    app.use('/api/agents', agentsRoutes);

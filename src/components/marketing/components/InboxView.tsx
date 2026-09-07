@@ -28,8 +28,10 @@ import {
   InboxStats,
   AIMode,
 } from '../../../types/messaging';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 
 export const InboxView: React.FC = () => {
+  const authFetch = useAuthFetch();
   const [conversations, setConversations] = useState<MarketingConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MarketingMessage[]>([]);
@@ -63,7 +65,7 @@ export const InboxView: React.FC = () => {
       if (channelFilter !== 'all') url.searchParams.append('channel', channelFilter);
       if (searchQuery) url.searchParams.append('search', searchQuery);
 
-      const res = await fetch(url.toString());
+      const res = await authFetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         setConversations(data.conversations || []);
@@ -78,7 +80,7 @@ export const InboxView: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/marketing/inbox/stats');
+      const res = await authFetch('/api/marketing/inbox/stats');
       if (res.ok) {
         const data = await res.json();
         setStats(data.stats);
@@ -91,7 +93,7 @@ export const InboxView: React.FC = () => {
   const fetchMessages = async (convId: string) => {
     setIsLoadingMessages(true);
     try {
-      const res = await fetch(`/api/marketing/inbox/conversations/${convId}/messages`);
+      const res = await authFetch(`/api/marketing/inbox/conversations/${convId}/messages`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
@@ -144,7 +146,7 @@ export const InboxView: React.FC = () => {
     setIsSending(true);
 
     try {
-      const res = await fetch(`/api/marketing/inbox/conversations/${activeConversationId}/messages`, {
+      const res = await authFetch(`/api/marketing/inbox/conversations/${activeConversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -168,7 +170,7 @@ export const InboxView: React.FC = () => {
   const handleToggleAIMode = async (newMode: AIMode) => {
     if (!activeConversationId) return;
     try {
-      const res = await fetch(`/api/marketing/inbox/conversations/${activeConversationId}`, {
+      const res = await authFetch(`/api/marketing/inbox/conversations/${activeConversationId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aiMode: newMode }),
@@ -185,7 +187,7 @@ export const InboxView: React.FC = () => {
   const handleRunSelfTest = async () => {
     setIsRunningTest(true);
     try {
-      const res = await fetch('/api/marketing/inbox/self-test', { method: 'POST' });
+      const res = await authFetch('/api/marketing/inbox/self-test', { method: 'POST' });
       const data = await res.json();
       setTestResults(data);
     } catch (err) {
@@ -200,7 +202,7 @@ export const InboxView: React.FC = () => {
     e.preventDefault();
     setIsSimulating(true);
     try {
-      const res = await fetch('/api/marketing/inbox/simulate-inbound', {
+      const res = await authFetch('/api/marketing/inbox/simulate-inbound', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,7 +1,8 @@
 import { MetaAccountState, MetaPublishRequest, MetaPublishResult } from '../../types';
+import { authFetch } from '../../lib/authFetch';
 
 export async function getMetaStatus(): Promise<MetaAccountState> {
-  const res = await fetch('/api/integrations/meta/status');
+  const res = await authFetch('/api/integrations/meta/status');
   if (!res.ok) {
     throw new Error('Falha ao obter status da integração Meta');
   }
@@ -12,7 +13,7 @@ export async function getMetaAuthUrl(redirectUri?: string): Promise<{ authUrl: s
   const url = redirectUri
     ? `/api/integrations/meta/auth-url?redirectUri=${encodeURIComponent(redirectUri)}`
     : '/api/integrations/meta/auth-url';
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) {
     throw new Error('Falha ao obter URL de login Meta');
   }
@@ -24,7 +25,7 @@ export async function connectMetaWithToken(
   pageId?: string,
   instagramAccountId?: string
 ): Promise<{ success: boolean; connection: MetaAccountState }> {
-  const res = await fetch('/api/integrations/meta/connect', {
+  const res = await authFetch('/api/integrations/meta/connect', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accessToken, pageId, instagramAccountId }),
@@ -40,7 +41,7 @@ export async function selectMetaTargets(
   pageId?: string,
   instagramAccountId?: string
 ): Promise<{ success: boolean; connection: MetaAccountState }> {
-  const res = await fetch('/api/integrations/meta/select-targets', {
+  const res = await authFetch('/api/integrations/meta/select-targets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pageId, instagramAccountId }),
@@ -53,7 +54,7 @@ export async function selectMetaTargets(
 }
 
 export async function disconnectMeta(): Promise<{ success: boolean }> {
-  const res = await fetch('/api/integrations/meta/disconnect', { method: 'POST' });
+  const res = await authFetch('/api/integrations/meta/disconnect', { method: 'POST' });
   if (!res.ok) {
     throw new Error('Falha ao desconectar conta Meta');
   }
@@ -61,7 +62,7 @@ export async function disconnectMeta(): Promise<{ success: boolean }> {
 }
 
 export async function publishToMeta(params: MetaPublishRequest): Promise<MetaPublishResult> {
-  const res = await fetch('/api/integrations/meta/publish', {
+  const res = await authFetch('/api/integrations/meta/publish', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -74,7 +75,7 @@ export async function publishToMeta(params: MetaPublishRequest): Promise<MetaPub
 }
 
 export async function runMetaDiagnostics(): Promise<any> {
-  const res = await fetch('/api/integrations/meta/tests');
+  const res = await authFetch('/api/integrations/meta/tests');
   if (!res.ok) {
     throw new Error('Falha ao executar bateria de testes da Meta');
   }
@@ -82,7 +83,7 @@ export async function runMetaDiagnostics(): Promise<any> {
 }
 
 export async function getMetaWebhooksHistory(): Promise<any> {
-  const res = await fetch('/api/integrations/meta/webhooks/history');
+  const res = await authFetch('/api/integrations/meta/webhooks/history');
   if (!res.ok) {
     throw new Error('Falha ao obter histórico de webhooks da Meta');
   }
