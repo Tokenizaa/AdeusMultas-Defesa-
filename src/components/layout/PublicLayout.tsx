@@ -20,7 +20,7 @@ export const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
       {/* 0. Skip link + Barra de Acessibilidade gov.br / eMAG (atalhos 1/2/3/4) */}
       <AccessibilityBar />
 
-      {/* 1. Cabeçalho Oficial DefesAi (contém nav#main-menu e #main-search existentes) */}
+      {/* 1. Cabeçalho Oficial DefesAi */}
       <div id="menu-navegacao" className="min-w-0">
         <PrivateHeader />
       </div>
@@ -32,8 +32,8 @@ export const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
         </div>
       </main>
 
-      {/* 3. Rodapé Padrão DefesAi (footer#footer interno) */}
-      <div id="rodape">
+      {/* 3. Rodapé Padrão DefesAi */}
+      <div id="rodape" tabIndex={-1}>
         <PrivateFooter />
       </div>
 
