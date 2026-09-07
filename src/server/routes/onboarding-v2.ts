@@ -56,8 +56,7 @@ router.post('/onboarding-v2/cases/:id/evidence', async (req, res) => {
   const { base64, filename, mimeType } = req.body || {};
   if (typeof base64 !== 'string' || !base64) return res.status(400).json({ error: 'Conteúdo da evidência obrigatório.', code: 'EVIDENCE_CONTENT_REQUIRED' });
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(String(mimeType))) return res.status(415).json({ error: 'Formato não suportado para OCR de imagem.', code: 'EVIDENCE_MIME_UNSUPPORTED' });
-  const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, '');
-  const bytes = Buffer.from(cleanBase64, 'base64');
+  const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, ''); const bytes = Buffer.from(cleanBase64, 'base64');
   if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'Evidência deve ter entre 1 byte e 5MB.', code: 'EVIDENCE_SIZE_INVALID' });
   try {
     const result = await ocrService.analyzeImage(cleanBase64); const current = CanonicalMapper.rowToDomain(row); const matched = RagPipeline.findInfraction(result.dadosExtraidos.codigoInfracao);
@@ -77,18 +76,7 @@ router.put('/onboarding-v2/cases/:id/qualification', (req, res) => {
   if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressNeighborhood || !applicant.addressZipCode || !applicant.addressCityState) return res.status(400).json({ error: 'Dados de qualificação incompletos.', code: 'QUALIFICATION_REQUIRED' });
   if (!/^\d{11}$/.test(applicant.applicantCpf.replace(/\D/g, ''))) return res.status(400).json({ error: 'CPF inválido.', code: 'QUALIFICATION_CPF_INVALID' });
   const current = CanonicalMapper.rowToDomain(row); const updated: CaseDomain = { ...current, applicant: { ...applicant, applicantCpf: applicant.applicantCpf.replace(/\D/g, '') }, status: 'qualificado', currentStage: 5, updatedAt: new Date().toISOString() };
-  databaseRows.set(current.id, CanonicalMapper.domainToRow(updated)); return res.json({ case: updated });
-});
-
-router.post('/onboarding-v2/claim', authenticateToken, async (req, res) => {
-  const { caseId, claimToken, name, email, phone, cpf } = req.body || {};
-  const row = databaseRows.get(String(caseId || ''));
-  if (!row) return res.status(404).json({ error: 'Caso anônimo não encontrado.' });
-  if (!req.user?.id) return res.status(401).json({ error: 'Identidade de usuário inválida.' });
-  if (!tokenMatches(claimToken, row.claim_token)) return res.status(403).json({ error: 'Token de claim inválido ou ausente.' });
-  if (row.user_id && row.user_id !== req.user.id) return res.status(403).json({ error: 'Caso já vinculado a outro usuário.' });
-  const domain = CanonicalMapper.rowToDomain(row); const updated: CaseDomain = { ...domain, clientName: name || domain.clientName, clientEmail: email || domain.clientEmail, clientPhone: phone || domain.clientPhone, clientCpf: cpf || domain.clientCpf, isAnonymous: false, userId: req.user.id, updatedAt: new Date().toISOString() };
-  await databaseRows.set(updated.id, CanonicalMapper.domainToRow(updated)); return res.json(updated);
+  await databaseRows.set(current.id, CanonicalMapper.domainToRow(updated)); return res.json({ case: updated });
 });
 
 export default router;
