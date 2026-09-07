@@ -23,16 +23,18 @@ export function useOnboarding(application: OnboardingApplication) {
     setError(undefined);
   }
 
-  async function persist() {
+  async function persist(): Promise<string> {
     setError(undefined);
     setState((current) => ({ ...current, status: 'persisting', updatedAt: new Date().toISOString() }));
     try {
       if (state.caseId) {
         await application.updateDraft({ caseId: state.caseId, payload });
-      } else {
-        const result = await application.createDraft({ payload });
-        setState((current) => ({ ...current, caseId: result.case.id, updatedAt: new Date().toISOString() }));
+        return state.caseId;
       }
+      const result = await application.createDraft({ payload });
+      const caseId = result.case.id;
+      setState((current) => ({ ...current, caseId, updatedAt: new Date().toISOString() }));
+      return caseId;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Não foi possível salvar o caso.';
       setError(message);
@@ -42,15 +44,20 @@ export function useOnboarding(application: OnboardingApplication) {
   }
 
   async function next() {
-    if (state.step === 'case' || state.step === 'facts' || state.step === 'evidence') await persist();
+    let caseId = state.caseId;
+    if (state.step === 'case' || state.step === 'facts' || state.step === 'evidence') caseId = await persist();
     const nextStep = stepOrder[stepIndex + 1];
     if (!nextStep) return;
     if (nextStep === 'diagnosis') {
-      const caseId = state.caseId;
       if (!caseId) throw new Error('Caso ainda não persistido.');
-      setState((current) => ({ ...current, status: 'analyzing', step: 'diagnosis', updatedAt: new Date().toISOString() }));
+      setState((current) => ({ ...current, status: 'analyzing', step: 'diagnosis', caseId, updatedAt: new Date().toISOString() }));
       const result = await application.startAnalysis(caseId);
-      if (result.status === 'failed') throw new Error(result.errorCode || 'ANALYSIS_FAILED');
+      if (result.status === 'failed') {
+        const failure = new Error(result.errorCode || 'ANALYSIS_FAILED');
+        setError(failure.message);
+        setState((current) => ({ ...current, status: 'failed', errorCode: 'ANALYSIS_FAILED', updatedAt: new Date().toISOString() }));
+        throw failure;
+      }
       setAnalysis(result.analysis);
       setState((current) => ({ ...current, status: 'analysis_ready', updatedAt: new Date().toISOString() }));
       return;
