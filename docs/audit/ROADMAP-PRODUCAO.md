@@ -75,7 +75,7 @@
 |---|---|---|---|---|
 | 3.1 Case → Evidence | VERIFIED | `e81eb741f1c314e3bbdd0fb5937b290f03a27e4d` + `93354cbe1742f0698496bd0ed18460da1315394f` | Persistência de evidence e boundary de ownership | Testes adversariais de GET/PUT de `evidence_json` |
 | 3.2 Evidence → Analysis | VERIFIED | `fc46015d4dc6deb13e908ccefa0dd10b7a131aa9` | Evidence-dependent arguments são filtrados quando evidência exigida não existe | 11 cenários A–G; data gaps preservados e selecionados filtrados |
-| 3.3 Analysis → Arguments | VERIFIED | cobertura registrada em `d8ff4016c183b1173d9eed74b3dd8a4664326b83` | Integridade das teses recomendadas e invariant `isReady === validation.isValid` | `fase-33-analysis-arguments.test.ts` e testes de geração fail-closed |
+| 3.3 Analysis → Arguments | VERIFIED | `d8ff4016c183b1173d9eed74b3dd8a4664326b83` | Integridade das teses recomendadas e invariant `isReady === validation.isValid` | `fase-33-analysis-arguments.test.ts` e testes de geração fail-closed |
 | 3.4 Arguments → Document | VERIFIED | `e6db74a1bb4823f4a55aa8f62585798685691d87` | `recommendedArguments` como fonte autorizada; sem auto-injeção de argumentos | Testes atualizados para contrato FASE 3.4 |
 | 3.5 Document → Persistence | VERIFIED | `008aab06f2440895f54bc27b3d1c9496b0f2eeb0` + `400b967dd15737875fe2d9a3f5b32598112c0ed7` | Persistência mantém `selectedArgumentIds`; leitura revalida contra autorização | P0-06/09/10/11; sanitização no GET; ordem preservada |
 | 3.6 Client → Server trust boundary | VERIFIED | `264877ab1bbc6dbccf982a706e517f24a0e66f95` | Teste adversarial de argumento válido no catálogo mas não autorizado para o caso | ARG-025 injetado e bloqueado; `selectedArguments` não amplia autoridade |
@@ -91,7 +91,7 @@
 
 | ID | Status | SHA | Descrição | Evidência |
 |---|---|---|---|---|
-| 4.1 Dados pessoais | VERIFIED | `3d521708bb751fd4391bcd8cd0eea53107aed65b` + `5a1bfcbbad4dfa4cd22590576d0c1c2e30a67c7d` + `1e6e1f0779dfcdfd9923f9e15ac1048dcf81830` | Mascaramento CPF/CNH/RG/telefone/email/placa; DELETE com anonimização completa | 6 testes reais de DELETE; 17 campos PII limpos; 19 testes de logger |
+| 4.1 Dados pessoais | VERIFIED | `3d521708bb751fd4391bcd8cd0eea53107aed65b` + `5a1bfcbbad4dfa4cd22590576d0c1c2e30a67c7d` + `1e6e1f0779dfcdfd99d23f9e15ac1048dcf81830` | Mascaramento CPF/CNH/RG/telefone/email/placa; DELETE com anonimização completa | 6 testes reais de DELETE; 17 campos PII limpos; 19 testes de logger |
 | 4.2 Logs | VERIFIED | `1e6e1f0779dfcdfd99d23f9e15ac1048dcf81830` + `920e5715e2d14c84af9cf7466cba320e75f25b16` | Sanitização de PII e remoção de signers/pdfBase64 dos logs de erro | Logger cobre telefone/email/placa; Documenso registra apenas `signerCount` |
 | 4.3 URLs | VERIFIED | `2fafc5356367dc040b92d3ebcfb689003face0b5` | Remoção de email de query string de histórico de notificações | JWT identifica usuário; email redundante removido |
 | 4.4 Storage / documentos | VERIFIED | `920e5715e2d14c84af9cf7466cba320e75f25b16` + `2ceb758f...` | PII em erros e Storage auditados | Signers removidos de logs; policies de Storage verificadas |
@@ -209,7 +209,7 @@ Estas correções atravessam mais de uma fase e devem permanecer registradas mes
 | Auditoria final | **GO WITH LIMITATION** |
 | Produção/Vercel | **PARTIAL / BLOCKED** — evidências reais 8.3–8.6 pendentes |
 | Issue #2 P0 | **VERIFIED** — `85761b7` |
-| Último commit da `main` | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
+| Último commit funcional antes deste documento | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
 
 ## Última sequência crítica
 
