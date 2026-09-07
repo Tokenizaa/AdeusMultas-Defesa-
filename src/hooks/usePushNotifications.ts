@@ -42,8 +42,8 @@ export function usePushNotifications() {
   // Fetch notification history
   const fetchNotifications = useCallback(async () => {
     try {
-      const email = user?.email || 'fariasnetto01@gmail.com';
-      const res = await fetch(`/api/notifications/history?email=${encodeURIComponent(email)}`);
+      // Auth token identifies the user — no email needed in URL
+      const res = await fetch(`/api/notifications/history`);
       if (res.ok) {
         const data = await res.json();
         const list: AppNotificationItem[] = data.notifications || [];
@@ -53,7 +53,7 @@ export function usePushNotifications() {
     } catch (err) {
       console.warn('[Push Hook] Erro ao carregar histórico:', err);
     }
-  }, [user?.email]);
+  }, []);
 
   useEffect(() => {
     fetchNotifications();

@@ -48,16 +48,10 @@ router.post('/unsubscribe', (req, res) => {
 // GET /api/notifications/history - Get notifications for active user
 router.get('/history', authenticateToken, (req, res) => {
   try {
-    const userEmail = (req.query.email as string) || (req.query.userEmail as string);
     const user = req.user;
 
-    // Only allow users to see their own notifications (or admin can see any)
-    if (user && user.role !== 'admin' && userEmail && userEmail !== user.email) {
-      return res.status(403).json({ error: 'Você não tem permissão para acessar notificações de outro usuário' });
-    }
-
-    // If no email provided, use the authenticated user's email
-    const effectiveEmail = userEmail || user?.email;
+    // User is identified by auth token — email comes from session, not query params
+    const effectiveEmail = user?.email;
     if (!effectiveEmail) {
       return res.status(400).json({ error: 'Email do usuário é obrigatório' });
     }
