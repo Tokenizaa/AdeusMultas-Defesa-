@@ -2,178 +2,155 @@
 
 **Produto:** Adeus Multa  
 **Data:** 2026-09-07  
-**Escopo:** revisão independente do resultado reportado pelo agente local para a Fase 0 — Mapeamento Forense.
+**Escopo:** revisão independente da Fase 0 e registro das correções emergenciais aplicadas posteriormente.
 
 ## 🔎 STATUS
 
-# 🟡 AUDITORIA PARCIALMENTE APROVADA — REVISÃO NECESSÁRIA
+# 🟡 FASE 0 PARCIALMENTE APROVADA — CORREÇÕES EMERGENCIAIS APLICADAS
 
-A Fase 0 foi executada pelo agente local e o resultado reportado é tecnicamente plausível em vários pontos, mas **não pode ser considerada auditada integralmente** porque o commit informado pelo agente (`f29adc0`) não está resolvível no histórico/branch acessível do repositório e o arquivo `docs/audit/E2E-CONTRACT-MAP.md` não está presente no estado atual da branch principal acessível pela auditoria.
+A Fase 0 foi executada pelo agente local, mas o SHA `f29adc0` reportado por ele não está resolvível na referência GitHub auditada e o mapa original não ficou recuperável nessa referência. Portanto, as contagens declaradas pelo agente não são tratadas como evidência independente.
 
-O roadmap mestre registra o commit `f29adc0` como resultado da Fase 0, mas isso é uma declaração do agente, não uma evidência independente. O commit posterior `e02b1aa5a7f61c14f130525ac45a7ab762db18ed` apenas registra essa declaração no roadmap. Portanto, **não devemos tratar os 13/10/8/8 números reportados como fatos auditados**.
+A auditoria independente confrontou o código atual e identificou contratos que podiam ser corrigidos com segurança imediata, sem esperar a execução do Golden Path.
 
-## 🟢 CONFIRMADO INDEPENDENTEMENTE
+## 🟢 CORREÇÕES APLICADAS
 
-### 1. Não existe mais `server.ts` como fonte ativa de execução
+### 1. Persistência de casos — fallback em memória deixou de ser implícito
 
-A arquitetura atual documentada no commit `73c43c28981518af266411510b4cd117467c8949` registra que `server.ts` foi removido e que o runtime canônico usa `src/server/app.ts`, `src/server/routes/*` e `caseRepository`/`databaseRows`.
+`src/server/db/case-repository.ts`
 
-### 2. `databaseRows` é atualmente o `caseRepository`
+Antes, a ausência de Supabase permitia persistência somente em memória fora de produção. Isso poderia permitir um E2E passar sem provar persistência real.
 
-`src/server/app.ts` exporta `databaseRows = caseRepository`.
+Agora:
 
-`src/server/routes/cases.ts` utiliza essa fonte para GET/POST/PUT/claim/generate-defense.
+- `ALLOW_IN_MEMORY_CASE_PERSISTENCE=true` é obrigatório para usar o fallback;
+- sem Supabase e sem a flag, `set()` falha;
+- falha no `loadAllFromSupabase()` não vira silenciosamente `[]`;
+- o caminho padrão é fail-closed.
 
-Isso significa que o achado histórico `casesStore ≠ caseRepository` **não deve ser repetido como estado atual sem qualificação**. O problema foi parcialmente resolvido pela remoção do entrypoint legado.
+Commit:
 
-### 3. Existe uma segunda camada de memória dentro do `CaseRepository`
+`8a1a1cf2b0559e53c7a3e35ca0de86cbc41d30a9`
 
-`CaseRepository` mantém `Map<string, CaseRow>` em memória, mas `set()` primeiro persiste no Supabase quando o cliente está configurado e só depois atualiza o Map. O próprio código classifica essa estratégia como write-through/fail-closed.
+### 2. Identidade canônica do usuário
 
-Portanto, a pergunta correta para a próxima fase não é mais simplesmente "casesStore versus caseRepository", mas:
+`src/server/routes/cases.ts`
 
-`persistência Supabase → hidratação/cold start → memória → consumidores de pagamento/documento`.
+Antes, ownership aceitava UUID ou email e a criação podia gravar email como identidade do caso.
 
-### 4. Há mapeamento explícito de UUID de domínio para UUID persistido
+Agora:
 
-O repository usa `domainIdToUuid()` para a coluna `cases.id` e mantém `app_ref` para IDs de domínio não-UUID.
+- criação de caso exige `req.user.id` em formato UUID;
+- `domainData.userId` vem exclusivamente do JWT;
+- ownership de cidadão compara somente UUID;
+- claim usa somente UUID;
+- PUT preserva `existingRow.user_id`.
 
-Esse contrato precisa ser confrontado com `payment_orders.case_id` e demais consumidores na Fase 1.
+Commit:
 
-### 5. A autenticação real existe e os bypasses estão condicionados a ambiente não produtivo
+`f5d70687f545411d06ac793dc12a7ad6738ea2f3`
 
-`authenticateToken()` valida JWT via Supabase quando disponível. Os bypasses locais (`usr_admin_defesai`, `usr_admin_e2e`) são condicionados a `NODE_ENV !== 'production'`.
+### 3. ID de caso não previsível
 
-Isso reduz o risco de um fallback de autenticação chegar diretamente à produção, mas mantém um **risco de ambiente de teste** que precisa ser explicitamente separado do Golden Path real.
+A criação deixou de usar:
 
-### 6. Existe autorização de caso por usuário/admin
+`Date.now() + Math.random()`
 
-`canAccessCase()` exige usuário, permite admin e verifica `row.user_id` contra `user.id` ou email. O claim canônico é `/cases/:id/claim`.
+para usar:
 
-### 7. A geração canônica usa análise/teses e integridade
+`crypto.randomUUID()`
 
-`src/server/routes/cases.ts` usa `permittedTheses()`, `RagPipeline` e `computeDefenseIntegrityHash()`. A leitura de um documento também valida integridade e autorização das teses.
+Isso remove previsibilidade desnecessária do identificador de aplicação.
 
-### 8. O pagamento possui fluxo gateway-agnóstico, mas há uma restrição importante
+Commit:
 
-`POST /api/pagbank/orders` e `/api/pix/create` usam `prodAuth`, e o código exige admin quando o gateway ativo é PagBank. Isso é incompatível com uma jornada simples de cidadão usando PagBank se não houver outro caminho de pagamento adequado.
+`f5d70687f545411d06ac793dc12a7ad6738ea2f3`
 
-Essa é uma questão de contrato de produto que deve ser resolvida/confirmada na Fase 1 antes de chamar o fluxo de pagamento de Golden Path.
+## 🔴 GAPS AINDA ABERTOS
 
-### 9. O pagamento tem persistência Supabase documentada no histórico recente
+### P0 — Golden Path real ainda não comprovado
 
-O histórico do repositório registra correções para centralização de `payment_orders`, mapeamento UUID, status e leitura do dashboard a partir de Supabase. Isso deve ser confrontado com o código atual durante a Fase 1.
+Ainda não existe evidência independente de:
 
-### 10. A geração automática pós-pagamento possui comportamento fail-closed para dados incompletos
+`usuário → case → análise → pagamento → webhook → defesa → documento → storage`
 
-`generateDefenseDraftForDomain()` rejeita ausência de qualificação necessária em vez de fabricar CNH, cidade ou CPF. O comentário do código registra explicitamente que o webhook pode confirmar o pagamento sem fabricar uma peça.
+### P1 — Gate administrativo do PagBank
 
-Isso é uma decisão de segurança, mas cria exatamente o risco funcional que o Golden Path precisa testar: **pagamento confirmado sem documento**.
+O código ainda exige admin quando o gateway ativo é PagBank. Isso precisa ser resolvido como contrato de produto antes do Golden Path cidadão.
 
-## 🔴 GAPS QUE A AUDITORIA CONSIDERA REAIS OU PRIORITÁRIOS
+### P1 — Pagamento confirmado sem documento
 
-### P0-1 — Evidência da Fase 0 não está auditável no branch acessível
+O webhook mantém o pagamento confirmado se a geração falhar. Isso é fail-closed contra fabricação de documento, mas a UX e o mecanismo de recuperação precisam ser definidos/provados.
 
-O SHA `f29adc0` informado pelo agente não é resolvível via GitHub e `docs/audit/E2E-CONTRACT-MAP.md` não está presente na branch principal acessível.
+### P1 — Claim token
 
-**Impacto:** não é possível auditar os 13/10/8/8 itens diretamente.
+A origem e entropia do `claim_token` ainda não foram confirmadas suficientemente para declarar o risco resolvido.
 
-**Ação:** recuperar/pushar o commit ou documento no histórico correto antes de usar o mapa como baseline formal.
+### P1 — Webhook / payment_orders
 
-### P0-2 — O Golden Path de pagamento/documento ainda não está provado
+Ainda precisa ser comprovada a consistência transacional/idempotente entre evento do gateway, `cases` e `payment_orders`.
 
-O histórico anterior do projeto já registrava que E2E completo dependia de Supabase/gateway externo. O código atual também mostra que o fluxo PagBank possui requisito de admin e que a geração pós-pagamento pode falhar fechadamente por dados incompletos.
+### P1 — Análise dual
 
-**Impacto:** não há base para declarar a jornada cidadão → pagamento → documento como funcional.
+Ainda precisa ser confrontado se existe mais de uma fonte de verdade para análise/recommended arguments e qual alimenta a geração final.
 
-### P1-1 — `user_id` possui normalização múltipla
+### P1 — TestFillButton / artefatos de teste
 
-O caso pode comparar `row.user_id` tanto com UUID quanto com email em `canAccessCase()`, enquanto a persistência Supabase só envia `user_id` quando ele é UUID; valores não-UUID podem ser convertidos em `null` no payload.
+Ainda não foi comprovado se controles de preenchimento de teste estão impossíveis de alcançar em produção.
 
-**Impacto:** potencial divergência entre identidade lógica em memória e ownership persistido.
+## 🟡 O QUE AINDA É HIPÓTESE
 
-Isso precisa de teste real de cold start e consulta ao banco.
+Continuam sem comprovação independente:
 
-### P1-2 — `CaseRepository` é dual-engine
-
-Embora diferente do antigo `casesStore`, ainda existe estado em memória sobreposto à persistência Supabase.
-
-**Impacto:** precisamos provar que GET/PUT/payment/generation depois de restart não dependem de memória residual.
-
-### P1-3 — PagBank possui gate administrativo
-
-O código atual explicitamente retorna 403 para usuário não-admin quando o gateway ativo é PagBank.
-
-**Impacto:** isso pode impedir o Golden Path do usuário final dependendo do gateway/fluxo escolhido.
-
-### P1-4 — Sandbox payment auth é diferente da produção
-
-O `prodAuth()` só aplica `authenticateToken` quando `PAYMENT_MODE=production`; em sandbox, a rota de criação pode operar sem autenticação própria. Isso não deve ser confundido com autenticação real do usuário no Golden Path.
-
-### P1-5 — Pagamento confirmado sem documento é um estado permitido pelo código
-
-O código explicitamente mantém o pagamento confirmado quando a geração da defesa falha por falta de dados, em vez de fabricar o documento.
-
-Isso é fail-closed juridicamente, mas precisa existir como estado operacional tratado pela UX.
-
-### P1-6 — Necessário confrontar payment reference com case ID canônico
-
-A criação de ordem utiliza `referenceId: defe...case_<caseId>` e o repository possui mapeamento UUID. A Fase 1 deve provar que o mesmo caso é recuperável a partir do pagamento em todos os caminhos.
-
-## 🟡 ITENS DO RELATÓRIO DO AGENTE QUE NÃO PODEM SER ACEITOS AINDA COMO CONFIRMADOS
-
-Os seguintes itens foram reportados pelo agente local, mas não possuem evidência verificável nesta auditoria:
-
-- dual analysis sources;
-- case ID generation como risco concreto;
-- user ID inconsistency em toda a jornada;
-- optional userId;
-- webhook não-bloqueante em execução real;
-- claim token previsível;
-- TestFillButton exposto;
-- race condition;
-- paid without document em execução real;
-- localStorage de dados sensíveis;
 - real PIX;
 - real webhook;
-- real PDF;
+- PDF real;
 - RLS real;
 - concorrência;
-- anon → auth → pay → doc completo;
 - token renewal;
-- rate limiting.
+- rate limiting;
+- jornada anônima → autenticada → paga → documento;
+- persistência após cold start;
+- conteúdo final comparado ao input.
 
-Eles devem entrar na Fase 1 como **hipóteses a confirmar**, não como fatos.
-
-## 📊 DECISÃO DA FASE 0
+## 📊 ESTADO APÓS AS CORREÇÕES
 
 ```text
-MAPEAMENTO DECLARADO PELO AGENTE       🟢 EXECUTADO
-ARTEFATO RECUPERÁVEL NO GITHUB         🔴 NÃO CONFIRMADO
-MAPA AUDITÁVEL INDEPENDENTEMENTE       🔴 NÃO
-ARQUITETURA ATUAL PARCIALMENTE CONFIRMADA 🟢 SIM
-GOLDEN PATH FUNCIONAL                  ⚫ NÃO VERIFICADO
-LIBERAÇÃO AUTOMÁTICA DA FASE 1         🔴 NÃO
+PERSISTÊNCIA REAL OBRIGATÓRIA POR PADRÃO      🟢
+IDENTIDADE UUID CANÔNICA                       🟢
+OWNERSHIP POR EMAIL COMO FALLBACK              🟢 REMOVIDO
+ID DE CASO PREVISÍVEL                          🟢 CORRIGIDO
+PAGBANK CIDADÃO                                🔴 ABERTO
+PAYMENT → DOCUMENT                             🔴 NÃO PROVADO
+CLAIM TOKEN                                    🟡 NÃO AUDITADO
+WEBHOOK/PAYMENT_ORDERS                         🟡 NÃO PROVADO
+ANALYSIS → DOCUMENT                            🟡 NÃO PROVADO
+GOLDEN PATH                                    ⚫ NÃO EXECUTADO
 ```
 
 ## 🎯 DECISÃO DOS AUDITORES
 
-**FASE 0: 🟡 CORREÇÃO DE EVIDÊNCIA NECESSÁRIA ANTES DA LIBERAÇÃO FORMAL DA FASE 1.**
+As correções emergenciais foram aplicadas porque eram defeitos suficientemente claros e independentes da execução E2E.
 
-Não vamos pedir ao agente para repetir toda a investigação. A estrutura atual do código já permite avançar, mas o artefato `E2E-CONTRACT-MAP.md` precisa estar recuperável/versionado para que o baseline seja auditável.
+**Isso não libera o Golden Path.**
 
-Depois disso, a Fase 1 deve começar focada nos contratos que realmente importam para a jornada vertical:
+A próxima etapa continua sendo:
+
+**FASE 1 — AUDITORIA DE CONTRATOS E DATA LINEAGE**
+
+com foco em:
 
 ```text
 USER
  ↓
 CASE
  ↓
-PERSISTENCE / COLD START
+SUPABASE / COLD START
  ↓
 ANALYSIS
  ↓
 PAYMENT
+ ↓
+WEBHOOK
  ↓
 AUTHORIZATION
  ↓
@@ -184,4 +161,4 @@ DOCUMENT
 STORAGE
 ```
 
-**Não executar correções de produto na Fase 1. Primeiro fechar o diagnóstico.**
+Depois da Fase 1, os bloqueadores remanescentes devem ser corrigidos antes da execução do Golden Path.
