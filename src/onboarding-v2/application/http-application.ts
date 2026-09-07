@@ -1,3 +1,4 @@
+import { authFetch } from '../../lib/authFetch';
 import type { OnboardingApplication, CreateDraftInput, CreateDraftResult, UpdateDraftInput, ClaimInput, AnalysisResult, QualificationInput, PaymentResult, GenerationResult, EvidenceUploadResult } from './contracts';
 
 export interface OnboardingHttpClient { request<T>(path: string, init?: RequestInit): Promise<T>; }
@@ -28,6 +29,7 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
     },
     async claim(input: ClaimInput): Promise<CreateDraftResult['case']> {
       const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }));
+      token = '';
       return result;
     },
     async startAnalysis(caseId: string): Promise<AnalysisResult> { return client.request<AnalysisResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/analysis`, authInit({ method: 'POST' })); },
@@ -36,13 +38,18 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       const result = await client.request<{ case: CreateDraftResult['case'] }>(`/api/onboarding-v2/cases/${encodeURIComponent(input.caseId)}/qualification`, authInit({ method: 'PUT', body: JSON.stringify(input) }));
       return result.case;
     },
-    async requestPayment(caseId: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment`, withJson({ method: 'POST' })); },
-    async confirmPayment(caseId: string, paymentReference: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment/confirm`, withJson({ method: 'POST', body: JSON.stringify({ paymentReference }) })); },
-    async generateDocument(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, withJson({ method: 'POST' })); },
-    async getGeneration(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, withJson()); },
+    async requestPayment(caseId: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment`, authInit({ method: 'POST' })); },
+    async confirmPayment(caseId: string, paymentReference: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment/confirm`, authInit({ method: 'POST', body: JSON.stringify({ paymentReference }) })); },
+    async generateDocument(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, authInit({ method: 'POST' })); },
+    async getGeneration(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, authInit()); },
   };
 }
 
 export function createBrowserOnboardingHttpClient(): OnboardingHttpClient {
-  return { async request<T>(path, init) { const response = await fetch(path, init); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(typeof body?.error === 'string' ? body.error : `Request failed (${response.status})`); return body as T; } };
+  return { async request<T>(path, init) {
+    const response = await authFetch(path, init);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(typeof body?.error === 'string' ? body.error : `Request failed (${response.status})`);
+    return body as T;
+  } };
 }
