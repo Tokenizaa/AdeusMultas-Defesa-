@@ -74,6 +74,32 @@ Mapa factual suficiente para reconstruir o fluxo sem depender de tentativa e err
 
 `docs(audit): map e2e product contract`
 
+## Status atual
+
+**🟢 EXECUTADA PELO AGENTE LOCAL**
+
+Commit reportado pelo agente:
+
+`f29adc0 — docs(audit): map e2e product contract`
+
+Resultado reportado:
+
+- 🟢 13 itens confirmados;
+- 🔴 10 gaps;
+- 🟡 8 riscos;
+- ⚫ 8 itens não verificados;
+- 📊 mapa concluído em 100%.
+
+Documento produzido:
+
+`docs/audit/E2E-CONTRACT-MAP.md`
+
+### Auditoria independente
+
+**🟠 PENDENTE DE REVISÃO**
+
+O fato de o agente declarar a Fase 0 concluída não significa que os auditores já validaram o conteúdo. A próxima ação dos auditores é revisar o mapa e confrontá-lo com o código/commit.
+
 ---
 
 # 3. FASE 1 — AUDITORIA DE CONTRATOS E DATA LINEAGE
@@ -471,7 +497,7 @@ Após revisar cada commit no GitHub, a auditoria pode acrescentar:
 
 | Fase | Status | Commit | Auditoria |
 |---|---|---|---|
-| Fase 0 — Mapeamento Forense | 🟠 PENDING | — | 🟠 PENDING |
+| Fase 0 — Mapeamento Forense | 🟢 EXECUTADA | `f29adc0` | 🟠 PENDENTE |
 | Fase 1 — Contratos/Data Lineage | 🟠 PENDING | — | 🟠 PENDING |
 | Fase 2 — Correção dos Bloqueadores | 🟠 PENDING | — | 🟠 PENDING |
 | Fase 3 — Ambiente/Test Data | 🟠 PENDING | — | 🟠 PENDING |
