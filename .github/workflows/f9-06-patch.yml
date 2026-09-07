@@ -1,0 +1,35 @@
+name: F9-06 temporary patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor == 'Tokenizaa' && contains(github.event.head_commit.message, 'f9-06')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harden case update reconciliation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          s = p.read_text()
+          old = """  const handleUpdateCase = (updated: CaseDomain) => {\n    setActiveCase(updated);\n    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));\n    api.put(`/api/cases/${updated.id}`, updated).catch(console.error);\n  };"""
+          new = """  const handleUpdateCase = async (updated: CaseDomain) => {\n    const previousCase = cases.find((c) => c.id === updated.id) ?? activeCase;\n\n    // Optimistic UI is allowed, but persistence must use the minimum DTO and\n    // server-truth must win after the mutation. Do not send the full CaseDomain.\n    setActiveCase(updated);\n    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));\n\n    try {\n      await api.put(`/api/cases/${updated.id}`, {\n        defenseDraft: updated.defenseDraft,\n      });\n      await loadCases();\n    } catch (error) {\n      console.error('Could not persist case update:', error);\n      if (previousCase) {\n        setActiveCase(previousCase);\n        setCases((prev) => prev.map((c) => (c.id === previousCase.id ? previousCase : c)));\n      }\n      alert('Não foi possível salvar as alterações do caso. Tente novamente.');\n    }\n  };"""
+          if old not in s:
+              raise SystemExit('F9-06 target handler not found; refusing to patch')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git diff --check
+          git diff -- src/App.tsx
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx
+          git commit -m "fix(frontend): use minimal case update DTO and reconcile server truth"
+          git push
