@@ -1,0 +1,54 @@
+name: F9-04 temporary patch
+
+on:
+  push:
+    branches: ["codex/f9-04"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply privacy-safe wizard persistence patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/onboarding/OnboardingWizard.tsx')
+          s = p.read_text()
+          old = '''// ============================================================================\n// Wizard State Persistence (localStorage)\n// ============================================================================\n\nconst WIZARD_STORAGE_KEY = 'defesai_wizard_state';\n\ninterface WizardPersistedState {\n  step: number;\n  leadName: string;\n  leadPhone: string;\n  situation: UserSituation;\n  processStage: UserProcessStage;\n  infractionCategory: InfractionCategory;\n  vehicleData: VehicleData;\n  infractionData: InfractionData;\n  caseAnalysis: CaseAnalysis;\n  documentData: CaseDocumentData;\n  savedCaseId?: string;\n  savedAt: number; // timestamp\n}\n\nfunction loadWizardState(): WizardPersistedState | null {\n  try {\n    const raw = localStorage.getItem(WIZARD_STORAGE_KEY);\n    if (!raw) return null;\n    const parsed = JSON.parse(raw) as WizardPersistedState;\n    // Expire after 24 hours\n    if (Date.now() - parsed.savedAt > 24 * 60 * 60 * 1000) {\n      localStorage.removeItem(WIZARD_STORAGE_KEY);\n      return null;\n    }\n    return parsed;\n  } catch {\n    localStorage.removeItem(WIZARD_STORAGE_KEY);\n    return null;\n  }\n}\n\nfunction saveWizardState(state: Omit<WizardPersistedState, 'savedAt'>) {\n  try {\n    localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));\n  } catch { /* quota exceeded, ignore */ }\n}\n\nfunction clearWizardState() {\n  try { localStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }\n}\n'''
+          new = '''// ============================================================================\n// Wizard State Persistence (sessionStorage — metadata only)\n// ============================================================================\n// Never persist PII, vehicle/infraction data, analysis results, or document\n// qualification data in browser storage. Case data is persisted server-side.\n\nconst WIZARD_STORAGE_KEY = 'defesai_wizard_state';\n\ninterface WizardPersistedState {\n  step: number;\n  savedCaseId?: string;\n  savedAt: number;\n}\n\nfunction loadWizardState(): WizardPersistedState | null {\n  try {\n    // Remove the legacy localStorage payload that could contain PII.\n    localStorage.removeItem(WIZARD_STORAGE_KEY);\n    const raw = sessionStorage.getItem(WIZARD_STORAGE_KEY);\n    if (!raw) return null;\n    const parsed = JSON.parse(raw) as WizardPersistedState;\n    if (Date.now() - parsed.savedAt > 24 * 60 * 60 * 1000) {\n      sessionStorage.removeItem(WIZARD_STORAGE_KEY);\n      return null;\n    }\n    if (typeof parsed.step !== 'number' || !Number.isFinite(parsed.step)) {\n      sessionStorage.removeItem(WIZARD_STORAGE_KEY);\n      return null;\n    }\n    return { step: parsed.step, savedCaseId: parsed.savedCaseId, savedAt: parsed.savedAt };\n  } catch {\n    try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }\n    return null;\n  }\n}\n\nfunction saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId'>) {\n  try {\n    sessionStorage.setItem(\n      WIZARD_STORAGE_KEY,\n      JSON.stringify({ step: state.step, savedCaseId: state.savedCaseId, savedAt: Date.now() })\n    );\n  } catch { /* storage unavailable, ignore */ }\n}\n\nfunction clearWizardState() {\n  try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }\n  try { localStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }\n}\n'''
+          if old not in s:
+            raise SystemExit('target persistence block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace("savedState?.leadName || user?.name || ''", "user?.name || ''")
+          s = s.replace("savedState?.leadPhone || user?.phone || ''", "user?.phone || ''")
+          s = s.replace("savedState?.situation ?? 'multa_transito'", "'multa_transito'")
+          s = s.replace("savedState?.processStage ?? 'primeira_notificacao'", "'primeira_notificacao'")
+          s = s.replace("savedState?.infractionCategory ?? 'excesso_velocidade'", "'excesso_velocidade'")
+          s = s.replace("savedState?.vehicleData ?? {", "{")
+          s = s.replace("savedState?.infractionData ?? {", "{")
+          s = s.replace("savedState?.caseAnalysis ?? {", "{")
+          s = s.replace("savedState?.documentData ?? {", "{")
+          start = s.index('  // Scroll to top of wizard on every step change AND save state')
+          end = s.index('// Auto-advance:', start)
+          replacement = '''  // Scroll to top of wizard on every step change and persist only non-sensitive metadata.\n  useEffect(() => {\n    wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });\n    saveWizardState({ step, savedCaseId });\n  }, [step, savedCaseId]);\n\n  // Persist only navigation metadata immediately before page unload.\n  useEffect(() => {\n    const handleBeforeUnload = () => {\n      saveWizardState({ step, savedCaseId });\n    };\n\n    window.addEventListener('beforeunload', handleBeforeUnload);\n    return () => {\n      window.removeEventListener('beforeunload', handleBeforeUnload);\n    };\n  }, [step, savedCaseId]);\n\n'''
+          s = s[:start] + replacement + s[end:]
+          import re
+          pattern = re.compile(r'''\n      saveWizardState\(\{\n        step: 7,\n        leadName,\n        leadPhone,\n        situation,\n        processStage,\n        infractionCategory,\n        vehicleData,\n        infractionData,\n        caseAnalysis,\n        documentData,\n        savedCaseId,\n      \}\);''')
+          s, n = pattern.subn("\n      saveWizardState({ step: 7, savedCaseId });", s)
+          if n != 2:
+            raise SystemExit(f'expected 2 auth-gate persistence calls, found {n}')
+          p.write_text(s)
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/onboarding/OnboardingWizard.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(onboarding): keep wizard persistence metadata-only"
+          git push
