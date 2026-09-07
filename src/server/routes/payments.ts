@@ -232,6 +232,16 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       couponCode,
     } = req.body;
 
+    // CPF do pagador é obrigatório — rejeitar request sem CPF válido (fail-closed).
+    // Não usar fallback com CPF inventado ('12345678909') — viola integridade do pagamento PIX.
+    const cleanCpf = (customerCpf || '').replace(/\D/g, '');
+    if (cleanCpf.length !== 11) {
+      return res.status(400).json({
+        error: 'CPF do pagador é obrigatório para criação do pagamento PIX.',
+        hint: 'Informe o campo customerCpf com CPF válido (11 dígitos).',
+      });
+    }
+
     // serviceType é obrigatório; o backend decide o preço.
     const offerResult = resolveOffer({
       serviceType: serviceType as string,
@@ -262,7 +272,7 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       payer: {
         name: customerName || 'Condutor DefesAi',
         email: customerEmail || 'contato@www.defesai.shop',
-        document: (customerCpf || '12345678909').replace(/\D/g, ''),
+        document: cleanCpf,
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
@@ -370,6 +380,15 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       });
     }
 
+    // CPF do pagador é obrigatório — fail-closed (não usar fallback inventado).
+    const cleanCpfCC = (customerCpf || '').replace(/\D/g, '');
+    if (cleanCpfCC.length !== 11) {
+      return res.status(400).json({
+        error: 'CPF do pagador é obrigatório para pagamento com cartão de crédito.',
+        hint: 'Informe o campo customerCpf com CPF válido (11 dígitos).',
+      });
+    }
+
     const offerResult = resolveOffer({
       serviceType: serviceType as string,
       userId: userId as string | undefined,
@@ -422,7 +441,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       customer: {
         name: customerName || 'Condutor DefesAi',
         email: customerEmail || 'contato@www.defesai.shop',
-        taxId: (customerCpf || '12345678909').replace(/\D/g, ''),
+        taxId: cleanCpfCC,
       },
       amount: offerResult.offer.price,
       installments: Number(installments),

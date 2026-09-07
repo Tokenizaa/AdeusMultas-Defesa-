@@ -374,7 +374,7 @@ router.get('/admin/e2e-tests/stats', async (req, res) => {
     
     // Get counts from relevant tables
     const [usersCount, casesCount, runsCount] = await Promise.all([
-      supabase.from('user_profiles').select('id', { count: 'exact' }),
+      supabase.from('user_profiles').select('user_id', { count: 'exact' }),
       supabase.from('cases').select('id', { count: 'exact' }),
       supabase.from('e2e_test_runs').select('id', { count: 'exact' }),
     ]);
