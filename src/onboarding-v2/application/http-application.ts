@@ -1,4 +1,4 @@
-import type { OnboardingApplication, CreateDraftInput, CreateDraftResult, UpdateDraftInput, AnalysisResult, QualificationInput, PaymentResult, GenerationResult, EvidenceUploadResult } from './contracts';
+import type { OnboardingApplication, CreateDraftInput, CreateDraftResult, UpdateDraftInput, ClaimInput, AnalysisResult, QualificationInput, PaymentResult, GenerationResult, EvidenceUploadResult } from './contracts';
 
 export interface OnboardingHttpClient { request<T>(path: string, init?: RequestInit): Promise<T>; }
 
@@ -21,11 +21,14 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
     },
     async getCase(caseId: string): Promise<CreateDraftResult['case']> { return client.request<CreateDraftResult['case']>(`/api/onboarding-v2/draft/${encodeURIComponent(caseId)}`, authInit()); },
     async uploadEvidence(caseId: string, file: File): Promise<EvidenceUploadResult> {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let binary = ''; const chunk = 0x8000;
+      const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; const chunk = 0x8000;
       for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
       const base64 = btoa(binary);
       return client.request<EvidenceUploadResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/evidence`, authInit({ method: 'POST', body: JSON.stringify({ base64, filename: file.name, mimeType: file.type }) }));
+    },
+    async claim(input: ClaimInput): Promise<CreateDraftResult['case']> {
+      const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }));
+      return result;
     },
     async startAnalysis(caseId: string): Promise<AnalysisResult> { return client.request<AnalysisResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/analysis`, authInit({ method: 'POST' })); },
     async getAnalysis(caseId: string): Promise<AnalysisResult> { return client.request<AnalysisResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/analysis`, authInit()); },
@@ -33,10 +36,10 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       const result = await client.request<{ case: CreateDraftResult['case'] }>(`/api/onboarding-v2/cases/${encodeURIComponent(input.caseId)}/qualification`, authInit({ method: 'PUT', body: JSON.stringify(input) }));
       return result.case;
     },
-    async requestPayment(caseId: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment`, authInit({ method: 'POST' })); },
-    async confirmPayment(caseId: string, paymentId: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment/confirm`, authInit({ method: 'POST', body: JSON.stringify({ paymentId }) })); },
-    async generateDocument(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, authInit({ method: 'POST' })); },
-    async getGeneration(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, authInit()); },
+    async requestPayment(caseId: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment`, withJson({ method: 'POST' })); },
+    async confirmPayment(caseId: string, paymentReference: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/payment/confirm`, withJson({ method: 'POST', body: JSON.stringify({ paymentReference }) })); },
+    async generateDocument(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, withJson({ method: 'POST' })); },
+    async getGeneration(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/generation`, withJson()); },
   };
 }
 
