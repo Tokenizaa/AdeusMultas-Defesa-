@@ -80,7 +80,7 @@ export interface LogFilterParams {
 
 const MAX_LOG_BUFFER_SIZE = 2000;
 
-class StructuredLogger {
+export class StructuredLogger {
   private buffer: StructuredLogEntry[] = [];
   private listeners: Set<(entry: StructuredLogEntry) => void> = new Set();
 
@@ -128,6 +128,23 @@ class StructuredLogger {
         cleaned[k] = typeof v === 'string' ? this.maskCnh(v) : v;
       } else if (k === 'rg' || k === 'clientRg' || k === 'applicantRg') {
         cleaned[k] = typeof v === 'string' ? this.maskRg(v) : v;
+      } else if (
+        k === 'phone' ||
+        k === 'cellphone' ||
+        k === 'contactPhone' ||
+        k === 'senderPhone' ||
+        k === 'from' ||
+        k === 'to'
+      ) {
+        cleaned[k] = typeof v === 'string' ? this.maskPhone(v) : v;
+      } else if (k === 'email' || k === 'senderEmail' || k === 'contactEmail') {
+        cleaned[k] = typeof v === 'string' ? this.maskEmail(v) : v;
+      } else if (
+        k === 'placa' ||
+        k === 'licensePlate' ||
+        k === 'plate'
+      ) {
+        cleaned[k] = typeof v === 'string' ? this.maskPlate(v) : v;
       } else {
         cleaned[k] = this.sanitize(v);
       }
@@ -143,11 +160,17 @@ class StructuredLogger {
     sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, 'nvapi-••••••••');
     sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, 'AIza••••••••');
     // Mask full CPF numbers
-    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, '***.$2.***-**');
+    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, '***.$2.***-$4');
     // Mask full CNH numbers (11 digits + 2 category letters: 00123456789AB)
     sanitized = sanitized.replace(/\b(\d{11})([A-Z]{2})\b/g, '***********$2');
     // Mask RG numbers (typically 2-3 digits followed by dash and check digit, e.g. 12.345.678-9)
     sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, '**.***.***-*');
+    // Mask Brazilian phone numbers (10-11 digits with optional DDD, spaces, dashes)
+    sanitized = sanitized.replace(/\b(\d{2})\s?9?\s?(\d{4})\s?(\d{4})\b/g, '(**) *****-$3');
+    // Mask email addresses
+    sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, '***@***.***');
+    // Mask Brazilian vehicle plates (ABC1234 or ABC-1234)
+    sanitized = sanitized.replace(/\b[A-Z]{3}[-]?\d{4}\b/g, '***-****');
     return sanitized;
   }
 
@@ -175,6 +198,32 @@ class StructuredLogger {
       return `***.${clean.slice(3, 7)}.***-*`;
     }
     return '***.***.***-**';
+  }
+
+  private maskPhone(phone: string): string {
+    // Brazilian phone: 11 digits (DDD + 9 digits)
+    const clean = phone.replace(/\D/g, '');
+    if (clean.length >= 10) {
+      return `(**) *****-${clean.slice(-4)}`;
+    }
+    return '(**) *****-****';
+  }
+
+  private maskEmail(email: string): string {
+    const atIdx = email.indexOf('@');
+    if (atIdx > 2) {
+      return `${email.slice(0, 2)}***@***.***`;
+    }
+    return '***@***.***';
+  }
+
+  private maskPlate(plate: string): string {
+    // Brazilian plates: ABC1234 or ABC-1234 (7 chars)
+    const clean = plate.replace(/[-]/g, '');
+    if (clean.length === 7) {
+      return '***-****';
+    }
+    return '***-****';
   }
 
   /**
