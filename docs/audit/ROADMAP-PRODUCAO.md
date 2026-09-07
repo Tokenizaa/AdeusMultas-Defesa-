@@ -1,7 +1,7 @@
 # Roadmap de Produção — DefesAi
 
 > **Fonte de verdade reconstruída a partir do histórico real de `main`.**
-> Atualizado em 2026-09-07, após o commit `85761b7611e419759d3f38344deb563a5ab38aa8`.
+> Atualizado em 2026-09-07, após a execução de F9-10.
 >
 > Regra: não declarar uma etapa como `VERIFIED` somente porque existe um commit relacionado. O status abaixo distingue implementação, verificação, bloqueio e lacunas operacionais.
 
@@ -183,25 +183,25 @@
 
 # FASE 9 — Auditoria e Hardening Frontend
 
-**STATUS: BLOCKED — P0/P1 encontrados; não iniciar UX/visual antes de fechar segurança de identidade e dados locais.**
+**STATUS: PARTIAL — F9-01–F9-08 corrigidas; F9-09/F9-10 implementadas com evidência de deployment, mas execução CI ainda não consolidada; F9-11 bloqueada por evidência externa.**
 
 | ID | Status | Prioridade | Descrição | Evidência |
 |---|---|---|---|---|
-| 9.1 Credenciais locais | BLOCKED | P0 | Remover armazenamento de senha/credential material no browser | `AuthContext.tsx` chama `saveStoredUser(..., password)`; `supabase.ts` persiste o valor em `localStorage` sob `defesai_registered_users_v1` |
-| 9.2 Identidade sintética | BLOCKED | P0/P1 | Eliminar `x-user-*` e `Bearer local_<id>_<role>` do cliente de produção | `src/lib/api/client.ts` e `src/lib/authFetch.ts` ainda montam headers/tokens sintéticos |
-| 9.3 Sessão cacheada | BLOCKED | P1 | Cache local não pode conceder `isAuthenticated`/`isAdmin` | `AuthContext.tsx` recupera `getStoredSession()`; `RouterContext.tsx` usa o estado resultante nos guards |
-| 9.4 PII no wizard | BLOCKED | P1 | Reduzir/remover PII e dados jurídicos do localStorage | `OnboardingWizard.tsx` persiste `CaseDocumentData`, veículo, infração e `CaseAnalysis` em `defesai_wizard_state` |
-| 9.5 Segundo sistema de identidade | BLOCKED | P1 | Remover lookup/login baseado em usuários locais | `AccountVerificationGate.tsx` usa `getStoredUsers()` e `localStorage` para decidir conta e usuário |
-| 9.6 DTO/reconciliação | PENDING | P1 | Mutação de case deve usar DTO mínimo e server-truth | `App.tsx` envia `CaseDomain` completo em `PUT` e ignora erro de persistência |
-| 9.7 Load de cases | PENDING | P1 | Não buscar `/api/cases` no shell público nem fazer retries desnecessários | `App.tsx` chama `loadCases()` no mount global |
-| 9.8 Query parser | PENDING | P2 | Migrar parser manual para `URLSearchParams` e testar entradas malformadas | `RouterContext.tsx` usa `split('&')`, `split('=')` e `decodeURIComponent()` manualmente |
-| 9.9 Acessibilidade | NOT_VERIFIED | P2 | Validar teclado, foco, labels, contraste e leitores de tela | `AdminLayout`/`UserLayout` já possuem `AccessibilityBar` e landmarks, mas não há fechamento automatizado |
-| 9.10 UX/UI | NOT_AUDITED | P2 | Matriz de fluxos, estados, responsividade e regressão visual | Não existe evidência consolidada nas fases anteriores |
+| 9.1 Credenciais locais | VERIFIED | P0 | Remover armazenamento de senha/credential material no browser | `AuthContext` não persiste senha; Supabase Auth é a autoridade |
+| 9.2 Identidade sintética | VERIFIED | P0/P1 | Eliminar `x-user-*` e `Bearer local_<id>_<role>` do cliente de produção | `authFetch` e `api.client` usam somente access token Supabase |
+| 9.3 Sessão cacheada | VERIFIED | P1 | Cache local não pode conceder `isAuthenticated`/`isAdmin` | `AuthContext` deriva identidade da sessão Supabase; cache é informativo |
+| 9.4 PII no wizard | VERIFIED | P1 | Reduzir/remover PII e dados jurídicos do localStorage | wizard persiste apenas `step`, `savedCaseId`, `savedAt` em `sessionStorage` |
+| 9.5 Segundo sistema de identidade | VERIFIED | P1 | Remover lookup/login baseado em usuários locais | `AccountVerificationGate` usa Supabase Auth |
+| 9.6 DTO/reconciliação | VERIFIED | P1 | Mutação de case deve usar DTO mínimo e server-truth | `App.tsx`: `defenseDraft`, await, `loadCases()` e rollback em erro |
+| 9.7 Load de cases | VERIFIED | P1 | Não buscar `/api/cases` no shell público nem fazer retries desnecessários | `loadCases()` condicionado a `isAuthenticated` |
+| 9.8 Query parser | VERIFIED | P2 | Migrar parser manual para `URLSearchParams` e testar entradas malformadas | `URLSearchParams` + testes dedicados; `6f22fed...` |
+| 9.9 Acessibilidade | IMPLEMENTED | P2 | Validar teclado, foco, labels, contraste e landmarks | atalhos/targets corrigidos; teste Playwright adicionado; Vercel `56206070...` READY |
+| 9.10 UX/UI | IMPLEMENTED | P2 | Matriz de fluxos, estados, responsividade e regressão visual | `tests/visual-ux-regression.spec.ts`; mobile 390×844 + desktop 1440×900; captura PNG + guardas geométricos/tipográficos; `5ea930b...` |
 | 9.11 Browser E2E | BLOCKED | P1 | Executar matriz real de fluxos críticos com serviços externos disponíveis | Suítes Playwright existem; FASE 6 registrou bloqueio por credenciais/serviços externos |
 
-**Evidência de cobertura positiva:** Issue #2 P0 já migrou `InboxView`, `use-marketing-service`, `MediaStudioView`, `ProspectingCollectionTab` e `meta-client.ts` para `authFetch`, além de substituir exports via `window.open` por Blob + Authorization. Isso fecha o problema específico daquela issue, mas não fecha o contrato global do `authFetch`. SHA: `85761b7611e419759d3f38344deb563a5ab38aa8`. 
+**Nota F9-10:** o repositório agora possui guardas objetivos contra overflow horizontal, controles interativos fora do viewport, base tipográfica inferior ao contrato e contraste primário/texto insuficiente. Cada cenário também captura PNG no relatório Playwright. A comparação pixel-a-pixel fica explicitamente pendente de um pipeline de baselines binários adequado.
 
-**Relatório completo:** `docs/audit/FASE-9-AUDITORIA-FRONTEND.md` — SHA do commit de auditoria `ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a`.
+**Relatório completo:** `docs/audit/FASE-9-AUDITORIA-FRONTEND.md` — atualizado no commit `2524a370a17bff8b1aa9eb3de9a987f1e9d54616`.
 
 ---
 
@@ -232,10 +232,10 @@ Estas correções atravessam mais de uma fase e devem permanecer registradas mes
 | Testes / RC | **VERIFIED COM LIMITAÇÃO E2E EXTERNA** |
 | Auditoria final | **GO WITH LIMITATION** |
 | Produção/Vercel | **PARTIAL / BLOCKED** — evidências reais 8.3–8.6 pendentes |
-| **Frontend** | **BLOCKED** — FASE 9 aberta por achados P0/P1 |
+| **Frontend** | **PARTIAL** — F9-01–F9-08 corrigidas; F9-09/F9-10 implementadas; F9-11 externa bloqueada |
 | Issue #2 P0 | **VERIFIED** — `85761b7` |
-| Último commit funcional antes da auditoria frontend | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
-| Último commit de documentação | **`ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a`** |
+| Último commit funcional frontend | **`5ea930b3daea6e15b3f5c14fb92d65b923d0c2b6`** |
+| Último commit de documentação FASE 9 | **`2524a370a17bff8b1aa9eb3de9a987f1e9d54616`** |
 
 ## Última sequência crítica
 
@@ -249,7 +249,10 @@ FASE 7 GO          → d355939a
 FASE 8 correções   → 751632b6 / f72f9d8
 Issue #3 P0        → 7927c809
 Issue #2 P0        → 85761b76
-FASE 9 auditoria   → ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a
+F9-01 a F9-08      → hardening frontend
+F9-09              → 56206070
+F9-10              → 5ea930b3
+F9 docs            → 2524a370
 ```
 
 ## Regra para próximas atualizações
@@ -259,5 +262,7 @@ FASE 9 auditoria   → ae3093246b5d2036d3e4da651bcd6fe8d03ccb0a
 3. Toda correção deve registrar SHA completo, resultado dos testes e evidência.
 4. Não usar o título da mensagem de commit como única prova; verificar conteúdo e testes.
 5. Alterações de onboarding de outro agente (`OnboardingWizard.tsx`, `AnalysisProcessingStep.tsx` e testes associados) permanecem fora deste roadmap até auditoria própria.
-6. Prioridade imediata: **FASE 9.1–9.5 (P0/P1 frontend)**, sem iniciar refatoração UX/visual antes de remover credenciais, identidade sintética, sessão local e PII local.
-7. Em paralelo, manter os gaps de FASE 1, FASE 2 e FASE 8 como pendências independentes.
+6. FASE 9.1–9.8 estão fechadas por implementação; F9-09/F9-10 aguardam consolidação de execução CI para fechamento formal.
+7. F9-11 permanece bloqueada por dependências externas reais.
+8. Em paralelo, manter os gaps de FASE 1, FASE 2 e FASE 8 como pendências independentes.
+9. Pixel-perfect visual regression deve ser adicionada somente quando o pipeline de baselines binários/versionados estiver disponível; não usar snapshots sem baseline confiável.
