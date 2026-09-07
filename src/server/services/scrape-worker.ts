@@ -83,8 +83,10 @@ export class ScrapeWorkerService {
           defaultJobOptions: {
             attempts: 3,
             backoff: { type: 'exponential', delay: 3000 },
-            removeOnComplete: false,
-            removeOnFail: false,
+            // Retenção operacional: jobs concluídos expiram após 24 h,
+            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
+            removeOnComplete: { age: 86400 },
+            removeOnFail: { age: 604800 },
           },
         });
 
