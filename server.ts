@@ -264,6 +264,7 @@ function validateCriticalEnvVars(): void {
   if (missing.length > 0) {
     console.error(`[env] ❌ CRÍTICO: Variáveis obrigatórias ausentes: ${missing.join(', ')}`);
     console.error('[env]    Configure no Vercel Dashboard ou no arquivo .env local');
+    process.exit(1); // fail-closed: não iniciar sem configuração mínima
   }
 
   if (placeholders.length > 0) {
