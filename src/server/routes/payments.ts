@@ -155,6 +155,15 @@ function isTestMode(): boolean {
  * Exige JWT apenas em produção (PAYMENT_MODE=production). Em sandbox a rota fica aberta
  * para permitir E2E e validação local sem Supabase configurado.
  */
+function validatePayerIdentity(name: unknown, email: unknown, cpf: unknown): { name: string; email: string; cpf: string } | null {
+  const normalizedName = typeof name === 'string' ? name.trim() : '';
+  const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+  const normalizedCpf = typeof cpf === 'string' ? cpf.replace(/\D/g, '') : '';
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  if (!normalizedName || !emailValid || normalizedCpf.length !== 11) return null;
+  return { name: normalizedName, email: normalizedEmail, cpf: normalizedCpf };
+}
+
 function prodAuth(req: Request, res: Response, next: NextFunction): void {
   if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     authenticateToken(req, res, next);
@@ -232,15 +241,8 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       couponCode,
     } = req.body;
 
-    // CPF do pagador é obrigatório — rejeitar request sem CPF válido (fail-closed).
-    // Não usar fallback com CPF inventado ('12345678909') — viola integridade do pagamento PIX.
-    const cleanCpf = (customerCpf || '').replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      return res.status(400).json({
-        error: 'CPF do pagador é obrigatório para criação do pagamento PIX.',
-        hint: 'Informe o campo customerCpf com CPF válido (11 dígitos).',
-      });
-    }
+    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para criação do pagamento PIX.' });
 
     // serviceType é obrigatório; o backend decide o preço.
     const offerResult = resolveOffer({
@@ -270,9 +272,9 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       payer: {
-        name: customerName || 'Condutor DefesAi',
-        email: customerEmail || 'contato@www.defesai.shop',
-        document: cleanCpf,
+        name: payer.name,
+        email: payer.email,
+        document: payer.cpf,
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
@@ -380,14 +382,8 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       });
     }
 
-    // CPF do pagador é obrigatório — fail-closed (não usar fallback inventado).
-    const cleanCpfCC = (customerCpf || '').replace(/\D/g, '');
-    if (cleanCpfCC.length !== 11) {
-      return res.status(400).json({
-        error: 'CPF do pagador é obrigatório para pagamento com cartão de crédito.',
-        hint: 'Informe o campo customerCpf com CPF válido (11 dígitos).',
-      });
-    }
+    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para pagamento com cartão de crédito.' });
 
     const offerResult = resolveOffer({
       serviceType: serviceType as string,
@@ -439,9 +435,9 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       customer: {
-        name: customerName || 'Condutor DefesAi',
-        email: customerEmail || 'contato@www.defesai.shop',
-        taxId: cleanCpfCC,
+        name: payer.name,
+        email: payer.email,
+        taxId: payer.cpf,
       },
       amount: offerResult.offer.price,
       installments: Number(installments),

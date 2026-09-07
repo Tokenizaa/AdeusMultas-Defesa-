@@ -42,6 +42,7 @@ export const auditLogs: AuditLogEntry[] = [];
 export function createApp() {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
+  app.set('trust proxy', process.env.VERCEL === '1' ? 1 : false);
   const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
   let supabaseOrigins = ['https://*.supabase.co', 'wss://*.supabase.co'];
   try {
@@ -203,7 +204,7 @@ export function createApp() {
   // Meta management, publishing and insights are privileged operations.
   // Webhooks and OAuth callbacks remain public integration endpoints.
   app.use('/api', (req, res, next) => {
-    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
+    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path);
     if (!metaAdminPath) return next();
     return authenticateToken(req, res, (err?: any) => {
       if (err) return next(err);

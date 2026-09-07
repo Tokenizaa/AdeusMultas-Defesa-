@@ -276,7 +276,7 @@ router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
 
     let query = supabase
       .from('user_profiles')
-      .select('id, email, name, role, cpf, created_at, updated_at');
+      .select('user_id, email, name, role, cpf, created_at, updated_at');
 
     const { search, role } = req.query as Record<string, string | undefined>;
 
@@ -329,7 +329,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
     // Buscar user_id pelo email em user_profiles
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('id, email, name, role')
+      .select('user_id, email, name, role')
       .eq('email', email)
       .maybeSingle();
 
@@ -356,8 +356,8 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
     // Retornar usuário atualizado
     const { data: updated } = await supabase
       .from('user_profiles')
-      .select('id, email, name, role, cpf, created_at, updated_at')
-      .eq('id', profile.id)
+      .select('user_id, email, name, role, cpf, created_at, updated_at')
+      .eq('user_id', profile.user_id)
       .single();
 
     res.json({ success: true, user: updated });
