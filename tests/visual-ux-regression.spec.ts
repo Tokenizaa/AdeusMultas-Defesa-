@@ -6,10 +6,19 @@ const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
 ];
 
-function parseRgb(value: string): [number, number, number] | null {
-  const match = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+function parseColor(value: string): [number, number, number] | null {
+  const normalized = value.trim();
+  const rgbMatch = normalized.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbMatch) return [Number(rgbMatch[1]), Number(rgbMatch[2]), Number(rgbMatch[3])];
+
+  const hexMatch = normalized.match(/^#([0-9a-f]{6})$/i);
+  if (!hexMatch) return null;
+  const hex = hexMatch[1];
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16),
+  ];
 }
 
 function relativeLuminance([r, g, b]: [number, number, number]): number {
@@ -85,10 +94,10 @@ test.describe('F9-10 UX/UI regression guards', () => {
     const metrics = await page.evaluate(() => {
       const root = getComputedStyle(document.documentElement);
       const body = getComputedStyle(document.body);
-      const foreground = parseRgb(body.color);
-      const background = parseRgb(body.backgroundColor);
-      const primary = parseRgb(root.getPropertyValue('--blue-warm-vivid-60').trim());
-      const white = parseRgb(root.getPropertyValue('--pure-white').trim());
+      const foreground = parseColor(body.color);
+      const background = parseColor(body.backgroundColor);
+      const primary = parseColor(root.getPropertyValue('--blue-warm-vivid-60'));
+      const white = parseColor(root.getPropertyValue('--pure-white'));
 
       return {
         bodyFontSize: Number.parseFloat(body.fontSize),
