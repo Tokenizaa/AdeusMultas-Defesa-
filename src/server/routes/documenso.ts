@@ -171,9 +171,13 @@ router.post('/envelopes', authenticateToken, async (req: Request, res: Response)
       },
     });
   } catch (err) {
+    // Strip signers (contains PII: email + name) before logging request body
+    const { signers: _signers, pdfBase64: _pdf, ...safeBody } = req.body as any;
     logger.error('documenso' as LogService, 'envelope-service', 'create-envelope', 'Create envelope failed', {
       err,
-      body: req.body,
+      caseId: req.body?.caseId,
+      signerCount: Array.isArray(req.body?.signers) ? req.body.signers.length : undefined,
+      ...safeBody,
     });
 
     if (err instanceof DocumensoError) {
