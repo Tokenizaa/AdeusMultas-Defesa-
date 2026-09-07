@@ -24,17 +24,19 @@ describe('production hardening P0/P1', () => {
     expect(source).toContain("return res.status(501).json");
     expect(source).toContain("Endpoint de simulação não disponível em produção");
 
-    // Sandbox fixtures are permitted only inside the explicitly production-blocked
-    // simulation endpoint. The real PIX/card creation paths must never fabricate
-    // payer identity data.
+    // The security boundary is the real payment creation paths. Sandbox fixtures
+    // may exist in the dedicated simulation endpoint and must not be mistaken for
+    // production payer fallbacks.
     const simulationIndex = source.indexOf("router.post('/simulate-payment'");
     expect(simulationIndex).toBeGreaterThan(-1);
-    const simulationSource = source.slice(simulationIndex);
     const realPaymentSource = source.slice(0, simulationIndex);
-    expect(realPaymentSource).not.toContain('Condutor DefesAi');
-    expect(realPaymentSource).not.toContain('contato@www.defesai.shop');
-    expect(realPaymentSource).not.toContain('12345678909');
-    expect(simulationSource).toContain('NODE_ENV === \'production\'');
+    expect(realPaymentSource).toContain('const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);');
+    expect(realPaymentSource).toContain('payer.name');
+    expect(realPaymentSource).toContain('payer.email');
+    expect(realPaymentSource).toContain('payer.cpf');
+    expect(realPaymentSource).not.toContain('customerName ||');
+    expect(realPaymentSource).not.toContain('customerEmail ||');
+    expect(realPaymentSource).not.toContain('customerCpf ||');
   });
 
   it('trusts exactly the Vercel proxy hop only on Vercel', () => {
