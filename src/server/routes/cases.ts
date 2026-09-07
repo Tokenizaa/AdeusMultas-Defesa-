@@ -1,9 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { Router, Response } from 'express';
 import { databaseRows, auditLogs } from '../app';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
-import { AUTUADOR_BODIES, PROCEDURE_TITLES } from '../../data/knowledge-base';
-import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { envelopeRepository } from '../db/envelope-repository';
 import { enrichDefenseWithGemini } from '../gemini';
@@ -25,11 +24,16 @@ registerRefinementProvider({
   },
 });
 
+function isCanonicalUserId(value: string | undefined): boolean {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function canAccessCase(user: AuthenticatedUser | undefined, row: CaseRow): boolean {
   if (!user) return false;
   if (user.role === 'admin') return true;
-  if (!row.user_id) return false;
-  return row.user_id === user.id || (!!user.email && row.user_id === user.email);
+  if (!row.user_id || !isCanonicalUserId(user.id)) return false;
+  return row.user_id === user.id;
 }
 
 function denyCaseAccess(
@@ -45,19 +49,16 @@ function denyCaseAccess(
 }
 
 router.get('/cases', authenticateToken, (req, res) => {
-  const { userId, claimToken } = req.query;
+  const { userId } = req.query;
   const user = req.user;
   let allRows = Array.from(databaseRows.values());
 
   if (user && user.role !== 'admin') {
-    const userSpecific = allRows.filter((r) =>
-      r.user_id === user.id || (user.email && r.user_id === user.email)
-    );
-    allRows = userSpecific;
+    allRows = isCanonicalUserId(user.id)
+      ? allRows.filter((r) => r.user_id === user.id)
+      : [];
   } else if (user?.role === 'admin' && userId) {
     allRows = allRows.filter((r) => r.user_id === userId);
-  } else if (!user && claimToken) {
-    allRows = allRows.filter((r) => r.claim_token === claimToken);
   } else if (!user) {
     allRows = [];
   }
@@ -82,8 +83,6 @@ router.get('/cases/:id', authenticateToken, (req, res) => {
   if (domain.defenseDraft && domain.analysis) {
     const draft = domain.defenseDraft as any;
 
-    // FASE 3.7 — fail closed: legacy/tampered artifacts without a valid
-    // deterministic fingerprint are never returned as a valid legal document.
     if (!hasValidDefenseIntegrity(draft, domain.analysis as any)) {
       domain.defenseDraft = undefined;
       return res.status(409).json({
@@ -113,24 +112,18 @@ router.get('/cases/:id', authenticateToken, (req, res) => {
 router.post('/cases', authenticateToken, async (req, res) => {
   try {
     const domainData: CaseDomain = req.body;
-    if (!domainData.id) {
-      domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    if (!isCanonicalUserId(req.user?.id)) {
+      return res.status(401).json({
+        error: 'Identidade de usuário inválida para criação do caso.',
+        code: 'CANONICAL_USER_ID_REQUIRED',
+      });
     }
 
+    domainData.id = domainData.id || `case_${randomUUID()}`;
     delete (domainData as any).userId;
     delete (domainData as any).analysis;
-
-    if (req.user?.id) {
-      const uid = req.user.id;
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
-      const isEmail = uid.includes('@');
-      if (isUuid || isEmail) {
-        domainData.userId = uid;
-      }
-      if (req.user.email && !domainData.userId) {
-        domainData.userId = req.user.email;
-      }
-    }
+    domainData.userId = req.user.id;
 
     if (!domainData.createdAt) {
       domainData.createdAt = new Date().toISOString();
@@ -177,7 +170,7 @@ router.post('/cases', authenticateToken, async (req, res) => {
       id: `audit_${Date.now()}`,
       timestamp: new Date().toISOString(),
       actor: domainData.clientName || 'Anônimo',
-      role: domainData.isAnonymous ? 'citizen' : 'citizen',
+      role: 'citizen',
       action: 'CASE_CREATED',
       targetResource: domainData.id,
       ipHash: '9f83c68a765b1c41',
@@ -204,6 +197,7 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   const updatedDomain: CaseDomain = req.body;
   updatedDomain.id = req.params.id;
   updatedDomain.updatedAt = new Date().toISOString();
+  updatedDomain.userId = existingRow.user_id;
 
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
   newRow.user_id = existingRow.user_id;
@@ -223,10 +217,6 @@ router.put('/cases/:id', authenticateToken, async (req, res) => {
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
 
-// DELETE /cases/:id — LGPD Art. 18: direito à eliminação
-// Os dados pessoais são anonimizados; a estrutura do caso permanece para
-// fins de auditoria e conformidade legal. LGPD Art. 4 permite anonimização
-// como alternativa à exclusão total.
 router.delete('/cases/:id', authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
@@ -237,19 +227,13 @@ router.delete('/cases/:id', authenticateToken, async (req, res) => {
     return denyCaseAccess(req.user, res);
   }
 
-  // Anonimiza TODOS os campos que contêm dados pessoais (LGPD Art. 5 I).
-  // Campos de infração/veículo são mantidos porque descrevem o evento
-  // de violação (não identificam diretamente uma pessoa).
   const anonymizedRow: typeof row = {
     ...row,
-    // Identificação pessoal direta
     client_name: '[REMOVIDO]',
     client_email: undefined,
     client_phone: undefined,
     client_cpf: undefined,
-    // Vinculação a conta
     user_id: undefined,
-    // Dados processuais que podem conter PII
     applicant_json: undefined,
     defense_draft_json: undefined,
     analysis_json: undefined,
@@ -260,21 +244,15 @@ router.delete('/cases/:id', authenticateToken, async (req, res) => {
     commercial_offer_id: undefined,
     formal_flaws_json: undefined,
     protocol_info_json: undefined,
-    // Condutor real (quando aplicável — pode ter CNH/Cpf do verdadeiro motorista)
     real_driver_name: undefined,
     real_driver_cpf: undefined,
     real_driver_cnh: undefined,
-    // Contexto do celular (pode conter identificadores)
     cellphone_circumstance: undefined,
     updated_at: new Date().toISOString(),
   };
 
   await databaseRows.set(req.params.id, anonymizedRow);
 
-  // FASE 4.5 P0: anonimiza envelope_data dos envelopes Documenso antes da cascade delete.
-  // envelope_data contém recipients[].email + .name (PII de signatários — terceiros).
-  // A cascade delete remove o registro fisicamente, mas o PII pode persistir em backups
-  // e ambientes de staging entre a anonimização do caso e a deleção física.
   const caseUuid = row.id;
   await envelopeRepository.anonymizeEnvelopesByCaseId(caseUuid);
 
@@ -301,12 +279,14 @@ router.post('/cases/:id/claim', authenticateToken, async (req, res) => {
     return res.status(404).json({ error: 'Caso anônimo não encontrado' });
   }
 
-  if (!req.user?.id) {
-    return res.status(401).json({ error: 'Não autenticado' });
+  if (!isCanonicalUserId(req.user?.id)) {
+    return res.status(401).json({
+      error: 'Identidade de usuário inválida para vinculação do caso.',
+      code: 'CANONICAL_USER_ID_REQUIRED',
+    });
   }
 
-  const isOwner =
-    row.user_id === req.user.id || (req.user.email && row.user_id === req.user.email);
+  const isOwner = row.user_id === req.user.id;
 
   if (row.user_id && !isOwner) {
     return res.status(403).json({ error: 'Caso já vinculado a outro usuário' });
@@ -356,7 +336,7 @@ router.post('/cases/:id/generate-defense', authenticateToken, async (req, res) =
   }
 
   const domain = CanonicalMapper.rowToDomain(row);
-  const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
+  const { applicantData, customFacts } = req.body;
 
   const canonicalAnalysis = domain.analysis as any;
   const canonicalArguments = (canonicalAnalysis?.recommendedArguments as any) || [];
