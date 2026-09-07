@@ -1,402 +1,235 @@
 # Roadmap de Produção — DefesAi
 
-## Baseline
+> **Fonte de verdade reconstruída a partir do histórico real de `main`.**
+> Atualizado em 2026-09-07, após o commit `85761b7611e419759d3f38344deb563a5ab38aa8`.
+>
+> Regra: não declarar uma etapa como `VERIFIED` somente porque existe um commit relacionado. O status abaixo distingue implementação, verificação, bloqueio e lacunas operacionais.
 
-**Baseline congelado:** `4a30cd7a9282b87e9ed7138ad02acc1fe9933a88`
+## Convenções
 
-**Regra operacional:** `1 objetivo → 1 área → 1 análise → 1 decisão`
-
----
-
-## Estados Permitidos por Subfase
-
-| Estado | Significado |
-|--------|-------------|
-| `PENDING` | Não iniciada |
-| `IN_PROGRESS` | Em execução |
-| `AUDIT_NO_FINDING` | Auditoria realizada — nenhum problema encontrado |
-| `FINDING` | Problema identificado |
-| `CORRECTION_REQUIRED` | Correção pendente |
-| `IMPLEMENTED` | Correção implementada |
-| `VERIFIED` | Correção verificada |
-| `BLOCKED` | Bloqueada por dependência |
-| `CANCELLED` | Cancelada (não aplicável) |
+| Status | Significado |
+|---|---|
+| `VERIFIED` | Implementação/correção e evidência de verificação disponíveis |
+| `IMPLEMENTED` | Correção implementada, mas fechamento formal ainda não consolidado |
+| `AUDIT_NO_FINDING` | Auditoria executada sem achado concreto |
+| `PARTIAL` | Parte da etapa fechada; existem subetapas pendentes |
+| `BLOCKED` | Evidência depende de ambiente/serviço externo ainda não comprovado |
+| `PENDING` | Ainda não executada ou sem evidência suficiente |
+| `GO_WITH_LIMITATION` | Pode avançar com limitações explicitamente registradas |
 
 ---
 
-## FASE 1 — Upload / Storage
+# FASE 0 — Baseline e Governança
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 1.1 | Upload | Verificar integridade e segurança do fluxo de upload de arquivos | IMPLEMENTED | — | 3 problemas → correções: (1) `authenticateToken` em `src/server/routes/ocr.ts`; (2) SSRF protection definitiva: raw sockets (net/tls), HTTPS conecta em validatedIP com servername=hostname (SNI), validação IPv4 completa, IPv6 completa, resolveAllIPs, TOCTOU eliminado, path+query preservados; (3) limites e redirects | 427083f7d9a3278fc22f0cb30a4d2de40bea03f8 | Upload real não implementado — apenas nome do arquivo enviado. |
-| 1.2 | Autorização / ownership de arquivos | Verificar que apenas o dono de um arquivo pode fazer upload associated a ele | VERIFIED | 1.1 | Ownership de envelopes persistido no banco; backfill histórico; UUIDv5 determinístico; RLS real validado no Supabase | 20260905000001 | Projeto `llmxnpgjpxcvyrqjkfwb`: `documenso_envelopes.user_id`, índice, policies e `domain_to_uuid()` validados no banco real. |
-| 1.3 | Storage / buckets / policies | Verificar configuração de storage e políticas de acesso | VERIFIED | 1.2 | Baseline RLS aplicado aos 5 buckets; 8 policies; `marketing-assets` público somente para leitura; escritas administrativas; buckets privados sem acesso público | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Banco real confirmou 5 buckets. `storage.objects` saiu de 0 policies para 8. Buckets privados sem objetos históricos. |
-| 1.4 | Nome / caminho / isolamento | Verificar isolamento de caminhos e nomenclatura de arquivos | VERIFIED | 1.3 | Auditoria real dos 8 objetos: 0 nomes inválidos, 0 padrões de traversal, 0 caminhos absolutos; todos os objetos existentes pertencem exclusivamente ao bucket público `marketing-assets`; buckets privados permanecem sem objetos | 2ceb758f64697236a0528ab6ca1ece4052c24e31 | Os 8 paths existentes são UUID + sufixo de mídia (`*_diaN.png`), sem segmentos de pasta. Como todos os buckets privados são vazios e suas escritas não são autorizadas a usuários comuns, não há vetor atual de mistura entre usuários/cases. Qualquer futuro fluxo privado deverá definir explicitamente owner/case no path ou metadado antes de liberar acesso de usuário. |
-| 1.5 | Validação de arquivos | Verificar validação de tipo, tamanho e conteúdo de arquivos | PENDING | 1.4 | — | — | Ainda não fechada com evidência suficiente. |
-| 1.6 | Correções dos achados | Aplicar correções identificadas nas subfases anteriores | PENDING | 1.5 | — | — | Não marcar como concluída antes da validação 1.5. |
-| 1.7 | Download / acesso aos arquivos | Verificar que o download é seguro e autorizado | PENDING | 1.6 | — | — | Não marcar como concluída antes da validação real. |
+**STATUS: VERIFIED**
 
----
-
-## FASE 2 — Autorização Global
-
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 2.1 | Endpoints protegidos | Mapear e verificar todos os endpoints protegidos | IN_PROGRESS | — | Cases, Documenso, OCR e Payments auditados; inventário global ainda em fechamento | 4420e3198d374ab83b1abd017a5dc5fecaa12fa7 | OWASP recomenda inventariar endpoints e verificar autenticação/autorização por operação; não marcar VERIFIED antes do inventário completo. |
-| 2.2 | Cases | Verificar autorização de acesso a cases | IMPLEMENTED | 2.1 | Ownership existente preservado e novo hardening contra mass assignment/BOPLA no `PUT /api/cases/:id` | 59b0eebcbf46edcf62495ba6edee3c9d927c3906 | Ainda falta execução do conjunto final de testes para `VERIFIED`. |
-| 2.3 | Documents | Verificar autorização de acesso a documentos | IMPLEMENTED | 2.2 | Documenso exige autenticação e ownership persistido em `documenso_envelopes.user_id`; `authorizeEnvelope()` consulta o banco | 41ba686 | Real DB já validado na FASE 1.2; falta consolidar teste final da subfase 2.3. |
-| 2.4 | Evidence | Verificar autorização de acesso a evidências | PENDING | 2.3 | — | — | OCR possui autenticação; inventário de todas as superfícies de evidência ainda pendente. |
-| 2.5 | Payments | Verificar autorização de acesso a pagamentos | IMPLEMENTED | 2.4 | Middleware global exige JWT para operações de pagamento; somente consulta pública de preço e webhooks são exceções | 4420e3198d374ab83b1abd017a5dc5fecaa12fa7 | Corrige risco de `PAYMENT_MODE=sandbox` deixar mutações/status anônimos. Falta teste final para VERIFIED. |
-| 2.6 | Admin / ações privilegiadas | Verificar controles de admin e ações privilegiadas | PENDING | 2.5 | — | — | — |
-| 2.7 | IDOR / IDs manipuláveis | Verificar ausência de IDOR em parâmetros manipuláveis | PENDING | 2.6 | — | — | — |
-| 2.8 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 2.7 | — | — | — |
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| G0-01 | VERIFIED | `ecdaa42410d5ba6c7edf569b2e19970effbcf20e` | Governança Loop Engineering, `loop/`, `features.json`, checkpoints e invariantes ratchet | `loop/CHECKPOINT.md`, `loop/loop.config.json`, `plan/features.json`, `tests/invariants/`; commit registra 3 features passing |
+| G0-02 | VERIFIED | `ecdaa42410d5ba6c7edf569b2e19970effbcf20e` | Baseline operacional e diário de progresso | `plan/progress.md`, `loop/sessions.log` |
+| G0-03 | VERIFIED | `ecdaa42410d5ba6c7edf569b2e19970effbcf20e` | Invariantes de segurança iniciais | `tests/invariants/`: no-getSession, RLS-enabled, no-secrets-env |
+| Baseline audit | VERIFIED | `062ed5585d20879d3e1687e782812047a3df86e1` | Congelamento do baseline de auditoria | Commit `chore(audit): freeze phase 0 baseline` |
 
 ---
 
-## FASE 3 — Integridade End-to-End
+# FASE 1 — Upload / Storage
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 3.1 | Case → Evidence | Verificar integridade da cadeia Case → Evidence | PENDING | — | — | — | — |
-| 3.2 | Evidence → Analysis | Verificar integridade da cadeia Evidence → Analysis | PENDING | 3.1 | — | — | — |
-| 3.3 | Analysis → Arguments | Verificar integridade da cadeia Analysis → Arguments | PENDING | 3.2 | — | — | — |
-| 3.4 | Arguments → Document | Verificar integridade da cadeia Arguments → Document | PENDING | 3.3 | — | — | — |
-| 3.5 | Document → Persistence | Verificar integridade da persistência de documentos | PENDING | 3.4 | — | — | — |
-| 3.6 | Client → Server trust boundary | Verificar limite de confiança Client ↔ Server | PENDING | 3.5 | — | — | — |
-| 3.7 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 3.6 | — | — | — |
+**STATUS: PARTIAL — 1.1–1.4 fechadas; 1.5–1.7 ainda sem evidência final.**
 
----
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 1.1 Upload / OCR | VERIFIED | `427083f7d9a3278fc22f0cb30a4d2de40bea03f8` | Autenticação OCR, SSRF hardening, limites de recurso, redirects e proteção contra TOCTOU | `src/server/routes/ocr.ts`; testes SSRF; `9a47477589ca8ab69b77f47b32fda34d666d4c7a` registra 35 testes SSRF e 602 testes totais |
+| 1.2 Ownership | VERIFIED | `bf83e6d716436c2f64f37cdc479bc8b6fb268b43` + migration `20260905000001` | Ownership de cases/envelopes, proteção contra IDOR e persistência de `user_id` | Commit registra 609 testes; banco real validou `documenso_envelopes.user_id`, índice, policies e `domain_to_uuid()` |
+| 1.3 Storage / policies | VERIFIED | `2ceb758f64697236a0528ab6ca1ece4052c24e31` | RLS dos buckets e policies de Storage | Banco real: 5 buckets e 8 policies; `marketing-assets` público somente leitura |
+| 1.4 Path isolation | VERIFIED | `ee76c41842ada04470ff1dcfb2ee025097326635` + `2ceb758f...` | Auditoria dos paths e isolamento | 8 objetos auditados: 0 traversal, 0 caminhos absolutos, 0 nomes inválidos; buckets privados vazios |
+| 1.5 Validação de arquivos | PENDING | — | Tipo, tamanho e conteúdo | Sem evidência final suficiente no histórico consultado |
+| 1.6 Correções | PENDING | — | Consolidar achados de 1.5 | Bloqueada pela falta de fechamento de 1.5 |
+| 1.7 Download / acesso | PENDING | — | Segurança e autorização de download | Sem validação final documentada |
 
-## FASE 4 — Proteção de Dados / LGPD
-
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 4.1 | Dados pessoais | Verificar tratamento de dados pessoais | PENDING | — | — | — | — |
-| 4.2 | Logs | Verificar adequação de logs à LGPD | PENDING | 4.1 | — | — | — |
-| 4.3 | URLs | Verificar que URLs não expõem dados pessoais | PENDING | 4.2 | — | — | — |
-| 4.4 | Storage / documentos | Verificar proteção de dados em storage | PENDING | 4.3 | — | — | — |
-| 4.5 | Retenção / exclusão | Verificar política de retenção e exclusão | PENDING | 4.4 | — | — | — |
-| 4.6 | Serviços externos | Verificar conformidade de serviços externos | PENDING | 4.5 | — | — | — |
-| 4.7 | Secrets / credenciais | Verificar gestão de secrets e credenciais | PENDING | 4.6 | — | — | — |
-| 4.8 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 4.7 | — | — | — |
+**Nota:** `3786e8b28d665d9b0f0ffd528677949d956c818d` registra a verificação consolidada da FASE 1.
 
 ---
 
-## FASE 5 — Produção / Infraestrutura
+# FASE 2 — Autorização Global
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 5.1 | Environment | Verificar configuração de ambiente | PENDING | — | — | — | — |
-| 5.2 | Secrets | Verificar gestão de secrets | PENDING | 5.1 | — | — | — |
-| 5.3 | Configuração de produção | Verificar config de produção | PENDING | 5.2 | — | — | — |
-| 5.4 | CORS / headers / HTTP security | Verificar headers de segurança HTTP | PENDING | 5.3 | — | — | — |
-| 5.5 | APIs externas | Verificar APIs externas | PENDING | 5.4 | — | — | — |
-| 5.6 | Comunicação entre serviços | Verificar comunicação interna | PENDING | 5.5 | — | — | — |
-| 5.7 | Rate limiting / abuso | Verificar controles de rate limiting | PENDING | 5.6 | — | — | — |
-| 5.8 | Erros / stack traces | Verificar tratamento de erros em produção | PENDING | 5.7 | — | — | — |
-| 5.9 | Logs de segurança | Verificar logs de segurança | PENDING | 5.8 | — | — | — |
-| 5.10 | Correções | Aplicar correções identificadas nas subfases anteriores | PENDING | 5.9 | — | — | — |
+**STATUS: PARTIAL — hardening importante implementado, mas o inventário/fechamento formal da fase ainda não foi concluído.**
 
-### Instruções básicas — FASE 5
-
-**5.1 — Environment**
-- Ler `.env`, `.env.example` e configurações usadas em produção.
-- Verificar valores, defaults, ambientes e configurações inseguras.
-- Não expor secrets no relatório.
-- Registrar somente problemas comprovados.
-
-**5.2 — Secrets**
-- Inventariar todas as credenciais usadas pela aplicação.
-- Verificar origem, uso server-side e ausência de secrets no frontend/logs/repositório.
-- Não rotacionar nem alterar credenciais sem evidência de necessidade.
-- Registrar `KNOWLEDGE_GAP` quando a gestão externa não puder ser comprovada.
-
-**5.3 — Configuração de produção**
-- Mapear configurações efetivamente usadas em produção.
-- Comparar configuração real com defaults de desenvolvimento/teste.
-- Verificar modos `production`, `development`, `test` e flags críticas.
-- Corrigir somente configurações comprovadamente inseguras.
-
-**5.4 — CORS / headers / HTTP security**
-- Auditar CORS, CSP, HSTS, X-Content-Type-Options e demais headers efetivamente aplicados.
-- Verificar origem permitida, métodos e credenciais.
-- Testar comportamento real dos endpoints HTTP.
-- Não adicionar header sem necessidade demonstrada.
-
-**5.5 — APIs externas**
-- Inventariar cada API externa realmente utilizada.
-- Verificar autenticação, timeout, TLS, tratamento de erro e exposição de dados.
-- Confirmar que secrets não chegam ao cliente.
-- Registrar `KNOWLEDGE_GAP` quando retenção/DPA/provedor não puder ser comprovado.
-
-**5.6 — Comunicação entre serviços**
-- Mapear chamadas entre frontend, backend, workers, banco e serviços externos.
-- Verificar autenticação e autorização entre serviços.
-- Verificar TLS e validação de destino quando aplicável.
-- Não assumir segurança apenas pela rede interna.
-
-**5.7 — Rate limiting / abuso**
-- Identificar endpoints de alto custo ou alto risco de abuso.
-- Verificar rate limiting real, limites de payload e proteção contra repetição.
-- Priorizar autenticação, upload, OCR, geração e integrações externas.
-- Não criar limites arbitrários sem justificativa técnica.
-
-**5.8 — Erros / stack traces**
-- Provocar erros controlados nos principais endpoints.
-- Verificar resposta HTTP, logs e mensagens retornadas ao cliente.
-- Confirmar que stack traces, paths internos, SQL e secrets não são expostos.
-- Preservar detalhes úteis somente em logs seguros.
-
-**5.9 — Logs de segurança**
-- Mapear eventos de autenticação, autorização, falhas e ações privilegiadas.
-- Verificar conteúdo, nível de detalhe e exposição de dados pessoais/secrets.
-- Confirmar que eventos relevantes podem ser investigados posteriormente.
-- Não adicionar logging indiscriminado.
-
-**5.10 — Correções**
-- Consolidar somente achados comprovados das subfases 5.1–5.9.
-- Corrigir o mínimo necessário.
-- Criar testes para cada correção relevante.
-- Validar novamente antes de marcar a fase como concluída.
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 2.1 Endpoints protegidos | IMPLEMENTED | `4420e3198d374ab83b1abd017a5dc5fecaa12fa7` | Inventário e proteção de operações de pagamento; escopo global ainda em fechamento | Commit identifica middleware global para operações de pagamento |
+| 2.2 Cases | IMPLEMENTED | `59b0eebcbf46edcf62495ba6edee3c9d927c3906` | Allowlist de campos no `PUT /api/cases/:id`, reduzindo mass assignment/BOPLA | `case-update-property-authorization.test.ts`; ainda sem fechamento formal da subfase |
+| 2.3 Documents | VERIFIED | `bf83e6d716436c2f64f37cdc479bc8b6fb268b43` | Ownership de envelopes Documenso | `authorizeEnvelope()` baseado em ownership server-side |
+| 2.4 Evidence | VERIFIED | `93354cbe1742f0698496bd0ed18460da1315394f` | Boundary de `evidence_json` coberta pela autorização do case | Testes K/L/M: outro usuário recebe 403; owner consegue ler/alterar |
+| 2.5 Payments | IMPLEMENTED | `4420e3198d374ab83b1abd017a5dc5fecaa12fa7` | JWT exigido para operações financeiras; preço público/webhooks preservados | Correção de risco de sandbox deixar mutações/status anônimos |
+| 2.6 Admin / privilegiadas | VERIFIED | `85761b7611e419759d3f38344deb563a5ab38aa8` | Marketing/Inbox/Leads/Meta protegidos por `requireAdmin` no Node e app.ts | 13 testes novos; 761/761 unit tests no commit |
+| 2.7 IDOR / IDs manipuláveis | VERIFIED | `bf83e6d716436c2f64f37cdc479bc8b6fb268b43` + `59b0eeb...` | Ownership e allowlists contra acesso/manipulação indevida | Testes de ownership/BOPLA e admin bypass |
+| 2.8 Correções | PARTIAL | `85761b7...` + SHAs anteriores | Correções principais aplicadas, mas inventário global da fase não foi formalmente encerrado | Fechamentos existentes não cobrem todas as superfícies como uma única auditoria |
 
 ---
 
-## FASE 6 — Testes / Release Candidate
+# FASE 3 — Integridade End-to-End
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 6.1 | Inventário de testes | Inventariar testes existentes | PENDING | — | — | — | — |
-| 6.2 | Autenticação | Verificar testes de autenticação | PENDING | 6.1 | — | — | — |
-| 6.3 | Autorização | Verificar testes de autorização | PENDING | 6.2 | — | — | — |
-| 6.4 | Upload / Evidence | Verificar testes de upload e evidências | PENDING | 6.3 | — | — | — |
-| 6.5 | Geração de defesa | Verificar testes de geração de defesa | PENDING | 6.4 | — | — | — |
-| 6.6 | Pagamento | Verificar testes de pagamento | PENDING | 6.5 | — | — | — |
-| 6.7 | Onboarding | Verificar testes de onboarding | PENDING | 6.6 | — | — | — |
-| 6.8 | E2E crítico | Verificar testes E2E de caminhos críticos | PENDING | 6.7 | — | — | — |
-| 6.9 | Build / lint / TypeScript | Verificar build, lint e TypeScript | PENDING | 6.8 | — | — | — |
-| 6.10 | Release Candidate | Preparar e validar release candidate | PENDING | 6.9 | — | — | — |
+**STATUS: VERIFIED para as fronteiras auditadas até 3.6.**
 
-### Instruções básicas — FASE 6
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 3.1 Case → Evidence | VERIFIED | `e81eb741f1c314e3bbdd0fb5937b290f03a27e4d` + `93354cbe1742f0698496bd0ed18460da1315394f` | Persistência de evidence e boundary de ownership | Testes adversariais de GET/PUT de `evidence_json` |
+| 3.2 Evidence → Analysis | VERIFIED | `fc46015d4dc6deb13e908ccefa0dd10b7a131aa9` | Evidence-dependent arguments são filtrados quando evidência exigida não existe | 11 cenários A–G; data gaps preservados e selecionados filtrados |
+| 3.3 Analysis → Arguments | VERIFIED | cobertura registrada em `d8ff4016c183b1173d9eed74b3dd8a4664326b83` | Integridade das teses recomendadas e invariant `isReady === validation.isValid` | `fase-33-analysis-arguments.test.ts` e testes de geração fail-closed |
+| 3.4 Arguments → Document | VERIFIED | `e6db74a1bb4823f4a55aa8f62585798685691d87` | `recommendedArguments` como fonte autorizada; sem auto-injeção de argumentos | Testes atualizados para contrato FASE 3.4 |
+| 3.5 Document → Persistence | VERIFIED | `008aab06f2440895f54bc27b3d1c9496b0f2eeb0` + `400b967dd15737875fe2d9a3f5b32598112c0ed7` | Persistência mantém `selectedArgumentIds`; leitura revalida contra autorização | P0-06/09/10/11; sanitização no GET; ordem preservada |
+| 3.6 Client → Server trust boundary | VERIFIED | `264877ab1bbc6dbccf982a706e517f24a0e66f95` | Teste adversarial de argumento válido no catálogo mas não autorizado para o caso | ARG-025 injetado e bloqueado; `selectedArguments` não amplia autoridade |
+| 3.7 Correções | VERIFIED | `095de69f793f50ef1217e85b55d529e5bb6c9609` + `008aab06...` + `264877ab...` | Correções fail-closed e testes P0 consolidados | 17 testes em 3.5; testes adversariais de persistência e assembly |
 
-**6.1 — Inventário de testes**
-- Listar testes unitários, integração, auditoria e E2E existentes.
-- Identificar testes duplicados, quebrados e áreas sem cobertura.
-- Não alterar testes apenas para melhorar métricas.
-- Definir o conjunto mínimo necessário para release.
-
-**6.2 — Autenticação**
-- Testar login, sessão, expiração e acesso sem autenticação.
-- Cobrir caminhos positivos e negativos.
-- Confirmar que endpoints protegidos rejeitam chamadas anônimas.
-- Não aceitar mocks como substitutos de fluxos críticos reais quando o teste exigir integração.
-
-**6.3 — Autorização**
-- Testar ownership, roles e recursos de outros usuários.
-- Criar casos adversariais para IDs manipulados.
-- Verificar que negar acesso não vaza dados.
-- Cobrir endpoints e ações privilegiadas.
-
-**6.4 — Upload / Evidence**
-- Testar tipo, tamanho, conteúdo e autorização dos arquivos.
-- Testar caminhos inválidos e acesso cruzado entre usuários/cases.
-- Verificar persistência e leitura das evidências.
-- Não tratar nome de arquivo ou metadado como prova jurídica.
-
-**6.5 — Geração de defesa**
-- Testar Case → Evidence → Analysis → Arguments → Document.
-- Testar dados ausentes, placeholders e argumentos não autorizados.
-- Confirmar comportamento fail-closed.
-- Confirmar que conteúdo jurídico não é inventado por fallback.
-
-**6.6 — Pagamento**
-- Testar criação, consulta, webhook, status e falhas.
-- Cobrir sandbox/production sem misturar comportamentos.
-- Verificar ownership do pagamento.
-- Não usar valores reais ou credenciais reais nos testes.
-
-**6.7 — Onboarding**
-- Testar fluxo completo do primeiro acesso até a criação/uso do case.
-- Cobrir retomada, refresh, sessão e dados incompletos.
-- Verificar que estados inválidos não liberam etapas indevidamente.
-- Priorizar o fluxo atualmente ativo em produção.
-
-**6.8 — E2E crítico**
-- Executar os caminhos críticos de ponta a ponta.
-- Priorizar autenticação, case, upload/evidence, análise, documento e pagamento.
-- Registrar falhas reproduzíveis com evidência.
-- Não mascarar falhas com aumento arbitrário de timeout ou relaxamento de asserts.
-
-**6.9 — Build / lint / TypeScript**
-- Executar `npm run test:unit`.
-- Executar `npm run lint`.
-- Executar `npx tsc --noEmit`.
-- Executar `npm run build`.
-- Registrar resultados reais, inclusive warnings relevantes.
-
-**6.10 — Release Candidate**
-- Congelar o conjunto de mudanças aprovado.
-- Executar a suíte final de validação.
-- Confirmar working tree limpa e commit identificável.
-- Só considerar RC pronto quando os gates definidos estiverem verdes.
+**Ponto crítico fechado:** `CaseAnalysis.recommendedArguments → permittedTheses() → RagPipeline.generateDefenseDraft() → DocumentAssemblyEngine` não pode ampliar autoridade por fallback. O fallback de `applicableGrounds` foi removido em `095de69f...`.
 
 ---
 
-## FASE 7 — Auditoria Final
+# FASE 4 — Proteção de Dados / LGPD
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 7.1 | Regressão | Verificar regressão geral | PENDING | — | — | — | — |
-| 7.2 | Critical paths | Verificar caminhos críticos | PENDING | 7.1 | — | — | — |
-| 7.3 | Security final | Auditoria final de segurança | PENDING | 7.2 | — | — | — |
-| 7.4 | Legal integrity final | Verificar integridade legal final | PENDING | 7.3 | — | — | — |
-| 7.5 | Persistence / payments | Verificar persistência e pagamentos | PENDING | 7.4 | — | — | — |
-| 7.6 | Production configuration | Verificar configuração de produção | PENDING | 7.5 | — | — | — |
-| 7.7 | Observability / recovery | Verificar observabilidade e recuperação | PENDING | 7.6 | — | — | — |
-| 7.8 | Auditoria final independente | Auditoria independente | PENDING | 7.7 | — | — | — |
-| 7.9 | Score de readiness | Calcular score de readiness | PENDING | 7.8 | — | — | — |
-| 7.10 | GO / NO-GO | Decisão final de produção | PENDING | 7.9 | — | — | — |
+**STATUS: VERIFIED — fechamento formal em `49fddf70`.**
 
-### Instruções básicas — FASE 7
-
-**7.1 — Regressão**
-- Executar a suíte completa definida no projeto.
-- Comparar falhas com o baseline conhecido.
-- Investigar qualquer regressão antes de avançar.
-- Não ignorar testes por serem antigos sem evidência de obsolescência.
-
-**7.2 — Critical paths**
-- Reexecutar os fluxos críticos completos.
-- Verificar autenticação, case, evidence, análise, documento e pagamento.
-- Confirmar entradas, saídas e persistência em cada fronteira.
-- Registrar qualquer divergência como achado.
-
-**7.3 — Security final**
-- Revisar autenticação, autorização, IDOR, upload, secrets, APIs e produção.
-- Revalidar correções das fases anteriores.
-- Testar casos adversariais críticos.
-- Não declarar seguro o que não foi efetivamente verificado.
-
-**7.4 — Legal integrity final**
-- Verificar que somente conteúdo jurídico autorizado é usado.
-- Confirmar fail-closed para dados insuficientes e placeholders.
-- Confirmar vigência e fonte quando houver regra temporal.
-- `KNOWLEDGE_GAP` quando a base jurídica não puder ser comprovada.
-
-**7.5 — Persistence / payments**
-- Verificar que dados importantes persistem corretamente.
-- Conferir ownership e integridade de registros financeiros.
-- Testar idempotência e webhooks quando aplicável.
-- Confirmar que falhas não geram estados financeiros inconsistentes.
-
-**7.6 — Production configuration**
-- Revalidar environment, secrets, CORS, headers, URLs e integrações.
-- Confirmar que configurações de teste/sandbox não estão ativas indevidamente.
-- Conferir dependências externas críticas.
-- Registrar diferenças entre ambiente auditado e produção real.
-
-**7.7 — Observability / recovery**
-- Verificar logs, métricas, alertas e rastreabilidade dos erros críticos.
-- Testar recuperação de falhas relevantes quando possível.
-- Confirmar que logs não expõem secrets ou PII desnecessária.
-- Documentar limitações reais de recuperação.
-
-**7.8 — Auditoria final independente**
-- Reavaliar o sistema sem assumir que fases anteriores estão corretas.
-- Procurar inconsistências, regressões e lacunas.
-- Revisar evidências e SHAs registrados no roadmap.
-- Não alterar o escopo para criar artificialmente novos achados.
-
-**7.9 — Score de readiness**
-- Basear o score somente em evidências verificadas.
-- Separar `PASS`, `FAIL`, `BLOCKED` e `KNOWLEDGE_GAP`.
-- Não compensar um bloqueio crítico com pontos de outras áreas.
-- Registrar claramente os critérios utilizados.
-
-**7.10 — GO / NO-GO**
-- Consolidar todos os bloqueadores críticos.
-- Confirmar testes, segurança, integridade legal e produção.
-- `NO-GO` se existir bloqueador crítico não resolvido.
-- `GO` somente com evidência suficiente para os critérios definidos.
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 4.1 Dados pessoais | VERIFIED | `3d521708bb751fd4391bcd8cd0eea53107aed65b` + `5a1bfcbbad4dfa4cd22590576d0c1c2e30a67c7d` + `1e6e1f0779dfcdfd9923f9e15ac1048dcf81830` | Mascaramento CPF/CNH/RG/telefone/email/placa; DELETE com anonimização completa | 6 testes reais de DELETE; 17 campos PII limpos; 19 testes de logger |
+| 4.2 Logs | VERIFIED | `1e6e1f0779dfcdfd99d23f9e15ac1048dcf81830` + `920e5715e2d14c84af9cf7466cba320e75f25b16` | Sanitização de PII e remoção de signers/pdfBase64 dos logs de erro | Logger cobre telefone/email/placa; Documenso registra apenas `signerCount` |
+| 4.3 URLs | VERIFIED | `2fafc5356367dc040b92d3ebcfb689003face0b5` | Remoção de email de query string de histórico de notificações | JWT identifica usuário; email redundante removido |
+| 4.4 Storage / documentos | VERIFIED | `920e5715e2d14c84af9cf7466cba320e75f25b16` + `2ceb758f...` | PII em erros e Storage auditados | Signers removidos de logs; policies de Storage verificadas |
+| 4.5 Retenção / exclusão | VERIFIED | `239aa7085e7854f3975e9a565e33ed02e5bc991d` + `5a1bfcbb...` | `envelope_data` anonimizado antes de cascade delete | `anonymizeEnvelopesByCaseId()` antes de `CASE_DELETED`; relatório `docs/fase/04-5-AUDIT-RETENCAO-EXCLUSAO.md` |
+| 4.6 Serviços externos | VERIFIED | `ec06e86ab8dda4b0c31ee129806392a18baff041` | Remoção de `raw_metadata` de webhooks e mascaramento de telefone | 4 adapters corrigidos; 738/738 testes no ponto da correção |
+| 4.7 Secrets / credenciais | VERIFIED | `d0890d4afd3dd35da7fad636b94d0eec06067b87` | Remoção de service-role JWT hardcoded e scan de secrets | Nenhum JWT `eyJ...`, `sk-` ou senha encontrada em código |
+| 4.8 Fechamento | VERIFIED | `49fddf70e6e0090e38dbd2b72e9f57aaff8a3067` | Auditoria final das subfases 4.1–4.7 | Resultado: nenhuma correção de código pendente; gaps operacionais documentados |
 
 ---
 
-## FASE 8 — Auditoria Operacional de Produção / Vercel
+# FASE 5 — Produção / Infraestrutura
 
-| ID | Nome | Objetivo | Status | Dependência | Resultado | SHA | Observação |
-|----|------|----------|--------|-------------|-----------|-----|------------|
-| 8.1 | Deployment / build | Verificar deployment Production, commit, build e warnings | VERIFIED | FASE 7 | Deployment `dpl_7ts5xoqUXCv2xWSUj9yrfDcjokc8` READY no commit `751632b6d279d48844dfecbd1e7d5e42da1309a2`; build concluído | 751632b6d279d48844dfecbd1e7d5e42da1309a2 | Bundle grande e `memory` ignorado são P2, não bloqueadores atuais. |
-| 8.2 | Runtime / 5xx | Verificar erros reais do deployment Production | VERIFIED | 8.1 | Nenhum 5xx atual observado na janela auditada; `/api/index` respondeu 401 conforme proteção | 751632b6d279d48844dfecbd1e7d5e42da1309a2 | Logs de runtime possuem warnings/erros de validação do `express-rate-limit`. |
-| 8.3 | Trust Proxy / rate limiting | Determinar topologia real de proxies e impacto no `req.ip`/rate limiting | BLOCKED | 8.2 | Produção registra `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` e `ERR_ERL_FORWARDED_HEADER`; Express mantém `trust proxy=false` | — | Não aplicar `trust proxy=1/2` sem evidência da cadeia real. `KNOWLEDGE_GAP` até comprovação. |
-| 8.4 | IA / NVIDIA / fallback | Provar se NVIDIA é obrigatório e se o fallback de IA funciona em Production | BLOCKED | 8.2 | Runtime registra `[NVIDIA Key Rotator] No valid NVIDIA API keys found`; fallback ainda não comprovado operacionalmente | — | Não acessar/expor secrets. Classificar somente após teste seguro do pipeline. |
-| 8.5 | Environment Production | Verificar targets e existência de variáveis críticas sem revelar valores | BLOCKED | 8.4 | Valores não devem ser lidos; targets/nomes ainda precisam ser comprovados com evidência segura | — | Vercel exige redeploy para novas variáveis surtirem efeito. citeturn0search1 |
-| 8.6 | Payments Production | Comprovar modo Production, gateway efetivo, webhook e idempotência | BLOCKED | 8.5 | Código está protegido; estado real do ambiente Production ainda não comprovado | — | Não usar credenciais reais nem modificar configuração durante auditoria. |
-| 8.7 | Source maps / headers / exposure | Verificar exposição pública e headers de segurança | VERIFIED | 8.1 | Source map não foi exposto publicamente no path auditado; headers de segurança presentes | — | Continuar sem alteração enquanto não houver evidência de exposição. |
-| 8.8 | Correções | Aplicar somente correções comprovadas nos achados 8.3–8.7 | PENDING | 8.7 | — | — | Não corrigir por tentativa. Um único commit por execução corretiva. |
-| 8.9 | Fechamento / GO-NO-GO | Consolidar evidências e decidir estado operacional | PENDING | 8.8 | — | — | `GO WITH LIMITATION` enquanto houver bloqueios externos não comprovados. |
+**STATUS: VERIFIED / GO — com knowledge gaps operacionais explicitamente aceitos.**
 
-### Instruções básicas — FASE 8
-
-**8.1 — Deployment / build**
-- Confirmar projeto Vercel, deployment Production, branch e SHA.
-- Conferir build logs completos.
-- Registrar warnings relevantes sem tratá-los como falhas automaticamente.
-
-**8.2 — Runtime / 5xx**
-- Consultar runtime errors agrupados.
-- Consultar 5xx por deployment/rota.
-- Diferenciar erro funcional, warning de dependência e falha de infraestrutura.
-- Não declarar PASS apenas porque a página principal retorna 200.
-
-**8.3 — Trust Proxy / rate limiting**
-- Provar a cadeia real `cliente → proxy(s) → Vercel → Express`.
-- Verificar `X-Forwarded-For`, `Forwarded`, `req.ip` e configuração Express.
-- Não usar `trust proxy=1` ou `2` sem comprovação.
-- Se a topologia não puder ser comprovada: `KNOWLEDGE_GAP` / `BLOCKED`.
-
-**8.4 — IA / NVIDIA / fallback**
-- Mapear provider selection e fallback no código.
-- Confirmar se NVIDIA é obrigatório ou apenas preferencial.
-- Verificar se 9Router/outro fallback existe.
-- Executar somente teste seguro e não destrutivo do pipeline em Production.
-- Nunca acessar ou expor valores de secrets.
-
-**8.5 — Environment Production**
-- Verificar nomes e targets de variáveis críticas, sem valores.
-- Não usar `.env.example` como prova do ambiente real.
-- Registrar `KNOWLEDGE_GAP` se a conexão não permitir comprovação segura.
-- Lembrar que alterações de environment exigem novo deployment para surtirem efeito. citeturn0search1
-
-**8.6 — Payments Production**
-- Comprovar `PAYMENT_MODE`, gateway efetivo, webhook e idempotência pelo comportamento seguro do sistema.
-- Não usar valores reais.
-- Não transformar sandbox em Production durante auditoria.
-
-**8.7 — Source maps / headers / exposure**
-- Testar paths públicos conhecidos.
-- Conferir CSP/HSTS/X-Content-Type-Options e demais headers efetivamente aplicados.
-- Não alterar headers sem evidência de necessidade.
-
-**8.8 — Correções**
-- Corrigir somente achados comprovados.
-- Adicionar testes para cada correção.
-- Executar `npm run test:unit`, `npm run lint`, `npx tsc --noEmit` e `npm run build` quando houver alteração de código.
-- Revisar `git diff`.
-- Criar UM ÚNICO commit por execução corretiva e push para `main`.
-- Após push, verificar novo deployment Vercel.
-
-**8.9 — Fechamento / GO-NO-GO**
-- Separar `PASS`, `P1`, `P2`, `BLOCKED` e `KNOWLEDGE_GAP`.
-- Não converter bloqueio externo em PASS.
-- Registrar SHA completo e deployment quando houver correção.
-- Não iniciar Fase 9 sem decisão explícita.
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 5.1 Environment | VERIFIED | `ded21a1f98b4dcd9b285ab1ee764f5f81ac3e6cf` | Variáveis críticas ausentes agora encerram o processo (`process.exit(1)`) | 3 testes novos; 749 testes passando |
+| 5.2 Secrets | VERIFIED | `d0890d4...` | Gestão/ausência de secrets hardcoded | Coberto também pela FASE 4.7 |
+| 5.3 Produção | AUDIT_NO_FINDING | `f8bbb1958d0089707b7d60e4d0804d2b842761be` | Configuração auditada; PII demo apenas em memória, sem exposição comprovada | Gap operacional documentado |
+| 5.4 CORS / headers | VERIFIED | `eb0f0e2355933adbb8aa16586c8a038455c2815a` | Corrigido fail-open do CORS: origem não permitida agora retorna `callback(null, false)` | 8 testes novos; 746 testes passando |
+| 5.5 APIs externas | AUDIT_NO_FINDING | `f8bbb195...` | APIs inventariadas no limite verificável do repositório | DPA/retention/provedor externo ficam como knowledge gaps |
+| 5.6 Comunicação | AUDIT_NO_FINDING | `f8bbb195...` | Comunicação entre serviços revisada | TLS/configuração externa não comprováveis apenas pelo repo |
+| 5.7 Rate limiting | AUDIT_NO_FINDING | `f8bbb195...` | Rate limiting revisado | Trust proxy permanece GAP dependente da topologia Vercel/Cloudflare |
+| 5.8 Erros | VERIFIED | `f8bbb195...` | Stack trace restrito a ambiente não-prod | Verificado em `server.ts` |
+| 5.9 Logs segurança | VERIFIED | `f8bbb195...` | Sanitização e proteção de `/api/logs` | Bearer/API keys/PII sanitizados; endpoint protegido |
+| 5.10 Fechamento | VERIFIED | `f8bbb1958d0089707b7d60e4d0804d2b842761be` | Consolidação da fase | Nenhuma correção funcional adicional necessária; gaps documentados |
 
 ---
 
-## Notas
+# FASE 6 — Testes / Release Candidate
 
-- Este arquivo é a **fonte de verdade** do andamento das fases.
-- Cada atualização de status deve incluir evidência concreta.
-- SHAs devem ser registrados apenas quando uma correção for implementada e verificada.
-- Não inventar resultados — registrar apenas o que foi efetivamente realizado.
-- Storage: operações sobre objetos devem usar a API de Storage; consultas SQL são somente para evidência/auditoria. As policies RLS são versionadas em migrations.
-- As instruções adicionadas nas FASES 5–8 são orientação operacional básica; não substituem a auditoria concreta nem autorizam mudanças fora do escopo da subfase.
+**STATUS: VERIFIED COM LIMITAÇÃO E2E EXTERNA.**
+
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 6.1 Inventário | VERIFIED | `d8ff4016c183b1173d9eed74b3dd8a4664326b83` | Inventário de 68 arquivos / 749 testes | Unit/integration/audit/E2E catalogados |
+| 6.2 Autenticação | VERIFIED | `d8ff4016...` | 12 cenários de auth | Ausente/inválido/expirado → 401; headers `x-user-*` não forjam identidade |
+| 6.3 Autorização | VERIFIED | `d8ff4016...` | IDOR/BOPLA/ownership | 19 cenários + legal authority + allowlist |
+| 6.4 Upload / Evidence | VERIFIED | `d8ff4016...` | OCR, SSRF, media e RLS | 35 cenários SSRF; autenticação e RLS verificadas |
+| 6.5 Geração de defesa | VERIFIED | `d8ff4016...` | Fail-closed e integridade jurídica | 20 testes de assembly + 3 analysis→arguments |
+| 6.6 Pagamento | VERIFIED | `d8ff4016...` | Webhook security | 14 testes: HMAC, IP allowlist, spoofing, idempotência |
+| 6.7 Onboarding | VERIFIED | `d8ff4016...` | Fluxo V2 ativo | Playwright `onboarding.spec.ts` |
+| 6.8 E2E crítico | BLOCKED | `d8ff4016...` | Execução completa depende de Supabase/gateways reais | Suite configurada; execução determinística completa bloqueada por credenciais externas |
+| 6.9 Build / TS | VERIFIED | `d8ff4016...` | Unit, lint/typecheck e build | 749 testes; `tsc --noEmit` 0 erros; build OK |
+| 6.10 RC | GO_WITH_LIMITATION | `d8ff4016...` | Release candidate com limitação externa | Limitação E2E explicitamente registrada |
+
+---
+
+# FASE 7 — Auditoria Final
+
+**STATUS: VERIFIED / GO WITH LIMITATION.**
+
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 7.1 Regressão | VERIFIED | `c90a4e9...` | 749 testes, sem regressão | Resultado documentado no fechamento |
+| 7.2 Critical paths | VERIFIED | `c90a4e9...` | Caminhos críticos verificados | Auth, case, evidence, análise, documento e pagamento |
+| 7.3 Security final | VERIFIED | `c90a4e9...` | Segurança final | 1 P2/GAP trust proxy aceito |
+| 7.4 Legal integrity | VERIFIED | `c90a4e9...` | Integridade jurídica | Quality gate fail-closed; sem teses inventadas |
+| 7.5 Persistence / payments | VERIFIED | `14d094b0c9bba7b79b263a703892cc46130c3d43` + `c90a4e9...` | Persistência financeira e idempotência | SELECT error handling, charge validation, duplicate `databaseRows.set()` removido |
+| 7.6 Production config | VERIFIED após correção | `dea5fc163ed25ababa7df21c3d122b1201f727f6` | `contranCollector` desativado em produção | Scheduler externo passa a ser responsável pelo collector em produção |
+| 7.7 Observability / recovery | VERIFIED | `c90a4e9...` | Logs estruturados, correlation IDs e ring buffer | Auditoria final registrou PASS |
+| 7.8 Independente | VERIFIED | `c90a4e9...` | Auditoria independente e verificação de SHAs | Todos os SHAs verificados em `origin/main` |
+| 7.9 Score | VERIFIED | `c90a4e9...` + `d355939a07c9d0badc1553d97b8ba39ac38a8cc1` | Score consolidado | Fase fechada posteriormente como GO with limitation |
+| 7.10 GO/NO-GO | GO_WITH_LIMITATION | `d355939a07c9d0badc1553d97b8ba39ac38a8cc1` | Decisão final | E2E externo permanece limitação; sem blocker interno crítico conhecido |
+
+**Histórico importante:** `c90a4e9` primeiro registrou BLOCKED por `contranCollector.start()` incondicional; `dea5fc1` corrigiu o blocker. O fechamento posterior `d355939` registrou GO com limitação.
+
+---
+
+# FASE 8 — Auditoria Operacional de Produção / Vercel
+
+**STATUS: PARTIAL / BLOCKED POR EVIDÊNCIAS EXTERNAS.**
+
+| ID | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| 8.1 Deployment / build | VERIFIED | `751632b6d279d48844dfecbd1e7d5e42da1309a2` | Deployment Production validado | Deployment `dpl_7ts5xoqUXCv2xWSUj9yrfDcjokc8` READY no commit `751632b6...` |
+| 8.2 Runtime / 5xx | VERIFIED | `751632b6...` | Nenhum 5xx observado na janela auditada; `/api/index` respondeu 401 | Runtime revisado |
+| 8.3 Trust proxy | BLOCKED | — | Topologia real de proxy ainda não comprovada | Runtime registra `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` / `ERR_ERL_FORWARDED_HEADER`; não aplicar `trust proxy` por suposição |
+| 8.4 IA / NVIDIA / fallback | BLOCKED | — | Fallback operacional em Production não comprovado | Runtime registra ausência de NVIDIA key válida; não acessar secrets |
+| 8.5 Environment Production | BLOCKED | — | Targets/existência de variáveis críticas precisam de comprovação segura | Valores não devem ser expostos; redeploy necessário após alterações |
+| 8.6 Payments Production | BLOCKED | — | Gateway, modo Production e webhook reais ainda não comprovados | Código protegido; ambiente real não comprovado |
+| 8.7 Source maps / headers | VERIFIED | `f72f9d88483673459ca2d9e164331f460e977fb0` | Source maps de produção removidos | `dist/server.cjs.map` deixou de ser gerado |
+| 8.8 Correções | IMPLEMENTED | `751632b6...` + `f72f9d8...` | `/simulate-payment` bloqueado em produção; `scrapeWorker` guardado; source maps removidos | Correções de código realizadas |
+| 8.9 Fechamento | BLOCKED | `69022ff2c4bd1029afbee005898316eeac74a6cc` | Findings/delegations registrados, mas evidências externas ainda pendentes | `docs(audit)` registra trust proxy, NVIDIA/fallback, environment e payments como pendentes |
+
+**Importante:** a FASE 8 não deve ser marcada como `VERIFIED` enquanto 8.3–8.6 continuarem sem evidência real de produção.
+
+---
+
+# P0 TRANSVERSAIS — Hardening posterior ao roadmap original
+
+Estas correções atravessam mais de uma fase e devem permanecer registradas mesmo não sendo uma nova fase numerada.
+
+| Item | Status | SHA | Descrição | Evidência |
+|---|---|---|---|---|
+| P0 — identidade client-controlled | VERIFIED | `d76a59f00ca93fb03aca17778f4d29f2951acb55` | Remove headers/tokens locais como fonte de identidade em produção | Auth server-side; 463 testes no ponto do fechamento |
+| P0 — Cases ownership | VERIFIED | `bf83e6d716436c2f64f37cdc479bc8b6fb268b43` | Defesa/Documenso protegidos por ownership | 609 testes; 7 regressões de ownership |
+| P0 — Payment auth | VERIFIED | `4420e3198d374ab83b1abd017a5dc5fecaa12fa7` | Operações de pagamento exigem autenticação | Preço público e webhooks preservados |
+| P0 — Issue #3 Payments | VERIFIED | `7927c809527ac5229ae4e72b8c56f3d8fe91952b2` | Remove CPF falso e corrige `user_profiles.id` → `user_id` | Corrige fallback ilegal e identidade financeira |
+| P0 — Issue #2 Marketing/Meta | VERIFIED | `85761b7611e419759d3f38344deb563a5ab38aa8` | `requireAdmin` em Marketing/Inbox/Leads/Meta no Node e app.ts | 13 testes novos; 761/761; tsc 0; build clean |
+
+---
+
+# Estado consolidado em `main`
+
+| Área | Estado atual |
+|---|---|
+| Baseline / governança | **VERIFIED** |
+| Upload / Storage | **PARTIAL** — 1.5–1.7 pendentes |
+| Autorização global | **PARTIAL** — hardening forte, inventário formal ainda não consolidado |
+| Integridade E2E jurídica | **VERIFIED** até 3.6 |
+| LGPD / proteção de dados | **VERIFIED** |
+| Produção / infraestrutura | **VERIFIED / GO**, com knowledge gaps externos |
+| Testes / RC | **VERIFIED COM LIMITAÇÃO E2E EXTERNA** |
+| Auditoria final | **GO WITH LIMITATION** |
+| Produção/Vercel | **PARTIAL / BLOCKED** — evidências reais 8.3–8.6 pendentes |
+| Issue #2 P0 | **VERIFIED** — `85761b7` |
+| Último commit da `main` | **`85761b7611e419759d3f38344deb563a5ab38aa8`** |
+
+## Última sequência crítica
+
+```text
+FASE 4 fechamento  → 49fddf70
+FASE 5 fechamento  → f8bbb195
+FASE 6 fechamento  → d8ff4016
+FASE 7 finding     → c90a4e9
+FASE 7 correção    → dea5fc1
+FASE 7 GO          → d355939a
+FASE 8 correções   → 751632b6 / f72f9d8
+Issue #3 P0        → 7927c809
+Issue #2 P0        → 85761b76
+```
+
+## Regra para próximas atualizações
+
+1. Não reabrir fase já `VERIFIED` sem evidência de regressão.
+2. Não transformar `BLOCKED` em `VERIFIED` sem evidência externa correspondente.
+3. Toda correção deve registrar SHA completo, resultado dos testes e evidência.
+4. Não usar o título da mensagem de commit como única prova; verificar conteúdo e testes.
+5. Alterações de onboarding de outro agente (`OnboardingWizard.tsx`, `AnalysisProcessingStep.tsx` e testes associados) permanecem fora deste roadmap até auditoria própria.
+6. O próximo trabalho prioritário é fechar os gaps objetivos de FASE 1, consolidar o inventário global da FASE 2 e resolver as evidências externas da FASE 8.
