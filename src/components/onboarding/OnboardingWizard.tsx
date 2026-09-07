@@ -31,50 +31,52 @@ import {
 } from '../../core/onboarding/rules-matrix';
 
 // ============================================================================
-// Wizard State Persistence (localStorage)
+// Wizard State Persistence (sessionStorage — metadata only)
 // ============================================================================
+// Never persist PII, vehicle/infraction data, analysis results, or document
+// qualification data in browser storage. Case data is persisted server-side.
 
 const WIZARD_STORAGE_KEY = 'defesai_wizard_state';
 
 interface WizardPersistedState {
   step: number;
-  leadName: string;
-  leadPhone: string;
-  situation: UserSituation;
-  processStage: UserProcessStage;
-  infractionCategory: InfractionCategory;
-  vehicleData: VehicleData;
-  infractionData: InfractionData;
-  caseAnalysis: CaseAnalysis;
-  documentData: CaseDocumentData;
   savedCaseId?: string;
-  savedAt: number; // timestamp
+  savedAt: number;
 }
 
 function loadWizardState(): WizardPersistedState | null {
   try {
-    const raw = localStorage.getItem(WIZARD_STORAGE_KEY);
+    // Remove the legacy localStorage payload that could contain PII.
+    localStorage.removeItem(WIZARD_STORAGE_KEY);
+    const raw = sessionStorage.getItem(WIZARD_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WizardPersistedState;
-    // Expire after 24 hours
     if (Date.now() - parsed.savedAt > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(WIZARD_STORAGE_KEY);
+      sessionStorage.removeItem(WIZARD_STORAGE_KEY);
       return null;
     }
-    return parsed;
+    if (typeof parsed.step !== 'number' || !Number.isFinite(parsed.step)) {
+      sessionStorage.removeItem(WIZARD_STORAGE_KEY);
+      return null;
+    }
+    return { step: parsed.step, savedCaseId: parsed.savedCaseId, savedAt: parsed.savedAt };
   } catch {
-    localStorage.removeItem(WIZARD_STORAGE_KEY);
+    try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
     return null;
   }
 }
 
-function saveWizardState(state: Omit<WizardPersistedState, 'savedAt'>) {
+function saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId'>) {
   try {
-    localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
-  } catch { /* quota exceeded, ignore */ }
+    sessionStorage.setItem(
+      WIZARD_STORAGE_KEY,
+      JSON.stringify({ step: state.step, savedCaseId: state.savedCaseId, savedAt: Date.now() })
+    );
+  } catch { /* storage unavailable, ignore */ }
 }
 
 function clearWizardState() {
+  try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
   try { localStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
 }
 
@@ -118,19 +120,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const wizardTopRef = useRef<HTMLDivElement>(null);
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
-  const [leadName, setLeadName] = useState<string>(savedState?.leadName || user?.name || '');
-  const [leadPhone, setLeadPhone] = useState<string>(savedState?.leadPhone || user?.phone || '');
+  const [leadName, setLeadName] = useState<string>(user?.name || '');
+  const [leadPhone, setLeadPhone] = useState<string>(user?.phone || '');
   const [isAuthGateOpen, setIsAuthGateOpen] = useState<boolean>(false);
   const [authGateRedirectAction, setAuthGateRedirectAction] = useState<'generation' | 'dashboard'>('generation');
 
   // =========================================================================
   // FASE 1: DADOS DA ANÁLISE JURÍDICA (100% GRATUITA)
   // =========================================================================
-  const [situation, setSituation] = useState<UserSituation>(savedState?.situation ?? 'multa_transito');
-  const [processStage, setProcessStage] = useState<UserProcessStage>(savedState?.processStage ?? 'primeira_notificacao');
-  const [infractionCategory, setInfractionCategory] = useState<InfractionCategory>(savedState?.infractionCategory ?? 'excesso_velocidade');
+  const [situation, setSituation] = useState<UserSituation>('multa_transito');
+  const [processStage, setProcessStage] = useState<UserProcessStage>('primeira_notificacao');
+  const [infractionCategory, setInfractionCategory] = useState<InfractionCategory>('excesso_velocidade');
 
-  const [vehicleData, setVehicleData] = useState<VehicleData>(savedState?.vehicleData ?? {
+  const [vehicleData, setVehicleData] = useState<VehicleData>({
     plate: '',
     brandModel: '',
     renavam: '',
@@ -138,7 +140,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     color: '',
   });
 
-  const [infractionData, setInfractionData] = useState<InfractionData>(savedState?.infractionData ?? {
+  const [infractionData, setInfractionData] = useState<InfractionData>({
     aitNumber: '',
     infractionCode: '',
     description: '',
@@ -152,7 +154,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     formalFlawsDetected: [],
   });
 
-  const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>(savedState?.caseAnalysis ?? {
+  const [caseAnalysis, setCaseAnalysis] = useState<CaseAnalysis>({
     id: `an_${Date.now()}`,
     caseId: `temp_${Date.now()}`,
     createdAt: new Date().toISOString(),
@@ -167,7 +169,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // =========================================================================
   // FASE 2: DADOS DE QUALIFICAÇÃO DO CONDUTOR (GERAÇÃO DA PEÇA FORMAL)
   // =========================================================================
-  const [documentData, setDocumentData] = useState<CaseDocumentData>(savedState?.documentData ?? {
+  const [documentData, setDocumentData] = useState<CaseDocumentData>({
     applicantName: user?.name || '',
     applicantCpf: user?.cpf || '',
     applicantRg: '',
@@ -186,47 +188,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
 
-  // Scroll to top of wizard on every step change AND save state
+  // Scroll to top of wizard on every step change and persist only non-sensitive metadata.
   useEffect(() => {
     wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    saveWizardState({
-      step,
-      leadName,
-      leadPhone,
-      situation,
-      processStage,
-      infractionCategory,
-      vehicleData,
-      infractionData,
-      caseAnalysis,
-      documentData,
-      savedCaseId,
-    });
-  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
+    saveWizardState({ step, savedCaseId });
+  }, [step, savedCaseId]);
 
-  // Persist wizard state immediately before page unload (to catch refresh/navigation)
+  // Persist only navigation metadata immediately before page unload.
   useEffect(() => {
     const handleBeforeUnload = () => {
-      saveWizardState({
-        step,
-        leadName,
-        leadPhone,
-        situation,
-        processStage,
-        infractionCategory,
-        vehicleData,
-        infractionData,
-        caseAnalysis,
-        documentData,
-        savedCaseId,
-      });
+      saveWizardState({ step, savedCaseId });
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [step, leadName, leadPhone, situation, processStage, infractionCategory, vehicleData, infractionData, caseAnalysis, documentData, savedCaseId]);
+  }, [step, savedCaseId]);
 
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)
@@ -437,19 +415,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       setStep(8); // Início da Fase 2 (Qualificação)
     } else {
       // Persist wizard state before opening auth gate
-      saveWizardState({
-        step: 7,
-        leadName,
-        leadPhone,
-        situation,
-        processStage,
-        infractionCategory,
-        vehicleData,
-        infractionData,
-        caseAnalysis,
-        documentData,
-        savedCaseId,
-      });
+      saveWizardState({ step: 7, savedCaseId });
       setAuthGateRedirectAction('generation');
       setIsAuthGateOpen(true);
     }
@@ -460,19 +426,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       navigate('/dashboard');
     } else {
       // Persist wizard state before opening auth gate
-      saveWizardState({
-        step: 7,
-        leadName,
-        leadPhone,
-        situation,
-        processStage,
-        infractionCategory,
-        vehicleData,
-        infractionData,
-        caseAnalysis,
-        documentData,
-        savedCaseId,
-      });
+      saveWizardState({ step: 7, savedCaseId });
       setAuthGateRedirectAction('dashboard');
       setIsAuthGateOpen(true);
     }
