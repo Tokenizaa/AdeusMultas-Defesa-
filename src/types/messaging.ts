@@ -51,7 +51,9 @@ export interface MarketingMessage {
   mediaType?: MediaType;
   status: MessageStatus;
   externalMessageId?: string;
-  rawMetadata?: Record<string, any>;
+  // rawMetadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais rawPayload
+  // em nenhum adapter; mapMessage() não persiste mais raw_metadata; o campo no DB
+  // existe mas não é写入. Removido do tipo MarketingMessage para refletir o estado real.
   createdAt: string;
 }
 

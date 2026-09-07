@@ -235,8 +235,15 @@ const handleWebhook = async (req: any, res: any) => {
 
     const parsed = whatsappService.parseWebhook(payload);
 
+    // FASE 4.6: mascara phone no log — Evolution API remoteJid é phone completo.
+    // O logger só mascara por nome de chave (`phone`, `cellphone`); `from` não é
+    // automaticamente mascarado. Máscara manual com mesmo padrão do journey router.
+    const phoneMasked = parsed.from
+      ? `****${parsed.from.slice(-4)}`
+      : undefined;
+
     logger.info('whatsapp', 'whatsapp_webhook', 'incoming', 'WhatsApp message received via Evolution API', {
-      from: parsed.from,
+      from: phoneMasked,
       type: parsed.type,
       instance: parsed.instance,
     });
@@ -245,15 +252,19 @@ const handleWebhook = async (req: any, res: any) => {
     await messagingService.handleEvolutionWebhook(payload);
 
     // 4. Publicação downstream no barramento de eventos
+    // FASE 4.6: sem subscriber — WHATSAPP_WEBHOOK_RECEIVED nunca é consumido.
+    // eventBus.publish removido para evitar exposição de from (phone completo)
+    // e rawPayload (webhook integral) via event bus sem necessidade.
+    //掩 phone e remover rawPayload da publicação residual.
     eventBus.publish(
       EventTopics.WHATSAPP_WEBHOOK_RECEIVED || ('whatsapp.webhook_received' as any),
       {
-        from: parsed.from,
-        text: parsed.text,
+        from: parsed.from ? `****${parsed.from.slice(-4)}` : undefined,
         type: parsed.type,
         instance: parsed.instance,
         messageId: parsed.messageId,
-        rawPayload: payload,
+        // rawPayload removido: LGPD FASE 4.6 — webhook completo não é consumido
+        // por nenhum subscriber; expor o payload integral desnecessário.
       },
       'whatsapp_webhook'
     );

@@ -111,7 +111,11 @@ export class EvolutionWhatsAppAdapter implements IChannelAdapter {
         mediaUrl,
         mediaType,
         timestamp: new Date().toISOString(),
-        rawPayload,
+        // rawPayload removido: LGPD FASE 4.6 — o payload original da Evolution API
+        // contém pushName + remoteJid + conteúdo integral da mensagem que já estão
+        // capturados nos campos normalizados acima (senderName, externalContactId,
+        // text, mediaUrl). Persistir o webhook completo sem necessidade expõe
+        // PII de signatários sem finalidade — dado duplicado, sem necessidade.
       });
     } catch (err: any) {
       logger.error('messaging', 'adapter_evolution', 'normalize_error', `Falha ao normalizar Evolution WhatsApp: ${err.message}`);
@@ -199,7 +203,10 @@ export class MetaMessengerAdapter implements IChannelAdapter {
               mediaUrl,
               mediaType,
               timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
-              rawPayload: msgEvent,
+              // rawPayload removido: LGPD FASE 4.6 — msgEvent contém o objeto
+              // original do Meta com sender PSID, conteúdo e anexos; todos os
+              // campos relevantes já estão nos campos normalizados (senderId,
+              // text, mediaUrl). Persistir o objeto completo é dado duplicado.
             });
           }
         }
@@ -217,7 +224,9 @@ export class MetaMessengerAdapter implements IChannelAdapter {
                 senderName: `Lead Anúncio Facebook (#${leadgenId?.slice?.(-4) || 'Novo'})`,
                 text: `Lead capturado via Anúncio Meta (Formulário: ${value.form_id || 'Principal'}). Solicitando atendimento sobre recurso de multa.`,
                 timestamp: new Date().toISOString(),
-                rawPayload: change,
+                // rawPayload removido: LGPD FASE 4.6 — change contém o objeto
+                // completo do webhook LeadGen (form_id, leadgen_id, page_id).
+                // Nenhum campo do change é usado fora dos já normalizados acima.
               });
             }
           }
@@ -301,7 +310,9 @@ export class InstagramDirectAdapter implements IChannelAdapter {
               mediaUrl,
               mediaType,
               timestamp: new Date(msgEvent.timestamp || Date.now()).toISOString(),
-              rawPayload: msgEvent,
+              // rawPayload removido: LGPD FASE 4.6 — msgEvent contém o objeto
+              // completo do Instagram com sender PSID e conteúdo; tudo já está
+              // nos campos normalizados (senderId, text, mediaUrl).
             });
           }
         }
@@ -376,7 +387,11 @@ export class MetaWhatsAppCloudAdapter implements IChannelAdapter {
                 senderName,
                 text,
                 timestamp: new Date(Number(msg.timestamp) * 1000 || Date.now()).toISOString(),
-                rawPayload: msg,
+                // rawPayload removido: LGPD FASE 4.6 — msg contém o objeto
+                // completo do WhatsApp Cloud com phone, pushName, conteúdo e
+                // anexos; tudo já está nos campos normalizados (senderId,
+                // senderName, text, mediaUrl). Persistir o msg completo é
+                // dado duplicado que expõe PII sem necessidade.
               });
             }
           }
@@ -882,7 +897,11 @@ export class MessagingService {
       mediaType: incoming.mediaType,
       status: 'delivered',
       externalMessageId: incoming.externalMessageId,
-      rawMetadata: incoming.rawPayload,
+      // rawMetadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload. O webhook completo da Evolution API/Meta era persistido sem
+      // necessidade, duplicando senderId, senderName, text e mediaUrl que já
+      // estão em campos normalizados. Remover elimina exposição de PII de
+      // signatários sem impacto em nenhuma lógica de negócio.
       createdAt: now,
     };
 
@@ -1594,7 +1613,9 @@ export class MessagingService {
       media_type: m.mediaType ?? null,
       status: m.status,
       external_message_id: m.externalMessageId ?? null,
-      raw_metadata: m.rawMetadata ?? null,
+      // raw_metadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload, mapMessage() não persiste mais rawMetadata, e mapMessageRow()
+      // não deve repassar um campo que não existe mais na写入 nem no retorno.
       metadata: { mapId: m.id },
       created_at: m.createdAt,
     };
@@ -1614,7 +1635,9 @@ export class MessagingService {
       mediaType: row.media_type ?? undefined,
       status: row.status,
       externalMessageId: row.external_message_id ?? undefined,
-      rawMetadata: row.raw_metadata ?? undefined,
+      // rawMetadata removido: LGPD FASE 4.6 — normalizeInbound() não define mais
+      // rawPayload; mapMessage() não persiste mais rawMetadata; mapMessageRow()
+      // é read-path e não precisa repassar um campo que não é mais写入.
       createdAt: row.created_at,
     };
   }
