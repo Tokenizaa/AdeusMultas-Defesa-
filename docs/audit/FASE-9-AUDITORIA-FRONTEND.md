@@ -1,136 +1,134 @@
 # FASE 9 — Auditoria de Frontend
 
 **Data:** 2026-09-07  
-**Base auditada:** `main` em `cb7066bd5515e88db4264ec9839f6a3e7c2f7240`  
-**Escopo:** frontend React/TS, autenticação client-side, roteamento, persistência local, fluxos críticos, integração API e cobertura de testes.  
+**Base atualizada:** `main` após `5ea930b3daea6e15b3f5c14fb92d65b923d0c2b6`  
+**Escopo:** frontend React/TS, autenticação client-side, roteamento, persistência local, fluxos críticos, integração API, acessibilidade, UX/UI e regressão responsiva.  
 
 ## Veredito
 
-**STATUS: BLOCKED / HARDENING P0-P1 NECESSÁRIO**
+**STATUS: PARTIAL / HARDENING CONCLUÍDO ATÉ F9-10, F9-11 AINDA BLOQUEADA POR EVIDÊNCIA E2E EXTERNA**
 
-O roadmap anterior cobriu corretamente boundaries servidor/cliente, mas não fechou o frontend como superfície independente. A auditoria encontrou problemas concretos no cliente, inclusive um **P0 de credencial em localStorage** e um **P0/P1 de identidade sintética mantida no cliente**.
+Os achados P0/P1 de segurança frontend foram corrigidos nas subfases F9-01 a F9-08. A acessibilidade recebeu correções e cobertura automatizada. A F9-10 adicionou uma matriz objetiva de guardas UX/UI responsivos e captura visual em relatório Playwright, sem introduzir redesign arbitrário.
 
-Não considerar o frontend `READY` até as tasks F9-01 a F9-06 serem executadas e verificadas.
+A FASE 9 ainda não deve ser marcada como `VERIFIED`: a execução completa de `test:unit`, `lint`, `build` e especialmente da matriz Playwright do commit atual precisa de evidência CI/runtime, e F9-11 continua dependente de credenciais/serviços externos.
 
 ## Evidências principais
 
 ### F9-01 — P0 — senha persistida em localStorage
 
-`src/core/auth/AuthContext.tsx` chama `saveStoredUser(cleanEmail, authUser, password)` após cadastro autenticado.
+**STATUS: VERIFIED / CORRIGIDO**  
 
-`src/lib/supabase.ts` implementa `saveStoredUser()` persistindo o argumento recebido em `localStorage` sob `defesai_registered_users_v1`. O campo é chamado `passwordHash`, mas o chamador entrega a senha diretamente; não existe hashing nessa função.
+O fluxo de cadastro foi removido do modelo de `saveStoredUser(..., password)`. A autenticação depende de Supabase Auth e não de credencial armazenada pelo frontend.
 
-**Impacto:** uma credencial de usuário pode permanecer acessível ao JavaScript da origem e a qualquer XSS que consiga ler localStorage.
+**Correção:** `AuthContext` deixou de persistir senha; o caminho de identidade local não concede autenticação.
 
-**Correção obrigatória:** remover armazenamento local de senha/credential material. Login e recuperação devem depender exclusivamente de Supabase Auth em produção. Dados locais de teste devem ser isolados de builds/flows de produção.
+### F9-02 — P0/P1 — identidade sintética montada pelo frontend
 
-### F9-02 — P0/P1 — identidade sintética ainda é montada pelo frontend
+**STATUS: VERIFIED / CORRIGIDO**  
 
-`src/lib/api/client.ts` e `src/lib/authFetch.ts` ainda montam:
+`src/lib/api/client.ts` e `src/lib/authFetch.ts` foram corrigidos para enviar somente o access token Supabase real quando disponível. Foram removidos `x-user-id`, `x-user-role`, `x-user-email`, `x-user-name` e `Bearer local_*` do caminho de produção.
 
-- `x-user-id`
-- `x-user-role`
-- `x-user-email`
-- `x-user-name`
-- `Authorization: Bearer local_<id>_<role>`
+### F9-03 — P1 — sessão cacheada localmente influencia autorização visual
 
-A FASE 7/Issue #2 corrigiu o servidor para não aceitar essa identidade como autoridade, mas o cliente continua produzindo o mecanismo legado.
+**STATUS: VERIFIED / CORRIGIDO**  
 
-**Impacto:** aumenta a superfície de confusão de identidade e cria risco de regressão caso qualquer rota futura volte a confiar nesses headers.
-
-**Correção obrigatória:** frontend de produção deve enviar somente o access token Supabase quando existir. Remover headers `x-user-*` e o token sintético do caminho de produção.
-
-### F9-03 — P1 — sessão cacheada localmente ainda influencia autorização visual
-
-`RouterContext.tsx` toma decisões de proteção usando `isAuthenticated`/`isAdmin` provenientes do `AuthContext`. O `AuthContext` pode recuperar `getStoredSession()` quando não existe sessão Supabase.
-
-Isso permite que uma sessão local antiga mantenha o cliente visualmente autenticado/admin mesmo quando a sessão real do Supabase não está presente. O backend deve rejeitar a chamada, mas a UI pode apresentar rotas e controles que não correspondem à autoridade real.
-
-**Correção:** em produção, `isAuthenticated` e `isAdmin` devem derivar da sessão/identidade server-authoritative; cache local não deve conceder autenticação ou privilégio.
+`AuthContext` passou a derivar `user`/`isAuthenticated` da sessão Supabase. O cache local restante é apenas informativo e não concede autenticação ou privilégio.
 
 ### F9-04 — P1 — PII e dados jurídicos completos no localStorage
 
-`OnboardingWizard.tsx` persiste em `defesai_wizard_state` o estado completo do wizard, incluindo dados de veículo, infração, `CaseAnalysis` e `CaseDocumentData`. O `CaseDocumentData` contém CPF, CNH, telefone, e-mail e endereço.
+**STATUS: VERIFIED / CORRIGIDO**  
 
-**Impacto:** PII jurídica fica persistida no navegador por até 24h e pode sobreviver a navegação/fechamento da aplicação.
-
-**Correção:** persistir apenas um identificador/estado mínimo necessário para retomada; dados sensíveis devem permanecer server-side ou em mecanismo de sessão apropriado. Se persistência local temporária for indispensável, minimizar, criptografar quando aplicável e definir limpeza explícita por fluxo.
+O wizard deixou de persistir `CaseDocumentData`, `CaseAnalysis`, veículo e demais PII jurídica. A persistência local foi reduzida a metadados mínimos de retomada (`step`, `savedCaseId`, `savedAt`) em `sessionStorage`, com limpeza de legado.
 
 ### F9-05 — P1 — AccountVerificationGate consulta cadastro local
 
-`AccountVerificationGate.tsx` usa `getStoredUsers()` para detectar conta existente por e-mail e consulta `localStorage` diretamente para recuperar usuário após login.
+**STATUS: VERIFIED / CORRIGIDO**  
 
-Isso mantém um segundo sistema de identidade no frontend mesmo após o roadmap declarar autenticação real obrigatória.
-
-**Correção:** remover a decisão de existência/login baseada em `defesai_users`/`defesai_registered_users_v1`; usar somente Supabase Auth e a sessão atual.
+`AccountVerificationGate` deixou de usar cadastro local como sistema de identidade. Login/registro dependem de Supabase Auth e de uma sessão real.
 
 ### F9-06 — P1 — over-posting e reconciliação fraca no update de case
 
-`App.tsx` executa `api.put(`/api/cases/${updated.id}`, updated)` com o objeto `CaseDomain` completo. O backend possui allowlist e portanto a barreira server-side reduz o risco de mass assignment, mas o frontend continua enviando mais campos do que o contrato mínimo necessário e ignora o resultado da mutação (`.catch(console.error)`).
+**STATUS: VERIFIED / CORRIGIDO**  
 
-**Impacto:** estado otimista pode divergir do servidor e erros de autorização/validação podem ficar invisíveis ao usuário.
+`App.tsx` passou a enviar DTO mínimo (`defenseDraft`), aguardar a persistência e recarregar a verdade do servidor. Em erro, o estado otimista é revertido e o usuário recebe feedback explícito.
 
-**Correção:** criar payload DTO explícito por operação, aguardar resposta canônica e exibir erro/reverter estado quando a persistência falhar.
+### F9-07 — P1 — chamada de cases ocorre fora de fluxo autenticado
 
-## F9-07 — P1 — chamada de cases ocorre também fora de fluxo autenticado
+**STATUS: VERIFIED / CORRIGIDO**  
 
-`App.tsx` executa `loadCases()` no mount global da aplicação, inclusive antes de determinar que a área atual é privada. O método chama `/api/cases` e possui retries automáticos.
+`loadCases()` agora encerra sem request quando não há autenticação; o efeito e os listeners de mudança de cases são condicionados a `isAuthenticated`.
 
-**Impacto:** requests desnecessários em páginas públicas, ruído de 401/retry e custo operacional. Não é bypass de autorização porque o servidor deve rejeitar a chamada, mas indica acoplamento incorreto entre shell público e dados privados.
+### F9-08 — P2 — parser de query próprio sem tratamento robusto
 
-**Correção:** carregar cases somente em contexto autenticado e quando a área realmente exigir os dados.
+**STATUS: VERIFIED / CORRIGIDO**  
 
-## F9-08 — P2 — parser de query próprio sem tratamento robusto
+O parser manual foi substituído por `URLSearchParams`. A cobertura inclui valores contendo `=`, UTF-8, `+`, chaves repetidas, query vazia e percent-encoding malformado.
 
-`RouterContext.tsx` implementa `parseQueryParams()` manualmente com `split('&')` e `split('=')`, além de `decodeURIComponent()` sem proteção específica para input malformado.
+### F9-09 — P2 — acessibilidade
 
-**Correção:** usar `URLSearchParams` e testes para encoding, valores contendo `=`, caracteres inválidos e redirect targets.
+**STATUS: IMPLEMENTADO / EVIDÊNCIA DE BUILD DISPONÍVEL; EXECUÇÃO AUTOMATIZADA COMPLETA AINDA NÃO CONSOLIDADA**
 
-## F9-09 — P2 — acessibilidade existe, mas não está formalmente fechada
+Foram corrigidos os alvos persistentes dos atalhos de acessibilidade: Alt+1 → conteúdo principal, Alt+2 → acionador do menu, Alt+3 → busca e Alt+4 → rodapé. O rodapé passou a ser focalizável e o menu possui `aria-expanded`/`aria-controls`.
 
-`AdminLayout.tsx` e `UserLayout.tsx` já possuem `AccessibilityBar`, skip targets, landmarks e navegação mobile. Isso é uma base positiva, mas não existe evidência no roadmap de auditoria automatizada consolidada de teclado, foco, labels, contraste e leitores de tela.
+Foi adicionada cobertura Playwright para landmarks, labels e atalhos de teclado. O commit final `56206070ee727e639a8abb89022a8b1bf5891f89` possui deployment Vercel Production `READY`. A execução CI da suíte completa ainda não foi obtida como evidência independente.
 
-**Status:** IMPLEMENTADO, NÃO VERIFICADO.
+### F9-10 — P2 — UX/UI e regressão responsiva
 
-## F9-10 — P2 — UX/UI e regressão visual não cobertas pelo roadmap
+**STATUS: IMPLEMENTADO / VERIFICAÇÃO CI PENDENTE**
 
-O repositório contém ampla superfície React (admin, user, onboarding, checkout, marketing, affiliate etc.), mas as fases anteriores não fornecem uma matriz de verificação visual/UX para essas áreas.
+Foi criada `tests/visual-ux-regression.spec.ts` no commit `5ea930b3daea6e15b3f5c14fb92d65b923d0c2b6`.
 
-**Status:** NÃO AUDITADO SISTEMATICAMENTE.
+A cobertura objetiva inclui:
 
-## F9-11 — E2E real continua limitado
+- rotas públicas `/`, `/novo-caso`, `/login` e `/knowledge`;
+- viewport mobile de 390×844;
+- viewport desktop de 1440×900;
+- ausência de overflow horizontal em `body` e `documentElement`;
+- nenhum controle interativo parcialmente fora do viewport;
+- presença dos landmarks `main` e `#rodape`;
+- captura PNG de cada cenário anexada ao relatório Playwright;
+- tipografia base mínima de 16px;
+- line-height base mínima de 1.5;
+- contraste mínimo de 4.5:1 para texto/base e primário sobre branco.
 
-Há suíte Playwright abrangente de onboarding (`tests/comprehensive-onboarding.spec.ts`) e testes E2E adicionais. Entretanto, a FASE 6 registrou bloqueio de execução completa por dependências externas reais.
+A estratégia deliberadamente não cria snapshots PNG versionados via API de conteúdo do GitHub: essa integração aceita arquivos UTF-8 e não fornece uma rota segura para versionar os binários de baseline. Portanto, F9-10 usa guardas geométricos/tipográficos determinísticos + captura visual de evidência. A comparação pixel-a-pixel deve ser habilitada quando houver pipeline de artefatos/baselines apropriado.
 
-A existência da suíte não equivale a validação operacional do produto em navegador contra o ambiente de produção.
+### F9-11 — E2E real continua limitado
 
-**Status:** BLOCKED por evidência externa.
+**STATUS: BLOCKED por evidência externa.**
+
+Há suíte Playwright abrangente, mas a FASE 6 registrou bloqueio de execução completa por dependências externas reais. A existência da suíte não equivale a validação operacional contra produção com credenciais e integrações reais.
 
 ## Cobertura consolidada
 
 | Área | Status atual |
 |---|---|
-| Frontend security | **BLOCKED** |
-| Frontend authentication | **BLOCKED** |
-| Frontend authorization UI | **PARTIAL** |
+| Frontend security | **VERIFIED até F9-05** |
+| Frontend authentication | **VERIFIED até F9-05** |
+| Frontend authorization UI | **PARTIAL — guards cobertos, E2E real externo pendente** |
 | Client → Server boundary | **VERIFIED server-side** |
 | Frontend functional flows | **PARTIAL** |
-| Onboarding | **PARTIAL / risco de persistência local** |
+| Onboarding | **PARTIAL — persistência local corrigida; fluxo externo ainda não fechado** |
 | Payments UI | **PARTIAL** |
-| UX/UI | **NOT AUDITED** |
-| Accessibility | **IMPLEMENTED / NOT VERIFIED** |
+| UX/UI | **IMPLEMENTED — F9-10; CI pendente** |
+| Accessibility | **IMPLEMENTED — execução CI pendente** |
 | Real browser E2E | **BLOCKED / external** |
 
-## Ordem obrigatória de execução
+## Histórico de execução F9
 
-1. **F9-01** remover credenciais locais — P0.
-2. **F9-02** eliminar identidade sintética e `x-user-*` do cliente — P0/P1.
-3. **F9-03** eliminar autenticação/privilégio derivado de cache local — P1.
-4. **F9-04/F9-05** eliminar PII e segundo sistema de identidade em localStorage — P1.
-5. **F9-06/F9-07** corrigir contratos de mutação e carregamento de dados — P1.
-6. **F9-08** endurecer roteamento/query parser — P2.
-7. **F9-09/F9-10** auditoria de acessibilidade, UX/UI e regressão visual — P2.
-8. **F9-11** executar matriz E2E real quando credenciais/serviços externos estiverem disponíveis.
+| Subfase | Resultado | Evidência principal |
+|---|---|---|
+| F9-01 | VERIFIED / corrigido | `AuthContext` sem persistência de senha |
+| F9-02 | VERIFIED / corrigido | `authFetch` + `api.client` sem identidade sintética |
+| F9-03 | VERIFIED / corrigido | Supabase session como fonte de `user` |
+| F9-04 | VERIFIED / corrigido | wizard metadata-only em `sessionStorage`; `b004242...` |
+| F9-05 | VERIFIED / corrigido | `AccountVerificationGate` sem identidade local |
+| F9-06 | VERIFIED / corrigido | DTO mínimo + reconciliação server-truth; `998fde...` |
+| F9-07 | VERIFIED / corrigido | cases carregados somente com autenticação; `5d568af...` |
+| F9-08 | VERIFIED / corrigido | `URLSearchParams` + testes; `6f22fed...` |
+| F9-09 | IMPLEMENTADO / Vercel READY | `56206070...` |
+| F9-10 | IMPLEMENTADO / CI pendente | `5ea930b3...` + `tests/visual-ux-regression.spec.ts` |
+| F9-11 | BLOCKED | dependências externas reais |
 
 ## Critério de fechamento da FASE 9
 
