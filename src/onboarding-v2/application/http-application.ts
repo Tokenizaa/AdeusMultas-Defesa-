@@ -28,7 +28,7 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       return client.request<EvidenceUploadResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/evidence`, authInit({ method: 'POST', body: JSON.stringify({ base64, filename: file.name, mimeType: file.type }) }));
     },
     async claim(input: ClaimInput): Promise<CreateDraftResult['case']> {
-      const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) });
+      const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }));
       token = '';
       return result;
     },
@@ -42,14 +42,7 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       const current = await client.request<CreateDraftResult['case']>(`/api/onboarding-v2/draft/${encodeURIComponent(caseId)}`, authInit());
       const applicant = current.applicant;
       if (!applicant) throw new Error('Qualificação do requerente é obrigatória antes do pagamento.');
-      return client.request<PaymentResult>('/api/pix/create', authInit({ method: 'POST', body: JSON.stringify({
-        caseId,
-        customerName: applicant.applicantName,
-        customerEmail: applicant.applicantEmail,
-        customerCpf: applicant.applicantCpf,
-        serviceType: current.serviceType,
-        userId: current.userId,
-      }) }));
+      return client.request<PaymentResult>('/api/pix/create', authInit({ method: 'POST', body: JSON.stringify({ caseId, customerName: applicant.applicantName, customerEmail: applicant.applicantEmail, customerCpf: applicant.applicantCpf, serviceType: current.serviceType, userId: current.userId }) }));
     },
     async confirmPayment(caseId: string, paymentReference: string): Promise<PaymentResult> {
       return client.request<PaymentResult>(`/api/pix/status/${encodeURIComponent(paymentReference)}`, authInit());
