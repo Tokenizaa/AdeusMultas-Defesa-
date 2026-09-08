@@ -3,8 +3,13 @@ import type { OnboardingApplication } from '../application/contracts';
 import type { CanonicalOnboardingPayload, CaseAnalysis, CaseApplicantData } from '../application/types-bridge';
 import type { OnboardingState, OnboardingStep } from '../domain/state';
 
+const CLAIM_STORAGE_KEY = 'defesai_onboarding_claim_token';
 const initialPayload: CanonicalOnboardingPayload = { procedureType: 'defesa_previa', vehicle: { plate: '', brandModel: '' }, infraction: { aitNumber: '', infractionCode: '', autuadorBody: '' } };
 const stepOrder: OnboardingStep[] = ['case', 'facts', 'evidence', 'diagnosis', 'qualification', 'review', 'payment', 'generation'];
+
+function loadClaimToken(): string {
+  try { return sessionStorage.getItem(CLAIM_STORAGE_KEY) || ''; } catch { return ''; }
+}
 
 export function useOnboarding(application: OnboardingApplication) {
   const [payload, setPayload] = useState<CanonicalOnboardingPayload>(initialPayload);
@@ -64,6 +69,26 @@ export function useOnboarding(application: OnboardingApplication) {
     setState((current) => ({ ...current, status: 'reviewing', step: 'review', updatedAt: new Date().toISOString() }));
   }
 
+  async function claimAuthenticatedCase(user: { id?: string; name?: string; email?: string; phone?: string; cpf?: string }) {
+    if (!state.caseId) throw new Error('Caso ainda não persistido.');
+    const claimToken = loadClaimToken();
+    if (!claimToken) throw new Error('Token de recuperação do caso não encontrado.');
+    const claimed = await application.claim({
+      caseId: state.caseId,
+      claimToken,
+      name: user.name || applicantFallback(payload),
+      email: user.email,
+      phone: user.phone,
+      cpf: user.cpf,
+    });
+    setState((current) => ({ ...current, caseId: claimed.id, updatedAt: new Date().toISOString() }));
+    return claimed;
+  }
+
+  function applicantFallback(current: CanonicalOnboardingPayload): string | undefined {
+    return current.applicant?.applicantName;
+  }
+
   async function requestPayment() {
     if (!state.caseId) throw new Error('Caso ainda não persistido.');
     return application.requestPayment(state.caseId);
@@ -79,5 +104,5 @@ export function useOnboarding(application: OnboardingApplication) {
     return application.generateDocument(state.caseId);
   }
 
-  return { payload, patchPayload, state, analysis, error, next, back, qualify, uploadEvidence, requestPayment, confirmPayment, generateDocument, stepIndex, stepOrder, caseId: state.caseId };
+  return { payload, patchPayload, state, analysis, error, next, back, qualify, claimAuthenticatedCase, uploadEvidence, requestPayment, confirmPayment, generateDocument, stepIndex, stepOrder, caseId: state.caseId };
 }
