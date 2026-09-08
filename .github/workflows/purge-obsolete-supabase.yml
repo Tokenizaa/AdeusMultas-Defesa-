@@ -1,3 +1,4 @@
+# One-shot migration guard; removes itself after successful execution.
 name: Purge obsolete Supabase project references
 
 on:
