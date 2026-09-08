@@ -36,7 +36,10 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       return client.request<EvidenceUploadResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/evidence`, withJson({ method: 'POST', body: JSON.stringify({ base64: btoa(binary), filename: file.name, mimeType: file.type }) }, token));
     },
     async claim(input: ClaimInput) {
-      const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }));
+      const result = await client.request<CreateDraftResult['case']>(
+        `/api/cases/${encodeURIComponent(input.caseId)}/claim`,
+        withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }
+      );
       token = '';
       clearClaimToken();
       return result;
