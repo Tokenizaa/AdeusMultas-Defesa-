@@ -3,7 +3,7 @@ import type { OnboardingApplication, CreateDraftInput, CreateDraftResult, ClaimI
 
 export interface OnboardingHttpClient { request<T>(path: string, init?: RequestInit): Promise<T>; }
 
-const CLAIM_STORAGE_KEY = 'defesai_onboarding_v2_claim_token';
+const CLAIM_STORAGE_KEY = 'defesai_onboarding_claim_token';
 
 function withJson(init: RequestInit = {}, claimToken?: string): RequestInit {
   return { ...init, headers: { 'Content-Type': 'application/json', ...(claimToken ? { 'X-Claim-Token': claimToken } : {}), ...(init.headers || {}) } };
