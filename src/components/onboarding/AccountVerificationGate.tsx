@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Sparkles, Mail, CheckCircle2, ArrowRight, Loader2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ShieldCheck, Sparkles, Mail, CheckCircle2, Loader2, X } from 'lucide-react';
 import { useAuth } from '../../core/auth/AuthContext';
 import { supabase as supabaseClient } from '../../lib/supabase';
 import { InfractionData, VehicleData, CaseAnalysis } from '../../types';
@@ -13,7 +13,7 @@ interface AccountVerificationGateProps {
   infractionData: InfractionData;
   vehicleData: VehicleData;
   analysis: CaseAnalysis;
-  onSuccess: (authenticatedUser: any) => void;
+  onSuccess: (authenticatedUser: any) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -31,19 +31,27 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
   const [pendingConfirmation, setPendingConfirmation] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [waitingForConfirmation, setWaitingForConfirmation] = useState(false);
+  const successHandled = useRef(false);
+
+  const completeSuccess = (authenticatedUser: any) => {
+    if (successHandled.current) return;
+    successHandled.current = true;
+    void onSuccess(authenticatedUser);
+  };
 
   useEffect(() => {
-    if (isAuthenticated && user) onSuccess(user);
-  }, [isAuthenticated, user, onSuccess]);
+    if (isAuthenticated && user) {
+      completeSuccess(user);
+    }
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (!waitingForConfirmation || !supabase) return;
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setWaitingForConfirmation(false);
         setPendingConfirmation(false);
-        onSuccess({
+        completeSuccess({
           id: session.user.id,
           name: session.user.user_metadata?.name || leadName,
           email: session.user.email || pendingEmail,
@@ -52,25 +60,18 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
         });
       }
     });
-
     return () => subscription.unsubscribe();
-  }, [waitingForConfirmation, pendingEmail, supabase, leadName, leadPhone, onSuccess]);
+  }, [waitingForConfirmation, pendingEmail, leadName, leadPhone]);
 
-  // Account existence is authoritative in Supabase Auth. Never inspect local
-  // user registries to decide whether the visitor should log in or register.
-  const handleEmailChange = (_emailValue: string) => {
-    // Deliberately no-op: Supabase Auth is the sole identity authority.
-  };
+  const handleEmailChange = (_emailValue: string) => {};
 
   const handleLogin = async (loginEmail: string, loginPassword: string) => {
     const result = await login(loginEmail, loginPassword);
     if (result.success) {
       const session = supabase ? await supabase.auth.getSession() : { data: { session: null } };
       const supaUser = session?.data?.session?.user;
-      if (!supaUser) {
-        return { success: false, error: 'Sessão de autenticação não disponível. Tente novamente.' };
-      }
-      onSuccess({
+      if (!supaUser) return { success: false, error: 'Sessão de autenticação não disponível. Tente novamente.' };
+      completeSuccess({
         id: supaUser.id,
         name: supaUser.user_metadata?.name || leadName,
         email: supaUser.email || loginEmail,
@@ -91,8 +92,7 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
         setWaitingForConfirmation(true);
         return { success: true };
       }
-
-      onSuccess({
+      completeSuccess({
         id: session.data.session.user.id,
         name: registerName,
         email: registerEmail,
@@ -106,7 +106,7 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
   if (pendingConfirmation) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in duration-200 text-center">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 mx-auto">
             <Mail className="w-8 h-8 text-[#155BCB] animate-pulse" />
           </div>
@@ -116,30 +116,13 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
             <p className="text-sm font-bold text-[#155BCB] mt-1 font-mono">{pendingEmail}</p>
           </div>
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900 space-y-2">
-            <p className="font-bold flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-[#155BCB]" />
-              Seus dados foram salvos com segurança
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-blue-800">
-              <li>Nome e telefone preservados</li>
-              <li>Diagnóstico jurídico mantido</li>
-              <li>Processo retomará de onde parou</li>
-            </ul>
+            <p className="font-bold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#155BCB]" />Seus dados foram salvos com segurança</p>
+            <ul className="list-disc list-inside space-y-1 text-blue-800"><li>Nome e telefone preservados</li><li>Diagnóstico jurídico mantido</li><li>Processo retomará de onde parou</li></ul>
           </div>
           <div className="space-y-3">
             <p className="text-xs text-slate-500">Clique no link do e-mail para confirmar sua conta. Esta janela detectará automaticamente a confirmação.</p>
-            {waitingForConfirmation && (
-              <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Aguardando confirmação...</span>
-              </div>
-            )}
-            <button
-              onClick={() => { setPendingConfirmation(false); setWaitingForConfirmation(false); }}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            >
-              Voltar ao Formulário
-            </button>
+            {waitingForConfirmation && <div className="flex items-center justify-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Aguardando confirmação...</span></div>}
+            <button onClick={() => { setPendingConfirmation(false); setWaitingForConfirmation(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">Voltar ao Formulário</button>
           </div>
         </div>
       </div>
@@ -148,58 +131,16 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onClick={onCancel}>
-      <div
-        className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6" onClick={(e) => e.stopPropagation()}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              100% dos Dados Coletados Preservados
-            </span>
-            <div className="flex items-center gap-2">
-              <button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600 font-semibold cursor-pointer">Voltar ao Diagnóstico</button>
-              <button onClick={onCancel} className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" aria-label="Fechar">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />100% dos Dados Coletados Preservados</span>
+            <div className="flex items-center gap-2"><button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600 font-semibold">Voltar ao Diagnóstico</button><button onClick={onCancel} className="p-2 rounded-lg bg-slate-100 text-slate-600" aria-label="Fechar"><X className="w-4 h-4" /></button></div>
           </div>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Acesso à Sua Defesa Jurídica</h2>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Verificamos seu cadastro para vincular o auto nº <strong className="font-mono text-slate-800">{infractionData.aitNumber || 'N/A'}</strong> (Placa <strong className="font-mono text-slate-800">{vehicleData.plate || 'N/A'}</strong>) com segurança.
-            </p>
-          </div>
+          <div><h2 className="text-xl sm:text-2xl font-bold text-slate-900">Acesso à Sua Defesa Jurídica</h2><p className="text-xs sm:text-sm text-slate-500 mt-1">Verificamos seu cadastro para vincular o auto nº <strong className="font-mono text-slate-800">{infractionData.aitNumber || 'N/A'}</strong> (Placa <strong className="font-mono text-slate-800">{vehicleData.plate || 'N/A'}</strong>) com segurança.</p></div>
         </div>
-        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-blue-950 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />
-              Diagnóstico Preliminar Concluído ({analysis.overallSuccessRate ?? 0}% de êxito)
-            </span>
-            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">
-              {analysis.recommendedArguments?.length || 3} Teses Mapeadas
-            </span>
-          </div>
-          <p className="text-[11px] text-blue-900">Você não precisará preencher os dados do veículo e da autuação novamente.</p>
-        </div>
-        <SharedAuthForm
-          mode={mode}
-          onModeChange={setMode}
-          variant="modal"
-          theme="blue"
-          showPhone={true}
-          phoneRequired={true}
-          showPasswordConfirm={true}
-          showTerms={true}
-          initialName={leadName}
-          initialPhone={leadPhone}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-          onAuthSuccess={() => {}}
-          onEmailChange={handleEmailChange}
-        />
+        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs"><div className="flex items-center justify-between"><span className="font-bold text-blue-950 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />Diagnóstico Preliminar Concluído ({analysis.overallSuccessRate ?? 0}% de êxito)</span><span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">{analysis.recommendedArguments?.length || 3} Teses Mapeadas</span></div><p className="text-[11px] text-blue-900">Você não precisará preencher os dados do veículo e da autuação novamente.</p></div>
+        <SharedAuthForm mode={mode} onModeChange={setMode} variant="modal" theme="blue" showPhone phoneRequired showPasswordConfirm showTerms initialName={leadName} initialPhone={leadPhone} onLogin={handleLogin} onRegister={handleRegister} onAuthSuccess={() => {}} onEmailChange={handleEmailChange} />
       </div>
     </div>
   );
