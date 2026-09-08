@@ -38,7 +38,7 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
     async claim(input: ClaimInput) {
       const result = await client.request<CreateDraftResult['case']>(
         `/api/cases/${encodeURIComponent(input.caseId)}/claim`,
-        withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }
+        withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) })
       );
       token = '';
       clearClaimToken();
