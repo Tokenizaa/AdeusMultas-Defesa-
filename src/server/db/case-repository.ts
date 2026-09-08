@@ -53,7 +53,18 @@ function allowInMemoryPersistence(): boolean {
 
 export class CaseRepository {
   private rows: Map<string, CaseRow> = new Map();
-  private client: SupabaseClient<Database> | null = getSupabaseServerClient();
+  private client: SupabaseClient<Database> | null = null;
+
+  /**
+   * Resolve the server client at operation time rather than module construction.
+   * This matters when dotenv/configuration is loaded after route modules import
+   * the repository during local development or serverless bootstrap.
+   */
+  private getClient(): SupabaseClient<Database> | null {
+    if (this.client) return this.client;
+    this.client = getSupabaseServerClient();
+    return this.client;
+  }
 
   get size(): number {
     return this.rows.size;
@@ -126,7 +137,9 @@ export class CaseRepository {
   }
 
   private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
-    if (!this.client) {
+    const client = this.getClient();
+
+    if (!client) {
       if (allowInMemoryPersistence()) {
         logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
           caseId: id,
@@ -141,7 +154,7 @@ export class CaseRepository {
       );
     }
 
-    const { error } = await this.client.from('cases').upsert(payload);
+    const { error } = await client.from('cases').upsert(payload);
     if (error) {
       logger.error('supabase', 'case_repository', 'persist', `Falha ao persistir caso ${id}: ${error.message}`, {
         caseId: id,
@@ -159,12 +172,14 @@ export class CaseRepository {
   }
 
   async loadAllFromSupabase(): Promise<CaseRow[]> {
-    if (!this.client) {
+    const client = this.getClient();
+
+    if (!client) {
       if (allowInMemoryPersistence()) return [];
       throw new Error('CaseRepository: Supabase client não configurado — cold start não pode ser considerado persistente.');
     }
 
-    const { data, error } = await this.client
+    const { data, error } = await client
       .from('cases')
       .select('*')
       .order('created_at', { ascending: false });
