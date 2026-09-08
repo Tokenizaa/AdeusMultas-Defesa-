@@ -1,184 +1,173 @@
-# 🔎 E2E CONTRACT MAP — ADEUS MULTA
+# E2E CONTRACT MAP — ADEUS MULTA
 
-## 🟢 O QUE FOI CONFIRMADO
+**Estado reconciliado:** `main` em `d8e349b9ebd18212a71136d66bc17d22fdc8ff29`  
+**Finalidade:** mapa contratual atual para a Fase 1.  
+**Regra:** existência de código não equivale a E2E comprovado.
 
-1. **Rota de entrada**: /novo-caso (PublicLayout) -> OnboardingWizard (src/App.tsx:393-399)
-2. **Autenticação**: Supabase Auth + JWT validation via authenticateToken middleware (src/server/middleware/auth-middleware.ts:78-211)
-3. **Sessão**: Armazenada em localStorage (defesai_auth_session_v1) + Supabase session cookies; backend usa service_role para RLS bypass
-4. **User ID**: UUID do Supabase Auth (session.user.id) -- validado como UUID v4 antes de persistir (src/server/db/case-repository.ts:48-51)
-5. **Onboarding em 10 passos dinâmicos** (OnboardingWizard.tsx:271-282):
-   - Step 1: Situação (multa_transito, suspensao_cnh, etc.)
-   - Step 2: Fase do processo (condicional -- pulado se inferredStage)
-   - Step 3: Categoria de infração (condicional -- pulado se defaultInfractionCategory)
-   - Step 4: Identificação da autuação (AIT, código, data, órgão)
-   - Step 5: Dados específicos por categoria (velocidade, bafômetro, etc.)
-   - Step 6: Análise processando (ExpertRuleEngine client-side)
-   - Step 7: Resultado da análise gratuita (tese, probabilidade, procedimento)
-   - Step 8: Dados de qualificação do condutor (nome, CPF, CNH, endereço)
-   - Step 9: Revisão da petição
-   - Step 10: Checkout (PIX/Cartão)
-6. **Persistência de estado do wizard**: localStorage chave defesai_wizard_state (TTL 24h) (OnboardingWizard.tsx:37-79)
-7. **Análise jurídica**: ExpertRuleEngine roda no frontend (AnalysisProcessingStep.tsx:49) E no backend (RagPipeline.analyzeInfraction em cases.ts:141)
-8. **Criação de caso**: POST /api/cases (cases.ts:113-192) -> CaseRepository.write-through obrigatório para Supabase (case-repository.ts:76-80)
-9. **Pagamento**: /api/payments/create-pix-order (payments.ts:223-317) -> webhook /api/webhooks/pagbank ou /api/webhooks/ggpix (payments.ts:508-630)
-10. **Geração de documento**: Automática no webhook PAID via generateDefenseDraftForDomain (payments.ts:105-143) usando DocumentAssemblyEngine (document-assembly-engine.ts)
-11. **Armazenamento**: cases tabela no Supabase (src/lib/supabase.ts:212-308) + CaseRepository dual engine (memória + Postgres write-through)
-12. **Autorização**: RLS no Supabase + middleware canAccessCase (cases.ts:28-33) + denyCaseAccess (cases.ts:35-45)
-13. **Defense Integrity**: Hash determinístico + validação hasValidDefenseIntegrity (cases.ts:85-93)
+## 1. ENTRADA E ONBOARDING ATUAL
 
-## 🔴 GAPS / CONTRADIÇÕES ENCONTRADAS
+O frontend atual tem **uma única implementação canônica** em `src/onboarding/`, promovida da antiga árvore V2 no commit `d8e349b9ebd18212a71136d66bc17d22fdc8ff29`.
 
-1. **Duas fontes de verdade para análise**: 
-   - Frontend: ExpertRuleEngine.evaluate() em AnalysisProcessingStep.tsx:49
-   - Backend: RagPipeline.analyzeInfraction() em cases.ts:141
-   - Podem divergir; backend é a autoridade final mas frontend mostra resultado primeiro
+A página atual `src/onboarding/ui/OnboardingPage.tsx` organiza o fluxo em oito estados:
 
-2. **Criação de caso no DocumentCheckoutStep**: Gera CaseDomain localmente (DocumentCheckoutStep.tsx:197-248) com id: case_${Date.now()}_${Math.random()} ANTES de persistir -- backend recria ID se não for UUID válido (cases.ts:116-118)
+```text
+case → facts → evidence → diagnosis → qualification → review → payment → generation
+```
 
-3. **CheckoutView só acessível para admins** (CheckoutView.tsx:44-65) -- usuários comuns NÃO podem usar /checkout; fluxo real usa DocumentCheckoutStep (step 10 do wizard)
+A implementação usa `useOnboarding()` e uma aplicação HTTP (`createOnboardingHttpApplication`). O antigo mapa de dois frontends concorrentes não representa mais o estado atual.
 
-4. **User ID inconsistente**: 
-   - Frontend: authUser.id (UUID Supabase)
-   - Backend: aceita UUID ou email (cases.ts:123-133)
-   - CaseRepository valida UUID v4 apenas (case-repository.ts:48-51) -- emails viram NULL no banco
+**Observação:** ainda existem endpoints backend com o prefixo `/api/onboarding-v2/`. Isso não representa, por si só, dois frontends. A necessidade de renomear/remover o sufixo deve ser decidida após a auditoria contratual.
 
-5. **DocumentCheckoutStep envia userId opcional** (DocumentCheckoutStep.tsx:47) mas não garante que seja UUID válido
+## 2. CONTRATOS ATUAIS IDENTIFICADOS
 
-6. **Webhook gera defesa automaticamente** (payments.ts:572-591) mas falha é "não-bloqueante" -- caso fica isPaid=true SEM defenseDraft
+| Etapa | Contrato atual | Estado da prova |
+|---|---|---|
+| Entrada | `/novo-caso` e alias `/onboarding` | 🟡 código/rota; E2E não provado |
+| Auth | Supabase Auth + JWT; `/api/auth/me` | 🟡 contrato identificado; jornada real não provada |
+| Draft | `POST /api/onboarding-v2/draft` | 🟡 identificado |
+| Atualização | `PUT /api/onboarding-v2/draft` | 🟡 identificado |
+| Evidência | `POST /api/onboarding-v2/cases/:id/evidence` | 🟡 identificado |
+| Análise | `POST /api/onboarding-v2/cases/:id/analysis` | 🟡 identificado |
+| Qualificação | `PUT /api/onboarding-v2/cases/:id/qualification` | 🟡 identificado |
+| PIX | `POST /api/payments/pix/create` | 🟡 identificado; gateway real não provado |
+| Status PIX | `GET /api/payments/pix/status/:reference?caseId=...` | 🟡 identificado |
+| Webhook | `POST /api/webhooks/pagbank` | 🟡 assinatura/handler identificados; evento real não provado |
+| Geração | `POST /api/cases/:id/generate-defense` | 🟡 identificado; documento real não provado |
+| Caso final | `GET /api/cases/:id` | 🟡 identificado |
+| Storage/URL | retornado pelo contrato de geração quando disponível | 🔴 persistência/URL final ainda não comprovadas |
 
-7. **Fallback local de autenticação** em AuthContext.tsx:147-148, 173, 243, 288 -- em produção "não há fallback" mas código permite
+## 3. DATA LINEAGE — ALVOS OBRIGATÓRIOS DA FASE 1
 
-8. **Dois fluxos de pagamento**: 
-   - Admin: /checkout (CheckoutView) 
-   - Usuário: DocumentCheckoutStep (wizard step 10)
-   - Diferentes componentes, mesma API backend
+### `user_id`
 
-9. **Claim de caso anônimo**: /api/cases/claim (OnboardingWizard.tsx:502-518) usa claimToken = caseId -- token previsível
+Origem esperada: Supabase Auth/JWT.  
+Persistência: `cases.user_id`.  
+Regra atual: ownership autenticado deve usar UUID canônico, não email.
 
-10. **TestFillButton** exposto para admins em produção (RequiredDataStep.tsx:60-68) -- gera dados aleatórios válidos
+Correção registrada: `f5d70687f545411d06ac793dc12a7ad6738ea2f3`.
 
-## 🟡 RISCOS
+**Fase 1 deve provar:** mesmo UUID atravessa auth → caso → pagamento/consulta → documento, sem identidade paralela.
 
-1. **Análise divergente**: Frontend mostra análise otimista; backend pode gerar defesa com teses diferentes
-2. **Race condition**: loadCases() no App.tsx (linha 88-90) vs emitCasesChanged() -- cache pode mostrar dado stale
-3. **Payment webhook não-bloqueante**: Se generateDefenseDraftForDomain falhar, usuário pagou mas não tem documento
-4. **Claim token previsível**: claimToken = caseId permite claim não autorizado se ID vazado
-5. **User ID email vs UUID**: Backend aceita email mas CaseRepository descarta (viola FK se email não for UUID)
-6. **Duas rotas de criação de caso**: POST /api/cases (cases.ts) + DocumentCheckoutStep local build -- payloads podem divergir
-7. **localStorage wizard state**: Persiste dados sensíveis (CPF, CNH, endereço) no browser sem criptografia
-8. **Fallback auth em produção**: Código em AuthContext.tsx permite fallback local se Supabase falhar
+### `case_id`
 
-## ⚫ NÃO VERIFICÁVEL NESTA FASE
+O estado do hook mantém `state.caseId`, retornado por `createDraft()` e reutilizado nas operações seguintes.
 
-1. Execução real de pagamento PIX (requer credenciais PagBank/GGPIX)
-2. Webhook real de confirmação de pagamento
-3. Geração de PDF real (exportDefenseToPDF)
-4. RLS policies no Supabase (precisa inspeção no dashboard)
-5. Concorrência de usuários no mesmo caso
-6. Fluxo completo anônimo -> autenticado -> pagamento -> documento
-7. Renovação de token Supabase em sessões longas
-8. Rate limiting efetivo em /api/cases e /api/payments
+`CaseRepository` persiste por `app_ref`/UUID e faz write-through no Supabase por padrão.
 
----
+Correções registradas:
+- persistência fail-closed: `8a1a1cf2b0559e53c7a3e35ca0de86cbc41d30a9`;
+- ID de caso não previsível e identidade canônica: `f5d70687f545411d06ac793dc12a7ad6738ea2f3`.
 
-# FLUXO REAL
+**Fase 1 deve provar:** criação → cold start → recuperação retorna o mesmo caso.
 
-PRIMEIRO ACESSO (/)
-    ↓
-LANDING PAGE (LandingPageView)
-    ↓
-CLICA "INICIAR" -> /novo-caso (rota pública)
-    ↓
-ONBOARDING WIZARD (OnboardingWizard) -- 10 passos dinâmicos
-    ├── Step 1: Situação (USER_SITUATIONS)
-    ├── Step 2: Fase Processual (condicional -- inferredStage)
-    ├── Step 3: Categoria Infração (condicional -- defaultInfractionCategory)
-    ├── Step 4: Dados AIT (número, código, data, órgão, local)
-    ├── Step 5: Dados Específicos por Categoria (velocidade, bafômetro, etc.)
-    ├── Step 6: Análise Processando (ExpertRuleEngine client-side)
-    ├── Step 7: Resultado Análise Gratuita (tese, probabilidade, procedimento)
-    │   ├── Botão "Salvar no Painel" -> AuthGate (login/cadastro)
-    │   └── Botão "Gerar Defesa Completa" -> Step 8
-    ├── Step 8: Qualificação Condutor (nome, CPF, CNH, endereço, email, telefone)
-    ├── Step 9: Revisão Petição (DocumentReviewStep)
-    └── Step 10: Checkout (DocumentCheckoutStep)
-        ├── Resolve preço via /api/payments/resolve-price
-        ├── Gera PIX via /api/payments/create-pix-order
-        ├── Usuário paga QR Code / Copia-e-cola
-        ├── Webhook PAID -> /api/webhooks/pagbank|ggpix
-        │   ├── Atualiza case: isPaid=true, status=defesa_pronta, currentStage=3
-        │   ├── Gera defenseDraft automaticamente (RagPipeline.generateDefenseDraft)
-        │   └── Persiste via CaseRepository (write-through Supabase)
-        └── Emite CASES_CHANGED -> App.tsx recarrega cases
-    ↓
-CASO CRIADO (CaseDomain) -- ID retornado pelo backend
-    ↓
-DASHBOARD (/dashboard) -> CasesListView -> CaseDetailView
-    ↓
-DOCUMENTO DISPONÍVEL (defenseDraft.fullDraftText + integrityHash)
-    ↓
-DOWNLOAD PDF / Google Drive / WhatsApp
+### `analysis_id`
 
----
+O contrato atual retorna `CaseAnalysis` associado ao caso. O mapa não deve inventar uma entidade `analysis_id` separada sem confirmar o schema/persistência.
 
-# DATA LINEAGE
+**Fase 1 deve provar:** qual identificador, se houver, é a chave canônica da análise; qual payload é persistido em `analysis_json`; e qual versão alimenta a defesa.
 
-| Dado | Origem (UI) | Estado (Frontend) | API Request | Backend Handler | Banco (Supabase) | Consumidor |
-|------|-------------|-------------------|-------------|-----------------|------------------|------------|
-| user_id | Supabase Auth (login) | AuthContext.user.id | Header Authorization: Bearer <jwt> | authenticateToken -> req.user.id | cases.user_id (UUID) + user_profiles.user_id | Cases, Payments, Documents |
-| case_id | Gerado frontend (case_${ts}_${rand}) ou backend | OnboardingWizard.savedCaseId | POST /api/cases body.id | cases.ts:116-118 (recria se inválido) | cases.id (app_ref se não-UUID) | Cases, Payments, Documents, Webhooks |
-| AIT | Step 4 (InfractionIdentificationStep) | infractionData.aitNumber | POST /api/cases body.infraction.aitNumber | CanonicalMapper.domainToRow | cases.ait_number | Análise, Documento, Webhook |
-| analysis_id | an_${Date.now()} (frontend) | caseAnalysis.id | Incluído em CaseDomain | RagPipeline.analyzeInfraction (backend) | cases.analysis_json (JSONB) | DocumentReviewStep, DocumentAssemblyEngine |
-| payment_id | Gateway (txId/orderId) | pixData.txId / creditCardResult.orderId | Webhook payload | webhookResult.orderId | payment_orders.id + cases.timeline_json | AdminPaymentsView, CaseDetailView |
-| document_id | Não existe ID separado | defenseDraft.fullDraftText | N/A (gerado no webhook) | generateDefenseDraftForDomain | cases.defense_draft_json (JSONB) | CaseDetailView, PDF Export |
+### `recommendedArguments`
 
----
+No fluxo de geração automática do pagamento, `generateDefenseDraftForDomain()` usa `domain.analysis?.recommendedArguments` como entrada de `RagPipeline.generateDefenseDraft`.
 
-# MATRIZ DE COBERTURA
+**Fase 1 deve provar:** origem → persistência → recuperação → `recommendedArguments` → geração, sem divergência entre análise exibida e análise usada no documento.
 
-| Etapa | Código Identificado | Persistência Identificada | Teste Existente | E2E Real Comprovado |
-|-------|---------------------|---------------------------|-----------------|---------------------|
-| Primeiro acesso | ✅ LandingPageView, PublicLayout, RouterContext | ❌ (stateless) | ❌ | 🟠 NÃO COMPROVADO |
-| Auth (login/cadastro) | ✅ LoginPageView, RegisterPageView, AuthContext, /api/auth/me | ✅ Supabase Auth + localStorage session | ⚠️ Unit: auth-middleware-p0.test.ts | 🟠 NÃO COMPROVADO |
-| Serviço (situação) | ✅ ServiceStep, USER_SITUATIONS, rules-matrix | ✅ localStorage wizard_state | ✅ comprehensive-onboarding.spec.ts | 🟠 NÃO COMPROVADO |
-| Dados infração (AIT) | ✅ InfractionIdentificationStep, SpecificInfractionDataStep | ✅ localStorage wizard_state | ✅ comprehensive-onboarding.spec.ts | 🟠 NÃO COMPROVADO |
-| Análise gratuita | ✅ AnalysisProcessingStep, ExpertRuleEngine, FreeAnalysisResultStep | ✅ localStorage wizard_state | ⚠️ Unit: rule-engine.test.ts | 🟠 NÃO COMPROVADO |
-| Case creation | ✅ POST /api/cases, CaseRepository, CanonicalMapper | ✅ Supabase cases table (write-through) | ✅ comprehensive-case-creation.spec.ts | 🟠 NÃO COMPROVADO |
-| Pagamento | ✅ DocumentCheckoutStep, /api/payments/create-pix-order, webhooks | ✅ payment_orders table + cases.is_paid | ⚠️ Unit: webhook-verification.test.ts | 🟠 NÃO COMPROVADO |
-| Documento | ✅ DocumentAssemblyEngine, RagPipeline.generateDefenseDraft | ✅ cases.defense_draft_json + integrityHash | ✅ document-assembly-fail-closed-p0.test.ts | 🟠 NÃO COMPROVADO |
-| Resultado final | ✅ CaseDetailView, PDF export, Google Drive | ✅ Supabase + local timeline | ❌ | 🟠 NÃO COMPROVADO |
+### `payment_id`
 
----
+O gateway fornece referência/order ID. O webhook PagBank normaliza a referência e tenta associá-la ao caso via `reference_id`/`referenceId`.
 
-# CONCLUSÃO
+**Fase 1 deve provar:** uma única referência canônica relaciona gateway → webhook → `payment_orders` → caso, com idempotência e sem dupla confirmação.
 
-🟢 CONFIRMADO
-- Fluxo completo mapeado no código (roteamento, componentes, APIs, banco)
-- Autenticação Supabase + JWT + middleware
-- Onboarding 10 passos com regras condicionais
-- Criação de caso com persistência write-through obrigatória
-- Pagamento via PIX/Cartão com webhook automático
-- Geração de documento determinística (DocumentAssemblyEngine)
-- Integridade de defesa com hash + validação
+### `document_id`
 
-🔴 BLOQUEADORES
-- CheckoutView restrito a admins -- usuários reais usam DocumentCheckoutStep (wizard step 10)
-- Webhook geração de defesa não-bloqueante -> caso pago sem documento
-- Claim token previsível (caseId)
-- Duas fontes de análise (frontend/backend) podem divergir
-- User ID: backend aceita email mas banco exige UUID
+O contrato atual não demonstra ainda uma entidade documental independente. A geração retorna um `GenerationResult` e o caso pode conter `defenseDraft`.
 
-🟡 RISCOS
-- Race condition loadCases vs emitCasesChanged
-- localStorage expõe dados sensíveis (CPF, CNH, endereço)
-- TestFillButton exposto para admins em produção
-- Fallback auth local em código de produção
+**Fase 1 deve determinar explicitamente:** se existe `document_id` persistido; se não existe, qual é a identidade canônica do documento e onde seu storage/URL é persistido.
 
-⚫ PENDÊNCIAS
-- Execução real E2E com pagamentos
-- Validação RLS no Supabase
-- Teste de concorrência
-- Renovação de token longa duração
+## 4. PAGAMENTO E WEBHOOK
 
-Golden Path atualmente:
-🟡 NÃO MAPEADO SUFICIENTEMENTE -- Fluxo existe no código mas tem gaps críticos (webhook não-bloqueante, claim token, dual analysis, admin-only checkout) que impedem garantia de funcionamento real sem execução.
+O handler atual do webhook PagBank:
+
+1. valida assinatura;
+2. extrai referência do caso;
+3. quando o status é `PAID`, marca pagamento/caso como confirmado;
+4. tenta gerar automaticamente a defesa;
+5. persiste o caso.
+
+A geração automática é **não-bloqueante**: se falhar, o pagamento permanece confirmado. Isso evita fabricar uma defesa, mas deixa uma necessidade de recuperação operacional.
+
+**Conclusão:** pagamento → documento continua não comprovado e deve permanecer como bloqueador de prova até existir evidência e contrato de recuperação.
+
+## 5. PAGBANK EM PRODUÇÃO
+
+Os commits `03f1f4ce3e4ecaf2c1ee0c6b55b628210c1c0f62` e `fbc83e3c7bf10da34678bde6a738dfac5f03f472` alteraram o contrato de produção: PagBank configurado pode operar em produção e o modo é derivado do ambiente Vercel.
+
+O `prodAuth` atual documenta JWT para checkout normal, sem exigência de admin.
+
+**Achado reconciliado:** o antigo "PagBank cidadão exige admin" está desatualizado como fato de código.  
+**Pendente:** prova real em produção, com gateway configurado e usuário cidadão.
+
+## 6. CLAIM TOKEN
+
+O frontend atual guarda `defesai_onboarding_claim_token` em `sessionStorage` e envia `X-Claim-Token` quando disponível.
+
+**Pendente crítico:** identificar a origem do token emitido no backend, medir entropia/imprevisibilidade, confirmar escopo, expiração, uso único e associação ao caso.
+
+O antigo achado `claimToken = caseId` não deve ser repetido como fato atual sem verificar o backend vigente.
+
+## 7. FALLBACKS / FALSOS POSITIVOS
+
+### Persistência
+
+`CaseRepository` usa Supabase write-through por padrão. Fallback em memória exige explicitamente `ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`.
+
+**Status:** 🟢 contrato fail-closed identificado; persistência real ainda precisa de prova E2E.
+
+### Geração manual
+
+O contrato `generateDocument()` chama `/api/cases/:id/generate-defense` e transforma o retorno em `status: 'ready'` no adapter HTTP.
+
+**Risco de auditoria:** o adapter força `status: 'ready'` no retorno. A Fase 1 deve verificar se isso pode mascarar uma resposta incompleta ou erro sem `defenseDraft`/URL.
+
+### Geração automática
+
+O webhook tenta gerar a defesa, mas mantém pagamento confirmado se a geração falhar.
+
+**Status:** 🟡 comportamento conhecido; mecanismo de recuperação não comprovado.
+
+## 8. MATRIZ RECONCILIADA
+
+| Domínio | Código atual | Persistência identificada | E2E comprovado |
+|---|---|---|---|
+| Auth | Supabase Auth/JWT | Auth + `cases.user_id` | 🟠 Não |
+| Onboarding | `src/onboarding/` | estado React; caso no backend | 🟠 Não |
+| Case | `createDraft` + CaseRepository | Supabase `cases` | 🟠 Não |
+| Evidence/OCR | endpoint de evidence | campos de evidence/OCR no caso | 🟠 Não |
+| Analysis | endpoint backend | `analysis_json` | 🟠 Não |
+| Payment | PIX create/status + PagBank | `payment_orders`/caso | 🟠 Não |
+| Webhook | PagBank HMAC + referência | caso/payment | 🟠 Não |
+| Defense | RagPipeline + DocumentAssemblyEngine | `defense_draft_json` | 🟠 Não |
+| Document | GenerationResult/caso | storage/URL ainda não confirmado | 🟠 Não |
+
+## 9. PENDÊNCIAS QUE A FASE 1 DEVE FECHAR
+
+1. `user_id` completo e sem identidade paralela.
+2. `case_id` completo, incluindo cold start.
+3. contrato real de `analysis_id`/`analysis_json`.
+4. lineage `analysis → recommendedArguments → defense`.
+5. contrato `payment_id`/order/reference e `payment_orders`.
+6. webhook idempotente e associação ao mesmo caso.
+7. origem/entropia/expiração do claim token.
+8. contrato real de geração e ausência de status sintético.
+9. identidade do documento e storage/URL.
+10. recuperação após pagamento confirmado e geração falha.
+11. mocks/fallbacks/controles de teste acessíveis em produção.
+12. prova de que o fluxo atual do frontend usa somente a implementação canônica.
+
+## 10. CONCLUSÃO
+
+O mapa anterior ficou parcialmente obsoleto porque o frontend de onboarding foi consolidado e os contratos de pagamento/autenticação foram alterados depois da Fase 0. Este documento é a nova base para a Fase 1.
+
+**Golden Path:** 🟠 NÃO COMPROVADO.  
+**Próxima etapa:** Fase 1 — Auditoria de Contratos e Data Lineage.  
+**Não executar Fase 2/3/4 automaticamente.**
