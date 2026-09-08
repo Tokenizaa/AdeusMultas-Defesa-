@@ -29122,6 +29122,24 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
   }
 }
 
+// src/core/documents/defense-integrity.ts
+import { createHash as createHash3 } from "node:crypto";
+function computeDefenseIntegrityHash(draft, analysis) {
+  const payload = {
+    fullDraftText: draft.fullDraftText ?? "",
+    selectedArgumentIds: Array.isArray(draft.selectedArgumentIds) ? draft.selectedArgumentIds : [],
+    procedureType: draft.procedureType ?? "",
+    analysisId: analysis?.id ?? "",
+    recommendedProcedure: analysis?.recommendedProcedure ?? "",
+    recommendedArgumentIds: Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments.map((argument) => argument.id ?? "") : []
+  };
+  return createHash3("sha256").update(JSON.stringify(payload), "utf8").digest("hex");
+}
+function hasValidDefenseIntegrity(draft, analysis) {
+  if (!draft.integrityHash) return false;
+  return draft.integrityHash === computeDefenseIntegrityHash(draft, analysis);
+}
+
 // src/server/payments/case-access.ts
 function assertPaymentCaseAccess(row, user) {
   if (!user) return { status: 401, error: "N\xE3o autenticado" };
@@ -29242,7 +29260,8 @@ router11.get("/resolve-price", (req, res) => {
     currency: result.offer.currency
   });
 });
-router11.use("/webhooks/pagbank", (req, res, next) => {
+router11.use("/webhooks/pagbank", (req, _res, next) => {
+  if (req.rawBody !== void 0) return next();
   let rawBody = "";
   req.setEncoding("utf8");
   req.on("data", (chunk) => {
@@ -29253,7 +29272,8 @@ router11.use("/webhooks/pagbank", (req, res, next) => {
     next();
   });
 });
-router11.use("/webhooks/ggpix", (req, res, next) => {
+router11.use("/webhooks/ggpix", (req, _res, next) => {
+  if (req.rawBody !== void 0) return next();
   let rawBody = "";
   req.setEncoding("utf8");
   req.on("data", (chunk) => {
@@ -29525,7 +29545,8 @@ router11.post("/webhooks/pagbank", async (req, res) => {
       });
       return res.status(401).json({ error: "Assinatura inv\xE1lida", received: false });
     }
-    const caseId = typeof payload.referenceId === "string" ? payload.referenceId.replace("defesai_case_", "") : null;
+    const rawReference = webhookResult.referenceId || typeof payload.reference_id === "string" ? payload.reference_id : typeof payload.referenceId === "string" ? payload.referenceId : null;
+    const caseId = typeof rawReference === "string" ? rawReference.replace("defesai_case_", "") : null;
     if (caseId && webhookResult.status === "PAID") {
       const row = databaseRows.get(caseId);
       if (row) {
@@ -29553,6 +29574,10 @@ router11.post("/webhooks/pagbank", async (req, res) => {
         try {
           const defense = generateDefenseDraftForDomain(domain);
           defense.generationCount = 1;
+          defense.integrityHash = computeDefenseIntegrityHash(
+            defense,
+            domain.analysis
+          );
           domain.defenseDraft = defense;
           domain.documentGenerationStatus = "ready";
           domain.timeline.push({
@@ -35631,24 +35656,6 @@ function permittedTheses(analysis) {
   return (analysis.recommendedArguments ?? []).filter((argument) => canonicalIds.has(argument.id));
 }
 
-// src/core/documents/defense-integrity.ts
-import { createHash as createHash3 } from "node:crypto";
-function computeDefenseIntegrityHash(draft, analysis) {
-  const payload = {
-    fullDraftText: draft.fullDraftText ?? "",
-    selectedArgumentIds: Array.isArray(draft.selectedArgumentIds) ? draft.selectedArgumentIds : [],
-    procedureType: draft.procedureType ?? "",
-    analysisId: analysis?.id ?? "",
-    recommendedProcedure: analysis?.recommendedProcedure ?? "",
-    recommendedArgumentIds: Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments.map((argument) => argument.id ?? "") : []
-  };
-  return createHash3("sha256").update(JSON.stringify(payload), "utf8").digest("hex");
-}
-function hasValidDefenseIntegrity(draft, analysis) {
-  if (!draft.integrityHash) return false;
-  return draft.integrityHash === computeDefenseIntegrityHash(draft, analysis);
-}
-
 // src/server/routes/cases.ts
 var router18 = Router18();
 registerRefinementProvider({
@@ -38302,10 +38309,15 @@ function createApp() {
   app.use("/api/admin", strictLimiter);
   app.use("/api", health_default);
   app.use("/api", auth_default);
-  app.use("/api", audit_default);
+  app.use("/api", (req, _res, next) => {
+    if (req.path === "/audit-logs" || req.path.startsWith("/audit/")) {
+      return audit_default(req, _res, next);
+    }
+    return next();
+  });
   app.use("/api", cases_default);
   app.use("/api", ai_default);
-  app.use("/api", knowledge_default);
+  app.use("/api/knowledge", knowledge_default);
   app.use("/api", onboarding_default);
   app.use("/api", transit_default);
   app.use("/api", governance_default);
@@ -38314,19 +38326,17 @@ function createApp() {
   app.use("/api", meta_default);
   app.use("/api", marketing_automation_default);
   app.use("/api", scrape_default);
-  app.use("/api", admin_default);
-  app.use("/api", commercial_default);
-  app.use("/api", monitoring_default);
-  app.use("/api", settings_default);
-  app.use("/api", logs_default);
-  app.use("/api", marketing_default);
-  app.use("/api", agents_default);
+  app.use("/api/agents", agents_default);
+  app.use("/api/monitoring", monitoring_default);
+  app.use("/api/settings", settings_default);
+  app.use("/api/logs", logs_default);
+  app.use("/api/marketing", marketing_default);
   app.use("/api", whatsapp_default);
   app.use("/api", ocr_default);
-  app.use("/api", payments_default);
-  app.use("/api", media_default);
-  app.use("/api", notifications_default);
-  app.use("/api", documenso_default);
+  app.use("/api/payments", payments_default);
+  app.use("/api/media", media_default);
+  app.use("/api/notifications", notifications_default);
+  app.use("/api/documenso", documenso_default);
   app.get("/api/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
   app.get("/api/marketing/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
   app.use((err, _req, res, _next) => {

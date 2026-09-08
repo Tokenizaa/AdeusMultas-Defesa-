@@ -8,6 +8,7 @@ import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
+import { computeDefenseIntegrityHash } from '../../core/documents/defense-integrity';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
@@ -213,8 +214,12 @@ router.get('/resolve-price', (req: Request, res: Response) => {
   });
 });
 
-// Middleware to capture raw body for webhook signature verification
-router.use('/webhooks/pagbank', (req: Request, res: Response, next) => {
+// Middleware to capture raw body for webhook signature verification.
+// GUARD: express.json (app.ts) já consumiu o stream e gravou req.rawBody quando
+// Content-Type é application/json — só recaptura quando nenhum body foi parseado,
+// senão 'end' nunca dispara e a request trava (bug: webhook oficial PIX pendurava).
+router.use('/webhooks/pagbank', (req: Request, _res: Response, next: NextFunction) => {
+  if ((req as any).rawBody !== undefined) return next();
   let rawBody = '';
   req.setEncoding('utf8');
   req.on('data', (chunk) => { rawBody += chunk; });
@@ -225,7 +230,8 @@ router.use('/webhooks/pagbank', (req: Request, res: Response, next) => {
 });
 
 // Raw body middleware for GGPIXAPI webhooks (no HMAC, but needs raw for logging)
-router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
+router.use('/webhooks/ggpix', (req: Request, _res: Response, next: NextFunction) => {
+  if ((req as any).rawBody !== undefined) return next();
   let rawBody = '';
   req.setEncoding('utf8');
   req.on('data', (chunk) => { rawBody += chunk; });
@@ -556,8 +562,16 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Assinatura inválida', received: false });
     }
 
-    const caseId = typeof payload.referenceId === 'string'
-      ? payload.referenceId.replace('defesai_case_', '')
+    // PagBank envia reference_id (snake_case) no corpo; o adapter normaliza para
+    // referenceId. Fallbacks cobrem ambos + compat reversa — sem isso o caseId
+    // saía null e o pagamento confirmado NUNCA vinculava ao caso.
+    const rawReference =
+      (webhookResult as any).referenceId ||
+      typeof payload.reference_id === 'string' ? payload.reference_id :
+      (typeof payload.referenceId === 'string' ? payload.referenceId : null);
+
+    const caseId = typeof rawReference === 'string'
+      ? rawReference.replace('defesai_case_', '')
       : null;
 
     if (caseId && webhookResult.status === 'PAID') {
@@ -596,6 +610,12 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
         try {
           const defense = generateDefenseDraftForDomain(domain);
           defense.generationCount = 1;
+          // Integridade (hash canônico) — sem ele o GET /cases rejeita a peça
+          // (DEFENSE_INTEGRITY_FAILED). Mesmo cálculo do fluxo do wizard.
+          (defense as any).integrityHash = computeDefenseIntegrityHash(
+            defense as any,
+            (domain as any).analysis as any
+          );
           domain.defenseDraft = defense;
           domain.documentGenerationStatus = 'ready';
 

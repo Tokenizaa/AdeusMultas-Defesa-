@@ -92,10 +92,17 @@ export function createApp() {
   app.use('/api/admin', strictLimiter);
   app.use('/api', healthRoutes);
   app.use('/api', authRoutes);
-  app.use('/api', auditRoutes);
+  // Audit mantém os dois aliases (/api/audit-logs e /api/audit/logs) SEM vazar o
+  // guard requireAdmin global para o resto da API (bug: mount cru em /api 401ava tudo).
+  app.use('/api', (req, _res, next) => {
+    if (req.path === '/audit-logs' || req.path.startsWith('/audit/')) {
+      return auditRoutes(req as express.Request, _res as express.Response, next);
+    }
+    return next();
+  });
   app.use('/api', casesRoutes);
   app.use('/api', aiRoutes);
-  app.use('/api', knowledgeRoutes);
+  app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api', onboardingRoutes);
   app.use('/api', transitRoutes);
   app.use('/api', governanceRoutes);
@@ -104,19 +111,18 @@ export function createApp() {
   app.use('/api', metaRoutes);
   app.use('/api', marketingAutomationRoutes);
   app.use('/api', scrapeRoutes);
-  app.use('/api', adminRoutes);
-  app.use('/api', commercialRoutes);
-  app.use('/api', monitoringRoutes);
-  app.use('/api', settingsRoutes);
-  app.use('/api', logsRoutes);
-  app.use('/api', marketingRoutes);
-  app.use('/api', agentsRoutes);
+  app.use('/api/agents', agentsRoutes);
+  app.use('/api/monitoring', monitoringRoutes);
+  app.use('/api/settings', settingsRoutes);
+  app.use('/api/logs', logsRoutes);
+  app.use('/api/marketing', marketingRoutes);
+  // whatsapp/ocr usam paths internos (/communication/... e /ocr/...) → mount cru /api
   app.use('/api', whatsappRoutes);
   app.use('/api', ocrRoutes);
-  app.use('/api', paymentsRoutes);
-  app.use('/api', mediaRoutes);
-  app.use('/api', notificationsRoutes);
-  app.use('/api', documensoRoutes);
+  app.use('/api/payments', paymentsRoutes);
+  app.use('/api/media', mediaRoutes);
+  app.use('/api/notifications', notificationsRoutes);
+  app.use('/api/documenso', documensoRoutes);
 
   app.get('/api/meta/status', async (_req,res)=>res.json(await metaIntegration.getStatus()));
   app.get('/api/marketing/meta/status', async (_req,res)=>res.json(await metaIntegration.getStatus()));
