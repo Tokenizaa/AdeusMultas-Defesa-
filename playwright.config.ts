@@ -1,18 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// import dotenv from 'dotenv';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+const productionBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+if (!productionBaseUrl) {
+  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. A suíte E2E Golden Path deve executar contra uma implantação Vercel/produção, nunca contra localhost.');
+}
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
+if (!/^https:\/\//i.test(productionBaseUrl)) {
+  throw new Error(`PLAYWRIGHT_BASE_URL inválido: ${productionBaseUrl}. Use uma URL HTTPS de produção.`);
+}
+
 export default defineConfig({
   testDir: './tests',
-  /* Ignore Vitest unit tests and broken/non-test files */
   testIgnore: [
     '**/invariants/**',
     '**/*.test.ts',
@@ -21,7 +19,7 @@ export default defineConfig({
     '**/knowledge/**',
     '**/audit/**',
     '**/core/**',
-    '**/e2e/services/**',   // broken imports — pre-existing
+    '**/e2e/services/**',
     '**/e2e-infrastructure.ts',
     '**/e2e-setup.ts',
     '**/e2e-fixtures.ts',
@@ -29,61 +27,24 @@ export default defineConfig({
     '**/e2e-validator.ts',
     '**/e2e-runner.spec.ts',
   ],
-  /* Maximum time one test can run for. */
   timeout: 60 * 1000,
-  expect: {
-    /**
-     * Maximum time expect() should wait for the condition to be met.
-     * For example: await expect(locator).toHaveText();
-     */
-    timeout: 10000
-  },
-  /* Run tests in files in parallel */
+  expect: { timeout: 10000 },
   fullyParallel: false,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
   retries: process.env.CI ? 1 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : 1,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  workers: 1,
   reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/test-classes.*/
   use: {
-    /* Maximum time each operation such as `click()` can take. */
     actionTimeout: 15000,
-    /* Base URL to use in actions like `await expect(page).toHaveURL('/'); */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    baseURL: productionBaseUrl,
     trace: 'on-first-retry',
-    /* Screenshot on failure */
     screenshot: 'only-on-failure',
-    /* Video on failure */
     video: 'retain-on-failure',
   },
-
-  /* Configure projects for major browsers */
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-production',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-
-  /*
-   * Run the local dev server before starting the tests.
-   *
-   * The application intentionally fails fast when the scraper is started
-   * without its required Supabase credentials. CI/E2E must therefore provide
-   * isolated test-only placeholders so importing the scraper does not abort
-   * the web server. No production credentials or external Supabase access are
-   * introduced by this configuration.
-   */
-  webServer: {
-    command: 'SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=e2e-test-service-role-key SUPABASE_ANON_KEY=e2e-test-anon-key VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true,
-    timeout: 120000,
-  },
 });
