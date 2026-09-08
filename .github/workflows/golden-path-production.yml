@@ -1,0 +1,58 @@
+name: Golden Path — Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-path-production
+  cancel-in-progress: false
+
+jobs:
+  golden-path:
+    name: Production Golden Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PLAYWRIGHT_BASE_URL: https://www.defesai.shop
+      E2E_TEST_EMAIL: ${{ secrets.USER_TEST_LOGIN }}
+      E2E_TEST_PASSWORD: ${{ secrets.USER_TEST_PASSWORD }}
+      E2E_RUN_ID: golden-${{ github.run_id }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify production target
+        run: |
+          node -e "const u=new URL(process.env.PLAYWRIGHT_BASE_URL); if(u.protocol!=='https:') process.exit(1); if(!['www.defesai.shop','defesai.shop'].includes(u.hostname)) process.exit(1); console.log('Production target:', u.origin)"
+
+      - name: Run production Golden Path
+        run: npx playwright test tests/golden-path-production.spec.ts --project=chromium --workers=1 --retries=0
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-production-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
