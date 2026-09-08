@@ -69,24 +69,13 @@ export function useOnboarding(application: OnboardingApplication) {
     setState((current) => ({ ...current, status: 'reviewing', step: 'review', updatedAt: new Date().toISOString() }));
   }
 
-  async function claimAuthenticatedCase(user: { id?: string; name?: string; email?: string; phone?: string; cpf?: string }) {
+  async function claimAuthenticatedCase(user: { name?: string; email?: string; phone?: string; cpf?: string }) {
     if (!state.caseId) throw new Error('Caso ainda não persistido.');
     const claimToken = loadClaimToken();
     if (!claimToken) throw new Error('Token de recuperação do caso não encontrado.');
-    const claimed = await application.claim({
-      caseId: state.caseId,
-      claimToken,
-      name: user.name || applicantFallback(payload),
-      email: user.email,
-      phone: user.phone,
-      cpf: user.cpf,
-    });
+    const claimed = await application.claim({ caseId: state.caseId, claimToken, name: user.name, email: user.email, phone: user.phone, cpf: user.cpf });
     setState((current) => ({ ...current, caseId: claimed.id, updatedAt: new Date().toISOString() }));
     return claimed;
-  }
-
-  function applicantFallback(current: CanonicalOnboardingPayload): string | undefined {
-    return current.applicant?.applicantName;
   }
 
   async function requestPayment() {
