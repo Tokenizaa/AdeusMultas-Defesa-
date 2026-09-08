@@ -38352,10 +38352,10 @@ var cachedApp = null;
 async function handler(req, res) {
   try {
     if (!cachedApp) {
-      void databaseRows.loadAllFromSupabase().catch(() => {
-      });
-      void commercialService.warmup().catch(() => {
-      });
+      try {
+        await Promise.all([databaseRows.loadAllFromSupabase(), commercialService.warmup()]);
+      } catch {
+      }
       cachedApp = createApp();
     }
     cachedApp(req, res);

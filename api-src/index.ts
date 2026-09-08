@@ -23,10 +23,13 @@ export default async function handler(
 ): Promise<void> {
   try {
     if (!cachedApp) {
-      // Warm-up best-effort: hidrata casos do Supabase quando configurado.
-      void databaseRows.loadAllFromSupabase().catch(() => {});
-      // Warm-up comercial: carrega catálogo de preços/promoções/cupons do Supabase.
-      void commercialService.warmup().catch(() => {});
+      // Warm-up no PRIMEIRO request: em serverless o runtime mata o processo
+      // após responder — fire-and-forget (`void`) nunca completa → catálogo
+      // comercial fica vazio e resolve-price 404. Await força a hidratação
+      // antes de servir (dev persistente: custo ~1s na primeira chamada).
+      try {
+        await Promise.all([databaseRows.loadAllFromSupabase(), commercialService.warmup()]);
+      } catch {}
       cachedApp = createApp();
     }
     cachedApp(req, res);
