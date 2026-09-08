@@ -12,6 +12,14 @@ import { testAdapter } from './test-adapter';
 import { logger } from '../../observability/logger';
 import { configService } from '../../config/config-service';
 
+function isProductionEnvironment(): boolean {
+  return (
+    (process.env.VERCEL_ENV || '').toLowerCase().trim() === 'production' ||
+    (process.env.NODE_ENV || '').toLowerCase().trim() === 'production' ||
+    (process.env.PAYMENT_MODE || '').toLowerCase().trim() === 'production'
+  );
+}
+
 function resolveActiveGatewayIdFromEnv(): GatewayId {
   const configOverride = configService.get('PAYMENT_ACTIVE_GATEWAY_OVERRIDE');
   if (configOverride && (configOverride === 'ggpixapi' || configOverride === 'pagbank' || configOverride === 'test')) return configOverride;
@@ -19,8 +27,7 @@ function resolveActiveGatewayIdFromEnv(): GatewayId {
   if (envValue === 'ggpixapi' || envValue === 'ggpix') return 'ggpixapi';
   if (envValue === 'pagbank') return 'pagbank';
   if (envValue === 'test') return 'test';
-  const paymentMode = (process.env.PAYMENT_MODE || 'sandbox').toLowerCase().trim();
-  if (paymentMode === 'production') return pagbankAdapter.isConfigured() ? 'pagbank' : 'ggpixapi';
+  if (isProductionEnvironment()) return pagbankAdapter.isConfigured() ? 'pagbank' : 'ggpixapi';
   return 'pagbank';
 }
 
