@@ -58,8 +58,23 @@ jobs:
         run: |
           node -e "const u=new URL(process.env.PLAYWRIGHT_BASE_URL); if(u.protocol!=='https:') process.exit(1); if(!['www.defesai.shop','defesai.shop'].includes(u.hostname)) process.exit(1); console.log('Production target:', u.origin)"
 
+      - name: Verify Golden Path Playwright project
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const config = fs.readFileSync('playwright.config.ts', 'utf8');
+          if (!config.includes("name: 'chromium-production'")) {
+            throw new Error('Expected Playwright project chromium-production is not declared');
+          }
+          const spec = fs.readFileSync('tests/golden-path-production.spec.ts', 'utf8');
+          for (const marker of ['case → analysis → PIX → paid → document', 'Supabase reconciliation']) {
+            if (!spec.includes(marker)) throw new Error(`Golden Path marker missing: ${marker}`);
+          }
+          console.log('Golden Path configuration reconciled');
+          NODE
+
       - name: Run production Golden Path
-        run: npx playwright test tests/golden-path-production.spec.ts --project=chromium --workers=1 --retries=0
+        run: npx playwright test tests/golden-path-production.spec.ts --project=chromium-production --workers=1 --retries=0
 
       - name: Upload Playwright report
         if: always()
