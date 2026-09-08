@@ -10,6 +10,7 @@ function withJson(init: RequestInit = {}, claimToken?: string): RequestInit {
 }
 
 function loadClaimToken(): string { try { return sessionStorage.getItem(CLAIM_STORAGE_KEY) || ''; } catch { return ''; } }
+function storeClaimToken(token: string): void { try { sessionStorage.setItem(CLAIM_STORAGE_KEY, token); } catch { /* storage unavailable */ } }
 function clearClaimToken(): void { try { sessionStorage.removeItem(CLAIM_STORAGE_KEY); } catch { /* storage unavailable */ } }
 
 export function createOnboardingHttpApplication(client: OnboardingHttpClient, setClaimToken?: (token: string) => void): OnboardingApplication {
@@ -17,7 +18,11 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
   return {
     async createDraft(input: CreateDraftInput): Promise<CreateDraftResult> {
       const result = await client.request<CreateDraftResult>('/api/onboarding-v2/draft', withJson({ method: 'POST', body: JSON.stringify(input) }));
-      if (result.claimToken) { token = result.claimToken; setClaimToken?.(result.claimToken); }
+      if (result.claimToken) {
+        token = result.claimToken;
+        storeClaimToken(result.claimToken);
+        setClaimToken?.(result.claimToken);
+      }
       return result;
     },
     async updateDraft(input) { const result = await client.request<{ case: CreateDraftResult['case'] }>('/api/onboarding-v2/draft', withJson({ method: 'PUT', body: JSON.stringify(input) }, token)); return result.case; },
