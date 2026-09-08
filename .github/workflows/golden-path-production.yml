@@ -2,6 +2,8 @@ name: Golden Path — Production
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -12,6 +14,7 @@ concurrency:
 
 jobs:
   golden-path:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[PHASE4-RUN]')
     name: Production Golden Path
     runs-on: ubuntu-latest
     timeout-minutes: 10
