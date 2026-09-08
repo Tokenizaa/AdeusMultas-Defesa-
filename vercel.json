@@ -8,6 +8,16 @@
       "maxDuration": 30
     }
   },
+  "env": {
+    "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
+    "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+  },
+  "build": {
+    "env": {
+      "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
+      "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
