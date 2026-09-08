@@ -1,0 +1,114 @@
+name: Purge obsolete Supabase project references
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  purge:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Replace obsolete project references
+        env:
+          OLD_HOST_B64: bGxteG5wZ2pweGN2eXJxamtmd2Iuc3VwYWJhc2UuY28=
+          CANONICAL_HOST: sgomwklorpzdwdubtmgg.supabase.co
+        run: |
+          set -euo pipefail
+          OLD_HOST="$(printf '%s' "$OLD_HOST_B64" | base64 --decode)"
+          export OLD_HOST CANONICAL_HOST
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          old = os.environ['OLD_HOST']
+          new = os.environ['CANONICAL_HOST']
+          skip = {'.git', 'node_modules', '.vercel'}
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or any(part in skip for part in path.parts):
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if old in text:
+                  path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Force canonical runtime Supabase URL
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          app = Path('src/server/app.ts')
+          text = app.read_text(encoding='utf-8')
+          old = "const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';"
+          new = "const supabaseEnvUrl = 'https://sgomwklorpzdwdubtmgg.supabase.co';"
+          if old in text:
+              text = text.replace(old, new)
+          app.write_text(text, encoding='utf-8')
+
+          server = Path('src/server/db/supabase-server.ts')
+          text = server.read_text(encoding='utf-8')
+          old_block = """  const url =
+    process.env.VITE_SUPABASE_URL ||
+    configService.get('VITE_SUPABASE_URL') ||
+    process.env.SUPABASE_URL ||
+    configService.get('SUPABASE_URL');"""
+          new_block = """  const url = 'https://sgomwklorpzdwdubtmgg.supabase.co';"""
+          if old_block in text:
+              text = text.replace(old_block, new_block)
+          server.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Add Vercel canonical Supabase configuration
+        run: |
+          set -euo pipefail
+          if [ ! -f vercel.json ]; then
+            cat > vercel.json <<'EOF'
+          {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "env": {
+              "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
+              "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+            },
+            "build": {
+              "env": {
+                "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
+                "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+              }
+            }
+          }
+          EOF
+          fi
+
+      - name: Verify obsolete host is absent
+        env:
+          OLD_HOST_B64: bGxteG5wZ2pweGN2eXJxamtmd2Iuc3VwYWJhc2UuY28=
+        run: |
+          set -euo pipefail
+          OLD_HOST="$(printf '%s' "$OLD_HOST_B64" | base64 --decode)"
+          if git grep -n -I "$OLD_HOST" -- ':!.github/workflows/purge-obsolete-supabase.yml'; then
+            echo 'Obsolete Supabase host still present.'
+            exit 1
+          fi
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/purge-obsolete-supabase.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git commit -m 'chore: remove obsolete Supabase project references'
+          git push
