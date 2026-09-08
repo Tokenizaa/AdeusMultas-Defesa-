@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
 const EMAIL = process.env.E2E_TEST_EMAIL || process.env.USER_TEST_LOGIN;
@@ -12,7 +12,7 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
-async function supabaseRows(request: Parameters<typeof test>[0] extends never ? never : any, table: string, filter: string) {
+async function supabaseRows(request: APIRequestContext, table: string, filter: string) {
   const url = `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/${table}?select=*&${filter}`;
   const response = await request.get(url, {
     headers: {
@@ -37,7 +37,6 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   const ait = `ANON-${RUN_ID}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 45);
   const plate = `AN${String(Date.now()).slice(-5)}`.slice(0, 7);
 
-  // CASE — deliberately unauthenticated.
   await expect(page.getByRole('heading', { name: /Identifique a infração/i })).toBeVisible();
   await page.getByLabel(/Número do AIT/i).fill(ait);
   await page.getByLabel(/Código da infração/i).fill('74550');
@@ -46,13 +45,11 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await page.getByLabel(/Marca\/modelo/i).fill('Teste E2E Anonymous');
   await page.getByRole('button', { name: /^Continuar$/i }).click();
 
-  // FACTS
   await expect(page.getByRole('heading', { name: /O que aconteceu\?/i })).toBeVisible();
   await page.getByLabel(/Velocidade permitida/i).fill('60');
   await page.getByLabel(/Velocidade medida/i).fill('68');
   await page.getByRole('button', { name: /^Continuar$/i }).click();
 
-  // EVIDENCE — real production upload path.
   await expect(page.getByRole('heading', { name: /Documentos e evidências/i })).toBeVisible();
   const input = page.locator('input[type="file"]');
   const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
@@ -60,11 +57,9 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await expect(page.getByText(/O documento foi enviado e processado pelo OCR/i)).toBeVisible({ timeout: 60_000 });
   await page.getByRole('button', { name: /^Continuar$/i }).click();
 
-  // ANALYSIS — real backend.
   await expect(page.getByRole('heading', { name: /Diagnóstico preliminar/i })).toBeVisible({ timeout: 120_000 });
   await page.getByRole('button', { name: /^Continuar$/i }).click();
 
-  // QUALIFICATION.
   await expect(page.getByRole('heading', { name: /Dados para a defesa/i })).toBeVisible();
   await page.getByLabel(/Nome completo/i).fill('Anonymous Golden Path');
   await page.getByLabel(/CPF/i).fill('52998224725');
@@ -78,18 +73,16 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await page.getByLabel(/Cidade\/UF/i).fill('São Paulo/SP');
   await page.getByRole('button', { name: /^Continuar$/i }).click();
 
-  // REVIEW → PAYMENT BOUNDARY.
   await expect(page.getByRole('heading', { name: /Revise seu caso/i })).toBeVisible();
   await page.getByRole('button', { name: /^Continuar$/i }).click();
   await expect(page.getByRole('heading', { name: /Pagamento PIX/i })).toBeVisible();
 
-  // Critical assertion: anonymous user must be stopped by AccountVerificationGate BEFORE payment creation.
+  // Critical assertion: anonymous user is stopped before payment creation.
   await page.getByRole('button', { name: /^Continuar$/i }).click();
   await expect(page.getByRole('heading', { name: /Acesso à Sua Defesa Jurídica/i })).toBeVisible();
   await expect(page.getByText(/100% dos Dados Coletados Preservados/i)).toBeVisible();
 
-  // Use the existing E2E account only to make the claim path deterministic.
-  // This test intentionally stops before requestPayment; no financial mutation is allowed here.
+  // Deterministic claim validation with the existing E2E account; no payment is created.
   await page.getByRole('tab', { name: /Já Tenho Conta/i }).click();
   await page.getByLabel(/E-mail Cadastrado/i).fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
   await page.getByLabel(/Senha de Acesso/i).fill(required('E2E_TEST_PASSWORD/USER_TEST_PASSWORD', PASSWORD));
@@ -98,12 +91,10 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await expect(page.getByRole('heading', { name: /Pagamento PIX/i })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: /Acesso à Sua Defesa Jurídica/i })).toHaveCount(0);
 
-  // Server reconciliation: the anonymous case must now be owned by an authenticated user.
   const cases = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
   expect(cases.length, 'anonymous case must exist in Supabase').toBeGreaterThan(0);
   expect(cases[0].user_id, 'claimed case must have authenticated owner').toBeTruthy();
 
-  // Payment must not have been created by this focused authentication test.
   const caseId = String(cases[0].id);
   const orders = await supabaseRows(request, 'payment_orders', `case_id=eq.${encodeURIComponent(caseId)}`);
   expect(orders.length, 'authentication gate test must not create a payment order').toBe(0);
