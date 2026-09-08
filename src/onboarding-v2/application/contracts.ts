@@ -13,7 +13,16 @@ export interface UpdateDraftInput { caseId: string; payload: Partial<CanonicalOn
 export interface ClaimInput { caseId: string; claimToken: string; name?: string; email?: string; phone?: string; cpf?: string; }
 export interface AnalysisResult { caseId: string; status: 'pending' | 'processing' | 'completed' | 'failed'; analysis?: CaseAnalysis; errorCode?: string; }
 export interface QualificationInput { caseId: string; applicant: CaseApplicantData; }
-export interface PaymentResult { caseId: string; status: PaymentStatus; paymentReference?: string; }
+export interface PaymentResult {
+  caseId: string;
+  status: PaymentStatus;
+  paymentReference?: string;
+  txId?: string;
+  pixCopyPasteString?: string;
+  qrCodeDataUrl?: string;
+  amount?: number;
+  gateway?: string;
+}
 export interface GenerationResult { caseId: string; status: DocumentGenerationStatus; documentUrl?: string; errorCode?: string; }
 export interface EvidenceUploadResult { case: CaseDomain; ocr: { provider?: string; confidence?: number; rawText?: string }; }
 
