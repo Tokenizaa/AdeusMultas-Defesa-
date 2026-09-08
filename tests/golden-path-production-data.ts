@@ -6,17 +6,21 @@
  * synthetic and intentionally unique enough to identify a single run.
  */
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} é obrigatório para o Golden Path de produção.`);
-  return value;
+function requiredEnv(...names: string[]): string {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  throw new Error(`${names.join(' ou ')} é obrigatório para o Golden Path de produção.`);
 }
 
 export const productionGoldenPath = {
   baseUrl: requiredEnv('PLAYWRIGHT_BASE_URL'),
   credentials: {
-    email: requiredEnv('E2E_TEST_EMAIL'),
-    password: requiredEnv('E2E_TEST_PASSWORD'),
+    // Canonical CI names are preferred. Existing local test credentials are
+    // accepted as aliases so no duplicate credentials need to be created.
+    email: requiredEnv('E2E_TEST_EMAIL', 'USER_TEST_LOGIN'),
+    password: requiredEnv('E2E_TEST_PASSWORD', 'USER_TEST_PASSWORD'),
   },
   case: {
     serviceType: 'recurso_jari',
