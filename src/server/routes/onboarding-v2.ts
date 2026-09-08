@@ -8,6 +8,11 @@ import type { CanonicalOnboardingPayload, CaseDomain, CaseApplicantData } from '
 import { authenticateToken } from '../middleware/auth-middleware';
 
 const router = Router();
+
+// Single authentication boundary: a valid Supabase JWT populates req.user;
+// anonymous requests continue without identity and use the claim token.
+router.use(authenticateToken);
+
 const CLAIM_HEADER = 'X-Claim-Token';
 
 function tokenMatches(provided: unknown, stored: unknown): boolean {

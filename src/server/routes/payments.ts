@@ -8,12 +8,14 @@ import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
+import { computeDefenseIntegrityHash } from '../../core/documents/defense-integrity';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { logger } from '../observability/logger';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { buildDocumentRollText } from '../../core/documents/document-roll';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
+import { assertPaymentCaseAccess, resolveEffectiveUser } from '../payments/case-access';
 import { PRICING } from '../config/pricing';
 const router = Router();
 
@@ -166,7 +168,15 @@ function validatePayerIdentity(name: unknown, email: unknown, cpf: unknown): { n
 
 function prodAuth(req: Request, res: Response, next: NextFunction): void {
   if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
-    authenticateToken(req, res, next);
+    // Produção: pagar/consultar status exige Supabase JWT (qualquer role — admin
+    // NÃO é exigido para checkout normal). Anônimo recebe 401 explícito.
+    authenticateToken(req, res, () => {
+      if (!req.user) {
+        res.status(401).json({ error: 'Não autorizado. Faça login para continuar.' });
+        return;
+      }
+      next();
+    });
     return;
   }
   next();
@@ -204,8 +214,12 @@ router.get('/resolve-price', (req: Request, res: Response) => {
   });
 });
 
-// Middleware to capture raw body for webhook signature verification
-router.use('/webhooks/pagbank', (req: Request, res: Response, next) => {
+// Middleware to capture raw body for webhook signature verification.
+// GUARD: express.json (app.ts) já consumiu o stream e gravou req.rawBody quando
+// Content-Type é application/json — só recaptura quando nenhum body foi parseado,
+// senão 'end' nunca dispara e a request trava (bug: webhook oficial PIX pendurava).
+router.use('/webhooks/pagbank', (req: Request, _res: Response, next: NextFunction) => {
+  if ((req as any).rawBody !== undefined) return next();
   let rawBody = '';
   req.setEncoding('utf8');
   req.on('data', (chunk) => { rawBody += chunk; });
@@ -216,7 +230,8 @@ router.use('/webhooks/pagbank', (req: Request, res: Response, next) => {
 });
 
 // Raw body middleware for GGPIXAPI webhooks (no HMAC, but needs raw for logging)
-router.use('/webhooks/ggpix', (req: Request, res: Response, next) => {
+router.use('/webhooks/ggpix', (req: Request, _res: Response, next: NextFunction) => {
+  if ((req as any).rawBody !== undefined) return next();
   let rawBody = '';
   req.setEncoding('utf8');
   req.on('data', (chunk) => { rawBody += chunk; });
@@ -241,13 +256,22 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       couponCode,
     } = req.body;
 
-    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    // Identidade do pagador e userId NUNCA vêm do frontend quando o servidor
+    // pode obtê-los do caso (server-authoritative).
+    const targetRow = caseId && typeof caseId === 'string' ? databaseRows.get(caseId) : undefined;
+    const effectiveUserId = resolveEffectiveUser(targetRow, (req as any).user);
+
+    const payer = validatePayerIdentity(
+      targetRow?.client_name || customerName,
+      targetRow?.client_email || customerEmail,
+      targetRow?.client_cpf || customerCpf,
+    );
     if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para criação do pagamento PIX.' });
 
     // serviceType é obrigatório; o backend decide o preço.
     const offerResult = resolveOffer({
       serviceType: serviceType as string,
-      userId: userId as string | undefined,
+      userId: effectiveUserId,
       couponCode: couponCode as string | undefined,
       caseId,
     });
@@ -261,11 +285,10 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
 
-    if (gateway.id === 'pagbank') {
-      const userRole = (req as any).user?.role;
-      if (userRole && userRole !== 'admin') {
-        return res.status(403).json({ error: "Não autorizado. Faça login como administrador." });
-      }
+    // Autorização: usuário autenticado paga SOMENTE o próprio caso (403 p/ caso alheio).
+    if (caseId && typeof caseId === 'string') {
+      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), (req as any).user);
+      if (denied) return res.status(denied.status).json({ error: denied.error });
     }
 
     const orderResult = await gateway.createPix({
@@ -382,12 +405,20 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
       });
     }
 
-    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    // Identidade e userId NUNCA vêm do frontend quando o servidor pode obtê-los do caso.
+    const targetRow = caseId && typeof caseId === 'string' ? databaseRows.get(caseId) : undefined;
+    const effectiveUserId = resolveEffectiveUser(targetRow, (req as any).user);
+
+    const payer = validatePayerIdentity(
+      targetRow?.client_name || customerName,
+      targetRow?.client_email || customerEmail,
+      targetRow?.client_cpf || customerCpf,
+    );
     if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para pagamento com cartão de crédito.' });
 
     const offerResult = resolveOffer({
       serviceType: serviceType as string,
-      userId: userId as string | undefined,
+      userId: effectiveUserId,
       couponCode: couponCode as string | undefined,
       caseId,
     });
@@ -408,11 +439,10 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
 
     const gateway = gatewayManager.getActiveGateway();
 
-    if (gateway.id === 'pagbank') {
-      const userRole = (req as any).user?.role;
-      if (userRole && userRole !== 'admin') {
-        return res.status(403).json({ error: "Não autorizado. Faça login como administrador." });
-      }
+    // Autorização: usuário autenticado paga SOMENTE o próprio caso (403 p/ caso alheio).
+    if (caseId && typeof caseId === 'string') {
+      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), (req as any).user);
+      if (denied) return res.status(denied.status).json({ error: denied.error });
     }
 
     if (gateway.id !== 'pagbank') {
@@ -532,8 +562,16 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Assinatura inválida', received: false });
     }
 
-    const caseId = typeof payload.referenceId === 'string'
-      ? payload.referenceId.replace('defesai_case_', '')
+    // PagBank envia reference_id (snake_case) no corpo; o adapter normaliza para
+    // referenceId. Fallbacks cobrem ambos + compat reversa — sem isso o caseId
+    // saía null e o pagamento confirmado NUNCA vinculava ao caso.
+    const rawReference =
+      (webhookResult as any).referenceId ||
+      typeof payload.reference_id === 'string' ? payload.reference_id :
+      (typeof payload.referenceId === 'string' ? payload.referenceId : null);
+
+    const caseId = typeof rawReference === 'string'
+      ? rawReference.replace('defesai_case_', '')
       : null;
 
     if (caseId && webhookResult.status === 'PAID') {
@@ -572,6 +610,12 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
         try {
           const defense = generateDefenseDraftForDomain(domain);
           defense.generationCount = 1;
+          // Integridade (hash canônico) — sem ele o GET /cases rejeita a peça
+          // (DEFENSE_INTEGRITY_FAILED). Mesmo cálculo do fluxo do wizard.
+          (defense as any).integrityHash = computeDefenseIntegrityHash(
+            defense as any,
+            (domain as any).analysis as any
+          );
           domain.defenseDraft = defense;
           domain.documentGenerationStatus = 'ready';
 
@@ -827,6 +871,12 @@ router.post('/simulate-payment', async (req: Request, res: Response) => {
 
 // Alias for backwards compatibility with test scripts
 router.post('/simulate-confirm', async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(501).json({
+      error: 'Endpoint de simulação não disponível em produção',
+      message: 'Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways.',
+    });
+  }
   const { caseId } = req.body;
   if (!caseId) {
     return res.status(400).json({ error: 'caseId é obrigatório' });
@@ -856,6 +906,12 @@ router.post('/simulate-confirm', async (req: Request, res: Response) => {
 
 // Admin Sandbox Webhook Trigger
 router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(501).json({
+      error: 'Endpoint de simulação não disponível em produção',
+      message: 'Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways.',
+    });
+  }
   try {
     const { gateway = 'pagbank', eventType = 'PAID', caseId, amount = 89.90 } = req.body;
     if (!caseId) {
