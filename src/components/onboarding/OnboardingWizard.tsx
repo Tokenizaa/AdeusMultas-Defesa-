@@ -41,6 +41,7 @@ const WIZARD_STORAGE_KEY = 'defesai_wizard_state';
 interface WizardPersistedState {
   step: number;
   savedCaseId?: string;
+  savedClaimToken?: string;
   savedAt: number;
 }
 
@@ -59,18 +60,18 @@ function loadWizardState(): WizardPersistedState | null {
       sessionStorage.removeItem(WIZARD_STORAGE_KEY);
       return null;
     }
-    return { step: parsed.step, savedCaseId: parsed.savedCaseId, savedAt: parsed.savedAt };
+    return { step: parsed.step, savedCaseId: parsed.savedCaseId, savedClaimToken: parsed.savedClaimToken, savedAt: parsed.savedAt };
   } catch {
     try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
     return null;
   }
 }
 
-function saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId'>) {
+function saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId' | 'savedClaimToken'>) {
   try {
     sessionStorage.setItem(
       WIZARD_STORAGE_KEY,
-      JSON.stringify({ step: state.step, savedCaseId: state.savedCaseId, savedAt: Date.now() })
+      JSON.stringify({ step: state.step, savedCaseId: state.savedCaseId, savedClaimToken: state.savedClaimToken, savedAt: Date.now() })
     );
   } catch { /* storage unavailable, ignore */ }
 }
@@ -187,24 +188,26 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   });
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
+  // Token de claim gerado pelo servidor para casos anônimos — nunca o próprio ID.
+  const [savedClaimToken, setSavedClaimToken] = useState<string | undefined>(savedState?.savedClaimToken);
 
   // Scroll to top of wizard on every step change and persist only non-sensitive metadata.
   useEffect(() => {
     wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    saveWizardState({ step, savedCaseId });
-  }, [step, savedCaseId]);
+    saveWizardState({ step, savedCaseId, savedClaimToken });
+  }, [step, savedCaseId, savedClaimToken]);
 
   // Persist only navigation metadata immediately before page unload.
   useEffect(() => {
     const handleBeforeUnload = () => {
-      saveWizardState({ step, savedCaseId });
+      saveWizardState({ step, savedCaseId, savedClaimToken });
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [step, savedCaseId]);
+  }, [step, savedCaseId, savedClaimToken]);
 
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)
@@ -388,6 +391,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const data = await res.json();
       if (data.id) {
         setSavedCaseId(data.id);
+        // Claim token gerado pelo servidor para casos anônimos (nunca o ID do caso).
+        if (data.claimToken) {
+          setSavedClaimToken(data.claimToken);
+        }
         // FIX 2: caso persistido no servidor → invalida cache de casos
         // (dashboard/listagem refetcham imediatamente).
         emitCasesChanged();
@@ -448,15 +455,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // If case was already saved on backend, link it to the user
     if (savedCaseId) {
       try {
-        await authFetch('/api/cases/claim', {
+        await authFetch(`/api/cases/${encodeURIComponent(savedCaseId)}/claim`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            caseId: savedCaseId,
-            claimToken: savedCaseId,
-            userId: authUser.id,
-            userEmail: authUser.email,
-            userNome: authUser.name,
+            // Token server-side correspondente ao caso; identidade vem do JWT (nunca do body).
+            claimToken: savedClaimToken,
           }),
         });
         // FIX 2: vinculação caso↔usuário altera a lista canônica → invalida cache.

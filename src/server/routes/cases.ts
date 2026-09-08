@@ -123,6 +123,13 @@ router.post('/cases', authenticateToken, async (req, res) => {
     domainData.id = domainData.id || `case_${randomUUID()}`;
     delete (domainData as any).userId;
     delete (domainData as any).analysis;
+
+    // Claim: caso anônimo ganha token server-side não-previsível (nunca o próprio ID,
+    // como ocorria antes). O token é retornado na resposta e exigido no POST claim.
+    if (domainData.isAnonymous && !domainData.claimToken) {
+      domainData.claimToken = randomUUID();
+    }
+
     domainData.userId = req.user.id;
 
     if (!domainData.createdAt) {

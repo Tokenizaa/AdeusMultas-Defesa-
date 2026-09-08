@@ -140,7 +140,9 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         async function loadPix() {
             setPixError(null);
             try {
-                const res = await fetch('/api/payments/pix/create', {
+                // authFetch injeta Authorization: Bearer <supabaseJWT> quando há sessão —
+                // exigido em produção (PAYMENT_MODE=production) para criar a cobrança.
+                const res = await authFetch('/api/payments/pix/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -315,7 +317,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             while (Date.now() < deadline) {
                 await sleep(3000);
                 try {
-                    const res = await fetch(`/api/payments/pix/status/${encodeURIComponent(pixData.txId)}`);
+                    const res = await authFetch(`/api/payments/pix/status/${encodeURIComponent(pixData.txId)}`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.success && data.status === 'PAID') {

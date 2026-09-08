@@ -1,8 +1,1467 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// src/scraper-prospecting/supabase.ts
+import { createClient as createClient3 } from "@supabase/supabase-js";
+var url, serviceRoleKey, supabaseAdmin;
+var init_supabase = __esm({
+  "src/scraper-prospecting/supabase.ts"() {
+    url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+    serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "").trim();
+    supabaseAdmin = url && serviceRoleKey ? createClient3(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    }) : null;
+  }
+});
+
+// src/scraper-prospecting/logger.ts
+function sanitizeMeta(meta) {
+  if (!meta) return {};
+  const cleaned = {};
+  for (const [k, v] of Object.entries(meta)) {
+    const lowerK = k.toLowerCase();
+    if (PII_FIELDS.some((f) => lowerK.includes(f))) {
+      if (typeof v === "string") {
+        let masked = v;
+        for (const [pattern, replacement] of PII_PATTERNS) {
+          masked = masked.replace(pattern, replacement);
+        }
+        cleaned[k] = masked;
+      } else {
+        cleaned[k] = v;
+      }
+    } else if (typeof v === "string") {
+      let masked = v;
+      for (const [pattern, replacement] of PII_PATTERNS) {
+        masked = masked.replace(pattern, replacement);
+      }
+      cleaned[k] = masked;
+    } else {
+      cleaned[k] = v;
+    }
+  }
+  return cleaned;
+}
+var PII_FIELDS, PII_PATTERNS, ConsoleLogger, logger2;
+var init_logger = __esm({
+  "src/scraper-prospecting/logger.ts"() {
+    PII_FIELDS = ["phone", "cellphone", "contactPhone", "email", "name", "contactName", "plate", "licensePlate", "cpf", "cnh", "rg"];
+    PII_PATTERNS = [
+      [/\b(\d{2})\s?9?\s?\d{4}\s?\d{4}\b/g, "(**) *****-****"],
+      // Brazilian phone
+      [/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "***@***.***"],
+      // email
+      [/\b[A-Z]{3}[-]?\d{4}\b/g, "***-****"],
+      // Brazilian plate
+      [/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, "***.$2.***-**"]
+      // CPF
+    ];
+    ConsoleLogger = class {
+      constructor() {
+        this.prefix = "[scraper-prospecting]";
+      }
+      format(level, message, meta) {
+        const time = (/* @__PURE__ */ new Date()).toISOString();
+        const sanitized = sanitizeMeta(meta);
+        const metaStr = Object.keys(sanitized).length > 0 ? ` ${JSON.stringify(sanitized)}` : "";
+        return `${time} ${this.prefix} ${level.toUpperCase()} ${message}${metaStr}`;
+      }
+      info(message, meta) {
+        console.log(this.format("info", message, meta));
+      }
+      warn(message, meta) {
+        console.warn(this.format("warn", message, meta));
+      }
+      error(message, meta) {
+        console.error(this.format("error", message, meta));
+      }
+    };
+    logger2 = new ConsoleLogger();
+  }
+});
+
+// src/scraper-prospecting/classifier.ts
+function classifyLead(raw) {
+  const haystack = [raw.category, raw.name].filter(Boolean).join(" ").toLowerCase();
+  const isDespachante = DESPACHANTE_KEYWORDS.some((kw) => haystack.includes(kw));
+  const isAdvogado = ADVOGADO_KEYWORDS.some((kw) => haystack.includes(kw));
+  if (isDespachante && !isAdvogado) return "despachante";
+  if (isAdvogado && !isDespachante) return "advogado_transito";
+  if (isDespachante && isAdvogado) {
+    if (raw.category) {
+      const cat = raw.category.toLowerCase();
+      if (cat.includes("advogado")) return "advogado_transito";
+      if (cat.includes("despachante")) return "despachante";
+    }
+    return null;
+  }
+  return null;
+}
+var DESPACHANTE_KEYWORDS, ADVOGADO_KEYWORDS;
+var init_classifier = __esm({
+  "src/scraper-prospecting/classifier.ts"() {
+    DESPACHANTE_KEYWORDS = [
+      "despachante",
+      "despachante de tr\xE2nsito",
+      "despachante documentalista",
+      "despachante ve\xEDculos",
+      "despachante veicular",
+      "despachante detran"
+    ];
+    ADVOGADO_KEYWORDS = [
+      "advogado direito de tr\xE2nsito",
+      "advogado tr\xE2nsito",
+      "advogado defesa multa",
+      "advogado suspens\xE3o cnh",
+      "advogado cassa\xE7\xE3o cnh",
+      "advogado tr\xE2nsito",
+      "direito de tr\xE2nsito",
+      "tr\xE2nsito direito",
+      "advocacia de tr\xE2nsito",
+      "defesa de multa",
+      "suspens\xE3o cnh",
+      "cassa\xE7\xE3o cnh"
+    ];
+  }
+});
+
+// src/scraper-prospecting/normalizer.ts
+function normalizePhone(phone) {
+  if (!phone) return void 0;
+  let digits = phone.replace(/\D/g, "");
+  if (!digits) return void 0;
+  if (digits.length > 10 && digits.startsWith("55") && digits.length - 2 >= 10) {
+    digits = digits.slice(2);
+  }
+  if (digits.length > 10 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  return digits;
+}
+function extractCleanPhone(text) {
+  if (!text) return null;
+  const match = text.match(BR_PHONE_RE);
+  if (!match) return null;
+  const digits = normalizePhone(match[0]);
+  if (!digits || digits.length < 10 || digits.length > 11) return null;
+  return digits;
+}
+function cleanPhoneFromTel(href) {
+  if (!href) return null;
+  const digits = normalizePhone(href);
+  if (!digits || digits.length < 10 || digits.length > 11) return null;
+  return digits;
+}
+function normalizeWebsite(website) {
+  if (!website) return void 0;
+  let url2 = website.trim().toLowerCase();
+  if (!/^https?:\/\//.test(url2)) {
+    url2 = `https://${url2}`;
+  }
+  try {
+    const u = new URL(url2);
+    u.pathname = u.pathname.replace(/\/$/, "");
+    return u.toString();
+  } catch {
+    return url2;
+  }
+}
+function normalizeEmail(email) {
+  if (!email) return void 0;
+  return email.trim().toLowerCase();
+}
+var BR_PHONE_RE;
+var init_normalizer = __esm({
+  "src/scraper-prospecting/normalizer.ts"() {
+    BR_PHONE_RE = /(?:\+?55[\s-]?)?(?:\(?(\d{2})\)?[\s-]?)?(\d{4,5}[\s-]?\d{4})/;
+  }
+});
+
+// src/scraper-prospecting/seen-filter.ts
+function buildSeenKeys(sourceUrl, phone, website, email) {
+  const keys = [];
+  if (sourceUrl) keys.push(`url:${sourceUrl}`);
+  const phoneKey = normalizePhone(phone ?? void 0) || "";
+  const webKey = (website || "").toLowerCase().trim();
+  const emailKey = (email || "").toLowerCase().trim();
+  const composite = [phoneKey, webKey, emailKey].filter(Boolean).join("|");
+  if (composite) keys.push(`id:${composite}`);
+  return keys;
+}
+function isSeen(seenKeys, sourceUrl, phone, website, email) {
+  return buildSeenKeys(sourceUrl, phone, website, email).some((k) => seenKeys.has(k));
+}
+function stillNeedsScroll(collectedNew, requiredNew, extraRoundsUsed, maxExtraRounds) {
+  if (requiredNew <= 0) return false;
+  if (extraRoundsUsed >= maxExtraRounds) return false;
+  return collectedNew < requiredNew;
+}
+var init_seen_filter = __esm({
+  "src/scraper-prospecting/seen-filter.ts"() {
+    init_normalizer();
+  }
+});
+
+// src/scraper-prospecting/selenium/session.ts
+import { Builder, Capabilities } from "selenium-webdriver";
+import chrome from "selenium-webdriver/chrome.js";
+var USER_AGENT, SeleniumSession;
+var init_session = __esm({
+  "src/scraper-prospecting/selenium/session.ts"() {
+    init_logger();
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    SeleniumSession = class {
+      constructor(options = {}) {
+        this.driver = null;
+        this.options = {
+          headless: true,
+          args: [
+            "--headless",
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--window-size=1920,1080",
+            "--disable-blink-features=AutomationDetected",
+            "--disable-extensions",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-default-apps"
+          ],
+          ...options
+        };
+      }
+      async start() {
+        if (this.driver) return this.driver;
+        try {
+          const caps = Capabilities.chrome();
+          const opt = new chrome.Options();
+          const flagSet = new Set(this.options.args || []);
+          if (this.options.headless) {
+            flagSet.add("--headless");
+            flagSet.add("--headless=new");
+            flagSet.add("--disable-gpu");
+            flagSet.add("--no-sandbox");
+            flagSet.add("--disable-dev-shm-usage");
+          }
+          opt.addArguments(...Array.from(flagSet));
+          opt.addArguments(`--user-agent=${USER_AGENT}`);
+          this.driver = await new Builder().forBrowser("chrome").withCapabilities(caps).setChromeOptions(opt).build();
+          await this.driver.manage().setTimeouts({ implicit: 0, pageLoad: 45e3, script: 3e4 });
+          await this.driver.executeScript(
+            `Object.defineProperty(navigator, 'webdriver', { get: () => false });`
+          ).catch(() => void 0);
+          logger2.info("Selenium session iniciada (headless)");
+          return this.driver;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Falha ao iniciar Chrome/Selenium";
+          logger2.error("Erro ao iniciar sess\xE3o Selenium", { error: message });
+          throw new Error(message);
+        }
+      }
+      async getDriver() {
+        if (!this.driver) {
+          return this.start();
+        }
+        return this.driver;
+      }
+      async navigate(url2) {
+        const driver = await this.getDriver();
+        await driver.get(url2);
+      }
+      async wait(ms) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      }
+      async waitForSelector(selector, timeoutMs = 1e4) {
+        try {
+          const driver = await this.getDriver();
+          await driver.wait(
+            async (d) => {
+              try {
+                const els = await d.findElements({ css: selector });
+                return els.length > 0;
+              } catch {
+                return false;
+              }
+            },
+            timeoutMs,
+            `Timeout aguardando seletor: ${selector}`
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      async findElement(selector) {
+        const driver = await this.getDriver();
+        try {
+          return await driver.findElement({ css: selector });
+        } catch {
+          return null;
+        }
+      }
+      async findElements(selector) {
+        const driver = await this.getDriver();
+        try {
+          return await driver.findElements({ css: selector });
+        } catch {
+          return [];
+        }
+      }
+      async scrollContainer(containerSelector) {
+        const driver = await this.getDriver();
+        await driver.executeScript(
+          `const el = document.querySelector(arguments[0]); if (el) { const max = el.scrollHeight - el.clientHeight; if (max > 0) el.scrollTop = max; }`,
+          containerSelector
+        );
+      }
+      async scrollWindow(pixelY = 800) {
+        const driver = await this.getDriver();
+        await driver.executeScript(`window.scrollBy(0, arguments[0]);`, pixelY);
+      }
+      async getCurrentUrl() {
+        const driver = await this.getDriver();
+        return driver.getCurrentUrl();
+      }
+      async getTitle() {
+        const driver = await this.getDriver();
+        return driver.getTitle();
+      }
+      async evaluate(fn) {
+        const driver = await this.getDriver();
+        return driver.executeScript(`return (function() { ${fn.toString()} })();`);
+      }
+      async getUrl() {
+        const driver = await this.getDriver();
+        return driver.getCurrentUrl();
+      }
+      async back() {
+        const driver = await this.getDriver();
+        await driver.navigate().back();
+      }
+      async close() {
+        if (this.driver) {
+          await this.driver.quit().catch(() => void 0);
+          this.driver = null;
+          logger2.info("Selenium session encerrada");
+        }
+      }
+    };
+  }
+});
+
+// src/scraper-prospecting/selenium/google-maps-scraper.ts
+function deriveCityStateZip(address) {
+  if (!address) return {};
+  const out = {};
+  const zipMatch = address.match(/\b(\d{5}-?\d{3})\b/);
+  if (zipMatch) out.zipCode = zipMatch[1].replace("-", "");
+  const ufMatch = address.match(/\b([A-Za-z]{2})\b(?=[\s,;-]*$)/) || address.match(/\b([A-Za-z]{2})\b[\s,;-]*\d{5}/);
+  if (ufMatch && /^[A-Za-z]{2}$/.test(ufMatch[1])) {
+    const uf = ufMatch[1].toUpperCase();
+    out.state = uf;
+    const withoutZip = address.replace(/\d{5}-?\d{3}/g, " ").trim();
+    const ufIndex = withoutZip.toUpperCase().lastIndexOf(uf);
+    if (ufIndex > 0) {
+      const beforeUf = withoutZip.slice(0, ufIndex).trim();
+      const parts = beforeUf.split(/[,，/-]/).map((p) => p.trim()).filter(Boolean);
+      const city = parts[parts.length - 1];
+      if (city && !/^\d+$/.test(city)) out.city = city;
+    }
+  }
+  return out;
+}
+var GENERIC_NAMES, FEED_SELECTORS, GoogleMapsSeleniumScraper;
+var init_google_maps_scraper = __esm({
+  "src/scraper-prospecting/selenium/google-maps-scraper.ts"() {
+    init_normalizer();
+    init_seen_filter();
+    init_logger();
+    GENERIC_NAMES = /* @__PURE__ */ new Set([
+      "Resultados",
+      "Resultado",
+      "Patrocinado",
+      "An\xFAncio",
+      "Mapa",
+      "Saiba mais sobre a divulga\xE7\xE3o legal de avalia\xE7\xF5es p\xFAblicas no Google Maps"
+    ]);
+    FEED_SELECTORS = [
+      'div[role="feed"]',
+      '[aria-label*="Resultados"]',
+      "div"
+    ];
+    GoogleMapsSeleniumScraper = class {
+      constructor(session, callbacks = {}) {
+        this.blocked = false;
+        this.callbacks = {};
+        this.session = session;
+        this.callbacks = callbacks;
+      }
+      setCallbacks(callbacks) {
+        this.callbacks = { ...this.callbacks, ...callbacks };
+      }
+      extractPlaceId(url2) {
+        if (!url2) return null;
+        const match = url2.match(/!1s([^!]+)/);
+        if (match && match[1]) {
+          return match[1];
+        }
+        const placeMatch = url2.match(/place\/([^/@?]+)/);
+        return placeMatch ? decodeURIComponent(placeMatch[1]) : null;
+      }
+      async detectPageState() {
+        const url2 = await this.session.getUrl();
+        if (/consent\.google\.com|consent\.google\.br/.test(url2)) {
+          return { status: "CONSENT_REQUIRED", reason: "P\xE1gina de consentimento de cookies detectada." };
+        }
+        if (/accounts\.google\.com/.test(url2)) {
+          return { status: "LOGIN_REQUIRED", reason: "Tela de login do Google detectada." };
+        }
+        if (/sorry\/index\?/.test(url2)) {
+          return { status: "BLOCKED", reason: "Bloqueio/verifica\xE7\xE3o de automa\xE7\xE3o." };
+        }
+        if (/captcha/.test(url2.toLowerCase())) {
+          return { status: "CAPTCHA", reason: "CAPTCHA detectado." };
+        }
+        return { status: "UNKNOWN", reason: "Estrutura n\xE3o reconhecida ou sem resultados." };
+      }
+      async findFeedContainer() {
+        for (const sel of FEED_SELECTORS) {
+          const found = await this.session.findElements(sel);
+          if (found.length > 0) {
+            const links = await this.session.findElements(`${sel} a[href*="/maps/place/"]`);
+            if (links.length > 0 || sel === 'div[role="feed"]') {
+              return sel;
+            }
+          }
+        }
+        return null;
+      }
+      async getPlaceLinkCount(containerSelector) {
+        const driver = await this.session.getDriver();
+        try {
+          return await driver.executeScript(
+            `return document.querySelectorAll(arguments[0] + ' a[href*="/maps/place/"]').length;`,
+            containerSelector
+          );
+        } catch {
+          return 0;
+        }
+      }
+      async scrollUntilNoNewItems(feedSelector, targetNewCount, existingCount, maxScrolls = 200) {
+        const WAIT_BETWEEN_SCROLLS = 3e3;
+        const STABLE_THRESHOLD = 5;
+        let lastCount = existingCount;
+        let stableRounds = 0;
+        let stopped = "no_new";
+        for (let scrolls = 0; scrolls < maxScrolls; scrolls++) {
+          if (this.callbacks.onCheckCancel?.()) {
+            logger2.info("Scroll cancelado pelo usu\xE1rio", { jobId: this.callbacks });
+            stopped = "no_new";
+            break;
+          }
+          await this.session.scrollContainer(feedSelector);
+          await this.session.wait(WAIT_BETWEEN_SCROLLS);
+          const afterCount = await this.getPlaceLinkCount(feedSelector);
+          const delta = afterCount - lastCount;
+          const newCollected = Math.max(0, afterCount - existingCount);
+          logger2.info("Scroll progressivo", {
+            scroll: scrolls + 1,
+            before: lastCount,
+            after: afterCount,
+            delta,
+            newCollected,
+            targetNewCount
+          });
+          if (delta > 0) {
+            stableRounds = 0;
+            lastCount = afterCount;
+          } else {
+            stableRounds += 1;
+          }
+          if (newCollected >= targetNewCount && targetNewCount > 0) {
+            stopped = "limit_reached";
+            break;
+          }
+          if (stableRounds >= STABLE_THRESHOLD && delta === 0) {
+            stopped = "no_new";
+            break;
+          }
+        }
+        if (stopped !== "limit_reached") {
+          const finalCount = await this.getPlaceLinkCount(feedSelector);
+          if (finalCount === lastCount && stableRounds >= STABLE_THRESHOLD) {
+            stopped = "no_new";
+          } else if (stableRounds < STABLE_THRESHOLD) {
+            stopped = "max_scrolls";
+          }
+        }
+        return { selector: feedSelector, newCount: Math.max(0, lastCount - existingCount), stopped };
+      }
+      /**
+       * FASE 1 - DISCOVERY: Coleta todos os cards do feed sem abrir detalhes.
+       * Retorna array de DiscoveredCard com URL e dados básicos.
+       */
+      async discoverAllCards(feedSelector, requiredNew, seenKeys) {
+        const driver = await this.session.getDriver();
+        const genericNames = Array.from(GENERIC_NAMES);
+        const discovered = [];
+        let extraScrollRounds = 0;
+        const maxExtraScrollRounds = 3;
+        while (true) {
+          if (this.callbacks.onCheckCancel?.()) break;
+          if (requiredNew > 0 && discovered.length >= requiredNew) break;
+          const cards = await driver.findElements({ css: `${feedSelector} a[href*="/maps/place/"]` });
+          for (let i = discovered.length; i < cards.length; i++) {
+            if (this.callbacks.onCheckCancel?.()) break;
+            if (requiredNew > 0 && discovered.length >= requiredNew) break;
+            const cardEl = cards[i];
+            try {
+              const data = await driver.executeScript(
+                (element, idx, genericNames2) => {
+                  const GENERIC_NAMES2 = new Set(genericNames2);
+                  const cardEl2 = element;
+                  const text = cardEl2.innerText || "";
+                  const linkEl = cardEl2.tagName === "A" ? cardEl2 : cardEl2.querySelector('a[href*="/maps/place/"]');
+                  const mapsUrl = linkEl?.getAttribute("href") || void 0;
+                  const label = linkEl?.getAttribute("aria-label") || void 0;
+                  const nameEl = cardEl2.querySelector('[role="heading"], h1, h2, h3');
+                  const fallbackName = cardEl2.tagName === "A" ? cardEl2.textContent?.trim() || label?.replace(/^.*:\s*/, "")?.trim() : void 0;
+                  const name = nameEl?.textContent?.trim() || fallbackName || `Resultado ${idx + 1}`;
+                  if (!mapsUrl || GENERIC_NAMES2.has(name) || name.startsWith("Resultado") || name === "Resultados") {
+                    return {};
+                  }
+                  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+                  const fullText = lines.join(" ").toLowerCase();
+                  const lead = { name, sourceUrl: mapsUrl, googleMapsUrl: mapsUrl };
+                  const categoryMatch = lines.find((l) => /despachante|advogado|direito|trânsito|detran|cnh/i.test(l));
+                  let leadType;
+                  if (/despachante/.test(fullText)) {
+                    lead.category = "despachante de tr\xE2nsito";
+                    leadType = "despachante";
+                  } else if (/advogado|direito de trânsito|trânsito direito|defesa de multa|suspensão cnh|cassação cnh/.test(fullText)) {
+                    lead.category = categoryMatch ? categoryMatch : "advogado direito de tr\xE2nsito";
+                    leadType = "advogado_transito";
+                  }
+                  if (!lead.category && mapsUrl) {
+                    const catMatch = mapsUrl.match(/place\/([^/]+)/);
+                    if (catMatch) {
+                      const slug = decodeURIComponent(catMatch[1]).toLowerCase();
+                      if (slug.includes("despachante")) {
+                        lead.category = "despachante de tr\xE2nsito";
+                        leadType = "despachante";
+                      } else if (slug.includes("advogado") || slug.includes("transito")) {
+                        lead.category = "advogado direito de tr\xE2nsito";
+                        leadType = "advogado_transito";
+                      }
+                    }
+                  }
+                  return { ...lead, leadType };
+                },
+                cardEl,
+                i
+              );
+              if (!data || !data.sourceUrl) continue;
+              if (discovered.some((d) => d.sourceUrl === data.sourceUrl)) continue;
+              if (isSeen(seenKeys, data.sourceUrl, data.phone, data.website, data.email)) {
+                logger2.info("Card j\xE1 conhecido (banco), pulando", { url: data.sourceUrl });
+                continue;
+              }
+              discovered.push(data);
+            } catch (err) {
+              logger2.warn("Erro ao extrair card base", { index: i, error: err instanceof Error ? err.message : err });
+            }
+          }
+          if (discovered.length >= cards.length) {
+            if (stillNeedsScroll(discovered.length, requiredNew, extraScrollRounds, maxExtraScrollRounds)) {
+              const loaded = await this.getPlaceLinkCount(feedSelector);
+              const more = await this.scrollUntilNoNewItems(feedSelector, requiredNew - discovered.length, loaded);
+              if (more.newCount === 0) break;
+              extraScrollRounds += 1;
+              continue;
+            }
+            break;
+          }
+        }
+        logger2.info("Discovery conclu\xEDdo", { totalDiscovered: discovered.length });
+        return discovered;
+      }
+      /**
+       * FASE 2 - DETAIL EXTRACTION: Para cada card descoberto, navega direto para a URL
+       * e extrai detalhes completos. Não usa click/back - navega direto.
+       */
+      async extractDetailsForCards(discovered, seenKeys, scrapedFor) {
+        const leads = [];
+        let duplicates = 0;
+        let rejected = 0;
+        const errors = [];
+        for (let i = 0; i < discovered.length; i++) {
+          if (this.callbacks.onCheckCancel?.()) break;
+          const card = discovered[i];
+          try {
+            this.callbacks.onProgress?.({
+              phase: "details",
+              discovered: discovered.length,
+              processed: i + 1,
+              persisted: leads.length,
+              duplicates,
+              errors: errors.length
+            });
+            await this.session.navigate(card.sourceUrl);
+            await this.session.wait(2500);
+            const detailReady = await this.session.waitForSelector(
+              'a[href^="tel:"], button[data-item-id="address"], button[data-item-id="oh"], div[role="main"]',
+              8e3
+            );
+            if (!detailReady) await this.session.wait(1500);
+            const detail = await this.extractDetailFromPanel();
+            const enriched = {
+              name: card.name,
+              category: card.category,
+              sourceUrl: card.sourceUrl,
+              googleMapsUrl: card.googleMapsUrl,
+              lead_type: card.leadType,
+              ...detail,
+              scrapedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              searchTerm: scrapedFor.query,
+              searchLocation: `${scrapedFor.city}, ${scrapedFor.state}`
+            };
+            for (const key of buildSeenKeys(enriched.sourceUrl, enriched.phone, enriched.website, enriched.email)) {
+              seenKeys.add(key);
+            }
+            leads.push(enriched);
+            if (this.callbacks.onCardExtracted) {
+              try {
+                await this.callbacks.onCardExtracted(enriched, i + 1, discovered.length);
+              } catch (callbackErr) {
+                logger2.warn("Aviso no callback onCardExtracted:", { error: callbackErr instanceof Error ? callbackErr.message : callbackErr });
+              }
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Erro ao extrair detalhe";
+            errors.push(message);
+            rejected += 1;
+            logger2.warn("Erro ao processar card", { url: card.sourceUrl, error: message });
+          }
+        }
+        return { leads, duplicates, rejected, errors };
+      }
+      /**
+       * Extrai dados completos do painel de detalhes via DOM.
+       * Não depende de click/back - apenas lê o DOM atual.
+       */
+      async extractDetailFromPanel() {
+        const driver = await this.session.getDriver();
+        const detail = {};
+        try {
+          const panelData = await driver.executeScript(() => {
+            const data = {};
+            const rawData = {};
+            const telLink = document.querySelector('a[href^="tel:"]');
+            if (telLink) {
+              data.phoneRaw = telLink.getAttribute("href") || void 0;
+              data.phoneLabel = telLink.getAttribute("aria-label") || telLink.textContent?.trim() || void 0;
+              rawData.phoneHref = telLink.getAttribute("href");
+              rawData.phoneAriaLabel = telLink.getAttribute("aria-label");
+            }
+            const siteLink = Array.from(document.querySelectorAll('a[href^="http"]')).find(
+              (a) => a.href && !/^https?:\/\/(www\.)?((.*\.)?google\.(com|com\.br|br)|maps\.google\.)/i.test(a.href) && !/(support\.google|policies\.google|accounts\.google|maps\.google)/i.test(a.href)
+            );
+            if (siteLink) {
+              data.website = siteLink.href;
+              rawData.websiteHref = siteLink.href;
+            }
+            const addrBtn = document.querySelector(
+              'button[data-item-id="address"], div[data-item-id="address"]'
+            );
+            if (addrBtn) {
+              data.address = addrBtn.textContent?.trim() || void 0;
+              rawData.addressText = addrBtn.textContent?.trim();
+            }
+            const hoursBtn = document.querySelector('button[data-item-id="oh"]');
+            if (hoursBtn) {
+              data.openingHours = hoursBtn.textContent?.trim() || void 0;
+              rawData.openingHoursText = hoursBtn.textContent?.trim();
+            }
+            const ratingEl = Array.from(document.querySelectorAll('[role="img"][aria-label]')).find(
+              (el) => /(estrelas?|stars?|5)/i.test(el.getAttribute("aria-label") || "")
+            );
+            if (ratingEl) {
+              const label = ratingEl.getAttribute("aria-label") || "";
+              const m = label.match(/(\d+[.,]\d+)/);
+              if (m) data.rating = parseFloat(m[1].replace(",", "."));
+              rawData.ratingAriaLabel = label;
+            }
+            const mainText = document.querySelector('div[role="main"], [data-item-id="address"]')?.textContent || "";
+            const reviewMatch = mainText.match(/(\d{1,6})\s+(avaliações?|comentários?|reviews?)/i);
+            if (reviewMatch) data.reviewCount = parseInt(reviewMatch[1], 10);
+            rawData.mainTextSnippet = mainText.slice(0, 2e3);
+            const placeIdMatch = window.location.href.match(/place\/([^\/]+)/);
+            if (placeIdMatch) {
+              data.placeId = placeIdMatch[1];
+              rawData.placeIdFromUrl = placeIdMatch[1];
+            }
+            const priceEl = document.querySelector('[data-price-level], [aria-label*="Pre\xE7o"], [aria-label*="price"]');
+            if (priceEl) {
+              const priceText = priceEl.textContent || priceEl.getAttribute("aria-label") || "";
+              const priceMatch = priceText.match(/[€$R\$]\s*\d+|gratuito|free|\$\d+/i);
+              if (priceMatch) data.priceLevel = priceMatch[0];
+              rawData.priceText = priceText;
+            }
+            const statusEl = document.querySelector(
+              '[data-item-id="oh"] ~ div, .ZDu9vd, [aria-label*="Aberto"], [aria-label*="Fechado"], [aria-label*="Open"], [aria-label*="Closed"]'
+            );
+            if (statusEl) {
+              data.currentStatus = statusEl.textContent?.trim() || void 0;
+              rawData.currentStatusText = statusEl.textContent?.trim();
+            }
+            const descEl = document.querySelector('[data-item-id="description"], [jsaction*="description"], .PYvSYb');
+            if (descEl) {
+              data.description = descEl.textContent?.trim() || void 0;
+              rawData.descriptionText = descEl.textContent?.trim();
+            }
+            const latLngMatch = window.location.href.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (latLngMatch) {
+              data.latitude = parseFloat(latLngMatch[1]);
+              data.longitude = parseFloat(latLngMatch[2]);
+              rawData.latLngFromUrl = { lat: latLngMatch[1], lng: latLngMatch[2] };
+            }
+            const plusCodeEl = document.querySelector('[data-item-id="plus_code"], [aria-label*="Plus Code"]');
+            if (plusCodeEl) {
+              data.plusCode = plusCodeEl.textContent?.trim() || void 0;
+              rawData.plusCodeText = plusCodeEl.textContent?.trim();
+            }
+            const socialLinks = [];
+            const socialSelectors = [
+              'a[href*="instagram.com"]',
+              'a[href*="facebook.com"]',
+              'a[href*="linkedin.com"]',
+              'a[href*="twitter.com"]',
+              'a[href*="youtube.com"]'
+            ];
+            for (const sel of socialSelectors) {
+              const els = document.querySelectorAll(sel);
+              els.forEach((el) => {
+                if (el.href && !socialLinks.includes(el.href)) socialLinks.push(el.href);
+              });
+            }
+            if (socialLinks.length > 0) {
+              data.socialLinks = socialLinks;
+              rawData.socialLinks = socialLinks;
+            }
+            const panel = document.querySelector('div[role="main"]');
+            if (panel) {
+              rawData.panelHtml = panel.innerHTML.slice(0, 5e4);
+            }
+            data.rawData = rawData;
+            return data;
+          }).catch(() => ({}));
+          const telHref = panelData.phoneRaw || "";
+          const telLabel = panelData.phoneLabel || "";
+          const phoneFromHref = cleanPhoneFromTel(telHref);
+          const phoneFromLabel = extractCleanPhone(telLabel);
+          const phone = phoneFromHref || phoneFromLabel;
+          if (phone) detail.phone = phone;
+          if (panelData.website) detail.website = panelData.website;
+          if (panelData.address) {
+            detail.address = panelData.address;
+            const derived = deriveCityStateZip(panelData.address);
+            if (derived.city) detail.city = derived.city;
+            if (derived.state) detail.state = derived.state;
+            if (derived.zipCode) detail.zipCode = derived.zipCode;
+          }
+          if (panelData.rating != null) detail.rating = panelData.rating;
+          if (panelData.reviewCount != null) detail.reviewCount = panelData.reviewCount;
+          if (panelData.openingHours) detail.openingHours = panelData.openingHours;
+          if (panelData.placeId) detail.placeId = panelData.placeId;
+          if (panelData.priceLevel) detail.priceLevel = panelData.priceLevel;
+          if (panelData.currentStatus) detail.currentStatus = panelData.currentStatus;
+          if (panelData.description) detail.description = panelData.description;
+          if (panelData.latitude != null) detail.latitude = panelData.latitude;
+          if (panelData.longitude != null) detail.longitude = panelData.longitude;
+          if (panelData.plusCode) detail.plusCode = panelData.plusCode;
+          if (panelData.socialLinks) detail.socialLinks = panelData.socialLinks;
+          if (panelData.rawData) detail.rawData = panelData.rawData;
+        } catch (err) {
+          logger2.warn("Falha ao extrair painel de detalhes", { error: err instanceof Error ? err.message : err });
+        }
+        return detail;
+      }
+      /**
+       * Método principal de busca com arquitetura discovery-first.
+       */
+      async search(query, location, requiredNew, seenKeys) {
+        const result = {
+          query: `${query} ${location}`,
+          location,
+          totalFound: 0,
+          inserted: 0,
+          filled: 0,
+          duplicates: 0,
+          completeDuplicates: 0,
+          rejected: 0,
+          errors: [],
+          leads: []
+        };
+        if (this.blocked) {
+          result.errors.push("Google bloqueou automa\xE7\xE3o anteriormente.");
+          return result;
+        }
+        const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query + " " + location)}?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDgyNC4w`;
+        try {
+          await this.session.navigate(searchUrl);
+          await this.session.wait(3e3);
+          const ready = await this.session.waitForSelector('a[href*="/maps/place/"], div[role="feed"]', 1e4);
+          if (!ready) {
+            const state = await this.detectPageState();
+            result.errors.push(`Timeout aguardando resultados. Motivo: ${state.reason}`);
+            result.errors.push(`URL: ${await this.session.getUrl()}`);
+            return result;
+          }
+          await this.session.wait(2e3);
+          const feedSelector = await this.findFeedContainer();
+          if (!feedSelector) {
+            const state = await this.detectPageState();
+            result.errors.push(`Feed n\xE3o encontrado. Motivo: ${state.reason}`);
+            result.errors.push(`URL: ${await this.session.getUrl()}`);
+            return result;
+          }
+          const initialCount = await this.getPlaceLinkCount(feedSelector);
+          logger2.info("Resultados iniciais no DOM", { count: initialCount, query });
+          this.callbacks.onProgress?.({
+            phase: "discovery",
+            discovered: 0,
+            processed: 0,
+            persisted: 0,
+            duplicates: 0,
+            errors: 0
+          });
+          const scrollResult = await this.scrollUntilNoNewItems(feedSelector, requiredNew, initialCount);
+          logger2.info("Scroll conclu\xEDdo", {
+            initialCount,
+            finalCount: initialCount + scrollResult.newCount,
+            newLoaded: scrollResult.newCount,
+            stopped: scrollResult.stopped,
+            query
+          });
+          result.totalFound = initialCount + scrollResult.newCount;
+          if (result.totalFound === 0) {
+            result.errors.push("Nenhum card encontrado no feed ap\xF3s scroll.");
+            return result;
+          }
+          this.callbacks.onProgress?.({
+            phase: "discovery",
+            discovered: result.totalFound,
+            processed: 0,
+            persisted: 0,
+            duplicates: 0,
+            errors: 0
+          });
+          const discovered = await this.discoverAllCards(feedSelector, requiredNew, seenKeys);
+          logger2.info("Discovery finalizado", { totalCards: discovered.length });
+          const scrapedFor = {
+            query,
+            city: location.split(",")[0]?.trim() || location,
+            state: (location.split(",")[1]?.trim() || "").slice(0, 2).toUpperCase(),
+            source: "google_maps"
+          };
+          const detailResult = await this.extractDetailsForCards(discovered, seenKeys, scrapedFor);
+          result.leads = detailResult.leads;
+          result.duplicates = detailResult.duplicates;
+          result.rejected = detailResult.rejected;
+          result.errors.push(...detailResult.errors);
+          this.callbacks.onProgress?.({
+            phase: "completed",
+            discovered: result.totalFound,
+            processed: discovered.length,
+            persisted: detailResult.leads.length,
+            duplicates: detailResult.duplicates,
+            errors: detailResult.errors.length
+          });
+          logger2.info("Extra\xE7\xE3o conclu\xEDda", {
+            query,
+            totalItems: result.totalFound,
+            newLeads: result.leads.length,
+            duplicates: detailResult.duplicates,
+            rejected: detailResult.rejected,
+            scrollStopped: scrollResult.stopped
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Erro desconhecido no Google Maps";
+          logger2.error("Falha no scraping do Google Maps (Selenium)", { error: message });
+          result.errors.push(message);
+          this.blocked = true;
+          if (err instanceof Error && (err.name === "WebDriverError" || err.message.includes("session"))) {
+            this.callbacks.onDriverCrash?.();
+          }
+        }
+        return result;
+      }
+      async close() {
+        await this.session.close();
+      }
+    };
+  }
+});
+
+// src/scraper-prospecting/persister.ts
+var persister_exports = {};
+__export(persister_exports, {
+  persistLeads: () => persistLeads,
+  runScrape: () => runScrape,
+  runScrapeAsJob: () => runScrapeAsJob
+});
+function isEmpty(val) {
+  return val === null || val === void 0 || val === "";
+}
+function computeFillColumns(existing, payload) {
+  const updates = {};
+  for (const key of FILLABLE_COLUMNS) {
+    const existingVal = existing[key];
+    const newVal = payload[key];
+    if (isEmpty(existingVal) && !isEmpty(newVal)) {
+      updates[key] = newVal;
+    }
+  }
+  return updates;
+}
+async function findExistingByUrl(url2) {
+  try {
+    for (const col of ["google_maps_url", "source_url"]) {
+      const { data, error } = await supabaseAdmin.from("marketing_leads").select("*").eq(col, url2).limit(1);
+      if (error) {
+        logger2.error("Erro ao buscar lead existente por URL", { col, url: url2, error: error.message });
+        return null;
+      }
+      if (data && data.length > 0) {
+        return data[0];
+      }
+    }
+    return null;
+  } catch (err) {
+    logger2.error("Falha ao buscar lead existente por URL", { error: err instanceof Error ? err.message : err });
+    return null;
+  }
+}
+function buildLead(raw, leadType, source, scrapedFor, collectionRunId) {
+  const phone = normalizePhone(raw.phone) || null;
+  const website = normalizeWebsite(raw.website) || null;
+  const email = normalizeEmail(raw.email) || null;
+  return {
+    name: raw.name,
+    category: raw.category || null,
+    phone,
+    phone_normalized: phone,
+    whatsapp: raw.whatsapp || null,
+    email,
+    website,
+    instagram: raw.instagram || null,
+    facebook: raw.facebook || null,
+    address: raw.address || null,
+    city: raw.city || null,
+    state: raw.state || null,
+    zipCode: raw.zipCode || null,
+    googleMapsUrl: raw.googleMapsUrl || null,
+    placeId: raw.placeId || null,
+    rating: raw.rating ?? null,
+    reviewCount: raw.reviewCount ?? null,
+    priceLevel: raw.priceLevel ?? null,
+    openingHours: raw.openingHours || null,
+    currentStatus: raw.currentStatus || null,
+    description: raw.description || null,
+    latitude: raw.latitude ?? null,
+    longitude: raw.longitude ?? null,
+    plusCode: raw.plusCode || null,
+    socialLinks: raw.socialLinks || null,
+    rawData: raw.rawData || null,
+    sourceUrl: raw.sourceUrl || "",
+    lead_type: leadType,
+    source,
+    scraped_at: raw.scrapedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    scraped_for: scrapedFor,
+    collection_run_id: collectionRunId,
+    searchTerm: raw.searchTerm || null,
+    searchLocation: raw.searchLocation || null
+  };
+}
+async function persistLeads(rawLeads, source, scrapedFor = null, collectionRunId = null) {
+  const result = { inserted: 0, filled: 0, duplicates: 0, completeDuplicates: 0, rejected: 0, errors: [] };
+  for (const raw of rawLeads) {
+    try {
+      const leadType = classifyLead(raw);
+      if (!leadType) {
+        result.rejected += 1;
+        result.errors.push(`Classifica\xE7\xE3o inv\xE1lida para lead: ${raw.name}`);
+        continue;
+      }
+      const lead = buildLead(raw, leadType, source, scrapedFor, collectionRunId);
+      const payload = {
+        lead_type: lead.lead_type,
+        name: lead.name,
+        phone: lead.phone,
+        phone_normalized: lead.phone_normalized,
+        whatsapp: lead.whatsapp,
+        email: lead.email,
+        website: lead.website,
+        instagram: lead.instagram,
+        facebook: lead.facebook,
+        address: lead.address,
+        city: lead.city,
+        state: lead.state,
+        zip_code: lead.zipCode,
+        google_maps_url: lead.googleMapsUrl,
+        place_id: lead.placeId,
+        rating: lead.rating,
+        review_count: lead.reviewCount,
+        price_level: lead.priceLevel,
+        category: lead.category,
+        source: lead.source,
+        source_url: lead.sourceUrl,
+        scraped_at: lead.scraped_at,
+        audience: "B2B",
+        opening_hours: lead.openingHours,
+        current_status: lead.currentStatus,
+        description: lead.description,
+        latitude: lead.latitude,
+        longitude: lead.longitude,
+        plus_code: lead.plusCode,
+        social_links: lead.socialLinks,
+        raw_data: lead.rawData,
+        scraped_for: scrapedFor ?? null,
+        collection_run_id: collectionRunId,
+        search_term: lead.searchTerm,
+        search_location: lead.searchLocation
+      };
+      const canonicalUrl = lead.googleMapsUrl || lead.sourceUrl;
+      if (canonicalUrl) {
+        const existing = await findExistingByUrl(canonicalUrl);
+        if (existing) {
+          const updates = computeFillColumns(existing, payload);
+          if (Object.keys(updates).length > 0) {
+            const merged = {
+              ...updates,
+              scraped_at: payload.scraped_at,
+              scraped_for: payload.scraped_for,
+              collection_run_id: payload.collection_run_id
+            };
+            let fillError = null;
+            let finalUpdates = merged;
+            const { error: error2 } = await supabaseAdmin.from("marketing_leads").update(merged).eq("id", existing.id);
+            if (error2 && error2.code === "23505") {
+              const { phone_normalized, ...retryUpdates } = merged;
+              finalUpdates = retryUpdates;
+              const { error: retryError } = await supabaseAdmin.from("marketing_leads").update(retryUpdates).eq("id", existing.id);
+              fillError = retryError;
+            } else {
+              fillError = error2;
+            }
+            if (fillError) {
+              result.errors.push(`Erro ao preencher lead ${lead.name}: ${fillError.message}`);
+              result.rejected += 1;
+            } else {
+              result.filled += 1;
+              if (finalUpdates !== merged) {
+                result.errors.push(
+                  `Aviso: phone_normalized n\xE3o atualizado para ${lead.name} (conflito de unique constraint \u2014 outro lead j\xE1 usa esse n\xFAmero).`
+                );
+              }
+            }
+            continue;
+          }
+          result.duplicates += 1;
+          result.completeDuplicates += 1;
+          continue;
+        }
+      }
+      const { error } = await supabaseAdmin.from("marketing_leads").insert(payload);
+      if (error) {
+        if (error.code === "23505") {
+          result.duplicates += 1;
+        } else {
+          result.errors.push(`Erro ao inserir ${lead.name}: ${error.message}`);
+          result.rejected += 1;
+        }
+      } else {
+        result.inserted += 1;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      result.errors.push(message);
+      result.rejected += 1;
+    }
+  }
+  return result;
+}
+async function loadExistingScrapedKeys() {
+  const seenKeys = /* @__PURE__ */ new Set();
+  try {
+    const { data, error } = await supabaseAdmin.from("marketing_leads").select("source_url, phone_normalized, website, email, scraped_for").not("source_url", "is", null).limit(5e3);
+    if (error) {
+      logger2.error("Erro ao carregar chaves existentes para dedup", { error: error.message });
+      return seenKeys;
+    }
+    for (const row of data || []) {
+      for (const key of buildSeenKeys(
+        row.source_url || void 0,
+        row.phone_normalized || void 0,
+        row.website || void 0,
+        row.email || void 0
+      )) {
+        seenKeys.add(key);
+      }
+    }
+    logger2.info("Chaves de dedup carregadas do banco", { count: seenKeys.size });
+  } catch (err) {
+    logger2.error("Falha ao carregar chaves existentes", { error: err instanceof Error ? err.message : err });
+  }
+  return seenKeys;
+}
+async function createCollectionRun(config) {
+  try {
+    const { data, error } = await supabaseAdmin.from("collection_runs").insert({
+      queries: config.queries,
+      cities: config.cities || [],
+      states: config.states || [],
+      limit_per_query: config.limitPerQuery,
+      status: "running",
+      started_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).select("id, status").single();
+    if (error || !data) {
+      logger2.error("Erro ao criar collection_run", { error: error?.message });
+      return null;
+    }
+    return data;
+  } catch (err) {
+    logger2.error("Falha ao criar collection_run", { error: err instanceof Error ? err.message : err });
+    return null;
+  }
+}
+async function updateCollectionRun(runId, updates) {
+  try {
+    const isTerminal = ["completed", "failed", "cancelled"].includes(updates.status || "");
+    const payload = {
+      ...updates,
+      ...isTerminal && { finished_at: (/* @__PURE__ */ new Date()).toISOString() }
+    };
+    const cleanPayload = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== void 0) {
+        cleanPayload[key] = value;
+      }
+    }
+    const { error } = await supabaseAdmin.from("collection_runs").update(cleanPayload).eq("id", runId);
+    if (error) {
+      logger2.warn("Erro ao atualizar collection_run", { runId, error: error.message });
+    }
+  } catch (err) {
+    logger2.warn("Erro ao atualizar collection_run", { runId, error: err instanceof Error ? err.message : err });
+  }
+}
+async function runScrapeAsJob(config, callbacks = {}, collectionRunId) {
+  const session = new SeleniumSession({
+    headless: true,
+    args: [
+      "--headless",
+      "--headless=new",
+      "--disable-gpu",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--window-size=1920,1080",
+      "--disable-blink-features=AutomationDetected",
+      "--disable-extensions",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-default-apps"
+    ]
+  });
+  let scraper = null;
+  let cancelled = false;
+  const locations = [];
+  for (const city of config.cities || []) locations.push(city);
+  for (const state of config.states || []) locations.push(state);
+  if (locations.length === 0) locations.push("Brasil");
+  const collectionRun = collectionRunId ? { id: collectionRunId } : await createCollectionRun(config);
+  const runId = collectionRun?.id || null;
+  if (collectionRunId && runId) {
+    await updateCollectionRun(runId, { status: "running", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
+  const seenKeys = await loadExistingScrapedKeys();
+  const aggregated = {
+    source: "google_maps",
+    query: config.queries.join(", "),
+    location: locations.join(", "),
+    totalFound: 0,
+    inserted: 0,
+    filled: 0,
+    duplicates: 0,
+    completeDuplicates: 0,
+    rejected: 0,
+    errors: [],
+    leads: []
+  };
+  const queriesExecuted = [];
+  if (runId) {
+    try {
+      const { data: existingRun } = await supabaseAdmin.from("collection_runs").select("*").eq("id", runId).maybeSingle();
+      if (existingRun && Array.isArray(existingRun.queries_executed) && existingRun.queries_executed.length > 0) {
+        queriesExecuted.push(...existingRun.queries_executed);
+        aggregated.totalFound = existingRun.results_found || 0;
+        aggregated.inserted = existingRun.new_leads || 0;
+        aggregated.duplicates = existingRun.duplicates || 0;
+        aggregated.rejected = existingRun.rejected || 0;
+        aggregated.errors = Array.isArray(existingRun.errors) ? existingRun.errors : [];
+        logger2.info("Retomando job a partir de checkpoint persistido", {
+          runId,
+          executedQueries: queriesExecuted.length,
+          previousInserted: aggregated.inserted
+        });
+      }
+    } catch (resumeErr) {
+      logger2.warn("Aviso ao consultar estado para retomada:", { error: resumeErr });
+    }
+  }
+  const scraperCallbacks = {
+    onProgress: callbacks.onProgress,
+    onCheckCancel: () => cancelled || callbacks.onCheckCancel?.() || false,
+    onDriverCrash: callbacks.onDriverCrash,
+    onCardExtracted: async (lead, index, total) => {
+      callbacks.onProgress?.({
+        phase: "details",
+        discovered: aggregated.totalFound,
+        processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected + index,
+        persisted: aggregated.inserted,
+        duplicates: aggregated.duplicates,
+        errors: aggregated.errors.length
+      });
+      if (runId) {
+        await updateCollectionRun(runId, {
+          results_found: Math.max(aggregated.totalFound, total),
+          new_leads: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          rejected: aggregated.rejected,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).catch(() => void 0);
+      }
+    }
+  };
+  try {
+    await session.start();
+    scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    for (const q of config.queries) {
+      for (const loc of locations) {
+        if (cancelled || callbacks.onCheckCancel?.()) {
+          cancelled = true;
+          logger2.info("Coleta cancelada pelo usu\xE1rio", { query: q, location: loc });
+          break;
+        }
+        const alreadyDone = queriesExecuted.some(
+          (eq) => (eq.query === q || eq.query === `${q} ${loc}`) && eq.location === loc
+        );
+        if (alreadyDone) {
+          logger2.info("Query e localiza\xE7\xE3o j\xE1 processadas anteriormente, pulando", { query: q, location: loc });
+          continue;
+        }
+        const scrapedFor = {
+          query: q,
+          city: loc.split(",")[0]?.trim() || loc,
+          state: (loc.split(",")[1]?.trim() || "").slice(0, 2).toUpperCase(),
+          source: "google_maps"
+        };
+        const requiredNew = Math.max(1, config.limitPerQuery - aggregated.inserted);
+        logger2.info("Executando query incremental", { query: q, location: loc, requiredNew, seenKeysSize: seenKeys.size });
+        let attempt = 0;
+        const maxAttempts = 3;
+        let queryResult = null;
+        while (attempt < maxAttempts && !cancelled) {
+          attempt += 1;
+          try {
+            queryResult = await scraper.search(q, loc, requiredNew, seenKeys);
+            break;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger2.warn("Erro no scraping (retry)", { attempt, error: message });
+            if (attempt < maxAttempts) {
+              try {
+                await scraper.close();
+                await session.start();
+                scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                callbacks.onDriverCrash?.();
+              } catch (restartErr) {
+                logger2.error("Falha ao reiniciar driver", { error: restartErr instanceof Error ? restartErr.message : restartErr });
+              }
+            } else {
+              queryResult = {
+                query: `${q} ${loc}`,
+                location: loc,
+                totalFound: 0,
+                inserted: 0,
+                filled: 0,
+                duplicates: 0,
+                completeDuplicates: 0,
+                rejected: 0,
+                errors: [`Falha ap\xF3s ${maxAttempts} tentativas: ${message}`],
+                leads: []
+              };
+            }
+          }
+        }
+        if (!queryResult) {
+          queryResult = {
+            query: `${q} ${loc}`,
+            location: loc,
+            totalFound: 0,
+            inserted: 0,
+            filled: 0,
+            duplicates: 0,
+            completeDuplicates: 0,
+            rejected: 0,
+            errors: ["Resultado n\xE3o obtido ap\xF3s tentativas"],
+            leads: []
+          };
+        }
+        if (cancelled) break;
+        const persist = await persistLeads(queryResult.leads, "google_maps", scrapedFor, runId);
+        aggregated.totalFound += queryResult.totalFound;
+        aggregated.leads.push(...queryResult.leads);
+        aggregated.inserted += persist.inserted;
+        aggregated.filled += persist.filled;
+        aggregated.duplicates += persist.duplicates + queryResult.duplicates;
+        aggregated.completeDuplicates += persist.completeDuplicates;
+        aggregated.rejected += persist.rejected + queryResult.rejected;
+        aggregated.errors.push(...queryResult.errors, ...persist.errors);
+        queriesExecuted.push({
+          query: queryResult.query,
+          location: queryResult.location,
+          found: queryResult.totalFound,
+          inserted: persist.inserted,
+          filled: persist.filled,
+          duplicates: persist.duplicates + queryResult.duplicates,
+          completeDuplicates: persist.completeDuplicates,
+          rejected: persist.rejected + queryResult.rejected,
+          errors: [...queryResult.errors, ...persist.errors]
+        });
+        if (runId) {
+          await updateCollectionRun(runId, {
+            results_found: aggregated.totalFound,
+            new_leads: aggregated.inserted,
+            duplicates: aggregated.duplicates,
+            rejected: aggregated.rejected,
+            errors: aggregated.errors,
+            queries_executed: queriesExecuted,
+            ...cancelled && { status: "cancelled" }
+          });
+        }
+        callbacks.onProgress?.({
+          phase: "details",
+          discovered: aggregated.totalFound,
+          processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected,
+          persisted: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          errors: aggregated.errors.length
+        });
+        logger2.info("Query conclu\xEDda", {
+          query: q,
+          location: loc,
+          found: queryResult.totalFound,
+          newPersisted: persist.inserted,
+          filled: persist.filled,
+          completeDuplicates: persist.completeDuplicates,
+          totalInsertedSoFar: aggregated.inserted
+        });
+      }
+    }
+    if (runId) {
+      const finalStatus = cancelled ? "cancelled" : aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED/.test(e)) ? "error" : "completed";
+      await updateCollectionRun(runId, {
+        status: finalStatus,
+        results_found: aggregated.totalFound,
+        new_leads: aggregated.inserted,
+        duplicates: aggregated.duplicates,
+        rejected: aggregated.rejected,
+        errors: aggregated.errors,
+        queries_executed: queriesExecuted
+      });
+    }
+    return {
+      source: aggregated.source,
+      query: aggregated.query,
+      location: aggregated.location,
+      totalFound: aggregated.totalFound,
+      inserted: aggregated.inserted,
+      filled: aggregated.filled,
+      duplicates: aggregated.duplicates,
+      completeDuplicates: aggregated.completeDuplicates,
+      rejected: aggregated.rejected,
+      errors: aggregated.errors,
+      leads: aggregated.leads,
+      queriesExecuted,
+      hasBlockingError: aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED|Falha fatal/.test(e))
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido no scraper Selenium";
+    logger2.error("Falha fatal no scraper Selenium", { error: message });
+    throw err;
+  } finally {
+    if (scraper) {
+      await scraper.close().catch(() => void 0);
+    } else {
+      await session.close().catch(() => void 0);
+    }
+  }
+}
+var FILLABLE_COLUMNS, runScrape;
+var init_persister = __esm({
+  "src/scraper-prospecting/persister.ts"() {
+    init_supabase();
+    init_classifier();
+    init_normalizer();
+    init_seen_filter();
+    init_logger();
+    init_session();
+    init_google_maps_scraper();
+    FILLABLE_COLUMNS = [
+      "phone",
+      "phone_normalized",
+      "whatsapp",
+      "email",
+      "website",
+      "instagram",
+      "facebook",
+      "address",
+      "city",
+      "state",
+      "zip_code",
+      "rating",
+      "review_count",
+      "price_level",
+      "category",
+      "source_url",
+      "google_maps_url",
+      "place_id",
+      "opening_hours",
+      "current_status",
+      "description",
+      "latitude",
+      "longitude",
+      "plus_code",
+      "social_links",
+      "raw_data"
+    ];
+    runScrape = runScrapeAsJob;
+  }
 });
 
 // src/server/app.ts
@@ -1343,12 +2802,12 @@ var configService = new ConfigService();
 var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
-  const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
+  const url2 = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
+  const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
-  const serviceKey = serviceRoleKey || anonKey;
-  if (url && serviceKey && url.startsWith("https://")) {
-    if (!serviceRoleKey) {
+  const serviceKey = serviceRoleKey2 || anonKey;
+  if (url2 && serviceKey && url2.startsWith("https://")) {
+    if (!serviceRoleKey2) {
       logger.error(
         "supabase",
         "db_server",
@@ -1358,7 +2817,7 @@ function ensureClient() {
       );
     }
     try {
-      clientInstance = createClient(url, serviceKey);
+      clientInstance = createClient(url2, serviceKey);
       logger.info("supabase", "db_server", "init", "Supabase server client conectado.");
     } catch (err) {
       logger.warn("supabase", "db_server", "init", `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
@@ -1423,14 +2882,14 @@ function toNumeric(value) {
 function isUuid2(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
+function allowInMemoryPersistence() {
+  return process.env.ALLOW_IN_MEMORY_CASE_PERSISTENCE === "true";
+}
 var CaseRepository = class {
   constructor() {
     this.rows = /* @__PURE__ */ new Map();
     this.client = getSupabaseServerClient();
   }
-  // ==========================================
-  // API compatível com Map<string, CaseRow>
-  // ==========================================
   get size() {
     return this.rows.size;
   }
@@ -1440,17 +2899,11 @@ var CaseRepository = class {
   values() {
     return this.rows.values();
   }
-  /** Grava na memória APÓS persistência no Supabase com sucesso.
-   * FASE 7: Falha de banco = operação falha (FAIL CLOSED).
-   * Lança erro se persistência falhar — não grava em memória sem confirmação. */
   async set(id, row) {
     const payload = this.toPayload(row);
     await this.persist(id, payload);
     this.rows.set(id, row);
   }
-  // ==========================================
-  // Persistência Supabase (write-through OBRIGATÓRIO)
-  // ==========================================
   toPayload(row) {
     return {
       id: domainIdToUuid(row.id) ?? void 0,
@@ -1502,23 +2955,18 @@ var CaseRepository = class {
       updated_at: toDate(row.updated_at)
     };
   }
-  /**
-   * Persiste no Supabase com FAIL CLOSED em produção.
-   *
-   * Quando o Supabase não está configurado, o modo in-memory é permitido
-   * somente fora de produção para suportar E2E/dev isolados. Em produção,
-   * ausência do cliente é uma falha de infraestrutura e bloqueia a operação.
-   */
   async persist(id, payload) {
     if (!this.client) {
-      if (process.env.NODE_ENV === "production") {
-        throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir caso ${id}`);
+      if (allowInMemoryPersistence()) {
+        logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
+          caseId: id,
+          persistenceResult: "explicit_in_memory_fallback"
+        });
+        return;
       }
-      logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria (E2E/dev)`, {
-        caseId: id,
-        persistenceResult: "skipped_no_client"
-      });
-      return;
+      throw new Error(
+        `CaseRepository: Supabase client n\xE3o configurado \u2014 persist\xEAncia real obrigat\xF3ria para o caso ${id}. Para testes unit\xE1rios/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.`
+      );
     }
     const { error } = await this.client.from("cases").upsert(payload);
     if (error) {
@@ -1536,13 +2984,17 @@ var CaseRepository = class {
       throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
     }
   }
-  /** Carrega do Supabase todos os casos persistidos (para warm-up opcional). */
   async loadAllFromSupabase() {
-    if (!this.client) return [];
+    if (!this.client) {
+      if (allowInMemoryPersistence()) return [];
+      throw new Error("CaseRepository: Supabase client n\xE3o configurado \u2014 cold start n\xE3o pode ser considerado persistente.");
+    }
     const { data, error } = await this.client.from("cases").select("*").order("created_at", { ascending: false });
     if (error) {
-      logger.warn("supabase", "case_repository", "loadAll", `Falha ao carregar casos: ${error.message}`);
-      return [];
+      logger.error("supabase", "case_repository", "loadAll", `Falha ao carregar casos: ${error.message}`, {
+        errorCode: "SUPABASE_LOAD_ALL"
+      });
+      throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
     }
     const rows = (data || []).map((c) => ({
       id: c.app_ref ?? c.id,
@@ -2422,12 +3874,12 @@ var MetricsService = class {
 var metricsService = new MetricsService();
 
 // src/server/observability/health-service.ts
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(url2, options = {}) {
   const { timeout = 5e3, ...fetchOptions } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+    return await fetch(url2, { ...fetchOptions, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -3304,8 +4756,8 @@ var HealthService = class {
       }
       case "supabase":
       case "supabase_db": {
-        const url = configService.get("VITE_SUPABASE_URL");
-        const isConfigured = Boolean(url && url.startsWith("https://"));
+        const url2 = configService.get("VITE_SUPABASE_URL");
+        const isConfigured = Boolean(url2 && url2.startsWith("https://"));
         if (!isConfigured) {
           return {
             serviceId: "supabase",
@@ -3324,7 +4776,7 @@ var HealthService = class {
         }
         const testStart = Date.now();
         try {
-          const response = await fetchWithTimeout(`${url}/rest/v1/`, {
+          const response = await fetchWithTimeout(`${url2}/rest/v1/`, {
             method: "GET",
             headers: {
               "apikey": configService.get("VITE_SUPABASE_ANON_KEY", "")
@@ -4510,18 +5962,18 @@ var MetaGraphClient = class {
    */
   buildUrl(endpoint, params, accessToken) {
     const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
-    const url = new URL(`${this.baseUrl}/${this.graphApiVersion}/${cleanEndpoint}`);
+    const url2 = new URL(`${this.baseUrl}/${this.graphApiVersion}/${cleanEndpoint}`);
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
         if (v !== void 0 && v !== null) {
-          url.searchParams.append(k, String(v));
+          url2.searchParams.append(k, String(v));
         }
       });
     }
     if (accessToken) {
-      url.searchParams.append("access_token", accessToken);
+      url2.searchParams.append("access_token", accessToken);
     }
-    return url.toString();
+    return url2.toString();
   }
   /**
    * Sanitizes URLs and Objects for logging (strips access_token, secrets)
@@ -4561,7 +6013,7 @@ var MetaGraphClient = class {
     let lastError = null;
     while (attempt < maxAttempts) {
       attempt++;
-      const url = this.buildUrl(endpoint, params, accessToken);
+      const url2 = this.buildUrl(endpoint, params, accessToken);
       const requestInit = {
         method,
         headers: {
@@ -4576,7 +6028,7 @@ var MetaGraphClient = class {
         requestInit.body = JSON.stringify(body);
       }
       try {
-        const response = await fetch(url, requestInit);
+        const response = await fetch(url2, requestInit);
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
           const text = await response.text();
@@ -5673,12 +7125,12 @@ async function validateMetaAppConnection(customToken) {
   const appAccessToken = `${appId}|${appSecret}`;
   const inputToken = customToken || process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN || appAccessToken;
   try {
-    const url = new URL(`https://graph.facebook.com/${version}/debug_token`);
-    url.searchParams.append("input_token", inputToken);
-    url.searchParams.append("access_token", appAccessToken);
+    const url2 = new URL(`https://graph.facebook.com/${version}/debug_token`);
+    url2.searchParams.append("input_token", inputToken);
+    url2.searchParams.append("access_token", appAccessToken);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8e3);
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url2.toString(), {
       method: "GET",
       headers: {
         Accept: "application/json"
@@ -6050,7 +7502,7 @@ router.get(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     if (!supabase) {
       return res.status(503).json({ error: "Supabase indispon\xEDvel." });
     }
-    let query = supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at");
+    let query = supabase.from("user_profiles").select("user_id, email, name, role, cpf, created_at, updated_at");
     const { search, role } = req.query;
     const validRole = typeof role === "string" && (role === "admin" || role === "citizen") ? role : null;
     if (validRole) {
@@ -6085,7 +7537,7 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     if (!supabase) {
       return res.status(503).json({ error: "Supabase indispon\xEDvel." });
     }
-    const { data: profile, error: profileError } = await supabase.from("user_profiles").select("id, email, name, role").eq("email", email).maybeSingle();
+    const { data: profile, error: profileError } = await supabase.from("user_profiles").select("user_id, email, name, role").eq("email", email).maybeSingle();
     if (profileError) {
       console.error("Erro ao buscar profile:", profileError);
       return res.status(500).json({ error: "Erro ao localizar usu\xE1rio." });
@@ -6101,7 +7553,7 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
       console.error("Erro ao atualizar role via RPC:", rpcError);
       return res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
     }
-    const { data: updated } = await supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at").eq("id", profile.id).single();
+    const { data: updated } = await supabase.from("user_profiles").select("user_id, email, name, role, cpf, created_at, updated_at").eq("user_id", profile.user_id).single();
     res.json({ success: true, user: updated });
   } catch (err) {
     console.error("Erro em PUT /api/admin/users:", err);
@@ -6939,12 +8391,12 @@ async function runMetaIntegrationTests() {
     "Gera\xE7\xE3o de URL OAuth com v20.0 e escopos obrigat\xF3rios de publica\xE7\xE3o e insights",
     "OAuth",
     async () => {
-      const url = metaAuthService.generateOAuthUrl("https://www.defesai.shop/api/meta/callback");
-      if (!url.includes("facebook.com/v20.0/dialog/oauth")) {
-        throw new Error(`URL OAuth n\xE3o usa Graph API v20.0: ${url}`);
+      const url2 = metaAuthService.generateOAuthUrl("https://www.defesai.shop/api/meta/callback");
+      if (!url2.includes("facebook.com/v20.0/dialog/oauth")) {
+        throw new Error(`URL OAuth n\xE3o usa Graph API v20.0: ${url2}`);
       }
       for (const scope of REQUIRED_META_SCOPES) {
-        if (!url.includes(scope)) {
+        if (!url2.includes(scope)) {
           throw new Error(`Escopo obrigat\xF3rio "${scope}" ausente na URL OAuth.`);
         }
       }
@@ -7255,12 +8707,12 @@ var WhatsAppService = class {
     if (!this.isConfigured) {
       throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
     }
-    const url = `${this.apiUrl}${path}`;
+    const url2 = `${this.apiUrl}${path}`;
     const headers = {
       "Content-Type": "application/json",
       apikey: this.apiKey
     };
-    const response = await fetch(url, {
+    const response = await fetch(url2, {
       method,
       headers,
       body: body ? JSON.stringify(body) : void 0
@@ -9103,8 +10555,8 @@ router2.all(
 );
 router2.get(["/integrations/meta/auth-url", "/meta/auth-url"], (req, res) => {
   const redirectUri = req.query.redirectUri || `${req.protocol}://${req.get("host")}/api/integrations/meta/callback`;
-  const url = metaAuthService.generateOAuthUrl(redirectUri, req.query.state);
-  res.json({ authUrl: url });
+  const url2 = metaAuthService.generateOAuthUrl(redirectUri, req.query.state);
+  res.json({ authUrl: url2 });
 });
 router2.get(["/integrations/meta/callback", "/meta/callback"], async (req, res) => {
   const code = req.query.code;
@@ -17008,11 +18460,11 @@ var VectorStore = class _VectorStore {
     return _VectorStore.instance;
   }
   initSupabaseClient() {
-    const url = configService.get("VITE_SUPABASE_URL");
+    const url2 = configService.get("VITE_SUPABASE_URL");
     const serviceKey = configService.get("SUPABASE_SERVICE_ROLE_KEY") || configService.get("VITE_SUPABASE_ANON_KEY");
-    if (url && serviceKey && url.startsWith("https://")) {
+    if (url2 && serviceKey && url2.startsWith("https://")) {
       try {
-        this.supabaseClient = createClient2(url, serviceKey);
+        this.supabaseClient = createClient2(url2, serviceKey);
         logger.info("supabase", "vector_store", "init", "Supabase Postgres pgvector client conectado.");
       } catch (err) {
         logger.warn("supabase", "vector_store", "init", `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
@@ -18477,11 +19929,11 @@ var ProviderRouter = class {
 // src/server/media/job-queue.ts
 import { randomUUID } from "crypto";
 var MediaJobQueue = class {
-  constructor(router26) {
+  constructor(router28) {
     this.jobs = /* @__PURE__ */ new Map();
     this.activeJobsCount = 0;
     this.cancelledJobIds = /* @__PURE__ */ new Set();
-    this.router = router26;
+    this.router = router28;
     const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
     this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
   }
@@ -19290,11 +20742,11 @@ async function analyzePixels(buffer, analysisSize, width, height) {
     return { width, height, luminance: 0, sharpness: 0, contrast: 0 };
   }
 }
-function dataUrlToBuffer(url) {
-  const comma = url.indexOf(",");
+function dataUrlToBuffer(url2) {
+  const comma = url2.indexOf(",");
   if (comma === -1) return null;
-  const header = url.slice(5, comma);
-  const payload = url.slice(comma + 1);
+  const header = url2.slice(5, comma);
+  const payload = url2.slice(comma + 1);
   try {
     if (/;base64$/i.test(header)) {
       return Buffer.from(payload, "base64");
@@ -19304,11 +20756,11 @@ function dataUrlToBuffer(url) {
     return null;
   }
 }
-async function downloadImage(url, timeoutMs, maxBytes) {
+async function downloadImage(url2, timeoutMs, maxBytes) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url2, { signal: controller.signal });
     if (!res.ok) return { ok: false };
     const declared = Number(res.headers.get("content-length") || 0);
     if (declared > maxBytes) return { ok: false };
@@ -25229,19 +26681,19 @@ function isPublicIPv6(ip) {
   return true;
 }
 function validateFetchUrl(inputUrl) {
-  let url;
+  let url2;
   try {
-    url = new URL2(inputUrl);
+    url2 = new URL2(inputUrl);
   } catch {
     return { valid: false, reason: "URL malformada" };
   }
-  if (!["http:", "https:"].includes(url.protocol)) {
-    return { valid: false, reason: `Esquema '${url.protocol}' n\xE3o permitido \u2014 use http:// ou https://` };
+  if (!["http:", "https:"].includes(url2.protocol)) {
+    return { valid: false, reason: `Esquema '${url2.protocol}' n\xE3o permitido \u2014 use http:// ou https://` };
   }
-  if (url.username || url.password) {
+  if (url2.username || url2.password) {
     return { valid: false, reason: "Credenciais na URL n\xE3o permitidas" };
   }
-  const hostname = url.hostname.toLowerCase();
+  const hostname = url2.hostname.toLowerCase();
   if (hostname === "localhost" || hostname === "localhost.localdomain" || hostname === "[::1]" || hostname === "127.0.0.1" || hostname.startsWith("0.0.0.0") || hostname.endsWith(".local") || hostname === "ip6-localhost" || hostname === "ip6-loopback") {
     return { valid: false, reason: "Host localhost/reservado n\xE3o permitido" };
   }
@@ -25460,21 +26912,21 @@ async function fetchWithRedirectProtection(initialUrl, signal) {
   let currentUrl = initialUrl;
   let redirectCount = 0;
   while (true) {
-    const url = new URL2(currentUrl);
-    const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
-    const isHTTPS = url.protocol === "https:";
+    const url2 = new URL2(currentUrl);
+    const port = url2.port ? parseInt(url2.port, 10) : url2.protocol === "https:" ? 443 : 80;
+    const isHTTPS = url2.protocol === "https:";
     const urlValidation = validateFetchUrl(currentUrl);
     if (!urlValidation.valid) {
       throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
     }
-    const resolution = await resolveAndValidateAllIPs(url.hostname);
+    const resolution = await resolveAndValidateAllIPs(url2.hostname);
     if (!resolution.valid) {
       throw new Error(`SSRF_BLOCKED: ${resolution.reason}`);
     }
     const connectIP = resolution.validatedIPs[0];
     let result;
     try {
-      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal, url.pathname + url.search);
+      result = await ssrfSafeFetch(connectIP, url2.hostname, port, isHTTPS, signal, url2.pathname + url2.search);
     } catch (err) {
       if (err.message?.startsWith("SSRF_BLOCKED:") || err.message?.startsWith("MAX_SIZE_EXCEEDED:")) {
         throw err;
@@ -27670,6 +29122,16 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
   }
 }
 
+// src/server/payments/case-access.ts
+function assertPaymentCaseAccess(row, user) {
+  if (!user) return { status: 401, error: "N\xE3o autenticado" };
+  if (!row || user.role === "admin") return null;
+  return row.user_id === user.id ? null : { status: 403, error: "Voc\xEA n\xE3o tem permiss\xE3o para pagar este caso." };
+}
+function resolveEffectiveUser(row, user) {
+  return user?.id || row?.user_id || void 0;
+}
+
 // src/server/routes/payments.ts
 var router11 = Router11();
 function resolveOffer(params) {
@@ -27732,9 +29194,23 @@ ${buildDocumentRollText(procedureType, aitNumber)}
 function isTestMode() {
   return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() !== "production";
 }
+function validatePayerIdentity(name, email, cpf) {
+  const normalizedName = typeof name === "string" ? name.trim() : "";
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
+  const normalizedCpf = typeof cpf === "string" ? cpf.replace(/\D/g, "") : "";
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  if (!normalizedName || !emailValid || normalizedCpf.length !== 11) return null;
+  return { name: normalizedName, email: normalizedEmail, cpf: normalizedCpf };
+}
 function prodAuth(req, res, next) {
   if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
-    authenticateToken(req, res, next);
+    authenticateToken(req, res, () => {
+      if (!req.user) {
+        res.status(401).json({ error: "N\xE3o autorizado. Fa\xE7a login para continuar." });
+        return;
+      }
+      next();
+    });
     return;
   }
   next();
@@ -27800,16 +29276,17 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       userId,
       couponCode
     } = req.body;
-    const cleanCpf = (customerCpf || "").replace(/\D/g, "");
-    if (cleanCpf.length !== 11) {
-      return res.status(400).json({
-        error: "CPF do pagador \xE9 obrigat\xF3rio para cria\xE7\xE3o do pagamento PIX.",
-        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
-      });
-    }
+    const targetRow = caseId && typeof caseId === "string" ? databaseRows.get(caseId) : void 0;
+    const effectiveUserId = resolveEffectiveUser(targetRow, req.user);
+    const payer = validatePayerIdentity(
+      targetRow?.client_name || customerName,
+      targetRow?.client_email || customerEmail,
+      targetRow?.client_cpf || customerCpf
+    );
+    if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para cria\xE7\xE3o do pagamento PIX." });
     const offerResult = resolveOffer({
       serviceType,
-      userId,
+      userId: effectiveUserId,
       couponCode,
       caseId
     });
@@ -27821,19 +29298,17 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
     }
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
-    if (gateway.id === "pagbank") {
-      const userRole = req.user?.role;
-      if (userRole && userRole !== "admin") {
-        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
-      }
+    if (caseId && typeof caseId === "string") {
+      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), req.user);
+      if (denied) return res.status(denied.status).json({ error: denied.error });
     }
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       payer: {
-        name: customerName || "Condutor DefesAi",
-        email: customerEmail || "contato@www.defesai.shop",
-        document: cleanCpf
+        name: payer.name,
+        email: payer.email,
+        document: payer.cpf
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
@@ -27926,16 +29401,17 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         hint: "Informe serviceType v\xE1lido (ex: recurso_jari)."
       });
     }
-    const cleanCpfCC = (customerCpf || "").replace(/\D/g, "");
-    if (cleanCpfCC.length !== 11) {
-      return res.status(400).json({
-        error: "CPF do pagador \xE9 obrigat\xF3rio para pagamento com cart\xE3o de cr\xE9dito.",
-        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
-      });
-    }
+    const targetRow = caseId && typeof caseId === "string" ? databaseRows.get(caseId) : void 0;
+    const effectiveUserId = resolveEffectiveUser(targetRow, req.user);
+    const payer = validatePayerIdentity(
+      targetRow?.client_name || customerName,
+      targetRow?.client_email || customerEmail,
+      targetRow?.client_cpf || customerCpf
+    );
+    if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para pagamento com cart\xE3o de cr\xE9dito." });
     const offerResult = resolveOffer({
       serviceType,
-      userId,
+      userId: effectiveUserId,
       couponCode,
       caseId
     });
@@ -27953,11 +29429,9 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       });
     }
     const gateway = gatewayManager.getActiveGateway();
-    if (gateway.id === "pagbank") {
-      const userRole = req.user?.role;
-      if (userRole && userRole !== "admin") {
-        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
-      }
+    if (caseId && typeof caseId === "string") {
+      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), req.user);
+      if (denied) return res.status(denied.status).json({ error: denied.error });
     }
     if (gateway.id !== "pagbank") {
       return res.status(400).json({
@@ -27977,9 +29451,9 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       customer: {
-        name: customerName || "Condutor DefesAi",
-        email: customerEmail || "contato@www.defesai.shop",
-        taxId: cleanCpfCC
+        name: payer.name,
+        email: payer.email,
+        taxId: payer.cpf
       },
       amount: offerResult.offer.price,
       installments: Number(installments),
@@ -28304,6 +29778,12 @@ router11.post("/simulate-payment", async (req, res) => {
   }
 });
 router11.post("/simulate-confirm", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
+      message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
+    });
+  }
   const { caseId } = req.body;
   if (!caseId) {
     return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
@@ -28332,6 +29812,12 @@ router11.post("/simulate-confirm", async (req, res) => {
   res.json({ success: true, case: domain });
 });
 router11.post("/sandbox/trigger-webhook", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(501).json({
+      error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
+      message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
+    });
+  }
   try {
     const { gateway = "pagbank", eventType = "PAID", caseId, amount = 89.9 } = req.body;
     if (!caseId) {
@@ -29994,8 +31480,1483 @@ router12.post("/temporal/resolve", (req, res) => {
 });
 var knowledge_default = router12;
 
-// src/server/routes/media.ts
+// src/server/routes/marketing-automation.ts
 import { Router as Router13 } from "express";
+
+// src/server/services/marketing-automation/worker.ts
+init_supabase();
+init_logger();
+
+// src/server/services/marketing-automation/state.ts
+var AUTOMATION_STATE_ID = "00000000-0000-0000-0000-000000000001";
+async function loadAutomationState(client) {
+  const { data } = await client.from("marketing_automation_state").select("*").eq("id", AUTOMATION_STATE_ID).single();
+  return {
+    status: data?.status || "STOPPED",
+    last_error: data?.last_error,
+    last_processed_at: data?.last_processed_at,
+    processed_count: data?.processed_count || 0
+  };
+}
+async function updateAutomationState(client, status, lastError) {
+  const updates = { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  if (status === "RUNNING") {
+    updates.last_processed_at = (/* @__PURE__ */ new Date()).toISOString();
+  }
+  if (lastError) {
+    updates.last_error = lastError;
+  }
+  await client.from("marketing_automation_state").upsert({ id: AUTOMATION_STATE_ID, ...updates });
+}
+async function recordSuccessfulSend(client) {
+  const state = await loadAutomationState(client);
+  const next = state.processed_count + 1;
+  await client.from("marketing_automation_state").upsert({
+    id: AUTOMATION_STATE_ID,
+    status: state.status,
+    processed_count: next,
+    last_processed_at: (/* @__PURE__ */ new Date()).toISOString(),
+    updated_at: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  return next;
+}
+function resolveEffectiveStatus(dbStatus, timerAlive, _lastError) {
+  return dbStatus === "RUNNING" && !timerAlive ? "STOPPED" : dbStatus;
+}
+
+// src/server/services/marketing-automation/worker.ts
+var POLL_INTERVAL_MS = 1e4;
+var MarketingAutomationWorker = class _MarketingAutomationWorker {
+  constructor() {
+    this.timer = null;
+    this.currentStatus = "STOPPED";
+    this.processing = false;
+  }
+  static {
+    this.instance = null;
+  }
+  static getInstance() {
+    if (!_MarketingAutomationWorker.instance) {
+      _MarketingAutomationWorker.instance = new _MarketingAutomationWorker();
+    }
+    return _MarketingAutomationWorker.instance;
+  }
+  async start() {
+    const state = await this.loadState();
+    if (state.status === "RUNNING") {
+      return { success: false, error: "J\xE1 est\xE1 rodando." };
+    }
+    await this.updateState("RUNNING");
+    this.currentStatus = "RUNNING";
+    if (!this.timer) {
+      this.timer = setInterval(() => this.tick(), POLL_INTERVAL_MS);
+    }
+    await this.tick();
+    return { success: true };
+  }
+  async pause() {
+    const state = await this.loadState();
+    if (state.status !== "RUNNING") {
+      return { success: false, error: "N\xE3o est\xE1 rodando." };
+    }
+    await this.updateState("PAUSED");
+    this.currentStatus = "PAUSED";
+    return { success: true };
+  }
+  async stop() {
+    await this.updateState("STOPPED");
+    this.currentStatus = "STOPPED";
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    return { success: true };
+  }
+  async getStatus() {
+    const state = await this.loadState();
+    const effective = resolveEffectiveStatus(state.status, this.timer !== null, state.last_error);
+    if (effective !== state.status) {
+      logger2.warn(`Worker morto detectado (DB=${state.status}, timer inativo). Estado corrigido para ${effective}.`, {
+        module: "worker"
+      });
+      await this.updateState(effective);
+    }
+    return {
+      status: effective,
+      lastError: state.last_error,
+      lastProcessedAt: state.last_processed_at,
+      processedCount: state.processed_count,
+      timerAlive: this.timer !== null
+    };
+  }
+  async tick() {
+    if (this.processing) return;
+    if (this.currentStatus !== "RUNNING") return;
+    this.processing = true;
+    try {
+      const state = await this.loadState();
+      if (state.status !== "RUNNING") {
+        this.currentStatus = state.status;
+        return;
+      }
+      const actions = await this.getNextActions();
+      for (const action of actions) {
+        if (this.currentStatus !== "RUNNING") break;
+        await this.processAction(action);
+      }
+      await this.updateState("RUNNING");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger2.error(`tick_error: ${message}`, { module: "worker" });
+      await this.updateState("ERROR", message);
+      this.currentStatus = "ERROR";
+    } finally {
+      this.processing = false;
+    }
+  }
+  async processAction(action) {
+    try {
+      switch (action.action) {
+        case "send_message":
+          await this.handleSendMessage(action);
+          break;
+        case "wait_response":
+          await this.handleWaitResponse(action);
+          break;
+        case "update_status":
+          await this.handleUpdateStatus(action);
+          break;
+        case "finish":
+          await this.handleFinish(action);
+          break;
+      }
+      await supabaseAdmin.from("marketing_automation_queue").delete().eq("id", action.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger2.warn(`Action error: ${message}`, { actionId: action.id, error: message });
+      await supabaseAdmin.from("marketing_automation_queue").update({
+        attempts: (action.attempts || 0) + 1,
+        last_error: message
+      }).eq("id", action.id);
+    }
+  }
+  async handleSendMessage(action) {
+    const { lead_campaign_id } = action;
+    const { data: lc, error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").select("*, campaign:marketing_campaigns(*), lead:marketing_leads(*)").eq("id", lead_campaign_id).single();
+    if (lcError || !lc) {
+      throw new Error(`Lead campaign n\xE3o encontrada: ${lead_campaign_id}`);
+    }
+    const lead = lc.lead;
+    const campaign = lc.campaign;
+    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "opt_out", "paused"];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === "opt_out") {
+      logger2.info(
+        `Lead campaign ${lc.id} status=${lc.status} (lead=${lead?.status}) \u2014 skipping outbound send and cancelling follow-ups`,
+        { module: "worker", operation: "handleSendMessage" }
+      );
+      await supabaseAdmin.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+      return;
+    }
+    if (!lead || !lead.phone && !lead.whatsapp && !lead.phone_normalized) {
+      throw new Error("Lead sem telefone/WhatsApp.");
+    }
+    let toPhone = (lead.whatsapp || lead.phone || lead.phone_normalized || "").replace(/\D/g, "");
+    if (!toPhone || toPhone.length < 10) {
+      throw new Error("Telefone inv\xE1lido.");
+    }
+    if (toPhone.length === 10 || toPhone.length === 11) {
+      toPhone = `55${toPhone}`;
+    }
+    const stepIndex = lc.current_step || 0;
+    const steps = campaign?.steps || [];
+    const step = steps[stepIndex];
+    if (!step) {
+      await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "exhausted", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", lead_campaign_id);
+      return;
+    }
+    const text = this.renderMessage(step.message || "", lead);
+    const result = await whatsappService.sendText({
+      to: toPhone,
+      message: text,
+      instanceName: configService.get("EVOLUTION_INSTANCE_NAME")
+    });
+    if (result.success) {
+      await this.recordSend();
+    }
+    await supabaseAdmin.from("marketing_messages").insert({
+      lead_id: lead.id,
+      campaign_id: campaign.id,
+      lead_campaign_id: lc.id,
+      direction: "outbound",
+      text,
+      channel: "whatsapp_evolution",
+      status: result.success ? "sent" : "failed",
+      external_id: result.messageId,
+      external_status: result,
+      sent_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const RESPONDED_OR_BEYOND2 = ["responded", "converted", "exhausted", "opt_out"];
+    const { data: currentLc } = await supabaseAdmin.from("marketing_lead_campaigns").select("status").eq("id", lead_campaign_id).single();
+    if (currentLc && RESPONDED_OR_BEYOND2.includes(currentLc.status)) {
+      logger2.info(`Lead campaign ${lc.id} status=${currentLc.status} \u2014 skipping state overwrite`, { module: "worker", operation: "handleSendMessage" });
+      return;
+    }
+    const nextStep = stepIndex + 1;
+    const isLastStep = nextStep >= steps.length;
+    const newStatus = isLastStep ? "exhausted" : "sent";
+    await supabaseAdmin.from("marketing_lead_campaigns").update({
+      status: newStatus,
+      current_step: nextStep,
+      contact_count: (lc.contact_count || 0) + 1,
+      last_contact_at: (/* @__PURE__ */ new Date()).toISOString(),
+      next_contact_at: isLastStep ? null : new Date(Date.now() + (campaign.min_interval_hours || 48) * 60 * 60 * 1e3).toISOString()
+    }).eq("id", lead_campaign_id);
+    if (!isLastStep) {
+      await supabaseAdmin.from("marketing_automation_queue").insert({
+        lead_campaign_id: lc.id,
+        action: "wait_response",
+        scheduled_at: new Date(Date.now() + (campaign.min_interval_hours || 48) * 60 * 60 * 1e3).toISOString(),
+        max_attempts: 5
+      });
+    }
+  }
+  async handleWaitResponse(action) {
+    const { lead_campaign_id } = action;
+    const { data: lc, error } = await supabaseAdmin.from("marketing_lead_campaigns").select("*, lead:marketing_leads(*)").eq("id", lead_campaign_id).single();
+    if (error || !lc) {
+      throw new Error(`Lead campaign n\xE3o encontrada: ${lead_campaign_id}`);
+    }
+    const lead = lc.lead;
+    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "opt_out", "paused"];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === "opt_out") {
+      logger2.info(`Lead campaign ${lc.id} em estado de parada (${lc.status}) \u2014 nenhum novo follow-up agendado`, { module: "worker" });
+      return;
+    }
+    const lastMessage = await supabaseAdmin.from("marketing_messages").select("*").eq("lead_campaign_id", lead_campaign_id).eq("direction", "outbound").order("created_at", { ascending: false }).limit(1).single();
+    if (lastMessage.data && lastMessage.data.status === "sent") {
+      await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "delivered" }).eq("id", lead_campaign_id);
+    }
+    const nextAction = {
+      lead_campaign_id: lc.id,
+      action: "send_message",
+      scheduled_at: new Date(Date.now() + 6e4).toISOString(),
+      max_attempts: 3
+    };
+    await supabaseAdmin.from("marketing_automation_queue").insert(nextAction);
+  }
+  async handleUpdateStatus(action) {
+    await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "queued" }).eq("id", action.lead_campaign_id);
+  }
+  async handleFinish(action) {
+    await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "exhausted" }).eq("id", action.lead_campaign_id);
+  }
+  renderMessage(template, lead) {
+    return template.replace(/\{nome\}/gi, lead.name || "").replace(/\{categoria\}/gi, lead.category || "").replace(/\{cidade\}/gi, lead.city || "");
+  }
+  async loadState() {
+    return loadAutomationState(supabaseAdmin);
+  }
+  async updateState(status, lastError) {
+    return updateAutomationState(supabaseAdmin, status, lastError);
+  }
+  async recordSend() {
+    await recordSuccessfulSend(supabaseAdmin);
+  }
+  async getNextActions() {
+    const { data, error } = await supabaseAdmin.from("marketing_automation_queue").select("*, lead_campaign:marketing_lead_campaigns(campaign:marketing_campaigns(max_contacts))").lte("scheduled_at", (/* @__PURE__ */ new Date()).toISOString()).order("scheduled_at", { ascending: true }).limit(30);
+    if (error) {
+      logger2.error(`queue_error: ${error.message}`, { module: "worker" });
+      return [];
+    }
+    const due = (data || []).filter(
+      (job) => (job.attempts ?? 0) < (job.max_attempts ?? 3)
+    );
+    const campaignContactCounts = /* @__PURE__ */ new Map();
+    for (const job of due) {
+      const campaign = job.lead_campaign?.campaign;
+      if (campaign?.id) {
+        const currentCount = campaignContactCounts.get(campaign.id) || 0;
+        const maxContacts = campaign.max_contacts || 3;
+        if (currentCount >= maxContacts) {
+          continue;
+        }
+        campaignContactCounts.set(campaign.id, currentCount + 1);
+      }
+    }
+    return due.slice(0, 10);
+  }
+};
+var marketingAutomationWorker = MarketingAutomationWorker.getInstance();
+
+// src/server/routes/marketing-automation.ts
+init_supabase();
+
+// src/server/services/scrape-worker.ts
+init_supabase();
+init_logger();
+import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
+import { randomUUID as randomUUID3 } from "crypto";
+var ScrapeWorkerService = class _ScrapeWorkerService {
+  constructor() {
+    this.queue = null;
+    this.worker = null;
+    this.redisConnection = null;
+    this.fallbackTimer = null;
+    this.isProcessingFallback = false;
+    this.isBullMqActive = false;
+    this.POLL_INTERVAL_MS = 4e3;
+    this.QUEUE_NAME = "google-maps-scrape-jobs";
+    this.initBullMQ();
+  }
+  static {
+    this.instance = null;
+  }
+  static getInstance() {
+    if (!_ScrapeWorkerService.instance) {
+      _ScrapeWorkerService.instance = new _ScrapeWorkerService();
+    }
+    return _ScrapeWorkerService.instance;
+  }
+  initBullMQ() {
+    const redisUrl = process.env.REDIS_URL || process.env.REDISCLOUD_URL;
+    const redisHost = process.env.REDIS_HOST;
+    const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
+    if (redisUrl || redisHost) {
+      try {
+        this.redisConnection = redisUrl ? new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false }) : new Redis({
+          host: redisHost,
+          port: redisPort,
+          password: process.env.REDIS_PASSWORD || void 0,
+          maxRetriesPerRequest: null,
+          enableReadyCheck: false
+        });
+        this.redisConnection.on("error", (err) => {
+          logger2.warn("Aviso de conex\xE3o Redis (BullMQ Scraper):", { error: err.message });
+        });
+        this.queue = new Queue(this.QUEUE_NAME, {
+          connection: this.redisConnection,
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 3e3 },
+            // Retenção operacional: jobs concluídos expiram após 24 h,
+            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
+            removeOnComplete: { age: 86400 },
+            removeOnFail: { age: 604800 }
+          }
+        });
+        this.worker = new Worker(
+          this.QUEUE_NAME,
+          async (job) => {
+            return this.processJob(job.data.jobId, job.data.config, job.data.collectionRunId);
+          },
+          {
+            connection: this.redisConnection,
+            concurrency: 1
+            // Single headless browser at a time for stability and resource sanity
+          }
+        );
+        this.worker.on("completed", (job) => {
+          logger2.info("BullMQ Scrape Job conclu\xEDdo com sucesso", { jobId: job.data.jobId });
+        });
+        this.worker.on("failed", (job, err) => {
+          logger2.error("BullMQ Scrape Job falhou", { jobId: job?.data.jobId, error: err.message });
+        });
+        this.isBullMqActive = true;
+        logger2.info("BullMQ Scrape Worker inicializado com sucesso.");
+      } catch (err) {
+        logger2.warn("N\xE3o foi poss\xEDvel conectar ao Redis, utilizando engine de fila de banco:", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        this.isBullMqActive = false;
+      }
+    } else {
+      logger2.info("Redis n\xE3o configurado. Utilizando engine resiliente via Supabase.");
+      this.isBullMqActive = false;
+    }
+  }
+  /**
+   * Enfileira um novo job de scraping e retorna o registro inicial.
+   */
+  async createJob(config) {
+    const id = randomUUID3();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const jobRecord = {
+      id,
+      status: "queued",
+      config,
+      progress: {
+        phase: "discovery",
+        discovered: 0,
+        processed: 0,
+        persisted: 0,
+        duplicates: 0,
+        errors: 0
+      },
+      createdAt: now,
+      updatedAt: now
+    };
+    const { error } = await supabaseAdmin.from("collection_runs").insert({
+      id,
+      status: "queued",
+      queries: config.queries,
+      cities: config.cities || [],
+      states: config.states || [],
+      limit_per_query: config.limitPerQuery || 10,
+      results_found: 0,
+      new_leads: 0,
+      duplicates: 0,
+      rejected: 0,
+      errors: [],
+      queries_executed: [],
+      started_at: now
+    });
+    if (error) {
+      logger2.error("Erro ao persistir collection_run no banco", { error: error.message, id });
+      throw new Error(`Falha ao registrar job no banco: ${error.message}`);
+    }
+    if (this.isBullMqActive && this.queue) {
+      try {
+        await this.queue.add(
+          "scrape",
+          { jobId: id, config, collectionRunId: id },
+          { jobId: id }
+        );
+        logger2.info("Job enfileirado no BullMQ", { id });
+      } catch (err) {
+        logger2.warn("Falha ao enfileirar no BullMQ, processamento ser\xE1 feito pelo worker DB:", {
+          id,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
+    logger2.info("Job de scraping registrado com sucesso", { id, config });
+    return jobRecord;
+  }
+  /**
+   * Obtém status detalhado de um job pelo ID.
+   */
+  async getJob(id) {
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").eq("id", id).maybeSingle();
+    if (error || !data) return null;
+    return this.mapDBToJobRecord(data);
+  }
+  /**
+   * Lista histórico de jobs de scraping.
+   */
+  async listJobs(limit = 20) {
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").order("created_at", { ascending: false }).limit(limit);
+    if (error || !data) return [];
+    return data.map((d) => this.mapDBToJobRecord(d));
+  }
+  /**
+   * Cancelamento cooperativo de um job de scraping.
+   */
+  async cancelJob(id) {
+    const job = await this.getJob(id);
+    if (!job) return false;
+    if (["completed", "failed", "cancelled"].includes(job.status)) {
+      return false;
+    }
+    const { error } = await supabaseAdmin.from("collection_runs").update({
+      status: "cancelled",
+      finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).eq("id", id);
+    if (error) {
+      logger2.error("Erro ao cancelar job no banco", { id, error: error.message });
+      return false;
+    }
+    if (this.isBullMqActive && this.queue) {
+      try {
+        const bullJob = await this.queue.getJob(id);
+        if (bullJob) {
+          await bullJob.remove().catch(() => void 0);
+        }
+      } catch {
+      }
+    }
+    logger2.info("Job de scraping cancelado com sucesso", { id });
+    return true;
+  }
+  /**
+   * Inicia o worker loop de background.
+   */
+  start() {
+    if (this.fallbackTimer) return;
+    this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
+    this.processNextDBJob();
+    logger2.info("ScrapeWorker background loop iniciado.");
+  }
+  /**
+   * Para o worker loop.
+   */
+  stop() {
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    if (this.worker) {
+      this.worker.close().catch(() => void 0);
+    }
+    if (this.queue) {
+      this.queue.close().catch(() => void 0);
+    }
+    logger2.info("ScrapeWorker background loop parado.");
+  }
+  /**
+   * Checa periodicamente por jobs 'queued' ou órfãos 'running' no Supabase.
+   */
+  async processNextDBJob() {
+    if (this.isProcessingFallback) return;
+    try {
+      const { data, error } = await supabaseAdmin.from("collection_runs").select("*").in("status", ["queued", "running"]).order("created_at", { ascending: true }).limit(1);
+      if (error || !data || data.length === 0) return;
+      const dbJob = data[0];
+      const jobRecord = this.mapDBToJobRecord(dbJob);
+      if (jobRecord.status === "running") {
+        const lastUpdated = new Date(dbJob.updated_at || dbJob.started_at).getTime();
+        const now = Date.now();
+        if (now - lastUpdated > 2 * 60 * 1e3) {
+          logger2.warn("Job \xF3rf\xE3o detectado pelo ScrapeWorker, retomando execu\xE7\xE3o:", { id: jobRecord.id });
+        } else {
+          return;
+        }
+      }
+      this.isProcessingFallback = true;
+      await this.processJob(jobRecord.id, jobRecord.config, jobRecord.id);
+    } catch (err) {
+      logger2.error("Erro no loop do ScrapeWorker:", {
+        error: err instanceof Error ? err.message : String(err)
+      });
+    } finally {
+      this.isProcessingFallback = false;
+    }
+  }
+  /**
+   * Executa um job de scraping completo de forma assíncrona.
+   */
+  async processJob(jobId, config, collectionRunId) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    logger2.info("Iniciando processamento do job de scraping:", { jobId, collectionRunId });
+    await supabaseAdmin.from("collection_runs").update({
+      status: "running",
+      started_at: nowIso,
+      updated_at: nowIso
+    }).eq("id", collectionRunId);
+    const cancelFlag = { cancelled: false };
+    const cancelChecker = setInterval(async () => {
+      if (cancelFlag.cancelled) return;
+      const { data } = await supabaseAdmin.from("collection_runs").select("status").eq("id", collectionRunId).maybeSingle();
+      if (data?.status === "cancelled") {
+        cancelFlag.cancelled = true;
+        logger2.info("Cancelamento cooperativo identificado durante execu\xE7\xE3o", { jobId });
+      }
+    }, 2500);
+    try {
+      const { runScrapeAsJob: runScrapeAsJob2 } = await Promise.resolve().then(() => (init_persister(), persister_exports));
+      const result = await runScrapeAsJob2(
+        config,
+        {
+          onProgress: async (progress) => {
+            await this.updateProgressInDB(collectionRunId, progress);
+          },
+          onCheckCancel: () => cancelFlag.cancelled,
+          onDriverCrash: () => {
+            logger2.warn("Driver crash reportado pelo scraper, o job se recuperar\xE1 automaticamente.", { jobId });
+          }
+        },
+        collectionRunId
+      );
+      const finalStatus = cancelFlag.cancelled ? "cancelled" : result.hasBlockingError ? "error" : "completed";
+      await supabaseAdmin.from("collection_runs").update({
+        status: finalStatus,
+        finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        results_found: result.totalFound,
+        new_leads: result.inserted,
+        duplicates: result.duplicates,
+        rejected: result.rejected,
+        errors: result.errors,
+        queries_executed: result.queriesExecuted
+      }).eq("id", collectionRunId);
+      logger2.info("Processamento de job finalizado com sucesso:", {
+        jobId,
+        status: finalStatus,
+        totalFound: result.totalFound,
+        newLeads: result.inserted
+      });
+      return result;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger2.error("Falha fatal durante execu\xE7\xE3o do scrape job:", { jobId, error: errorMsg });
+      await supabaseAdmin.from("collection_runs").update({
+        status: "error",
+        finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        errors: [errorMsg]
+      }).eq("id", collectionRunId);
+      throw err;
+    } finally {
+      clearInterval(cancelChecker);
+    }
+  }
+  /**
+   * Salva progresso periódico no banco de dados com atualização de heartbeat.
+   */
+  async updateProgressInDB(collectionRunId, progress) {
+    try {
+      await supabaseAdmin.from("collection_runs").update({
+        results_found: progress.discovered,
+        new_leads: progress.persisted,
+        duplicates: progress.duplicates,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", collectionRunId);
+    } catch (err) {
+      logger2.warn("Falha ao atualizar heartbeat de progresso:", { collectionRunId, error: err });
+    }
+  }
+  mapDBToJobRecord(data) {
+    const dbToStatus = {
+      queued: "queued",
+      running: "running",
+      completed: "completed",
+      partial: "running",
+      error: "failed",
+      cancelled: "cancelled"
+    };
+    return {
+      id: data.id,
+      status: dbToStatus[data.status] || "queued",
+      config: {
+        queries: Array.isArray(data.queries) ? data.queries : [],
+        cities: Array.isArray(data.cities) ? data.cities : [],
+        states: Array.isArray(data.states) ? data.states : [],
+        limitPerQuery: data.limit_per_query || 10
+      },
+      progress: {
+        phase: data.status === "completed" ? "completed" : data.status === "running" ? "details" : "discovery",
+        discovered: data.results_found || 0,
+        processed: (data.new_leads || 0) + (data.duplicates || 0) + (data.rejected || 0),
+        persisted: data.new_leads || 0,
+        duplicates: data.duplicates || 0,
+        errors: Array.isArray(data.errors) ? data.errors.length : 0
+      },
+      error: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors[data.errors.length - 1] : void 0,
+      collectionRunId: data.id,
+      createdAt: data.created_at || data.started_at,
+      startedAt: data.started_at,
+      finishedAt: data.finished_at || void 0,
+      updatedAt: data.updated_at || data.created_at
+    };
+  }
+};
+var scrapeWorker = ScrapeWorkerService.getInstance();
+
+// src/scraper-prospecting/export/xlsx.ts
+import * as XLSX from "xlsx";
+async function generateLeadsXlsx(leads, options = {}) {
+  const resultados = (leads || []).map((l) => ({
+    Nome: l.name || null,
+    Categoria: l.category || null,
+    Endere\u00E7o: l.address || null,
+    Telefone: l.phone || null,
+    Website: l.website || null,
+    "Google Maps URL": l.googleMapsUrl || l.sourceUrl || null,
+    "Place ID": l.placeId || null,
+    Avalia\u00E7\u00E3o: l.rating ?? null,
+    "N\xFAmero de Avalia\xE7\xF5es": l.reviewCount ?? null,
+    "N\xEDvel de Pre\xE7o": l.priceLevel ?? null,
+    Hor\u00E1rios: l.openingHours || null,
+    Status: l.currentStatus || null,
+    Descri\u00E7\u00E3o: l.description || null,
+    Latitude: l.latitude ?? null,
+    Longitude: l.longitude ?? null,
+    "Plus Code": l.plusCode || null,
+    "Data da Coleta": l.scraped_at ? new Date(l.scraped_at).toISOString() : null,
+    "Termo de Busca": l.searchTerm || null,
+    "Localiza\xE7\xE3o da Busca": l.searchLocation || null,
+    "Links Sociais": l.socialLinks ? l.socialLinks.join("; ") : null
+  }));
+  const wsResultados = XLSX.utils.json_to_sheet(resultados);
+  const metadados = [
+    { Campo: "Pesquisa", Valor: options.searchTerm || null },
+    { Campo: "Localiza\xE7\xE3o", Valor: options.location || null },
+    { Campo: "Data", Valor: options.collectionRunId ? (/* @__PURE__ */ new Date()).toISOString() : (/* @__PURE__ */ new Date()).toISOString() },
+    { Campo: "Total Encontrado", Valor: options.totalFound ?? leads.length },
+    { Campo: "Total Processado", Valor: options.totalProcessed ?? leads.length },
+    { Campo: "Duplicados", Valor: options.duplicates ?? 0 },
+    { Campo: "Erros", Valor: options.errors ?? 0 }
+  ];
+  const wsMetadados = XLSX.utils.json_to_sheet(metadados);
+  const rawData = (leads || []).map((l) => ({
+    Nome: l.name || null,
+    "Raw Data": l.rawData ? JSON.stringify(l.rawData, null, 2) : null
+  }));
+  const wsRawData = XLSX.utils.json_to_sheet(rawData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsResultados, "Resultados");
+  XLSX.utils.book_append_sheet(wb, wsMetadados, "Metadados");
+  XLSX.utils.book_append_sheet(wb, wsRawData, "RAW_DATA");
+  const buffer = Buffer.from(XLSX.write(wb, { bookType: "xlsx", type: "buffer" }));
+  return buffer;
+}
+
+// src/server/routes/marketing-automation.ts
+var router13 = Router13();
+router13.get("/status", async (_req, res) => {
+  try {
+    const status = await marketingAutomationWorker.getStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao obter status", message: err.message });
+  }
+});
+router13.post("/start", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.start();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "RUNNING" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao iniciar", message: err.message });
+  }
+});
+router13.post("/pause", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.pause();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "PAUSED" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao pausar", message: err.message });
+  }
+});
+router13.post("/stop", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.stop();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "STOPPED" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao parar", message: err.message });
+  }
+});
+router13.get("/campaigns", async (_req, res) => {
+  try {
+    const { data: campaigns, error } = await supabaseAdmin.from("marketing_campaigns").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    const enrichedCampaigns = await Promise.all(
+      (campaigns || []).map(async (camp) => {
+        try {
+          const { data: links } = await supabaseAdmin.from("marketing_lead_campaigns").select("status, contact_count").eq("campaign_id", camp.id);
+          const totalLeads = links?.length || 0;
+          const queued = links?.filter((l) => l.status === "queued").length || 0;
+          const sent = links?.filter((l) => l.status === "sent" || l.status === "delivered").length || 0;
+          const responded = links?.filter((l) => l.status === "responded").length || 0;
+          const converted = links?.filter((l) => l.status === "converted").length || 0;
+          const exhausted = links?.filter((l) => l.status === "exhausted").length || 0;
+          const contacted = links?.filter((l) => (l.contact_count || 0) > 0).length || 0;
+          const responseRate = contacted > 0 ? Math.round(responded / contacted * 100) : 0;
+          const conversionRate = contacted > 0 ? Math.round(converted / contacted * 100) : 0;
+          return {
+            ...camp,
+            total_leads: totalLeads,
+            metrics: {
+              total: totalLeads,
+              queued,
+              sent,
+              contacted,
+              responded,
+              converted,
+              exhausted,
+              responseRate,
+              conversionRate
+            }
+          };
+        } catch {
+          return {
+            ...camp,
+            total_leads: 0,
+            metrics: {
+              total: 0,
+              queued: 0,
+              sent: 0,
+              contacted: 0,
+              responded: 0,
+              converted: 0,
+              exhausted: 0,
+              responseRate: 0,
+              conversionRate: 0
+            }
+          };
+        }
+      })
+    );
+    res.json(enrichedCampaigns);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar campanhas", message: err.message });
+  }
+});
+function isValidUrl(url2) {
+  try {
+    new URL(url2);
+    return true;
+  } catch {
+    return false;
+  }
+}
+router13.post("/campaigns", async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      audience,
+      lead_type,
+      target_cities,
+      steps,
+      max_contacts,
+      min_interval_hours,
+      status,
+      image_url,
+      visual_prompt
+    } = req.body;
+    const errors = [];
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      errors.push("name \xE9 obrigat\xF3rio");
+    }
+    if (!audience || !["B2C", "B2B"].includes(audience)) {
+      errors.push('audience \xE9 obrigat\xF3rio e deve ser "B2C" ou "B2B"');
+    }
+    if (audience === "B2B") {
+      if (!lead_type || !["despachante", "advogado_transito"].includes(lead_type)) {
+        errors.push('lead_type \xE9 obrigat\xF3rio para B2B e deve ser "despachante" ou "advogado_transito"');
+      }
+      if (!target_cities || !Array.isArray(target_cities) || target_cities.length === 0) {
+        errors.push("target_cities \xE9 obrigat\xF3rio para B2B e deve ser array n\xE3o vazio");
+      }
+      if (!steps || !Array.isArray(steps) || steps.length === 0) {
+        errors.push("steps \xE9 obrigat\xF3rio para B2B e deve ser array n\xE3o vazio");
+      }
+    }
+    const hasImageUrl = image_url && typeof image_url === "string" && image_url.trim().length > 0;
+    const hasVisualPrompt = visual_prompt && typeof visual_prompt === "string" && visual_prompt.trim().length > 0;
+    if (hasImageUrl && !isValidUrl(image_url)) {
+      errors.push("image_url deve ser uma URL v\xE1lida");
+    }
+    if (!hasImageUrl && !hasVisualPrompt) {
+      errors.push("image_url ou visual_prompt \xE9 obrigat\xF3rio (pelo menos um)");
+    }
+    if (max_contacts !== void 0 && (typeof max_contacts !== "number" || max_contacts < 1 || max_contacts > 100)) {
+      errors.push("max_contacts deve ser n\xFAmero entre 1 e 100");
+    }
+    if (min_interval_hours !== void 0 && (typeof min_interval_hours !== "number" || min_interval_hours < 1 || min_interval_hours > 720)) {
+      errors.push("min_interval_hours deve ser n\xFAmero entre 1 e 720");
+    }
+    if (errors.length > 0) {
+      return res.status(400).json({ error: "Valida\xE7\xE3o falhou", details: errors });
+    }
+    const insertData = {
+      name: name.trim(),
+      description: description?.trim() || null,
+      audience,
+      lead_type: lead_type || "despachante",
+      target_cities: target_cities || [],
+      steps: steps && steps.length > 0 ? steps : [
+        { step: 1, delay_hours: 0, message: "Ol\xE1 {nome}, tudo bem? Sou da DefesAi. Ajudamos a automatizar recursos e an\xE1lises de CNH." },
+        { step: 2, delay_hours: 48, message: "Oi {nome}, conseguiu avaliar nossa proposta para despachantes em {cidade}?" },
+        { step: 3, delay_hours: 96, message: "{nome}, \xFAltima mensagem: caso queira testar nossa IA para defesa de multas, estamos \xE0 disposi\xE7\xE3o!" }
+      ],
+      max_contacts: max_contacts || 3,
+      min_interval_hours: min_interval_hours || 48,
+      status: status || "active"
+    };
+    if (hasImageUrl) insertData.image_url = image_url.trim();
+    if (hasVisualPrompt) insertData.visual_prompt = visual_prompt.trim();
+    const { data, error } = await supabaseAdmin.from("marketing_campaigns").insert(insertData).select().single();
+    if (error) {
+      if (error.code === "23505") {
+        return res.status(409).json({ error: "Campanha duplicada", message: "J\xE1 existe campanha com este nome e lead_type" });
+      }
+      throw error;
+    }
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao criar campanha", message: err.message });
+  }
+});
+router13.patch("/campaigns/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, name, description, min_interval_hours, steps } = req.body;
+    const updates = { updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+    if (status !== void 0) updates.status = status;
+    if (name !== void 0) updates.name = name;
+    if (description !== void 0) updates.description = description;
+    if (min_interval_hours !== void 0) updates.min_interval_hours = min_interval_hours;
+    if (steps !== void 0) updates.steps = steps;
+    const { data, error } = await supabaseAdmin.from("marketing_campaigns").update(updates).eq("id", id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao atualizar campanha", message: err.message });
+  }
+});
+router13.post("/campaigns/:id/start", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 20 } = req.body;
+    const { data: campaign, error: campaignError } = await supabaseAdmin.from("marketing_campaigns").select("*").eq("id", id).single();
+    if (campaignError || !campaign) {
+      return res.status(404).json({ error: "Campanha n\xE3o encontrada" });
+    }
+    const leadQuery = supabaseAdmin.from("marketing_leads").select("*").eq("lead_type", campaign.lead_type).eq("audience", campaign.audience).not("phone_normalized", "is", null).limit(limit);
+    const { data: leads, error: leadsError } = await leadQuery;
+    if (leadsError) throw leadsError;
+    const { data: existingLinks } = await supabaseAdmin.from("marketing_lead_campaigns").select("lead_id").eq("campaign_id", id);
+    const existingLeadIds = new Set((existingLinks || []).map((l) => l.lead_id));
+    const newLeads = (leads || []).filter((l) => !existingLeadIds.has(l.id));
+    const maxContacts = campaign.max_contacts || 3;
+    const existingCount = existingLeadIds.size;
+    const remainingSlots = Math.max(0, maxContacts - existingCount);
+    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
+    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
+        campaign: campaign.name,
+        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
+      });
+    }
+    const leadCampaigns = leadsToEnqueue.map((lead) => ({
+      lead_id: lead.id,
+      campaign_id: id,
+      status: "queued",
+      current_step: 0,
+      contact_count: 0
+    }));
+    if (leadCampaigns.length > 0) {
+      const { error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").insert(leadCampaigns);
+      if (lcError) throw lcError;
+    }
+    const queues = leadsToEnqueue.map((lead) => ({
+      lead_campaign_id: leadCampaigns.find((lc) => lc.lead_id === lead.id)?.id,
+      action: "send_message",
+      scheduled_at: (/* @__PURE__ */ new Date()).toISOString(),
+      max_attempts: 3
+    })).filter((q) => q.lead_campaign_id);
+    if (queues.length > 0) {
+      const { error: qError } = await supabaseAdmin.from("marketing_automation_queue").insert(queues);
+      if (qError) throw qError;
+    }
+    res.json({
+      success: true,
+      enqueued: queues.length,
+      campaign: campaign.name,
+      remainingSlots: remainingSlots - queues.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao iniciar campanha", message: err.message });
+  }
+});
+router13.get("/stats", async (_req, res) => {
+  try {
+    const { count: totalLeads } = await supabaseAdmin.from("marketing_leads").select("*", { count: "exact", head: true });
+    const { count: totalCampaigns } = await supabaseAdmin.from("marketing_campaigns").select("*", { count: "exact", head: true });
+    const { count: queued } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "queued");
+    const { count: sent } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "sent");
+    const { count: responded } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "responded");
+    const { count: converted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "converted");
+    const { count: exhausted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "exhausted");
+    const { count: totalMessages } = await supabaseAdmin.from("marketing_messages").select("*", { count: "exact", head: true });
+    const { count: pendingQueue } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true });
+    const { count: contacted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).gte("contact_count", 1);
+    const { count: erroredQueue } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true }).gte("attempts", 3);
+    res.json({
+      totalLeads: totalLeads || 0,
+      totalCampaigns: totalCampaigns || 0,
+      queued: queued || 0,
+      sent: sent || 0,
+      responded: responded || 0,
+      converted: converted || 0,
+      exhausted: exhausted || 0,
+      totalMessages: totalMessages || 0,
+      pendingQueue: pendingQueue || 0,
+      contacted: contacted || 0,
+      interested: (responded || 0) + (converted || 0),
+      errors: erroredQueue || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar estat\xEDsticas", message: err.message });
+  }
+});
+router13.get("/leads", async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(5, parseInt(req.query.pageSize) || 20));
+    const search = (req.query.search || "").trim().toLowerCase();
+    const leadType = req.query.lead_type || "";
+    const city = req.query.city || "";
+    const source = req.query.source || "";
+    const contactFilter = req.query.contact_filter || "";
+    const isPaginated = req.query.page !== void 0 || req.query.pageSize !== void 0 || req.query.paginated === "true";
+    let query = supabaseAdmin.from("marketing_leads").select("*", { count: "exact" });
+    if (leadType && leadType !== "all") {
+      query = query.eq("lead_type", leadType);
+    }
+    if (city && city !== "all") {
+      query = query.ilike("city", `%${city}%`);
+    }
+    if (source && source !== "all") {
+      query = query.eq("source", source);
+    }
+    if (contactFilter === "has_whatsapp") {
+      query = query.not("whatsapp", "is", null);
+    } else if (contactFilter === "has_email") {
+      query = query.not("email", "is", null);
+    } else if (contactFilter === "has_website") {
+      query = query.not("website", "is", null);
+    }
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.order("created_at", { ascending: false });
+    if (isPaginated) {
+      query = query.range(from, to);
+    } else {
+      query = query.limit(200);
+    }
+    const { data, count, error } = await query;
+    if (error) throw error;
+    const { data: cityData } = await supabaseAdmin.from("marketing_leads").select("city").not("city", "is", null).limit(300);
+    const availableCities = Array.from(
+      new Set((cityData || []).map((c) => c.city?.trim()).filter(Boolean))
+    ).sort();
+    const { data: sourceData } = await supabaseAdmin.from("marketing_leads").select("source").not("source", "is", null).limit(300);
+    const availableSources = Array.from(
+      new Set((sourceData || []).map((s) => s.source?.trim()).filter(Boolean))
+    ).sort();
+    if (isPaginated) {
+      res.json({
+        data: data || [],
+        total: count || (data ? data.length : 0),
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+        availableCities,
+        availableSources
+      });
+    } else {
+      res.json(data || []);
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar leads", message: err.message });
+  }
+});
+router13.get("/leads/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabaseAdmin.from("marketing_leads").select("*, campaigns:marketing_lead_campaigns(*, campaign:marketing_campaigns(*)), messages:marketing_messages(*)").eq("id", id).single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Lead n\xE3o encontrado" });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar lead", message: err.message });
+  }
+});
+router13.get("/health", async (_req, res) => {
+  try {
+    const dbStart = Date.now();
+    const { error: dbError } = await supabaseAdmin.from("marketing_leads").select("*", { count: "exact", head: true });
+    const dbLatency = Date.now() - dbStart;
+    const { count: queueCount } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true });
+    const workerStatus = await marketingAutomationWorker.getStatus();
+    let evolutionStatus = {
+      status: "offline",
+      instance: configService.get("EVOLUTION_INSTANCE_NAME") || "defesai"
+    };
+    try {
+      const ev = await whatsappService.getInstanceStatus();
+      if (ev) {
+        evolutionStatus = {
+          status: ev.status === "open" ? "online" : ev.status,
+          instance: ev.instanceName,
+          phone: ev.phone || null
+        };
+      }
+    } catch {
+    }
+    res.json({
+      database: {
+        status: dbError ? "offline" : "online",
+        latencyMs: dbLatency,
+        error: dbError?.message || null
+      },
+      queue: {
+        status: "online",
+        pendingJobs: queueCount || 0
+      },
+      worker: {
+        status: workerStatus.status.toLowerCase(),
+        processedCount: workerStatus.processedCount,
+        lastError: workerStatus.lastError,
+        lastProcessedAt: workerStatus.lastProcessedAt
+      },
+      evolution: evolutionStatus,
+      lastLeadProcessedAt: workerStatus.lastProcessedAt,
+      lastError: workerStatus.lastError
+    });
+  } catch (err) {
+    res.status(500).json({
+      database: { status: "unknown", error: err.message },
+      queue: { status: "unknown" },
+      worker: { status: "unknown" },
+      evolution: { status: "unknown" }
+    });
+  }
+});
+router13.get("/queue", async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from("marketing_automation_queue").select("*, lead_campaign:marketing_lead_campaigns(lead:marketing_leads(*), campaign:marketing_campaigns(*))").order("scheduled_at", { ascending: true }).limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar fila", message: err.message });
+  }
+});
+router13.get("/collection-runs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Execu\xE7\xE3o n\xE3o encontrada" });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar execu\xE7\xE3o", message: err.message });
+  }
+});
+router13.post("/scrape", async (req, res) => {
+  try {
+    const { queries = [], cities = [], limitPerQuery = 10 } = req.body || {};
+    const config = {
+      queries: Array.isArray(queries) && queries.length > 0 ? queries : ["despachante de tr\xE2nsito", "advogado direito de tr\xE2nsito"],
+      cities: Array.isArray(cities) ? cities : [],
+      states: [],
+      limitPerQuery: Math.max(1, Math.min(50, Number(limitPerQuery) || 10))
+    };
+    const job = await scrapeWorker.createJob(config);
+    res.json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: "Job de scraping enfileirado. Consulte GET /api/marketing/automation/scrape/" + job.id + " para status."
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape:", err);
+    res.status(500).json({ error: "Falha ao criar job de scraping", message: err.message });
+  }
+});
+router13.get("/scrape/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await scrapeWorker.getJob(jobId);
+    if (!job) {
+      return res.status(404).json({ error: "Job n\xE3o encontrado" });
+    }
+    res.json({
+      id: job.id,
+      status: job.status,
+      progress: job.progress,
+      config: job.config,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      error: job.error,
+      collectionRunId: job.collectionRunId
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId:", err);
+    res.status(500).json({ error: "Falha ao obter status do job", message: err.message });
+  }
+});
+router13.post("/scrape/:jobId/cancel", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const cancelled = await scrapeWorker.cancelJob(jobId);
+    if (!cancelled) {
+      return res.status(400).json({ error: "N\xE3o foi poss\xEDvel cancelar o job (n\xE3o existe ou j\xE1 finalizado)" });
+    }
+    res.json({ success: true, jobId, status: "cancelled" });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId/cancel:", err);
+    res.status(500).json({ error: "Falha ao cancelar job", message: err.message });
+  }
+});
+router13.get("/scrape/:jobId/results", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { data: leads, error } = await supabaseAdmin.from("marketing_leads").select("*").eq("collection_run_id", jobId).order("created_at", { ascending: false }).limit(500);
+    if (error) throw error;
+    const { data: runRow } = await supabaseAdmin.from("collection_runs").select("status, results_found, new_leads, duplicates, rejected, errors, started_at, finished_at").eq("id", jobId).single();
+    res.json({
+      jobId,
+      status: runRow?.status || "unknown",
+      totalFound: runRow?.results_found || 0,
+      processed: (leads || []).length,
+      duplicates: runRow?.duplicates || 0,
+      errors: runRow?.errors || [],
+      startedAt: runRow?.started_at,
+      finishedAt: runRow?.finished_at,
+      leads: leads || []
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId/results:", err);
+    res.status(500).json({ error: "Falha ao buscar resultados", message: err.message });
+  }
+});
+router13.get("/scrapes", async (_req, res) => {
+  try {
+    const jobs = await scrapeWorker.listJobs(20);
+    res.json({ jobs });
+  } catch (err) {
+    console.error("Erro no endpoint /scrapes:", err);
+    res.status(500).json({ error: "Falha ao listar jobs", message: err.message });
+  }
+});
+router13.get("/export/:collectionRunId?", async (req, res) => {
+  try {
+    const { collectionRunId } = req.params;
+    const runId = collectionRunId || "latest";
+    let query = supabaseAdmin.from("marketing_leads").select("*").order("created_at", { ascending: false });
+    if (runId !== "latest") {
+      query = query.eq("collection_run_id", runId);
+    }
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+    let runRow = null;
+    if (runId !== "latest") {
+      const { data: run } = await supabaseAdmin.from("collection_runs").select("*").eq("id", runId).maybeSingle();
+      runRow = run;
+    } else {
+      const { data: latest } = await supabaseAdmin.from("collection_runs").select("*").order("started_at", { ascending: false }).limit(1).maybeSingle();
+      runRow = latest;
+    }
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      collectionRunId: runId !== "latest" ? runId : runRow?.id,
+      searchTerm: runRow?.queries ? Array.isArray(runRow.queries) ? runRow.queries.join(", ") : String(runRow.queries) : void 0,
+      location: runRow ? [runRow.cities, runRow.states].filter(Boolean).flat().join(", ") : void 0,
+      totalFound: runRow?.results_found ?? (leads || []).length,
+      totalProcessed: (leads || []).length,
+      duplicates: runRow?.duplicates ?? 0,
+      errors: runRow?.errors ? Array.isArray(runRow.errors) ? runRow.errors.length : 1 : 0
+    });
+    const filename = `leads-${runId === "latest" ? "latest" : runId}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error("Erro no endpoint /export:", err);
+    res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
+  }
+});
+router13.get("/export", async (req, res) => {
+  try {
+    const search = (req.query.search || "").trim().toLowerCase();
+    const leadType = req.query.lead_type || "";
+    const city = req.query.city || "";
+    const source = req.query.source || "";
+    const contactFilter = req.query.contact_filter || "";
+    let query = supabaseAdmin.from("marketing_leads").select("*").order("created_at", { ascending: false });
+    if (leadType && leadType !== "all") {
+      query = query.eq("lead_type", leadType);
+    }
+    if (city && city !== "all") {
+      query = query.ilike("city", `%${city}%`);
+    }
+    if (source && source !== "all") {
+      query = query.eq("source", source);
+    }
+    if (contactFilter === "has_whatsapp") {
+      query = query.not("whatsapp", "is", null);
+    } else if (contactFilter === "has_email") {
+      query = query.not("email", "is", null);
+    } else if (contactFilter === "has_website") {
+      query = query.not("website", "is", null);
+    }
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      searchTerm: search || void 0,
+      location: city || void 0,
+      totalFound: leads?.length || 0,
+      totalProcessed: leads?.length || 0,
+      duplicates: 0,
+      errors: 0
+    });
+    const filename = `leads-filtered-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error("Erro no endpoint /export (filtered):", err);
+    res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
+  }
+});
+var marketing_automation_default = router13;
+
+// src/server/routes/scrape.ts
+import { Router as Router14 } from "express";
+init_supabase();
+var router14 = Router14();
+router14.post(["/", "/scrape"], async (req, res) => {
+  try {
+    const { queries = [], cities = [], states = [], limitPerQuery = 10 } = req.body || {};
+    const rawQueries = Array.isArray(queries) ? queries.map((q) => String(q).trim()).filter(Boolean) : typeof queries === "string" && queries.trim() ? [queries.trim()] : [];
+    const rawCities = Array.isArray(cities) ? cities.map((c) => String(c).trim()).filter(Boolean) : typeof cities === "string" && cities.trim() ? [cities.trim()] : [];
+    const rawStates = Array.isArray(states) ? states.map((s) => String(s).trim()).filter(Boolean) : typeof states === "string" && states.trim() ? [states.trim()] : [];
+    const config = {
+      queries: rawQueries.length > 0 ? rawQueries : ["despachante de tr\xE2nsito", "advogado direito de tr\xE2nsito"],
+      cities: rawCities,
+      states: rawStates,
+      limitPerQuery: Math.max(1, Math.min(100, Number(limitPerQuery) || 10))
+    };
+    const job = await scrapeWorker.createJob(config);
+    res.status(201).json({
+      success: true,
+      id: job.id,
+      jobId: job.id,
+      status: job.status,
+      config: job.config,
+      progress: job.progress,
+      createdAt: job.createdAt,
+      message: `Job de scraping enfileirado com sucesso. Consulte GET /api/scrape/${job.id} para acompanhar o progresso.`
+    });
+  } catch (err) {
+    console.error("Erro ao criar job de scraping:", err);
+    res.status(500).json({
+      success: false,
+      error: "Falha ao criar job de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/", "/scrape"], async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
+    const jobs = await scrapeWorker.listJobs(limit);
+    res.json({
+      success: true,
+      count: jobs.length,
+      jobs
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao listar jobs de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/:id", "/scrape/:id"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const job = await scrapeWorker.getJob(id);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: "Job n\xE3o encontrado",
+        message: `Nenhum job de scraping encontrado com o ID '${id}'.`
+      });
+    }
+    res.json({
+      success: true,
+      id: job.id,
+      jobId: job.id,
+      status: job.status,
+      progress: job.progress,
+      config: job.config,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      updatedAt: job.updatedAt,
+      error: job.error,
+      collectionRunId: job.collectionRunId
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao consultar status do job",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.post(["/:id/cancel", "/scrape/:id/cancel"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cancelled = await scrapeWorker.cancelJob(id);
+    if (!cancelled) {
+      return res.status(400).json({
+        success: false,
+        error: "N\xE3o foi poss\xEDvel cancelar o job",
+        message: "O job n\xE3o existe ou j\xE1 foi finalizado/cancelado anteriormente."
+      });
+    }
+    res.json({
+      success: true,
+      id,
+      jobId: id,
+      status: "cancelled",
+      message: "Job de scraping cancelado com sucesso."
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao cancelar job de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/:id/results", "/scrape/:id/results"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 100));
+    const { data: leads, error } = await supabaseAdmin.from("marketing_leads").select("*").eq("collection_run_id", id).order("created_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    const { data: runRow } = await supabaseAdmin.from("collection_runs").select("status, results_found, new_leads, duplicates, rejected, errors, started_at, finished_at").eq("id", id).maybeSingle();
+    res.json({
+      success: true,
+      jobId: id,
+      status: runRow?.status || "unknown",
+      totalFound: runRow?.results_found || 0,
+      newLeads: runRow?.new_leads || (leads ? leads.length : 0),
+      duplicates: runRow?.duplicates || 0,
+      rejected: runRow?.rejected || 0,
+      errors: runRow?.errors || [],
+      startedAt: runRow?.started_at,
+      finishedAt: runRow?.finished_at,
+      count: leads?.length || 0,
+      leads: leads || []
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao buscar resultados do job",
+      message: err?.message || String(err)
+    });
+  }
+});
+var scrape_default = router14;
+
+// src/server/routes/media.ts
+import { Router as Router15 } from "express";
 
 // src/server/services/ai-media-service.ts
 import { GoogleGenAI as GoogleGenAI3, GenerateVideosOperation } from "@google/genai";
@@ -30447,12 +33408,12 @@ var aiMediaService = new AIMediaService();
 
 // src/server/routes/media.ts
 import { GenerateVideosOperation as GenerateVideosOperation2, GoogleGenAI as GoogleGenAI4 } from "@google/genai";
-var router13 = Router13();
-router13.get("/health", (_req, res) => {
+var router15 = Router15();
+router15.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "media", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
-router13.use(authenticateToken, requireAdmin);
-router13.get("/hardware", (req, res) => {
+router15.use(authenticateToken, requireAdmin);
+router15.get("/hardware", (req, res) => {
   try {
     const hardware = mediaGenerationService.getHardwareAudit();
     res.json({ success: true, hardware });
@@ -30461,7 +33422,7 @@ router13.get("/hardware", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao auditar hardware" });
   }
 });
-router13.get("/providers", (req, res) => {
+router15.get("/providers", (req, res) => {
   try {
     const info = mediaGenerationService.getProvidersInfo();
     res.json({ success: true, ...info });
@@ -30470,7 +33431,7 @@ router13.get("/providers", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao listar provedores" });
   }
 });
-router13.post("/image", async (req, res) => {
+router15.post("/image", async (req, res) => {
   try {
     const { prompt, aspectRatio, imageSize, stylePreset, negativePrompt, provider, sync } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30500,7 +33461,7 @@ router13.post("/image", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar imagem" });
   }
 });
-router13.post("/video", async (req, res) => {
+router15.post("/video", async (req, res) => {
   try {
     const { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt, provider, sync } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30530,7 +33491,7 @@ router13.post("/video", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar v\xEDdeo" });
   }
 });
-router13.post("/image-to-video", async (req, res) => {
+router15.post("/image-to-video", async (req, res) => {
   try {
     const {
       prompt,
@@ -30574,7 +33535,7 @@ router13.post("/image-to-video", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar Image-to-Video" });
   }
 });
-router13.get("/jobs/:id", (req, res) => {
+router15.get("/jobs/:id", (req, res) => {
   try {
     const job = mediaGenerationService.getJob(req.params.id);
     if (!job) {
@@ -30599,7 +33560,7 @@ router13.get("/jobs/:id", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao consultar job" });
   }
 });
-router13.post("/jobs/:id/cancel", (req, res) => {
+router15.post("/jobs/:id/cancel", (req, res) => {
   try {
     const cancelled = mediaGenerationService.cancelJob(req.params.id);
     if (!cancelled) {
@@ -30612,7 +33573,7 @@ router13.post("/jobs/:id/cancel", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao cancelar job" });
   }
 });
-router13.get("/jobs", (req, res) => {
+router15.get("/jobs", (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const jobs = mediaGenerationService.listJobs(limit);
@@ -30622,7 +33583,7 @@ router13.get("/jobs", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao listar jobs" });
   }
 });
-router13.post(["/generate-image", "/marketing/generate-image"], async (req, res) => {
+router15.post(["/generate-image", "/marketing/generate-image"], async (req, res) => {
   try {
     const { prompt, imageSize, aspectRatio, referenceImageBase64, referenceMimeType, stylePreset } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30647,7 +33608,7 @@ router13.post(["/generate-image", "/marketing/generate-image"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro ao gerar imagem" });
   }
 });
-router13.post(["/generate-video", "/marketing/generate-video"], async (req, res) => {
+router15.post(["/generate-video", "/marketing/generate-video"], async (req, res) => {
   try {
     const { prompt, image, aspectRatio, resolution } = req.body;
     const validRatios = ["16:9", "9:16"];
@@ -30664,7 +33625,7 @@ router13.post(["/generate-video", "/marketing/generate-video"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro ao iniciar gera\xE7\xE3o de v\xEDdeo" });
   }
 });
-router13.post(["/video-status", "/marketing/video-status"], async (req, res) => {
+router15.post(["/video-status", "/marketing/video-status"], async (req, res) => {
   try {
     const { operationName } = req.body;
     if (!operationName) {
@@ -30678,7 +33639,7 @@ router13.post(["/video-status", "/marketing/video-status"], async (req, res) => 
     res.status(500).json({ success: false, error: error?.message || "Erro ao consultar status do v\xEDdeo" });
   }
 });
-router13.post(["/video-download", "/marketing/video-download"], async (req, res) => {
+router15.post(["/video-download", "/marketing/video-download"], async (req, res) => {
   try {
     const { operationName } = req.body;
     if (!operationName) {
@@ -30727,7 +33688,7 @@ router13.post(["/video-download", "/marketing/video-download"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro no download do v\xEDdeo" });
   }
 });
-router13.post("/marketing/generate-week", async (req, res) => {
+router15.post("/marketing/generate-week", async (req, res) => {
   try {
     const { generateImages = true, imageSize = "2K", targetAudience } = req.body;
     const weeklySchedule = await aiMediaService.generateWeeklySchedule({
@@ -30796,10 +33757,10 @@ router13.post("/marketing/generate-week", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao gerar semana de publica\xE7\xF5es" });
   }
 });
-var media_default = router13;
+var media_default = router15;
 
 // src/server/routes/notifications.ts
-import { Router as Router14 } from "express";
+import { Router as Router16 } from "express";
 
 // src/server/services/notification-service.ts
 var NotificationService = class {
@@ -31408,8 +34369,8 @@ var EmailService = class {
 var emailService = new EmailService();
 
 // src/server/routes/notifications.ts
-var router14 = Router14();
-router14.post("/subscribe", (req, res) => {
+var router16 = Router16();
+router16.post("/subscribe", (req, res) => {
   try {
     const { endpoint, keys, userId, userEmail, userAgent, fcmToken } = req.body;
     if (!endpoint && !fcmToken) {
@@ -31429,7 +34390,7 @@ router14.post("/subscribe", (req, res) => {
     res.status(500).json({ error: error.message || "Erro ao registrar push subscription" });
   }
 });
-router14.post("/unsubscribe", (req, res) => {
+router16.post("/unsubscribe", (req, res) => {
   try {
     const { endpoint } = req.body;
     if (!endpoint) {
@@ -31441,7 +34402,7 @@ router14.post("/unsubscribe", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.get("/history", authenticateToken, (req, res) => {
+router16.get("/history", authenticateToken, (req, res) => {
   try {
     const user = req.user;
     const effectiveEmail = user?.email;
@@ -31454,7 +34415,7 @@ router14.get("/history", authenticateToken, (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/mark-read", (req, res) => {
+router16.post("/mark-read", (req, res) => {
   try {
     const userEmail = req.body.email || req.body.userEmail;
     notificationService.markAllAsRead(userEmail);
@@ -31463,7 +34424,7 @@ router14.post("/mark-read", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/notify-status-change", async (req, res) => {
+router16.post("/notify-status-change", async (req, res) => {
   try {
     const { caseId, newStatus, oldStatus, autoInfracao, userId, userEmail, fcmToken } = req.body;
     if (!caseId || !newStatus) {
@@ -31490,9 +34451,9 @@ router14.post("/notify-status-change", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/send-push", async (req, res) => {
+router16.post("/send-push", async (req, res) => {
   try {
-    const { fcmToken, title, body, url, tag } = req.body;
+    const { fcmToken, title, body, url: url2, tag } = req.body;
     if (!fcmToken || !title || !body) {
       return res.status(400).json({ error: "fcmToken, title e body s\xE3o obrigat\xF3rios" });
     }
@@ -31501,7 +34462,7 @@ router14.post("/send-push", async (req, res) => {
       notification: {
         title,
         body,
-        url,
+        url: url2,
         tag
       }
     });
@@ -31514,7 +34475,7 @@ router14.post("/send-push", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/send-test", requireAdmin, async (req, res) => {
+router16.post("/send-test", requireAdmin, async (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Endpoint de teste indispon\xEDvel em produ\xE7\xE3o",
@@ -31555,11 +34516,11 @@ router14.post("/send-test", requireAdmin, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.get("/vapid-key", (req, res) => {
+router16.get("/vapid-key", (req, res) => {
   const vapidKey = pushService.getVapidPublicKey();
   res.json({ vapidKey });
 });
-router14.post("/push", authenticateToken, async (req, res) => {
+router16.post("/push", authenticateToken, async (req, res) => {
   try {
     const { title, body, caseId, userEmail } = req.body;
     if (!title || !body) {
@@ -31587,7 +34548,7 @@ router14.post("/push", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar push notification" });
   }
 });
-router14.post("/email", authenticateToken, async (req, res) => {
+router16.post("/email", authenticateToken, async (req, res) => {
   try {
     const { email, caseId, subject, body: emailBody } = req.body;
     const targetEmail = email || req.user?.email;
@@ -31615,7 +34576,7 @@ router14.post("/email", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar email" });
   }
 });
-router14.post("/whatsapp/send", requireAdmin, async (req, res) => {
+router16.post("/whatsapp/send", requireAdmin, async (req, res) => {
   try {
     const { phone, eventType, caseId, customText } = req.body;
     if (!phone) {
@@ -31657,7 +34618,7 @@ router14.post("/whatsapp/send", requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar mensagem WhatsApp" });
   }
 });
-router14.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
+router16.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Endpoint de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
@@ -31694,12 +34655,12 @@ router14.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
     res.status(500).json({ error: err.message || "Erro ao simular envio WhatsApp" });
   }
 });
-var notifications_default = router14;
+var notifications_default = router16;
 
 // src/server/routes/health.ts
-import { Router as Router15 } from "express";
-var router15 = Router15();
-router15.get("/health", (req, res) => {
+import { Router as Router17 } from "express";
+var router17 = Router17();
+router17.get("/health", (req, res) => {
   res.json({
     status: "ok",
     service: "DefesAi API",
@@ -31709,7 +34670,7 @@ router15.get("/health", (req, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router15.post("/health/test", async (req, res) => {
+router17.post("/health/test", async (req, res) => {
   try {
     const { service } = req.body;
     if (!service) {
@@ -31730,10 +34691,11 @@ router15.post("/health/test", async (req, res) => {
     });
   }
 });
-var health_default = router15;
+var health_default = router17;
 
 // src/server/routes/cases.ts
-import { Router as Router16 } from "express";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { Router as Router18 } from "express";
 
 // src/server/db/envelope-repository.ts
 var EnvelopeRepository = class {
@@ -32688,17 +35650,20 @@ function hasValidDefenseIntegrity(draft, analysis) {
 }
 
 // src/server/routes/cases.ts
-var router16 = Router16();
+var router18 = Router18();
 registerRefinementProvider({
   refineProse: async (draftText) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
+function isCanonicalUserId(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 function canAccessCase(user, row) {
   if (!user) return false;
   if (user.role === "admin") return true;
-  if (!row.user_id) return false;
-  return row.user_id === user.id || !!user.email && row.user_id === user.email;
+  if (!row.user_id || !isCanonicalUserId(user.id)) return false;
+  return row.user_id === user.id;
 }
 function denyCaseAccess(user, res) {
   if (!user) {
@@ -32708,19 +35673,14 @@ function denyCaseAccess(user, res) {
   res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
   return true;
 }
-router16.get("/cases", authenticateToken, (req, res) => {
-  const { userId, claimToken } = req.query;
+router18.get("/cases", authenticateToken, (req, res) => {
+  const { userId } = req.query;
   const user = req.user;
   let allRows = Array.from(databaseRows.values());
   if (user && user.role !== "admin") {
-    const userSpecific = allRows.filter(
-      (r) => r.user_id === user.id || user.email && r.user_id === user.email
-    );
-    allRows = userSpecific;
+    allRows = isCanonicalUserId(user.id) ? allRows.filter((r) => r.user_id === user.id) : [];
   } else if (user?.role === "admin" && userId) {
     allRows = allRows.filter((r) => r.user_id === userId);
-  } else if (!user && claimToken) {
-    allRows = allRows.filter((r) => r.claim_token === claimToken);
   } else if (!user) {
     allRows = [];
   }
@@ -32728,7 +35688,7 @@ router16.get("/cases", authenticateToken, (req, res) => {
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });
-router16.get("/cases/:id", authenticateToken, (req, res) => {
+router18.get("/cases/:id", authenticateToken, (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32761,25 +35721,22 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
   }
   res.json(domain);
 });
-router16.post("/cases", authenticateToken, async (req, res) => {
+router18.post("/cases", authenticateToken, async (req, res) => {
   try {
     const domainData = req.body;
-    if (!domainData.id) {
-      domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    if (!isCanonicalUserId(req.user?.id)) {
+      return res.status(401).json({
+        error: "Identidade de usu\xE1rio inv\xE1lida para cria\xE7\xE3o do caso.",
+        code: "CANONICAL_USER_ID_REQUIRED"
+      });
     }
+    domainData.id = domainData.id || `case_${randomUUID4()}`;
     delete domainData.userId;
     delete domainData.analysis;
-    if (req.user?.id) {
-      const uid = req.user.id;
-      const isUuid3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
-      const isEmail = uid.includes("@");
-      if (isUuid3 || isEmail) {
-        domainData.userId = uid;
-      }
-      if (req.user.email && !domainData.userId) {
-        domainData.userId = req.user.email;
-      }
+    if (domainData.isAnonymous && !domainData.claimToken) {
+      domainData.claimToken = randomUUID4();
     }
+    domainData.userId = req.user.id;
     if (!domainData.createdAt) {
       domainData.createdAt = (/* @__PURE__ */ new Date()).toISOString();
     }
@@ -32820,7 +35777,7 @@ router16.post("/cases", authenticateToken, async (req, res) => {
       id: `audit_${Date.now()}`,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       actor: domainData.clientName || "An\xF4nimo",
-      role: domainData.isAnonymous ? "citizen" : "citizen",
+      role: "citizen",
       action: "CASE_CREATED",
       targetResource: domainData.id,
       ipHash: "9f83c68a765b1c41",
@@ -32832,7 +35789,7 @@ router16.post("/cases", authenticateToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-router16.put("/cases/:id", authenticateToken, async (req, res) => {
+router18.put("/cases/:id", authenticateToken, async (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32843,6 +35800,7 @@ router16.put("/cases/:id", authenticateToken, async (req, res) => {
   const updatedDomain = req.body;
   updatedDomain.id = req.params.id;
   updatedDomain.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  updatedDomain.userId = existingRow.user_id;
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
   newRow.user_id = existingRow.user_id;
   if (updatedDomain.infraction) {
@@ -32856,7 +35814,7 @@ router16.put("/cases/:id", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, "case_engine");
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
-router16.delete("/cases/:id", authenticateToken, async (req, res) => {
+router18.delete("/cases/:id", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32866,14 +35824,11 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
   }
   const anonymizedRow = {
     ...row,
-    // Identificação pessoal direta
     client_name: "[REMOVIDO]",
     client_email: void 0,
     client_phone: void 0,
     client_cpf: void 0,
-    // Vinculação a conta
     user_id: void 0,
-    // Dados processuais que podem conter PII
     applicant_json: void 0,
     defense_draft_json: void 0,
     analysis_json: void 0,
@@ -32884,11 +35839,9 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
     commercial_offer_id: void 0,
     formal_flaws_json: void 0,
     protocol_info_json: void 0,
-    // Condutor real (quando aplicável — pode ter CNH/Cpf do verdadeiro motorista)
     real_driver_name: void 0,
     real_driver_cpf: void 0,
     real_driver_cnh: void 0,
-    // Contexto do celular (pode conter identificadores)
     cellphone_circumstance: void 0,
     updated_at: (/* @__PURE__ */ new Date()).toISOString()
   };
@@ -32909,15 +35862,18 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_DELETED, { caseId: req.params.id }, "case_engine");
   res.json({ success: true, message: "Dados pessoais removidos. Caso retido para conformidade legal." });
 });
-router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
+router18.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso an\xF4nimo n\xE3o encontrado" });
   }
-  if (!req.user?.id) {
-    return res.status(401).json({ error: "N\xE3o autenticado" });
+  if (!isCanonicalUserId(req.user?.id)) {
+    return res.status(401).json({
+      error: "Identidade de usu\xE1rio inv\xE1lida para vincula\xE7\xE3o do caso.",
+      code: "CANONICAL_USER_ID_REQUIRED"
+    });
   }
-  const isOwner = row.user_id === req.user.id || req.user.email && row.user_id === req.user.email;
+  const isOwner = row.user_id === req.user.id;
   if (row.user_id && !isOwner) {
     return res.status(403).json({ error: "Caso j\xE1 vinculado a outro usu\xE1rio" });
   }
@@ -32948,7 +35904,7 @@ router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_CLAIMED, { caseId: domain.id, email }, "auth_engine");
   res.json(domain);
 });
-router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res) => {
+router18.post("/cases/:id/generate-defense", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32957,7 +35913,7 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
     return denyCaseAccess(req.user, res);
   }
   const domain = CanonicalMapper.rowToDomain(row);
-  const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
+  const { applicantData, customFacts } = req.body;
   const canonicalAnalysis = domain.analysis;
   const canonicalArguments = canonicalAnalysis?.recommendedArguments || [];
   const canonicalProcedure = canonicalAnalysis?.recommendedProcedure || domain.serviceType || "recurso_jari";
@@ -33076,22 +36032,22 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
     case: domain
   });
 });
-var cases_default = router16;
+var cases_default = router18;
 
 // src/server/routes/audit.ts
-import { Router as Router17 } from "express";
-var router17 = Router17();
-router17.use(authenticateToken, requireAdmin);
-router17.get("/audit-logs", (_req, res) => {
+import { Router as Router19 } from "express";
+var router19 = Router19();
+router19.use(authenticateToken, requireAdmin);
+router19.get("/audit-logs", (_req, res) => {
   res.json(auditLogs);
 });
-router17.get("/audit/logs", (_req, res) => {
+router19.get("/audit/logs", (_req, res) => {
   res.json({ logs: auditLogs.slice(0, 50) });
 });
-var audit_default = router17;
+var audit_default = router19;
 
 // src/server/routes/onboarding.ts
-import { Router as Router18 } from "express";
+import { Router as Router20 } from "express";
 
 // src/core/onboarding/rules-matrix.ts
 var USER_SITUATIONS = [
@@ -33241,8 +36197,8 @@ var RULES_MATRIX = {
 };
 
 // src/server/routes/onboarding.ts
-var router18 = Router18();
-router18.get("/onboarding/rules", (_req, res) => {
+var router20 = Router20();
+router20.get("/onboarding/rules", (_req, res) => {
   const baseRules = {
     situations: USER_SITUATIONS.map((s) => ({
       id: s.id,
@@ -33282,12 +36238,12 @@ router18.get("/onboarding/rules", (_req, res) => {
   };
   res.json(baseRules);
 });
-var onboarding_default = router18;
+var onboarding_default = router20;
 
 // src/server/routes/transit.ts
-import { Router as Router19 } from "express";
-var router19 = Router19();
-router19.get("/transit-database/query", (req, res) => {
+import { Router as Router21 } from "express";
+var router21 = Router21();
+router21.get("/transit-database/query", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o de consulta veicular n\xE3o dispon\xEDvel",
@@ -33375,7 +36331,7 @@ router19.get("/transit-database/query", (req, res) => {
     radarAfericao: radarMatch
   });
 });
-router19.get("/transit-database/inmetro-check", (req, res) => {
+router21.get("/transit-database/inmetro-check", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o INMETRO n\xE3o dispon\xEDvel",
@@ -33418,12 +36374,12 @@ router19.get("/transit-database/inmetro-check", (req, res) => {
     alertaPerito: cert.statusLaudo === "EXPIRADO_INVALIDO" ? "Aferi\xE7\xE3o expirada! V\xEDcio metrol\xF3gico insan\xE1vel perante a Resolu\xE7\xE3o CONTRAN 798/2020." : "Equipamento com laudo metrol\xF3gico v\xE1lido."
   });
 });
-var transit_default = router19;
+var transit_default = router21;
 
 // src/server/routes/governance.ts
-import { Router as Router20 } from "express";
-var router20 = Router20();
-router20.get("/governance/law-enforcement-verify", (req, res) => {
+import { Router as Router22 } from "express";
+var router22 = Router22();
+router22.get("/governance/law-enforcement-verify", (req, res) => {
   const { protocolOrHash, autoInfracao } = req.query;
   const allRows = Array.from(databaseRows.values());
   const matched = allRows.find((r) => {
@@ -33452,7 +36408,7 @@ router20.get("/governance/law-enforcement-verify", (req, res) => {
     source: "system"
   });
 });
-router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
+router22.post("/governance/manual-override", requireAdmin, async (req, res) => {
   const { caseId, overrideField, oldValue, newValue, justification, specialistName } = req.body;
   const row = databaseRows.get(caseId);
   if (row) {
@@ -33481,12 +36437,12 @@ router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
   auditLogs.unshift(auditEntry);
   res.json({ success: true, auditEntry });
 });
-var governance_default = router20;
+var governance_default = router22;
 
 // src/server/routes/analytics.ts
-import { Router as Router21 } from "express";
-var router21 = Router21();
-router21.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
+import { Router as Router23 } from "express";
+var router23 = Router23();
+router23.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
   const allCases = Array.from(databaseRows.values()).map((r) => CanonicalMapper.rowToDomain(r));
   const totalProcessed = allCases.length;
   const paidCases = allCases.filter(
@@ -33533,17 +36489,17 @@ router21.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res)
     topInfracoes
   });
 });
-var analytics_default = router21;
+var analytics_default = router23;
 
 // src/server/routes/ai.ts
-import { Router as Router22 } from "express";
-var router22 = Router22();
+import { Router as Router24 } from "express";
+var router24 = Router24();
 registerRefinementProvider({
   refineProse: async (draftText) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
-router22.post("/ai/analyze-infraction", async (req, res) => {
+router24.post("/ai/analyze-infraction", async (req, res) => {
   try {
     const infraction = req.body;
     const ragContext = RagPipeline.retrieveContext(infraction);
@@ -33663,7 +36619,7 @@ Responda em formato JSON estrito com o seguinte schema:
     res.status(500).json({ error: "Erro ao processar an\xE1lise jur\xEDdica", details: err.message });
   }
 });
-router22.post("/ai/generate-defense", async (req, res) => {
+router24.post("/ai/generate-defense", async (req, res) => {
   try {
     const { caseData, customInstructions } = req.body;
     const rawInfraction = caseData?.dadosInfracao || caseData?.infraction || {};
@@ -33822,7 +36778,7 @@ Assinatura do Requerente`,
     res.status(500).json({ error: "Erro ao gerar minuta da defesa", details: err.message });
   }
 });
-router22.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
+router24.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
   try {
     const { message, prompt, caseContext, context } = req.body;
     const userMessage = message || prompt || "";
@@ -33860,12 +36816,12 @@ Pergunta do usu\xE1rio: ${userMessage}` : userMessage;
     res.status(500).json({ error: "Erro ao responder consulta", details: err.message });
   }
 });
-var ai_default = router22;
+var ai_default = router24;
 
 // src/server/routes/sync.ts
-import { Router as Router23 } from "express";
-var router23 = Router23();
-router23.post("/sync/offline-batch", authenticateToken, (req, res) => {
+import { Router as Router25 } from "express";
+var router25 = Router25();
+router25.post("/sync/offline-batch", authenticateToken, (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Sincroniza\xE7\xE3o offline n\xE3o implementada",
@@ -33891,12 +36847,12 @@ router23.post("/sync/offline-batch", authenticateToken, (req, res) => {
     message: `${processedCount} opera\xE7\xF5es offline sincronizadas com sucesso.`
   });
 });
-var sync_default = router23;
+var sync_default = router25;
 
 // src/server/routes/auth.ts
-import { Router as Router24 } from "express";
-var router24 = Router24();
-router24.get("/me", authenticateToken, async (req, res) => {
+import { Router as Router26 } from "express";
+var router26 = Router26();
+router26.get("/me", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
@@ -33926,10 +36882,10 @@ router24.get("/me", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erro ao buscar usu\xE1rio" });
   }
 });
-var auth_default = router24;
+var auth_default = router26;
 
 // src/server/routes/documenso.ts
-import { Router as Router25 } from "express";
+import { Router as Router27 } from "express";
 import express from "express";
 
 // src/types/documenso.ts
@@ -34102,8 +37058,8 @@ var DocumensoClient = class {
    * Internal request helper
    */
   async request(path, options = {}) {
-    const url = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
-    const response = await fetch(url, {
+    const url2 = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
+    const response = await fetch(url2, {
       ...options,
       headers: {
         ...this.getHeaders(),
@@ -34934,7 +37890,7 @@ var PollingJob = class {
 };
 
 // src/server/routes/documenso.ts
-var router25 = Router25();
+var router27 = Router27();
 var envelopeService;
 var webhookHandler;
 var pollingJob;
@@ -34968,7 +37924,7 @@ function ensureServices() {
     pollingJob = new PollingJob({}, documensoClient, envelopeService, webhookHandler);
   }
 }
-router25.use((req, res, next) => {
+router27.use((req, res, next) => {
   try {
     ensureServices();
   } catch (err) {
@@ -34984,7 +37940,7 @@ router25.use((req, res, next) => {
   }
   next();
 });
-router25.post("/envelopes", authenticateToken, async (req, res) => {
+router27.post("/envelopes", authenticateToken, async (req, res) => {
   try {
     const {
       caseId,
@@ -35061,7 +38017,7 @@ router25.post("/envelopes", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create envelope" });
   }
 });
-router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
+router27.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35091,7 +38047,7 @@ router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to send envelope" });
   }
 });
-router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
+router27.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35110,7 +38066,7 @@ router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope status" });
   }
 });
-router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
+router27.get("/envelopes/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35129,7 +38085,7 @@ router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope" });
   }
 });
-router25.get(
+router27.get(
   "/envelopes/:id/signing-url/:recipientId",
   authenticateToken,
   async (req, res) => {
@@ -35152,7 +38108,7 @@ router25.get(
     }
   }
 );
-router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
+router27.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35181,7 +38137,7 @@ router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to download envelope" });
   }
 });
-router25.post("/embedding-token", authenticateToken, async (req, res) => {
+router27.post("/embedding-token", authenticateToken, async (req, res) => {
   try {
     const { envelopeId, recipientId, redirectUrl } = req.body;
     if (!envelopeId || !recipientId) {
@@ -35203,14 +38159,14 @@ router25.post("/embedding-token", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create embedding token" });
   }
 });
-router25.post(
+router27.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   (req, res, next) => {
     return documensoWebhookMiddleware(webhookHandler)(req, res, next);
   }
 );
-router25.get("/polling/status", authenticateToken, async (req, res) => {
+router27.get("/polling/status", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35218,7 +38174,7 @@ router25.get("/polling/status", authenticateToken, async (req, res) => {
   const status = pollingJob.getStatus();
   res.json(status);
 });
-router25.post("/polling/trigger", authenticateToken, async (req, res) => {
+router27.post("/polling/trigger", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35239,7 +38195,7 @@ router25.post("/polling/trigger", authenticateToken, async (req, res) => {
     }
   });
 });
-router25.post("/polling/start", authenticateToken, async (req, res) => {
+router27.post("/polling/start", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35247,7 +38203,7 @@ router25.post("/polling/start", authenticateToken, async (req, res) => {
   pollingJob.start();
   res.json({ success: true, message: "Polling job started" });
 });
-router25.post("/polling/stop", authenticateToken, async (req, res) => {
+router27.post("/polling/stop", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35255,7 +38211,7 @@ router25.post("/polling/stop", authenticateToken, async (req, res) => {
   pollingJob.stop();
   res.json({ success: true, message: "Polling job stopped" });
 });
-var documenso_default = router25;
+var documenso_default = router27;
 
 // src/server/app.ts
 var databaseRows = caseRepository;
@@ -35263,6 +38219,7 @@ var auditLogs = [];
 function createApp() {
   const app = express2();
   const isProd = process.env.NODE_ENV === "production";
+  app.set("trust proxy", process.env.VERCEL === "1" ? 1 : false);
   const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
   let supabaseOrigins = ["https://*.supabase.co", "wss://*.supabase.co"];
   try {
@@ -35272,207 +38229,110 @@ function createApp() {
     }
   } catch {
   }
-  app.use(
-    helmet({
-      frameguard: false,
-      contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", ...isProd ? [] : ["'unsafe-inline'"]],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-          imgSrc: ["'self'", "data:", "blob:", "https:"],
-          connectSrc: [
-            "'self'",
-            ...isProd ? [] : ["ws:", "wss:"],
-            ...supabaseOrigins,
-            "https://identitytoolkit.googleapis.com",
-            "https://securetoken.googleapis.com",
-            "https://firebaseinstallations.googleapis.com",
-            "https://firebaselogging-pa.googleapis.com",
-            "https://www.googleapis.com"
-          ],
-          workerSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          frameAncestors: ["'self'"]
-        }
-      },
-      crossOriginEmbedderPolicy: false,
-      strictTransportSecurity: isProd ? { maxAge: 31536e3, includeSubDomains: true } : false
-    })
-  );
+  app.use(helmet({ frameguard: false, contentSecurityPolicy: { useDefaults: true, directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", ...isProd ? [] : ["'unsafe-inline'"]],
+    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+    imgSrc: ["'self'", "data:", "blob:", "https:"],
+    connectSrc: ["'self'", ...isProd ? [] : ["ws:", "wss:"], ...supabaseOrigins, "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firebaseinstallations.googleapis.com", "https://firebaselogging-pa.googleapis.com", "https://www.googleapis.com"],
+    workerSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    frameAncestors: ["'self'"]
+  } }, crossOriginEmbedderPolicy: false, strictTransportSecurity: isProd ? { maxAge: 31536e3, includeSubDomains: true } : false }));
   app.use(corsMiddleware);
   app.use(globalLimiter);
-  app.use(
-    express2.json({
-      limit: "10mb",
-      verify: (req, _res, buf) => {
-        req.rawBody = buf.toString("utf8");
-      }
-    })
-  );
+  app.use(express2.json({ limit: "10mb", verify: (req, _res, buf) => {
+    req.rawBody = buf.toString("utf8");
+  } }));
   app.use(express2.urlencoded({ extended: true, limit: "10mb" }));
-  const editableCaseFields = /* @__PURE__ */ new Set([
-    "title",
-    "clientName",
-    "clientEmail",
-    "clientPhone",
-    "clientCpf",
-    "vehicle",
-    "infraction",
-    "applicant",
-    "nominatedDriver",
-    "company",
-    "processNumbers",
-    "specificFacts",
-    "evidence",
-    "ocrAuxiliaryData",
-    "commercialOfferId",
-    "serviceType"
-  ]);
+  const editableCaseFields = /* @__PURE__ */ new Set(["title", "clientName", "clientEmail", "clientPhone", "clientCpf", "vehicle", "infraction", "applicant", "nominatedDriver", "company", "processNumbers", "specificFacts", "evidence", "ocrAuxiliaryData", "commercialOfferId", "serviceType"]);
   app.use("/api", (req, _res, next) => {
     if (req.method !== "PUT") return next();
     const match = req.path.match(/^\/cases\/([^/]+)$/);
     if (!match) return next();
-    const caseId = decodeURIComponent(match[1]);
-    const existingRow = databaseRows.get(caseId);
+    const existingRow = databaseRows.get(decodeURIComponent(match[1]));
     if (!existingRow || !req.body || typeof req.body !== "object" || Array.isArray(req.body)) return next();
     const existingDomain = CanonicalMapper.rowToDomain(existingRow);
     const sanitized = {};
-    for (const field of editableCaseFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
-    }
-    req.body = {
-      ...existingDomain,
-      ...sanitized,
-      id: existingDomain.id,
-      userId: existingDomain.userId,
-      status: existingDomain.status,
-      currentStage: existingDomain.currentStage,
-      isPaid: existingDomain.isPaid,
-      paidAt: existingDomain.paidAt,
-      payment: existingDomain.payment,
-      analysis: existingDomain.analysis,
-      defenseDraft: existingDomain.defenseDraft,
-      documentGenerationStatus: existingDomain.documentGenerationStatus,
-      protocolInfo: existingDomain.protocolInfo,
-      submissionInstructions: existingDomain.submissionInstructions,
-      timeline: existingDomain.timeline,
-      claimToken: existingDomain.claimToken,
-      isAnonymous: existingDomain.isAnonymous,
-      createdAt: existingDomain.createdAt,
-      updatedAt: existingDomain.updatedAt
-    };
-    return next();
+    for (const field of editableCaseFields) if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
+    req.body = { ...existingDomain, ...sanitized, id: existingDomain.id, userId: existingDomain.userId, status: existingDomain.status, currentStage: existingDomain.currentStage, isPaid: existingDomain.isPaid, paidAt: existingDomain.paidAt, payment: existingDomain.payment, analysis: existingDomain.analysis, defenseDraft: existingDomain.defenseDraft, documentGenerationStatus: existingDomain.documentGenerationStatus, protocolInfo: existingDomain.protocolInfo, submissionInstructions: existingDomain.submissionInstructions, timeline: existingDomain.timeline, claimToken: existingDomain.claimToken, isAnonymous: existingDomain.isAnonymous, createdAt: existingDomain.createdAt, updatedAt: existingDomain.updatedAt };
+    next();
   });
   app.use("/api/payments", (req, res, next) => {
-    const isPublicPriceLookup = req.method === "GET" && req.path === "/resolve-price";
-    const isGatewayWebhook = req.path.startsWith("/webhooks/");
-    if (isPublicPriceLookup || isGatewayWebhook) return next();
+    if (req.method === "GET" && req.path === "/resolve-price" || req.path.startsWith("/webhooks/")) return next();
     return authenticateToken(req, res, next);
   });
   app.use("/api/admin", admin_default);
   app.use("/api/admin/commercial", authenticateToken, requireAdmin, commercial_default);
   app.use("/api/commercial", authenticateToken, (req, res, next) => {
-    if (isProd && req.body?.userId !== void 0 && req.body.userId !== req.user?.id) {
-      return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
-    }
+    if (isProd && req.body?.userId !== void 0 && req.body.userId !== req.user?.id) return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
     next();
   }, commercial_default);
   app.use("/api/communication", authenticateToken, (req, res, next) => {
-    const isSendAction = req.method === "POST" && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
-    if (!isSendAction || req.user?.role === "admin") return next();
+    const send = req.method === "POST" && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
+    if (!send || req.user?.role === "admin") return next();
     const caseId = req.body?.caseId;
-    if (!caseId || typeof caseId !== "string") {
-      return res.status(403).json({ error: "caseId \xE9 obrigat\xF3rio para envio de WhatsApp por usu\xE1rio n\xE3o administrador." });
-    }
-    const row = databaseRows.get(caseId);
-    const ownerId = row?.user_id;
-    if (!row || !ownerId || ownerId !== req.user?.id) {
-      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para enviar mensagens neste caso." });
-    }
-    return next();
+    const row = caseId ? databaseRows.get(caseId) : void 0;
+    if (!caseId || !row || row.user_id !== req.user?.id) return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para enviar mensagens neste caso." });
+    next();
   });
   app.use("/api/marketing", (req, res, next) => {
-    if (req.method === "GET" && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
-      return authenticateToken(req, res, (err) => {
-        if (err) return next(err);
-        return requireAdmin(req, res, next);
-      });
-    }
-    return next();
+    if (req.method === "GET" && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) return authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next));
+    next();
   });
-  app.use("/api/marketing", (req, res, next) => {
-    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
+  app.use("/api/marketing", (req, res, next) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method) ? authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next)) : next());
   app.use("/api/notifications", (req, res, next) => {
     if (req.method === "GET" && req.path === "/vapid-key") return next();
     return authenticateToken(req, res, (err) => {
       if (err) return next(err);
       if (req.user?.role !== "admin") {
-        const requestedUserId = req.body?.userId;
-        const requestedEmail = req.body?.userEmail || req.body?.email;
-        if (requestedUserId !== void 0 && requestedUserId !== req.user?.id) {
-          return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
-        }
-        if (requestedEmail !== void 0 && requestedEmail !== req.user?.email) {
-          return res.status(403).json({ error: "Email n\xE3o corresponde ao usu\xE1rio autenticado." });
-        }
+        if (req.body?.userId !== void 0 && req.body.userId !== req.user?.id) return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
+        if (req.body?.userEmail !== void 0 && req.body.userEmail !== req.user?.email) return res.status(403).json({ error: "Email n\xE3o corresponde ao usu\xE1rio autenticado." });
       }
       next();
     });
   });
   app.use("/api", (req, res, next) => {
-    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
-    if (!metaAdminPath) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
+    const privileged = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path);
+    if (!privileged) return next();
+    return authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next));
   });
-  app.use("/api", (req, res, next) => {
-    const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
-    if (!metaAdminAuxPath) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
-  app.use("/api/agents", agents_default);
-  app.use("/api/monitoring", monitoring_default);
-  app.use("/api/settings", settings_default);
-  app.use("/api/logs", logs_default);
-  app.use("/api/media", media_default);
-  app.use("/api/integrations", meta_default);
-  app.use("/api", meta_default);
-  app.use("/api/marketing", marketing_default);
-  app.use("/api/communication", whatsapp_default);
-  app.use("/api", whatsapp_default);
-  app.use("/api/ocr", ocr_default);
-  app.use("/api/payments", payments_default);
-  app.use("/api/knowledge", knowledge_default);
-  app.use("/api/notifications", notifications_default);
-  app.use("/api/auth", auth_default);
+  app.use("/api/admin", strictLimiter);
   app.use("/api", health_default);
-  app.use("/api", cases_default);
+  app.use("/api", auth_default);
   app.use("/api", audit_default);
+  app.use("/api", cases_default);
+  app.use("/api", ai_default);
+  app.use("/api", knowledge_default);
   app.use("/api", onboarding_default);
   app.use("/api", transit_default);
   app.use("/api", governance_default);
   app.use("/api", analytics_default);
-  app.use("/api/ai", strictLimiter);
-  app.use("/api/auth", strictLimiter);
-  app.use("/api", ai_default);
   app.use("/api", sync_default);
-  app.use("/api/documenso", documenso_default);
-  app.use("/api", (_req, res) => {
-    res.status(404).json({ error: "Endpoint n\xE3o encontrado" });
+  app.use("/api", meta_default);
+  app.use("/api", marketing_automation_default);
+  app.use("/api", scrape_default);
+  app.use("/api", admin_default);
+  app.use("/api", commercial_default);
+  app.use("/api", monitoring_default);
+  app.use("/api", settings_default);
+  app.use("/api", logs_default);
+  app.use("/api", marketing_default);
+  app.use("/api", agents_default);
+  app.use("/api", whatsapp_default);
+  app.use("/api", ocr_default);
+  app.use("/api", payments_default);
+  app.use("/api", media_default);
+  app.use("/api", notifications_default);
+  app.use("/api", documenso_default);
+  app.get("/api/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
+  app.get("/api/marketing/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
+  app.use((err, _req, res, _next) => {
+    console.error("[api] unhandled error", err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: "Internal server error" });
   });
   return app;
 }
