@@ -108,17 +108,18 @@ test.describe('Phase 4 — Production Golden Path', () => {
     await expect(page.getByText(/Status:/i)).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('img[alt="QR Code PIX"]')).toBeVisible({ timeout: 30_000 });
 
-    // Reconcile the newly created case/order before waiting for payment confirmation.
-    const caseLink = page.url();
-    expect(caseLink).toContain('/onboarding');
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText).toContain('Pagamento PIX');
+    // Reconcile the newly created payment order before waiting for confirmation.
+    const casesAfterPayment = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
+    expect(casesAfterPayment.length, 'unique E2E case must exist after payment creation').toBeGreaterThan(0);
+    const caseId = String(casesAfterPayment[0].id);
+    const ordersAfterCreation = await supabaseRows(request, 'payment_orders', `case_id=eq.${encodeURIComponent(caseId)}`);
+    expect(ordersAfterCreation.length, 'payment order must exist immediately after PIX creation').toBeGreaterThan(0);
 
     // The UI confirms payment only after the real backend reports a paid status.
+    // No simulated-payment endpoint, fixture, direct DB update, or mock is used.
     const paymentDeadline = Date.now() + 150_000;
     let paid = false;
     while (Date.now() < paymentDeadline) {
-      await page.waitForTimeout(5_000);
       const status = await page.locator('text=/Status:\s*/i').last().innerText().catch(() => '');
       if (/PAID|APPROVED|COMPLETED|paid|approved|completed/i.test(status)) {
         paid = true;
@@ -126,29 +127,20 @@ test.describe('Phase 4 — Production Golden Path', () => {
       }
       const buttons = page.getByRole('button', { name: /^Continuar$/i });
       if (await buttons.count()) await buttons.last().click().catch(() => undefined);
+      await page.waitForTimeout(5_000);
     }
     expect(paid, 'production payment did not reach a paid state within 150s; no payment was simulated').toBeTruthy();
 
-    await page.getByRole('button', { name: /^Continuar$/i }).click();
+    // The payment step advances to generation inside the same UI action when payment is paid.
+    await expect(page.getByRole('heading', { name: /^Documento$/i })).toBeVisible({ timeout: 30_000 });
 
     // DOCUMENT
-    await expect(page.getByRole('heading', { name: /^Documento$/i })).toBeVisible({ timeout: 180_000 });
     await page.getByRole('button', { name: /Gerar documento/i }).click();
     await expect(page.getByText(/Status:/i).last()).toBeVisible({ timeout: 180_000 });
     await expect(page.getByRole('link', { name: /Abrir documento/i })).toHaveAttribute('href', /.+/);
 
-    // Extract the case identifier from the production application's network traffic.
-    // The app persists it internally; collect it from API responses captured during the run.
-    const reconciliationHint = await page.evaluate(() => ({ url: location.href, localStorageKeys: Object.keys(localStorage) }));
-    expect(reconciliationHint.url).toContain('/onboarding');
-
-    // Use Supabase reconciliation by locating the unique E2E AIT. This avoids relying on
-    // an implementation-specific localStorage key while still proving DB persistence.
-    const cases = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
-    expect(cases.length, 'unique E2E case must exist in Supabase').toBeGreaterThan(0);
-    const caseId = String(cases[0].id);
+    // Final Supabase reconciliation: case + payment order + persisted document.
     const reconciled = await reconcileCase(request, caseId);
-
     expect(reconciled.caseRow.id).toBe(caseId);
     expect(reconciled.paymentOrder.case_id).toBe(caseId);
     expect(reconciled.document.case_id).toBe(caseId);
