@@ -1,9 +1,10 @@
 import React from 'react';
-import { OnboardingV2Route } from '../../onboarding-v2/ui/OnboardingV2Route';
+import { OnboardingRoute } from '../../onboarding/ui/OnboardingRoute';
 
-/**
- * Compatibility entry point for the existing /novo-caso route.
- * The legacy onboarding implementation is frozen on the dedicated legacy branch;
- * this rebuild branch delegates the active entry point to canonical Onboarding V2.
- */
-export const OnboardingWizard: React.FC = () => <OnboardingV2Route />;
+type OnboardingWizardProps = {
+  onOpenKnowledge?: () => void;
+  isAdmin?: boolean;
+};
+
+/** Canonical onboarding entry point kept at the original product import path. */
+export const OnboardingWizard: React.FC<OnboardingWizardProps> = () => <OnboardingRoute />;
