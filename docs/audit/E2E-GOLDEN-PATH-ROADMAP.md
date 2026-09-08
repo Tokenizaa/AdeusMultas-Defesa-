@@ -12,7 +12,8 @@ Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz comm
 - **Fase 0:** 🟡 parcial/histórica; evidência original não recuperável.
 - **Fase 1:** 🔴 concluída com bloqueadores.
 - **Fase 2:** 🟡 executada parcialmente; bloqueadores estruturais corrigidos, Golden Path ainda bloqueado.
-- **Fase 3:** 🔵 próxima fase operacional somente após revisão/liberação.
+- **Fase 3:** 🟡 executada parcialmente; ambiente Vercel/produção verificável, harness preparado, mas execução E2E real ainda bloqueada por configuração de ambiente e P0 remanescentes da Fase 2.
+- **Fase 4:** 🟠 PENDING.
 
 ## FASE 1 — RESULTADO
 
@@ -22,69 +23,55 @@ Artefatos:
 - `docs/audit/PHASE-1-CONTRACT-LINEAGE-AUDIT.md`
 - `docs/audit/E2E-CONTRACT-MAP.md`
 
-### Bloqueadores encontrados
-
-1. `payment_orders` existia com FK para `cases`/`auth.users` e `case_id UNIQUE`, mas possuía **0 registros** no Supabase auditado; o fluxo não comprovava persistência da ordem.
-2. `documents` existia, mas sem FK identificada para `cases.id`; o fluxo não comprovava documento persistido.
-3. `cases` e `documents` estavam com RLS desabilitado.
-4. O adapter de geração transformava qualquer HTTP 200 em `status: 'ready'`.
-5. Pagamento confirmado podia ficar sem defesa pronta sem contrato explícito de recuperação.
-6. `analysis.id` estava embutido em `cases.analysis_json`, sem vínculo persistente inequívoco com a geração.
-7. Claim token tinha geração forte, mas ciclo de vida não comprovado.
-8. Havia artefatos históricos apontando para outro projeto Supabase.
-
 ## FASE 2 — RESULTADO
 
 **🟡 EXECUTADA PARCIALMENTE — não libera o Golden Path.**
 
-### Aplicado
-
-- RLS de `cases` habilitado com ownership por `auth.uid()`.
-- RLS de `documents` habilitado com leitura condicionada ao proprietário do caso.
-- FK `documents.case_id → cases.id ON DELETE CASCADE` criada.
-- `documents.case_id` tornou-se UNIQUE.
-- `documents` recebeu `storage_path`, `document_url`, `content_hash`, `generated_at` e `metadata`.
-- Trigger de transição para `aguardando_pagamento` garante criação de `payment_orders` interna vinculada ao caso, usuário e referência, usando a oferta comercial vigente.
-- Trigger de transição para `defesa_pronta` garante identidade documental `documents` vinculada ao caso e à ordem de pagamento.
-- Funções de trigger foram colocadas no schema `private`, sem execução pública.
-- `http-application.ts` deixou de fabricar `status: 'ready'`; só considera `ready` quando há `documentUrl` real.
-
-### Verificação Supabase
-
-Projeto: `sgomwklorpzdwdubtmgg`.
-
-Confirmado após as migrations:
-- RLS ativo em `cases`, `documents` e `payment_orders`.
-- Políticas de ownership presentes em `cases` e `documents`.
-- FK `documents_case_id_fkey` presente.
-- Triggers de pagamento/documento habilitados e apontando para funções no schema `private`.
-- Bucket Storage privado `documents` existente.
-- Nenhum registro sintético foi inserido: `payment_orders=0` e `documents=0` após a verificação.
-
-Migrations aplicadas no Supabase:
-- `20260908201604_phase_2_lineage_security_hardening`
-- `20260908201619_phase_2_trigger_security_fix`
+Foram aplicados RLS/ownership, FK e identidade documental, triggers de garantia e remoção do falso estado `ready`. Permanecem os P0 de sincronização real da cobrança, upload/persistência documental e webhook idempotente.
 
 Artefato:
 - `docs/audit/PHASE-2-BLOCKER-CORRECTIONS.md`
 
-### P0 ainda aberto
+## FASE 3 — PREPARAÇÃO DO AMBIENTE E TEST DATA
 
-1. A criação PIX precisa atualizar a ordem interna com os IDs/referência/QR/expiração reais do gateway.
-2. A geração precisa fazer upload real do documento ao Storage, persistir hash/path/URL e marcar o documento como `uploaded`/`verified` após confirmação.
-3. A geração precisa devolver `document_id` e `documentUrl` somente após persistência real.
-4. O webhook precisa sincronizar `payment_orders` de forma idempotente e manter recuperação para `paid` sem documento.
+**🟡 EXECUTADA PARCIALMENTE — pronta para preparação, mas não para execução do Golden Path.**
 
-### P1 ainda aberto
+### 🟢 CONFIRMADO
 
-5. Versionamento persistente da análise autorizadora.
-6. Expiração/revogação/uso único do claim token.
-7. Reconciliação definitiva de `/api/onboarding-v2/*`.
+- Implantação de produção Vercel disponível e `READY`.
+- `GET /api/health` em `https://www.defesai.shop` respondeu HTTP 200.
+- Playwright agora exige explicitamente `PLAYWRIGHT_BASE_URL` em HTTPS e não inicia servidor local.
+- Harness de dados do Golden Path exige `PLAYWRIGHT_BASE_URL`, `E2E_TEST_EMAIL`, `E2E_TEST_PASSWORD` e aceita `E2E_RUN_ID` para isolamento lógico.
+- Nenhuma credencial foi adicionada ao repositório.
 
-## FASES 3–8
+### 🔴 BLOQUEADORES
 
-Permanecem `🟠 PENDING` até revisão da Fase 2 e posterior liberação.
+1. A resposta de produção observada em `/api/health` referencia o Supabase `llmxnpgjpxcvyrqjkfwb`, enquanto a base canônica auditada das Fases 1–2 é `sgomwklorpzdwdubtmgg`. A execução E2E não pode usar essa produção como prova de lineage até a configuração ser reconciliada.
+2. Os quatro P0 da Fase 2 continuam impedindo a declaração de Golden Path.
+3. Não há evidência versionada de uma conta E2E autenticável disponível para execução; as credenciais são deliberadamente externas ao repositório.
+
+### 🟡 RISCOS
+
+- Fixtures históricos em `tests/e2e-fixtures.ts` contêm dados sintéticos fixos e não devem ser usados como identidade do Golden Path de produção.
+- O teste deve capturar IDs reais de `case`, `analysis`, `payment` e `document`, sem inserir valores manualmente.
+
+### 🟠 PENDÊNCIAS
+
+- Configurar a Vercel para o Supabase canônico `sgomwklorpzdwdubtmgg`.
+- Disponibilizar conta E2E dedicada por variáveis seguras da execução.
+- Concluir P0 da Fase 2.
+- Na Fase 4, executar exclusivamente contra a implantação Vercel/produção.
+
+### Artefatos da Fase 3
+
+- `playwright.config.ts`
+- `tests/golden-path-production-data.ts`
+- `docs/audit/PHASE-3-ENVIRONMENT-TEST-DATA.md`
+
+## FASES 4–8
+
+Permanecem `🟠 PENDING`.
 
 ## REGRA DE PARADA
 
-**Fase 2 encerrada neste ponto. Não executar a Fase 3 automaticamente.**
+**Fase 3 encerrada neste ponto. Não executar a Fase 4 automaticamente.**
