@@ -4,7 +4,7 @@
  *
  * Client único reutilizável para a camada de dados do servidor.
  * Segue o padrão do vector-store.ts:
- *  - Usa configService (process.env) para resolver URL + chave.
+ *  - Usa o projeto Supabase canônico definido pelo runtime.
  *  - Prefere SUPABASE_SERVICE_ROLE_KEY (backend), com fallback para anon.
  *  - Fallback anon é LOUCO-LOGADO como erro: com RLS deny-all nas 14 tabelas
  *    internas (marketing_*, orders, payments, documents, commissions,
@@ -25,19 +25,12 @@ let clientInstance: SupabaseClient<Database> | null = null;
  * Inicializa (ou reinicializa) o client Supabase server-side.
  * Se a primeira chamada ocorre antes do dotenv injetar envs,
  * clientInstance fica null — a próxima chamada re-tenta automaticamente.
- *
- * Usa process.env diretamente porque o configService pode ter
- * cacheado valores vazios durante init (antes do dotenv injetar).
  */
 function ensureClient(): SupabaseClient<Database> | null {
   if (clientInstance) return clientInstance;
 
-  // Prefer process.env (sempre atualizado) sobre configService (pode ter cache stale)
-  const url =
-    process.env.VITE_SUPABASE_URL ||
-    configService.get('VITE_SUPABASE_URL') ||
-    process.env.SUPABASE_URL ||
-    configService.get('SUPABASE_URL');
+  // O projeto de dados é único e canônico; não aceitar URLs históricas do ambiente.
+  const url = 'https://sgomwklorpzdwdubtmgg.supabase.co';
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -46,11 +39,8 @@ function ensureClient(): SupabaseClient<Database> | null {
     configService.get('VITE_SUPABASE_ANON_KEY');
   const serviceKey = serviceRoleKey || anonKey;
 
-  if (url && serviceKey && url.startsWith('https://')) {
+  if (url && serviceKey) {
     if (!serviceRoleKey) {
-      // Fallback anon é intencional (auth-middleware usa getUser/JWT), mas com
-      // RLS deny-all nas tabelas internas qualquer escrita/leitura do backend
-      // via anon falha silenciosamente. Logar erro alto p/ não mascarar setup quebrado.
       logger.error(
         'supabase',
         'db_server',
