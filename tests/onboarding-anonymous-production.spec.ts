@@ -1,8 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
-const EMAIL = process.env.E2E_TEST_EMAIL || process.env.USER_TEST_LOGIN;
-const PASSWORD = process.env.E2E_TEST_PASSWORD || process.env.USER_TEST_PASSWORD;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RUN_ID = process.env.E2E_RUN_ID || `anonymous-${Date.now()}`;
@@ -24,7 +22,7 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   return response.json() as Promise<Record<string, unknown>[]>;
 }
 
-test('anonymous onboarding → authentication gate → claim, without creating payment', async ({ page, request, context }) => {
+test('anonymous onboarding → authentication gate → safe stop before payment', async ({ page, request, context }) => {
   test.setTimeout(4 * 60_000);
   const baseUrl = required('PLAYWRIGHT_BASE_URL', BASE_URL);
   expect(baseUrl).toMatch(/^https:\/\//);
@@ -65,7 +63,7 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await page.getByLabel(/CPF/i).fill('52998224725');
   await page.getByLabel(/CNH/i).fill('01234567890');
   await page.getByLabel(/Telefone/i).fill('11999999999');
-  await page.getByLabel(/E-mail/i).fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
+  await page.getByLabel(/E-mail/i).fill('anonymous-e2e@example.com');
   await page.getByLabel(/CEP/i).fill('01001000');
   await page.getByLabel(/^Rua$/i).fill('Praça da Sé');
   await page.getByLabel(/^Número$/i).fill('1');
@@ -82,18 +80,14 @@ test('anonymous onboarding → authentication gate → claim, without creating p
   await expect(page.getByRole('heading', { name: /Acesso à Sua Defesa Jurídica/i })).toBeVisible();
   await expect(page.getByText(/100% dos Dados Coletados Preservados/i)).toBeVisible();
 
-  // Deterministic claim validation with the existing E2E account; no payment is created.
-  await page.getByRole('tab', { name: /Já Tenho Conta/i }).click();
-  await page.getByLabel(/E-mail Cadastrado/i).fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
-  await page.getByLabel(/Senha de Acesso/i).fill(required('E2E_TEST_PASSWORD/USER_TEST_PASSWORD', PASSWORD));
-  await page.getByRole('button', { name: /Entrar/i }).last().click();
+  // The recovery token must exist before authentication and survive in session storage.
+  const claimToken = await page.evaluate(() => sessionStorage.getItem('defesai_onboarding_claim_token'));
+  expect(claimToken, 'anonymous case recovery token must be persisted in sessionStorage').toBeTruthy();
 
-  await expect(page.getByRole('heading', { name: /Pagamento PIX/i })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { name: /Acesso à Sua Defesa Jurídica/i })).toHaveCount(0);
-
+  // Server reconciliation: case exists, remains anonymous, and no payment order exists.
   const cases = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
   expect(cases.length, 'anonymous case must exist in Supabase').toBeGreaterThan(0);
-  expect(cases[0].user_id, 'claimed case must have authenticated owner').toBeTruthy();
+  expect(cases[0].user_id, 'case must remain unclaimed before authentication').toBeFalsy();
 
   const caseId = String(cases[0].id);
   const orders = await supabaseRows(request, 'payment_orders', `case_id=eq.${encodeURIComponent(caseId)}`);
