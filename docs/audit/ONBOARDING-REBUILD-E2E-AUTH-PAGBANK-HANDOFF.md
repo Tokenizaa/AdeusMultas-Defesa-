@@ -15,6 +15,38 @@ Fechar a validação real do novo onboarding greenfield, usando uma sessão Supa
 - O deployment atual da Vercel está operacional, mas o teste direto sem sessão encontrou `401` no fluxo de pagamento.
 - Ainda não está comprovado que uma sessão Supabase de usuário consegue atravessar o checkout e chegar ao PagBank.
 
+## Variáveis de ambiente — regra para o agente local
+
+O agente local **pode e deve usar o `.env` local existente** para executar os testes, inclusive as variáveis necessárias do PagBank, desde que o arquivo permaneça fora do Git.
+
+Regras obrigatórias:
+
+- Nunca copiar o conteúdo do `.env` para arquivos versionados.
+- Nunca colocar secrets em código, documentação, testes, screenshots ou logs.
+- Nunca imprimir valores completos de tokens, client secrets, access tokens, certificados ou chaves privadas.
+- Se precisar registrar configuração, registrar somente nomes das variáveis e `configured=true/false`.
+- Confirmar que `.env`, `.env.local` e equivalentes estão no `.gitignore`.
+
+### Sincronização com Vercel
+
+O agente local deve verificar se as variáveis necessárias para o runtime estão cadastradas no projeto Vercel `defesai`.
+
+Se alguma variável necessária estiver ausente, **pode cadastrá-la na Vercel usando o CLI/API autorizado disponível no ambiente local**, sem revelar seu valor no relatório.
+
+Preferir a sincronização segura a partir do ambiente local, por exemplo usando o fluxo oficial do Vercel CLI para adicionar variáveis de ambiente. Não criar arquivo com secrets para commit.
+
+Antes de alterar Vercel:
+
+1. identificar exatamente quais nomes de variáveis o código PagBank realmente consome;
+2. comparar presença local × Vercel;
+3. cadastrar somente as variáveis necessárias;
+4. aplicar aos ambientes corretos (`production` e/ou `preview`) conforme o teste;
+5. não alterar variáveis não relacionadas;
+6. redeployar depois da alteração;
+7. verificar o deployment e os logs sem expor secrets.
+
+Se o CLI exigir autenticação e o agente não possuir acesso autorizado, não improvisar credenciais. Informar exatamente qual operação ficou bloqueada.
+
 ## O que o agente local deve fazer
 
 1. **Reproduzir o problema primeiro.**
@@ -37,7 +69,9 @@ Fechar a validação real do novo onboarding greenfield, usando uma sessão Supa
    - Dados comerciais sensíveis não devem depender de identidade enviada pelo browser quando podem ser derivados do caso.
    - Não aceitar `userId`, `role`, `amount` ou identidade privilegiada enviados pelo cliente como autoridade.
 
-4. **Validar a configuração do gateway sem expor segredo.**
+4. **Validar configuração do gateway sem expor segredo.**
+   - Usar o `.env` local para testes quando disponível.
+   - Comparar com a configuração da Vercel.
    - Não imprimir tokens, client secrets, access tokens ou valores completos de variáveis.
    - Verificar somente presença/configuração e comportamento do gateway.
    - Determinar se o ambiente é sandbox/teste ou produção antes de criar qualquer cobrança.
