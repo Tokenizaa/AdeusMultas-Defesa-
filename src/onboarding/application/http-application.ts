@@ -36,8 +36,14 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
     async qualify(input: QualificationInput) { const result = await client.request<{ case: CreateDraftResult['case'] }>(`/api/onboarding-v2/cases/${encodeURIComponent(input.caseId)}/qualification`, withJson({ method: 'PUT', body: JSON.stringify(input) }, token)); return result.case; },
     async requestPayment(caseId: string): Promise<PaymentResult> { const current = await this.getCase(caseId); if (!current.applicant) throw new Error('Qualificação do requerente é obrigatória antes do pagamento.'); return client.request<PaymentResult>('/api/payments/pix/create', withJson({ method: 'POST', body: JSON.stringify({ caseId, customerName: current.applicant.applicantName, customerEmail: current.applicant.applicantEmail, customerCpf: current.applicant.applicantCpf, serviceType: current.serviceType }) }, token)); },
     async confirmPayment(caseId: string, paymentReference: string): Promise<PaymentResult> { return client.request<PaymentResult>(`/api/payments/pix/status/${encodeURIComponent(paymentReference)}?caseId=${encodeURIComponent(caseId)}`, withJson({}, token)); },
-    async generateDocument(caseId: string): Promise<GenerationResult> { const result = await client.request<any>(`/api/cases/${encodeURIComponent(caseId)}/generate-defense`, withJson({ method: 'POST' }, token)); return { ...(result || {}), status: 'ready' } as GenerationResult; },
-    async getGeneration(caseId: string): Promise<GenerationResult> { const result = await client.request<any>(`/api/cases/${encodeURIComponent(caseId)}`, withJson({}, token)); return { caseId, ...(result?.defenseDraft ? { defenseDraft: result.defenseDraft } : {}), status: result?.defenseDraft ? 'ready' : 'not_requested' } as GenerationResult; },
+    async generateDocument(caseId: string): Promise<GenerationResult> { return client.request<GenerationResult>(`/api/cases/${encodeURIComponent(caseId)}/generate-defense`, withJson({ method: 'POST' }, token)); },
+    async getGeneration(caseId: string): Promise<GenerationResult> {
+      const result = await client.request<any>(`/api/cases/${encodeURIComponent(caseId)}`, withJson({}, token));
+      if (result?.documentUrl) return { caseId, status: 'ready', documentUrl: result.documentUrl };
+      if (result?.document?.status === 'pending') return { caseId, status: 'processing' };
+      if (result?.defenseDraft) return { caseId, status: 'processing' };
+      return { caseId, status: 'not_requested' } as GenerationResult;
+    },
   };
 }
 
