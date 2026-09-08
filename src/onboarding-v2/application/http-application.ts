@@ -3,12 +3,22 @@ import type { OnboardingApplication, CreateDraftInput, CreateDraftResult, ClaimI
 
 export interface OnboardingHttpClient { request<T>(path: string, init?: RequestInit): Promise<T>; }
 
+const CLAIM_STORAGE_KEY = 'defesai_onboarding_v2_claim_token';
+
 function withJson(init: RequestInit = {}, claimToken?: string): RequestInit {
   return { ...init, headers: { 'Content-Type': 'application/json', ...(claimToken ? { 'X-Claim-Token': claimToken } : {}), ...(init.headers || {}) } };
 }
 
+function loadClaimToken(): string {
+  try { return sessionStorage.getItem(CLAIM_STORAGE_KEY) || ''; } catch { return ''; }
+}
+
+function clearClaimToken(): void {
+  try { sessionStorage.removeItem(CLAIM_STORAGE_KEY); } catch { /* storage unavailable */ }
+}
+
 export function createOnboardingHttpApplication(client: OnboardingHttpClient, setClaimToken?: (token: string) => void): OnboardingApplication {
-  let token = '';
+  let token = loadClaimToken();
   return {
     async createDraft(input: CreateDraftInput): Promise<CreateDraftResult> {
       const result = await client.request<CreateDraftResult>('/api/onboarding-v2/draft', withJson({ method: 'POST', body: JSON.stringify(input) }));
@@ -25,7 +35,12 @@ export function createOnboardingHttpApplication(client: OnboardingHttpClient, se
       for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
       return client.request<EvidenceUploadResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/evidence`, withJson({ method: 'POST', body: JSON.stringify({ base64: btoa(binary), filename: file.name, mimeType: file.type }) }, token));
     },
-    async claim(input: ClaimInput) { const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }); token = ''; return result; },
+    async claim(input: ClaimInput) {
+      const result = await client.request<CreateDraftResult['case']>(`/api/cases/${encodeURIComponent(input.caseId)}/claim`, withJson({ method: 'POST', body: JSON.stringify({ claimToken: input.claimToken, name: input.name, email: input.email, phone: input.phone, cpf: input.cpf }) }));
+      token = '';
+      clearClaimToken();
+      return result;
+    },
     async startAnalysis(caseId: string): Promise<AnalysisResult> { return client.request<AnalysisResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/analysis`, withJson({ method: 'POST' }, token)); },
     async getAnalysis(caseId: string): Promise<AnalysisResult> { return client.request<AnalysisResult>(`/api/onboarding-v2/cases/${encodeURIComponent(caseId)}/analysis`, withJson({}, token)); },
     async qualify(input: QualificationInput) { const result = await client.request<{ case: CreateDraftResult['case'] }>(`/api/onboarding-v2/cases/${encodeURIComponent(input.caseId)}/qualification`, withJson({ method: 'PUT', body: JSON.stringify(input) }, token)); return result.case; },
