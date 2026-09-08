@@ -43,23 +43,65 @@ function isUuid(value?: string | null): boolean {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-/**
- * In-memory persistence is an explicit opt-in escape hatch for isolated unit/dev
- * work. It must never be silently selected by an E2E or production-like run.
- */
 function allowInMemoryPersistence(): boolean {
   return process.env.ALLOW_IN_MEMORY_CASE_PERSISTENCE === 'true';
+}
+
+function databaseRowToCaseRow(c: Database['public']['Tables']['cases']['Row']): CaseRow {
+  return {
+    id: c.app_ref ?? c.id,
+    title: c.title,
+    client_name: c.client_name,
+    client_email: c.client_email ?? undefined,
+    client_phone: c.client_phone ?? undefined,
+    client_cpf: c.client_cpf ?? undefined,
+    user_id: c.user_id ?? undefined,
+    status: c.status,
+    current_stage: c.current_stage,
+    service_type: c.service_type,
+    vehicle_plate: c.vehicle_plate,
+    vehicle_brand_model: c.vehicle_brand_model,
+    vehicle_renavam: c.vehicle_renavam ?? undefined,
+    vehicle_chassis: c.vehicle_chassis ?? undefined,
+    vehicle_year: c.vehicle_year ?? undefined,
+    vehicle_color: c.vehicle_color ?? undefined,
+    ait_number: c.ait_number,
+    infraction_code: c.infraction_code ?? undefined,
+    infraction_description: c.infraction_description,
+    ctb_article: c.ctb_article,
+    severity: c.severity,
+    points: c.points,
+    fine_amount: c.fine_amount,
+    autuador_body: c.autuador_body,
+    date_time: c.date_time ? new Date(c.date_time).toISOString() : '',
+    location: c.location ?? undefined,
+    speed_limit: c.speed_limit ?? undefined,
+    measured_speed: c.measured_speed ?? undefined,
+    considered_speed: c.considered_speed ?? undefined,
+    radar_equipment_id: c.radar_equipment_id ?? undefined,
+    inmetro_aferition_date: c.inmetro_aferition_date ?? undefined,
+    notification_expedition_date: c.notification_expedition_date ?? undefined,
+    defense_deadline: c.defense_deadline ?? undefined,
+    formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : undefined,
+    analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : undefined,
+    defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : undefined,
+    protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : undefined,
+    ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : undefined,
+    evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : undefined,
+    timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : undefined,
+    is_anonymous: c.is_anonymous,
+    claim_token: c.claim_token ?? undefined,
+    is_paid: c.is_paid,
+    paid_at: c.paid_at ? c.paid_at : undefined,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  };
 }
 
 export class CaseRepository {
   private rows: Map<string, CaseRow> = new Map();
   private client: SupabaseClient<Database> | null = null;
 
-  /**
-   * Resolve the server client at operation time rather than module construction.
-   * This matters when dotenv/configuration is loaded after route modules import
-   * the repository during local development or serverless bootstrap.
-   */
   private getClient(): SupabaseClient<Database> | null {
     if (this.client) return this.client;
     this.client = getSupabaseServerClient();
@@ -72,6 +114,39 @@ export class CaseRepository {
 
   get(id: string): CaseRow | undefined {
     return this.rows.get(id);
+  }
+
+  /**
+   * Serverless-safe read for canonical onboarding routes. The synchronous Map
+   * remains a hot cache, but correctness never depends on a warm Lambda.
+   */
+  async getPersisted(id: string): Promise<CaseRow | undefined> {
+    const cached = this.rows.get(id);
+    if (cached) return cached;
+
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryPersistence()) return undefined;
+      throw new Error('CaseRepository: Supabase client não configurado — leitura persistente obrigatória.');
+    }
+
+    const { data: byRef, error: refError } = await client
+      .from('cases')
+      .select('*')
+      .eq('app_ref', id)
+      .maybeSingle();
+
+    if (refError) throw new Error(`Falha ao carregar caso ${id}: ${refError.message}`);
+
+    let row = byRef ? databaseRowToCaseRow(byRef) : undefined;
+    if (!row && isUuid(id)) {
+      const { data, error } = await client.from('cases').select('*').eq('id', id).maybeSingle();
+      if (error) throw new Error(`Falha ao carregar caso ${id}: ${error.message}`);
+      row = data ? databaseRowToCaseRow(data) : undefined;
+    }
+
+    if (row) this.rows.set(row.id, row);
+    return row;
   }
 
   values(): IterableIterator<CaseRow> {
@@ -191,58 +266,8 @@ export class CaseRepository {
       throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
     }
 
-    const rows: CaseRow[] = (data || []).map((c) => ({
-      id: c.app_ref ?? c.id,
-      title: c.title,
-      client_name: c.client_name,
-      client_email: c.client_email ?? undefined,
-      client_phone: c.client_phone ?? undefined,
-      client_cpf: c.client_cpf ?? undefined,
-      user_id: c.user_id ?? undefined,
-      status: c.status,
-      current_stage: c.current_stage,
-      service_type: c.service_type,
-      vehicle_plate: c.vehicle_plate,
-      vehicle_brand_model: c.vehicle_brand_model,
-      vehicle_renavam: c.vehicle_renavam ?? undefined,
-      vehicle_chassis: c.vehicle_chassis ?? undefined,
-      vehicle_year: c.vehicle_year ?? undefined,
-      vehicle_color: c.vehicle_color ?? undefined,
-      ait_number: c.ait_number,
-      infraction_code: c.infraction_code ?? undefined,
-      infraction_description: c.infraction_description,
-      ctb_article: c.ctb_article,
-      severity: c.severity,
-      points: c.points,
-      fine_amount: c.fine_amount,
-      autuador_body: c.autuador_body,
-      date_time: c.date_time ? new Date(c.date_time).toISOString() : '',
-      location: c.location ?? undefined,
-      speed_limit: c.speed_limit ?? undefined,
-      measured_speed: c.measured_speed ?? undefined,
-      considered_speed: c.considered_speed ?? undefined,
-      radar_equipment_id: c.radar_equipment_id ?? undefined,
-      inmetro_aferition_date: c.inmetro_aferition_date ?? undefined,
-      notification_expedition_date: c.notification_expedition_date ?? undefined,
-      defense_deadline: c.defense_deadline ?? undefined,
-      formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : undefined,
-      analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : undefined,
-      defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : undefined,
-      protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : undefined,
-      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : undefined,
-      evidence_json: (c as any).evidence_json ? JSON.stringify((c as any).evidence_json) : undefined,
-      timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : undefined,
-      is_anonymous: c.is_anonymous,
-      claim_token: c.claim_token ?? undefined,
-      is_paid: c.is_paid,
-      paid_at: c.paid_at ? c.paid_at : undefined,
-      created_at: c.created_at,
-      updated_at: c.updated_at,
-    }));
-
-    for (const row of rows) {
-      this.rows.set(row.id, row);
-    }
+    const rows: CaseRow[] = (data || []).map(databaseRowToCaseRow);
+    for (const row of rows) this.rows.set(row.id, row);
     return rows;
   }
 }
