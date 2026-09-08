@@ -64,5 +64,20 @@ export function useOnboarding(application: OnboardingApplication) {
     setState((current) => ({ ...current, status: 'reviewing', step: 'review', updatedAt: new Date().toISOString() }));
   }
 
-  return { payload, patchPayload, state, analysis, error, next, back, qualify, uploadEvidence, stepIndex, stepOrder };
+  async function requestPayment() {
+    if (!state.caseId) throw new Error('Caso ainda não persistido.');
+    return application.requestPayment(state.caseId);
+  }
+
+  async function confirmPayment(paymentReference: string) {
+    if (!state.caseId) throw new Error('Caso ainda não persistido.');
+    return application.confirmPayment(state.caseId, paymentReference);
+  }
+
+  async function generateDocument() {
+    if (!state.caseId) throw new Error('Caso ainda não persistido.');
+    return application.generateDocument(state.caseId);
+  }
+
+  return { payload, patchPayload, state, analysis, error, next, back, qualify, uploadEvidence, requestPayment, confirmPayment, generateDocument, stepIndex, stepOrder, caseId: state.caseId };
 }
