@@ -7,10 +7,9 @@ const router = Router();
 
 /**
  * GET /api/auth/me
- * Returns authenticated user info with role from user_profiles (using service_role)
- * Frontend uses this instead of direct Supabase query to avoid RLS issues
+ * Returns authenticated user info with role from user_profiles.
  */
-router.get('/me', authenticateToken, async (req, res) => {
+router.get('/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = req.user;
 
@@ -18,7 +17,6 @@ router.get('/me', authenticateToken, async (req, res) => {
       return res.status(401).json({ error: 'Não autenticado' });
     }
 
-    // Fetch role from user_profiles using service_role (bypasses RLS)
     let roleFromProfile: string | undefined;
     const supabase = getSupabaseServerClient();
 
@@ -40,7 +38,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     const role = roleFromProfile || user.role || 'citizen';
 
-    res.json({
+    return res.json({
       id: user.id,
       email: user.email,
       name: user.name,
@@ -48,7 +46,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     });
   } catch (err: any) {
     logger.error('auth', 'routes', 'me_error', err.message);
-    res.status(500).json({ error: 'Erro ao buscar usuário' });
+    return res.status(500).json({ error: 'Erro ao buscar usuário' });
   }
 });
 
