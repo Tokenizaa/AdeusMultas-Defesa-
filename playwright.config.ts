@@ -26,6 +26,7 @@ export default defineConfig({
     '**/e2e-onboarding-executor.ts',
     '**/e2e-validator.ts',
     '**/e2e-runner.spec.ts',
+    '**/local/**',
   ],
   timeout: 60 * 1000,
   expect: { timeout: 10000 },
