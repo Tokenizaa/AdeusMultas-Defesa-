@@ -75,7 +75,7 @@ router.post('/onboarding-v2/cases/:id/evidence', async (req, res) => {
 
 router.post('/onboarding-v2/cases/:id/analysis', async (req, res) => { const row = getAuthorizedCase(req, res, req.params.id); if (!row) return; const domain = CanonicalMapper.rowToDomain(row); if (!domain.infraction?.aitNumber || !domain.infraction?.infractionCode) return res.status(400).json({ error: 'Infração incompleta para análise.' }); const analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction); const updated: CaseDomain = { ...domain, analysis, status: 'analisado', currentStage: 3, updatedAt: new Date().toISOString() }; await databaseRows.set(domain.id, CanonicalMapper.domainToRow(updated)); return res.json({ status: 'completed', analysis }); });
 
-router.put('/onboarding-v2/cases/:id/qualification', (req, res) => {
+router.put('/onboarding-v2/cases/:id/qualification', async (req, res) => {
   const row = getAuthorizedCase(req, res, req.params.id); if (!row) return;
   const applicant = req.body?.applicant as CaseApplicantData | undefined;
   if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressNeighborhood || !applicant.addressZipCode || !applicant.addressCityState) return res.status(400).json({ error: 'Dados de qualificação incompletos.', code: 'QUALIFICATION_REQUIRED' });
