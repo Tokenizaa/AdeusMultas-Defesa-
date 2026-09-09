@@ -25,6 +25,7 @@ describe('PaymentOrderAttemptRepository', () => {
     const result = await repo.createOrderAndAttempt(
       {
         caseId: '11111111-1111-4111-8111-111111111111',
+        gateway: 'pagbank',
         amountInCents: 12990,
         commercialOfferId: '33333333-3333-4333-8333-333333333333',
       },
@@ -37,6 +38,20 @@ describe('PaymentOrderAttemptRepository', () => {
 
     expect(result.paymentOrderId).toBe('11111111-1111-4111-8111-111111111111');
     expect(result.attemptId).toBe('22222222-2222-4222-8222-222222222222');
+  });
+
+  it.each(['pagbank', 'ggpixapi'] as const)('allows %s as a production gateway', async (gateway) => {
+    const repo = new PaymentOrderAttemptRepository();
+    (repo as any).client = makeClient();
+
+    await expect(repo.createPaymentAttempt({
+      paymentOrderId: '11111111-1111-4111-8111-111111111111',
+      caseId: '11111111-1111-4111-8111-111111111111',
+      gateway,
+      gatewayEnvironment: 'production',
+      amountInCents: 1000,
+      idempotencyKey: `prod-${gateway}`,
+    })).resolves.toBe('22222222-2222-4222-8222-222222222222');
   });
 
   it('rejects test gateway in production', async () => {
@@ -73,6 +88,7 @@ describe('PaymentOrderAttemptRepository', () => {
 
     await expect(repo.createPaymentOrder({
       caseId: '11111111-1111-4111-8111-111111111111',
+      gateway: 'pagbank',
       amountInCents: 10.5,
     })).rejects.toThrow('inteiro positivo');
   });
