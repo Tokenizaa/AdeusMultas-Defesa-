@@ -4,7 +4,7 @@ on:
   push:
     branches: [ develop, main ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, phase2-gateway-selection-deterministic ]
 
 jobs:
   test-unit:
