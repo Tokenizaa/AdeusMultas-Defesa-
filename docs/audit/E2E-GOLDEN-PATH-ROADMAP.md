@@ -13,7 +13,7 @@ Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz comm
 - **Fase 1:** 🔴 concluída com bloqueadores.
 - **Fase 2:** 🟡 executada parcialmente; bloqueadores estruturais corrigidos, Golden Path ainda bloqueado.
 - **Fase 3:** 🟢 concluída; ambiente de produção reconciliado com o Supabase canônico e referências ao projeto obsoleto removidas do código ativo.
-- **Fase 4:** 🟠 PENDING.
+- **Fase 4:** 🔴 executada parcialmente e bloqueada; produção e banco foram verificados, mas não existe evidência de uma execução E2E completa aprovada.
 
 ## FASE 1 — RESULTADO
 
@@ -64,11 +64,35 @@ Artefato:
 
 ## FASE 4 — GOLDEN PATH E2E
 
-**🟠 PENDING — próxima fase.**
+**🔴 EXECUTADA PARCIALMENTE — BLOQUEADA.**
 
-Objetivo: executar a jornada completa exclusivamente contra produção Vercel, capturando evidências reais de criação do caso, análise, cobrança/pagamento, geração e persistência do documento, sem mocks, localhost ou estados sintéticos.
+### 🟢 Evidência obtida em 2026-09-09
 
-A Fase 4 só pode ser declarada concluída se todos os IDs e transições relevantes forem observados e reconciliados com o Supabase canônico.
+- Produção `https://www.defesai.shop/api/health` respondeu HTTP 200.
+- CSP de produção referencia o Supabase canônico `sgomwklorpzdwdubtmgg.supabase.co`.
+- Supabase canônico contém 9 `cases`, porém `payment_orders = 0`, `payment_attempts = 0`, `payments = 0` e `documents = 0`.
+- Os casos existentes não apresentam uma cadeia completa caso → cobrança → pagamento → documento.
+- `tests/golden-path-production.spec.ts` e `.github/workflows/golden-path-production.yml` estão preparados para executar o caminho real contra produção, sem mocks e com reconciliação no Supabase.
+
+### 🔴 Resultado
+
+A execução E2E completa **não foi comprovada**. O workflow é `workflow_dispatch`/`workflow_call` e a integração disponível nesta sessão não oferece disparo manual de workflow. O runner local também não possui `agent-browser` nem as credenciais externas necessárias para autenticação.
+
+Não foram inseridos pagamentos, documentos ou estados artificiais no banco para transformar ausência de evidência em falso positivo.
+
+### Critério de saída
+
+A Fase 4 somente poderá ser aprovada após uma execução real que produza e reconcilie:
+
+- `cases.id`
+- identidade/versionamento da análise
+- `payment_orders.id` / `payment_attempts.id`
+- confirmação real do PIX
+- `documents.id`
+- `storage_path` e/ou `document_url` válidos
+
+Artefato:
+- `docs/audit/PHASE-4-GOLDEN-PATH-E2E.md`
 
 ## FASES 5–8
 
@@ -76,4 +100,4 @@ Permanecem `🟠 PENDING`.
 
 ## REGRA DE PARADA
 
-**Fase 3 encerrada. A Fase 4 é a próxima fase autorizada e não deve avançar automaticamente para a Fase 5.**
+**Fase 4 encerrada nesta rodada como BLOQUEADA. Não avançar automaticamente para a Fase 5.**
