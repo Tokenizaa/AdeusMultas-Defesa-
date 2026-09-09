@@ -5,7 +5,9 @@ on:
   workflow_call:
   push:
     branches:
-      - phase4-golden-path-execution
+      - main
+    paths:
+      - docs/audit/PHASE-4-GOLDEN-PATH-E2E.md
 
 permissions:
   contents: read
