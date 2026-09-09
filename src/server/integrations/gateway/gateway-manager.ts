@@ -8,15 +8,22 @@
  * pagamentos já criados.
  */
 import { randomUUID } from 'node:crypto';
-import { PaymentGateway, GatewayId, GatewayStatus, GatewayCreatePixInput, GatewayPixResult, GatewayPaymentStatusResult } from './types';
 import { pagbankAdapter } from './pagbank-adapter';
 import { ggpixAdapter } from './ggpix-adapter';
 import { testAdapter } from './test-adapter';
 import { logger } from '../../observability/logger';
 import { configService } from '../../config/config-service';
 import { assertProductionGateway } from '../../domain/payment/payment-invariants';
-import {
-  paymentOrderAttemptRepository,
+import { paymentOrderAttemptRepository } from '../../db/payment-order-attempt-repository';
+import type {
+  PaymentGateway,
+  GatewayId,
+  GatewayStatus,
+  GatewayCreatePixInput,
+  GatewayPixResult,
+  GatewayPaymentStatusResult,
+} from './types';
+import type {
   PaymentAttemptStatus,
   PaymentGatewayEnvironment,
 } from '../../db/payment-order-attempt-repository';
