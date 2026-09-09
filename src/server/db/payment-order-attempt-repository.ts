@@ -57,16 +57,6 @@ export interface PaymentAttemptRecord {
   referenceId: string | null;
 }
 
-export interface PaymentOrderAttemptResult {
-  paymentOrderId: string;
-  attemptId: string;
-}
-
-/**
- * Durable persistence boundary for PaymentOrder -> PaymentAttempt.
- * Gateway selection is copied into the PaymentOrder and each Attempt so an
- * administrator changing the active gateway cannot migrate an existing payment.
- */
 export class PaymentOrderAttemptRepository {
   private readonly client: SupabaseClient<any> | null = getSupabaseServerClient() as SupabaseClient<any> | null;
 
@@ -178,7 +168,12 @@ export class PaymentOrderAttemptRepository {
 
   async updateAttemptProviderData(
     attemptId: string,
-    input: { providerOrderId?: string; providerTransactionId?: string; referenceId?: string; status?: PaymentAttemptStatus },
+    input: {
+      providerOrderId?: string;
+      providerTransactionId?: string;
+      referenceId?: string;
+      status?: PaymentAttemptStatus;
+    },
   ): Promise<void> {
     const client = this.requireClient();
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -192,6 +187,26 @@ export class PaymentOrderAttemptRepository {
 
     const { error } = await client.from('payment_attempts').update(patch).eq('id', attemptId);
     if (error) throw new Error(`Falha ao atualizar PaymentAttempt: ${error.message}`);
+  }
+
+  async updatePaymentOrder(
+    paymentOrderId: string,
+    input: {
+      providerOrderId?: string;
+      referenceId?: string;
+      status?: string;
+      paidAt?: string;
+    },
+  ): Promise<void> {
+    const client = this.requireClient();
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.providerOrderId !== undefined) patch.pagbank_order_id = input.providerOrderId;
+    if (input.referenceId !== undefined) patch.reference_id = input.referenceId;
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.paidAt !== undefined) patch.paid_at = input.paidAt;
+
+    const { error } = await client.from('payment_orders').update(patch).eq('id', paymentOrderId);
+    if (error) throw new Error(`Falha ao atualizar PaymentOrder: ${error.message}`);
   }
 
   async createOrderAndAttempt(
@@ -214,6 +229,11 @@ export class PaymentOrderAttemptRepository {
     });
     return { paymentOrderId, attemptId };
   }
+}
+
+export interface PaymentOrderAttemptResult {
+  paymentOrderId: string;
+  attemptId: string;
 }
 
 export const paymentOrderAttemptRepository = new PaymentOrderAttemptRepository();
