@@ -2,6 +2,7 @@ name: Golden Path — Production
 
 # Phase 4 trigger: this workflow is intentionally executable from pull_request
 # so the corrected production harness can be run through the available GitHub integration.
+# Re-trigger after authoritative authentication assertion fix.
 
 on:
   workflow_dispatch:
