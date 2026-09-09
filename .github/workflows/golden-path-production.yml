@@ -1,5 +1,8 @@
 name: Golden Path — Production
 
+# Phase 4 trigger: this workflow is intentionally executable from pull_request
+# so the corrected production harness can be run through the available GitHub integration.
+
 on:
   workflow_dispatch:
   workflow_call:
