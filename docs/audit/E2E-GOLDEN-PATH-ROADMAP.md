@@ -78,6 +78,8 @@ Artefato:
 
 A execução E2E completa **não foi comprovada**. O workflow é `workflow_dispatch`/`workflow_call` e a integração disponível nesta sessão não oferece disparo manual de workflow. O runner local também não possui `agent-browser` nem as credenciais externas necessárias para autenticação.
 
+Além disso, a implantação de produção correspondente ao commit do relatório apresentou falha de build porque o `package.json` declara `ioredis@^6.3.4`, versão que o instalador Bun da Vercel não conseguiu resolver. Isso impede usar essa implantação como evidência de execução E2E até a correção do manifesto/dependências e uma nova implantação `READY`.
+
 Não foram inseridos pagamentos, documentos ou estados artificiais no banco para transformar ausência de evidência em falso positivo.
 
 ### Critério de saída
