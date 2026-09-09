@@ -6,9 +6,11 @@
 
 ## Veredito
 
-**🔴 BLOQUEADA — Golden Path não comprovado em produção.**
+**🔴 BLOQUEADA — Golden Path ainda não comprovado em produção.**
 
-A Fase 4 foi executada nesta rodada até o limite verificável pela integração disponível. O ambiente de produção foi recuperado para um deployment `READY`, mas a jornada vertical completa não pode ser declarada executada/aprovada porque não existe evidência de uma execução Playwright de produção concluída com criação real de caso → análise → PIX → pagamento confirmado → documento persistido.
+A Fase 4 agora teve uma tentativa E2E real executada pelo GitHub Actions contra produção. A infraestrutura do executor, credenciais externas e acesso ao Supabase foram aceitos pelo workflow, porém a execução parou no primeiro passo de autenticação por incompatibilidade entre o seletor usado pelo teste e o markup real da página de login.
+
+Isso é progresso de evidência: o bloqueio deixou de ser "não existe executor" e passou a ser um **defeito concreto do harness E2E**. A cadeia de negócio ainda não foi exercitada e, portanto, a Fase 4 continua bloqueada.
 
 ## Evidências confirmadas
 
@@ -28,17 +30,61 @@ A correção foi aplicada no `package.json` e commitada em:
 
 `8aa42558986071828d75c53dd5f8ac40e13d7d0a`
 
-O novo deployment concluiu build e deploy com sucesso. O warning de chunk JavaScript grande não bloqueou a publicação.
+O novo deployment concluiu build e deploy com sucesso.
 
 ### 3. Rotas de produção respondem
 
-`GET /novo-caso` respondeu HTTP 200 e entregou o bundle atual de produção.
+`GET /novo-caso` respondeu HTTP 200.
 
 `GET /api/health` respondeu HTTP 200.
 
-### 4. O banco canônico não contém resultado de Golden Path
+### 4. Primeira execução E2E real — infraestrutura aprovada, teste falhou no login
 
-Consulta direta ao Supabase canônico confirmou:
+Foi criada uma execução isolada do workflow de produção no GitHub Actions:
+
+- Workflow: `Golden Path — Production`
+- Run: `34372940368`
+- Commit executor: `d6607a19e6d6d4a9416da96468e278c25c476d6f`
+- Resultado: **failure**
+- Artifact Playwright: `golden-path-production-report-34372940368`
+
+As etapas de infraestrutura passaram:
+
+- checkout
+- Node.js 22
+- npm 11.6.0
+- geração/verificação de `package-lock.json`
+- `npm ci`
+- `postinstall`
+- Chromium
+- verificação do alvo HTTPS de produção
+- verificação da configuração do Golden Path
+
+A falha ocorreu em `tests/golden-path-production.spec.ts`, durante o login:
+
+```text
+TimeoutError: locator.fill: Timeout 15000ms exceeded
+waiting for getByLabel(/E-mail do Condutor ou Administrador/i)
+```
+
+O snapshot real da página mostrou que o texto `E-mail do Condutor ou Administrador` é um elemento visual separado, enquanto o campo é exposto como textbox pelo placeholder `seu.email@exemplo.com`. O mesmo padrão ocorre com o campo de senha.
+
+A correção aplicada no branch de execução substitui os seletores incorretos por:
+
+```ts
+page.locator('input[type="email"]')
+page.locator('input[type="password"]')
+```
+
+Commit da correção do harness:
+
+`be582e52589588fe62a4a1c1c69ad55da692b565`
+
+Nenhum caso, `payment_order` ou documento foi criado pela tentativa que falhou no login.
+
+### 5. O banco canônico continua sem resultado de Golden Path
+
+A evidência anterior permanece válida:
 
 | Entidade | Registros |
 |---|---:|
@@ -46,23 +92,17 @@ Consulta direta ao Supabase canônico confirmou:
 | `payment_orders` | 0 |
 | `documents` | 0 |
 
-Os casos existentes verificados não apresentam `payment_order` nem `document` associados. Não foi encontrado no banco canônico um encadeamento vertical completo que pudesse ser reutilizado como evidência.
+Não existe ainda no banco canônico um encadeamento vertical completo que possa ser reutilizado como evidência.
 
-### 5. O teste de produção está definido para ser real
+## Estado atual do harness
 
-`tests/golden-path-production.spec.ts` executa contra `PLAYWRIGHT_BASE_URL`, autentica com credenciais externas, cria dados sintéticos únicos, realiza upload real, aguarda análise do backend, cria PIX no gateway configurado, reconcilia `payment_orders`, aguarda estado pago e exige documento persistido em `documents`.
+O workflow foi preparado para uma execução controlada de produção. Para evitar execução em todo push do produto, o disparo automático está restrito a alterações do artefato de auditoria da Fase 4 no branch `main`, mantendo também `workflow_dispatch`/`workflow_call`.
 
-O workflow `.github/workflows/golden-path-production.yml` está configurado para produção, exige o projeto Playwright `chromium-production` e executa especificamente `tests/golden-path-production.spec.ts`.
-
-## Bloqueio de execução E2E
-
-O workflow de Golden Path é deliberadamente `workflow_dispatch`/`workflow_call`; a integração GitHub disponível nesta sessão não oferece disparo manual de workflow. O ambiente local desta sessão também não fornece um executor Playwright de produção utilizável nem as variáveis externas de execução (`E2E_TEST_EMAIL`/`USER_TEST_LOGIN` e `E2E_TEST_PASSWORD`/`USER_TEST_PASSWORD`).
-
-Consequentemente, **não foi fabricada uma aprovação** e nenhum pagamento/documento foi inserido artificialmente no banco para simular sucesso.
+O próximo disparo deve usar o seletor corrigido e produzir a primeira evidência útil de autenticação → criação de caso → análise → PIX.
 
 ## P0/P1 ainda abertos
 
-1. Executar Playwright real em produção com conta E2E externa disponível.
+1. Reexecutar o Golden Path com o seletor de login corrigido.
 2. Criar e reconciliar `payment_order` + `payment_attempt` reais.
 3. Confirmar o PIX real pelo gateway, sem simulação.
 4. Gerar e persistir efetivamente o documento em Storage + `documents.document_url`/`storage_path`.

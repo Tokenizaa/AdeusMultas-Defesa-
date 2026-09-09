@@ -14,8 +14,8 @@ function required(name: string, value: string | undefined): string {
 
 async function login(page: Page) {
   await page.goto('/login?redirect=/onboarding', { waitUntil: 'domcontentloaded' });
-  await page.getByLabel(/E-mail do Condutor ou Administrador/i).fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
-  await page.getByLabel(/Senha de Acesso/i).fill(required('E2E_TEST_PASSWORD/USER_TEST_PASSWORD', PASSWORD));
+  await page.locator('input[type="email"]').fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
+  await page.locator('input[type="password"]').fill(required('E2E_TEST_PASSWORD/USER_TEST_PASSWORD', PASSWORD));
   await page.getByRole('button', { name: /Entrar no DefesAi/i }).click();
   await expect(page).toHaveURL(/\/onboarding(?:\?|$)/, { timeout: 30_000 });
 }

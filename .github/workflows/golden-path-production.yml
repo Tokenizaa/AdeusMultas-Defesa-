@@ -3,6 +3,11 @@ name: Golden Path — Production
 on:
   workflow_dispatch:
   workflow_call:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/audit/PHASE-4-GOLDEN-PATH-E2E.md
 
 permissions:
   contents: read
