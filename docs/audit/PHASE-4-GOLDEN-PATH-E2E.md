@@ -102,7 +102,7 @@ O próximo disparo deve usar o seletor corrigido e produzir a primeira evidênci
 
 ### Disparo de execução 2
 
-A presente atualização do artefato de auditoria é intencional e serve como evento de execução do Golden Path no `main`. O workflow, já incorporado ao `main`, está restrito a este arquivo para impedir disparos acidentais durante o desenvolvimento normal.
+Esta atualização controlada do artefato de auditoria é o gatilho de push previsto para iniciar uma nova execução do Golden Path com o harness corrigido. O workflow permanece restrito a este arquivo para impedir disparos acidentais durante o desenvolvimento normal.
 
 ## P0/P1 ainda abertos
 
