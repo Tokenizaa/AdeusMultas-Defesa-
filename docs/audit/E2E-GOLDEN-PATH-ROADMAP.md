@@ -13,7 +13,7 @@ Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz comm
 - **Fase 1:** 🔴 concluída com bloqueadores.
 - **Fase 2:** 🟡 executada parcialmente; bloqueadores estruturais corrigidos, Golden Path ainda bloqueado.
 - **Fase 3:** 🟢 concluída; ambiente de produção reconciliado com o Supabase canônico e referências ao projeto obsoleto removidas do código ativo.
-- **Fase 4:** 🔴 executada parcialmente e bloqueada; produção e banco foram verificados, mas não existe evidência de uma execução E2E completa aprovada.
+- **Fase 4:** 🔴 executada parcialmente e bloqueada; deployment de produção recuperado e ambiente verificado, mas não existe evidência de uma execução E2E completa aprovada.
 
 ## FASE 1 — RESULTADO
 
@@ -68,17 +68,16 @@ Artefato:
 
 ### 🟢 Evidência obtida em 2026-09-09
 
-- Produção `https://www.defesai.shop/api/health` respondeu HTTP 200.
-- CSP de produção referencia o Supabase canônico `sgomwklorpzdwdubtmgg.supabase.co`.
-- Supabase canônico contém 9 `cases`, porém `payment_orders = 0`, `payment_attempts = 0`, `payments = 0` e `documents = 0`.
-- Os casos existentes não apresentam uma cadeia completa caso → cobrança → pagamento → documento.
-- `tests/golden-path-production.spec.ts` e `.github/workflows/golden-path-production.yml` estão preparados para executar o caminho real contra produção, sem mocks e com reconciliação no Supabase.
+- `GET https://www.defesai.shop/api/health` respondeu HTTP 200 após o deployment `dpl_DVXqj5PYNjwHGzq4myEQuT9ykusN`.
+- O deployment `dpl_DVXqj5PYNjwHGzq4myEQuT9ykusN`, commit `8aa42558986071828d75c53dd5f8ac40e13d7d0a`, terminou `READY` em produção.
+- O CSP de produção referencia o Supabase canônico `sgomwklorpzdwdubtmgg.supabase.co`.
+- `GET /novo-caso` respondeu HTTP 200.
+- O banco canônico mantém 9 `cases`, 0 `payment_orders` e 0 `documents`; não há evidência de uma cadeia completa caso → análise → cobrança → pagamento → documento.
+- O bloqueador de build da rodada anterior foi corrigido: `package.json` agora declara `ioredis@^6.0.0`, alinhado ao `bun.lock` e à versão estável publicada da linha 6.
 
 ### 🔴 Resultado
 
-A execução E2E completa **não foi comprovada**. O workflow é `workflow_dispatch`/`workflow_call` e a integração disponível nesta sessão não oferece disparo manual de workflow. O runner local também não possui `agent-browser` nem as credenciais externas necessárias para autenticação.
-
-Além disso, a implantação de produção correspondente ao commit do relatório apresentou falha de build porque o `package.json` declara `ioredis@^6.3.4`, versão que o instalador Bun da Vercel não conseguiu resolver. Isso impede usar essa implantação como evidência de execução E2E até a correção do manifesto/dependências e uma nova implantação `READY`.
+A execução E2E completa **não foi comprovada**. O workflow é `workflow_dispatch`/`workflow_call` e a integração disponível nesta sessão não oferece disparo manual de workflow. O ambiente de execução desta sessão não possui um executor Playwright de produção utilizável nem as credenciais externas necessárias para autenticação.
 
 Não foram inseridos pagamentos, documentos ou estados artificiais no banco para transformar ausência de evidência em falso positivo.
 
