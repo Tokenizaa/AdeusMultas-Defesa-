@@ -3,6 +3,13 @@ name: Golden Path — Production
 on:
   workflow_dispatch:
   workflow_call:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - docs/audit/PHASE-4-GOLDEN-PATH-E2E.md
+      - tests/golden-path-production.spec.ts
+      - .github/workflows/golden-path-production.yml
   push:
     branches:
       - main
