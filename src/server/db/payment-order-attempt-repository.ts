@@ -16,6 +16,7 @@ export type PaymentAttemptStatus =
 export interface CreatePaymentOrderInput {
   caseId: string;
   userId?: string;
+  gateway: PaymentGatewayId;
   amountInCents: number;
   currency?: string;
   paymentMethod?: 'pix' | 'credit_card' | 'boleto';
@@ -42,18 +43,29 @@ export interface CreatePaymentAttemptInput {
   status?: PaymentAttemptStatus;
 }
 
+export interface PaymentAttemptRecord {
+  id: string;
+  paymentOrderId: string;
+  caseId: string;
+  gateway: PaymentGatewayId;
+  gatewayEnvironment: PaymentGatewayEnvironment;
+  amountInCents: number;
+  currency: string;
+  status: PaymentAttemptStatus;
+  providerOrderId: string | null;
+  providerTransactionId: string | null;
+  referenceId: string | null;
+}
+
 export interface PaymentOrderAttemptResult {
   paymentOrderId: string;
   attemptId: string;
 }
 
 /**
- * Durable persistence boundary for the PaymentOrder -> PaymentAttempt model.
- *
- * Payment state is never kept only in process memory here. The caller receives
- * the database-generated identities and must retain them when creating provider
- * transactions. Provider gateway/environment are copied into each attempt and
- * are therefore immutable historical facts of that attempt.
+ * Durable persistence boundary for PaymentOrder -> PaymentAttempt.
+ * Gateway selection is copied into the PaymentOrder and each Attempt so an
+ * administrator changing the active gateway cannot migrate an existing payment.
  */
 export class PaymentOrderAttemptRepository {
   private readonly client: SupabaseClient<any> | null = getSupabaseServerClient() as SupabaseClient<any> | null;
@@ -69,13 +81,24 @@ export class PaymentOrderAttemptRepository {
     return uuid;
   }
 
-  async createPaymentOrder(input: CreatePaymentOrderInput): Promise<string> {
-    if (!Number.isInteger(input.amountInCents) || input.amountInCents <= 0) {
-      throw new Error('PaymentOrder amountInCents deve ser inteiro positivo.');
+  private validateAmount(amountInCents: number): void {
+    if (!Number.isInteger(amountInCents) || amountInCents <= 0) {
+      throw new Error('Pagamento amountInCents deve ser inteiro positivo.');
     }
+  }
 
+  private validateGateway(gateway: PaymentGatewayId, environment: PaymentGatewayEnvironment): void {
+    if (environment === 'production' && gateway === 'test') {
+      throw new Error('testAdapter é proibido em pagamentos de produção.');
+    }
+    if (environment === 'sandbox' && gateway === 'ggpixapi') {
+      throw new Error('GGPIXAPI não é gateway sandbox suportado.');
+    }
+  }
+
+  async createPaymentOrder(input: CreatePaymentOrderInput): Promise<string> {
+    this.validateAmount(input.amountInCents);
     const caseId = this.caseUuid(input.caseId);
-    const amount = input.amountInCents / 100;
     const client = this.requireClient();
 
     const { data, error } = await client
@@ -83,8 +106,9 @@ export class PaymentOrderAttemptRepository {
       .insert({
         case_id: caseId,
         user_id: input.userId || null,
-        amount,
-        final_amount: amount,
+        gateway: input.gateway,
+        amount: input.amountInCents / 100,
+        final_amount: input.amountInCents / 100,
         base_amount: input.baseAmountInCents != null ? input.baseAmountInCents / 100 : null,
         discount_amount: input.discountAmountInCents != null ? input.discountAmountInCents / 100 : 0,
         currency: input.currency || 'BRL',
@@ -105,16 +129,9 @@ export class PaymentOrderAttemptRepository {
   }
 
   async createPaymentAttempt(input: CreatePaymentAttemptInput): Promise<string> {
-    if (!Number.isInteger(input.amountInCents) || input.amountInCents <= 0) {
-      throw new Error('PaymentAttempt amountInCents deve ser inteiro positivo.');
-    }
+    this.validateAmount(input.amountInCents);
     if (!input.idempotencyKey.trim()) throw new Error('PaymentAttempt idempotencyKey é obrigatório.');
-    if (input.gatewayEnvironment === 'production' && input.gateway === 'test') {
-      throw new Error('testAdapter é proibido em PaymentAttempt de produção.');
-    }
-    if (input.gatewayEnvironment === 'sandbox' && input.gateway === 'ggpixapi') {
-      throw new Error('GGPIXAPI não é gateway sandbox suportado.');
-    }
+    this.validateGateway(input.gateway, input.gatewayEnvironment);
 
     const client = this.requireClient();
     const caseId = this.caseUuid(input.caseId);
@@ -145,6 +162,38 @@ export class PaymentOrderAttemptRepository {
     return data.id as string;
   }
 
+  async findAttemptByProviderTransactionId(providerTransactionId: string): Promise<PaymentAttemptRecord | null> {
+    if (!providerTransactionId.trim()) return null;
+    const client = this.requireClient();
+    const { data, error } = await client
+      .from('payment_attempts')
+      .select('id,payment_order_id,case_id,gateway,gateway_environment,amount_in_cents,currency,status,provider_order_id,provider_transaction_id,reference_id')
+      .eq('provider_transaction_id', providerTransactionId)
+      .maybeSingle();
+
+    if (error) throw new Error(`Falha ao localizar PaymentAttempt: ${error.message}`);
+    if (!data) return null;
+    return data as PaymentAttemptRecord;
+  }
+
+  async updateAttemptProviderData(
+    attemptId: string,
+    input: { providerOrderId?: string; providerTransactionId?: string; referenceId?: string; status?: PaymentAttemptStatus },
+  ): Promise<void> {
+    const client = this.requireClient();
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.providerOrderId !== undefined) patch.provider_order_id = input.providerOrderId;
+    if (input.providerTransactionId !== undefined) patch.provider_transaction_id = input.providerTransactionId;
+    if (input.referenceId !== undefined) patch.reference_id = input.referenceId;
+    if (input.status !== undefined) {
+      patch.status = input.status;
+      if (input.status === 'paid') patch.paid_at = new Date().toISOString();
+    }
+
+    const { error } = await client.from('payment_attempts').update(patch).eq('id', attemptId);
+    if (error) throw new Error(`Falha ao atualizar PaymentAttempt: ${error.message}`);
+  }
+
   async createOrderAndAttempt(
     order: CreatePaymentOrderInput,
     attempt: Omit<CreatePaymentAttemptInput, 'paymentOrderId' | 'caseId' | 'amountInCents' | 'currency' | 'commercialOfferId'> & {
@@ -154,21 +203,16 @@ export class PaymentOrderAttemptRepository {
     },
   ): Promise<PaymentOrderAttemptResult> {
     const paymentOrderId = await this.createPaymentOrder(order);
-    try {
-      const attemptId = await this.createPaymentAttempt({
-        ...attempt,
-        paymentOrderId,
-        caseId: order.caseId,
-        amountInCents: attempt.amountInCents ?? order.amountInCents,
-        currency: attempt.currency ?? order.currency ?? 'BRL',
-        commercialOfferId: attempt.commercialOfferId ?? order.commercialOfferId,
-      });
-      return { paymentOrderId, attemptId };
-    } catch (error) {
-      // The order is deliberately retained as an auditable failed creation.
-      // No provider state exists yet, so deleting history would hide the failure.
-      throw error;
-    }
+    const attemptId = await this.createPaymentAttempt({
+      ...attempt,
+      paymentOrderId,
+      caseId: order.caseId,
+      gateway: attempt.gateway || order.gateway,
+      amountInCents: attempt.amountInCents ?? order.amountInCents,
+      currency: attempt.currency ?? order.currency ?? 'BRL',
+      commercialOfferId: attempt.commercialOfferId ?? order.commercialOfferId,
+    });
+    return { paymentOrderId, attemptId };
   }
 }
 
