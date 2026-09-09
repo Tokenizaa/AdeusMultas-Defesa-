@@ -100,6 +100,10 @@ O workflow foi preparado para uma execução controlada de produção. Para evit
 
 O próximo disparo deve usar o seletor corrigido e produzir a primeira evidência útil de autenticação → criação de caso → análise → PIX.
 
+### Disparo de execução 2
+
+A presente atualização do artefato de auditoria é intencional e serve como evento de execução do Golden Path no `main`. O workflow, já incorporado ao `main`, está restrito a este arquivo para impedir disparos acidentais durante o desenvolvimento normal.
+
 ## P0/P1 ainda abertos
 
 1. Reexecutar o Golden Path com o seletor de login corrigido.
