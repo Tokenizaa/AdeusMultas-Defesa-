@@ -3,6 +3,9 @@ name: Golden Path — Production
 on:
   workflow_dispatch:
   workflow_call:
+  push:
+    branches:
+      - phase4-golden-path-execution
 
 permissions:
   contents: read
