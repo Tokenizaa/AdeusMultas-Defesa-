@@ -13,7 +13,7 @@ Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz comm
 - **Fase 1:** 🔴 concluída com bloqueadores.
 - **Fase 2:** 🟡 executada parcialmente; bloqueadores estruturais corrigidos, Golden Path ainda bloqueado.
 - **Fase 3:** 🟢 concluída; ambiente de produção reconciliado com o Supabase canônico e referências ao projeto obsoleto removidas do código ativo.
-- **Fase 4:** 🔴 executada parcialmente e bloqueada; deployment de produção recuperado e ambiente verificado, mas não existe evidência de uma execução E2E completa aprovada.
+- **Fase 4:** 🔴 execução real iniciada, primeiro bloqueador do harness identificado e corrigido; Golden Path de negócio ainda não comprovado.
 
 ## FASE 1 — RESULTADO
 
@@ -46,15 +46,9 @@ Artefato:
 - Harness de dados do Golden Path exige `PLAYWRIGHT_BASE_URL`, `E2E_TEST_EMAIL`, `E2E_TEST_PASSWORD` e aceita `E2E_RUN_ID` para isolamento lógico.
 - Nenhuma credencial foi adicionada ao repositório.
 
-### 🔴 BLOQUEADORES PARA O GOLDEN PATH
+### 🟡 EVOLUÇÃO PARA A FASE 4
 
-1. Os P0 estruturais identificados na Fase 2 continuam impedindo a declaração de Golden Path aprovado: sincronização real da cobrança, upload/persistência documental e webhook idempotente/recovery.
-2. Não há evidência versionada de uma conta E2E autenticável disponível para execução; as credenciais permanecem externas ao repositório.
-
-### 🟡 RISCOS
-
-- Fixtures históricos em `tests/e2e-fixtures.ts` contêm dados sintéticos fixos e não devem ser usados como identidade do Golden Path de produção.
-- O teste deve capturar IDs reais de `case`, `analysis`, `payment` e `document`, sem inserir valores manualmente.
+A execução real posterior confirmou que as credenciais externas existem e chegam ao GitHub Actions como secrets, que o runner consegue instalar dependências/Chromium e que o alvo de produção é alcançável. O bloqueio inicial de "executor/credenciais indisponíveis" deixou de ser o bloqueador operacional observado.
 
 ### Artefatos da Fase 3
 
@@ -73,13 +67,18 @@ Artefato:
 - O CSP de produção referencia o Supabase canônico `sgomwklorpzdwdubtmgg.supabase.co`.
 - `GET /novo-caso` respondeu HTTP 200.
 - O banco canônico mantém 9 `cases`, 0 `payment_orders` e 0 `documents`; não há evidência de uma cadeia completa caso → análise → cobrança → pagamento → documento.
-- O bloqueador de build da rodada anterior foi corrigido: `package.json` agora declara `ioredis@^6.0.0`, alinhado ao `bun.lock` e à versão estável publicada da linha 6.
+- O workflow `Golden Path — Production` foi efetivamente executado contra produção no run `34372940368`.
+- As etapas de infraestrutura, secrets, instalação do Playwright e verificação do alvo passaram.
+- O teste falhou concretamente no login porque `getByLabel(/E-mail do Condutor ou Administrador/i)` não correspondia ao markup real.
+- O snapshot real de produção comprovou que o input é exposto como `input[type="email"]` e `input[type="password"]`.
+- O harness foi corrigido em `be582e52589588fe62a4a1c1c69ad55da692b565`.
+- O PR de consolidação foi o `#13`, posteriormente incorporado ao `main`.
 
-### 🔴 Resultado
+### 🔴 Resultado atual
 
-A execução E2E completa **não foi comprovada**. O workflow é `workflow_dispatch`/`workflow_call` e a integração disponível nesta sessão não oferece disparo manual de workflow. O ambiente de execução desta sessão não possui um executor Playwright de produção utilizável nem as credenciais externas necessárias para autenticação.
+A primeira execução real não chegou à criação do caso e, portanto, não produziu `payment_order`, pagamento ou documento. O bloqueador atual é a necessidade de **executar novamente o workflow com o harness corrigido**.
 
-Não foram inseridos pagamentos, documentos ou estados artificiais no banco para transformar ausência de evidência em falso positivo.
+A integração GitHub disponível nesta sessão não expõe uma operação de `workflow_dispatch`. A alteração do artefato de auditoria foi preparada no `main` para servir de evento controlado de push, mas a conexão utilizada para escrever no repositório não fornece garantia de disparo de Actions após esse tipo de escrita. Portanto, não foi declarado sucesso nem simulada uma segunda execução.
 
 ### Critério de saída
 
@@ -101,4 +100,4 @@ Permanecem `🟠 PENDING`.
 
 ## REGRA DE PARADA
 
-**Fase 4 encerrada nesta rodada como BLOQUEADA. Não avançar automaticamente para a Fase 5.**
+**Fase 4 permanece BLOQUEADA. Não avançar para a Fase 5 até o Golden Path real ser aprovado.**
