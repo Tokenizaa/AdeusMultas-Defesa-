@@ -1,5 +1,5 @@
 import { AuditLogEntry } from '../../types';
-import { auditLogs } from '../app';
+import { auditLogs } from '../stores';
 
 /**
  * Service to manage audit logs - moved from global scope in server.ts

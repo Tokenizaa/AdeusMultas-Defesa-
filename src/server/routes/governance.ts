@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { databaseRows, auditLogs } from '../app';
+import { databaseRows, auditLogs } from '../stores';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { AuditLogEntry } from '../../types';
 import { requireAdmin } from '../middleware/auth-middleware';

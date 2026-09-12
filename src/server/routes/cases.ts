@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Router, Response } from 'express';
-import { databaseRows, auditLogs } from '../app';
+import { databaseRows, auditLogs } from '../stores';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';

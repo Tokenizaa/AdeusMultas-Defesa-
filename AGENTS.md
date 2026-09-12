@@ -29,17 +29,19 @@
 | `@seguranca` | Auditoria segurança | OWASP, secrets, SSRF, injection, crypto |
 | `@documentacao` | Documentação viva | ADRs, folder-structure, decision-log, roadmap |
 
-### Domain Agents
+### Domain Agents (Descobertos via Discovery Pipeline Fases 4-7)
 
 | Agent | Domínio | Escopo Principal |
 |-------|---------|------------------|
-| `@backend` | Backend | Rotas Express, serviços, auth, middleware, validação |
-| `@frontend` | Frontend | Componentes React, estado, roteamento, estilos |
-| `@banco` | Database | Schema Supabase, queries, migrations, índices |
-| `@testes` | Qualidade/Testes | Unit, integração, E2E, performance |
-| `@build-error-resolver` | Build | Erros TypeScript, build, lint |
-| `@refactor-cleaner` | Refatoração | Dead code, duplicatas, dependências não usadas |
-| `@admin` | Painel Admin | Queries centralizadas, métricas, usuários, payments, documents, health |
+| `@defesa-transito` | **Defesa de Trânsito (CORE)** | Onboarding 5 situações × 9 categorias × 6 fases, Rule Engine determinístico (FACT→RULE→FLAW→ARGUMENT→BLOCK→PROCEDURE), análise gratuita, geração peças jurídicas, Quality Gate Fase 8 |
+| `@base-legal` | **Base Legal** | CTB artigos, 27 DETRANs+PRF+DNIT+DERs, resoluções CONTRAN, jurisprudência, glossário — API somente leitura |
+| `@conhecimento-juridico` | **Conhecimento Jurídico (RAG)** | Pipeline RAG: ingestão 50+ fontes/semana, embedding NVIDIA NV-Embed-QA (3 chaves round-robin), vector store, busca semântica, rerank Nemotron-3B, change detection |
+| `@comunicacao-whatsapp` | **Comunicação WhatsApp** | Evolution API (Baileys): instâncias, envio/recebimento msg/mídia/docs, webhooks, jornadas conversacionais, templates HSM |
+| `@marketing-aquisicao` | **Marketing & Aquisição** | 7 agentes autônomos, Meta Ads/Conversions API, ComfyUI criativos, Firecrawl prospecção, Resend email — **CANDIDATO A SPLIT** |
+| `@pagamentos-comercial` | **Pagamentos & Comercial** | Catálogo ofertas, pricing dinâmico, checkout PIX/cartão (PagBank), webhooks idempotentes, payment_orders, ofertas bônus 3 docs |
+| `@ocr-evidencias` | **OCR & Evidências** | Upload docs, OCR (Vision/Tesseract), quality gate, evidenceFlags para Rule Engine, Documenso assinatura digital |
+| `@admin-observabilidade` | **Administração & Observabilidade** (Transversal) | Dashboard admin, health checks 12+ serviços, métricas AI providers, alertas PagerDuty/Slack, audit logs, config dinâmicas |
+| `@trabalhadores-assincronos` | **Trabalhadores Assíncronos** (Infra) | BullMQ/Redis workers: scraping, OCR, messaging, marketing automation; retry/DLQ, autoscaling, zero HTTP routes |
 
 ### Specialized Agents
 
@@ -137,25 +139,69 @@
 
 ## Escopo Padrão por Agent
 
-### @backend
-- **Permitido**: `src/server.ts`, `src/routes/**`, `src/services/**`, `src/middleware/**`, `src/validators/**`
-- **Proibido**: `src/components/**`, `src/pages/**`, `supabase/migrations/**` (exceto leitura)
+### @defesa-transito (CORE)
+- **Permitido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/core/validation/**`, `src/core/ai/**`, `src/core/arguments/**`, `src/core/procedures/**`, `src/core/templates/**`, `src/core/documents/**`, `src/onboarding-v2/**`, `src/server/routes/onboarding.ts`, `src/server/routes/onboarding-v2.ts`, `src/server/routes/cases.ts`
+- **Proibido**: `src/server/routes/payments.ts`, `src/server/routes/marketing*.ts`, `src/server/routes/whatsapp.ts`, `src/server/routes/ocr.ts`, `src/server/routes/knowledge.ts`, `src/server/integrations/**`, `src/server/knowledge/**`, `src/core/knowledge/**`, `src/core/legal-base/**`
+- **Pode importar**: `@compartilhado`, `@base-legal`, `@conhecimento-juridico`
+- **Contratos**: `POST /api/onboarding/analyze`, `POST /api/onboarding-v2/start`, `POST /api/onboarding-v2/claim`, `GET/PUT /api/cases/:id`, `GET /api/cases/:id/analysis`, `POST /api/cases/:id/defense`
 
-### @admin
-- **Permitido**: `src/server/routes/admin.ts`, `src/server/services/admin-query-service.ts`
-- **Proibido**: `src/components/admin/**` (frontend), `supabase/migrations/**`
+### @base-legal
+- **Permitido**: `src/core/legal-base/**`
+- **Proibido**: `src/core/onboarding/**`, `src/core/knowledge/**`, `src/server/routes/**`, `src/server/services/**`, `src/server/integrations/**`
+- **Pode importar**: `@compartilhado`
+- **Contratos**: `GET /api/knowledge/legal-base/ctb/:article`, `GET /api/knowledge/legal-base/organs`, `GET /api/knowledge/legal-base/resolutions`
 
-### @frontend
-- **Permitido**: `src/components/**`, `src/pages/**`, `src/hooks/**`, `src/context/**`, `src/styles/**`
-- **Proibido**: `src/server.ts`, `src/routes/**`, `src/services/**`, `supabase/migrations/**`
+### @conhecimento-juridico
+- **Permitido**: `src/core/knowledge/**`, `src/server/knowledge/**`, `src/server/routes/knowledge.ts`, `src/core/rag/**`
+- **Proibido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/core/legal-base/**`, `src/server/routes/onboarding*.ts`, `src/server/routes/cases.ts`, `src/server/routes/payments.ts`, `src/server/routes/marketing*.ts`
+- **Pode importar**: `@compartilhado`, `@base-legal`
+- **Contratos**: `POST /api/knowledge/ingest`, `GET /api/knowledge/search`, `GET /api/knowledge/sources`, `POST /api/knowledge/monitor`
 
-### @banco
-- **Permitido**: `supabase/migrations/**`, `supabase/functions/**`, `src/lib/supabase.ts`
-- **Proibido**: `src/components/**`, `src/routes/**`, `src/server.ts`
+### @comunicacao-whatsapp
+- **Permitido**: `src/server/routes/whatsapp.ts`, `src/server/routes/whatsapp-webhook.integration.test.ts`, `src/server/services/whatsapp-service.ts`, `src/server/services/whatsapp-journey-router.ts`, `src/server/services/messaging-service.ts`, `src/server/integrations/evolution-api/**`
+- **Proibido**: `src/server/routes/onboarding*.ts`, `src/server/routes/cases.ts`, `src/server/routes/payments.ts`, `src/server/routes/marketing*.ts`, `src/server/routes/ocr.ts`, `src/server/integrations/meta/**`, `src/server/integrations/comfyui/**`
+- **Pode importar**: `@compartilhado`, `@defesa-transito` (caseId), `@marketing-aquisicao`
+- **Contratos**: `POST /api/whatsapp/send`, `POST /api/whatsapp/send-document`, `POST /api/whatsapp/send-media`, `POST /api/webhooks/whatsapp`, `GET /api/whatsapp/instances`
 
-### @testes
-- **Permitido**: `tests/**`, `*.test.ts`, `*.spec.ts`, `playwright.config.ts`
-- **Proibido**: Código de produção (apenas leitura)
+### @marketing-aquisicao
+- **Permitido**: `src/server/routes/marketing.ts`, `src/server/routes/marketing-automation.ts`, `src/server/services/marketing-service.ts`, `src/server/services/marketing-automation/**`, `src/server/services/ai-media-service.ts`, `src/server/services/scraper-job-queue.ts`, `src/server/services/scrape-worker.ts`, `src/server/integrations/meta/**`, `src/server/integrations/comfyui/**`, `src/scraper-prospecting/**`, `src/data/marketing-agents-data.ts`
+- **Proibido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/core/legal-base/**`, `src/server/routes/payments.ts`, `src/server/routes/ocr.ts`, `src/server/knowledge/**`
+- **Pode importar**: `@compartilhado`, `@defesa-transito` (temas), `@comunicacao-whatsapp` (envio)
+- **Contratos**: `GET /api/marketing/agents`, `POST /api/marketing/content`, `POST /api/marketing/automation/leads`, `GET /api/marketing/meta/status`, `POST /api/scrape/jobs`
+
+### @pagamentos-comercial
+- **Permitido**: `src/server/routes/payments.ts`, `src/server/routes/commercial.ts`, `src/server/payments/**`, `src/server/services/commercial-service.ts`, `src/core/integrations/pagbank-client.ts`, `src/config/pricing.ts`, `src/types/commercial.ts`
+- **Proibido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/server/routes/marketing*.ts`, `src/server/routes/whatsapp.ts`, `src/server/routes/ocr.ts`, `src/server/integrations/meta/**`, `src/server/integrations/comfyui/**`
+- **Pode importar**: `@compartilhado`, `@defesa-transito` (caseId, serviceType)
+- **Contratos**: `GET /api/payments/resolve-price`, `POST /api/payments/create-order`, `POST /api/payments/webhooks/pagbank`, `GET/POST /api/commercial/offers`
+
+### @ocr-evidencias
+- **Permitido**: `src/server/routes/ocr.ts`, `src/server/routes/documenso.ts`, `src/server/services/ocr-service.ts`, `src/server/services/image-quality.service.ts`, `src/core/documents/defense-integrity.ts`
+- **Proibido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/server/routes/payments.ts`, `src/server/routes/marketing*.ts`, `src/server/routes/whatsapp.ts`, `src/server/integrations/**`
+- **Pode importar**: `@compartilhado`, `@defesa-transito` (evidenceFlags)
+- **Contratos**: `POST /api/ocr/upload`, `POST /api/ocr/process`, `GET /api/ocr/quality/:fileId`, `POST /api/documenso/sign`
+
+### @admin-observabilidade (Transversal)
+- **Permitido**: `src/server/routes/admin.ts`, `src/server/routes/monitoring.ts`, `src/server/routes/analytics.ts`, `src/server/routes/audit.ts`, `src/server/routes/logs.ts`, `src/server/routes/settings.ts`, `src/server/services/admin-query-service.ts`, `src/server/observability/**`
+- **Proibido**: `src/core/onboarding/**`, `src/core/rules/**`, `src/core/legal-base/**`, `src/core/knowledge/**`, `src/server/routes/onboarding*.ts`, `src/server/routes/payments.ts`, `src/server/routes/marketing*.ts`, `src/server/routes/whatsapp.ts`, `src/server/routes/ocr.ts`
+- **Pode importar**: `@compartilhado`, TODOS domínios (read-only agregação)
+- **Contratos**: `GET /api/admin/overview`, `GET /api/admin/metrics`, `GET /api/health`, `GET /api/monitoring/*`, `GET /api/audit/logs`
+
+### @trabalhadores-assincronos (Infra)
+- **Permitido**: `src/server/workers/**`, `src/server/services/scraper-job-queue.ts`, `src/server/services/scrape-worker.ts`, `src/core/events/topics.ts`
+- **Proibido**: `src/server/routes/**`, `src/core/onboarding/**`, `src/core/rules/**`, `src/server/integrations/**`
+- **Pode importar**: `@compartilhado`, `@marketing-aquisicao` (via queue), `@ocr-evidencias` (via queue), `@comunicacao-whatsapp` (via queue)
+- **Contratos**: BullMQ queues (scraping, ocr, messaging, marketing), `core/events/topics.ts`
+
+### @compartilhado (Shared Kernel)
+- **Permitido**: `src/types/**`, `src/lib/**`, `src/server/config/**`, `src/server/middleware/**`, `src/server/shared/**`, `src/core/mappers/**`, `src/core/events/**`
+- **Proibido**: TODOS domínios de negócio (`src/core/onboarding/**`, `src/core/knowledge/**`, `src/core/legal-base/**`, `src/core/documents/**`, `src/server/routes/**`, `src/server/services/**`, `src/server/integrations/**`, `src/server/workers/**`)
+- **Owner**: `@compartilhado` | **Mutable by**: `@compartilhado` + aprovação `@supervisor`
+- **Contratos**: `types/index.ts`, `types/commercial.ts`, `canonical-mapper.ts`, `auth-middleware.ts`, `rate-limit.ts`, `cors.ts`, `pricing.ts`, `topics.ts`, `lib/supabase.ts`
+
+### @supervisor | @qualidade | @documentacao
+- **Permitido**: Orquestração, review, documentação (nenhum código de produção)
+- **Proibido**: Implementar features de domínio
 
 ---
 

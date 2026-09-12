@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { databaseRows } from '../app';
+import { databaseRows } from '../stores';
 import { healthService } from '../observability/health-service';
 
 const router = Router();

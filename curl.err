@@ -1,0 +1,129 @@
+22:01:40.414116 http.c:845              == Info: Couldn't find host github.com in the .netrc file; using defaults
+22:01:40.434918 http.c:845              == Info: Host github.com:443 was resolved.
+22:01:40.434967 http.c:845              == Info: IPv6: (none)
+22:01:40.434982 http.c:845              == Info: IPv4: 140.82.121.4
+22:01:40.435057 http.c:845              == Info:   Trying 140.82.121.4:443...
+22:01:40.667665 http.c:845              == Info: Connected to github.com (140.82.121.4) port 443
+22:01:40.749017 http.c:845              == Info: found 363 certificates in /etc/ssl/certs
+22:01:40.749150 http.c:845              == Info: GnuTLS ciphers: NORMAL:-ARCFOUR-128:-CTYPE-ALL:+CTYPE-X509:-VERS-SSL3.0
+22:01:40.749193 http.c:845              == Info: ALPN: curl offers h2,http/1.1
+22:01:40.980714 http.c:845              == Info: SSL connection using TLS1.3 / ECDHE_RSA_AES_128_GCM_SHA256
+22:01:40.994774 http.c:845              == Info:   server certificate verification OK
+22:01:40.995421 http.c:845              == Info:   server certificate status verification SKIPPED
+22:01:40.996718 http.c:845              == Info:   common name: github.com (matched)
+22:01:40.996788 http.c:845              == Info:   server certificate expiration date OK
+22:01:40.996880 http.c:845              == Info:   server certificate activation date OK
+22:01:40.996958 http.c:845              == Info:   certificate public key: EC/ECDSA
+22:01:40.996994 http.c:845              == Info:   certificate version: #3
+22:01:40.997087 http.c:845              == Info:   subject: CN=github.com
+22:01:40.997133 http.c:845              == Info:   start date: Tue, 01 Sep 2026 00:00:00 GMT
+22:01:40.997187 http.c:845              == Info:   expire date: Sun, 29 Nov 2026 23:59:59 GMT
+22:01:40.997305 http.c:845              == Info:   issuer: C=GB,O=Sectigo Limited,CN=Sectigo Public Server Authentication CA DV E36
+22:01:40.997442 http.c:845              == Info: ALPN: server accepted h2
+22:01:40.997735 http.c:845              == Info: using HTTP/2
+22:01:40.997973 http.c:845              == Info: [HTTP/2] [1] OPENED stream for https://github.com/Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack
+22:01:40.998050 http.c:845              == Info: [HTTP/2] [1] [:method: GET]
+22:01:40.998075 http.c:845              == Info: [HTTP/2] [1] [:scheme: https]
+22:01:40.998099 http.c:845              == Info: [HTTP/2] [1] [:authority: github.com]
+22:01:40.998128 http.c:845              == Info: [HTTP/2] [1] [:path: /Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack]
+22:01:40.998155 http.c:845              == Info: [HTTP/2] [1] [user-agent: git/2.43.0]
+22:01:40.998177 http.c:845              == Info: [HTTP/2] [1] [accept: */*]
+22:01:40.998200 http.c:845              == Info: [HTTP/2] [1] [accept-encoding: deflate, gzip, br, zstd]
+22:01:40.998237 http.c:845              == Info: [HTTP/2] [1] [accept-language: pt-BR, *;q=0.9]
+22:01:40.998258 http.c:845              == Info: [HTTP/2] [1] [pragma: no-cache]
+22:01:40.998386 http.c:792              => Send header, 0000000232 bytes (0x000000e8)
+22:01:40.998424 http.c:804              => Send header: GET /Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack HTTP/2
+22:01:40.998456 http.c:804              => Send header: Host: github.com
+22:01:40.998480 http.c:804              => Send header: User-Agent: git/2.43.0
+22:01:40.998506 http.c:804              => Send header: Accept: */*
+22:01:40.998527 http.c:804              => Send header: Accept-Encoding: deflate, gzip, br, zstd
+22:01:40.998551 http.c:804              => Send header: Accept-Language: pt-BR, *;q=0.9
+22:01:40.998574 http.c:804              => Send header: Pragma: no-cache
+22:01:40.998652 http.c:804              => Send header:
+22:01:41.523215 http.c:792              <= Recv header, 0000000013 bytes (0x0000000d)
+22:01:41.523366 http.c:804              <= Recv header: HTTP/2 401
+22:01:41.523395 http.c:792              <= Recv header, 0000000026 bytes (0x0000001a)
+22:01:41.523408 http.c:804              <= Recv header: server: GitHub-Babel/3.0
+22:01:41.523462 http.c:792              <= Recv header, 0000000054 bytes (0x00000036)
+22:01:41.523487 http.c:804              <= Recv header: content-security-policy: default-src 'none'; sandbox
+22:01:41.523579 http.c:792              <= Recv header, 0000000041 bytes (0x00000029)
+22:01:41.523616 http.c:804              <= Recv header: content-type: text/plain; charset=UTF-8
+22:01:41.523649 http.c:792              <= Recv header, 0000000045 bytes (0x0000002d)
+22:01:41.523669 http.c:804              <= Recv header: strict-transport-security: max-age=31536000
+22:01:41.523697 http.c:792              <= Recv header, 0000000040 bytes (0x00000028)
+22:01:41.523719 http.c:804              <= Recv header: www-authenticate: Basic realm="GitHub"
+22:01:41.523771 http.c:792              <= Recv header, 0000000020 bytes (0x00000014)
+22:01:41.523788 http.c:804              <= Recv header: content-length: 26
+22:01:41.523803 http.c:792              <= Recv header, 0000000037 bytes (0x00000025)
+22:01:41.523815 http.c:804              <= Recv header: date: Tue, 08 Sep 2026 01:03:07 GMT
+22:01:41.523827 http.c:792              <= Recv header, 0000000023 bytes (0x00000017)
+22:01:41.523838 http.c:804              <= Recv header: x-frame-options: DENY
+22:01:41.523851 http.c:792              <= Recv header, 0000000060 bytes (0x0000003c)
+22:01:41.523862 http.c:804              <= Recv header: x-github-request-id: 7594:6CCDD:1A437627:16D0B089:6A9F5ECB
+22:01:41.523874 http.c:792              <= Recv header, 0000000027 bytes (0x0000001b)
+22:01:41.523885 http.c:804              <= Recv header: x-github-edge-region: fra
+22:01:41.523899 http.c:792              <= Recv header, 0000000002 bytes (0x00000002)
+22:01:41.523909 http.c:804              <= Recv header:
+22:01:41.523942 http.c:845              == Info: Connection #0 to host github.com left intact
+22:01:41.536228 http.c:845              == Info: Found bundle for host: 0x5a4bc5bd1ef0 [can multiplex]
+22:01:41.536363 http.c:845              == Info: Re-using existing connection with host github.com
+22:01:41.536462 http.c:845              == Info: Server auth using Basic with user 'Tokenizaa'
+22:01:41.536692 http.c:845              == Info: [HTTP/2] [3] OPENED stream for https://github.com/Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack
+22:01:41.536723 http.c:845              == Info: [HTTP/2] [3] [:method: GET]
+22:01:41.536737 http.c:845              == Info: [HTTP/2] [3] [:scheme: https]
+22:01:41.536749 http.c:845              == Info: [HTTP/2] [3] [:authority: github.com]
+22:01:41.536765 http.c:845              == Info: [HTTP/2] [3] [:path: /Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack]
+22:01:41.536789 http.c:845              == Info: [HTTP/2] [3] [authorization: Basic <redacted>]
+22:01:41.536802 http.c:845              == Info: [HTTP/2] [3] [user-agent: git/2.43.0]
+22:01:41.536814 http.c:845              == Info: [HTTP/2] [3] [accept: */*]
+22:01:41.536826 http.c:845              == Info: [HTTP/2] [3] [accept-encoding: deflate, gzip, br, zstd]
+22:01:41.536857 http.c:845              == Info: [HTTP/2] [3] [accept-language: pt-BR, *;q=0.9]
+22:01:41.536883 http.c:845              == Info: [HTTP/2] [3] [pragma: no-cache]
+22:01:41.537114 http.c:792              => Send header, 0000000323 bytes (0x00000143)
+22:01:41.537157 http.c:804              => Send header: GET /Tokenizaa/AdeusMultas-Defesa-.git/info/refs?service=git-receive-pack HTTP/2
+22:01:41.537172 http.c:804              => Send header: Host: github.com
+22:01:41.537183 http.c:804              => Send header: Authorization: Basic <redacted>
+22:01:41.537204 http.c:804              => Send header: User-Agent: git/2.43.0
+22:01:41.537228 http.c:804              => Send header: Accept: */*
+22:01:41.537248 http.c:804              => Send header: Accept-Encoding: deflate, gzip, br, zstd
+22:01:41.537269 http.c:804              => Send header: Accept-Language: pt-BR, *;q=0.9
+22:01:41.537311 http.c:804              => Send header: Pragma: no-cache
+22:01:41.537343 http.c:804              => Send header:
+22:01:42.060499 http.c:792              <= Recv header, 0000000013 bytes (0x0000000d)
+22:01:42.060613 http.c:804              <= Recv header: HTTP/2 200
+22:01:42.060649 http.c:792              <= Recv header, 0000000026 bytes (0x0000001a)
+22:01:42.060667 http.c:804              <= Recv header: server: GitHub-Babel/3.0
+22:01:42.060689 http.c:792              <= Recv header, 0000000060 bytes (0x0000003c)
+22:01:42.060705 http.c:804              <= Recv header: content-type: application/x-git-receive-pack-advertisement
+22:01:42.060722 http.c:792              <= Recv header, 0000000054 bytes (0x00000036)
+22:01:42.060740 http.c:804              <= Recv header: content-security-policy: default-src 'none'; sandbox
+22:01:42.060759 http.c:792              <= Recv header, 0000000040 bytes (0x00000028)
+22:01:42.060772 http.c:804              <= Recv header: expires: Fri, 01 Jan 1980 00:00:00 GMT
+22:01:42.060789 http.c:792              <= Recv header, 0000000018 bytes (0x00000012)
+22:01:42.060802 http.c:804              <= Recv header: pragma: no-cache
+22:01:42.060819 http.c:792              <= Recv header, 0000000053 bytes (0x00000035)
+22:01:42.060869 http.c:804              <= Recv header: cache-control: no-cache, max-age=0, must-revalidate
+22:01:42.060889 http.c:792              <= Recv header, 0000000023 bytes (0x00000017)
+22:01:42.060904 http.c:804              <= Recv header: vary: Accept-Encoding
+22:01:42.060920 http.c:792              <= Recv header, 0000000045 bytes (0x0000002d)
+22:01:42.060934 http.c:804              <= Recv header: strict-transport-security: max-age=31536000
+22:01:42.060952 http.c:792              <= Recv header, 0000000037 bytes (0x00000025)
+22:01:42.060967 http.c:804              <= Recv header: date: Tue, 08 Sep 2026 01:03:08 GMT
+22:01:42.060983 http.c:792              <= Recv header, 0000000023 bytes (0x00000017)
+22:01:42.060995 http.c:804              <= Recv header: x-frame-options: DENY
+22:01:42.061009 http.c:792              <= Recv header, 0000000060 bytes (0x0000003c)
+22:01:42.061023 http.c:804              <= Recv header: x-github-request-id: 7594:6CCDD:1A4379B5:16D0B3C0:6A9F5ECB
+22:01:42.061046 http.c:792              <= Recv header, 0000000027 bytes (0x0000001b)
+22:01:42.061064 http.c:804              <= Recv header: x-github-edge-region: fra
+22:01:42.061082 http.c:792              <= Recv header, 0000000002 bytes (0x00000002)
+22:01:42.061098 http.c:804              <= Recv header:
+22:01:42.061147 http.c:845              == Info: Connection #0 to host github.com left intact
+fatal: unable to get credential storage lock in 1000 ms: Read-only file system
+To https://github.com/Tokenizaa/AdeusMultas-Defesa-.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/Tokenizaa/AdeusMultas-Defesa-.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.

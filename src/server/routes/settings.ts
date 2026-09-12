@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { settingsService } from '../services/settings-service';
 import { logger } from '../observability/logger';
-import { auditLogs } from '../app';
+import { auditLogs } from '../stores';
 import { healthService } from '../observability/health-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 

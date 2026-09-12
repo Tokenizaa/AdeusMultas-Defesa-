@@ -1,401 +1,1947 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// src/scraper-prospecting/supabase.ts
+import { createClient as createClient3 } from "@supabase/supabase-js";
+var url, serviceRoleKey, supabaseAdmin;
+var init_supabase = __esm({
+  "src/scraper-prospecting/supabase.ts"() {
+    url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+    serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "").trim();
+    supabaseAdmin = url && serviceRoleKey ? createClient3(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    }) : null;
+  }
+});
+
+// src/scraper-prospecting/logger.ts
+function sanitizeMeta(meta) {
+  if (!meta) return {};
+  const cleaned = {};
+  for (const [k, v] of Object.entries(meta)) {
+    const lowerK = k.toLowerCase();
+    if (PII_FIELDS.some((f) => lowerK.includes(f))) {
+      if (typeof v === "string") {
+        let masked = v;
+        for (const [pattern, replacement] of PII_PATTERNS) {
+          masked = masked.replace(pattern, replacement);
+        }
+        cleaned[k] = masked;
+      } else {
+        cleaned[k] = v;
+      }
+    } else if (typeof v === "string") {
+      let masked = v;
+      for (const [pattern, replacement] of PII_PATTERNS) {
+        masked = masked.replace(pattern, replacement);
+      }
+      cleaned[k] = masked;
+    } else {
+      cleaned[k] = v;
+    }
+  }
+  return cleaned;
+}
+var PII_FIELDS, PII_PATTERNS, ConsoleLogger, logger2;
+var init_logger = __esm({
+  "src/scraper-prospecting/logger.ts"() {
+    PII_FIELDS = ["phone", "cellphone", "contactPhone", "email", "name", "contactName", "plate", "licensePlate", "cpf", "cnh", "rg"];
+    PII_PATTERNS = [
+      [/\b(\d{2})\s?9?\s?\d{4}\s?\d{4}\b/g, "(**) *****-****"],
+      // Brazilian phone
+      [/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "***@***.***"],
+      // email
+      [/\b[A-Z]{3}[-]?\d{4}\b/g, "***-****"],
+      // Brazilian plate
+      [/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, "***.$2.***-**"]
+      // CPF
+    ];
+    ConsoleLogger = class {
+      constructor() {
+        this.prefix = "[scraper-prospecting]";
+      }
+      format(level, message, meta) {
+        const time = (/* @__PURE__ */ new Date()).toISOString();
+        const sanitized = sanitizeMeta(meta);
+        const metaStr = Object.keys(sanitized).length > 0 ? ` ${JSON.stringify(sanitized)}` : "";
+        return `${time} ${this.prefix} ${level.toUpperCase()} ${message}${metaStr}`;
+      }
+      info(message, meta) {
+        console.log(this.format("info", message, meta));
+      }
+      warn(message, meta) {
+        console.warn(this.format("warn", message, meta));
+      }
+      error(message, meta) {
+        console.error(this.format("error", message, meta));
+      }
+    };
+    logger2 = new ConsoleLogger();
+  }
+});
+
+// src/scraper-prospecting/classifier.ts
+function classifyLead(raw) {
+  const haystack = [raw.category, raw.name].filter(Boolean).join(" ").toLowerCase();
+  const isDespachante = DESPACHANTE_KEYWORDS.some((kw) => haystack.includes(kw));
+  const isAdvogado = ADVOGADO_KEYWORDS.some((kw) => haystack.includes(kw));
+  if (isDespachante && !isAdvogado) return "despachante";
+  if (isAdvogado && !isDespachante) return "advogado_transito";
+  if (isDespachante && isAdvogado) {
+    if (raw.category) {
+      const cat = raw.category.toLowerCase();
+      if (cat.includes("advogado")) return "advogado_transito";
+      if (cat.includes("despachante")) return "despachante";
+    }
+    return null;
+  }
+  return null;
+}
+var DESPACHANTE_KEYWORDS, ADVOGADO_KEYWORDS;
+var init_classifier = __esm({
+  "src/scraper-prospecting/classifier.ts"() {
+    DESPACHANTE_KEYWORDS = [
+      "despachante",
+      "despachante de tr\xE2nsito",
+      "despachante documentalista",
+      "despachante ve\xEDculos",
+      "despachante veicular",
+      "despachante detran"
+    ];
+    ADVOGADO_KEYWORDS = [
+      "advogado direito de tr\xE2nsito",
+      "advogado tr\xE2nsito",
+      "advogado defesa multa",
+      "advogado suspens\xE3o cnh",
+      "advogado cassa\xE7\xE3o cnh",
+      "advogado tr\xE2nsito",
+      "direito de tr\xE2nsito",
+      "tr\xE2nsito direito",
+      "advocacia de tr\xE2nsito",
+      "defesa de multa",
+      "suspens\xE3o cnh",
+      "cassa\xE7\xE3o cnh"
+    ];
+  }
+});
+
+// src/scraper-prospecting/normalizer.ts
+function normalizePhone(phone) {
+  if (!phone) return void 0;
+  let digits = phone.replace(/\D/g, "");
+  if (!digits) return void 0;
+  if (digits.length > 10 && digits.startsWith("55") && digits.length - 2 >= 10) {
+    digits = digits.slice(2);
+  }
+  if (digits.length > 10 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  return digits;
+}
+function extractCleanPhone(text) {
+  if (!text) return null;
+  const match = text.match(BR_PHONE_RE);
+  if (!match) return null;
+  const digits = normalizePhone(match[0]);
+  if (!digits || digits.length < 10 || digits.length > 11) return null;
+  return digits;
+}
+function cleanPhoneFromTel(href) {
+  if (!href) return null;
+  const digits = normalizePhone(href);
+  if (!digits || digits.length < 10 || digits.length > 11) return null;
+  return digits;
+}
+function normalizeWebsite(website) {
+  if (!website) return void 0;
+  let url2 = website.trim().toLowerCase();
+  if (!/^https?:\/\//.test(url2)) {
+    url2 = `https://${url2}`;
+  }
+  try {
+    const u = new URL(url2);
+    u.pathname = u.pathname.replace(/\/$/, "");
+    return u.toString();
+  } catch {
+    return url2;
+  }
+}
+function normalizeEmail(email) {
+  if (!email) return void 0;
+  return email.trim().toLowerCase();
+}
+var BR_PHONE_RE;
+var init_normalizer = __esm({
+  "src/scraper-prospecting/normalizer.ts"() {
+    BR_PHONE_RE = /(?:\+?55[\s-]?)?(?:\(?(\d{2})\)?[\s-]?)?(\d{4,5}[\s-]?\d{4})/;
+  }
+});
+
+// src/scraper-prospecting/seen-filter.ts
+function buildSeenKeys(sourceUrl, phone, website, email) {
+  const keys = [];
+  if (sourceUrl) keys.push(`url:${sourceUrl}`);
+  const phoneKey = normalizePhone(phone ?? void 0) || "";
+  const webKey = (website || "").toLowerCase().trim();
+  const emailKey = (email || "").toLowerCase().trim();
+  const composite = [phoneKey, webKey, emailKey].filter(Boolean).join("|");
+  if (composite) keys.push(`id:${composite}`);
+  return keys;
+}
+function isSeen(seenKeys, sourceUrl, phone, website, email) {
+  return buildSeenKeys(sourceUrl, phone, website, email).some((k) => seenKeys.has(k));
+}
+function stillNeedsScroll(collectedNew, requiredNew, extraRoundsUsed, maxExtraRounds) {
+  if (requiredNew <= 0) return false;
+  if (extraRoundsUsed >= maxExtraRounds) return false;
+  return collectedNew < requiredNew;
+}
+var init_seen_filter = __esm({
+  "src/scraper-prospecting/seen-filter.ts"() {
+    init_normalizer();
+  }
+});
+
+// src/scraper-prospecting/selenium/session.ts
+import { Builder, Capabilities } from "selenium-webdriver";
+import chrome from "selenium-webdriver/chrome.js";
+var USER_AGENT, SeleniumSession;
+var init_session = __esm({
+  "src/scraper-prospecting/selenium/session.ts"() {
+    init_logger();
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    SeleniumSession = class {
+      constructor(options = {}) {
+        this.driver = null;
+        this.options = {
+          headless: true,
+          args: [
+            "--headless",
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--window-size=1920,1080",
+            "--disable-blink-features=AutomationDetected",
+            "--disable-extensions",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-default-apps"
+          ],
+          ...options
+        };
+      }
+      async start() {
+        if (this.driver) return this.driver;
+        try {
+          const caps = Capabilities.chrome();
+          const opt = new chrome.Options();
+          const flagSet = new Set(this.options.args || []);
+          if (this.options.headless) {
+            flagSet.add("--headless");
+            flagSet.add("--headless=new");
+            flagSet.add("--disable-gpu");
+            flagSet.add("--no-sandbox");
+            flagSet.add("--disable-dev-shm-usage");
+          }
+          opt.addArguments(...Array.from(flagSet));
+          opt.addArguments(`--user-agent=${USER_AGENT}`);
+          this.driver = await new Builder().forBrowser("chrome").withCapabilities(caps).setChromeOptions(opt).build();
+          await this.driver.manage().setTimeouts({ implicit: 0, pageLoad: 45e3, script: 3e4 });
+          await this.driver.executeScript(
+            `Object.defineProperty(navigator, 'webdriver', { get: () => false });`
+          ).catch(() => void 0);
+          logger2.info("Selenium session iniciada (headless)");
+          return this.driver;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Falha ao iniciar Chrome/Selenium";
+          logger2.error("Erro ao iniciar sess\xE3o Selenium", { error: message });
+          throw new Error(message);
+        }
+      }
+      async getDriver() {
+        if (!this.driver) {
+          return this.start();
+        }
+        return this.driver;
+      }
+      async navigate(url2) {
+        const driver = await this.getDriver();
+        await driver.get(url2);
+      }
+      async wait(ms) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      }
+      async waitForSelector(selector, timeoutMs = 1e4) {
+        try {
+          const driver = await this.getDriver();
+          await driver.wait(
+            async (d) => {
+              try {
+                const els = await d.findElements({ css: selector });
+                return els.length > 0;
+              } catch {
+                return false;
+              }
+            },
+            timeoutMs,
+            `Timeout aguardando seletor: ${selector}`
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      async findElement(selector) {
+        const driver = await this.getDriver();
+        try {
+          return await driver.findElement({ css: selector });
+        } catch {
+          return null;
+        }
+      }
+      async findElements(selector) {
+        const driver = await this.getDriver();
+        try {
+          return await driver.findElements({ css: selector });
+        } catch {
+          return [];
+        }
+      }
+      async scrollContainer(containerSelector) {
+        const driver = await this.getDriver();
+        await driver.executeScript(
+          `const el = document.querySelector(arguments[0]); if (el) { const max = el.scrollHeight - el.clientHeight; if (max > 0) el.scrollTop = max; }`,
+          containerSelector
+        );
+      }
+      async scrollWindow(pixelY = 800) {
+        const driver = await this.getDriver();
+        await driver.executeScript(`window.scrollBy(0, arguments[0]);`, pixelY);
+      }
+      async getCurrentUrl() {
+        const driver = await this.getDriver();
+        return driver.getCurrentUrl();
+      }
+      async getTitle() {
+        const driver = await this.getDriver();
+        return driver.getTitle();
+      }
+      async evaluate(fn) {
+        const driver = await this.getDriver();
+        return driver.executeScript(`return (function() { ${fn.toString()} })();`);
+      }
+      async getUrl() {
+        const driver = await this.getDriver();
+        return driver.getCurrentUrl();
+      }
+      async back() {
+        const driver = await this.getDriver();
+        await driver.navigate().back();
+      }
+      async close() {
+        if (this.driver) {
+          await this.driver.quit().catch(() => void 0);
+          this.driver = null;
+          logger2.info("Selenium session encerrada");
+        }
+      }
+    };
+  }
+});
+
+// src/scraper-prospecting/selenium/google-maps-scraper.ts
+function deriveCityStateZip(address) {
+  if (!address) return {};
+  const out = {};
+  const zipMatch = address.match(/\b(\d{5}-?\d{3})\b/);
+  if (zipMatch) out.zipCode = zipMatch[1].replace("-", "");
+  const ufMatch = address.match(/\b([A-Za-z]{2})\b(?=[\s,;-]*$)/) || address.match(/\b([A-Za-z]{2})\b[\s,;-]*\d{5}/);
+  if (ufMatch && /^[A-Za-z]{2}$/.test(ufMatch[1])) {
+    const uf = ufMatch[1].toUpperCase();
+    out.state = uf;
+    const withoutZip = address.replace(/\d{5}-?\d{3}/g, " ").trim();
+    const ufIndex = withoutZip.toUpperCase().lastIndexOf(uf);
+    if (ufIndex > 0) {
+      const beforeUf = withoutZip.slice(0, ufIndex).trim();
+      const parts = beforeUf.split(/[,，/-]/).map((p) => p.trim()).filter(Boolean);
+      const city = parts[parts.length - 1];
+      if (city && !/^\d+$/.test(city)) out.city = city;
+    }
+  }
+  return out;
+}
+var GENERIC_NAMES, FEED_SELECTORS, GoogleMapsSeleniumScraper;
+var init_google_maps_scraper = __esm({
+  "src/scraper-prospecting/selenium/google-maps-scraper.ts"() {
+    init_normalizer();
+    init_seen_filter();
+    init_logger();
+    GENERIC_NAMES = /* @__PURE__ */ new Set([
+      "Resultados",
+      "Resultado",
+      "Patrocinado",
+      "An\xFAncio",
+      "Mapa",
+      "Saiba mais sobre a divulga\xE7\xE3o legal de avalia\xE7\xF5es p\xFAblicas no Google Maps"
+    ]);
+    FEED_SELECTORS = [
+      'div[role="feed"]',
+      '[aria-label*="Resultados"]',
+      "div"
+    ];
+    GoogleMapsSeleniumScraper = class {
+      constructor(session, callbacks = {}) {
+        this.blocked = false;
+        this.callbacks = {};
+        this.session = session;
+        this.callbacks = callbacks;
+      }
+      setCallbacks(callbacks) {
+        this.callbacks = { ...this.callbacks, ...callbacks };
+      }
+      extractPlaceId(url2) {
+        if (!url2) return null;
+        const match = url2.match(/!1s([^!]+)/);
+        if (match && match[1]) {
+          return match[1];
+        }
+        const placeMatch = url2.match(/place\/([^/@?]+)/);
+        return placeMatch ? decodeURIComponent(placeMatch[1]) : null;
+      }
+      async detectPageState() {
+        const url2 = await this.session.getUrl();
+        if (/consent\.google\.com|consent\.google\.br/.test(url2)) {
+          return { status: "CONSENT_REQUIRED", reason: "P\xE1gina de consentimento de cookies detectada." };
+        }
+        if (/accounts\.google\.com/.test(url2)) {
+          return { status: "LOGIN_REQUIRED", reason: "Tela de login do Google detectada." };
+        }
+        if (/sorry\/index\?/.test(url2)) {
+          return { status: "BLOCKED", reason: "Bloqueio/verifica\xE7\xE3o de automa\xE7\xE3o." };
+        }
+        if (/captcha/.test(url2.toLowerCase())) {
+          return { status: "CAPTCHA", reason: "CAPTCHA detectado." };
+        }
+        return { status: "UNKNOWN", reason: "Estrutura n\xE3o reconhecida ou sem resultados." };
+      }
+      async findFeedContainer() {
+        for (const sel of FEED_SELECTORS) {
+          const found = await this.session.findElements(sel);
+          if (found.length > 0) {
+            const links = await this.session.findElements(`${sel} a[href*="/maps/place/"]`);
+            if (links.length > 0 || sel === 'div[role="feed"]') {
+              return sel;
+            }
+          }
+        }
+        return null;
+      }
+      async getPlaceLinkCount(containerSelector) {
+        const driver = await this.session.getDriver();
+        try {
+          return await driver.executeScript(
+            `return document.querySelectorAll(arguments[0] + ' a[href*="/maps/place/"]').length;`,
+            containerSelector
+          );
+        } catch {
+          return 0;
+        }
+      }
+      async scrollUntilNoNewItems(feedSelector, targetNewCount, existingCount, maxScrolls = 200) {
+        const WAIT_BETWEEN_SCROLLS = 3e3;
+        const STABLE_THRESHOLD = 5;
+        let lastCount = existingCount;
+        let stableRounds = 0;
+        let stopped = "no_new";
+        for (let scrolls = 0; scrolls < maxScrolls; scrolls++) {
+          if (this.callbacks.onCheckCancel?.()) {
+            logger2.info("Scroll cancelado pelo usu\xE1rio", { jobId: this.callbacks });
+            stopped = "no_new";
+            break;
+          }
+          await this.session.scrollContainer(feedSelector);
+          await this.session.wait(WAIT_BETWEEN_SCROLLS);
+          const afterCount = await this.getPlaceLinkCount(feedSelector);
+          const delta = afterCount - lastCount;
+          const newCollected = Math.max(0, afterCount - existingCount);
+          logger2.info("Scroll progressivo", {
+            scroll: scrolls + 1,
+            before: lastCount,
+            after: afterCount,
+            delta,
+            newCollected,
+            targetNewCount
+          });
+          if (delta > 0) {
+            stableRounds = 0;
+            lastCount = afterCount;
+          } else {
+            stableRounds += 1;
+          }
+          if (newCollected >= targetNewCount && targetNewCount > 0) {
+            stopped = "limit_reached";
+            break;
+          }
+          if (stableRounds >= STABLE_THRESHOLD && delta === 0) {
+            stopped = "no_new";
+            break;
+          }
+        }
+        if (stopped !== "limit_reached") {
+          const finalCount = await this.getPlaceLinkCount(feedSelector);
+          if (finalCount === lastCount && stableRounds >= STABLE_THRESHOLD) {
+            stopped = "no_new";
+          } else if (stableRounds < STABLE_THRESHOLD) {
+            stopped = "max_scrolls";
+          }
+        }
+        return { selector: feedSelector, newCount: Math.max(0, lastCount - existingCount), stopped };
+      }
+      /**
+       * FASE 1 - DISCOVERY: Coleta todos os cards do feed sem abrir detalhes.
+       * Retorna array de DiscoveredCard com URL e dados básicos.
+       */
+      async discoverAllCards(feedSelector, requiredNew, seenKeys) {
+        const driver = await this.session.getDriver();
+        const genericNames = Array.from(GENERIC_NAMES);
+        const discovered = [];
+        let extraScrollRounds = 0;
+        const maxExtraScrollRounds = 3;
+        while (true) {
+          if (this.callbacks.onCheckCancel?.()) break;
+          if (requiredNew > 0 && discovered.length >= requiredNew) break;
+          const cards = await driver.findElements({ css: `${feedSelector} a[href*="/maps/place/"]` });
+          for (let i = discovered.length; i < cards.length; i++) {
+            if (this.callbacks.onCheckCancel?.()) break;
+            if (requiredNew > 0 && discovered.length >= requiredNew) break;
+            const cardEl = cards[i];
+            try {
+              const data = await driver.executeScript(
+                (element, idx, genericNames2) => {
+                  const GENERIC_NAMES2 = new Set(genericNames2);
+                  const cardEl2 = element;
+                  const text = cardEl2.innerText || "";
+                  const linkEl = cardEl2.tagName === "A" ? cardEl2 : cardEl2.querySelector('a[href*="/maps/place/"]');
+                  const mapsUrl = linkEl?.getAttribute("href") || void 0;
+                  const label = linkEl?.getAttribute("aria-label") || void 0;
+                  const nameEl = cardEl2.querySelector('[role="heading"], h1, h2, h3');
+                  const fallbackName = cardEl2.tagName === "A" ? cardEl2.textContent?.trim() || label?.replace(/^.*:\s*/, "")?.trim() : void 0;
+                  const name = nameEl?.textContent?.trim() || fallbackName || `Resultado ${idx + 1}`;
+                  if (!mapsUrl || GENERIC_NAMES2.has(name) || name.startsWith("Resultado") || name === "Resultados") {
+                    return {};
+                  }
+                  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+                  const fullText = lines.join(" ").toLowerCase();
+                  const lead = { name, sourceUrl: mapsUrl, googleMapsUrl: mapsUrl };
+                  const categoryMatch = lines.find((l) => /despachante|advogado|direito|trânsito|detran|cnh/i.test(l));
+                  let leadType;
+                  if (/despachante/.test(fullText)) {
+                    lead.category = "despachante de tr\xE2nsito";
+                    leadType = "despachante";
+                  } else if (/advogado|direito de trânsito|trânsito direito|defesa de multa|suspensão cnh|cassação cnh/.test(fullText)) {
+                    lead.category = categoryMatch ? categoryMatch : "advogado direito de tr\xE2nsito";
+                    leadType = "advogado_transito";
+                  }
+                  if (!lead.category && mapsUrl) {
+                    const catMatch = mapsUrl.match(/place\/([^/]+)/);
+                    if (catMatch) {
+                      const slug = decodeURIComponent(catMatch[1]).toLowerCase();
+                      if (slug.includes("despachante")) {
+                        lead.category = "despachante de tr\xE2nsito";
+                        leadType = "despachante";
+                      } else if (slug.includes("advogado") || slug.includes("transito")) {
+                        lead.category = "advogado direito de tr\xE2nsito";
+                        leadType = "advogado_transito";
+                      }
+                    }
+                  }
+                  return { ...lead, leadType };
+                },
+                cardEl,
+                i
+              );
+              if (!data || !data.sourceUrl) continue;
+              if (discovered.some((d) => d.sourceUrl === data.sourceUrl)) continue;
+              if (isSeen(seenKeys, data.sourceUrl, data.phone, data.website, data.email)) {
+                logger2.info("Card j\xE1 conhecido (banco), pulando", { url: data.sourceUrl });
+                continue;
+              }
+              discovered.push(data);
+            } catch (err) {
+              logger2.warn("Erro ao extrair card base", { index: i, error: err instanceof Error ? err.message : err });
+            }
+          }
+          if (discovered.length >= cards.length) {
+            if (stillNeedsScroll(discovered.length, requiredNew, extraScrollRounds, maxExtraScrollRounds)) {
+              const loaded = await this.getPlaceLinkCount(feedSelector);
+              const more = await this.scrollUntilNoNewItems(feedSelector, requiredNew - discovered.length, loaded);
+              if (more.newCount === 0) break;
+              extraScrollRounds += 1;
+              continue;
+            }
+            break;
+          }
+        }
+        logger2.info("Discovery conclu\xEDdo", { totalDiscovered: discovered.length });
+        return discovered;
+      }
+      /**
+       * FASE 2 - DETAIL EXTRACTION: Para cada card descoberto, navega direto para a URL
+       * e extrai detalhes completos. Não usa click/back - navega direto.
+       */
+      async extractDetailsForCards(discovered, seenKeys, scrapedFor) {
+        const leads = [];
+        let duplicates = 0;
+        let rejected = 0;
+        const errors = [];
+        for (let i = 0; i < discovered.length; i++) {
+          if (this.callbacks.onCheckCancel?.()) break;
+          const card = discovered[i];
+          try {
+            this.callbacks.onProgress?.({
+              phase: "details",
+              discovered: discovered.length,
+              processed: i + 1,
+              persisted: leads.length,
+              duplicates,
+              errors: errors.length
+            });
+            await this.session.navigate(card.sourceUrl);
+            await this.session.wait(2500);
+            const detailReady = await this.session.waitForSelector(
+              'a[href^="tel:"], button[data-item-id="address"], button[data-item-id="oh"], div[role="main"]',
+              8e3
+            );
+            if (!detailReady) await this.session.wait(1500);
+            const detail = await this.extractDetailFromPanel();
+            const enriched = {
+              name: card.name,
+              category: card.category,
+              sourceUrl: card.sourceUrl,
+              googleMapsUrl: card.googleMapsUrl,
+              lead_type: card.leadType,
+              ...detail,
+              scrapedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              searchTerm: scrapedFor.query,
+              searchLocation: `${scrapedFor.city}, ${scrapedFor.state}`
+            };
+            for (const key of buildSeenKeys(enriched.sourceUrl, enriched.phone, enriched.website, enriched.email)) {
+              seenKeys.add(key);
+            }
+            leads.push(enriched);
+            if (this.callbacks.onCardExtracted) {
+              try {
+                await this.callbacks.onCardExtracted(enriched, i + 1, discovered.length);
+              } catch (callbackErr) {
+                logger2.warn("Aviso no callback onCardExtracted:", { error: callbackErr instanceof Error ? callbackErr.message : callbackErr });
+              }
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Erro ao extrair detalhe";
+            errors.push(message);
+            rejected += 1;
+            logger2.warn("Erro ao processar card", { url: card.sourceUrl, error: message });
+          }
+        }
+        return { leads, duplicates, rejected, errors };
+      }
+      /**
+       * Extrai dados completos do painel de detalhes via DOM.
+       * Não depende de click/back - apenas lê o DOM atual.
+       */
+      async extractDetailFromPanel() {
+        const driver = await this.session.getDriver();
+        const detail = {};
+        try {
+          const panelData = await driver.executeScript(() => {
+            const data = {};
+            const rawData = {};
+            const telLink = document.querySelector('a[href^="tel:"]');
+            if (telLink) {
+              data.phoneRaw = telLink.getAttribute("href") || void 0;
+              data.phoneLabel = telLink.getAttribute("aria-label") || telLink.textContent?.trim() || void 0;
+              rawData.phoneHref = telLink.getAttribute("href");
+              rawData.phoneAriaLabel = telLink.getAttribute("aria-label");
+            }
+            const siteLink = Array.from(document.querySelectorAll('a[href^="http"]')).find(
+              (a) => a.href && !/^https?:\/\/(www\.)?((.*\.)?google\.(com|com\.br|br)|maps\.google\.)/i.test(a.href) && !/(support\.google|policies\.google|accounts\.google|maps\.google)/i.test(a.href)
+            );
+            if (siteLink) {
+              data.website = siteLink.href;
+              rawData.websiteHref = siteLink.href;
+            }
+            const addrBtn = document.querySelector(
+              'button[data-item-id="address"], div[data-item-id="address"]'
+            );
+            if (addrBtn) {
+              data.address = addrBtn.textContent?.trim() || void 0;
+              rawData.addressText = addrBtn.textContent?.trim();
+            }
+            const hoursBtn = document.querySelector('button[data-item-id="oh"]');
+            if (hoursBtn) {
+              data.openingHours = hoursBtn.textContent?.trim() || void 0;
+              rawData.openingHoursText = hoursBtn.textContent?.trim();
+            }
+            const ratingEl = Array.from(document.querySelectorAll('[role="img"][aria-label]')).find(
+              (el) => /(estrelas?|stars?|5)/i.test(el.getAttribute("aria-label") || "")
+            );
+            if (ratingEl) {
+              const label = ratingEl.getAttribute("aria-label") || "";
+              const m = label.match(/(\d+[.,]\d+)/);
+              if (m) data.rating = parseFloat(m[1].replace(",", "."));
+              rawData.ratingAriaLabel = label;
+            }
+            const mainText = document.querySelector('div[role="main"], [data-item-id="address"]')?.textContent || "";
+            const reviewMatch = mainText.match(/(\d{1,6})\s+(avaliações?|comentários?|reviews?)/i);
+            if (reviewMatch) data.reviewCount = parseInt(reviewMatch[1], 10);
+            rawData.mainTextSnippet = mainText.slice(0, 2e3);
+            const placeIdMatch = window.location.href.match(/place\/([^\/]+)/);
+            if (placeIdMatch) {
+              data.placeId = placeIdMatch[1];
+              rawData.placeIdFromUrl = placeIdMatch[1];
+            }
+            const priceEl = document.querySelector('[data-price-level], [aria-label*="Pre\xE7o"], [aria-label*="price"]');
+            if (priceEl) {
+              const priceText = priceEl.textContent || priceEl.getAttribute("aria-label") || "";
+              const priceMatch = priceText.match(/[€$R\$]\s*\d+|gratuito|free|\$\d+/i);
+              if (priceMatch) data.priceLevel = priceMatch[0];
+              rawData.priceText = priceText;
+            }
+            const statusEl = document.querySelector(
+              '[data-item-id="oh"] ~ div, .ZDu9vd, [aria-label*="Aberto"], [aria-label*="Fechado"], [aria-label*="Open"], [aria-label*="Closed"]'
+            );
+            if (statusEl) {
+              data.currentStatus = statusEl.textContent?.trim() || void 0;
+              rawData.currentStatusText = statusEl.textContent?.trim();
+            }
+            const descEl = document.querySelector('[data-item-id="description"], [jsaction*="description"], .PYvSYb');
+            if (descEl) {
+              data.description = descEl.textContent?.trim() || void 0;
+              rawData.descriptionText = descEl.textContent?.trim();
+            }
+            const latLngMatch = window.location.href.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (latLngMatch) {
+              data.latitude = parseFloat(latLngMatch[1]);
+              data.longitude = parseFloat(latLngMatch[2]);
+              rawData.latLngFromUrl = { lat: latLngMatch[1], lng: latLngMatch[2] };
+            }
+            const plusCodeEl = document.querySelector('[data-item-id="plus_code"], [aria-label*="Plus Code"]');
+            if (plusCodeEl) {
+              data.plusCode = plusCodeEl.textContent?.trim() || void 0;
+              rawData.plusCodeText = plusCodeEl.textContent?.trim();
+            }
+            const socialLinks = [];
+            const socialSelectors = [
+              'a[href*="instagram.com"]',
+              'a[href*="facebook.com"]',
+              'a[href*="linkedin.com"]',
+              'a[href*="twitter.com"]',
+              'a[href*="youtube.com"]'
+            ];
+            for (const sel of socialSelectors) {
+              const els = document.querySelectorAll(sel);
+              els.forEach((el) => {
+                if (el.href && !socialLinks.includes(el.href)) socialLinks.push(el.href);
+              });
+            }
+            if (socialLinks.length > 0) {
+              data.socialLinks = socialLinks;
+              rawData.socialLinks = socialLinks;
+            }
+            const panel = document.querySelector('div[role="main"]');
+            if (panel) {
+              rawData.panelHtml = panel.innerHTML.slice(0, 5e4);
+            }
+            data.rawData = rawData;
+            return data;
+          }).catch(() => ({}));
+          const telHref = panelData.phoneRaw || "";
+          const telLabel = panelData.phoneLabel || "";
+          const phoneFromHref = cleanPhoneFromTel(telHref);
+          const phoneFromLabel = extractCleanPhone(telLabel);
+          const phone = phoneFromHref || phoneFromLabel;
+          if (phone) detail.phone = phone;
+          if (panelData.website) detail.website = panelData.website;
+          if (panelData.address) {
+            detail.address = panelData.address;
+            const derived = deriveCityStateZip(panelData.address);
+            if (derived.city) detail.city = derived.city;
+            if (derived.state) detail.state = derived.state;
+            if (derived.zipCode) detail.zipCode = derived.zipCode;
+          }
+          if (panelData.rating != null) detail.rating = panelData.rating;
+          if (panelData.reviewCount != null) detail.reviewCount = panelData.reviewCount;
+          if (panelData.openingHours) detail.openingHours = panelData.openingHours;
+          if (panelData.placeId) detail.placeId = panelData.placeId;
+          if (panelData.priceLevel) detail.priceLevel = panelData.priceLevel;
+          if (panelData.currentStatus) detail.currentStatus = panelData.currentStatus;
+          if (panelData.description) detail.description = panelData.description;
+          if (panelData.latitude != null) detail.latitude = panelData.latitude;
+          if (panelData.longitude != null) detail.longitude = panelData.longitude;
+          if (panelData.plusCode) detail.plusCode = panelData.plusCode;
+          if (panelData.socialLinks) detail.socialLinks = panelData.socialLinks;
+          if (panelData.rawData) detail.rawData = panelData.rawData;
+        } catch (err) {
+          logger2.warn("Falha ao extrair painel de detalhes", { error: err instanceof Error ? err.message : err });
+        }
+        return detail;
+      }
+      /**
+       * Método principal de busca com arquitetura discovery-first.
+       */
+      async search(query, location, requiredNew, seenKeys) {
+        const result = {
+          query: `${query} ${location}`,
+          location,
+          totalFound: 0,
+          inserted: 0,
+          filled: 0,
+          duplicates: 0,
+          completeDuplicates: 0,
+          rejected: 0,
+          errors: [],
+          leads: []
+        };
+        if (this.blocked) {
+          result.errors.push("Google bloqueou automa\xE7\xE3o anteriormente.");
+          return result;
+        }
+        const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query + " " + location)}?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDgyNC4w`;
+        try {
+          await this.session.navigate(searchUrl);
+          await this.session.wait(3e3);
+          const ready = await this.session.waitForSelector('a[href*="/maps/place/"], div[role="feed"]', 1e4);
+          if (!ready) {
+            const state = await this.detectPageState();
+            result.errors.push(`Timeout aguardando resultados. Motivo: ${state.reason}`);
+            result.errors.push(`URL: ${await this.session.getUrl()}`);
+            return result;
+          }
+          await this.session.wait(2e3);
+          const feedSelector = await this.findFeedContainer();
+          if (!feedSelector) {
+            const state = await this.detectPageState();
+            result.errors.push(`Feed n\xE3o encontrado. Motivo: ${state.reason}`);
+            result.errors.push(`URL: ${await this.session.getUrl()}`);
+            return result;
+          }
+          const initialCount = await this.getPlaceLinkCount(feedSelector);
+          logger2.info("Resultados iniciais no DOM", { count: initialCount, query });
+          this.callbacks.onProgress?.({
+            phase: "discovery",
+            discovered: 0,
+            processed: 0,
+            persisted: 0,
+            duplicates: 0,
+            errors: 0
+          });
+          const scrollResult = await this.scrollUntilNoNewItems(feedSelector, requiredNew, initialCount);
+          logger2.info("Scroll conclu\xEDdo", {
+            initialCount,
+            finalCount: initialCount + scrollResult.newCount,
+            newLoaded: scrollResult.newCount,
+            stopped: scrollResult.stopped,
+            query
+          });
+          result.totalFound = initialCount + scrollResult.newCount;
+          if (result.totalFound === 0) {
+            result.errors.push("Nenhum card encontrado no feed ap\xF3s scroll.");
+            return result;
+          }
+          this.callbacks.onProgress?.({
+            phase: "discovery",
+            discovered: result.totalFound,
+            processed: 0,
+            persisted: 0,
+            duplicates: 0,
+            errors: 0
+          });
+          const discovered = await this.discoverAllCards(feedSelector, requiredNew, seenKeys);
+          logger2.info("Discovery finalizado", { totalCards: discovered.length });
+          const scrapedFor = {
+            query,
+            city: location.split(",")[0]?.trim() || location,
+            state: (location.split(",")[1]?.trim() || "").slice(0, 2).toUpperCase(),
+            source: "google_maps"
+          };
+          const detailResult = await this.extractDetailsForCards(discovered, seenKeys, scrapedFor);
+          result.leads = detailResult.leads;
+          result.duplicates = detailResult.duplicates;
+          result.rejected = detailResult.rejected;
+          result.errors.push(...detailResult.errors);
+          this.callbacks.onProgress?.({
+            phase: "completed",
+            discovered: result.totalFound,
+            processed: discovered.length,
+            persisted: detailResult.leads.length,
+            duplicates: detailResult.duplicates,
+            errors: detailResult.errors.length
+          });
+          logger2.info("Extra\xE7\xE3o conclu\xEDda", {
+            query,
+            totalItems: result.totalFound,
+            newLeads: result.leads.length,
+            duplicates: detailResult.duplicates,
+            rejected: detailResult.rejected,
+            scrollStopped: scrollResult.stopped
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Erro desconhecido no Google Maps";
+          logger2.error("Falha no scraping do Google Maps (Selenium)", { error: message });
+          result.errors.push(message);
+          this.blocked = true;
+          if (err instanceof Error && (err.name === "WebDriverError" || err.message.includes("session"))) {
+            this.callbacks.onDriverCrash?.();
+          }
+        }
+        return result;
+      }
+      async close() {
+        await this.session.close();
+      }
+    };
+  }
+});
+
+// src/scraper-prospecting/persister.ts
+var persister_exports = {};
+__export(persister_exports, {
+  persistLeads: () => persistLeads,
+  runScrape: () => runScrape,
+  runScrapeAsJob: () => runScrapeAsJob
+});
+function isEmpty(val) {
+  return val === null || val === void 0 || val === "";
+}
+function computeFillColumns(existing, payload) {
+  const updates = {};
+  for (const key of FILLABLE_COLUMNS) {
+    const existingVal = existing[key];
+    const newVal = payload[key];
+    if (isEmpty(existingVal) && !isEmpty(newVal)) {
+      updates[key] = newVal;
+    }
+  }
+  return updates;
+}
+async function findExistingByUrl(url2) {
+  try {
+    for (const col of ["google_maps_url", "source_url"]) {
+      const { data, error } = await supabaseAdmin.from("marketing_leads").select("*").eq(col, url2).limit(1);
+      if (error) {
+        logger2.error("Erro ao buscar lead existente por URL", { col, url: url2, error: error.message });
+        return null;
+      }
+      if (data && data.length > 0) {
+        return data[0];
+      }
+    }
+    return null;
+  } catch (err) {
+    logger2.error("Falha ao buscar lead existente por URL", { error: err instanceof Error ? err.message : err });
+    return null;
+  }
+}
+function buildLead(raw, leadType, source, scrapedFor, collectionRunId) {
+  const phone = normalizePhone(raw.phone) || null;
+  const website = normalizeWebsite(raw.website) || null;
+  const email = normalizeEmail(raw.email) || null;
+  return {
+    name: raw.name,
+    category: raw.category || null,
+    phone,
+    phone_normalized: phone,
+    whatsapp: raw.whatsapp || null,
+    email,
+    website,
+    instagram: raw.instagram || null,
+    facebook: raw.facebook || null,
+    address: raw.address || null,
+    city: raw.city || null,
+    state: raw.state || null,
+    zipCode: raw.zipCode || null,
+    googleMapsUrl: raw.googleMapsUrl || null,
+    placeId: raw.placeId || null,
+    rating: raw.rating ?? null,
+    reviewCount: raw.reviewCount ?? null,
+    priceLevel: raw.priceLevel ?? null,
+    openingHours: raw.openingHours || null,
+    currentStatus: raw.currentStatus || null,
+    description: raw.description || null,
+    latitude: raw.latitude ?? null,
+    longitude: raw.longitude ?? null,
+    plusCode: raw.plusCode || null,
+    socialLinks: raw.socialLinks || null,
+    rawData: raw.rawData || null,
+    sourceUrl: raw.sourceUrl || "",
+    lead_type: leadType,
+    source,
+    scraped_at: raw.scrapedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    scraped_for: scrapedFor,
+    collection_run_id: collectionRunId,
+    searchTerm: raw.searchTerm || null,
+    searchLocation: raw.searchLocation || null
+  };
+}
+async function persistLeads(rawLeads, source, scrapedFor = null, collectionRunId = null) {
+  const result = { inserted: 0, filled: 0, duplicates: 0, completeDuplicates: 0, rejected: 0, errors: [] };
+  for (const raw of rawLeads) {
+    try {
+      const leadType = classifyLead(raw);
+      if (!leadType) {
+        result.rejected += 1;
+        result.errors.push(`Classifica\xE7\xE3o inv\xE1lida para lead: ${raw.name}`);
+        continue;
+      }
+      const lead = buildLead(raw, leadType, source, scrapedFor, collectionRunId);
+      const payload = {
+        lead_type: lead.lead_type,
+        name: lead.name,
+        phone: lead.phone,
+        phone_normalized: lead.phone_normalized,
+        whatsapp: lead.whatsapp,
+        email: lead.email,
+        website: lead.website,
+        instagram: lead.instagram,
+        facebook: lead.facebook,
+        address: lead.address,
+        city: lead.city,
+        state: lead.state,
+        zip_code: lead.zipCode,
+        google_maps_url: lead.googleMapsUrl,
+        place_id: lead.placeId,
+        rating: lead.rating,
+        review_count: lead.reviewCount,
+        price_level: lead.priceLevel,
+        category: lead.category,
+        source: lead.source,
+        source_url: lead.sourceUrl,
+        scraped_at: lead.scraped_at,
+        audience: "B2B",
+        opening_hours: lead.openingHours,
+        current_status: lead.currentStatus,
+        description: lead.description,
+        latitude: lead.latitude,
+        longitude: lead.longitude,
+        plus_code: lead.plusCode,
+        social_links: lead.socialLinks,
+        raw_data: lead.rawData,
+        scraped_for: scrapedFor ?? null,
+        collection_run_id: collectionRunId,
+        search_term: lead.searchTerm,
+        search_location: lead.searchLocation
+      };
+      const canonicalUrl = lead.googleMapsUrl || lead.sourceUrl;
+      if (canonicalUrl) {
+        const existing = await findExistingByUrl(canonicalUrl);
+        if (existing) {
+          const updates = computeFillColumns(existing, payload);
+          if (Object.keys(updates).length > 0) {
+            const merged = {
+              ...updates,
+              scraped_at: payload.scraped_at,
+              scraped_for: payload.scraped_for,
+              collection_run_id: payload.collection_run_id
+            };
+            let fillError = null;
+            let finalUpdates = merged;
+            const { error: error2 } = await supabaseAdmin.from("marketing_leads").update(merged).eq("id", existing.id);
+            if (error2 && error2.code === "23505") {
+              const { phone_normalized, ...retryUpdates } = merged;
+              finalUpdates = retryUpdates;
+              const { error: retryError } = await supabaseAdmin.from("marketing_leads").update(retryUpdates).eq("id", existing.id);
+              fillError = retryError;
+            } else {
+              fillError = error2;
+            }
+            if (fillError) {
+              result.errors.push(`Erro ao preencher lead ${lead.name}: ${fillError.message}`);
+              result.rejected += 1;
+            } else {
+              result.filled += 1;
+              if (finalUpdates !== merged) {
+                result.errors.push(
+                  `Aviso: phone_normalized n\xE3o atualizado para ${lead.name} (conflito de unique constraint \u2014 outro lead j\xE1 usa esse n\xFAmero).`
+                );
+              }
+            }
+            continue;
+          }
+          result.duplicates += 1;
+          result.completeDuplicates += 1;
+          continue;
+        }
+      }
+      const { error } = await supabaseAdmin.from("marketing_leads").insert(payload);
+      if (error) {
+        if (error.code === "23505") {
+          result.duplicates += 1;
+        } else {
+          result.errors.push(`Erro ao inserir ${lead.name}: ${error.message}`);
+          result.rejected += 1;
+        }
+      } else {
+        result.inserted += 1;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      result.errors.push(message);
+      result.rejected += 1;
+    }
+  }
+  return result;
+}
+async function loadExistingScrapedKeys() {
+  const seenKeys = /* @__PURE__ */ new Set();
+  try {
+    const { data, error } = await supabaseAdmin.from("marketing_leads").select("source_url, phone_normalized, website, email, scraped_for").not("source_url", "is", null).limit(5e3);
+    if (error) {
+      logger2.error("Erro ao carregar chaves existentes para dedup", { error: error.message });
+      return seenKeys;
+    }
+    for (const row of data || []) {
+      for (const key of buildSeenKeys(
+        row.source_url || void 0,
+        row.phone_normalized || void 0,
+        row.website || void 0,
+        row.email || void 0
+      )) {
+        seenKeys.add(key);
+      }
+    }
+    logger2.info("Chaves de dedup carregadas do banco", { count: seenKeys.size });
+  } catch (err) {
+    logger2.error("Falha ao carregar chaves existentes", { error: err instanceof Error ? err.message : err });
+  }
+  return seenKeys;
+}
+async function createCollectionRun(config) {
+  try {
+    const { data, error } = await supabaseAdmin.from("collection_runs").insert({
+      queries: config.queries,
+      cities: config.cities || [],
+      states: config.states || [],
+      limit_per_query: config.limitPerQuery,
+      status: "running",
+      started_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).select("id, status").single();
+    if (error || !data) {
+      logger2.error("Erro ao criar collection_run", { error: error?.message });
+      return null;
+    }
+    return data;
+  } catch (err) {
+    logger2.error("Falha ao criar collection_run", { error: err instanceof Error ? err.message : err });
+    return null;
+  }
+}
+async function updateCollectionRun(runId, updates) {
+  try {
+    const isTerminal = ["completed", "failed", "cancelled"].includes(updates.status || "");
+    const payload = {
+      ...updates,
+      ...isTerminal && { finished_at: (/* @__PURE__ */ new Date()).toISOString() }
+    };
+    const cleanPayload = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== void 0) {
+        cleanPayload[key] = value;
+      }
+    }
+    const { error } = await supabaseAdmin.from("collection_runs").update(cleanPayload).eq("id", runId);
+    if (error) {
+      logger2.warn("Erro ao atualizar collection_run", { runId, error: error.message });
+    }
+  } catch (err) {
+    logger2.warn("Erro ao atualizar collection_run", { runId, error: err instanceof Error ? err.message : err });
+  }
+}
+async function runScrapeAsJob(config, callbacks = {}, collectionRunId) {
+  const session = new SeleniumSession({
+    headless: true,
+    args: [
+      "--headless",
+      "--headless=new",
+      "--disable-gpu",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--window-size=1920,1080",
+      "--disable-blink-features=AutomationDetected",
+      "--disable-extensions",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-default-apps"
+    ]
+  });
+  let scraper = null;
+  let cancelled = false;
+  const locations = [];
+  for (const city of config.cities || []) locations.push(city);
+  for (const state of config.states || []) locations.push(state);
+  if (locations.length === 0) locations.push("Brasil");
+  const collectionRun = collectionRunId ? { id: collectionRunId } : await createCollectionRun(config);
+  const runId = collectionRun?.id || null;
+  if (collectionRunId && runId) {
+    await updateCollectionRun(runId, { status: "running", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
+  const seenKeys = await loadExistingScrapedKeys();
+  const aggregated = {
+    source: "google_maps",
+    query: config.queries.join(", "),
+    location: locations.join(", "),
+    totalFound: 0,
+    inserted: 0,
+    filled: 0,
+    duplicates: 0,
+    completeDuplicates: 0,
+    rejected: 0,
+    errors: [],
+    leads: []
+  };
+  const queriesExecuted = [];
+  if (runId) {
+    try {
+      const { data: existingRun } = await supabaseAdmin.from("collection_runs").select("*").eq("id", runId).maybeSingle();
+      if (existingRun && Array.isArray(existingRun.queries_executed) && existingRun.queries_executed.length > 0) {
+        queriesExecuted.push(...existingRun.queries_executed);
+        aggregated.totalFound = existingRun.results_found || 0;
+        aggregated.inserted = existingRun.new_leads || 0;
+        aggregated.duplicates = existingRun.duplicates || 0;
+        aggregated.rejected = existingRun.rejected || 0;
+        aggregated.errors = Array.isArray(existingRun.errors) ? existingRun.errors : [];
+        logger2.info("Retomando job a partir de checkpoint persistido", {
+          runId,
+          executedQueries: queriesExecuted.length,
+          previousInserted: aggregated.inserted
+        });
+      }
+    } catch (resumeErr) {
+      logger2.warn("Aviso ao consultar estado para retomada:", { error: resumeErr });
+    }
+  }
+  const scraperCallbacks = {
+    onProgress: callbacks.onProgress,
+    onCheckCancel: () => cancelled || callbacks.onCheckCancel?.() || false,
+    onDriverCrash: callbacks.onDriverCrash,
+    onCardExtracted: async (lead, index, total) => {
+      callbacks.onProgress?.({
+        phase: "details",
+        discovered: aggregated.totalFound,
+        processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected + index,
+        persisted: aggregated.inserted,
+        duplicates: aggregated.duplicates,
+        errors: aggregated.errors.length
+      });
+      if (runId) {
+        await updateCollectionRun(runId, {
+          results_found: Math.max(aggregated.totalFound, total),
+          new_leads: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          rejected: aggregated.rejected,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).catch(() => void 0);
+      }
+    }
+  };
+  try {
+    await session.start();
+    scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    for (const q of config.queries) {
+      for (const loc of locations) {
+        if (cancelled || callbacks.onCheckCancel?.()) {
+          cancelled = true;
+          logger2.info("Coleta cancelada pelo usu\xE1rio", { query: q, location: loc });
+          break;
+        }
+        const alreadyDone = queriesExecuted.some(
+          (eq) => (eq.query === q || eq.query === `${q} ${loc}`) && eq.location === loc
+        );
+        if (alreadyDone) {
+          logger2.info("Query e localiza\xE7\xE3o j\xE1 processadas anteriormente, pulando", { query: q, location: loc });
+          continue;
+        }
+        const scrapedFor = {
+          query: q,
+          city: loc.split(",")[0]?.trim() || loc,
+          state: (loc.split(",")[1]?.trim() || "").slice(0, 2).toUpperCase(),
+          source: "google_maps"
+        };
+        const requiredNew = Math.max(1, config.limitPerQuery - aggregated.inserted);
+        logger2.info("Executando query incremental", { query: q, location: loc, requiredNew, seenKeysSize: seenKeys.size });
+        let attempt = 0;
+        const maxAttempts = 3;
+        let queryResult = null;
+        while (attempt < maxAttempts && !cancelled) {
+          attempt += 1;
+          try {
+            queryResult = await scraper.search(q, loc, requiredNew, seenKeys);
+            break;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger2.warn("Erro no scraping (retry)", { attempt, error: message });
+            if (attempt < maxAttempts) {
+              try {
+                await scraper.close();
+                await session.start();
+                scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                callbacks.onDriverCrash?.();
+              } catch (restartErr) {
+                logger2.error("Falha ao reiniciar driver", { error: restartErr instanceof Error ? restartErr.message : restartErr });
+              }
+            } else {
+              queryResult = {
+                query: `${q} ${loc}`,
+                location: loc,
+                totalFound: 0,
+                inserted: 0,
+                filled: 0,
+                duplicates: 0,
+                completeDuplicates: 0,
+                rejected: 0,
+                errors: [`Falha ap\xF3s ${maxAttempts} tentativas: ${message}`],
+                leads: []
+              };
+            }
+          }
+        }
+        if (!queryResult) {
+          queryResult = {
+            query: `${q} ${loc}`,
+            location: loc,
+            totalFound: 0,
+            inserted: 0,
+            filled: 0,
+            duplicates: 0,
+            completeDuplicates: 0,
+            rejected: 0,
+            errors: ["Resultado n\xE3o obtido ap\xF3s tentativas"],
+            leads: []
+          };
+        }
+        if (cancelled) break;
+        const persist = await persistLeads(queryResult.leads, "google_maps", scrapedFor, runId);
+        aggregated.totalFound += queryResult.totalFound;
+        aggregated.leads.push(...queryResult.leads);
+        aggregated.inserted += persist.inserted;
+        aggregated.filled += persist.filled;
+        aggregated.duplicates += persist.duplicates + queryResult.duplicates;
+        aggregated.completeDuplicates += persist.completeDuplicates;
+        aggregated.rejected += persist.rejected + queryResult.rejected;
+        aggregated.errors.push(...queryResult.errors, ...persist.errors);
+        queriesExecuted.push({
+          query: queryResult.query,
+          location: queryResult.location,
+          found: queryResult.totalFound,
+          inserted: persist.inserted,
+          filled: persist.filled,
+          duplicates: persist.duplicates + queryResult.duplicates,
+          completeDuplicates: persist.completeDuplicates,
+          rejected: persist.rejected + queryResult.rejected,
+          errors: [...queryResult.errors, ...persist.errors]
+        });
+        if (runId) {
+          await updateCollectionRun(runId, {
+            results_found: aggregated.totalFound,
+            new_leads: aggregated.inserted,
+            duplicates: aggregated.duplicates,
+            rejected: aggregated.rejected,
+            errors: aggregated.errors,
+            queries_executed: queriesExecuted,
+            ...cancelled && { status: "cancelled" }
+          });
+        }
+        callbacks.onProgress?.({
+          phase: "details",
+          discovered: aggregated.totalFound,
+          processed: aggregated.inserted + aggregated.duplicates + aggregated.rejected,
+          persisted: aggregated.inserted,
+          duplicates: aggregated.duplicates,
+          errors: aggregated.errors.length
+        });
+        logger2.info("Query conclu\xEDda", {
+          query: q,
+          location: loc,
+          found: queryResult.totalFound,
+          newPersisted: persist.inserted,
+          filled: persist.filled,
+          completeDuplicates: persist.completeDuplicates,
+          totalInsertedSoFar: aggregated.inserted
+        });
+      }
+    }
+    if (runId) {
+      const finalStatus = cancelled ? "cancelled" : aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED/.test(e)) ? "error" : "completed";
+      await updateCollectionRun(runId, {
+        status: finalStatus,
+        results_found: aggregated.totalFound,
+        new_leads: aggregated.inserted,
+        duplicates: aggregated.duplicates,
+        rejected: aggregated.rejected,
+        errors: aggregated.errors,
+        queries_executed: queriesExecuted
+      });
+    }
+    return {
+      source: aggregated.source,
+      query: aggregated.query,
+      location: aggregated.location,
+      totalFound: aggregated.totalFound,
+      inserted: aggregated.inserted,
+      filled: aggregated.filled,
+      duplicates: aggregated.duplicates,
+      completeDuplicates: aggregated.completeDuplicates,
+      rejected: aggregated.rejected,
+      errors: aggregated.errors,
+      leads: aggregated.leads,
+      queriesExecuted,
+      hasBlockingError: aggregated.errors.some((e) => /BLOCKED|CAPTCHA|LOGIN_REQUIRED|Falha fatal/.test(e))
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido no scraper Selenium";
+    logger2.error("Falha fatal no scraper Selenium", { error: message });
+    throw err;
+  } finally {
+    if (scraper) {
+      await scraper.close().catch(() => void 0);
+    } else {
+      await session.close().catch(() => void 0);
+    }
+  }
+}
+var FILLABLE_COLUMNS, runScrape;
+var init_persister = __esm({
+  "src/scraper-prospecting/persister.ts"() {
+    init_supabase();
+    init_classifier();
+    init_normalizer();
+    init_seen_filter();
+    init_logger();
+    init_session();
+    init_google_maps_scraper();
+    FILLABLE_COLUMNS = [
+      "phone",
+      "phone_normalized",
+      "whatsapp",
+      "email",
+      "website",
+      "instagram",
+      "facebook",
+      "address",
+      "city",
+      "state",
+      "zip_code",
+      "rating",
+      "review_count",
+      "price_level",
+      "category",
+      "source_url",
+      "google_maps_url",
+      "place_id",
+      "opening_hours",
+      "current_status",
+      "description",
+      "latitude",
+      "longitude",
+      "plus_code",
+      "social_links",
+      "raw_data"
+    ];
+    runScrape = runScrapeAsJob;
+  }
+});
 
 // src/server/app.ts
 import express2 from "express";
 import helmet from "helmet";
 
-// src/core/events/topics.ts
-var EventTopics = {
-  // Case Lifecycle
-  CASE_CREATED: "case.created",
-  CASE_UPDATED: "case.updated",
-  CASE_CLAIMED: "case.claimed",
-  CASE_STAGE_CHANGED: "case.stage_changed",
-  CASE_DELETED: "case.deleted",
-  // OCR & Analysis
-  OCR_UPLOADED: "ocr.uploaded",
-  OCR_PROCESSING: "ocr.processing",
-  OCR_COMPLETED: "ocr.completed",
-  ANALYSIS_GENERATED: "analysis.generated",
-  // Defense Drafting
-  DEFENSE_DRAFT_INITIATED: "defense.draft_initiated",
-  DEFENSE_ARGUMENTS_SELECTED: "defense.arguments_selected",
-  DEFENSE_DRAFT_FINALIZED: "defense.draft_finalized",
-  DEFENSE_PDF_EXPORTED: "defense.pdf_exported",
-  // Protocol & Timeline
-  PROTOCOL_FILED: "protocol.filed",
-  STATUS_UPDATED: "status.updated",
-  DEADLINE_ALERT_TRIGGERED: "deadline.alert_triggered",
-  // Payments & Checkout
-  PAYMENT_INTENT_CREATED: "payment.intent_created",
-  PAYMENT_PIX_GENERATED: "payment.pix_generated",
-  PAYMENT_CONFIRMED: "payment.confirmed",
-  PAYMENT_REFUNDED: "payment.refunded",
-  // Communication & WhatsApp (Evolution API)
-  WHATSAPP_MESSAGE_QUEUED: "whatsapp.message_queued",
-  WHATSAPP_MESSAGE_SENT: "whatsapp.message_sent",
-  WHATSAPP_WEBHOOK_RECEIVED: "whatsapp.webhook_received",
-  // Omnichannel Messaging (WhatsApp, Meta Messenger, Instagram Direct)
-  MESSAGING_MESSAGE_RECEIVED: "messaging.message_received",
-  MESSAGING_MESSAGE_SENT: "messaging.message_sent",
-  MESSAGING_LEAD_QUALIFIED: "messaging.lead_qualified",
-  // Marketing OS 7-Agent Organism
-  MARKETING_CYCLE_TICK: "marketing.cycle_tick",
-  MARKETING_STRATEGY_UPDATED: "marketing.strategy_updated",
-  MARKETING_CONTENT_DRAFTED: "marketing.content_drafted",
-  MARKETING_QUALITY_APPROVED: "marketing.quality_approved",
-  MARKETING_CONTENT_PUBLISHED: "marketing.content_published",
-  MARKETING_CONTENT_REJECTED: "marketing.content_rejected",
-  MARKETING_METRICS_COLLECTED: "marketing.metrics_collected",
-  MARKETING_LEARNING_UPDATE: "marketing.learning_update",
-  MARKETING_KNOWLEDGE_BASE_UPDATED: "marketing.knowledge_base_updated",
-  MARKETING_EDITORIAL_CALENDAR_UPDATED: "marketing.editorial_calendar_updated",
-  MARKETING_DISTRIBUTION_PLAN_UPDATED: "marketing.distribution_plan_updated",
-  // Audit & Security
-  AUDIT_LOG_RECORDED: "audit.log_recorded",
-  SECURITY_OVERRIDE_TRIGGERED: "security.override_triggered"
-};
-var EventBus = class {
-  constructor() {
-    this.listeners = /* @__PURE__ */ new Map();
-    this.history = [];
+// src/core/mappers/canonical-mapper.ts
+var CanonicalMapper = class _CanonicalMapper {
+  static {
+    this.toDomain = _CanonicalMapper.rowToDomain;
   }
-  subscribe(topic, listener) {
-    if (!this.listeners.has(topic)) {
-      this.listeners.set(topic, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(topic).add(listener);
-    return () => {
-      this.listeners.get(topic)?.delete(listener);
-    };
-  }
-  publish(topic, payload, sourceModule = "system") {
-    const event = {
-      topic,
-      payload,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-      correlationId: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      sourceModule
-    };
-    this.history.unshift(event);
-    if (this.history.length > 200) {
-      this.history.pop();
-    }
-    const specific = this.listeners.get(topic);
-    if (specific) {
-      specific.forEach((fn) => {
-        try {
-          fn(event);
-        } catch (err) {
-          console.error(`[EventBus] Error in listener for topic ${topic}:`, err);
-        }
-      });
-    }
-    const wildcard = this.listeners.get("*");
-    if (wildcard) {
-      wildcard.forEach((fn) => {
-        try {
-          fn(event);
-        } catch (err) {
-          console.error(`[EventBus] Error in wildcard listener for topic ${topic}:`, err);
-        }
-      });
-    }
-    return event;
-  }
-  getHistory() {
-    return [...this.history];
-  }
-};
-var eventBus = new EventBus();
-
-// src/server/observability/logger.ts
-var MAX_LOG_BUFFER_SIZE = 2e3;
-var StructuredLogger = class {
-  constructor() {
-    this.buffer = [];
-    this.listeners = /* @__PURE__ */ new Set();
+  static {
+    this.toRow = _CanonicalMapper.domainToRow;
   }
   /**
-   * Sanitizes object data, stripping sensitive tokens, keys, passwords and masking CPFs.
+   * Convert Canonical Onboarding Payload to CaseDomain
+   *
+   * Preserva SEM perda:
+   *  - identification (AIT, fase, código, órgão autuador)
+   *  - infraction (dados da infração + fatos específicos)
+   *  - vehicle (placa, marca, renavam)
+   *  - applicant (qualificação do requerente)
+   *  - specificFacts (fatos juridicamente relevantes)
+   *  - evidence (OCR, fotos, declarações)
+   *  - procedure (tipo de procedimento)
+   *  - journey stage (fase processual)
    */
-  sanitize(data) {
-    if (!data) return data;
-    if (typeof data !== "object") {
-      if (typeof data === "string") {
-        return this.sanitizeString(data);
-      }
-      return data;
-    }
-    if (Array.isArray(data)) {
-      return data.map((item) => this.sanitize(item));
-    }
-    const cleaned = {};
-    const sensitiveKeys = [
-      "key",
-      "apikey",
-      "api_key",
-      "token",
-      "access_token",
-      "secret",
-      "password",
-      "authorization",
-      "bearer",
-      "creditcard",
-      "card_number",
-      "cvv"
-    ];
-    for (const [k, v] of Object.entries(data)) {
-      const lowerKey = k.toLowerCase().replace(/[-_]/g, "");
-      const isSensitive = sensitiveKeys.some((s) => lowerKey.includes(s));
-      if (isSensitive && typeof v === "string" && v.length > 0) {
-        cleaned[k] = "\u2022\u2022\u2022\u2022[PROTEGIDO]\u2022\u2022\u2022\u2022";
-      } else if (k === "cpf" || k === "clientCpf" || k === "applicantCpf") {
-        cleaned[k] = typeof v === "string" ? this.maskCpf(v) : v;
-      } else if (k === "cnh" || k === "clientCnh" || k === "applicantCnh") {
-        cleaned[k] = typeof v === "string" ? this.maskCnh(v) : v;
-      } else if (k === "rg" || k === "clientRg" || k === "applicantRg") {
-        cleaned[k] = typeof v === "string" ? this.maskRg(v) : v;
-      } else if (k === "phone" || k === "cellphone" || k === "contactPhone" || k === "senderPhone" || k === "from" || k === "to") {
-        cleaned[k] = typeof v === "string" ? this.maskPhone(v) : v;
-      } else if (k === "email" || k === "senderEmail" || k === "contactEmail") {
-        cleaned[k] = typeof v === "string" ? this.maskEmail(v) : v;
-      } else if (k === "placa" || k === "licensePlate" || k === "plate") {
-        cleaned[k] = typeof v === "string" ? this.maskPlate(v) : v;
-      } else {
-        cleaned[k] = this.sanitize(v);
-      }
-    }
-    return cleaned;
-  }
-  sanitizeString(str) {
-    let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
-    sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
-    sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
-    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-$4");
-    sanitized = sanitized.replace(/\b(\d{11})([A-Z]{2})\b/g, "***********$2");
-    sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, "**.***.***-*");
-    sanitized = sanitized.replace(/\b(\d{2})\s?9?\s?(\d{4})\s?(\d{4})\b/g, "(**) *****-$3");
-    sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "***@***.***");
-    sanitized = sanitized.replace(/\b[A-Z]{3}[-]?\d{4}\b/g, "***-****");
-    return sanitized;
-  }
-  maskCpf(cpf) {
-    const clean = cpf.replace(/\D/g, "");
-    if (clean.length === 11) {
-      return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
-    }
-    return "***.***.***-**";
-  }
-  maskCnh(cnh) {
-    const match = cnh.match(/^(\d{11})([A-Z]{2})$/);
-    if (match) {
-      return `***********${match[2]}`;
-    }
-    return "****.******************";
-  }
-  maskRg(rg) {
-    const clean = rg.replace(/\D/g, "");
-    if (clean.length >= 7) {
-      return `***.${clean.slice(3, 7)}.***-*`;
-    }
-    return "***.***.***-**";
-  }
-  maskPhone(phone) {
-    const clean = phone.replace(/\D/g, "");
-    if (clean.length >= 10) {
-      return `(**) *****-${clean.slice(-4)}`;
-    }
-    return "(**) *****-****";
-  }
-  maskEmail(email) {
-    const atIdx = email.indexOf("@");
-    if (atIdx > 2) {
-      return `${email.slice(0, 2)}***@***.***`;
-    }
-    return "***@***.***";
-  }
-  maskPlate(plate) {
-    const clean = plate.replace(/[-]/g, "");
-    if (clean.length === 7) {
-      return "***-****";
-    }
-    return "***-****";
+  static onboardingPayloadToDomain(payload, caseId) {
+    const id = caseId || `case_${Date.now()}`;
+    const applicantName = payload.applicant?.name || payload.leadName || "Condutor";
+    const applicantEmail = payload.applicant?.email || payload.leadEmail;
+    const applicantPhone = payload.applicant?.phone || payload.leadPhone;
+    const applicantCpf = payload.applicant?.cpf;
+    const mergedHasPsychomotorTerm = payload.specificFacts?.hasPsychomotorTerm ?? payload.infraction.hasPsychomotorTerm;
+    const mergedHasPhotoProof = payload.specificFacts?.hasPhotoProof ?? payload.infraction.hasPhotoProof;
+    const mergedHasR19SignageProof = payload.specificFacts?.hasR19SignageProof ?? payload.infraction.hasR19SignageProof;
+    const mergedHasAgentDetailedObservations = payload.specificFacts?.hasAgentDetailedObservations ?? payload.infraction.hasAgentDetailedObservations;
+    const mergedHasPreviousInfractionsLast12Months = payload.specificFacts?.isFirstInfractionLast12Months === false ? true : payload.specificFacts?.isFirstInfractionLast12Months === true ? false : payload.infraction.hasPreviousInfractionsLast12Months;
+    const mergedRefusedTest = payload.specificFacts?.refusedTest ?? payload.infraction.refusedTest;
+    const mergedOfferedRetest = payload.specificFacts?.offeredRetest ?? payload.infraction.offeredRetest;
+    const mergedCellphoneCircumstance = payload.specificFacts?.cellphoneCircumstance ?? payload.infraction.cellphoneCircumstance;
+    const mergedYellowPhaseCrossing = payload.specificFacts?.yellowPhaseCrossing ?? payload.infraction.yellowPhaseCrossing;
+    const mergedEmergencyPassage = payload.specificFacts?.emergencyPassage ?? payload.infraction.emergencyPassage;
+    const mergedRealDriverName = payload.specificFacts?.realDriverName ?? payload.infraction.realDriverName;
+    const mergedRealDriverCpf = payload.specificFacts?.realDriverCpf ?? payload.infraction.realDriverCpf;
+    const mergedRealDriverCnh = payload.specificFacts?.realDriverCnh ?? payload.infraction.realDriverCnh;
+    const mergedIndicationWithinDeadline = payload.specificFacts?.indicationWithinDeadline ?? payload.infraction.indicationWithinDeadline;
+    const mergedHasRegulatorySign = payload.specificFacts?.hasRegulatorySign ?? payload.infraction.hasRegulatorySign;
+    return {
+      id,
+      title: `Defesa Auto ${payload.infraction.aitNumber || "SN"}`,
+      clientName: applicantName,
+      clientEmail: applicantEmail,
+      clientPhone: applicantPhone,
+      clientCpf: applicantCpf,
+      status: "novo",
+      currentStage: payload.applicant ? 2 : 1,
+      serviceType: payload.procedureType,
+      vehicle: {
+        plate: (payload.vehicle.plate || "SEM PLACA").toUpperCase(),
+        brandModel: payload.vehicle.brandModel || "Ve\xEDculo n\xE3o informado",
+        renavam: payload.vehicle.renavam,
+        chassis: payload.vehicle.chassis,
+        year: payload.vehicle.year,
+        color: payload.vehicle.color
+      },
+      infraction: {
+        aitNumber: payload.infraction.aitNumber,
+        infractionCode: payload.infraction.infractionCode,
+        description: payload.infraction.description || "",
+        ctbArticle: payload.infraction.ctbArticle || "",
+        severity: payload.infraction.severity || "grave",
+        points: payload.infraction.points || 0,
+        fineAmount: payload.infraction.fineAmount || 0,
+        autuadorBody: payload.infraction.autuadorBody,
+        dateTime: payload.infraction.dateTime,
+        location: payload.infraction.location,
+        speedLimit: payload.infraction.speedLimit ?? payload.specificFacts?.speedLimit,
+        measuredSpeed: payload.infraction.measuredSpeed ?? payload.specificFacts?.measuredSpeed,
+        consideredSpeed: payload.infraction.consideredSpeed ?? payload.specificFacts?.consideredSpeed,
+        speedMeasured: payload.infraction.speedMeasured,
+        speedConsidered: payload.infraction.speedConsidered,
+        radarEquipmentId: payload.infraction.radarEquipmentId ?? payload.specificFacts?.radarEquipmentId,
+        inmetroAferitionDate: payload.infraction.inmetroAferitionDate ?? payload.specificFacts?.inmetroAferitionDate,
+        notificationExpeditionDate: payload.infraction.notificationExpeditionDate ?? payload.identification?.notificationExpeditionDate,
+        notificationDeliveryDate: payload.infraction.notificationDeliveryDate ?? payload.identification?.notificationDeliveryDate,
+        defenseDeadline: payload.infraction.defenseDeadline ?? payload.identification?.defenseDeadline,
+        hasPreviousInfractionsLast12Months: mergedHasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: mergedHasPsychomotorTerm,
+        hasAgentDetailedObservations: mergedHasAgentDetailedObservations,
+        hasPhotoProof: mergedHasPhotoProof,
+        hasR19SignageProof: mergedHasR19SignageProof,
+        hasRegulatorySign: mergedHasRegulatorySign,
+        formalFlawsDetected: [],
+        // Novos campos
+        refusedTest: mergedRefusedTest,
+        offeredRetest: mergedOfferedRetest,
+        cellphoneCircumstance: mergedCellphoneCircumstance,
+        yellowPhaseCrossing: mergedYellowPhaseCrossing,
+        emergencyPassage: mergedEmergencyPassage,
+        realDriverName: mergedRealDriverName,
+        realDriverCpf: mergedRealDriverCpf,
+        realDriverCnh: mergedRealDriverCnh,
+        indicationWithinDeadline: mergedIndicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (preserva dados antigos se ausente)
+        evidenceFlags: payload.infraction.evidenceFlags
+      },
+      applicant: payload.applicant ? {
+        applicantName: payload.applicant.name,
+        applicantCpf: payload.applicant.cpf,
+        applicantRg: payload.applicant.rg,
+        applicantCnh: payload.applicant.cnh,
+        cnhCategory: payload.applicant.category,
+        applicantPhone: payload.applicant.phone || "",
+        applicantEmail: payload.applicant.email || "",
+        addressStreet: payload.applicant.addressStreet || "",
+        addressNumber: payload.applicant.addressNumber || "",
+        addressComplement: payload.applicant.addressComplement,
+        addressNeighborhood: payload.applicant.addressNeighborhood || "",
+        addressZipCode: payload.applicant.addressZipCode || "",
+        addressCityState: payload.applicant.addressCityState || "",
+        vehicleRenavam: payload.vehicle.renavam,
+        factsNarrative: payload.infraction.customFacts
+      } : void 0,
+      timeline: [
+        {
+          id: `evt_${Date.now()}`,
+          title: "Caso Criado",
+          description: "Diagn\xF3stico jur\xEDdico preliminar iniciado via Onboarding.",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          type: "system"
+        }
+      ],
+      isPaid: false,
+      isAnonymous: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
   }
   /**
-   * Primary entry point for structured log emission
+   * Converte CaseDomain de volta para o contrato canônico do onboarding.
+   * Útil para edição do rascunho e para o dashboard do cidadão.
    */
-  log(entry) {
-    const fullEntry = {
-      level: entry.level,
-      service: entry.service,
-      module: entry.module,
-      operation: entry.operation,
-      requestId: entry.requestId,
-      correlationId: entry.correlationId,
-      status: entry.status,
-      ...entry,
-      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-      message: this.sanitizeString(entry.message),
-      metadata: entry.metadata ? this.sanitize(entry.metadata) : void 0,
-      sanitized: true
+  static domainToOnboardingPayload(domain) {
+    const inf = domain.infraction;
+    const veh = domain.vehicle;
+    const app = domain.applicant;
+    return {
+      procedureType: domain.serviceType,
+      situation: domain.situation,
+      processStage: domain.currentStage ? String(domain.currentStage) : void 0,
+      leadName: domain.clientName,
+      leadEmail: domain.clientEmail,
+      leadPhone: domain.clientPhone,
+      identification: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        autuadorBody: inf.autuadorBody,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline
+      },
+      vehicle: {
+        plate: veh.plate,
+        brandModel: veh.brandModel,
+        renavam: veh.renavam,
+        chassis: veh.chassis,
+        year: veh.year,
+        color: veh.color
+      },
+      infraction: {
+        aitNumber: inf.aitNumber,
+        infractionCode: inf.infractionCode,
+        description: inf.description,
+        ctbArticle: inf.ctbArticle,
+        severity: inf.severity,
+        points: inf.points,
+        fineAmount: inf.fineAmount,
+        autuadorBody: inf.autuadorBody,
+        dateTime: inf.dateTime,
+        location: inf.location,
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        speedMeasured: inf.speedMeasured,
+        speedConsidered: inf.speedConsidered,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        notificationExpeditionDate: inf.notificationExpeditionDate,
+        notificationDeliveryDate: inf.notificationDeliveryDate,
+        defenseDeadline: inf.defenseDeadline,
+        hasPreviousInfractionsLast12Months: inf.hasPreviousInfractionsLast12Months,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        customFacts: app?.factsNarrative,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline,
+        // Fase 8-P1A — Evidência explícita (roundtrip)
+        evidenceFlags: inf.evidenceFlags
+      },
+      specificFacts: {
+        speedLimit: inf.speedLimit,
+        measuredSpeed: inf.measuredSpeed,
+        consideredSpeed: inf.consideredSpeed,
+        radarEquipmentId: inf.radarEquipmentId,
+        inmetroAferitionDate: inf.inmetroAferitionDate,
+        hasR19SignageProof: inf.hasR19SignageProof,
+        hasPsychomotorTerm: inf.hasPsychomotorTerm,
+        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
+        hasPhotoProof: inf.hasPhotoProof,
+        hasRegulatorySign: inf.hasRegulatorySign,
+        isFirstInfractionLast12Months: inf.hasPreviousInfractionsLast12Months === void 0 ? void 0 : !inf.hasPreviousInfractionsLast12Months,
+        // Novos campos
+        refusedTest: inf.refusedTest,
+        offeredRetest: inf.offeredRetest,
+        cellphoneCircumstance: inf.cellphoneCircumstance,
+        yellowPhaseCrossing: inf.yellowPhaseCrossing,
+        emergencyPassage: inf.emergencyPassage,
+        realDriverName: inf.realDriverName,
+        realDriverCpf: inf.realDriverCpf,
+        realDriverCnh: inf.realDriverCnh,
+        indicationWithinDeadline: inf.indicationWithinDeadline
+      },
+      evidence: domain.ocrAuxiliaryData ? {
+        ocrExtractedText: domain.ocrAuxiliaryData.extractedText,
+        ocrConfidence: domain.ocrAuxiliaryData.confidenceScore
+      } : void 0,
+      applicant: app ? {
+        name: app.applicantName,
+        cpf: app.applicantCpf,
+        rg: app.applicantRg,
+        cnh: app.applicantCnh,
+        category: app.cnhCategory,
+        phone: app.applicantPhone,
+        email: app.applicantEmail,
+        addressStreet: app.addressStreet,
+        addressNumber: app.addressNumber,
+        addressComplement: app.addressComplement,
+        addressNeighborhood: app.addressNeighborhood,
+        addressZipCode: app.addressZipCode,
+        addressCityState: app.addressCityState
+      } : void 0
     };
-    this.buffer.unshift(fullEntry);
-    if (this.buffer.length > MAX_LOG_BUFFER_SIZE) {
-      this.buffer.pop();
-    }
-    const timeShort = new Date(fullEntry.timestamp).toLocaleTimeString();
-    const tag = `[${fullEntry.level.toUpperCase()}][${fullEntry.service}:${fullEntry.module}]`;
-    const dur = fullEntry.duration ? ` (${fullEntry.duration}ms)` : "";
-    if (fullEntry.level === "error" || fullEntry.level === "fatal") {
-      console.error(`${timeShort} ${tag} ${fullEntry.message}${dur}`, fullEntry.metadata || "");
-    } else if (fullEntry.level === "warn") {
-      console.warn(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
-    } else if (process.env.NODE_ENV !== "production" && fullEntry.level === "debug") {
-      console.debug(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
-    }
-    this.listeners.forEach((listener) => {
+  }
+  /**
+   * Convert database Row (snake_case) to Frontend Domain (camelCase)
+   */
+  static rowToDomain(row) {
+    let formalFlaws = [];
+    if (row.formal_flaws_json) {
       try {
-        listener(fullEntry);
-      } catch (err) {
-        console.error("[Logger] Listener notification error:", err);
+        formalFlaws = JSON.parse(row.formal_flaws_json);
+      } catch (e) {
+        formalFlaws = [];
       }
-    });
-    return fullEntry;
-  }
-  info(service, module, operation, message, opts = {}) {
-    return this.log({
-      level: "info",
-      service,
-      module,
-      operation,
-      message,
-      requestId: opts.requestId || `req_${Date.now()}`,
-      correlationId: opts.correlationId || `corr_${Date.now()}`,
-      status: opts.status || "success",
-      ...opts
-    });
-  }
-  warn(service, module, operation, message, opts = {}) {
-    return this.log({
-      level: "warn",
-      service,
-      module,
-      operation,
-      message,
-      requestId: opts.requestId || `req_${Date.now()}`,
-      correlationId: opts.correlationId || `corr_${Date.now()}`,
-      status: opts.status || "failed",
-      ...opts
-    });
-  }
-  error(service, module, operation, message, opts = {}) {
-    return this.log({
-      level: "error",
-      service,
-      module,
-      operation,
-      message,
-      requestId: opts.requestId || `req_${Date.now()}`,
-      correlationId: opts.correlationId || `corr_${Date.now()}`,
-      status: opts.status || "failed",
-      ...opts
-    });
-  }
-  debug(service, module, operation, message, opts = {}) {
-    return this.log({
-      level: "debug",
-      service,
-      module,
-      operation,
-      message,
-      requestId: opts.requestId || `req_${Date.now()}`,
-      correlationId: opts.correlationId || `corr_${Date.now()}`,
-      status: opts.status || "success",
-      ...opts
-    });
-  }
-  /**
-   * Query filtered logs for the Log Explorer
-   */
-  query(params = {}) {
-    let filtered = [...this.buffer];
-    const levelsCount = {
-      debug: 0,
-      info: 0,
-      warn: 0,
-      error: 0,
-      fatal: 0
+    }
+    let analysis = void 0;
+    if (row.analysis_json) {
+      try {
+        analysis = JSON.parse(row.analysis_json);
+      } catch (e) {
+        analysis = void 0;
+      }
+    }
+    let defenseDraft = void 0;
+    if (row.defense_draft_json) {
+      try {
+        defenseDraft = JSON.parse(row.defense_draft_json);
+      } catch (e) {
+        defenseDraft = void 0;
+      }
+    }
+    let protocolInfo = void 0;
+    if (row.protocol_info_json) {
+      try {
+        protocolInfo = JSON.parse(row.protocol_info_json);
+      } catch (e) {
+        protocolInfo = void 0;
+      }
+    }
+    let timeline = [];
+    if (row.timeline_json) {
+      try {
+        timeline = JSON.parse(row.timeline_json);
+      } catch (e) {
+        timeline = [];
+      }
+    }
+    let applicant = void 0;
+    if (row.applicant_json) {
+      try {
+        applicant = JSON.parse(row.applicant_json);
+      } catch (e) {
+        applicant = void 0;
+      }
+    }
+    let ocrAuxiliaryData = void 0;
+    if (row.ocr_auxiliary_json) {
+      try {
+        ocrAuxiliaryData = JSON.parse(row.ocr_auxiliary_json);
+      } catch (e) {
+        ocrAuxiliaryData = void 0;
+      }
+    }
+    let evidenceFlags = void 0;
+    if (row.evidence_json) {
+      try {
+        const parsed = JSON.parse(row.evidence_json);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          evidenceFlags = parsed;
+        }
+      } catch (e) {
+        evidenceFlags = void 0;
+      }
+    }
+    return {
+      id: row.id,
+      title: row.title || `Recurso Auto ${row.ait_number}`,
+      clientName: row.client_name,
+      clientEmail: row.client_email,
+      clientPhone: row.client_phone,
+      clientCpf: row.client_cpf,
+      userId: row.user_id,
+      status: row.status || "novo",
+      currentStage: row.current_stage || 1,
+      serviceType: row.service_type || "recurso_jari",
+      commercialOfferId: row.commercial_offer_id,
+      vehicle: {
+        plate: row.vehicle_plate || "SEM PLACA",
+        brandModel: row.vehicle_brand_model || "Ve\xEDculo n\xE3o informado",
+        renavam: row.vehicle_renavam,
+        chassis: row.vehicle_chassis,
+        year: row.vehicle_year,
+        color: row.vehicle_color
+      },
+      infraction: {
+        aitNumber: row.ait_number,
+        infractionCode: row.infraction_code,
+        description: row.infraction_description,
+        ctbArticle: row.ctb_article,
+        severity: row.severity || "grave",
+        points: Number(row.points) || 0,
+        fineAmount: Number(row.fine_amount) || 0,
+        autuadorBody: row.autuador_body,
+        dateTime: row.date_time,
+        location: row.location,
+        speedLimit: row.speed_limit,
+        measuredSpeed: row.measured_speed,
+        consideredSpeed: row.considered_speed,
+        radarEquipmentId: row.radar_equipment_id,
+        inmetroAferitionDate: row.inmetro_aferition_date,
+        notificationExpeditionDate: row.notification_expedition_date,
+        defenseDeadline: row.defense_deadline,
+        formalFlawsDetected: formalFlaws,
+        // Novos campos
+        hasPreviousInfractionsLast12Months: row.has_previous_infractions_last_12_months,
+        hasPsychomotorTerm: row.has_psychomotor_term,
+        hasAgentDetailedObservations: row.has_agent_detailed_observations,
+        hasPhotoProof: row.has_photo_proof,
+        hasR19SignageProof: row.has_r19_signage_proof,
+        hasRegulatorySign: row.has_regulatory_sign,
+        refusedTest: row.refused_test,
+        offeredRetest: row.offered_retest,
+        cellphoneCircumstance: row.cellphone_circumstance,
+        yellowPhaseCrossing: row.yellow_phase_crossing,
+        emergencyPassage: row.emergency_passage,
+        realDriverName: row.real_driver_name,
+        realDriverCpf: row.real_driver_cpf,
+        realDriverCnh: row.real_driver_cnh,
+        indicationWithinDeadline: row.indication_within_deadline,
+        // Fase 8-P1A — Evidência explícita (preserva ausência = compatível com dados antigos)
+        evidenceFlags
+      },
+      analysis,
+      applicant,
+      ocrAuxiliaryData,
+      defenseDraft,
+      protocolInfo,
+      timeline,
+      isAnonymous: Boolean(row.is_anonymous),
+      claimToken: row.claim_token,
+      isPaid: Boolean(row.is_paid),
+      paidAt: row.paid_at,
+      createdAt: row.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: row.updated_at || (/* @__PURE__ */ new Date()).toISOString()
     };
-    this.buffer.forEach((e) => {
-      levelsCount[e.level] = (levelsCount[e.level] || 0) + 1;
-    });
-    if (params.level) {
-      filtered = filtered.filter((e) => e.level === params.level);
-    }
-    if (params.service) {
-      filtered = filtered.filter((e) => e.service === params.service);
-    }
-    if (params.provider) {
-      filtered = filtered.filter((e) => e.provider === params.provider);
-    }
-    if (params.status) {
-      filtered = filtered.filter((e) => e.status === params.status);
-    }
-    if (params.correlationId) {
-      filtered = filtered.filter(
-        (e) => e.correlationId.toLowerCase().includes(params.correlationId.toLowerCase())
-      );
-    }
-    if (params.caseId) {
-      filtered = filtered.filter(
-        (e) => e.caseId?.toLowerCase().includes(params.caseId.toLowerCase())
-      );
-    }
-    if (params.requestId) {
-      filtered = filtered.filter(
-        (e) => e.requestId.toLowerCase().includes(params.requestId.toLowerCase())
-      );
-    }
-    if (params.search) {
-      const q = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (e) => e.message.toLowerCase().includes(q) || e.module.toLowerCase().includes(q) || e.operation.toLowerCase().includes(q) || e.errorCode && e.errorCode.toLowerCase().includes(q)
-      );
-    }
-    if (params.startDate) {
-      filtered = filtered.filter((e) => new Date(e.timestamp) >= new Date(params.startDate));
-    }
-    if (params.endDate) {
-      filtered = filtered.filter((e) => new Date(e.timestamp) <= new Date(params.endDate));
-    }
-    const total = filtered.length;
-    const offset = params.offset || 0;
-    const limit = params.limit || 50;
-    const results = filtered.slice(offset, offset + limit);
-    return { total, results, levelsCount };
   }
   /**
-   * Fetch all logs related to a correlationId (tracing)
+   * Convert Frontend Domain (camelCase) to Database Row (snake_case)
    */
-  getTrace(correlationId) {
-    return this.buffer.filter((e) => e.correlationId === correlationId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }
-  subscribe(fn) {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  }
-  clear() {
-    this.buffer = [];
+  static domainToRow(domain) {
+    if (!domain) {
+      return {};
+    }
+    const vehicle = domain.vehicle || {};
+    const infraction = domain.infraction || domain.dadosInfracao || {};
+    const clientName = domain.clientName || domain.userNome || infraction.nomeCondutor || "Condutor";
+    const clientEmail = domain.clientEmail || domain.userEmail || "";
+    const clientPhone = domain.clientPhone || "";
+    const clientCpf = domain.clientCpf || infraction.cpfCondutor || "";
+    return {
+      id: domain.id || `case_${Date.now()}`,
+      title: domain.title || `Recurso Auto ${infraction.aitNumber || infraction.autoInfracao || "AIT"}`,
+      client_name: clientName,
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      client_cpf: clientCpf,
+      user_id: domain.userId,
+      status: domain.status || "novo",
+      current_stage: Number(domain.currentStage || domain.stageAtual || 1),
+      service_type: domain.serviceType || domain.tipoServico || "recurso_jari",
+      vehicle_plate: vehicle.plate || infraction.placa || "SEM PLACA",
+      vehicle_brand_model: vehicle.brandModel || infraction.marcaModelo || "Ve\xEDculo",
+      vehicle_renavam: vehicle.renavam || infraction.renavam,
+      vehicle_chassis: vehicle.chassis || infraction.chassi,
+      vehicle_year: vehicle.year || infraction.anoModelo,
+      vehicle_color: vehicle.color || infraction.cor,
+      ait_number: infraction.aitNumber || infraction.autoInfracao || "SEM_AIT",
+      infraction_code: infraction.infractionCode || infraction.codigoInfracao,
+      infraction_description: infraction.description || infraction.descricaoInfracao || "",
+      ctb_article: infraction.ctbArticle || infraction.enquadramentoLegal,
+      severity: infraction.severity || (infraction.gravidade ? String(infraction.gravidade).toLowerCase() : "grave"),
+      points: Number(infraction.points || infraction.pontos || 0),
+      fine_amount: Number(infraction.fineAmount || infraction.valorOriginal || 0),
+      autuador_body: infraction.autuadorBody ?? infraction.orgaoAutuador,
+      date_time: infraction.dateTime || infraction.dataHoraInfracao || (/* @__PURE__ */ new Date()).toISOString(),
+      location: infraction.location || infraction.localInfracao || "",
+      speed_limit: infraction.speedLimit || infraction.velocidadePermitida,
+      measured_speed: infraction.measuredSpeed || infraction.velocidadeMedida,
+      considered_speed: infraction.consideredSpeed || infraction.velocidadeConsiderada,
+      radar_equipment_id: infraction.radarEquipmentId || infraction.numeroEquipamentoInmetro,
+      inmetro_aferition_date: infraction.inmetroAferitionDate || infraction.dataAfericaoInmetro,
+      notification_expedition_date: infraction.notificationExpeditionDate,
+      defense_deadline: infraction.defenseDeadline || infraction.prazoDefesa,
+      formal_flaws_json: JSON.stringify(infraction.formalFlawsDetected || infraction.viciosTipicos || []),
+      analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : void 0,
+      defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : void 0,
+      protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : void 0,
+      applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : void 0,
+      ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : void 0,
+      // Fase 8-P1A — Evidência explícita (mapa chave → booleano)
+      evidence_json: infraction.evidenceFlags ? JSON.stringify(infraction.evidenceFlags) : void 0,
+      commercial_offer_id: domain.commercialOfferId,
+      timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
+      is_anonymous: Boolean(domain.isAnonymous),
+      claim_token: domain.claimToken,
+      is_paid: Boolean(domain.isPaid || domain.statusPagamento === "pago"),
+      paid_at: domain.paidAt || domain.dataPagamento,
+      created_at: domain.createdAt || domain.criadoEm || (/* @__PURE__ */ new Date()).toISOString(),
+      updated_at: domain.updatedAt || domain.atualizadoEm || (/* @__PURE__ */ new Date()).toISOString(),
+      // Novos campos
+      has_previous_infractions_last_12_months: infraction.hasPreviousInfractionsLast12Months,
+      has_psychomotor_term: infraction.hasPsychomotorTerm,
+      has_agent_detailed_observations: infraction.hasAgentDetailedObservations,
+      has_photo_proof: infraction.hasPhotoProof,
+      has_r19_signage_proof: infraction.hasR19SignageProof,
+      has_regulatory_sign: infraction.hasRegulatorySign,
+      refused_test: infraction.refusedTest,
+      offered_retest: infraction.offeredRetest,
+      cellphone_circumstance: infraction.cellphoneCircumstance,
+      yellow_phase_crossing: infraction.yellowPhaseCrossing,
+      emergency_passage: infraction.emergencyPassage,
+      real_driver_name: infraction.realDriverName,
+      real_driver_cpf: infraction.realDriverCpf,
+      real_driver_cnh: infraction.realDriverCnh,
+      indication_within_deadline: infraction.indicationWithinDeadline
+    };
   }
 };
-var logger = new StructuredLogger();
 
 // src/server/db/supabase-server.ts
 import { createClient } from "@supabase/supabase-js";
@@ -1339,16 +2885,299 @@ var ConfigService = class {
 };
 var configService = new ConfigService();
 
+// src/server/observability/logger.ts
+var MAX_LOG_BUFFER_SIZE = 2e3;
+var StructuredLogger = class {
+  constructor() {
+    this.buffer = [];
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Sanitizes object data, stripping sensitive tokens, keys, passwords and masking CPFs.
+   */
+  sanitize(data) {
+    if (!data) return data;
+    if (typeof data !== "object") {
+      if (typeof data === "string") {
+        return this.sanitizeString(data);
+      }
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return data.map((item) => this.sanitize(item));
+    }
+    const cleaned = {};
+    const sensitiveKeys = [
+      "key",
+      "apikey",
+      "api_key",
+      "token",
+      "access_token",
+      "secret",
+      "password",
+      "authorization",
+      "bearer",
+      "creditcard",
+      "card_number",
+      "cvv"
+    ];
+    for (const [k, v] of Object.entries(data)) {
+      const lowerKey = k.toLowerCase().replace(/[-_]/g, "");
+      const isSensitive = sensitiveKeys.some((s) => lowerKey.includes(s));
+      if (isSensitive && typeof v === "string" && v.length > 0) {
+        cleaned[k] = "\u2022\u2022\u2022\u2022[PROTEGIDO]\u2022\u2022\u2022\u2022";
+      } else if (k === "cpf" || k === "clientCpf" || k === "applicantCpf") {
+        cleaned[k] = typeof v === "string" ? this.maskCpf(v) : v;
+      } else if (k === "cnh" || k === "clientCnh" || k === "applicantCnh") {
+        cleaned[k] = typeof v === "string" ? this.maskCnh(v) : v;
+      } else if (k === "rg" || k === "clientRg" || k === "applicantRg") {
+        cleaned[k] = typeof v === "string" ? this.maskRg(v) : v;
+      } else if (k === "phone" || k === "cellphone" || k === "contactPhone" || k === "senderPhone" || k === "from" || k === "to") {
+        cleaned[k] = typeof v === "string" ? this.maskPhone(v) : v;
+      } else if (k === "email" || k === "senderEmail" || k === "contactEmail") {
+        cleaned[k] = typeof v === "string" ? this.maskEmail(v) : v;
+      } else if (k === "placa" || k === "licensePlate" || k === "plate") {
+        cleaned[k] = typeof v === "string" ? this.maskPlate(v) : v;
+      } else {
+        cleaned[k] = this.sanitize(v);
+      }
+    }
+    return cleaned;
+  }
+  sanitizeString(str) {
+    let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
+    sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-$4");
+    sanitized = sanitized.replace(/\b(\d{11})([A-Z]{2})\b/g, "***********$2");
+    sanitized = sanitized.replace(/\b(\d{2})\.?\d{3}\.?\d{3}-?\d{1,2}\b/g, "**.***.***-*");
+    sanitized = sanitized.replace(/\b(\d{2})\s?9?\s?(\d{4})\s?(\d{4})\b/g, "(**) *****-$3");
+    sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "***@***.***");
+    sanitized = sanitized.replace(/\b[A-Z]{3}[-]?\d{4}\b/g, "***-****");
+    return sanitized;
+  }
+  maskCpf(cpf) {
+    const clean = cpf.replace(/\D/g, "");
+    if (clean.length === 11) {
+      return `***.${clean.slice(3, 6)}.***-${clean.slice(9, 11)}`;
+    }
+    return "***.***.***-**";
+  }
+  maskCnh(cnh) {
+    const match = cnh.match(/^(\d{11})([A-Z]{2})$/);
+    if (match) {
+      return `***********${match[2]}`;
+    }
+    return "****.******************";
+  }
+  maskRg(rg) {
+    const clean = rg.replace(/\D/g, "");
+    if (clean.length >= 7) {
+      return `***.${clean.slice(3, 7)}.***-*`;
+    }
+    return "***.***.***-**";
+  }
+  maskPhone(phone) {
+    const clean = phone.replace(/\D/g, "");
+    if (clean.length >= 10) {
+      return `(**) *****-${clean.slice(-4)}`;
+    }
+    return "(**) *****-****";
+  }
+  maskEmail(email) {
+    const atIdx = email.indexOf("@");
+    if (atIdx > 2) {
+      return `${email.slice(0, 2)}***@***.***`;
+    }
+    return "***@***.***";
+  }
+  maskPlate(plate) {
+    const clean = plate.replace(/[-]/g, "");
+    if (clean.length === 7) {
+      return "***-****";
+    }
+    return "***-****";
+  }
+  /**
+   * Primary entry point for structured log emission
+   */
+  log(entry) {
+    const fullEntry = {
+      level: entry.level,
+      service: entry.service,
+      module: entry.module,
+      operation: entry.operation,
+      requestId: entry.requestId,
+      correlationId: entry.correlationId,
+      status: entry.status,
+      ...entry,
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      message: this.sanitizeString(entry.message),
+      metadata: entry.metadata ? this.sanitize(entry.metadata) : void 0,
+      sanitized: true
+    };
+    this.buffer.unshift(fullEntry);
+    if (this.buffer.length > MAX_LOG_BUFFER_SIZE) {
+      this.buffer.pop();
+    }
+    const timeShort = new Date(fullEntry.timestamp).toLocaleTimeString();
+    const tag = `[${fullEntry.level.toUpperCase()}][${fullEntry.service}:${fullEntry.module}]`;
+    const dur = fullEntry.duration ? ` (${fullEntry.duration}ms)` : "";
+    if (fullEntry.level === "error" || fullEntry.level === "fatal") {
+      console.error(`${timeShort} ${tag} ${fullEntry.message}${dur}`, fullEntry.metadata || "");
+    } else if (fullEntry.level === "warn") {
+      console.warn(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
+    } else if (process.env.NODE_ENV !== "production" && fullEntry.level === "debug") {
+      console.debug(`${timeShort} ${tag} ${fullEntry.message}${dur}`);
+    }
+    this.listeners.forEach((listener) => {
+      try {
+        listener(fullEntry);
+      } catch (err) {
+        console.error("[Logger] Listener notification error:", err);
+      }
+    });
+    return fullEntry;
+  }
+  info(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "info",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "success",
+      ...opts
+    });
+  }
+  warn(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "warn",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "failed",
+      ...opts
+    });
+  }
+  error(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "error",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "failed",
+      ...opts
+    });
+  }
+  debug(service, module, operation, message, opts = {}) {
+    return this.log({
+      level: "debug",
+      service,
+      module,
+      operation,
+      message,
+      requestId: opts.requestId || `req_${Date.now()}`,
+      correlationId: opts.correlationId || `corr_${Date.now()}`,
+      status: opts.status || "success",
+      ...opts
+    });
+  }
+  /**
+   * Query filtered logs for the Log Explorer
+   */
+  query(params = {}) {
+    let filtered = [...this.buffer];
+    const levelsCount = {
+      debug: 0,
+      info: 0,
+      warn: 0,
+      error: 0,
+      fatal: 0
+    };
+    this.buffer.forEach((e) => {
+      levelsCount[e.level] = (levelsCount[e.level] || 0) + 1;
+    });
+    if (params.level) {
+      filtered = filtered.filter((e) => e.level === params.level);
+    }
+    if (params.service) {
+      filtered = filtered.filter((e) => e.service === params.service);
+    }
+    if (params.provider) {
+      filtered = filtered.filter((e) => e.provider === params.provider);
+    }
+    if (params.status) {
+      filtered = filtered.filter((e) => e.status === params.status);
+    }
+    if (params.correlationId) {
+      filtered = filtered.filter(
+        (e) => e.correlationId.toLowerCase().includes(params.correlationId.toLowerCase())
+      );
+    }
+    if (params.caseId) {
+      filtered = filtered.filter(
+        (e) => e.caseId?.toLowerCase().includes(params.caseId.toLowerCase())
+      );
+    }
+    if (params.requestId) {
+      filtered = filtered.filter(
+        (e) => e.requestId.toLowerCase().includes(params.requestId.toLowerCase())
+      );
+    }
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(
+        (e) => e.message.toLowerCase().includes(q) || e.module.toLowerCase().includes(q) || e.operation.toLowerCase().includes(q) || e.errorCode && e.errorCode.toLowerCase().includes(q)
+      );
+    }
+    if (params.startDate) {
+      filtered = filtered.filter((e) => new Date(e.timestamp) >= new Date(params.startDate));
+    }
+    if (params.endDate) {
+      filtered = filtered.filter((e) => new Date(e.timestamp) <= new Date(params.endDate));
+    }
+    const total = filtered.length;
+    const offset = params.offset || 0;
+    const limit = params.limit || 50;
+    const results = filtered.slice(offset, offset + limit);
+    return { total, results, levelsCount };
+  }
+  /**
+   * Fetch all logs related to a correlationId (tracing)
+   */
+  getTrace(correlationId) {
+    return this.buffer.filter((e) => e.correlationId === correlationId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+  clear() {
+    this.buffer = [];
+  }
+};
+var logger = new StructuredLogger();
+
 // src/server/db/supabase-server.ts
 var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
-  const url = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
+  const url2 = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
+  const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
-  const serviceKey = serviceRoleKey || anonKey;
-  if (url && serviceKey && url.startsWith("https://")) {
-    if (!serviceRoleKey) {
+  const serviceKey = serviceRoleKey2 || anonKey;
+  if (url2 && serviceKey && url2.startsWith("https://")) {
+    if (!serviceRoleKey2) {
       logger.error(
         "supabase",
         "db_server",
@@ -1358,7 +3187,7 @@ function ensureClient() {
       );
     }
     try {
-      clientInstance = createClient(url, serviceKey);
+      clientInstance = createClient(url2, serviceKey);
       logger.info("supabase", "db_server", "init", "Supabase server client conectado.");
     } catch (err) {
       logger.warn("supabase", "db_server", "init", `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
@@ -1372,708 +3201,6 @@ function ensureClient() {
 function getSupabaseServerClient() {
   return ensureClient();
 }
-
-// src/server/db/uuid-v5.ts
-import { createHash } from "node:crypto";
-var DEFESAI_UUID_NAMESPACE = "6f0a9d2e-8c47-4b3a-9f15-d7e0b2c4a681";
-var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isUuid(value) {
-  return typeof value === "string" && UUID_RE.test(value);
-}
-function parseNamespaceBytes(namespace) {
-  const hex = namespace.replace(/-/g, "");
-  if (!/^[0-9a-f]{32}$/i.test(hex)) {
-    throw new Error(`Namespace UUID inv\xE1lido: ${namespace}`);
-  }
-  return Buffer.from(hex, "hex");
-}
-function uuidV5(name, namespace = DEFESAI_UUID_NAMESPACE) {
-  const hash = createHash("sha1");
-  hash.update(parseNamespaceBytes(namespace));
-  hash.update(Buffer.from(name, "utf8"));
-  const bytes = Buffer.from(hash.digest().subarray(0, 16));
-  bytes[6] = bytes[6] & 15 | 80;
-  bytes[8] = bytes[8] & 63 | 128;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-function domainIdToUuid(id) {
-  if (!id) return null;
-  if (isUuid(id)) return id;
-  return uuidV5(id);
-}
-
-// src/server/db/case-repository.ts
-function parseJson(value, fallback) {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-function toDate(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-function toNumeric(value) {
-  return typeof value === "number" && !Number.isNaN(value) ? value : null;
-}
-function isUuid2(value) {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-var CaseRepository = class {
-  constructor() {
-    this.rows = /* @__PURE__ */ new Map();
-    this.client = getSupabaseServerClient();
-  }
-  // ==========================================
-  // API compatível com Map<string, CaseRow>
-  // ==========================================
-  get size() {
-    return this.rows.size;
-  }
-  get(id) {
-    return this.rows.get(id);
-  }
-  values() {
-    return this.rows.values();
-  }
-  /** Grava na memória APÓS persistência no Supabase com sucesso.
-   * FASE 7: Falha de banco = operação falha (FAIL CLOSED).
-   * Lança erro se persistência falhar — não grava em memória sem confirmação. */
-  async set(id, row) {
-    const payload = this.toPayload(row);
-    await this.persist(id, payload);
-    this.rows.set(id, row);
-  }
-  // ==========================================
-  // Persistência Supabase (write-through OBRIGATÓRIO)
-  // ==========================================
-  toPayload(row) {
-    return {
-      id: domainIdToUuid(row.id) ?? void 0,
-      app_ref: isUuid2(row.id) ? null : row.id,
-      title: row.title,
-      client_name: row.client_name,
-      client_email: row.client_email ?? null,
-      client_phone: row.client_phone ?? null,
-      client_cpf: row.client_cpf ?? null,
-      user_id: isUuid2(row.user_id) ? row.user_id : null,
-      status: row.status,
-      current_stage: row.current_stage,
-      service_type: row.service_type,
-      vehicle_plate: row.vehicle_plate,
-      vehicle_brand_model: row.vehicle_brand_model,
-      vehicle_renavam: row.vehicle_renavam ?? null,
-      vehicle_chassis: row.vehicle_chassis ?? null,
-      vehicle_year: row.vehicle_year ?? null,
-      vehicle_color: row.vehicle_color ?? null,
-      ait_number: row.ait_number,
-      infraction_code: row.infraction_code ?? null,
-      infraction_description: row.infraction_description,
-      ctb_article: row.ctb_article,
-      severity: row.severity,
-      points: row.points,
-      fine_amount: row.fine_amount,
-      autuador_body: row.autuador_body,
-      date_time: toDate(row.date_time),
-      location: row.location ?? null,
-      speed_limit: toNumeric(row.speed_limit),
-      measured_speed: toNumeric(row.measured_speed),
-      considered_speed: toNumeric(row.considered_speed),
-      radar_equipment_id: row.radar_equipment_id ?? null,
-      inmetro_aferition_date: row.inmetro_aferition_date ?? null,
-      notification_expedition_date: row.notification_expedition_date ?? null,
-      defense_deadline: row.defense_deadline ?? null,
-      formal_flaws_json: parseJson(row.formal_flaws_json, []),
-      analysis_json: parseJson(row.analysis_json, null),
-      defense_draft_json: parseJson(row.defense_draft_json, null),
-      protocol_info_json: parseJson(row.protocol_info_json, null),
-      ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null),
-      evidence_json: parseJson(row.evidence_json, null),
-      timeline_json: parseJson(row.timeline_json, []),
-      is_anonymous: row.is_anonymous,
-      claim_token: row.claim_token ?? null,
-      is_paid: row.is_paid,
-      paid_at: toDate(row.paid_at),
-      created_at: toDate(row.created_at),
-      updated_at: toDate(row.updated_at)
-    };
-  }
-  /**
-   * Persiste no Supabase com FAIL CLOSED em produção.
-   *
-   * Quando o Supabase não está configurado, o modo in-memory é permitido
-   * somente fora de produção para suportar E2E/dev isolados. Em produção,
-   * ausência do cliente é uma falha de infraestrutura e bloqueia a operação.
-   */
-  async persist(id, payload) {
-    if (!this.client) {
-      if (process.env.NODE_ENV === "production") {
-        throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 n\xE3o \xE9 poss\xEDvel persistir caso ${id}`);
-      }
-      logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria (E2E/dev)`, {
-        caseId: id,
-        persistenceResult: "skipped_no_client"
-      });
-      return;
-    }
-    const { error } = await this.client.from("cases").upsert(payload);
-    if (error) {
-      logger.error("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${error.message}`, {
-        caseId: id,
-        status: "failed",
-        errorCode: "SUPABASE_UPSERT"
-      });
-      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
-        type: "persistence_failure",
-        caseId: id,
-        errorCode: "SUPABASE_UPSERT",
-        message: error.message
-      }, "case_repository");
-      throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
-    }
-  }
-  /** Carrega do Supabase todos os casos persistidos (para warm-up opcional). */
-  async loadAllFromSupabase() {
-    if (!this.client) return [];
-    const { data, error } = await this.client.from("cases").select("*").order("created_at", { ascending: false });
-    if (error) {
-      logger.warn("supabase", "case_repository", "loadAll", `Falha ao carregar casos: ${error.message}`);
-      return [];
-    }
-    const rows = (data || []).map((c) => ({
-      id: c.app_ref ?? c.id,
-      title: c.title,
-      client_name: c.client_name,
-      client_email: c.client_email ?? void 0,
-      client_phone: c.client_phone ?? void 0,
-      client_cpf: c.client_cpf ?? void 0,
-      user_id: c.user_id ?? void 0,
-      status: c.status,
-      current_stage: c.current_stage,
-      service_type: c.service_type,
-      vehicle_plate: c.vehicle_plate,
-      vehicle_brand_model: c.vehicle_brand_model,
-      vehicle_renavam: c.vehicle_renavam ?? void 0,
-      vehicle_chassis: c.vehicle_chassis ?? void 0,
-      vehicle_year: c.vehicle_year ?? void 0,
-      vehicle_color: c.vehicle_color ?? void 0,
-      ait_number: c.ait_number,
-      infraction_code: c.infraction_code ?? void 0,
-      infraction_description: c.infraction_description,
-      ctb_article: c.ctb_article,
-      severity: c.severity,
-      points: c.points,
-      fine_amount: c.fine_amount,
-      autuador_body: c.autuador_body,
-      date_time: c.date_time ? new Date(c.date_time).toISOString() : "",
-      location: c.location ?? void 0,
-      speed_limit: c.speed_limit ?? void 0,
-      measured_speed: c.measured_speed ?? void 0,
-      considered_speed: c.considered_speed ?? void 0,
-      radar_equipment_id: c.radar_equipment_id ?? void 0,
-      inmetro_aferition_date: c.inmetro_aferition_date ?? void 0,
-      notification_expedition_date: c.notification_expedition_date ?? void 0,
-      defense_deadline: c.defense_deadline ?? void 0,
-      formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : void 0,
-      analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : void 0,
-      defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : void 0,
-      protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : void 0,
-      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : void 0,
-      evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : void 0,
-      timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : void 0,
-      is_anonymous: c.is_anonymous,
-      claim_token: c.claim_token ?? void 0,
-      is_paid: c.is_paid,
-      paid_at: c.paid_at ? c.paid_at : void 0,
-      created_at: c.created_at,
-      updated_at: c.updated_at
-    }));
-    for (const row of rows) {
-      this.rows.set(row.id, row);
-    }
-    return rows;
-  }
-};
-var caseRepository = new CaseRepository();
-
-// src/core/mappers/canonical-mapper.ts
-var CanonicalMapper = class _CanonicalMapper {
-  static {
-    this.toDomain = _CanonicalMapper.rowToDomain;
-  }
-  static {
-    this.toRow = _CanonicalMapper.domainToRow;
-  }
-  /**
-   * Convert Canonical Onboarding Payload to CaseDomain
-   *
-   * Preserva SEM perda:
-   *  - identification (AIT, fase, código, órgão autuador)
-   *  - infraction (dados da infração + fatos específicos)
-   *  - vehicle (placa, marca, renavam)
-   *  - applicant (qualificação do requerente)
-   *  - specificFacts (fatos juridicamente relevantes)
-   *  - evidence (OCR, fotos, declarações)
-   *  - procedure (tipo de procedimento)
-   *  - journey stage (fase processual)
-   */
-  static onboardingPayloadToDomain(payload, caseId) {
-    const id = caseId || `case_${Date.now()}`;
-    const applicantName = payload.applicant?.name || payload.leadName || "Condutor";
-    const applicantEmail = payload.applicant?.email || payload.leadEmail;
-    const applicantPhone = payload.applicant?.phone || payload.leadPhone;
-    const applicantCpf = payload.applicant?.cpf;
-    const mergedHasPsychomotorTerm = payload.specificFacts?.hasPsychomotorTerm ?? payload.infraction.hasPsychomotorTerm;
-    const mergedHasPhotoProof = payload.specificFacts?.hasPhotoProof ?? payload.infraction.hasPhotoProof;
-    const mergedHasR19SignageProof = payload.specificFacts?.hasR19SignageProof ?? payload.infraction.hasR19SignageProof;
-    const mergedHasAgentDetailedObservations = payload.specificFacts?.hasAgentDetailedObservations ?? payload.infraction.hasAgentDetailedObservations;
-    const mergedHasPreviousInfractionsLast12Months = payload.specificFacts?.isFirstInfractionLast12Months === false ? true : payload.specificFacts?.isFirstInfractionLast12Months === true ? false : payload.infraction.hasPreviousInfractionsLast12Months;
-    const mergedRefusedTest = payload.specificFacts?.refusedTest ?? payload.infraction.refusedTest;
-    const mergedOfferedRetest = payload.specificFacts?.offeredRetest ?? payload.infraction.offeredRetest;
-    const mergedCellphoneCircumstance = payload.specificFacts?.cellphoneCircumstance ?? payload.infraction.cellphoneCircumstance;
-    const mergedYellowPhaseCrossing = payload.specificFacts?.yellowPhaseCrossing ?? payload.infraction.yellowPhaseCrossing;
-    const mergedEmergencyPassage = payload.specificFacts?.emergencyPassage ?? payload.infraction.emergencyPassage;
-    const mergedRealDriverName = payload.specificFacts?.realDriverName ?? payload.infraction.realDriverName;
-    const mergedRealDriverCpf = payload.specificFacts?.realDriverCpf ?? payload.infraction.realDriverCpf;
-    const mergedRealDriverCnh = payload.specificFacts?.realDriverCnh ?? payload.infraction.realDriverCnh;
-    const mergedIndicationWithinDeadline = payload.specificFacts?.indicationWithinDeadline ?? payload.infraction.indicationWithinDeadline;
-    const mergedHasRegulatorySign = payload.specificFacts?.hasRegulatorySign ?? payload.infraction.hasRegulatorySign;
-    return {
-      id,
-      title: `Defesa Auto ${payload.infraction.aitNumber || "SN"}`,
-      clientName: applicantName,
-      clientEmail: applicantEmail,
-      clientPhone: applicantPhone,
-      clientCpf: applicantCpf,
-      status: "novo",
-      currentStage: payload.applicant ? 2 : 1,
-      serviceType: payload.procedureType,
-      vehicle: {
-        plate: (payload.vehicle.plate || "SEM PLACA").toUpperCase(),
-        brandModel: payload.vehicle.brandModel || "Ve\xEDculo n\xE3o informado",
-        renavam: payload.vehicle.renavam,
-        chassis: payload.vehicle.chassis,
-        year: payload.vehicle.year,
-        color: payload.vehicle.color
-      },
-      infraction: {
-        aitNumber: payload.infraction.aitNumber,
-        infractionCode: payload.infraction.infractionCode,
-        description: payload.infraction.description || "",
-        ctbArticle: payload.infraction.ctbArticle || "",
-        severity: payload.infraction.severity || "grave",
-        points: payload.infraction.points || 0,
-        fineAmount: payload.infraction.fineAmount || 0,
-        autuadorBody: payload.infraction.autuadorBody,
-        dateTime: payload.infraction.dateTime,
-        location: payload.infraction.location,
-        speedLimit: payload.infraction.speedLimit ?? payload.specificFacts?.speedLimit,
-        measuredSpeed: payload.infraction.measuredSpeed ?? payload.specificFacts?.measuredSpeed,
-        consideredSpeed: payload.infraction.consideredSpeed ?? payload.specificFacts?.consideredSpeed,
-        speedMeasured: payload.infraction.speedMeasured,
-        speedConsidered: payload.infraction.speedConsidered,
-        radarEquipmentId: payload.infraction.radarEquipmentId ?? payload.specificFacts?.radarEquipmentId,
-        inmetroAferitionDate: payload.infraction.inmetroAferitionDate ?? payload.specificFacts?.inmetroAferitionDate,
-        notificationExpeditionDate: payload.infraction.notificationExpeditionDate ?? payload.identification?.notificationExpeditionDate,
-        notificationDeliveryDate: payload.infraction.notificationDeliveryDate ?? payload.identification?.notificationDeliveryDate,
-        defenseDeadline: payload.infraction.defenseDeadline ?? payload.identification?.defenseDeadline,
-        hasPreviousInfractionsLast12Months: mergedHasPreviousInfractionsLast12Months,
-        hasPsychomotorTerm: mergedHasPsychomotorTerm,
-        hasAgentDetailedObservations: mergedHasAgentDetailedObservations,
-        hasPhotoProof: mergedHasPhotoProof,
-        hasR19SignageProof: mergedHasR19SignageProof,
-        hasRegulatorySign: mergedHasRegulatorySign,
-        formalFlawsDetected: [],
-        // Novos campos
-        refusedTest: mergedRefusedTest,
-        offeredRetest: mergedOfferedRetest,
-        cellphoneCircumstance: mergedCellphoneCircumstance,
-        yellowPhaseCrossing: mergedYellowPhaseCrossing,
-        emergencyPassage: mergedEmergencyPassage,
-        realDriverName: mergedRealDriverName,
-        realDriverCpf: mergedRealDriverCpf,
-        realDriverCnh: mergedRealDriverCnh,
-        indicationWithinDeadline: mergedIndicationWithinDeadline,
-        // Fase 8-P1A — Evidência explícita (preserva dados antigos se ausente)
-        evidenceFlags: payload.infraction.evidenceFlags
-      },
-      applicant: payload.applicant ? {
-        applicantName: payload.applicant.name,
-        applicantCpf: payload.applicant.cpf,
-        applicantRg: payload.applicant.rg,
-        applicantCnh: payload.applicant.cnh,
-        cnhCategory: payload.applicant.category,
-        applicantPhone: payload.applicant.phone || "",
-        applicantEmail: payload.applicant.email || "",
-        addressStreet: payload.applicant.addressStreet || "",
-        addressNumber: payload.applicant.addressNumber || "",
-        addressComplement: payload.applicant.addressComplement,
-        addressNeighborhood: payload.applicant.addressNeighborhood || "",
-        addressZipCode: payload.applicant.addressZipCode || "",
-        addressCityState: payload.applicant.addressCityState || "",
-        vehicleRenavam: payload.vehicle.renavam,
-        factsNarrative: payload.infraction.customFacts
-      } : void 0,
-      timeline: [
-        {
-          id: `evt_${Date.now()}`,
-          title: "Caso Criado",
-          description: "Diagn\xF3stico jur\xEDdico preliminar iniciado via Onboarding.",
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          type: "system"
-        }
-      ],
-      isPaid: false,
-      isAnonymous: false,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  /**
-   * Converte CaseDomain de volta para o contrato canônico do onboarding.
-   * Útil para edição do rascunho e para o dashboard do cidadão.
-   */
-  static domainToOnboardingPayload(domain) {
-    const inf = domain.infraction;
-    const veh = domain.vehicle;
-    const app = domain.applicant;
-    return {
-      procedureType: domain.serviceType,
-      situation: domain.situation,
-      processStage: domain.currentStage ? String(domain.currentStage) : void 0,
-      leadName: domain.clientName,
-      leadEmail: domain.clientEmail,
-      leadPhone: domain.clientPhone,
-      identification: {
-        aitNumber: inf.aitNumber,
-        infractionCode: inf.infractionCode,
-        autuadorBody: inf.autuadorBody,
-        notificationExpeditionDate: inf.notificationExpeditionDate,
-        notificationDeliveryDate: inf.notificationDeliveryDate,
-        defenseDeadline: inf.defenseDeadline
-      },
-      vehicle: {
-        plate: veh.plate,
-        brandModel: veh.brandModel,
-        renavam: veh.renavam,
-        chassis: veh.chassis,
-        year: veh.year,
-        color: veh.color
-      },
-      infraction: {
-        aitNumber: inf.aitNumber,
-        infractionCode: inf.infractionCode,
-        description: inf.description,
-        ctbArticle: inf.ctbArticle,
-        severity: inf.severity,
-        points: inf.points,
-        fineAmount: inf.fineAmount,
-        autuadorBody: inf.autuadorBody,
-        dateTime: inf.dateTime,
-        location: inf.location,
-        speedLimit: inf.speedLimit,
-        measuredSpeed: inf.measuredSpeed,
-        consideredSpeed: inf.consideredSpeed,
-        speedMeasured: inf.speedMeasured,
-        speedConsidered: inf.speedConsidered,
-        radarEquipmentId: inf.radarEquipmentId,
-        inmetroAferitionDate: inf.inmetroAferitionDate,
-        notificationExpeditionDate: inf.notificationExpeditionDate,
-        notificationDeliveryDate: inf.notificationDeliveryDate,
-        defenseDeadline: inf.defenseDeadline,
-        hasPreviousInfractionsLast12Months: inf.hasPreviousInfractionsLast12Months,
-        hasPsychomotorTerm: inf.hasPsychomotorTerm,
-        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
-        hasPhotoProof: inf.hasPhotoProof,
-        hasR19SignageProof: inf.hasR19SignageProof,
-        hasRegulatorySign: inf.hasRegulatorySign,
-        customFacts: app?.factsNarrative,
-        // Novos campos
-        refusedTest: inf.refusedTest,
-        offeredRetest: inf.offeredRetest,
-        cellphoneCircumstance: inf.cellphoneCircumstance,
-        yellowPhaseCrossing: inf.yellowPhaseCrossing,
-        emergencyPassage: inf.emergencyPassage,
-        realDriverName: inf.realDriverName,
-        realDriverCpf: inf.realDriverCpf,
-        realDriverCnh: inf.realDriverCnh,
-        indicationWithinDeadline: inf.indicationWithinDeadline,
-        // Fase 8-P1A — Evidência explícita (roundtrip)
-        evidenceFlags: inf.evidenceFlags
-      },
-      specificFacts: {
-        speedLimit: inf.speedLimit,
-        measuredSpeed: inf.measuredSpeed,
-        consideredSpeed: inf.consideredSpeed,
-        radarEquipmentId: inf.radarEquipmentId,
-        inmetroAferitionDate: inf.inmetroAferitionDate,
-        hasR19SignageProof: inf.hasR19SignageProof,
-        hasPsychomotorTerm: inf.hasPsychomotorTerm,
-        hasAgentDetailedObservations: inf.hasAgentDetailedObservations,
-        hasPhotoProof: inf.hasPhotoProof,
-        hasRegulatorySign: inf.hasRegulatorySign,
-        isFirstInfractionLast12Months: inf.hasPreviousInfractionsLast12Months === void 0 ? void 0 : !inf.hasPreviousInfractionsLast12Months,
-        // Novos campos
-        refusedTest: inf.refusedTest,
-        offeredRetest: inf.offeredRetest,
-        cellphoneCircumstance: inf.cellphoneCircumstance,
-        yellowPhaseCrossing: inf.yellowPhaseCrossing,
-        emergencyPassage: inf.emergencyPassage,
-        realDriverName: inf.realDriverName,
-        realDriverCpf: inf.realDriverCpf,
-        realDriverCnh: inf.realDriverCnh,
-        indicationWithinDeadline: inf.indicationWithinDeadline
-      },
-      evidence: domain.ocrAuxiliaryData ? {
-        ocrExtractedText: domain.ocrAuxiliaryData.extractedText,
-        ocrConfidence: domain.ocrAuxiliaryData.confidenceScore
-      } : void 0,
-      applicant: app ? {
-        name: app.applicantName,
-        cpf: app.applicantCpf,
-        rg: app.applicantRg,
-        cnh: app.applicantCnh,
-        category: app.cnhCategory,
-        phone: app.applicantPhone,
-        email: app.applicantEmail,
-        addressStreet: app.addressStreet,
-        addressNumber: app.addressNumber,
-        addressComplement: app.addressComplement,
-        addressNeighborhood: app.addressNeighborhood,
-        addressZipCode: app.addressZipCode,
-        addressCityState: app.addressCityState
-      } : void 0
-    };
-  }
-  /**
-   * Convert database Row (snake_case) to Frontend Domain (camelCase)
-   */
-  static rowToDomain(row) {
-    let formalFlaws = [];
-    if (row.formal_flaws_json) {
-      try {
-        formalFlaws = JSON.parse(row.formal_flaws_json);
-      } catch (e) {
-        formalFlaws = [];
-      }
-    }
-    let analysis = void 0;
-    if (row.analysis_json) {
-      try {
-        analysis = JSON.parse(row.analysis_json);
-      } catch (e) {
-        analysis = void 0;
-      }
-    }
-    let defenseDraft = void 0;
-    if (row.defense_draft_json) {
-      try {
-        defenseDraft = JSON.parse(row.defense_draft_json);
-      } catch (e) {
-        defenseDraft = void 0;
-      }
-    }
-    let protocolInfo = void 0;
-    if (row.protocol_info_json) {
-      try {
-        protocolInfo = JSON.parse(row.protocol_info_json);
-      } catch (e) {
-        protocolInfo = void 0;
-      }
-    }
-    let timeline = [];
-    if (row.timeline_json) {
-      try {
-        timeline = JSON.parse(row.timeline_json);
-      } catch (e) {
-        timeline = [];
-      }
-    }
-    let applicant = void 0;
-    if (row.applicant_json) {
-      try {
-        applicant = JSON.parse(row.applicant_json);
-      } catch (e) {
-        applicant = void 0;
-      }
-    }
-    let ocrAuxiliaryData = void 0;
-    if (row.ocr_auxiliary_json) {
-      try {
-        ocrAuxiliaryData = JSON.parse(row.ocr_auxiliary_json);
-      } catch (e) {
-        ocrAuxiliaryData = void 0;
-      }
-    }
-    let evidenceFlags = void 0;
-    if (row.evidence_json) {
-      try {
-        const parsed = JSON.parse(row.evidence_json);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          evidenceFlags = parsed;
-        }
-      } catch (e) {
-        evidenceFlags = void 0;
-      }
-    }
-    return {
-      id: row.id,
-      title: row.title || `Recurso Auto ${row.ait_number}`,
-      clientName: row.client_name,
-      clientEmail: row.client_email,
-      clientPhone: row.client_phone,
-      clientCpf: row.client_cpf,
-      userId: row.user_id,
-      status: row.status || "novo",
-      currentStage: row.current_stage || 1,
-      serviceType: row.service_type || "recurso_jari",
-      commercialOfferId: row.commercial_offer_id,
-      vehicle: {
-        plate: row.vehicle_plate || "SEM PLACA",
-        brandModel: row.vehicle_brand_model || "Ve\xEDculo n\xE3o informado",
-        renavam: row.vehicle_renavam,
-        chassis: row.vehicle_chassis,
-        year: row.vehicle_year,
-        color: row.vehicle_color
-      },
-      infraction: {
-        aitNumber: row.ait_number,
-        infractionCode: row.infraction_code,
-        description: row.infraction_description,
-        ctbArticle: row.ctb_article,
-        severity: row.severity || "grave",
-        points: Number(row.points) || 0,
-        fineAmount: Number(row.fine_amount) || 0,
-        autuadorBody: row.autuador_body,
-        dateTime: row.date_time,
-        location: row.location,
-        speedLimit: row.speed_limit,
-        measuredSpeed: row.measured_speed,
-        consideredSpeed: row.considered_speed,
-        radarEquipmentId: row.radar_equipment_id,
-        inmetroAferitionDate: row.inmetro_aferition_date,
-        notificationExpeditionDate: row.notification_expedition_date,
-        defenseDeadline: row.defense_deadline,
-        formalFlawsDetected: formalFlaws,
-        // Novos campos
-        hasPreviousInfractionsLast12Months: row.has_previous_infractions_last_12_months,
-        hasPsychomotorTerm: row.has_psychomotor_term,
-        hasAgentDetailedObservations: row.has_agent_detailed_observations,
-        hasPhotoProof: row.has_photo_proof,
-        hasR19SignageProof: row.has_r19_signage_proof,
-        hasRegulatorySign: row.has_regulatory_sign,
-        refusedTest: row.refused_test,
-        offeredRetest: row.offered_retest,
-        cellphoneCircumstance: row.cellphone_circumstance,
-        yellowPhaseCrossing: row.yellow_phase_crossing,
-        emergencyPassage: row.emergency_passage,
-        realDriverName: row.real_driver_name,
-        realDriverCpf: row.real_driver_cpf,
-        realDriverCnh: row.real_driver_cnh,
-        indicationWithinDeadline: row.indication_within_deadline,
-        // Fase 8-P1A — Evidência explícita (preserva ausência = compatível com dados antigos)
-        evidenceFlags
-      },
-      analysis,
-      applicant,
-      ocrAuxiliaryData,
-      defenseDraft,
-      protocolInfo,
-      timeline,
-      isAnonymous: Boolean(row.is_anonymous),
-      claimToken: row.claim_token,
-      isPaid: Boolean(row.is_paid),
-      paidAt: row.paid_at,
-      createdAt: row.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: row.updated_at || (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  /**
-   * Convert Frontend Domain (camelCase) to Database Row (snake_case)
-   */
-  static domainToRow(domain) {
-    if (!domain) {
-      return {};
-    }
-    const vehicle = domain.vehicle || {};
-    const infraction = domain.infraction || domain.dadosInfracao || {};
-    const clientName = domain.clientName || domain.userNome || infraction.nomeCondutor || "Condutor";
-    const clientEmail = domain.clientEmail || domain.userEmail || "";
-    const clientPhone = domain.clientPhone || "";
-    const clientCpf = domain.clientCpf || infraction.cpfCondutor || "";
-    return {
-      id: domain.id || `case_${Date.now()}`,
-      title: domain.title || `Recurso Auto ${infraction.aitNumber || infraction.autoInfracao || "AIT"}`,
-      client_name: clientName,
-      client_email: clientEmail,
-      client_phone: clientPhone,
-      client_cpf: clientCpf,
-      user_id: domain.userId,
-      status: domain.status || "novo",
-      current_stage: Number(domain.currentStage || domain.stageAtual || 1),
-      service_type: domain.serviceType || domain.tipoServico || "recurso_jari",
-      vehicle_plate: vehicle.plate || infraction.placa || "SEM PLACA",
-      vehicle_brand_model: vehicle.brandModel || infraction.marcaModelo || "Ve\xEDculo",
-      vehicle_renavam: vehicle.renavam || infraction.renavam,
-      vehicle_chassis: vehicle.chassis || infraction.chassi,
-      vehicle_year: vehicle.year || infraction.anoModelo,
-      vehicle_color: vehicle.color || infraction.cor,
-      ait_number: infraction.aitNumber || infraction.autoInfracao || "SEM_AIT",
-      infraction_code: infraction.infractionCode || infraction.codigoInfracao,
-      infraction_description: infraction.description || infraction.descricaoInfracao || "",
-      ctb_article: infraction.ctbArticle || infraction.enquadramentoLegal,
-      severity: infraction.severity || (infraction.gravidade ? String(infraction.gravidade).toLowerCase() : "grave"),
-      points: Number(infraction.points || infraction.pontos || 0),
-      fine_amount: Number(infraction.fineAmount || infraction.valorOriginal || 0),
-      autuador_body: infraction.autuadorBody ?? infraction.orgaoAutuador,
-      date_time: infraction.dateTime || infraction.dataHoraInfracao || (/* @__PURE__ */ new Date()).toISOString(),
-      location: infraction.location || infraction.localInfracao || "",
-      speed_limit: infraction.speedLimit || infraction.velocidadePermitida,
-      measured_speed: infraction.measuredSpeed || infraction.velocidadeMedida,
-      considered_speed: infraction.consideredSpeed || infraction.velocidadeConsiderada,
-      radar_equipment_id: infraction.radarEquipmentId || infraction.numeroEquipamentoInmetro,
-      inmetro_aferition_date: infraction.inmetroAferitionDate || infraction.dataAfericaoInmetro,
-      notification_expedition_date: infraction.notificationExpeditionDate,
-      defense_deadline: infraction.defenseDeadline || infraction.prazoDefesa,
-      formal_flaws_json: JSON.stringify(infraction.formalFlawsDetected || infraction.viciosTipicos || []),
-      analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : void 0,
-      defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : void 0,
-      protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : void 0,
-      applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : void 0,
-      ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : void 0,
-      // Fase 8-P1A — Evidência explícita (mapa chave → booleano)
-      evidence_json: infraction.evidenceFlags ? JSON.stringify(infraction.evidenceFlags) : void 0,
-      commercial_offer_id: domain.commercialOfferId,
-      timeline_json: JSON.stringify(domain.timeline || domain.historicoTimeline || []),
-      is_anonymous: Boolean(domain.isAnonymous),
-      claim_token: domain.claimToken,
-      is_paid: Boolean(domain.isPaid || domain.statusPagamento === "pago"),
-      paid_at: domain.paidAt || domain.dataPagamento,
-      created_at: domain.createdAt || domain.criadoEm || (/* @__PURE__ */ new Date()).toISOString(),
-      updated_at: domain.updatedAt || domain.atualizadoEm || (/* @__PURE__ */ new Date()).toISOString(),
-      // Novos campos
-      has_previous_infractions_last_12_months: infraction.hasPreviousInfractionsLast12Months,
-      has_psychomotor_term: infraction.hasPsychomotorTerm,
-      has_agent_detailed_observations: infraction.hasAgentDetailedObservations,
-      has_photo_proof: infraction.hasPhotoProof,
-      has_r19_signage_proof: infraction.hasR19SignageProof,
-      has_regulatory_sign: infraction.hasRegulatorySign,
-      refused_test: infraction.refusedTest,
-      offered_retest: infraction.offeredRetest,
-      cellphone_circumstance: infraction.cellphoneCircumstance,
-      yellow_phase_crossing: infraction.yellowPhaseCrossing,
-      emergency_passage: infraction.emergencyPassage,
-      real_driver_name: infraction.realDriverName,
-      real_driver_cpf: infraction.realDriverCpf,
-      real_driver_cnh: infraction.realDriverCnh,
-      indication_within_deadline: infraction.indicationWithinDeadline
-    };
-  }
-};
 
 // src/server/middleware/auth-middleware.ts
 function sanitizeCaseCreateBody(req) {
@@ -2263,6 +3390,335 @@ var strictLimiter = (req, res, next) => {
   });
 };
 
+// src/core/events/topics.ts
+var EventTopics = {
+  // Case Lifecycle
+  CASE_CREATED: "case.created",
+  CASE_UPDATED: "case.updated",
+  CASE_CLAIMED: "case.claimed",
+  CASE_STAGE_CHANGED: "case.stage_changed",
+  CASE_DELETED: "case.deleted",
+  // OCR & Analysis
+  OCR_UPLOADED: "ocr.uploaded",
+  OCR_PROCESSING: "ocr.processing",
+  OCR_COMPLETED: "ocr.completed",
+  ANALYSIS_GENERATED: "analysis.generated",
+  // Defense Drafting
+  DEFENSE_DRAFT_INITIATED: "defense.draft_initiated",
+  DEFENSE_ARGUMENTS_SELECTED: "defense.arguments_selected",
+  DEFENSE_DRAFT_FINALIZED: "defense.draft_finalized",
+  DEFENSE_PDF_EXPORTED: "defense.pdf_exported",
+  // Protocol & Timeline
+  PROTOCOL_FILED: "protocol.filed",
+  STATUS_UPDATED: "status.updated",
+  DEADLINE_ALERT_TRIGGERED: "deadline.alert_triggered",
+  // Payments & Checkout
+  PAYMENT_INTENT_CREATED: "payment.intent_created",
+  PAYMENT_PIX_GENERATED: "payment.pix_generated",
+  PAYMENT_CONFIRMED: "payment.confirmed",
+  PAYMENT_REFUNDED: "payment.refunded",
+  // Communication & WhatsApp (Evolution API)
+  WHATSAPP_MESSAGE_QUEUED: "whatsapp.message_queued",
+  WHATSAPP_MESSAGE_SENT: "whatsapp.message_sent",
+  WHATSAPP_WEBHOOK_RECEIVED: "whatsapp.webhook_received",
+  // Omnichannel Messaging (WhatsApp, Meta Messenger, Instagram Direct)
+  MESSAGING_MESSAGE_RECEIVED: "messaging.message_received",
+  MESSAGING_MESSAGE_SENT: "messaging.message_sent",
+  MESSAGING_LEAD_QUALIFIED: "messaging.lead_qualified",
+  // Marketing OS 7-Agent Organism
+  MARKETING_CYCLE_TICK: "marketing.cycle_tick",
+  MARKETING_STRATEGY_UPDATED: "marketing.strategy_updated",
+  MARKETING_CONTENT_DRAFTED: "marketing.content_drafted",
+  MARKETING_QUALITY_APPROVED: "marketing.quality_approved",
+  MARKETING_CONTENT_PUBLISHED: "marketing.content_published",
+  MARKETING_CONTENT_REJECTED: "marketing.content_rejected",
+  MARKETING_METRICS_COLLECTED: "marketing.metrics_collected",
+  MARKETING_LEARNING_UPDATE: "marketing.learning_update",
+  MARKETING_KNOWLEDGE_BASE_UPDATED: "marketing.knowledge_base_updated",
+  MARKETING_EDITORIAL_CALENDAR_UPDATED: "marketing.editorial_calendar_updated",
+  MARKETING_DISTRIBUTION_PLAN_UPDATED: "marketing.distribution_plan_updated",
+  // Audit & Security
+  AUDIT_LOG_RECORDED: "audit.log_recorded",
+  SECURITY_OVERRIDE_TRIGGERED: "security.override_triggered"
+};
+var EventBus = class {
+  constructor() {
+    this.listeners = /* @__PURE__ */ new Map();
+    this.history = [];
+  }
+  subscribe(topic, listener) {
+    if (!this.listeners.has(topic)) {
+      this.listeners.set(topic, /* @__PURE__ */ new Set());
+    }
+    this.listeners.get(topic).add(listener);
+    return () => {
+      this.listeners.get(topic)?.delete(listener);
+    };
+  }
+  publish(topic, payload, sourceModule = "system") {
+    const event = {
+      topic,
+      payload,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      correlationId: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      sourceModule
+    };
+    this.history.unshift(event);
+    if (this.history.length > 200) {
+      this.history.pop();
+    }
+    const specific = this.listeners.get(topic);
+    if (specific) {
+      specific.forEach((fn) => {
+        try {
+          fn(event);
+        } catch (err) {
+          console.error(`[EventBus] Error in listener for topic ${topic}:`, err);
+        }
+      });
+    }
+    const wildcard = this.listeners.get("*");
+    if (wildcard) {
+      wildcard.forEach((fn) => {
+        try {
+          fn(event);
+        } catch (err) {
+          console.error(`[EventBus] Error in wildcard listener for topic ${topic}:`, err);
+        }
+      });
+    }
+    return event;
+  }
+  getHistory() {
+    return [...this.history];
+  }
+};
+var eventBus = new EventBus();
+
+// src/server/db/uuid-v5.ts
+import { createHash } from "node:crypto";
+var DEFESAI_UUID_NAMESPACE = "6f0a9d2e-8c47-4b3a-9f15-d7e0b2c4a681";
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value) {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+function parseNamespaceBytes(namespace) {
+  const hex = namespace.replace(/-/g, "");
+  if (!/^[0-9a-f]{32}$/i.test(hex)) {
+    throw new Error(`Namespace UUID inv\xE1lido: ${namespace}`);
+  }
+  return Buffer.from(hex, "hex");
+}
+function uuidV5(name, namespace = DEFESAI_UUID_NAMESPACE) {
+  const hash = createHash("sha1");
+  hash.update(parseNamespaceBytes(namespace));
+  hash.update(Buffer.from(name, "utf8"));
+  const bytes = Buffer.from(hash.digest().subarray(0, 16));
+  bytes[6] = bytes[6] & 15 | 80;
+  bytes[8] = bytes[8] & 63 | 128;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+function domainIdToUuid(id) {
+  if (!id) return null;
+  if (isUuid(id)) return id;
+  return uuidV5(id);
+}
+
+// src/server/db/case-repository.ts
+function parseJson(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+function toDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+function toNumeric(value) {
+  return typeof value === "number" && !Number.isNaN(value) ? value : null;
+}
+function isUuid2(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+function allowInMemoryPersistence() {
+  return process.env.ALLOW_IN_MEMORY_CASE_PERSISTENCE === "true";
+}
+var CaseRepository = class {
+  constructor() {
+    this.rows = /* @__PURE__ */ new Map();
+    this.client = getSupabaseServerClient();
+  }
+  get size() {
+    return this.rows.size;
+  }
+  get(id) {
+    return this.rows.get(id);
+  }
+  values() {
+    return this.rows.values();
+  }
+  async set(id, row) {
+    const payload = this.toPayload(row);
+    await this.persist(id, payload);
+    this.rows.set(id, row);
+  }
+  toPayload(row) {
+    return {
+      id: domainIdToUuid(row.id) ?? void 0,
+      app_ref: isUuid2(row.id) ? null : row.id,
+      title: row.title,
+      client_name: row.client_name,
+      client_email: row.client_email ?? null,
+      client_phone: row.client_phone ?? null,
+      client_cpf: row.client_cpf ?? null,
+      user_id: isUuid2(row.user_id) ? row.user_id : null,
+      status: row.status,
+      current_stage: row.current_stage,
+      service_type: row.service_type,
+      vehicle_plate: row.vehicle_plate,
+      vehicle_brand_model: row.vehicle_brand_model,
+      vehicle_renavam: row.vehicle_renavam ?? null,
+      vehicle_chassis: row.vehicle_chassis ?? null,
+      vehicle_year: row.vehicle_year ?? null,
+      vehicle_color: row.vehicle_color ?? null,
+      ait_number: row.ait_number,
+      infraction_code: row.infraction_code ?? null,
+      infraction_description: row.infraction_description,
+      ctb_article: row.ctb_article,
+      severity: row.severity,
+      points: row.points,
+      fine_amount: row.fine_amount,
+      autuador_body: row.autuador_body,
+      date_time: toDate(row.date_time),
+      location: row.location ?? null,
+      speed_limit: toNumeric(row.speed_limit),
+      measured_speed: toNumeric(row.measured_speed),
+      considered_speed: toNumeric(row.considered_speed),
+      radar_equipment_id: row.radar_equipment_id ?? null,
+      inmetro_aferition_date: row.inmetro_aferition_date ?? null,
+      notification_expedition_date: row.notification_expedition_date ?? null,
+      defense_deadline: row.defense_deadline ?? null,
+      formal_flaws_json: parseJson(row.formal_flaws_json, []),
+      analysis_json: parseJson(row.analysis_json, null),
+      defense_draft_json: parseJson(row.defense_draft_json, null),
+      protocol_info_json: parseJson(row.protocol_info_json, null),
+      ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null),
+      evidence_json: parseJson(row.evidence_json, null),
+      timeline_json: parseJson(row.timeline_json, []),
+      is_anonymous: row.is_anonymous,
+      claim_token: row.claim_token ?? null,
+      is_paid: row.is_paid,
+      paid_at: toDate(row.paid_at),
+      created_at: toDate(row.created_at),
+      updated_at: toDate(row.updated_at)
+    };
+  }
+  async persist(id, payload) {
+    if (!this.client) {
+      if (allowInMemoryPersistence()) {
+        logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
+          caseId: id,
+          persistenceResult: "explicit_in_memory_fallback"
+        });
+        return;
+      }
+      throw new Error(
+        `CaseRepository: Supabase client n\xE3o configurado \u2014 persist\xEAncia real obrigat\xF3ria para o caso ${id}. Para testes unit\xE1rios/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.`
+      );
+    }
+    const { error } = await this.client.from("cases").upsert(payload);
+    if (error) {
+      logger.error("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${error.message}`, {
+        caseId: id,
+        status: "failed",
+        errorCode: "SUPABASE_UPSERT"
+      });
+      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
+        type: "persistence_failure",
+        caseId: id,
+        errorCode: "SUPABASE_UPSERT",
+        message: error.message
+      }, "case_repository");
+      throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
+    }
+  }
+  async loadAllFromSupabase() {
+    if (!this.client) {
+      if (allowInMemoryPersistence()) return [];
+      throw new Error("CaseRepository: Supabase client n\xE3o configurado \u2014 cold start n\xE3o pode ser considerado persistente.");
+    }
+    const { data, error } = await this.client.from("cases").select("*").order("created_at", { ascending: false });
+    if (error) {
+      logger.error("supabase", "case_repository", "loadAll", `Falha ao carregar casos: ${error.message}`, {
+        errorCode: "SUPABASE_LOAD_ALL"
+      });
+      throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
+    }
+    const rows = (data || []).map((c) => ({
+      id: c.app_ref ?? c.id,
+      title: c.title,
+      client_name: c.client_name,
+      client_email: c.client_email ?? void 0,
+      client_phone: c.client_phone ?? void 0,
+      client_cpf: c.client_cpf ?? void 0,
+      user_id: c.user_id ?? void 0,
+      status: c.status,
+      current_stage: c.current_stage,
+      service_type: c.service_type,
+      vehicle_plate: c.vehicle_plate,
+      vehicle_brand_model: c.vehicle_brand_model,
+      vehicle_renavam: c.vehicle_renavam ?? void 0,
+      vehicle_chassis: c.vehicle_chassis ?? void 0,
+      vehicle_year: c.vehicle_year ?? void 0,
+      vehicle_color: c.vehicle_color ?? void 0,
+      ait_number: c.ait_number,
+      infraction_code: c.infraction_code ?? void 0,
+      infraction_description: c.infraction_description,
+      ctb_article: c.ctb_article,
+      severity: c.severity,
+      points: c.points,
+      fine_amount: c.fine_amount,
+      autuador_body: c.autuador_body,
+      date_time: c.date_time ? new Date(c.date_time).toISOString() : "",
+      location: c.location ?? void 0,
+      speed_limit: c.speed_limit ?? void 0,
+      measured_speed: c.measured_speed ?? void 0,
+      considered_speed: c.considered_speed ?? void 0,
+      radar_equipment_id: c.radar_equipment_id ?? void 0,
+      inmetro_aferition_date: c.inmetro_aferition_date ?? void 0,
+      notification_expedition_date: c.notification_expedition_date ?? void 0,
+      defense_deadline: c.defense_deadline ?? void 0,
+      formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : void 0,
+      analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : void 0,
+      defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : void 0,
+      protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : void 0,
+      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : void 0,
+      evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : void 0,
+      timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : void 0,
+      is_anonymous: c.is_anonymous,
+      claim_token: c.claim_token ?? void 0,
+      is_paid: c.is_paid,
+      paid_at: c.paid_at ? c.paid_at : void 0,
+      created_at: c.created_at,
+      updated_at: c.updated_at
+    }));
+    for (const row of rows) {
+      this.rows.set(row.id, row);
+    }
+    return rows;
+  }
+};
+var caseRepository = new CaseRepository();
+
+// src/server/stores.ts
+var databaseRows = caseRepository;
+var auditLogs = [];
+
 // src/server/routes/admin.ts
 import { Router } from "express";
 
@@ -2422,12 +3878,12 @@ var MetricsService = class {
 var metricsService = new MetricsService();
 
 // src/server/observability/health-service.ts
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(url2, options = {}) {
   const { timeout = 5e3, ...fetchOptions } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+    return await fetch(url2, { ...fetchOptions, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -3304,8 +4760,8 @@ var HealthService = class {
       }
       case "supabase":
       case "supabase_db": {
-        const url = configService.get("VITE_SUPABASE_URL");
-        const isConfigured = Boolean(url && url.startsWith("https://"));
+        const url2 = configService.get("VITE_SUPABASE_URL");
+        const isConfigured = Boolean(url2 && url2.startsWith("https://"));
         if (!isConfigured) {
           return {
             serviceId: "supabase",
@@ -3324,7 +4780,7 @@ var HealthService = class {
         }
         const testStart = Date.now();
         try {
-          const response = await fetchWithTimeout(`${url}/rest/v1/`, {
+          const response = await fetchWithTimeout(`${url2}/rest/v1/`, {
             method: "GET",
             headers: {
               "apikey": configService.get("VITE_SUPABASE_ANON_KEY", "")
@@ -4510,18 +5966,18 @@ var MetaGraphClient = class {
    */
   buildUrl(endpoint, params, accessToken) {
     const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
-    const url = new URL(`${this.baseUrl}/${this.graphApiVersion}/${cleanEndpoint}`);
+    const url2 = new URL(`${this.baseUrl}/${this.graphApiVersion}/${cleanEndpoint}`);
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
         if (v !== void 0 && v !== null) {
-          url.searchParams.append(k, String(v));
+          url2.searchParams.append(k, String(v));
         }
       });
     }
     if (accessToken) {
-      url.searchParams.append("access_token", accessToken);
+      url2.searchParams.append("access_token", accessToken);
     }
-    return url.toString();
+    return url2.toString();
   }
   /**
    * Sanitizes URLs and Objects for logging (strips access_token, secrets)
@@ -4561,7 +6017,7 @@ var MetaGraphClient = class {
     let lastError = null;
     while (attempt < maxAttempts) {
       attempt++;
-      const url = this.buildUrl(endpoint, params, accessToken);
+      const url2 = this.buildUrl(endpoint, params, accessToken);
       const requestInit = {
         method,
         headers: {
@@ -4576,7 +6032,7 @@ var MetaGraphClient = class {
         requestInit.body = JSON.stringify(body);
       }
       try {
-        const response = await fetch(url, requestInit);
+        const response = await fetch(url2, requestInit);
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
           const text = await response.text();
@@ -5673,12 +7129,12 @@ async function validateMetaAppConnection(customToken) {
   const appAccessToken = `${appId}|${appSecret}`;
   const inputToken = customToken || process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN || appAccessToken;
   try {
-    const url = new URL(`https://graph.facebook.com/${version}/debug_token`);
-    url.searchParams.append("input_token", inputToken);
-    url.searchParams.append("access_token", appAccessToken);
+    const url2 = new URL(`https://graph.facebook.com/${version}/debug_token`);
+    url2.searchParams.append("input_token", inputToken);
+    url2.searchParams.append("access_token", appAccessToken);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8e3);
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url2.toString(), {
       method: "GET",
       headers: {
         Accept: "application/json"
@@ -6050,7 +7506,7 @@ router.get(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     if (!supabase) {
       return res.status(503).json({ error: "Supabase indispon\xEDvel." });
     }
-    let query = supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at");
+    let query = supabase.from("user_profiles").select("user_id, email, name, role, cpf, created_at, updated_at");
     const { search, role } = req.query;
     const validRole = typeof role === "string" && (role === "admin" || role === "citizen") ? role : null;
     if (validRole) {
@@ -6085,7 +7541,7 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     if (!supabase) {
       return res.status(503).json({ error: "Supabase indispon\xEDvel." });
     }
-    const { data: profile, error: profileError } = await supabase.from("user_profiles").select("id, email, name, role").eq("email", email).maybeSingle();
+    const { data: profile, error: profileError } = await supabase.from("user_profiles").select("user_id, email, name, role").eq("email", email).maybeSingle();
     if (profileError) {
       console.error("Erro ao buscar profile:", profileError);
       return res.status(500).json({ error: "Erro ao localizar usu\xE1rio." });
@@ -6101,7 +7557,7 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
       console.error("Erro ao atualizar role via RPC:", rpcError);
       return res.status(500).json({ error: "Erro ao atualizar permiss\xE3o." });
     }
-    const { data: updated } = await supabase.from("user_profiles").select("id, email, name, role, cpf, created_at, updated_at").eq("id", profile.id).single();
+    const { data: updated } = await supabase.from("user_profiles").select("user_id, email, name, role, cpf, created_at, updated_at").eq("user_id", profile.user_id).single();
     res.json({ success: true, user: updated });
   } catch (err) {
     console.error("Erro em PUT /api/admin/users:", err);
@@ -6939,12 +8395,12 @@ async function runMetaIntegrationTests() {
     "Gera\xE7\xE3o de URL OAuth com v20.0 e escopos obrigat\xF3rios de publica\xE7\xE3o e insights",
     "OAuth",
     async () => {
-      const url = metaAuthService.generateOAuthUrl("https://www.defesai.shop/api/meta/callback");
-      if (!url.includes("facebook.com/v20.0/dialog/oauth")) {
-        throw new Error(`URL OAuth n\xE3o usa Graph API v20.0: ${url}`);
+      const url2 = metaAuthService.generateOAuthUrl("https://www.defesai.shop/api/meta/callback");
+      if (!url2.includes("facebook.com/v20.0/dialog/oauth")) {
+        throw new Error(`URL OAuth n\xE3o usa Graph API v20.0: ${url2}`);
       }
       for (const scope of REQUIRED_META_SCOPES) {
-        if (!url.includes(scope)) {
+        if (!url2.includes(scope)) {
           throw new Error(`Escopo obrigat\xF3rio "${scope}" ausente na URL OAuth.`);
         }
       }
@@ -7255,12 +8711,12 @@ var WhatsAppService = class {
     if (!this.isConfigured) {
       throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
     }
-    const url = `${this.apiUrl}${path}`;
+    const url2 = `${this.apiUrl}${path}`;
     const headers = {
       "Content-Type": "application/json",
       apikey: this.apiKey
     };
-    const response = await fetch(url, {
+    const response = await fetch(url2, {
       method,
       headers,
       body: body ? JSON.stringify(body) : void 0
@@ -9103,8 +10559,8 @@ router2.all(
 );
 router2.get(["/integrations/meta/auth-url", "/meta/auth-url"], (req, res) => {
   const redirectUri = req.query.redirectUri || `${req.protocol}://${req.get("host")}/api/integrations/meta/callback`;
-  const url = metaAuthService.generateOAuthUrl(redirectUri, req.query.state);
-  res.json({ authUrl: url });
+  const url2 = metaAuthService.generateOAuthUrl(redirectUri, req.query.state);
+  res.json({ authUrl: url2 });
 });
 router2.get(["/integrations/meta/callback", "/meta/callback"], async (req, res) => {
   const code = req.query.code;
@@ -12715,6 +14171,260 @@ var CTB_ARTICLES_DB = [
     practicalApplication: "Distingue-se entre condutor manuseando aparelho solto e o uso de suporte veicular para navega\xE7\xE3o GPS ou comando de voz.",
     nullityConsequence: "Falta de descri\xE7\xE3o detalhada das circunst\xE2ncias f\xE1ticas pelo agente anula a autua\xE7\xE3o (Res. 985/2022).",
     relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT - Ficha 736-62)"]
+  },
+  {
+    article: "Art. 208",
+    title: "Avan\xE7o de Sinal Vermelho e Parada Obrigat\xF3ria",
+    caput: "Avan\xE7ar o sinal vermelho do sem\xE1foro ou, onde houver, o de parada obrigat\xF3ria:",
+    paragraphsAndIncidents: [
+      "Penalidade: multa (grav\xEDssima) e 7 (sete) pontos na CNH.",
+      "Inciso I: Avan\xE7ar o sinal vermelho do sem\xE1foro.",
+      "Inciso II: Parar o ve\xEDculo sobre a faixa de pedestres na mudan\xE7a de sinal luminoso.",
+      "Inciso III: Transpor, sem autoriza\xE7\xE3o, bloqueio vi\xE1rio policial."
+    ],
+    practicalApplication: "Verificar tempo de sinal amarelo (Res. 973/2022), visibilidade do sem\xE1foro, dilema do amarelo, e se houve parada obrigat\xF3ria em faixa.",
+    nullityConsequence: "Anula\xE7\xE3o se tempo de amarelo insuficiente, sinaliza\xE7\xE3o encoberta, ou inexist\xEAncia de dilema do amarelo configurado.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022 (Sinaliza\xE7\xE3o Semaf\xF3rica)", "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT)"]
+  },
+  {
+    article: "Art. 162",
+    title: "Dirigir sem CNH ou com CNH Cassada/Suspensa",
+    caput: "Dirigir ve\xEDculo automotor: I - sem possuir Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir; II - com Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir cassada ou suspensa; III - com Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir de categoria diferente da do ve\xEDculo que esteja conduzindo.",
+    paragraphsAndIncidents: [
+      "Inciso I: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x, apreens\xE3o do ve\xEDculo.",
+      "Inciso II: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x, recolhimento do documento.",
+      "Inciso III: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x."
+    ],
+    practicalApplication: "Verificar se condutor possu\xEDa CNH v\xE1lida na data, se suspens\xE3o/cassa\xE7\xE3o j\xE1 tinha tr\xE2nsito em julgado, se categoria compat\xEDvel.",
+    nullityConsequence: "Nulidade se CNH j\xE1 regularizada na data ou se notifica\xE7\xE3o de suspens\xE3o n\xE3o entregue (decad\xEAncia/prescri\xE7\xE3o).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022"]
+  },
+  {
+    article: "Art. 163",
+    title: "Entregar ve\xEDculo a pessoa sem CNH ou com CNH Suspensa/Cassada",
+    caput: "Entregar a dire\xE7\xE3o do ve\xEDculo a pessoa que n\xE3o esteja habilitada, com habilita\xE7\xE3o cassada ou com o direito de dirigir suspenso, ou, ainda, a pessoa que, por seu estado f\xEDsico ou mental, ou por embriaguez, n\xE3o esteja em condi\xE7\xF5es de conduzi-lo com seguran\xE7a.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o grav\xEDssima (7 pontos, multa 3x).",
+      "Se o condutor n\xE3o habilitado causar acidente com v\xEDtima: crime de tr\xE2nsito (Art. 309 e 310 CTB)."
+    ],
+    practicalApplication: "Propriet\xE1rio responde solidariamente. Verificar se tinha ci\xEAncia da condi\xE7\xE3o do condutor.",
+    nullityConsequence: "Nulidade se comprovado que propriet\xE1rio n\xE3o tinha como saber da condi\xE7\xE3o.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 180",
+    title: "Licenciamento Anual Obrigat\xF3rio",
+    caput: "Deixar de efetuar o registro de ve\xEDculo ou de licenci\xE1-lo no prazo estabelecido pela autoridade de tr\xE2nsito.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o grav\xEDssima (7 pontos, multa 1x), apreens\xE3o e remo\xE7\xE3o do ve\xEDculo.",
+      "Art. 230, V: Transitando com ve\xEDculo sem o devido licenciamento."
+    ],
+    practicalApplication: "Verificar se CRLV-e dispon\xEDvel, se taxas pagas, se restri\xE7\xE3o administrativa indevida.",
+    nullityConsequence: "Anula\xE7\xE3o se licenciamento pago mas sistema n\xE3o atualizado, ou se notifica\xE7\xE3o n\xE3o entregue.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Portaria SENATRAN n\xBA 354/2022"]
+  },
+  {
+    article: "Art. 195",
+    title: "Transitar em Local/Hor\xE1rio n\xE3o Permitido",
+    caput: "Transitar em locais e hor\xE1rios n\xE3o permitidos pela regulamenta\xE7\xE3o estabelecida pela autoridade de tr\xE2nsito com circunscri\xE7\xE3o sobre a via:",
+    paragraphsAndIncidents: [
+      "Inciso I: Em \xE1reas de estacionamento proibido; II: Em ciclovias/ciclofaixas; III: Em acostamentos; IV: Na contram\xE3o de dire\xE7\xE3o.",
+      "Penalidade: m\xE9dia (4 pts) a grave (5 pts) conforme inciso."
+    ],
+    practicalApplication: "Verificar sinaliza\xE7\xE3o (placas R-6, R-45, etc.), hor\xE1rios, se regulamenta\xE7\xE3o publicada e vis\xEDvel.",
+    nullityConsequence: "Anula\xE7\xE3o se sinaliza\xE7\xE3o inexistente, encoberta, ou regulamenta\xE7\xE3o n\xE3o publicada.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022 (Sinaliza\xE7\xE3o)", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 230",
+    title: "Infra\xE7\xF5es de Estacionamento e Parada",
+    caput: "Conduzir ve\xEDculo: V - sem estar licenciado; IX - sem os equipamentos obrigat\xF3rios; XVIII - com lota\xE7\xE3o excedente; XXIII - transitando em ciclovia/ciclofaixa; XXIV - estacionamento em desacordo com sinaliza\xE7\xE3o; XXV - parada em desacordo com sinaliza\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Inciso V: Grav\xEDssima (7 pts, multa 1x, apreens\xE3o); IX: Grave (5 pts); XVIII: Grave (5 pts); XXIII: M\xE9dia (4 pts); XXIV/XXV: Leve (3 pts) ou M\xE9dia (4 pts)."
+    ],
+    practicalApplication: "Verificar placas R-6a/b/c, R-45, R-46, hor\xE1rios, se \xE1rea permitia estacionamento/parada, se sinaliza\xE7\xE3o vis\xEDvel.",
+    nullityConsequence: "Anula\xE7\xE3o se sinaliza\xE7\xE3o inexistente, irregular, ou equipamento obrigat\xF3rio presente.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 231",
+    title: "Transitar sem Equipamentos Obrigat\xF3rios",
+    caput: "Conduzir ve\xEDculo: IX - sem os equipamentos obrigat\xF3rios ou estando estes em desacordo com as normas estabelecidas pelo CONTRAN.",
+    paragraphsAndIncidents: [
+      "Equipamentos: extintor, tri\xE2ngulo, macaco, chave de roda, estepe (conforme tipo), cinto de seguran\xE7a, encosto de cabe\xE7a, tac\xF3grafo (ve\xEDculos pesados).",
+      "Infra\xE7\xE3o grave (5 pontos)."
+    ],
+    practicalApplication: "Verificar se equipamento realmente ausente ou em desacordo, se ve\xEDculo isento (ex: extintor n\xE3o obrigat\xF3rio para carros de passeio desde 2015).",
+    nullityConsequence: "Anula\xE7\xE3o se equipamento n\xE3o exigido para categoria do ve\xEDculo, ou se presente mas n\xE3o identificado pelo agente.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT)"]
+  },
+  {
+    article: "Art. 244",
+    title: "Conduzir Motocicleta sem Capacete ou Vestu\xE1rio",
+    caput: "Conduzir motocicleta, motoneta ou ciclomotor: I - sem usar capacete de seguran\xE7a com viseira ou \xF3culos de prote\xE7\xE3o e vestu\xE1rio de acordo com as normas do CONTRAN; II - transportando passageiro sem capacete ou fora do banco; III - fazendo malabarismo ou equilibrando-se em uma roda; IV - com farol apagado.",
+    paragraphsAndIncidents: [
+      "Inciso I/II: Grav\xEDssima (7 pts, multa 1x, suspens\xE3o do direito de dirigir); III/IV: Grav\xEDssima (7 pts)."
+    ],
+    practicalApplication: "Verificar se capacete certificado INMETRO, viseira/\xF3culos, vestu\xE1rio adequado, farol aceso (obrigat\xF3rio dia e noite).",
+    nullityConsequence: "Anula\xE7\xE3o se capacete certificado, farol aceso, ou passageiro em banco pr\xF3prio com capacete.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022", "Portaria INMETRO (capacetes)"]
+  },
+  {
+    article: "Art. 256",
+    title: "Infra\xE7\xF5es de Cinto de Seguran\xE7a e Cadeirinha",
+    caput: "Deixar de usar o cinto de seguran\xE7a, conforme disp\xF5e o art. 65, ou transportar crian\xE7a sem observar as normas de seguran\xE7a (cadeirinha, assento de eleva\xE7\xE3o, beb\xEA conforto).",
+    paragraphsAndIncidents: [
+      "Inciso I: Condutor sem cinto \u2014 Grav\xEDssima (7 pts); II: Passageiro sem cinto \u2014 Grave (5 pts); III: Crian\xE7a sem dispositivo \u2014 Grav\xEDssima (7 pts, multa 1x)."
+    ],
+    practicalApplication: "Verificar se todos ocupantes usavam cinto, se crian\xE7a em dispositivo adequado \xE0 idade/peso/altura (Res. 819/2021).",
+    nullityConsequence: "Anula\xE7\xE3o se cinto usado, crian\xE7a em dispositivo correto, ou ve\xEDculo isento (\xF4nibus urbano, t\xE1xi em algumas cidades).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 819/2021", "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022"]
+  },
+  {
+    article: "Art. 265",
+    title: "Dirigir sob Chuva Forte sem Farol Baixo",
+    caput: "Deixar de acender as luzes do ve\xEDculo: I - \xE0 noite; II - em t\xFAneis providos de ilumina\xE7\xE3o p\xFAblica; III - durante o dia, em rodovias, quando houver chuva forte, neblina ou cerra\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o m\xE9dia (4 pontos).",
+      "Desde 2016 (Lei 13.154): farol baixo obrigat\xF3rio em rodovias mesmo de dia."
+    ],
+    practicalApplication: "Verificar se condi\xE7\xE3o clim\xE1tica justificava, se em rodovia, se farol realmente apagado.",
+    nullityConsequence: "Anula\xE7\xE3o se n\xE3o em rodovia, ou se farol aceso (DRL n\xE3o conta como farol baixo em alguns entendimentos).",
+    relatedResolutions: ["Lei 13.154/2015", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 267",
+    title: "Convers\xE3o em Advert\xEAncia por Escrito (Direito Subjetivo)",
+    caput: "Dever\xE1 ser imposta a penalidade de advert\xEAncia por escrito para as infra\xE7\xF5es de natureza leve ou m\xE9dia, pass\xEDveis de serem punidas com multa, caso o infrator n\xE3o tenha cometido nenhuma outra infra\xE7\xE3o nos \xFAltimos 12 (doze) meses.",
+    paragraphsAndIncidents: [
+      'Lei 14.071/2020: substituiu "poder\xE1" por "dever\xE1" \u2014 direito subjetivo vinculado.',
+      "N\xE3o se aplica a infra\xE7\xF5es graves/grav\xEDssimas, nem a reincidentes nos 12 meses."
+    ],
+    practicalApplication: "Para qualquer infra\xE7\xE3o leve (3 pts) ou m\xE9dia (4 pts), condutor sem hist\xF3rico nos 12 meses tem 100% direito \xE0 isen\xE7\xE3o da multa e cancelamento dos pontos.",
+    nullityConsequence: "Indeferimento ilegal pass\xEDvel de mandado de seguran\xE7a ou recurso ao CETRAN.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 918/2022, Art. 10", "Lei 14.071/2020"]
+  },
+  {
+    article: "Art. 273",
+    title: "Indica\xE7\xE3o de Condutor Infrator",
+    caput: "Sempre que o condutor for identificado no momento da infra\xE7\xE3o, a autoridade de tr\xE2nsito consignar\xE1 essa identifica\xE7\xE3o no auto de infra\xE7\xE3o. N\xE3o sendo poss\xEDvel a identifica\xE7\xE3o, o propriet\xE1rio do ve\xEDculo ser\xE1 notificado para, no prazo de 15 (quinze) dias contados da notifica\xE7\xE3o, identificar o condutor.",
+    paragraphsAndIncidents: [
+      "\xA71\xBA A n\xE3o indica\xE7\xE3o no prazo sujeita o propriet\xE1rio \xE0 multa (Grav\xEDssima, 7 pts, multa 1x).",
+      "\xA72\xBA A indica\xE7\xE3o falsa sujeita \xE0s penas de falsidade ideol\xF3gica.",
+      "\xA77\xBA O condutor indicado responder\xE1 pela infra\xE7\xE3o como se fosse o autuado origin\xE1rio."
+    ],
+    practicalApplication: "Prazo de 15 dias da NOTIFICA\xC7\xC3O (n\xE3o do fato). Indica\xE7\xE3o pode ser eletr\xF4nica (SNIE). Verificar se prazo respeitado.",
+    nullityConsequence: "Nulidade da multa por n\xE3o indica\xE7\xE3o se prazo n\xE3o respeitado ou se condutor j\xE1 identificado no ato.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 277",
+    title: "Teste de Etil\xF4metro e Exame Cl\xEDnico",
+    caput: "Todo condutor de ve\xEDculo automotor, envolvido em acidente de tr\xE2nsito ou que for alvo de fiscaliza\xE7\xE3o de tr\xE2nsito, submeter-se-\xE1 a teste de etil\xF4metro, exame cl\xEDnico, per\xEDcia ou outro procedimento que permita certificar influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa.",
+    paragraphsAndIncidents: [
+      "Recusa (Art. 165-A): Grav\xEDssima 10x, suspens\xE3o 12 meses.",
+      "Resultado \u2265 0,34 mg/L ou 6 dg/L: Crime (Art. 306 CTB).",
+      "Resultado > 0,05 mg/L e < 0,34 mg/L: Infra\xE7\xE3o administrativa (Art. 165)."
+    ],
+    practicalApplication: "Verificar se etil\xF4metro homologado INMETRO (laudo v\xE1lido 12 meses), se termo circunstanciado preenchido (Anexo II Res. 432/2013), se oferecido contraprova.",
+    nullityConsequence: "Nulidade se etil\xF4metro sem laudo, termo n\xE3o preenchido, contraprova negada, ou agente n\xE3o habilitado.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013", "Portaria INMETRO n\xBA 369/2021"]
+  },
+  {
+    article: "Art. 283",
+    title: "Efeito Suspensivo do Recurso (Garantia)",
+    caput: "O recurso de que trata o art. 285, interposto no prazo legal, tem efeito suspensivo at\xE9 a decis\xE3o final do processo administrativo.",
+    paragraphsAndIncidents: [
+      "Garantia constitucional de n\xE3o sofrer restri\xE7\xE3o antes de julgamento final.",
+      "Lei 14.229/2021: Se n\xE3o julgado em 24 meses, efeito suspensivo de of\xEDcio."
+    ],
+    practicalApplication: "Durante recurso \xE0 JARI e CETRAN: sem bloqueio no licenciamento, sem restri\xE7\xE3o na CNH, sem inscri\xE7\xE3o em d\xEDvida ativa.",
+    nullityConsequence: "Qualquer restri\xE7\xE3o aplicada durante tramita\xE7\xE3o de recurso tempestivo \xE9 nula.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Lei 14.229/2021"]
+  },
+  {
+    article: "Art. 284",
+    title: "Prescri\xE7\xE3o da Pretens\xE3o Punitiva",
+    caput: "A pretens\xE3o de punir pela infra\xE7\xE3o de tr\xE2nsito prescreve em 5 (cinco) anos, contados da data do cometimento da infra\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Prescri\xE7\xE3o intercorrente: 3 (tr\xEAs) anos de paralisa\xE7\xE3o do processo (Lei 9.873/99).",
+      "Interrup\xE7\xE3o: ato inequ\xEDvoco de impulso processual pela administra\xE7\xE3o."
+    ],
+    practicalApplication: "Verificar se processo paralisado > 3 anos (intercorrente) ou > 5 anos do fato (quinquenal).",
+    nullityConsequence: "Extin\xE7\xE3o da punibilidade, arquivamento do processo, cancelamento da multa e pontos.",
+    relatedResolutions: ["Lei 9.873/1999", "Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 290",
+    title: "Cassa\xE7\xE3o da Carteira Nacional de Habilita\xE7\xE3o",
+    caput: "A Carteira Nacional de Habilita\xE7\xE3o ser\xE1 cassada: I - quando o condutor, com o direito de dirigir suspenso, for flagrado conduzindo qualquer ve\xEDculo; II - em caso de reincid\xEAncia, no prazo de 12 (doze) meses, das infra\xE7\xF5es previstas nos arts. 162, I, 163, 164, 165, 173, 174, 175, 244 e 306.",
+    paragraphsAndIncidents: [
+      "Processo de Cassa\xE7\xE3o (PCDD) \u2014 inst\xE2ncia mais grave.",
+      "Ap\xF3s cassa\xE7\xE3o: 2 anos sem poder tirar nova CNH, necessidade de novo processo de forma\xE7\xE3o."
+    ],
+    practicalApplication: "Verificar se suspens\xE3o j\xE1 tinha tr\xE2nsito em julgado, se flagrante real, se reincid\xEAncia em 12 meses comprovada.",
+    nullityConsequence: "Anula\xE7\xE3o se suspens\xE3o n\xE3o transitada em julgado, ou se reincid\xEAncia n\xE3o comprovada no prazo.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022"]
+  },
+  {
+    article: "Art. 306",
+    title: "Crime de Tr\xE2nsito \u2014 Conduzir com Capacidade Psicomotora Alterada",
+    caput: "Conduzir ve\xEDculo automotor com capacidade psicomotora alterada em raz\xE3o da influ\xEAncia de \xE1lcool ou de outra subst\xE2ncia psicoativa que determine depend\xEAncia.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 3 anos, multa, suspens\xE3o ou proibi\xE7\xE3o de se obter CNH.",
+      "Materialidade: etil\xF4metro \u2265 0,34 mg/L OU exame cl\xEDnico/per\xEDcia OU prova testemunhal/v\xEDdeo."
+    ],
+    practicalApplication: "Esfera criminal \u2014 n\xE3o julgada no administrativo. Administrativo: Art. 165 (0,05-0,34) ou 165-A (recusa).",
+    nullityConsequence: "Absolvi\xE7\xE3o criminal n\xE3o anula automaticamente administrativo (esferas independentes), mas prova emprestada pode ser usada.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013", "Lei 11.705/2008 (Lei Seca)"]
+  },
+  {
+    article: "Art. 309",
+    title: "Crime de Tr\xE2nsito \u2014 Dirigir sem Habilita\xE7\xE3o",
+    caput: "Dirigir ve\xEDculo automotor, em via p\xFAblica, sem a devida Permiss\xE3o para Dirigir ou Carteira de Habilita\xE7\xE3o ou, ainda, se cassado o direito de dirigir, gerando perigo de dano.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Perigo de dano presumido (n\xE3o precisa de acidente)."
+    ],
+    practicalApplication: "Esfera criminal. Administrativo: Art. 162 (sem CNH, cassada, suspensa, categoria errada).",
+    nullityConsequence: "Absolvi\xE7\xE3o criminal por atipicidade n\xE3o impede san\xE7\xE3o administrativa (independ\xEAncia das inst\xE2ncias).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 310",
+    title: "Crime de Tr\xE2nsito \u2014 Permitir que Pessoa n\xE3o Habilitada Dirija",
+    caput: "Permitir, confiar ou entregar a dire\xE7\xE3o de ve\xEDculo automotor a pessoa n\xE3o habilitada, com habilita\xE7\xE3o cassada ou com o direito de dirigir suspenso, ou, ainda, a quem, por seu estado f\xEDsico ou mental, ou por embriaguez, n\xE3o esteja em condi\xE7\xF5es de conduzi-lo com seguran\xE7a.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Propriet\xE1rio responde se tinha ci\xEAncia da condi\xE7\xE3o."
+    ],
+    practicalApplication: "Esfera criminal. Administrativo: Art. 163.",
+    nullityConsequence: "Mesma independ\xEAncia entre esferas do Art. 309.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 311",
+    title: "Crime de Tr\xE2nsito \u2014 Afastar-se do Local do Acidente",
+    caput: "Afastar-se o condutor do ve\xEDculo do local do acidente, para fugir \xE0 responsabilidade penal ou civil que lhe possa ser atribu\xEDda.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "N\xE3o se aplica se para socorrer v\xEDtima ou buscar ajuda (em local ermo/sem sinal)."
+    ],
+    practicalApplication: "Verificar se condutor permaneceu, prestou socorro, acionou autoridades.",
+    nullityConsequence: "Exclus\xE3o de ilicitude se para socorro em local sem comunica\xE7\xE3o.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 312",
+    title: "Crime de Tr\xE2nsito \u2014 Entregar Ve\xEDculo a Pessoa Embriagada",
+    caput: "Entregar a dire\xE7\xE3o de ve\xEDculo automotor a pessoa embriagada ou sob efeito de subst\xE2ncia psicoativa.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Administrativo: Art. 163, II."
+    ],
+    practicalApplication: "Verificar ci\xEAncia do propriet\xE1rio do estado do condutor.",
+    nullityConsequence: "Independ\xEAncia das esferas.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013"]
   }
 ];
 
@@ -12783,6 +14493,14 @@ var RESOLUTIONS_DB = [
     subject: "Regulamento T\xE9cnico Metrol\xF3gico para medidores de velocidade de ve\xEDculos automotores (radares).",
     keyArticles: "Item 4.1 (Verifica\xE7\xE3o inicial e peri\xF3dica com periodicidade improrrog\xE1vel de 12 meses).",
     impactOnDefenses: "Regula o laudo t\xE9cnico do IPEM/INMETRO obrigat\xF3rio para valida\xE7\xE3o da velocidade apurada."
+  },
+  {
+    number: "Resolu\xE7\xE3o CONTRAN n\xBA 940/2022",
+    body: "CONTRAN",
+    year: 2022,
+    subject: "Estabelece crit\xE9rios para a fiscaliza\xE7\xE3o de tr\xE2nsito e d\xE1 outras provid\xEAncias, regulamentando o uso de equipamentos eletr\xF4nicos.",
+    keyArticles: "Art. 1\xBA a 15\xBA (Fiscaliza\xE7\xE3o eletr\xF4nica, homologa\xE7\xE3o INMETRO, margem de toler\xE2ncia, sinaliza\xE7\xE3o, comprova\xE7\xE3o da infra\xE7\xE3o); Anexo I (Formul\xE1rio de autua\xE7\xE3o eletr\xF4nica); Anexo II (Crit\xE9rios de instala\xE7\xE3o de equipamentos).",
+    impactOnDefenses: "Complementa a Res. 798/2020 para fiscaliza\xE7\xE3o eletr\xF4nica. Estabelece requisitos de homologa\xE7\xE3o, sinaliza\xE7\xE3o e margem de toler\xE2ncia para equipamentos de fiscaliza\xE7\xE3o automatizada. A aus\xEAncia de homologa\xE7\xE3o ou laudo INMETRO v\xE1lido invalida a autua\xE7\xE3o."
   }
 ];
 
@@ -17008,11 +18726,11 @@ var VectorStore = class _VectorStore {
     return _VectorStore.instance;
   }
   initSupabaseClient() {
-    const url = configService.get("VITE_SUPABASE_URL");
+    const url2 = configService.get("VITE_SUPABASE_URL");
     const serviceKey = configService.get("SUPABASE_SERVICE_ROLE_KEY") || configService.get("VITE_SUPABASE_ANON_KEY");
-    if (url && serviceKey && url.startsWith("https://")) {
+    if (url2 && serviceKey && url2.startsWith("https://")) {
       try {
-        this.supabaseClient = createClient2(url, serviceKey);
+        this.supabaseClient = createClient2(url2, serviceKey);
         logger.info("supabase", "vector_store", "init", "Supabase Postgres pgvector client conectado.");
       } catch (err) {
         logger.warn("supabase", "vector_store", "init", `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
@@ -18477,11 +20195,11 @@ var ProviderRouter = class {
 // src/server/media/job-queue.ts
 import { randomUUID } from "crypto";
 var MediaJobQueue = class {
-  constructor(router26) {
+  constructor(router29) {
     this.jobs = /* @__PURE__ */ new Map();
     this.activeJobsCount = 0;
     this.cancelledJobIds = /* @__PURE__ */ new Set();
-    this.router = router26;
+    this.router = router29;
     const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
     this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
   }
@@ -19290,11 +21008,11 @@ async function analyzePixels(buffer, analysisSize, width, height) {
     return { width, height, luminance: 0, sharpness: 0, contrast: 0 };
   }
 }
-function dataUrlToBuffer(url) {
-  const comma = url.indexOf(",");
+function dataUrlToBuffer(url2) {
+  const comma = url2.indexOf(",");
   if (comma === -1) return null;
-  const header = url.slice(5, comma);
-  const payload = url.slice(comma + 1);
+  const header = url2.slice(5, comma);
+  const payload = url2.slice(comma + 1);
   try {
     if (/;base64$/i.test(header)) {
       return Buffer.from(payload, "base64");
@@ -19304,11 +21022,11 @@ function dataUrlToBuffer(url) {
     return null;
   }
 }
-async function downloadImage(url, timeoutMs, maxBytes) {
+async function downloadImage(url2, timeoutMs, maxBytes) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url2, { signal: controller.signal });
     if (!res.ok) return { ok: false };
     const declared = Number(res.headers.get("content-length") || 0);
     if (declared > maxBytes) return { ok: false };
@@ -25229,19 +26947,19 @@ function isPublicIPv6(ip) {
   return true;
 }
 function validateFetchUrl(inputUrl) {
-  let url;
+  let url2;
   try {
-    url = new URL2(inputUrl);
+    url2 = new URL2(inputUrl);
   } catch {
     return { valid: false, reason: "URL malformada" };
   }
-  if (!["http:", "https:"].includes(url.protocol)) {
-    return { valid: false, reason: `Esquema '${url.protocol}' n\xE3o permitido \u2014 use http:// ou https://` };
+  if (!["http:", "https:"].includes(url2.protocol)) {
+    return { valid: false, reason: `Esquema '${url2.protocol}' n\xE3o permitido \u2014 use http:// ou https://` };
   }
-  if (url.username || url.password) {
+  if (url2.username || url2.password) {
     return { valid: false, reason: "Credenciais na URL n\xE3o permitidas" };
   }
-  const hostname = url.hostname.toLowerCase();
+  const hostname = url2.hostname.toLowerCase();
   if (hostname === "localhost" || hostname === "localhost.localdomain" || hostname === "[::1]" || hostname === "127.0.0.1" || hostname.startsWith("0.0.0.0") || hostname.endsWith(".local") || hostname === "ip6-localhost" || hostname === "ip6-loopback") {
     return { valid: false, reason: "Host localhost/reservado n\xE3o permitido" };
   }
@@ -25460,21 +27178,21 @@ async function fetchWithRedirectProtection(initialUrl, signal) {
   let currentUrl = initialUrl;
   let redirectCount = 0;
   while (true) {
-    const url = new URL2(currentUrl);
-    const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
-    const isHTTPS = url.protocol === "https:";
+    const url2 = new URL2(currentUrl);
+    const port = url2.port ? parseInt(url2.port, 10) : url2.protocol === "https:" ? 443 : 80;
+    const isHTTPS = url2.protocol === "https:";
     const urlValidation = validateFetchUrl(currentUrl);
     if (!urlValidation.valid) {
       throw new Error(`SSRF_BLOCKED: ${urlValidation.reason}`);
     }
-    const resolution = await resolveAndValidateAllIPs(url.hostname);
+    const resolution = await resolveAndValidateAllIPs(url2.hostname);
     if (!resolution.valid) {
       throw new Error(`SSRF_BLOCKED: ${resolution.reason}`);
     }
     const connectIP = resolution.validatedIPs[0];
     let result;
     try {
-      result = await ssrfSafeFetch(connectIP, url.hostname, port, isHTTPS, signal, url.pathname + url.search);
+      result = await ssrfSafeFetch(connectIP, url2.hostname, port, isHTTPS, signal, url2.pathname + url2.search);
     } catch (err) {
       if (err.message?.startsWith("SSRF_BLOCKED:") || err.message?.startsWith("MAX_SIZE_EXCEEDED:")) {
         throw err;
@@ -26418,6 +28136,7 @@ var ocr_default = router10;
 
 // src/server/routes/payments.ts
 import { Router as Router11 } from "express";
+import crypto5 from "node:crypto";
 
 // src/server/integrations/pagbank.ts
 import * as crypto4 from "crypto";
@@ -27732,6 +29451,35 @@ ${buildDocumentRollText(procedureType, aitNumber)}
 function isTestMode() {
   return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() !== "production";
 }
+function validatePayerIdentity(name, email, cpf) {
+  const normalizedName = typeof name === "string" ? name.trim() : "";
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
+  const normalizedCpf = typeof cpf === "string" ? cpf.replace(/\D/g, "") : "";
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  if (!normalizedName || !emailValid || normalizedCpf.length !== 11) return null;
+  return { name: normalizedName, email: normalizedEmail, cpf: normalizedCpf };
+}
+function canPayCase(req, caseId) {
+  const user = req.user;
+  if (user?.role === "admin") return true;
+  if (user?.id) {
+    const row2 = databaseRows.get(caseId);
+    if (!row2) return false;
+    return row2.user_id === user.id;
+  }
+  const provided = req.header("X-Claim-Token");
+  const row = databaseRows.get(caseId);
+  if (typeof provided !== "string" || !provided || !row?.claim_token) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(row.claim_token);
+  return a.length === b.length && crypto5.timingSafeEqual(a, b);
+}
+function assertCanPayCase(req, res, caseId) {
+  if (!caseId) return true;
+  if (canPayCase(req, caseId)) return true;
+  res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para pagar este caso." });
+  return false;
+}
 function prodAuth(req, res, next) {
   if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
     authenticateToken(req, res, next);
@@ -27800,13 +29548,8 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       userId,
       couponCode
     } = req.body;
-    const cleanCpf = (customerCpf || "").replace(/\D/g, "");
-    if (cleanCpf.length !== 11) {
-      return res.status(400).json({
-        error: "CPF do pagador \xE9 obrigat\xF3rio para cria\xE7\xE3o do pagamento PIX.",
-        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
-      });
-    }
+    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para cria\xE7\xE3o do pagamento PIX." });
     const offerResult = resolveOffer({
       serviceType,
       userId,
@@ -27821,19 +29564,14 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
     }
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
-    if (gateway.id === "pagbank") {
-      const userRole = req.user?.role;
-      if (userRole && userRole !== "admin") {
-        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
-      }
-    }
+    if (!assertCanPayCase(req, res, caseId)) return;
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       payer: {
-        name: customerName || "Condutor DefesAi",
-        email: customerEmail || "contato@www.defesai.shop",
-        document: cleanCpf
+        name: payer.name,
+        email: payer.email,
+        document: payer.cpf
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
@@ -27926,13 +29664,8 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
         hint: "Informe serviceType v\xE1lido (ex: recurso_jari)."
       });
     }
-    const cleanCpfCC = (customerCpf || "").replace(/\D/g, "");
-    if (cleanCpfCC.length !== 11) {
-      return res.status(400).json({
-        error: "CPF do pagador \xE9 obrigat\xF3rio para pagamento com cart\xE3o de cr\xE9dito.",
-        hint: "Informe o campo customerCpf com CPF v\xE1lido (11 d\xEDgitos)."
-      });
-    }
+    const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);
+    if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para pagamento com cart\xE3o de cr\xE9dito." });
     const offerResult = resolveOffer({
       serviceType,
       userId,
@@ -27953,12 +29686,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       });
     }
     const gateway = gatewayManager.getActiveGateway();
-    if (gateway.id === "pagbank") {
-      const userRole = req.user?.role;
-      if (userRole && userRole !== "admin") {
-        return res.status(403).json({ error: "N\xE3o autorizado. Fa\xE7a login como administrador." });
-      }
-    }
+    if (!assertCanPayCase(req, res, caseId)) return;
     if (gateway.id !== "pagbank") {
       return res.status(400).json({
         error: "Gateway ativo n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito.",
@@ -27977,9 +29705,9 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
       customer: {
-        name: customerName || "Condutor DefesAi",
-        email: customerEmail || "contato@www.defesai.shop",
-        taxId: cleanCpfCC
+        name: payer.name,
+        email: payer.email,
+        taxId: payer.cpf
       },
       amount: offerResult.offer.price,
       installments: Number(installments),
@@ -28518,8 +30246,8 @@ import { Router as Router12 } from "express";
 // src/core/knowledge/monitoring/hash-generator.ts
 function calculateSha256Sync(text) {
   try {
-    const crypto6 = __require("crypto");
-    return crypto6.createHash("sha256").update(text, "utf8").digest("hex");
+    const crypto8 = __require("crypto");
+    return crypto8.createHash("sha256").update(text, "utf8").digest("hex");
   } catch (e) {
     let h1 = 3735928559 ^ text.length;
     let h2 = 1103547991 ^ text.length;
@@ -29994,8 +31722,1490 @@ router12.post("/temporal/resolve", (req, res) => {
 });
 var knowledge_default = router12;
 
-// src/server/routes/media.ts
+// src/server/routes/marketing-automation.ts
 import { Router as Router13 } from "express";
+
+// src/server/services/marketing-automation/worker.ts
+init_supabase();
+init_logger();
+
+// src/server/services/marketing-automation/state.ts
+var AUTOMATION_STATE_ID = "00000000-0000-0000-0000-000000000001";
+async function loadAutomationState(client) {
+  const { data } = await client.from("marketing_automation_state").select("*").eq("id", AUTOMATION_STATE_ID).single();
+  return {
+    status: data?.status || "STOPPED",
+    last_error: data?.last_error,
+    last_processed_at: data?.last_processed_at,
+    processed_count: data?.processed_count || 0
+  };
+}
+async function updateAutomationState(client, status, lastError) {
+  const updates = { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  if (status === "RUNNING") {
+    updates.last_processed_at = (/* @__PURE__ */ new Date()).toISOString();
+  }
+  if (lastError) {
+    updates.last_error = lastError;
+  }
+  await client.from("marketing_automation_state").upsert({ id: AUTOMATION_STATE_ID, ...updates });
+}
+async function recordSuccessfulSend(client) {
+  const state = await loadAutomationState(client);
+  const next = state.processed_count + 1;
+  await client.from("marketing_automation_state").upsert({
+    id: AUTOMATION_STATE_ID,
+    status: state.status,
+    processed_count: next,
+    last_processed_at: (/* @__PURE__ */ new Date()).toISOString(),
+    updated_at: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  return next;
+}
+function resolveEffectiveStatus(dbStatus, timerAlive, _lastError) {
+  return dbStatus === "RUNNING" && !timerAlive ? "STOPPED" : dbStatus;
+}
+
+// src/server/services/marketing-automation/worker.ts
+var POLL_INTERVAL_MS = 1e4;
+var MarketingAutomationWorker = class _MarketingAutomationWorker {
+  constructor() {
+    this.timer = null;
+    this.currentStatus = "STOPPED";
+    this.processing = false;
+  }
+  static {
+    this.instance = null;
+  }
+  static getInstance() {
+    if (!_MarketingAutomationWorker.instance) {
+      _MarketingAutomationWorker.instance = new _MarketingAutomationWorker();
+    }
+    return _MarketingAutomationWorker.instance;
+  }
+  async start() {
+    const state = await this.loadState();
+    if (state.status === "RUNNING") {
+      return { success: false, error: "J\xE1 est\xE1 rodando." };
+    }
+    await this.updateState("RUNNING");
+    this.currentStatus = "RUNNING";
+    if (!this.timer) {
+      this.timer = setInterval(() => this.tick(), POLL_INTERVAL_MS);
+    }
+    await this.tick();
+    return { success: true };
+  }
+  async pause() {
+    const state = await this.loadState();
+    if (state.status !== "RUNNING") {
+      return { success: false, error: "N\xE3o est\xE1 rodando." };
+    }
+    await this.updateState("PAUSED");
+    this.currentStatus = "PAUSED";
+    return { success: true };
+  }
+  async stop() {
+    await this.updateState("STOPPED");
+    this.currentStatus = "STOPPED";
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    return { success: true };
+  }
+  async getStatus() {
+    const state = await this.loadState();
+    const effective = resolveEffectiveStatus(state.status, this.timer !== null, state.last_error);
+    if (effective !== state.status) {
+      logger2.warn(`Worker morto detectado (DB=${state.status}, timer inativo). Estado corrigido para ${effective}.`, {
+        module: "worker"
+      });
+      await this.updateState(effective);
+    }
+    return {
+      status: effective,
+      lastError: state.last_error,
+      lastProcessedAt: state.last_processed_at,
+      processedCount: state.processed_count,
+      timerAlive: this.timer !== null
+    };
+  }
+  async tick() {
+    if (this.processing) return;
+    if (this.currentStatus !== "RUNNING") return;
+    this.processing = true;
+    try {
+      const state = await this.loadState();
+      if (state.status !== "RUNNING") {
+        this.currentStatus = state.status;
+        return;
+      }
+      const actions = await this.getNextActions();
+      for (const action of actions) {
+        if (this.currentStatus !== "RUNNING") break;
+        await this.processAction(action);
+      }
+      await this.updateState("RUNNING");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger2.error(`tick_error: ${message}`, { module: "worker" });
+      await this.updateState("ERROR", message);
+      this.currentStatus = "ERROR";
+    } finally {
+      this.processing = false;
+    }
+  }
+  async processAction(action) {
+    try {
+      switch (action.action) {
+        case "send_message":
+          await this.handleSendMessage(action);
+          break;
+        case "wait_response":
+          await this.handleWaitResponse(action);
+          break;
+        case "update_status":
+          await this.handleUpdateStatus(action);
+          break;
+        case "finish":
+          await this.handleFinish(action);
+          break;
+      }
+      await supabaseAdmin.from("marketing_automation_queue").delete().eq("id", action.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger2.warn(`Action error: ${message}`, { actionId: action.id, error: message });
+      await supabaseAdmin.from("marketing_automation_queue").update({
+        attempts: (action.attempts || 0) + 1,
+        last_error: message
+      }).eq("id", action.id);
+    }
+  }
+  async handleSendMessage(action) {
+    const { lead_campaign_id } = action;
+    const { data: lc, error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").select("*, campaign:marketing_campaigns(*), lead:marketing_leads(*)").eq("id", lead_campaign_id).single();
+    if (lcError || !lc) {
+      throw new Error(`Lead campaign n\xE3o encontrada: ${lead_campaign_id}`);
+    }
+    const lead = lc.lead;
+    const campaign = lc.campaign;
+    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "opt_out", "paused"];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === "opt_out") {
+      logger2.info(
+        `Lead campaign ${lc.id} status=${lc.status} (lead=${lead?.status}) \u2014 skipping outbound send and cancelling follow-ups`,
+        { module: "worker", operation: "handleSendMessage" }
+      );
+      await supabaseAdmin.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+      return;
+    }
+    if (!lead || !lead.phone && !lead.whatsapp && !lead.phone_normalized) {
+      throw new Error("Lead sem telefone/WhatsApp.");
+    }
+    let toPhone = (lead.whatsapp || lead.phone || lead.phone_normalized || "").replace(/\D/g, "");
+    if (!toPhone || toPhone.length < 10) {
+      throw new Error("Telefone inv\xE1lido.");
+    }
+    if (toPhone.length === 10 || toPhone.length === 11) {
+      toPhone = `55${toPhone}`;
+    }
+    const stepIndex = lc.current_step || 0;
+    const steps = campaign?.steps || [];
+    const step = steps[stepIndex];
+    if (!step) {
+      await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "exhausted", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", lead_campaign_id);
+      return;
+    }
+    const text = this.renderMessage(step.message || "", lead);
+    const result = await whatsappService.sendText({
+      to: toPhone,
+      message: text,
+      instanceName: configService.get("EVOLUTION_INSTANCE_NAME")
+    });
+    if (result.success) {
+      await this.recordSend();
+    }
+    await supabaseAdmin.from("marketing_messages").insert({
+      lead_id: lead.id,
+      campaign_id: campaign.id,
+      lead_campaign_id: lc.id,
+      direction: "outbound",
+      text,
+      channel: "whatsapp_evolution",
+      status: result.success ? "sent" : "failed",
+      external_id: result.messageId,
+      external_status: result,
+      sent_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const RESPONDED_OR_BEYOND2 = ["responded", "converted", "exhausted", "opt_out"];
+    const { data: currentLc } = await supabaseAdmin.from("marketing_lead_campaigns").select("status").eq("id", lead_campaign_id).single();
+    if (currentLc && RESPONDED_OR_BEYOND2.includes(currentLc.status)) {
+      logger2.info(`Lead campaign ${lc.id} status=${currentLc.status} \u2014 skipping state overwrite`, { module: "worker", operation: "handleSendMessage" });
+      return;
+    }
+    const nextStep = stepIndex + 1;
+    const isLastStep = nextStep >= steps.length;
+    const newStatus = isLastStep ? "exhausted" : "sent";
+    await supabaseAdmin.from("marketing_lead_campaigns").update({
+      status: newStatus,
+      current_step: nextStep,
+      contact_count: (lc.contact_count || 0) + 1,
+      last_contact_at: (/* @__PURE__ */ new Date()).toISOString(),
+      next_contact_at: isLastStep ? null : new Date(Date.now() + (campaign.min_interval_hours || 48) * 60 * 60 * 1e3).toISOString()
+    }).eq("id", lead_campaign_id);
+    if (!isLastStep) {
+      await supabaseAdmin.from("marketing_automation_queue").insert({
+        lead_campaign_id: lc.id,
+        action: "wait_response",
+        scheduled_at: new Date(Date.now() + (campaign.min_interval_hours || 48) * 60 * 60 * 1e3).toISOString(),
+        max_attempts: 5
+      });
+    }
+  }
+  async handleWaitResponse(action) {
+    const { lead_campaign_id } = action;
+    const { data: lc, error } = await supabaseAdmin.from("marketing_lead_campaigns").select("*, lead:marketing_leads(*)").eq("id", lead_campaign_id).single();
+    if (error || !lc) {
+      throw new Error(`Lead campaign n\xE3o encontrada: ${lead_campaign_id}`);
+    }
+    const lead = lc.lead;
+    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "opt_out", "paused"];
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === "opt_out") {
+      logger2.info(`Lead campaign ${lc.id} em estado de parada (${lc.status}) \u2014 nenhum novo follow-up agendado`, { module: "worker" });
+      return;
+    }
+    const lastMessage = await supabaseAdmin.from("marketing_messages").select("*").eq("lead_campaign_id", lead_campaign_id).eq("direction", "outbound").order("created_at", { ascending: false }).limit(1).single();
+    if (lastMessage.data && lastMessage.data.status === "sent") {
+      await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "delivered" }).eq("id", lead_campaign_id);
+    }
+    const nextAction = {
+      lead_campaign_id: lc.id,
+      action: "send_message",
+      scheduled_at: new Date(Date.now() + 6e4).toISOString(),
+      max_attempts: 3
+    };
+    await supabaseAdmin.from("marketing_automation_queue").insert(nextAction);
+  }
+  async handleUpdateStatus(action) {
+    await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "queued" }).eq("id", action.lead_campaign_id);
+  }
+  async handleFinish(action) {
+    await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "exhausted" }).eq("id", action.lead_campaign_id);
+  }
+  renderMessage(template, lead) {
+    return template.replace(/\{nome\}/gi, lead.name || "").replace(/\{categoria\}/gi, lead.category || "").replace(/\{cidade\}/gi, lead.city || "");
+  }
+  async loadState() {
+    return loadAutomationState(supabaseAdmin);
+  }
+  async updateState(status, lastError) {
+    return updateAutomationState(supabaseAdmin, status, lastError);
+  }
+  async recordSend() {
+    await recordSuccessfulSend(supabaseAdmin);
+  }
+  async getNextActions() {
+    const { data, error } = await supabaseAdmin.from("marketing_automation_queue").select("*, lead_campaign:marketing_lead_campaigns(campaign:marketing_campaigns(max_contacts))").lte("scheduled_at", (/* @__PURE__ */ new Date()).toISOString()).order("scheduled_at", { ascending: true }).limit(30);
+    if (error) {
+      logger2.error(`queue_error: ${error.message}`, { module: "worker" });
+      return [];
+    }
+    const due = (data || []).filter(
+      (job) => (job.attempts ?? 0) < (job.max_attempts ?? 3)
+    );
+    const campaignContactCounts = /* @__PURE__ */ new Map();
+    for (const job of due) {
+      const campaign = job.lead_campaign?.campaign;
+      if (campaign?.id) {
+        const currentCount = campaignContactCounts.get(campaign.id) || 0;
+        const maxContacts = campaign.max_contacts || 3;
+        if (currentCount >= maxContacts) {
+          continue;
+        }
+        campaignContactCounts.set(campaign.id, currentCount + 1);
+      }
+    }
+    return due.slice(0, 10);
+  }
+};
+var marketingAutomationWorker = MarketingAutomationWorker.getInstance();
+
+// src/server/routes/marketing-automation.ts
+init_supabase();
+
+// src/server/services/scrape-worker.ts
+init_supabase();
+init_logger();
+import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
+import { randomUUID as randomUUID3 } from "crypto";
+var ScrapeWorkerService = class _ScrapeWorkerService {
+  constructor() {
+    this.queue = null;
+    this.worker = null;
+    this.redisConnection = null;
+    this.fallbackTimer = null;
+    this.isProcessingFallback = false;
+    this.isBullMqActive = false;
+    this.POLL_INTERVAL_MS = 4e3;
+    this.QUEUE_NAME = "google-maps-scrape-jobs";
+    this.initBullMQ();
+  }
+  static {
+    this.instance = null;
+  }
+  static getInstance() {
+    if (!_ScrapeWorkerService.instance) {
+      _ScrapeWorkerService.instance = new _ScrapeWorkerService();
+    }
+    return _ScrapeWorkerService.instance;
+  }
+  initBullMQ() {
+    const redisUrl = process.env.REDIS_URL || process.env.REDISCLOUD_URL;
+    const redisHost = process.env.REDIS_HOST;
+    const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
+    if (redisUrl || redisHost) {
+      try {
+        this.redisConnection = redisUrl ? new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false }) : new Redis({
+          host: redisHost,
+          port: redisPort,
+          password: process.env.REDIS_PASSWORD || void 0,
+          maxRetriesPerRequest: null,
+          enableReadyCheck: false
+        });
+        this.redisConnection.on("error", (err) => {
+          logger2.warn("Aviso de conex\xE3o Redis (BullMQ Scraper):", { error: err.message });
+        });
+        this.queue = new Queue(this.QUEUE_NAME, {
+          connection: this.redisConnection,
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 3e3 },
+            // Retenção operacional: jobs concluídos expiram após 24 h,
+            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
+            removeOnComplete: { age: 86400 },
+            removeOnFail: { age: 604800 }
+          }
+        });
+        this.worker = new Worker(
+          this.QUEUE_NAME,
+          async (job) => {
+            return this.processJob(job.data.jobId, job.data.config, job.data.collectionRunId);
+          },
+          {
+            connection: this.redisConnection,
+            concurrency: 1
+            // Single headless browser at a time for stability and resource sanity
+          }
+        );
+        this.worker.on("completed", (job) => {
+          logger2.info("BullMQ Scrape Job conclu\xEDdo com sucesso", { jobId: job.data.jobId });
+        });
+        this.worker.on("failed", (job, err) => {
+          logger2.error("BullMQ Scrape Job falhou", { jobId: job?.data.jobId, error: err.message });
+        });
+        this.isBullMqActive = true;
+        logger2.info("BullMQ Scrape Worker inicializado com sucesso.");
+      } catch (err) {
+        logger2.warn("N\xE3o foi poss\xEDvel conectar ao Redis, utilizando engine de fila de banco:", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        this.isBullMqActive = false;
+      }
+    } else {
+      logger2.info("Redis n\xE3o configurado. Utilizando engine resiliente via Supabase.");
+      this.isBullMqActive = false;
+    }
+  }
+  /**
+   * Enfileira um novo job de scraping e retorna o registro inicial.
+   */
+  async createJob(config) {
+    if (!supabaseAdmin) {
+      throw new Error("ScrapeWorker: supabaseAdmin n\xE3o configurado \u2014 imposs\xEDvel criar job.");
+    }
+    const id = randomUUID3();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const jobRecord = {
+      id,
+      status: "queued",
+      config,
+      progress: {
+        phase: "discovery",
+        discovered: 0,
+        processed: 0,
+        persisted: 0,
+        duplicates: 0,
+        errors: 0
+      },
+      createdAt: now,
+      updatedAt: now
+    };
+    const { error } = await supabaseAdmin.from("collection_runs").insert({
+      id,
+      status: "queued",
+      queries: config.queries,
+      cities: config.cities || [],
+      states: config.states || [],
+      limit_per_query: config.limitPerQuery || 10,
+      results_found: 0,
+      new_leads: 0,
+      duplicates: 0,
+      rejected: 0,
+      errors: [],
+      queries_executed: [],
+      started_at: now
+    });
+    if (error) {
+      logger2.error("Erro ao persistir collection_run no banco", { error: error.message, id });
+      throw new Error(`Falha ao registrar job no banco: ${error.message}`);
+    }
+    if (this.isBullMqActive && this.queue) {
+      try {
+        await this.queue.add(
+          "scrape",
+          { jobId: id, config, collectionRunId: id },
+          { jobId: id }
+        );
+        logger2.info("Job enfileirado no BullMQ", { id });
+      } catch (err) {
+        logger2.warn("Falha ao enfileirar no BullMQ, processamento ser\xE1 feito pelo worker DB:", {
+          id,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
+    logger2.info("Job de scraping registrado com sucesso", { id, config });
+    return jobRecord;
+  }
+  /**
+   * Obtém status detalhado de um job pelo ID.
+   */
+  async getJob(id) {
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").eq("id", id).maybeSingle();
+    if (error || !data) return null;
+    return this.mapDBToJobRecord(data);
+  }
+  /**
+   * Lista histórico de jobs de scraping.
+   */
+  async listJobs(limit = 20) {
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").order("created_at", { ascending: false }).limit(limit);
+    if (error || !data) return [];
+    return data.map((d) => this.mapDBToJobRecord(d));
+  }
+  /**
+   * Cancelamento cooperativo de um job de scraping.
+   */
+  async cancelJob(id) {
+    const job = await this.getJob(id);
+    if (!job) return false;
+    if (["completed", "failed", "cancelled"].includes(job.status)) {
+      return false;
+    }
+    const { error } = await supabaseAdmin.from("collection_runs").update({
+      status: "cancelled",
+      finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).eq("id", id);
+    if (error) {
+      logger2.error("Erro ao cancelar job no banco", { id, error: error.message });
+      return false;
+    }
+    if (this.isBullMqActive && this.queue) {
+      try {
+        const bullJob = await this.queue.getJob(id);
+        if (bullJob) {
+          await bullJob.remove().catch(() => void 0);
+        }
+      } catch {
+      }
+    }
+    logger2.info("Job de scraping cancelado com sucesso", { id });
+    return true;
+  }
+  /**
+   * Inicia o worker loop de background.
+   */
+  start() {
+    if (this.fallbackTimer) return;
+    if (!supabaseAdmin) {
+      logger2.warn("ScrapeWorker: supabaseAdmin n\xE3o configurado \u2014 background loop N\xC3O iniciado.");
+      return;
+    }
+    this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
+    this.processNextDBJob();
+    logger2.info("ScrapeWorker background loop iniciado.");
+  }
+  /**
+   * Para o worker loop.
+   */
+  stop() {
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    if (this.worker) {
+      this.worker.close().catch(() => void 0);
+    }
+    if (this.queue) {
+      this.queue.close().catch(() => void 0);
+    }
+    logger2.info("ScrapeWorker background loop parado.");
+  }
+  /**
+   * Checa periodicamente por jobs 'queued' ou órfãos 'running' no Supabase.
+   */
+  async processNextDBJob() {
+    if (this.isProcessingFallback) return;
+    try {
+      const { data, error } = await supabaseAdmin.from("collection_runs").select("*").in("status", ["queued", "running"]).order("created_at", { ascending: true }).limit(1);
+      if (error || !data || data.length === 0) return;
+      const dbJob = data[0];
+      const jobRecord = this.mapDBToJobRecord(dbJob);
+      if (jobRecord.status === "running") {
+        const lastUpdated = new Date(dbJob.updated_at || dbJob.started_at).getTime();
+        const now = Date.now();
+        if (now - lastUpdated > 2 * 60 * 1e3) {
+          logger2.warn("Job \xF3rf\xE3o detectado pelo ScrapeWorker, retomando execu\xE7\xE3o:", { id: jobRecord.id });
+        } else {
+          return;
+        }
+      }
+      this.isProcessingFallback = true;
+      await this.processJob(jobRecord.id, jobRecord.config, jobRecord.id);
+    } catch (err) {
+      logger2.error("Erro no loop do ScrapeWorker:", {
+        error: err instanceof Error ? err.message : String(err)
+      });
+    } finally {
+      this.isProcessingFallback = false;
+    }
+  }
+  /**
+   * Executa um job de scraping completo de forma assíncrona.
+   */
+  async processJob(jobId, config, collectionRunId) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    logger2.info("Iniciando processamento do job de scraping:", { jobId, collectionRunId });
+    await supabaseAdmin.from("collection_runs").update({
+      status: "running",
+      started_at: nowIso,
+      updated_at: nowIso
+    }).eq("id", collectionRunId);
+    const cancelFlag = { cancelled: false };
+    const cancelChecker = setInterval(async () => {
+      if (cancelFlag.cancelled) return;
+      const { data } = await supabaseAdmin.from("collection_runs").select("status").eq("id", collectionRunId).maybeSingle();
+      if (data?.status === "cancelled") {
+        cancelFlag.cancelled = true;
+        logger2.info("Cancelamento cooperativo identificado durante execu\xE7\xE3o", { jobId });
+      }
+    }, 2500);
+    try {
+      const { runScrapeAsJob: runScrapeAsJob2 } = await Promise.resolve().then(() => (init_persister(), persister_exports));
+      const result = await runScrapeAsJob2(
+        config,
+        {
+          onProgress: async (progress) => {
+            await this.updateProgressInDB(collectionRunId, progress);
+          },
+          onCheckCancel: () => cancelFlag.cancelled,
+          onDriverCrash: () => {
+            logger2.warn("Driver crash reportado pelo scraper, o job se recuperar\xE1 automaticamente.", { jobId });
+          }
+        },
+        collectionRunId
+      );
+      const finalStatus = cancelFlag.cancelled ? "cancelled" : result.hasBlockingError ? "error" : "completed";
+      await supabaseAdmin.from("collection_runs").update({
+        status: finalStatus,
+        finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        results_found: result.totalFound,
+        new_leads: result.inserted,
+        duplicates: result.duplicates,
+        rejected: result.rejected,
+        errors: result.errors,
+        queries_executed: result.queriesExecuted
+      }).eq("id", collectionRunId);
+      logger2.info("Processamento de job finalizado com sucesso:", {
+        jobId,
+        status: finalStatus,
+        totalFound: result.totalFound,
+        newLeads: result.inserted
+      });
+      return result;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger2.error("Falha fatal durante execu\xE7\xE3o do scrape job:", { jobId, error: errorMsg });
+      await supabaseAdmin.from("collection_runs").update({
+        status: "error",
+        finished_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        errors: [errorMsg]
+      }).eq("id", collectionRunId);
+      throw err;
+    } finally {
+      clearInterval(cancelChecker);
+    }
+  }
+  /**
+   * Salva progresso periódico no banco de dados com atualização de heartbeat.
+   */
+  async updateProgressInDB(collectionRunId, progress) {
+    try {
+      await supabaseAdmin.from("collection_runs").update({
+        results_found: progress.discovered,
+        new_leads: progress.persisted,
+        duplicates: progress.duplicates,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", collectionRunId);
+    } catch (err) {
+      logger2.warn("Falha ao atualizar heartbeat de progresso:", { collectionRunId, error: err });
+    }
+  }
+  mapDBToJobRecord(data) {
+    const dbToStatus = {
+      queued: "queued",
+      running: "running",
+      completed: "completed",
+      partial: "running",
+      error: "failed",
+      cancelled: "cancelled"
+    };
+    return {
+      id: data.id,
+      status: dbToStatus[data.status] || "queued",
+      config: {
+        queries: Array.isArray(data.queries) ? data.queries : [],
+        cities: Array.isArray(data.cities) ? data.cities : [],
+        states: Array.isArray(data.states) ? data.states : [],
+        limitPerQuery: data.limit_per_query || 10
+      },
+      progress: {
+        phase: data.status === "completed" ? "completed" : data.status === "running" ? "details" : "discovery",
+        discovered: data.results_found || 0,
+        processed: (data.new_leads || 0) + (data.duplicates || 0) + (data.rejected || 0),
+        persisted: data.new_leads || 0,
+        duplicates: data.duplicates || 0,
+        errors: Array.isArray(data.errors) ? data.errors.length : 0
+      },
+      error: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors[data.errors.length - 1] : void 0,
+      collectionRunId: data.id,
+      createdAt: data.created_at || data.started_at,
+      startedAt: data.started_at,
+      finishedAt: data.finished_at || void 0,
+      updatedAt: data.updated_at || data.created_at
+    };
+  }
+};
+var scrapeWorker = ScrapeWorkerService.getInstance();
+
+// src/scraper-prospecting/export/xlsx.ts
+import * as XLSX from "xlsx";
+async function generateLeadsXlsx(leads, options = {}) {
+  const resultados = (leads || []).map((l) => ({
+    Nome: l.name || null,
+    Categoria: l.category || null,
+    Endere\u00E7o: l.address || null,
+    Telefone: l.phone || null,
+    Website: l.website || null,
+    "Google Maps URL": l.googleMapsUrl || l.sourceUrl || null,
+    "Place ID": l.placeId || null,
+    Avalia\u00E7\u00E3o: l.rating ?? null,
+    "N\xFAmero de Avalia\xE7\xF5es": l.reviewCount ?? null,
+    "N\xEDvel de Pre\xE7o": l.priceLevel ?? null,
+    Hor\u00E1rios: l.openingHours || null,
+    Status: l.currentStatus || null,
+    Descri\u00E7\u00E3o: l.description || null,
+    Latitude: l.latitude ?? null,
+    Longitude: l.longitude ?? null,
+    "Plus Code": l.plusCode || null,
+    "Data da Coleta": l.scraped_at ? new Date(l.scraped_at).toISOString() : null,
+    "Termo de Busca": l.searchTerm || null,
+    "Localiza\xE7\xE3o da Busca": l.searchLocation || null,
+    "Links Sociais": l.socialLinks ? l.socialLinks.join("; ") : null
+  }));
+  const wsResultados = XLSX.utils.json_to_sheet(resultados);
+  const metadados = [
+    { Campo: "Pesquisa", Valor: options.searchTerm || null },
+    { Campo: "Localiza\xE7\xE3o", Valor: options.location || null },
+    { Campo: "Data", Valor: options.collectionRunId ? (/* @__PURE__ */ new Date()).toISOString() : (/* @__PURE__ */ new Date()).toISOString() },
+    { Campo: "Total Encontrado", Valor: options.totalFound ?? leads.length },
+    { Campo: "Total Processado", Valor: options.totalProcessed ?? leads.length },
+    { Campo: "Duplicados", Valor: options.duplicates ?? 0 },
+    { Campo: "Erros", Valor: options.errors ?? 0 }
+  ];
+  const wsMetadados = XLSX.utils.json_to_sheet(metadados);
+  const rawData = (leads || []).map((l) => ({
+    Nome: l.name || null,
+    "Raw Data": l.rawData ? JSON.stringify(l.rawData, null, 2) : null
+  }));
+  const wsRawData = XLSX.utils.json_to_sheet(rawData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsResultados, "Resultados");
+  XLSX.utils.book_append_sheet(wb, wsMetadados, "Metadados");
+  XLSX.utils.book_append_sheet(wb, wsRawData, "RAW_DATA");
+  const buffer = Buffer.from(XLSX.write(wb, { bookType: "xlsx", type: "buffer" }));
+  return buffer;
+}
+
+// src/server/routes/marketing-automation.ts
+var router13 = Router13();
+router13.get("/status", async (_req, res) => {
+  try {
+    const status = await marketingAutomationWorker.getStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao obter status", message: err.message });
+  }
+});
+router13.post("/start", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.start();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "RUNNING" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao iniciar", message: err.message });
+  }
+});
+router13.post("/pause", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.pause();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "PAUSED" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao pausar", message: err.message });
+  }
+});
+router13.post("/stop", async (_req, res) => {
+  try {
+    const result = await marketingAutomationWorker.stop();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, status: "STOPPED" });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao parar", message: err.message });
+  }
+});
+router13.get("/campaigns", async (_req, res) => {
+  try {
+    const { data: campaigns, error } = await supabaseAdmin.from("marketing_campaigns").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    const enrichedCampaigns = await Promise.all(
+      (campaigns || []).map(async (camp) => {
+        try {
+          const { data: links } = await supabaseAdmin.from("marketing_lead_campaigns").select("status, contact_count").eq("campaign_id", camp.id);
+          const totalLeads = links?.length || 0;
+          const queued = links?.filter((l) => l.status === "queued").length || 0;
+          const sent = links?.filter((l) => l.status === "sent" || l.status === "delivered").length || 0;
+          const responded = links?.filter((l) => l.status === "responded").length || 0;
+          const converted = links?.filter((l) => l.status === "converted").length || 0;
+          const exhausted = links?.filter((l) => l.status === "exhausted").length || 0;
+          const contacted = links?.filter((l) => (l.contact_count || 0) > 0).length || 0;
+          const responseRate = contacted > 0 ? Math.round(responded / contacted * 100) : 0;
+          const conversionRate = contacted > 0 ? Math.round(converted / contacted * 100) : 0;
+          return {
+            ...camp,
+            total_leads: totalLeads,
+            metrics: {
+              total: totalLeads,
+              queued,
+              sent,
+              contacted,
+              responded,
+              converted,
+              exhausted,
+              responseRate,
+              conversionRate
+            }
+          };
+        } catch {
+          return {
+            ...camp,
+            total_leads: 0,
+            metrics: {
+              total: 0,
+              queued: 0,
+              sent: 0,
+              contacted: 0,
+              responded: 0,
+              converted: 0,
+              exhausted: 0,
+              responseRate: 0,
+              conversionRate: 0
+            }
+          };
+        }
+      })
+    );
+    res.json(enrichedCampaigns);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar campanhas", message: err.message });
+  }
+});
+function isValidUrl(url2) {
+  try {
+    new URL(url2);
+    return true;
+  } catch {
+    return false;
+  }
+}
+router13.post("/campaigns", async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      audience,
+      lead_type,
+      target_cities,
+      steps,
+      max_contacts,
+      min_interval_hours,
+      status,
+      image_url,
+      visual_prompt
+    } = req.body;
+    const errors = [];
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      errors.push("name \xE9 obrigat\xF3rio");
+    }
+    if (!audience || !["B2C", "B2B"].includes(audience)) {
+      errors.push('audience \xE9 obrigat\xF3rio e deve ser "B2C" ou "B2B"');
+    }
+    if (audience === "B2B") {
+      if (!lead_type || !["despachante", "advogado_transito"].includes(lead_type)) {
+        errors.push('lead_type \xE9 obrigat\xF3rio para B2B e deve ser "despachante" ou "advogado_transito"');
+      }
+      if (!target_cities || !Array.isArray(target_cities) || target_cities.length === 0) {
+        errors.push("target_cities \xE9 obrigat\xF3rio para B2B e deve ser array n\xE3o vazio");
+      }
+      if (!steps || !Array.isArray(steps) || steps.length === 0) {
+        errors.push("steps \xE9 obrigat\xF3rio para B2B e deve ser array n\xE3o vazio");
+      }
+    }
+    const hasImageUrl = image_url && typeof image_url === "string" && image_url.trim().length > 0;
+    const hasVisualPrompt = visual_prompt && typeof visual_prompt === "string" && visual_prompt.trim().length > 0;
+    if (hasImageUrl && !isValidUrl(image_url)) {
+      errors.push("image_url deve ser uma URL v\xE1lida");
+    }
+    if (!hasImageUrl && !hasVisualPrompt) {
+      errors.push("image_url ou visual_prompt \xE9 obrigat\xF3rio (pelo menos um)");
+    }
+    if (max_contacts !== void 0 && (typeof max_contacts !== "number" || max_contacts < 1 || max_contacts > 100)) {
+      errors.push("max_contacts deve ser n\xFAmero entre 1 e 100");
+    }
+    if (min_interval_hours !== void 0 && (typeof min_interval_hours !== "number" || min_interval_hours < 1 || min_interval_hours > 720)) {
+      errors.push("min_interval_hours deve ser n\xFAmero entre 1 e 720");
+    }
+    if (errors.length > 0) {
+      return res.status(400).json({ error: "Valida\xE7\xE3o falhou", details: errors });
+    }
+    const insertData = {
+      name: name.trim(),
+      description: description?.trim() || null,
+      audience,
+      lead_type: lead_type || "despachante",
+      target_cities: target_cities || [],
+      steps: steps && steps.length > 0 ? steps : [
+        { step: 1, delay_hours: 0, message: "Ol\xE1 {nome}, tudo bem? Sou da DefesAi. Ajudamos a automatizar recursos e an\xE1lises de CNH." },
+        { step: 2, delay_hours: 48, message: "Oi {nome}, conseguiu avaliar nossa proposta para despachantes em {cidade}?" },
+        { step: 3, delay_hours: 96, message: "{nome}, \xFAltima mensagem: caso queira testar nossa IA para defesa de multas, estamos \xE0 disposi\xE7\xE3o!" }
+      ],
+      max_contacts: max_contacts || 3,
+      min_interval_hours: min_interval_hours || 48,
+      status: status || "active"
+    };
+    if (hasImageUrl) insertData.image_url = image_url.trim();
+    if (hasVisualPrompt) insertData.visual_prompt = visual_prompt.trim();
+    const { data, error } = await supabaseAdmin.from("marketing_campaigns").insert(insertData).select().single();
+    if (error) {
+      if (error.code === "23505") {
+        return res.status(409).json({ error: "Campanha duplicada", message: "J\xE1 existe campanha com este nome e lead_type" });
+      }
+      throw error;
+    }
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao criar campanha", message: err.message });
+  }
+});
+router13.patch("/campaigns/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, name, description, min_interval_hours, steps } = req.body;
+    const updates = { updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+    if (status !== void 0) updates.status = status;
+    if (name !== void 0) updates.name = name;
+    if (description !== void 0) updates.description = description;
+    if (min_interval_hours !== void 0) updates.min_interval_hours = min_interval_hours;
+    if (steps !== void 0) updates.steps = steps;
+    const { data, error } = await supabaseAdmin.from("marketing_campaigns").update(updates).eq("id", id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao atualizar campanha", message: err.message });
+  }
+});
+router13.post("/campaigns/:id/start", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 20 } = req.body;
+    const { data: campaign, error: campaignError } = await supabaseAdmin.from("marketing_campaigns").select("*").eq("id", id).single();
+    if (campaignError || !campaign) {
+      return res.status(404).json({ error: "Campanha n\xE3o encontrada" });
+    }
+    const leadQuery = supabaseAdmin.from("marketing_leads").select("*").eq("lead_type", campaign.lead_type).eq("audience", campaign.audience).not("phone_normalized", "is", null).limit(limit);
+    const { data: leads, error: leadsError } = await leadQuery;
+    if (leadsError) throw leadsError;
+    const { data: existingLinks } = await supabaseAdmin.from("marketing_lead_campaigns").select("lead_id").eq("campaign_id", id);
+    const existingLeadIds = new Set((existingLinks || []).map((l) => l.lead_id));
+    const newLeads = (leads || []).filter((l) => !existingLeadIds.has(l.id));
+    const maxContacts = campaign.max_contacts || 3;
+    const existingCount = existingLeadIds.size;
+    const remainingSlots = Math.max(0, maxContacts - existingCount);
+    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
+    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
+        campaign: campaign.name,
+        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
+      });
+    }
+    const leadCampaigns = leadsToEnqueue.map((lead) => ({
+      lead_id: lead.id,
+      campaign_id: id,
+      status: "queued",
+      current_step: 0,
+      contact_count: 0
+    }));
+    if (leadCampaigns.length > 0) {
+      const { error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").insert(leadCampaigns);
+      if (lcError) throw lcError;
+    }
+    const queues = leadsToEnqueue.map((lead) => ({
+      lead_campaign_id: leadCampaigns.find((lc) => lc.lead_id === lead.id)?.id,
+      action: "send_message",
+      scheduled_at: (/* @__PURE__ */ new Date()).toISOString(),
+      max_attempts: 3
+    })).filter((q) => q.lead_campaign_id);
+    if (queues.length > 0) {
+      const { error: qError } = await supabaseAdmin.from("marketing_automation_queue").insert(queues);
+      if (qError) throw qError;
+    }
+    res.json({
+      success: true,
+      enqueued: queues.length,
+      campaign: campaign.name,
+      remainingSlots: remainingSlots - queues.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao iniciar campanha", message: err.message });
+  }
+});
+router13.get("/stats", async (_req, res) => {
+  try {
+    const { count: totalLeads } = await supabaseAdmin.from("marketing_leads").select("*", { count: "exact", head: true });
+    const { count: totalCampaigns } = await supabaseAdmin.from("marketing_campaigns").select("*", { count: "exact", head: true });
+    const { count: queued } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "queued");
+    const { count: sent } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "sent");
+    const { count: responded } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "responded");
+    const { count: converted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "converted");
+    const { count: exhausted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).eq("status", "exhausted");
+    const { count: totalMessages } = await supabaseAdmin.from("marketing_messages").select("*", { count: "exact", head: true });
+    const { count: pendingQueue } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true });
+    const { count: contacted } = await supabaseAdmin.from("marketing_lead_campaigns").select("*", { count: "exact", head: true }).gte("contact_count", 1);
+    const { count: erroredQueue } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true }).gte("attempts", 3);
+    res.json({
+      totalLeads: totalLeads || 0,
+      totalCampaigns: totalCampaigns || 0,
+      queued: queued || 0,
+      sent: sent || 0,
+      responded: responded || 0,
+      converted: converted || 0,
+      exhausted: exhausted || 0,
+      totalMessages: totalMessages || 0,
+      pendingQueue: pendingQueue || 0,
+      contacted: contacted || 0,
+      interested: (responded || 0) + (converted || 0),
+      errors: erroredQueue || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar estat\xEDsticas", message: err.message });
+  }
+});
+router13.get("/leads", async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(5, parseInt(req.query.pageSize) || 20));
+    const search = (req.query.search || "").trim().toLowerCase();
+    const leadType = req.query.lead_type || "";
+    const city = req.query.city || "";
+    const source = req.query.source || "";
+    const contactFilter = req.query.contact_filter || "";
+    const isPaginated = req.query.page !== void 0 || req.query.pageSize !== void 0 || req.query.paginated === "true";
+    let query = supabaseAdmin.from("marketing_leads").select("*", { count: "exact" });
+    if (leadType && leadType !== "all") {
+      query = query.eq("lead_type", leadType);
+    }
+    if (city && city !== "all") {
+      query = query.ilike("city", `%${city}%`);
+    }
+    if (source && source !== "all") {
+      query = query.eq("source", source);
+    }
+    if (contactFilter === "has_whatsapp") {
+      query = query.not("whatsapp", "is", null);
+    } else if (contactFilter === "has_email") {
+      query = query.not("email", "is", null);
+    } else if (contactFilter === "has_website") {
+      query = query.not("website", "is", null);
+    }
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.order("created_at", { ascending: false });
+    if (isPaginated) {
+      query = query.range(from, to);
+    } else {
+      query = query.limit(200);
+    }
+    const { data, count, error } = await query;
+    if (error) throw error;
+    const { data: cityData } = await supabaseAdmin.from("marketing_leads").select("city").not("city", "is", null).limit(300);
+    const availableCities = Array.from(
+      new Set((cityData || []).map((c) => c.city?.trim()).filter(Boolean))
+    ).sort();
+    const { data: sourceData } = await supabaseAdmin.from("marketing_leads").select("source").not("source", "is", null).limit(300);
+    const availableSources = Array.from(
+      new Set((sourceData || []).map((s) => s.source?.trim()).filter(Boolean))
+    ).sort();
+    if (isPaginated) {
+      res.json({
+        data: data || [],
+        total: count || (data ? data.length : 0),
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+        availableCities,
+        availableSources
+      });
+    } else {
+      res.json(data || []);
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar leads", message: err.message });
+  }
+});
+router13.get("/leads/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabaseAdmin.from("marketing_leads").select("*, campaigns:marketing_lead_campaigns(*, campaign:marketing_campaigns(*)), messages:marketing_messages(*)").eq("id", id).single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Lead n\xE3o encontrado" });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar lead", message: err.message });
+  }
+});
+router13.get("/health", async (_req, res) => {
+  try {
+    const dbStart = Date.now();
+    const { error: dbError } = await supabaseAdmin.from("marketing_leads").select("*", { count: "exact", head: true });
+    const dbLatency = Date.now() - dbStart;
+    const { count: queueCount } = await supabaseAdmin.from("marketing_automation_queue").select("*", { count: "exact", head: true });
+    const workerStatus = await marketingAutomationWorker.getStatus();
+    let evolutionStatus = {
+      status: "offline",
+      instance: configService.get("EVOLUTION_INSTANCE_NAME") || "defesai"
+    };
+    try {
+      const ev = await whatsappService.getInstanceStatus();
+      if (ev) {
+        evolutionStatus = {
+          status: ev.status === "open" ? "online" : ev.status,
+          instance: ev.instanceName,
+          phone: ev.phone || null
+        };
+      }
+    } catch {
+    }
+    res.json({
+      database: {
+        status: dbError ? "offline" : "online",
+        latencyMs: dbLatency,
+        error: dbError?.message || null
+      },
+      queue: {
+        status: "online",
+        pendingJobs: queueCount || 0
+      },
+      worker: {
+        status: workerStatus.status.toLowerCase(),
+        processedCount: workerStatus.processedCount,
+        lastError: workerStatus.lastError,
+        lastProcessedAt: workerStatus.lastProcessedAt
+      },
+      evolution: evolutionStatus,
+      lastLeadProcessedAt: workerStatus.lastProcessedAt,
+      lastError: workerStatus.lastError
+    });
+  } catch (err) {
+    res.status(500).json({
+      database: { status: "unknown", error: err.message },
+      queue: { status: "unknown" },
+      worker: { status: "unknown" },
+      evolution: { status: "unknown" }
+    });
+  }
+});
+router13.get("/queue", async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from("marketing_automation_queue").select("*, lead_campaign:marketing_lead_campaigns(lead:marketing_leads(*), campaign:marketing_campaigns(*))").order("scheduled_at", { ascending: true }).limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar fila", message: err.message });
+  }
+});
+router13.get("/collection-runs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabaseAdmin.from("collection_runs").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Execu\xE7\xE3o n\xE3o encontrada" });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Falha ao buscar execu\xE7\xE3o", message: err.message });
+  }
+});
+router13.post("/scrape", async (req, res) => {
+  try {
+    const { queries = [], cities = [], limitPerQuery = 10 } = req.body || {};
+    const config = {
+      queries: Array.isArray(queries) && queries.length > 0 ? queries : ["despachante de tr\xE2nsito", "advogado direito de tr\xE2nsito"],
+      cities: Array.isArray(cities) ? cities : [],
+      states: [],
+      limitPerQuery: Math.max(1, Math.min(50, Number(limitPerQuery) || 10))
+    };
+    const job = await scrapeWorker.createJob(config);
+    res.json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      message: "Job de scraping enfileirado. Consulte GET /api/marketing/automation/scrape/" + job.id + " para status."
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape:", err);
+    res.status(500).json({ error: "Falha ao criar job de scraping", message: err.message });
+  }
+});
+router13.get("/scrape/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await scrapeWorker.getJob(jobId);
+    if (!job) {
+      return res.status(404).json({ error: "Job n\xE3o encontrado" });
+    }
+    res.json({
+      id: job.id,
+      status: job.status,
+      progress: job.progress,
+      config: job.config,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      error: job.error,
+      collectionRunId: job.collectionRunId
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId:", err);
+    res.status(500).json({ error: "Falha ao obter status do job", message: err.message });
+  }
+});
+router13.post("/scrape/:jobId/cancel", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const cancelled = await scrapeWorker.cancelJob(jobId);
+    if (!cancelled) {
+      return res.status(400).json({ error: "N\xE3o foi poss\xEDvel cancelar o job (n\xE3o existe ou j\xE1 finalizado)" });
+    }
+    res.json({ success: true, jobId, status: "cancelled" });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId/cancel:", err);
+    res.status(500).json({ error: "Falha ao cancelar job", message: err.message });
+  }
+});
+router13.get("/scrape/:jobId/results", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { data: leads, error } = await supabaseAdmin.from("marketing_leads").select("*").eq("collection_run_id", jobId).order("created_at", { ascending: false }).limit(500);
+    if (error) throw error;
+    const { data: runRow } = await supabaseAdmin.from("collection_runs").select("status, results_found, new_leads, duplicates, rejected, errors, started_at, finished_at").eq("id", jobId).single();
+    res.json({
+      jobId,
+      status: runRow?.status || "unknown",
+      totalFound: runRow?.results_found || 0,
+      processed: (leads || []).length,
+      duplicates: runRow?.duplicates || 0,
+      errors: runRow?.errors || [],
+      startedAt: runRow?.started_at,
+      finishedAt: runRow?.finished_at,
+      leads: leads || []
+    });
+  } catch (err) {
+    console.error("Erro no endpoint /scrape/:jobId/results:", err);
+    res.status(500).json({ error: "Falha ao buscar resultados", message: err.message });
+  }
+});
+router13.get("/scrapes", async (_req, res) => {
+  try {
+    const jobs = await scrapeWorker.listJobs(20);
+    res.json({ jobs });
+  } catch (err) {
+    console.error("Erro no endpoint /scrapes:", err);
+    res.status(500).json({ error: "Falha ao listar jobs", message: err.message });
+  }
+});
+router13.get("/export/:collectionRunId?", async (req, res) => {
+  try {
+    const { collectionRunId } = req.params;
+    const runId = collectionRunId || "latest";
+    let query = supabaseAdmin.from("marketing_leads").select("*").order("created_at", { ascending: false });
+    if (runId !== "latest") {
+      query = query.eq("collection_run_id", runId);
+    }
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+    let runRow = null;
+    if (runId !== "latest") {
+      const { data: run } = await supabaseAdmin.from("collection_runs").select("*").eq("id", runId).maybeSingle();
+      runRow = run;
+    } else {
+      const { data: latest } = await supabaseAdmin.from("collection_runs").select("*").order("started_at", { ascending: false }).limit(1).maybeSingle();
+      runRow = latest;
+    }
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      collectionRunId: runId !== "latest" ? runId : runRow?.id,
+      searchTerm: runRow?.queries ? Array.isArray(runRow.queries) ? runRow.queries.join(", ") : String(runRow.queries) : void 0,
+      location: runRow ? [runRow.cities, runRow.states].filter(Boolean).flat().join(", ") : void 0,
+      totalFound: runRow?.results_found ?? (leads || []).length,
+      totalProcessed: (leads || []).length,
+      duplicates: runRow?.duplicates ?? 0,
+      errors: runRow?.errors ? Array.isArray(runRow.errors) ? runRow.errors.length : 1 : 0
+    });
+    const filename = `leads-${runId === "latest" ? "latest" : runId}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error("Erro no endpoint /export:", err);
+    res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
+  }
+});
+router13.get("/export", async (req, res) => {
+  try {
+    const search = (req.query.search || "").trim().toLowerCase();
+    const leadType = req.query.lead_type || "";
+    const city = req.query.city || "";
+    const source = req.query.source || "";
+    const contactFilter = req.query.contact_filter || "";
+    let query = supabaseAdmin.from("marketing_leads").select("*").order("created_at", { ascending: false });
+    if (leadType && leadType !== "all") {
+      query = query.eq("lead_type", leadType);
+    }
+    if (city && city !== "all") {
+      query = query.ilike("city", `%${city}%`);
+    }
+    if (source && source !== "all") {
+      query = query.eq("source", source);
+    }
+    if (contactFilter === "has_whatsapp") {
+      query = query.not("whatsapp", "is", null);
+    } else if (contactFilter === "has_email") {
+      query = query.not("email", "is", null);
+    } else if (contactFilter === "has_website") {
+      query = query.not("website", "is", null);
+    }
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+    const { data: leads, error: leadsError } = await query;
+    if (leadsError) throw leadsError;
+    const xlsxBuffer = await generateLeadsXlsx(leads || [], {
+      searchTerm: search || void 0,
+      location: city || void 0,
+      totalFound: leads?.length || 0,
+      totalProcessed: leads?.length || 0,
+      duplicates: 0,
+      errors: 0
+    });
+    const filename = `leads-filtered-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (err) {
+    console.error("Erro no endpoint /export (filtered):", err);
+    res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
+  }
+});
+var marketing_automation_default = router13;
+
+// src/server/routes/scrape.ts
+import { Router as Router14 } from "express";
+init_supabase();
+var router14 = Router14();
+router14.post(["/", "/scrape"], async (req, res) => {
+  try {
+    const { queries = [], cities = [], states = [], limitPerQuery = 10 } = req.body || {};
+    const rawQueries = Array.isArray(queries) ? queries.map((q) => String(q).trim()).filter(Boolean) : typeof queries === "string" && queries.trim() ? [queries.trim()] : [];
+    const rawCities = Array.isArray(cities) ? cities.map((c) => String(c).trim()).filter(Boolean) : typeof cities === "string" && cities.trim() ? [cities.trim()] : [];
+    const rawStates = Array.isArray(states) ? states.map((s) => String(s).trim()).filter(Boolean) : typeof states === "string" && states.trim() ? [states.trim()] : [];
+    const config = {
+      queries: rawQueries.length > 0 ? rawQueries : ["despachante de tr\xE2nsito", "advogado direito de tr\xE2nsito"],
+      cities: rawCities,
+      states: rawStates,
+      limitPerQuery: Math.max(1, Math.min(100, Number(limitPerQuery) || 10))
+    };
+    const job = await scrapeWorker.createJob(config);
+    res.status(201).json({
+      success: true,
+      id: job.id,
+      jobId: job.id,
+      status: job.status,
+      config: job.config,
+      progress: job.progress,
+      createdAt: job.createdAt,
+      message: `Job de scraping enfileirado com sucesso. Consulte GET /api/scrape/${job.id} para acompanhar o progresso.`
+    });
+  } catch (err) {
+    console.error("Erro ao criar job de scraping:", err);
+    res.status(500).json({
+      success: false,
+      error: "Falha ao criar job de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/", "/scrape"], async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
+    const jobs = await scrapeWorker.listJobs(limit);
+    res.json({
+      success: true,
+      count: jobs.length,
+      jobs
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao listar jobs de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/:id", "/scrape/:id"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const job = await scrapeWorker.getJob(id);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: "Job n\xE3o encontrado",
+        message: `Nenhum job de scraping encontrado com o ID '${id}'.`
+      });
+    }
+    res.json({
+      success: true,
+      id: job.id,
+      jobId: job.id,
+      status: job.status,
+      progress: job.progress,
+      config: job.config,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      updatedAt: job.updatedAt,
+      error: job.error,
+      collectionRunId: job.collectionRunId
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao consultar status do job",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.post(["/:id/cancel", "/scrape/:id/cancel"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cancelled = await scrapeWorker.cancelJob(id);
+    if (!cancelled) {
+      return res.status(400).json({
+        success: false,
+        error: "N\xE3o foi poss\xEDvel cancelar o job",
+        message: "O job n\xE3o existe ou j\xE1 foi finalizado/cancelado anteriormente."
+      });
+    }
+    res.json({
+      success: true,
+      id,
+      jobId: id,
+      status: "cancelled",
+      message: "Job de scraping cancelado com sucesso."
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao cancelar job de scraping",
+      message: err?.message || String(err)
+    });
+  }
+});
+router14.get(["/:id/results", "/scrape/:id/results"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 100));
+    const { data: leads, error } = await supabaseAdmin.from("marketing_leads").select("*").eq("collection_run_id", id).order("created_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    const { data: runRow } = await supabaseAdmin.from("collection_runs").select("status, results_found, new_leads, duplicates, rejected, errors, started_at, finished_at").eq("id", id).maybeSingle();
+    res.json({
+      success: true,
+      jobId: id,
+      status: runRow?.status || "unknown",
+      totalFound: runRow?.results_found || 0,
+      newLeads: runRow?.new_leads || (leads ? leads.length : 0),
+      duplicates: runRow?.duplicates || 0,
+      rejected: runRow?.rejected || 0,
+      errors: runRow?.errors || [],
+      startedAt: runRow?.started_at,
+      finishedAt: runRow?.finished_at,
+      count: leads?.length || 0,
+      leads: leads || []
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Falha ao buscar resultados do job",
+      message: err?.message || String(err)
+    });
+  }
+});
+var scrape_default = router14;
+
+// src/server/routes/media.ts
+import { Router as Router15 } from "express";
 
 // src/server/services/ai-media-service.ts
 import { GoogleGenAI as GoogleGenAI3, GenerateVideosOperation } from "@google/genai";
@@ -30447,12 +33657,12 @@ var aiMediaService = new AIMediaService();
 
 // src/server/routes/media.ts
 import { GenerateVideosOperation as GenerateVideosOperation2, GoogleGenAI as GoogleGenAI4 } from "@google/genai";
-var router13 = Router13();
-router13.get("/health", (_req, res) => {
+var router15 = Router15();
+router15.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "media", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
-router13.use(authenticateToken, requireAdmin);
-router13.get("/hardware", (req, res) => {
+router15.use(authenticateToken, requireAdmin);
+router15.get("/hardware", (req, res) => {
   try {
     const hardware = mediaGenerationService.getHardwareAudit();
     res.json({ success: true, hardware });
@@ -30461,7 +33671,7 @@ router13.get("/hardware", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao auditar hardware" });
   }
 });
-router13.get("/providers", (req, res) => {
+router15.get("/providers", (req, res) => {
   try {
     const info = mediaGenerationService.getProvidersInfo();
     res.json({ success: true, ...info });
@@ -30470,7 +33680,7 @@ router13.get("/providers", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao listar provedores" });
   }
 });
-router13.post("/image", async (req, res) => {
+router15.post("/image", async (req, res) => {
   try {
     const { prompt, aspectRatio, imageSize, stylePreset, negativePrompt, provider, sync } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30500,7 +33710,7 @@ router13.post("/image", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar imagem" });
   }
 });
-router13.post("/video", async (req, res) => {
+router15.post("/video", async (req, res) => {
   try {
     const { prompt, durationSeconds, aspectRatio, fps, resolution, quality, negativePrompt, provider, sync } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30530,7 +33740,7 @@ router13.post("/video", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar v\xEDdeo" });
   }
 });
-router13.post("/image-to-video", async (req, res) => {
+router15.post("/image-to-video", async (req, res) => {
   try {
     const {
       prompt,
@@ -30574,7 +33784,7 @@ router13.post("/image-to-video", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao enfileirar Image-to-Video" });
   }
 });
-router13.get("/jobs/:id", (req, res) => {
+router15.get("/jobs/:id", (req, res) => {
   try {
     const job = mediaGenerationService.getJob(req.params.id);
     if (!job) {
@@ -30599,7 +33809,7 @@ router13.get("/jobs/:id", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao consultar job" });
   }
 });
-router13.post("/jobs/:id/cancel", (req, res) => {
+router15.post("/jobs/:id/cancel", (req, res) => {
   try {
     const cancelled = mediaGenerationService.cancelJob(req.params.id);
     if (!cancelled) {
@@ -30612,7 +33822,7 @@ router13.post("/jobs/:id/cancel", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao cancelar job" });
   }
 });
-router13.get("/jobs", (req, res) => {
+router15.get("/jobs", (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const jobs = mediaGenerationService.listJobs(limit);
@@ -30622,7 +33832,7 @@ router13.get("/jobs", (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao listar jobs" });
   }
 });
-router13.post(["/generate-image", "/marketing/generate-image"], async (req, res) => {
+router15.post(["/generate-image", "/marketing/generate-image"], async (req, res) => {
   try {
     const { prompt, imageSize, aspectRatio, referenceImageBase64, referenceMimeType, stylePreset } = req.body;
     if (!prompt || typeof prompt !== "string") {
@@ -30647,7 +33857,7 @@ router13.post(["/generate-image", "/marketing/generate-image"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro ao gerar imagem" });
   }
 });
-router13.post(["/generate-video", "/marketing/generate-video"], async (req, res) => {
+router15.post(["/generate-video", "/marketing/generate-video"], async (req, res) => {
   try {
     const { prompt, image, aspectRatio, resolution } = req.body;
     const validRatios = ["16:9", "9:16"];
@@ -30664,7 +33874,7 @@ router13.post(["/generate-video", "/marketing/generate-video"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro ao iniciar gera\xE7\xE3o de v\xEDdeo" });
   }
 });
-router13.post(["/video-status", "/marketing/video-status"], async (req, res) => {
+router15.post(["/video-status", "/marketing/video-status"], async (req, res) => {
   try {
     const { operationName } = req.body;
     if (!operationName) {
@@ -30678,7 +33888,7 @@ router13.post(["/video-status", "/marketing/video-status"], async (req, res) => 
     res.status(500).json({ success: false, error: error?.message || "Erro ao consultar status do v\xEDdeo" });
   }
 });
-router13.post(["/video-download", "/marketing/video-download"], async (req, res) => {
+router15.post(["/video-download", "/marketing/video-download"], async (req, res) => {
   try {
     const { operationName } = req.body;
     if (!operationName) {
@@ -30727,7 +33937,7 @@ router13.post(["/video-download", "/marketing/video-download"], async (req, res)
     res.status(500).json({ success: false, error: error?.message || "Erro no download do v\xEDdeo" });
   }
 });
-router13.post("/marketing/generate-week", async (req, res) => {
+router15.post("/marketing/generate-week", async (req, res) => {
   try {
     const { generateImages = true, imageSize = "2K", targetAudience } = req.body;
     const weeklySchedule = await aiMediaService.generateWeeklySchedule({
@@ -30796,10 +34006,10 @@ router13.post("/marketing/generate-week", async (req, res) => {
     res.status(500).json({ success: false, error: error?.message || "Erro ao gerar semana de publica\xE7\xF5es" });
   }
 });
-var media_default = router13;
+var media_default = router15;
 
 // src/server/routes/notifications.ts
-import { Router as Router14 } from "express";
+import { Router as Router16 } from "express";
 
 // src/server/services/notification-service.ts
 var NotificationService = class {
@@ -31408,8 +34618,8 @@ var EmailService = class {
 var emailService = new EmailService();
 
 // src/server/routes/notifications.ts
-var router14 = Router14();
-router14.post("/subscribe", (req, res) => {
+var router16 = Router16();
+router16.post("/subscribe", (req, res) => {
   try {
     const { endpoint, keys, userId, userEmail, userAgent, fcmToken } = req.body;
     if (!endpoint && !fcmToken) {
@@ -31429,7 +34639,7 @@ router14.post("/subscribe", (req, res) => {
     res.status(500).json({ error: error.message || "Erro ao registrar push subscription" });
   }
 });
-router14.post("/unsubscribe", (req, res) => {
+router16.post("/unsubscribe", (req, res) => {
   try {
     const { endpoint } = req.body;
     if (!endpoint) {
@@ -31441,7 +34651,7 @@ router14.post("/unsubscribe", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.get("/history", authenticateToken, (req, res) => {
+router16.get("/history", authenticateToken, (req, res) => {
   try {
     const user = req.user;
     const effectiveEmail = user?.email;
@@ -31454,7 +34664,7 @@ router14.get("/history", authenticateToken, (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/mark-read", (req, res) => {
+router16.post("/mark-read", (req, res) => {
   try {
     const userEmail = req.body.email || req.body.userEmail;
     notificationService.markAllAsRead(userEmail);
@@ -31463,7 +34673,7 @@ router14.post("/mark-read", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/notify-status-change", async (req, res) => {
+router16.post("/notify-status-change", async (req, res) => {
   try {
     const { caseId, newStatus, oldStatus, autoInfracao, userId, userEmail, fcmToken } = req.body;
     if (!caseId || !newStatus) {
@@ -31490,9 +34700,9 @@ router14.post("/notify-status-change", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/send-push", async (req, res) => {
+router16.post("/send-push", async (req, res) => {
   try {
-    const { fcmToken, title, body, url, tag } = req.body;
+    const { fcmToken, title, body, url: url2, tag } = req.body;
     if (!fcmToken || !title || !body) {
       return res.status(400).json({ error: "fcmToken, title e body s\xE3o obrigat\xF3rios" });
     }
@@ -31501,7 +34711,7 @@ router14.post("/send-push", async (req, res) => {
       notification: {
         title,
         body,
-        url,
+        url: url2,
         tag
       }
     });
@@ -31514,7 +34724,7 @@ router14.post("/send-push", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.post("/send-test", requireAdmin, async (req, res) => {
+router16.post("/send-test", requireAdmin, async (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Endpoint de teste indispon\xEDvel em produ\xE7\xE3o",
@@ -31555,11 +34765,11 @@ router14.post("/send-test", requireAdmin, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-router14.get("/vapid-key", (req, res) => {
+router16.get("/vapid-key", (req, res) => {
   const vapidKey = pushService.getVapidPublicKey();
   res.json({ vapidKey });
 });
-router14.post("/push", authenticateToken, async (req, res) => {
+router16.post("/push", authenticateToken, async (req, res) => {
   try {
     const { title, body, caseId, userEmail } = req.body;
     if (!title || !body) {
@@ -31587,7 +34797,7 @@ router14.post("/push", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar push notification" });
   }
 });
-router14.post("/email", authenticateToken, async (req, res) => {
+router16.post("/email", authenticateToken, async (req, res) => {
   try {
     const { email, caseId, subject, body: emailBody } = req.body;
     const targetEmail = email || req.user?.email;
@@ -31615,7 +34825,7 @@ router14.post("/email", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar email" });
   }
 });
-router14.post("/whatsapp/send", requireAdmin, async (req, res) => {
+router16.post("/whatsapp/send", requireAdmin, async (req, res) => {
   try {
     const { phone, eventType, caseId, customText } = req.body;
     if (!phone) {
@@ -31657,7 +34867,7 @@ router14.post("/whatsapp/send", requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao enviar mensagem WhatsApp" });
   }
 });
-router14.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
+router16.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Endpoint de simula\xE7\xE3o indispon\xEDvel em produ\xE7\xE3o",
@@ -31694,12 +34904,12 @@ router14.post("/whatsapp/simulate", requireAdmin, async (req, res, next) => {
     res.status(500).json({ error: err.message || "Erro ao simular envio WhatsApp" });
   }
 });
-var notifications_default = router14;
+var notifications_default = router16;
 
 // src/server/routes/health.ts
-import { Router as Router15 } from "express";
-var router15 = Router15();
-router15.get("/health", (req, res) => {
+import { Router as Router17 } from "express";
+var router17 = Router17();
+router17.get("/health", (req, res) => {
   res.json({
     status: "ok",
     service: "DefesAi API",
@@ -31709,7 +34919,7 @@ router15.get("/health", (req, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router15.post("/health/test", async (req, res) => {
+router17.post("/health/test", async (req, res) => {
   try {
     const { service } = req.body;
     if (!service) {
@@ -31730,10 +34940,11 @@ router15.post("/health/test", async (req, res) => {
     });
   }
 });
-var health_default = router15;
+var health_default = router17;
 
 // src/server/routes/cases.ts
-import { Router as Router16 } from "express";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { Router as Router18 } from "express";
 
 // src/server/db/envelope-repository.ts
 var EnvelopeRepository = class {
@@ -32688,17 +35899,20 @@ function hasValidDefenseIntegrity(draft, analysis) {
 }
 
 // src/server/routes/cases.ts
-var router16 = Router16();
+var router18 = Router18();
 registerRefinementProvider({
   refineProse: async (draftText) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
+function isCanonicalUserId(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 function canAccessCase(user, row) {
   if (!user) return false;
   if (user.role === "admin") return true;
-  if (!row.user_id) return false;
-  return row.user_id === user.id || !!user.email && row.user_id === user.email;
+  if (!row.user_id || !isCanonicalUserId(user.id)) return false;
+  return row.user_id === user.id;
 }
 function denyCaseAccess(user, res) {
   if (!user) {
@@ -32708,19 +35922,14 @@ function denyCaseAccess(user, res) {
   res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
   return true;
 }
-router16.get("/cases", authenticateToken, (req, res) => {
-  const { userId, claimToken } = req.query;
+router18.get("/cases", authenticateToken, (req, res) => {
+  const { userId } = req.query;
   const user = req.user;
   let allRows = Array.from(databaseRows.values());
   if (user && user.role !== "admin") {
-    const userSpecific = allRows.filter(
-      (r) => r.user_id === user.id || user.email && r.user_id === user.email
-    );
-    allRows = userSpecific;
+    allRows = isCanonicalUserId(user.id) ? allRows.filter((r) => r.user_id === user.id) : [];
   } else if (user?.role === "admin" && userId) {
     allRows = allRows.filter((r) => r.user_id === userId);
-  } else if (!user && claimToken) {
-    allRows = allRows.filter((r) => r.claim_token === claimToken);
   } else if (!user) {
     allRows = [];
   }
@@ -32728,7 +35937,7 @@ router16.get("/cases", authenticateToken, (req, res) => {
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });
-router16.get("/cases/:id", authenticateToken, (req, res) => {
+router18.get("/cases/:id", authenticateToken, (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32761,25 +35970,19 @@ router16.get("/cases/:id", authenticateToken, (req, res) => {
   }
   res.json(domain);
 });
-router16.post("/cases", authenticateToken, async (req, res) => {
+router18.post("/cases", authenticateToken, async (req, res) => {
   try {
     const domainData = req.body;
-    if (!domainData.id) {
-      domainData.id = `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    if (!isCanonicalUserId(req.user?.id)) {
+      return res.status(401).json({
+        error: "Identidade de usu\xE1rio inv\xE1lida para cria\xE7\xE3o do caso.",
+        code: "CANONICAL_USER_ID_REQUIRED"
+      });
     }
+    domainData.id = domainData.id || `case_${randomUUID4()}`;
     delete domainData.userId;
     delete domainData.analysis;
-    if (req.user?.id) {
-      const uid = req.user.id;
-      const isUuid3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid);
-      const isEmail = uid.includes("@");
-      if (isUuid3 || isEmail) {
-        domainData.userId = uid;
-      }
-      if (req.user.email && !domainData.userId) {
-        domainData.userId = req.user.email;
-      }
-    }
+    domainData.userId = req.user.id;
     if (!domainData.createdAt) {
       domainData.createdAt = (/* @__PURE__ */ new Date()).toISOString();
     }
@@ -32820,7 +36023,7 @@ router16.post("/cases", authenticateToken, async (req, res) => {
       id: `audit_${Date.now()}`,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       actor: domainData.clientName || "An\xF4nimo",
-      role: domainData.isAnonymous ? "citizen" : "citizen",
+      role: "citizen",
       action: "CASE_CREATED",
       targetResource: domainData.id,
       ipHash: "9f83c68a765b1c41",
@@ -32832,7 +36035,7 @@ router16.post("/cases", authenticateToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-router16.put("/cases/:id", authenticateToken, async (req, res) => {
+router18.put("/cases/:id", authenticateToken, async (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32843,6 +36046,7 @@ router16.put("/cases/:id", authenticateToken, async (req, res) => {
   const updatedDomain = req.body;
   updatedDomain.id = req.params.id;
   updatedDomain.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  updatedDomain.userId = existingRow.user_id;
   const newRow = CanonicalMapper.domainToRow(updatedDomain);
   newRow.user_id = existingRow.user_id;
   if (updatedDomain.infraction) {
@@ -32856,7 +36060,7 @@ router16.put("/cases/:id", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_UPDATED, { caseId: req.params.id }, "case_engine");
   res.json(CanonicalMapper.rowToDomain(newRow));
 });
-router16.delete("/cases/:id", authenticateToken, async (req, res) => {
+router18.delete("/cases/:id", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32866,14 +36070,11 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
   }
   const anonymizedRow = {
     ...row,
-    // Identificação pessoal direta
     client_name: "[REMOVIDO]",
     client_email: void 0,
     client_phone: void 0,
     client_cpf: void 0,
-    // Vinculação a conta
     user_id: void 0,
-    // Dados processuais que podem conter PII
     applicant_json: void 0,
     defense_draft_json: void 0,
     analysis_json: void 0,
@@ -32884,11 +36085,9 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
     commercial_offer_id: void 0,
     formal_flaws_json: void 0,
     protocol_info_json: void 0,
-    // Condutor real (quando aplicável — pode ter CNH/Cpf do verdadeiro motorista)
     real_driver_name: void 0,
     real_driver_cpf: void 0,
     real_driver_cnh: void 0,
-    // Contexto do celular (pode conter identificadores)
     cellphone_circumstance: void 0,
     updated_at: (/* @__PURE__ */ new Date()).toISOString()
   };
@@ -32909,15 +36108,18 @@ router16.delete("/cases/:id", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_DELETED, { caseId: req.params.id }, "case_engine");
   res.json({ success: true, message: "Dados pessoais removidos. Caso retido para conformidade legal." });
 });
-router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
+router18.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso an\xF4nimo n\xE3o encontrado" });
   }
-  if (!req.user?.id) {
-    return res.status(401).json({ error: "N\xE3o autenticado" });
+  if (!isCanonicalUserId(req.user?.id)) {
+    return res.status(401).json({
+      error: "Identidade de usu\xE1rio inv\xE1lida para vincula\xE7\xE3o do caso.",
+      code: "CANONICAL_USER_ID_REQUIRED"
+    });
   }
-  const isOwner = row.user_id === req.user.id || req.user.email && row.user_id === req.user.email;
+  const isOwner = row.user_id === req.user.id;
   if (row.user_id && !isOwner) {
     return res.status(403).json({ error: "Caso j\xE1 vinculado a outro usu\xE1rio" });
   }
@@ -32948,7 +36150,7 @@ router16.post("/cases/:id/claim", authenticateToken, async (req, res) => {
   eventBus.publish(EventTopics.CASE_CLAIMED, { caseId: domain.id, email }, "auth_engine");
   res.json(domain);
 });
-router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res) => {
+router18.post("/cases/:id/generate-defense", authenticateToken, async (req, res) => {
   const row = databaseRows.get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: "Caso n\xE3o encontrado" });
@@ -32957,7 +36159,7 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
     return denyCaseAccess(req.user, res);
   }
   const domain = CanonicalMapper.rowToDomain(row);
-  const { procedureType: _procedureTypeIgnored, selectedArgumentIds: _selectedArgumentIdsIgnored, applicantData, customFacts } = req.body;
+  const { applicantData, customFacts } = req.body;
   const canonicalAnalysis = domain.analysis;
   const canonicalArguments = canonicalAnalysis?.recommendedArguments || [];
   const canonicalProcedure = canonicalAnalysis?.recommendedProcedure || domain.serviceType || "recurso_jari";
@@ -33076,22 +36278,22 @@ router16.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
     case: domain
   });
 });
-var cases_default = router16;
+var cases_default = router18;
 
 // src/server/routes/audit.ts
-import { Router as Router17 } from "express";
-var router17 = Router17();
-router17.use(authenticateToken, requireAdmin);
-router17.get("/audit-logs", (_req, res) => {
+import { Router as Router19 } from "express";
+var router19 = Router19();
+router19.use(authenticateToken, requireAdmin);
+router19.get("/audit-logs", (_req, res) => {
   res.json(auditLogs);
 });
-router17.get("/audit/logs", (_req, res) => {
+router19.get("/audit/logs", (_req, res) => {
   res.json({ logs: auditLogs.slice(0, 50) });
 });
-var audit_default = router17;
+var audit_default = router19;
 
 // src/server/routes/onboarding.ts
-import { Router as Router18 } from "express";
+import { Router as Router20 } from "express";
 
 // src/core/onboarding/rules-matrix.ts
 var USER_SITUATIONS = [
@@ -33241,8 +36443,8 @@ var RULES_MATRIX = {
 };
 
 // src/server/routes/onboarding.ts
-var router18 = Router18();
-router18.get("/onboarding/rules", (_req, res) => {
+var router20 = Router20();
+router20.get("/onboarding/rules", (_req, res) => {
   const baseRules = {
     situations: USER_SITUATIONS.map((s) => ({
       id: s.id,
@@ -33282,12 +36484,121 @@ router18.get("/onboarding/rules", (_req, res) => {
   };
   res.json(baseRules);
 });
-var onboarding_default = router18;
+var onboarding_default = router20;
+
+// src/server/routes/onboarding-v2.ts
+import crypto6 from "node:crypto";
+import { Router as Router21 } from "express";
+var router21 = Router21();
+router21.use(authenticateToken);
+var CLAIM_HEADER = "X-Claim-Token";
+function tokenMatches(provided, stored) {
+  if (typeof provided !== "string" || typeof stored !== "string" || !provided || !stored) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(stored);
+  return a.length === b.length && crypto6.timingSafeEqual(a, b);
+}
+function authorized(req, row) {
+  if (req.user?.role === "admin") return true;
+  if (req.user?.id && row.user_id === req.user.id) return true;
+  return tokenMatches(req.header(CLAIM_HEADER), row.claim_token);
+}
+function getAuthorizedCase(req, res, id) {
+  const row = databaseRows.get(id);
+  if (!row) {
+    res.status(404).json({ error: "Caso n\xE3o encontrado." });
+    return null;
+  }
+  if (!authorized(req, row)) {
+    res.status(403).json({ error: "Acesso ao caso n\xE3o autorizado." });
+    return null;
+  }
+  return row;
+}
+router21.post("/onboarding-v2/draft", async (req, res) => {
+  try {
+    const payload = req.body?.payload;
+    if (!payload?.vehicle?.plate || !payload.vehicle.brandModel || !payload.infraction?.aitNumber || !payload.infraction.infractionCode || !payload.infraction.autuadorBody) return res.status(400).json({ error: "Dados m\xEDnimos do caso incompletos.", code: "DRAFT_MINIMUM_DATA_REQUIRED" });
+    const id = `case_${crypto6.randomUUID()}`;
+    const claimToken = crypto6.randomBytes(32).toString("hex");
+    const domain = CanonicalMapper.onboardingPayloadToDomain(payload, id);
+    const caseDomain = { ...domain, userId: req.user?.id, isAnonymous: !req.user?.id, claimToken, status: "draft", currentStage: 1, createdAt: domain.createdAt, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const row = CanonicalMapper.domainToRow(caseDomain);
+    await databaseRows.set(id, row);
+    return res.status(201).json({ case: CanonicalMapper.rowToDomain(row), claimToken });
+  } catch (error) {
+    console.error("[onboarding-v2] create draft", error);
+    return res.status(500).json({ error: "Falha ao criar caso." });
+  }
+});
+router21.put("/onboarding-v2/draft", async (req, res) => {
+  const { caseId, payload } = req.body || {};
+  const row = getAuthorizedCase(req, res, String(caseId || ""));
+  if (!row) return;
+  const current = CanonicalMapper.rowToDomain(row);
+  const nextPayload = payload;
+  if (!nextPayload) return res.status(400).json({ error: "Payload can\xF4nico obrigat\xF3rio." });
+  const next = CanonicalMapper.onboardingPayloadToDomain(nextPayload, current.id);
+  const merged = { ...current, ...next, id: current.id, userId: current.userId, claimToken: current.claimToken, isAnonymous: current.isAnonymous, isPaid: current.isPaid, createdAt: current.createdAt, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  await databaseRows.set(current.id, CanonicalMapper.domainToRow(merged));
+  return res.json({ case: merged });
+});
+router21.get("/onboarding-v2/draft/:id", (req, res) => {
+  const row = getAuthorizedCase(req, res, req.params.id);
+  if (!row) return;
+  return res.json(CanonicalMapper.rowToDomain(row));
+});
+router21.post("/onboarding-v2/cases/:id/evidence", async (req, res) => {
+  const row = getAuthorizedCase(req, res, req.params.id);
+  if (!row) return;
+  const { base64, filename, mimeType } = req.body || {};
+  if (typeof base64 !== "string" || !base64) return res.status(400).json({ error: "Conte\xFAdo da evid\xEAncia obrigat\xF3rio.", code: "EVIDENCE_CONTENT_REQUIRED" });
+  if (!["image/jpeg", "image/png", "image/webp"].includes(String(mimeType))) return res.status(415).json({ error: "Formato n\xE3o suportado para OCR de imagem.", code: "EVIDENCE_MIME_UNSUPPORTED" });
+  const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, "");
+  const bytes = Buffer.from(cleanBase64, "base64");
+  if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: "Evid\xEAncia deve ter entre 1 byte e 5MB.", code: "EVIDENCE_SIZE_INVALID" });
+  try {
+    const result = await ocrService.analyzeImage(cleanBase64);
+    const current = CanonicalMapper.rowToDomain(row);
+    const matched = RagPipeline.findInfraction(result.dadosExtraidos.codigoInfracao);
+    const infraction = { ...current.infraction, aitNumber: result.dadosExtraidos.aitNumber || current.infraction.aitNumber, infractionCode: result.dadosExtraidos.codigoInfracao || current.infraction.infractionCode, description: result.dadosExtraidos.descricao || current.infraction.description, ctbArticle: result.dadosExtraidos.artigoCtb || current.infraction.ctbArticle, autuadorBody: result.dadosExtraidos.orgaoAutuador || current.infraction.autuadorBody, dateTime: result.dadosExtraidos.dataInfracao || current.infraction.dateTime, location: result.dadosExtraidos.localInfracao || current.infraction.location, severity: matched?.severity || current.infraction.severity, points: matched?.points ?? current.infraction.points, fineAmount: matched?.fineAmount ?? current.infraction.fineAmount };
+    const vehicle = { ...current.vehicle, plate: result.dadosExtraidos.placa || current.vehicle.plate };
+    const ocrAuxiliaryData = { ...current.ocrAuxiliaryData || {}, extractedText: result.textoCompleto, confidenceScore: result.confianca, provider: result.provedor, filename, mimeType, processedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const next = { ...current, infraction, vehicle, ocrAuxiliaryData, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    await databaseRows.set(current.id, CanonicalMapper.domainToRow(next));
+    return res.json({ case: next, ocr: { provider: result.provedor, confidence: result.confianca, rawText: result.textoCompleto } });
+  } catch (error) {
+    console.error("[onboarding-v2] evidence OCR", error);
+    return res.status(502).json({ error: "Falha ao processar evid\xEAncia.", code: "EVIDENCE_OCR_FAILED" });
+  }
+});
+router21.post("/onboarding-v2/cases/:id/analysis", async (req, res) => {
+  const row = getAuthorizedCase(req, res, req.params.id);
+  if (!row) return;
+  const domain = CanonicalMapper.rowToDomain(row);
+  if (!domain.infraction?.aitNumber || !domain.infraction?.infractionCode) return res.status(400).json({ error: "Infra\xE7\xE3o incompleta para an\xE1lise." });
+  const analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction);
+  const updated = { ...domain, analysis, status: "analisado", currentStage: 3, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  await databaseRows.set(domain.id, CanonicalMapper.domainToRow(updated));
+  return res.json({ status: "completed", analysis });
+});
+router21.put("/onboarding-v2/cases/:id/qualification", async (req, res) => {
+  const row = getAuthorizedCase(req, res, req.params.id);
+  if (!row) return;
+  const applicant = req.body?.applicant;
+  if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressNeighborhood || !applicant.addressZipCode || !applicant.addressCityState) return res.status(400).json({ error: "Dados de qualifica\xE7\xE3o incompletos.", code: "QUALIFICATION_REQUIRED" });
+  if (!/^\d{11}$/.test(applicant.applicantCpf.replace(/\D/g, ""))) return res.status(400).json({ error: "CPF inv\xE1lido.", code: "QUALIFICATION_CPF_INVALID" });
+  const current = CanonicalMapper.rowToDomain(row);
+  const updated = { ...current, applicant: { ...applicant, applicantCpf: applicant.applicantCpf.replace(/\D/g, "") }, status: "analisado", currentStage: 4, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  await databaseRows.set(current.id, CanonicalMapper.domainToRow(updated));
+  return res.json({ case: updated });
+});
+var onboarding_v2_default = router21;
 
 // src/server/routes/transit.ts
-import { Router as Router19 } from "express";
-var router19 = Router19();
-router19.get("/transit-database/query", (req, res) => {
+import { Router as Router22 } from "express";
+var router22 = Router22();
+router22.get("/transit-database/query", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o de consulta veicular n\xE3o dispon\xEDvel",
@@ -33375,7 +36686,7 @@ router19.get("/transit-database/query", (req, res) => {
     radarAfericao: radarMatch
   });
 });
-router19.get("/transit-database/inmetro-check", (req, res) => {
+router22.get("/transit-database/inmetro-check", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o INMETRO n\xE3o dispon\xEDvel",
@@ -33418,12 +36729,12 @@ router19.get("/transit-database/inmetro-check", (req, res) => {
     alertaPerito: cert.statusLaudo === "EXPIRADO_INVALIDO" ? "Aferi\xE7\xE3o expirada! V\xEDcio metrol\xF3gico insan\xE1vel perante a Resolu\xE7\xE3o CONTRAN 798/2020." : "Equipamento com laudo metrol\xF3gico v\xE1lido."
   });
 });
-var transit_default = router19;
+var transit_default = router22;
 
 // src/server/routes/governance.ts
-import { Router as Router20 } from "express";
-var router20 = Router20();
-router20.get("/governance/law-enforcement-verify", (req, res) => {
+import { Router as Router23 } from "express";
+var router23 = Router23();
+router23.get("/governance/law-enforcement-verify", (req, res) => {
   const { protocolOrHash, autoInfracao } = req.query;
   const allRows = Array.from(databaseRows.values());
   const matched = allRows.find((r) => {
@@ -33452,7 +36763,7 @@ router20.get("/governance/law-enforcement-verify", (req, res) => {
     source: "system"
   });
 });
-router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
+router23.post("/governance/manual-override", requireAdmin, async (req, res) => {
   const { caseId, overrideField, oldValue, newValue, justification, specialistName } = req.body;
   const row = databaseRows.get(caseId);
   if (row) {
@@ -33481,12 +36792,12 @@ router20.post("/governance/manual-override", requireAdmin, async (req, res) => {
   auditLogs.unshift(auditEntry);
   res.json({ success: true, auditEntry });
 });
-var governance_default = router20;
+var governance_default = router23;
 
 // src/server/routes/analytics.ts
-import { Router as Router21 } from "express";
-var router21 = Router21();
-router21.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
+import { Router as Router24 } from "express";
+var router24 = Router24();
+router24.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
   const allCases = Array.from(databaseRows.values()).map((r) => CanonicalMapper.rowToDomain(r));
   const totalProcessed = allCases.length;
   const paidCases = allCases.filter(
@@ -33533,17 +36844,17 @@ router21.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res)
     topInfracoes
   });
 });
-var analytics_default = router21;
+var analytics_default = router24;
 
 // src/server/routes/ai.ts
-import { Router as Router22 } from "express";
-var router22 = Router22();
+import { Router as Router25 } from "express";
+var router25 = Router25();
 registerRefinementProvider({
   refineProse: async (draftText) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
-router22.post("/ai/analyze-infraction", async (req, res) => {
+router25.post("/ai/analyze-infraction", async (req, res) => {
   try {
     const infraction = req.body;
     const ragContext = RagPipeline.retrieveContext(infraction);
@@ -33663,7 +36974,7 @@ Responda em formato JSON estrito com o seguinte schema:
     res.status(500).json({ error: "Erro ao processar an\xE1lise jur\xEDdica", details: err.message });
   }
 });
-router22.post("/ai/generate-defense", async (req, res) => {
+router25.post("/ai/generate-defense", async (req, res) => {
   try {
     const { caseData, customInstructions } = req.body;
     const rawInfraction = caseData?.dadosInfracao || caseData?.infraction || {};
@@ -33822,7 +37133,7 @@ Assinatura do Requerente`,
     res.status(500).json({ error: "Erro ao gerar minuta da defesa", details: err.message });
   }
 });
-router22.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
+router25.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
   try {
     const { message, prompt, caseContext, context } = req.body;
     const userMessage = message || prompt || "";
@@ -33860,12 +37171,12 @@ Pergunta do usu\xE1rio: ${userMessage}` : userMessage;
     res.status(500).json({ error: "Erro ao responder consulta", details: err.message });
   }
 });
-var ai_default = router22;
+var ai_default = router25;
 
 // src/server/routes/sync.ts
-import { Router as Router23 } from "express";
-var router23 = Router23();
-router23.post("/sync/offline-batch", authenticateToken, (req, res) => {
+import { Router as Router26 } from "express";
+var router26 = Router26();
+router26.post("/sync/offline-batch", authenticateToken, (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Sincroniza\xE7\xE3o offline n\xE3o implementada",
@@ -33891,12 +37202,12 @@ router23.post("/sync/offline-batch", authenticateToken, (req, res) => {
     message: `${processedCount} opera\xE7\xF5es offline sincronizadas com sucesso.`
   });
 });
-var sync_default = router23;
+var sync_default = router26;
 
 // src/server/routes/auth.ts
-import { Router as Router24 } from "express";
-var router24 = Router24();
-router24.get("/me", authenticateToken, async (req, res) => {
+import { Router as Router27 } from "express";
+var router27 = Router27();
+router27.get("/me", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
@@ -33926,10 +37237,10 @@ router24.get("/me", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erro ao buscar usu\xE1rio" });
   }
 });
-var auth_default = router24;
+var auth_default = router27;
 
 // src/server/routes/documenso.ts
-import { Router as Router25 } from "express";
+import { Router as Router28 } from "express";
 import express from "express";
 
 // src/types/documenso.ts
@@ -33962,7 +37273,7 @@ var DOCUMENSO_ENDPOINTS = {
 };
 
 // src/server/lib/documenso/client.ts
-import crypto5 from "crypto";
+import crypto7 from "crypto";
 var DocumensoClient = class {
   constructor(config) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -34081,13 +37392,13 @@ var DocumensoClient = class {
       logger.warn("documenso", "client", "verify-webhook", "No signature header received");
       return false;
     }
-    const expected = crypto5.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
+    const expected = crypto7.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const receivedBuffer = Buffer.from(receivedSecret);
     const expectedBuffer = Buffer.from(expected);
     if (receivedBuffer.length !== expectedBuffer.length) {
       return false;
     }
-    return crypto5.timingSafeEqual(receivedBuffer, expectedBuffer);
+    return crypto7.timingSafeEqual(receivedBuffer, expectedBuffer);
   }
   /**
    * Get webhook configuration
@@ -34102,8 +37413,8 @@ var DocumensoClient = class {
    * Internal request helper
    */
   async request(path, options = {}) {
-    const url = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
-    const response = await fetch(url, {
+    const url2 = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
+    const response = await fetch(url2, {
       ...options,
       headers: {
         ...this.getHeaders(),
@@ -34934,7 +38245,7 @@ var PollingJob = class {
 };
 
 // src/server/routes/documenso.ts
-var router25 = Router25();
+var router28 = Router28();
 var envelopeService;
 var webhookHandler;
 var pollingJob;
@@ -34968,7 +38279,7 @@ function ensureServices() {
     pollingJob = new PollingJob({}, documensoClient, envelopeService, webhookHandler);
   }
 }
-router25.use((req, res, next) => {
+router28.use((req, res, next) => {
   try {
     ensureServices();
   } catch (err) {
@@ -34984,7 +38295,7 @@ router25.use((req, res, next) => {
   }
   next();
 });
-router25.post("/envelopes", authenticateToken, async (req, res) => {
+router28.post("/envelopes", authenticateToken, async (req, res) => {
   try {
     const {
       caseId,
@@ -35061,7 +38372,7 @@ router25.post("/envelopes", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create envelope" });
   }
 });
-router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
+router28.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35091,7 +38402,7 @@ router25.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to send envelope" });
   }
 });
-router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35110,7 +38421,7 @@ router25.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope status" });
   }
 });
-router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35129,7 +38440,7 @@ router25.get("/envelopes/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope" });
   }
 });
-router25.get(
+router28.get(
   "/envelopes/:id/signing-url/:recipientId",
   authenticateToken,
   async (req, res) => {
@@ -35152,7 +38463,7 @@ router25.get(
     }
   }
 );
-router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -35181,7 +38492,7 @@ router25.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to download envelope" });
   }
 });
-router25.post("/embedding-token", authenticateToken, async (req, res) => {
+router28.post("/embedding-token", authenticateToken, async (req, res) => {
   try {
     const { envelopeId, recipientId, redirectUrl } = req.body;
     if (!envelopeId || !recipientId) {
@@ -35203,14 +38514,14 @@ router25.post("/embedding-token", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create embedding token" });
   }
 });
-router25.post(
+router28.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   (req, res, next) => {
     return documensoWebhookMiddleware(webhookHandler)(req, res, next);
   }
 );
-router25.get("/polling/status", authenticateToken, async (req, res) => {
+router28.get("/polling/status", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35218,7 +38529,7 @@ router25.get("/polling/status", authenticateToken, async (req, res) => {
   const status = pollingJob.getStatus();
   res.json(status);
 });
-router25.post("/polling/trigger", authenticateToken, async (req, res) => {
+router28.post("/polling/trigger", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35239,7 +38550,7 @@ router25.post("/polling/trigger", authenticateToken, async (req, res) => {
     }
   });
 });
-router25.post("/polling/start", authenticateToken, async (req, res) => {
+router28.post("/polling/start", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35247,7 +38558,7 @@ router25.post("/polling/start", authenticateToken, async (req, res) => {
   pollingJob.start();
   res.json({ success: true, message: "Polling job started" });
 });
-router25.post("/polling/stop", authenticateToken, async (req, res) => {
+router28.post("/polling/stop", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -35255,14 +38566,13 @@ router25.post("/polling/stop", authenticateToken, async (req, res) => {
   pollingJob.stop();
   res.json({ success: true, message: "Polling job stopped" });
 });
-var documenso_default = router25;
+var documenso_default = router28;
 
 // src/server/app.ts
-var databaseRows = caseRepository;
-var auditLogs = [];
 function createApp() {
   const app = express2();
   const isProd = process.env.NODE_ENV === "production";
+  app.set("trust proxy", process.env.VERCEL === "1" ? 1 : false);
   const supabaseEnvUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
   let supabaseOrigins = ["https://*.supabase.co", "wss://*.supabase.co"];
   try {
@@ -35272,207 +38582,99 @@ function createApp() {
     }
   } catch {
   }
-  app.use(
-    helmet({
-      frameguard: false,
-      contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", ...isProd ? [] : ["'unsafe-inline'"]],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-          imgSrc: ["'self'", "data:", "blob:", "https:"],
-          connectSrc: [
-            "'self'",
-            ...isProd ? [] : ["ws:", "wss:"],
-            ...supabaseOrigins,
-            "https://identitytoolkit.googleapis.com",
-            "https://securetoken.googleapis.com",
-            "https://firebaseinstallations.googleapis.com",
-            "https://firebaselogging-pa.googleapis.com",
-            "https://www.googleapis.com"
-          ],
-          workerSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          frameAncestors: ["'self'"]
-        }
-      },
-      crossOriginEmbedderPolicy: false,
-      strictTransportSecurity: isProd ? { maxAge: 31536e3, includeSubDomains: true } : false
-    })
-  );
+  app.use(helmet({ frameguard: false, contentSecurityPolicy: { useDefaults: true, directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", ...isProd ? [] : ["'unsafe-inline'"]], styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"], fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"], imgSrc: ["'self'", "data:", "blob:", "https:"], connectSrc: ["'self'", ...isProd ? [] : ["ws:", "wss:"], ...supabaseOrigins, "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firebaseinstallations.googleapis.com", "https://firebaselogging-pa.googleapis.com", "https://www.googleapis.com"], workerSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'self'"] } }, crossOriginEmbedderPolicy: false, strictTransportSecurity: isProd ? { maxAge: 31536e3, includeSubDomains: true } : false }));
   app.use(corsMiddleware);
   app.use(globalLimiter);
-  app.use(
-    express2.json({
-      limit: "10mb",
-      verify: (req, _res, buf) => {
-        req.rawBody = buf.toString("utf8");
-      }
-    })
-  );
+  app.use(express2.json({ limit: "10mb", verify: (req, _res, buf) => {
+    req.rawBody = buf.toString("utf8");
+  } }));
   app.use(express2.urlencoded({ extended: true, limit: "10mb" }));
-  const editableCaseFields = /* @__PURE__ */ new Set([
-    "title",
-    "clientName",
-    "clientEmail",
-    "clientPhone",
-    "clientCpf",
-    "vehicle",
-    "infraction",
-    "applicant",
-    "nominatedDriver",
-    "company",
-    "processNumbers",
-    "specificFacts",
-    "evidence",
-    "ocrAuxiliaryData",
-    "commercialOfferId",
-    "serviceType"
-  ]);
+  const editableCaseFields = /* @__PURE__ */ new Set(["title", "clientName", "clientEmail", "clientPhone", "clientCpf", "vehicle", "infraction", "applicant", "nominatedDriver", "company", "processNumbers", "specificFacts", "evidence", "ocrAuxiliaryData", "commercialOfferId", "serviceType"]);
   app.use("/api", (req, _res, next) => {
     if (req.method !== "PUT") return next();
     const match = req.path.match(/^\/cases\/([^/]+)$/);
     if (!match) return next();
-    const caseId = decodeURIComponent(match[1]);
-    const existingRow = databaseRows.get(caseId);
+    const existingRow = databaseRows.get(decodeURIComponent(match[1]));
     if (!existingRow || !req.body || typeof req.body !== "object" || Array.isArray(req.body)) return next();
     const existingDomain = CanonicalMapper.rowToDomain(existingRow);
     const sanitized = {};
-    for (const field of editableCaseFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
-    }
-    req.body = {
-      ...existingDomain,
-      ...sanitized,
-      id: existingDomain.id,
-      userId: existingDomain.userId,
-      status: existingDomain.status,
-      currentStage: existingDomain.currentStage,
-      isPaid: existingDomain.isPaid,
-      paidAt: existingDomain.paidAt,
-      payment: existingDomain.payment,
-      analysis: existingDomain.analysis,
-      defenseDraft: existingDomain.defenseDraft,
-      documentGenerationStatus: existingDomain.documentGenerationStatus,
-      protocolInfo: existingDomain.protocolInfo,
-      submissionInstructions: existingDomain.submissionInstructions,
-      timeline: existingDomain.timeline,
-      claimToken: existingDomain.claimToken,
-      isAnonymous: existingDomain.isAnonymous,
-      createdAt: existingDomain.createdAt,
-      updatedAt: existingDomain.updatedAt
-    };
-    return next();
+    for (const field of editableCaseFields) if (Object.prototype.hasOwnProperty.call(req.body, field)) sanitized[field] = req.body[field];
+    req.body = { ...existingDomain, ...sanitized, id: existingDomain.id, userId: existingDomain.userId, status: existingDomain.status, currentStage: existingDomain.currentStage, isPaid: existingDomain.isPaid, paidAt: existingDomain.paidAt, payment: existingDomain.payment, analysis: existingDomain.analysis, defenseDraft: existingDomain.defenseDraft, documentGenerationStatus: existingDomain.documentGenerationStatus, protocolInfo: existingDomain.protocolInfo, submissionInstructions: existingDomain.submissionInstructions, timeline: existingDomain.timeline, claimToken: existingDomain.claimToken, isAnonymous: existingDomain.isAnonymous, createdAt: existingDomain.createdAt, updatedAt: existingDomain.updatedAt };
+    next();
   });
   app.use("/api/payments", (req, res, next) => {
-    const isPublicPriceLookup = req.method === "GET" && req.path === "/resolve-price";
-    const isGatewayWebhook = req.path.startsWith("/webhooks/");
-    if (isPublicPriceLookup || isGatewayWebhook) return next();
+    if (req.method === "GET" && req.path === "/resolve-price" || req.path.startsWith("/webhooks/")) return next();
     return authenticateToken(req, res, next);
   });
   app.use("/api/admin", admin_default);
   app.use("/api/admin/commercial", authenticateToken, requireAdmin, commercial_default);
   app.use("/api/commercial", authenticateToken, (req, res, next) => {
-    if (isProd && req.body?.userId !== void 0 && req.body.userId !== req.user?.id) {
-      return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
-    }
+    if (isProd && req.body?.userId !== void 0 && req.body.userId !== req.user?.id) return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
     next();
   }, commercial_default);
   app.use("/api/communication", authenticateToken, (req, res, next) => {
-    const isSendAction = req.method === "POST" && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
-    if (!isSendAction || req.user?.role === "admin") return next();
+    const send = req.method === "POST" && /^\/whatsapp\/(send|send-document|send-media)$/.test(req.path);
+    if (!send || req.user?.role === "admin") return next();
     const caseId = req.body?.caseId;
-    if (!caseId || typeof caseId !== "string") {
-      return res.status(403).json({ error: "caseId \xE9 obrigat\xF3rio para envio de WhatsApp por usu\xE1rio n\xE3o administrador." });
-    }
-    const row = databaseRows.get(caseId);
-    const ownerId = row?.user_id;
-    if (!row || !ownerId || ownerId !== req.user?.id) {
-      return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para enviar mensagens neste caso." });
-    }
-    return next();
+    const row = caseId ? databaseRows.get(caseId) : void 0;
+    if (!caseId || !row || row.user_id !== req.user?.id) return res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para enviar mensagens neste caso." });
+    next();
   });
   app.use("/api/marketing", (req, res, next) => {
-    if (req.method === "GET" && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) {
-      return authenticateToken(req, res, (err) => {
-        if (err) return next(err);
-        return requireAdmin(req, res, next);
-      });
-    }
-    return next();
+    if (req.method === "GET" && /^\/(?:inbox\/conversations|inbox\/stats|automation\/leads|automation\/export)/.test(req.path)) return authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next));
+    next();
   });
-  app.use("/api/marketing", (req, res, next) => {
-    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
+  app.use("/api/marketing", (req, res, next) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method) ? authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next)) : next());
   app.use("/api/notifications", (req, res, next) => {
     if (req.method === "GET" && req.path === "/vapid-key") return next();
     return authenticateToken(req, res, (err) => {
       if (err) return next(err);
       if (req.user?.role !== "admin") {
-        const requestedUserId = req.body?.userId;
-        const requestedEmail = req.body?.userEmail || req.body?.email;
-        if (requestedUserId !== void 0 && requestedUserId !== req.user?.id) {
-          return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
-        }
-        if (requestedEmail !== void 0 && requestedEmail !== req.user?.email) {
-          return res.status(403).json({ error: "Email n\xE3o corresponde ao usu\xE1rio autenticado." });
-        }
+        if (req.body?.userId !== void 0 && req.body.userId !== req.user?.id) return res.status(403).json({ error: "userId n\xE3o corresponde ao usu\xE1rio autenticado." });
+        if (req.body?.userEmail !== void 0 && req.body.userEmail !== req.user?.email) return res.status(403).json({ error: "Email n\xE3o corresponde ao usu\xE1rio autenticado." });
       }
       next();
     });
   });
   app.use("/api", (req, res, next) => {
-    const metaAdminPath = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights)$/.test(req.path);
-    if (!metaAdminPath) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
+    const privileged = /^\/(?:integrations\/meta|meta)\/(?:debug-app|debug-token|connect|select-targets|disconnect|publish|insights|tests|webhooks\/history|webhook\/history)$/.test(req.path);
+    if (!privileged) return next();
+    return authenticateToken(req, res, (err) => err ? next(err) : requireAdmin(req, res, next));
   });
-  app.use("/api", (req, res, next) => {
-    const metaAdminAuxPath = /^\/(?:integrations\/meta|meta)\/(?:webhooks\/history|tests)$/.test(req.path);
-    if (!metaAdminAuxPath) return next();
-    return authenticateToken(req, res, (err) => {
-      if (err) return next(err);
-      return requireAdmin(req, res, next);
-    });
-  });
-  app.use("/api/agents", agents_default);
-  app.use("/api/monitoring", monitoring_default);
-  app.use("/api/settings", settings_default);
-  app.use("/api/logs", logs_default);
-  app.use("/api/media", media_default);
-  app.use("/api/integrations", meta_default);
-  app.use("/api", meta_default);
-  app.use("/api/marketing", marketing_default);
-  app.use("/api/communication", whatsapp_default);
-  app.use("/api", whatsapp_default);
-  app.use("/api/ocr", ocr_default);
-  app.use("/api/payments", payments_default);
-  app.use("/api/knowledge", knowledge_default);
-  app.use("/api/notifications", notifications_default);
-  app.use("/api/auth", auth_default);
+  app.use("/api/admin", strictLimiter);
   app.use("/api", health_default);
-  app.use("/api", cases_default);
+  app.use("/api", auth_default);
   app.use("/api", audit_default);
+  app.use("/api", cases_default);
+  app.use("/api", ai_default);
+  app.use("/api", knowledge_default);
   app.use("/api", onboarding_default);
+  app.use("/api", onboarding_v2_default);
   app.use("/api", transit_default);
   app.use("/api", governance_default);
   app.use("/api", analytics_default);
-  app.use("/api/ai", strictLimiter);
-  app.use("/api/auth", strictLimiter);
-  app.use("/api", ai_default);
   app.use("/api", sync_default);
+  app.use("/api", meta_default);
+  app.use("/api", marketing_automation_default);
+  app.use("/api", scrape_default);
+  app.use("/api", commercial_default);
+  app.use("/api", monitoring_default);
+  app.use("/api", settings_default);
+  app.use("/api", logs_default);
+  app.use("/api", marketing_default);
+  app.use("/api", agents_default);
+  app.use("/api", whatsapp_default);
+  app.use("/api", ocr_default);
+  app.use("/api", payments_default);
+  app.use("/api", media_default);
+  app.use("/api", notifications_default);
   app.use("/api/documenso", documenso_default);
-  app.use("/api", (_req, res) => {
-    res.status(404).json({ error: "Endpoint n\xE3o encontrado" });
+  app.get("/api/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
+  app.get("/api/marketing/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
+  app.use((err, _req, res, _next) => {
+    console.error("[api] unhandled error", err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: "Internal server error" });
   });
   return app;
 }

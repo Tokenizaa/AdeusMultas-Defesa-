@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
-import { databaseRows } from '../app';
+import { databaseRows } from '../stores';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { ocrService } from '../services/ocr-service';
@@ -38,7 +38,7 @@ router.post('/onboarding-v2/draft', async (req, res) => {
     if (!payload?.vehicle?.plate || !payload.vehicle.brandModel || !payload.infraction?.aitNumber || !payload.infraction.infractionCode || !payload.infraction.autuadorBody) return res.status(400).json({ error: 'Dados mínimos do caso incompletos.', code: 'DRAFT_MINIMUM_DATA_REQUIRED' });
     const id = `case_${crypto.randomUUID()}`; const claimToken = crypto.randomBytes(32).toString('hex');
     const domain = CanonicalMapper.onboardingPayloadToDomain(payload, id);
-    const caseDomain: CaseDomain = { ...domain, userId: req.user?.id, isAnonymous: !req.user?.id, claimToken, status: 'rascunho', currentStage: 0, createdAt: domain.createdAt, updatedAt: new Date().toISOString() };
+    const caseDomain: CaseDomain = { ...domain, userId: req.user?.id, isAnonymous: !req.user?.id, claimToken, status: 'draft', currentStage: 1, createdAt: domain.createdAt, updatedAt: new Date().toISOString() };
     const row = CanonicalMapper.domainToRow(caseDomain); await databaseRows.set(id, row);
     return res.status(201).json({ case: CanonicalMapper.rowToDomain(row), claimToken });
   } catch (error) { console.error('[onboarding-v2] create draft', error); return res.status(500).json({ error: 'Falha ao criar caso.' }); }
@@ -75,12 +75,12 @@ router.post('/onboarding-v2/cases/:id/evidence', async (req, res) => {
 
 router.post('/onboarding-v2/cases/:id/analysis', async (req, res) => { const row = getAuthorizedCase(req, res, req.params.id); if (!row) return; const domain = CanonicalMapper.rowToDomain(row); if (!domain.infraction?.aitNumber || !domain.infraction?.infractionCode) return res.status(400).json({ error: 'Infração incompleta para análise.' }); const analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction); const updated: CaseDomain = { ...domain, analysis, status: 'analisado', currentStage: 3, updatedAt: new Date().toISOString() }; await databaseRows.set(domain.id, CanonicalMapper.domainToRow(updated)); return res.json({ status: 'completed', analysis }); });
 
-router.put('/onboarding-v2/cases/:id/qualification', (req, res) => {
+router.put('/onboarding-v2/cases/:id/qualification', async (req, res) => {
   const row = getAuthorizedCase(req, res, req.params.id); if (!row) return;
   const applicant = req.body?.applicant as CaseApplicantData | undefined;
   if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressNeighborhood || !applicant.addressZipCode || !applicant.addressCityState) return res.status(400).json({ error: 'Dados de qualificação incompletos.', code: 'QUALIFICATION_REQUIRED' });
   if (!/^\d{11}$/.test(applicant.applicantCpf.replace(/\D/g, ''))) return res.status(400).json({ error: 'CPF inválido.', code: 'QUALIFICATION_CPF_INVALID' });
-  const current = CanonicalMapper.rowToDomain(row); const updated: CaseDomain = { ...current, applicant: { ...applicant, applicantCpf: applicant.applicantCpf.replace(/\D/g, '') }, status: 'qualificado', currentStage: 5, updatedAt: new Date().toISOString() };
+  const current = CanonicalMapper.rowToDomain(row); const updated: CaseDomain = { ...current, applicant: { ...applicant, applicantCpf: applicant.applicantCpf.replace(/\D/g, '') }, status: 'analisado', currentStage: 4, updatedAt: new Date().toISOString() };
   await databaseRows.set(current.id, CanonicalMapper.domainToRow(updated)); return res.json({ case: updated });
 });
 

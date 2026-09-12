@@ -127,6 +127,10 @@ export class ScrapeWorkerService {
    * Enfileira um novo job de scraping e retorna o registro inicial.
    */
   async createJob(config: SearchConfig): Promise<ScrapeJobRecord> {
+    if (!supabaseAdmin) {
+      throw new Error('ScrapeWorker: supabaseAdmin não configurado — impossível criar job.');
+    }
+
     const id = randomUUID();
     const now = new Date().toISOString();
 
@@ -264,6 +268,11 @@ export class ScrapeWorkerService {
    */
   start(): void {
     if (this.fallbackTimer) return;
+
+    if (!supabaseAdmin) {
+      logger.warn('ScrapeWorker: supabaseAdmin não configurado — background loop NÃO iniciado.');
+      return;
+    }
 
     this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
     // Dispara checagem imediata

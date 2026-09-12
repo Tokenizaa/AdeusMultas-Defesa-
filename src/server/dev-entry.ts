@@ -16,7 +16,7 @@ import { startDevLifecycle } from './lifecycle/dev-lifecycle';
 const port = Number(process.env.PORT || 3000);
 
 async function main() {
-  startDevLifecycle();
+  await startDevLifecycle();
 
   const app = createApp();
   const vite = await createViteServer({
