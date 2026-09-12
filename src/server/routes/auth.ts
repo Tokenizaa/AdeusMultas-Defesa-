@@ -8,9 +8,9 @@ const router = Router();
 /**
  * GET /api/auth/me
  * Returns authenticated user info with role from user_profiles (using service_role)
- * Frontend uses this instead of direct Supabase query to avoid RLS issues
+ * Frontend uses this instead of direct Supabase query to avoid RLS issues.
  */
-router.get('/me', authenticateToken, async (req, res) => {
+router.get('/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = req.user;
 
