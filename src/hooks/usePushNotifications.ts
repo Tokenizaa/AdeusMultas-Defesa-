@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../core/auth/AuthContext';
+import { authFetch } from '../lib/authFetch';
 
 export interface AppNotificationItem {
   id: string;
@@ -19,7 +20,7 @@ export function usePushNotifications() {
   const { user } = useAuth();
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
-  const [isSupported, setIsSupported] = useState<boolean>(false);
+  [isSupported, setIsSupported] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<AppNotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
@@ -43,7 +44,7 @@ export function usePushNotifications() {
   const fetchNotifications = useCallback(async () => {
     try {
       // Auth token identifies the user — no email needed in URL
-      const res = await fetch(`/api/notifications/history`);
+      const res = await authFetch(`/api/notifications/history`);
       if (res.ok) {
         const data = await res.json();
         const list: AppNotificationItem[] = data.notifications || [];
@@ -92,7 +93,7 @@ export function usePushNotifications() {
         }
 
         // Register with server
-        await fetch('/api/notifications/subscribe', {
+        await authFetch('/api/notifications/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -151,7 +152,7 @@ export function usePushNotifications() {
       } catch (err) {
         console.warn('[Push Hook] Falha ao disparar notificação local:', err);
       }
-    },
+    }
     []
   );
 
@@ -162,7 +163,7 @@ export function usePushNotifications() {
     setLoading(true);
     try {
       // 1. Request via Backend
-      const res = await fetch('/api/notifications/send-test', {
+      const res = await authFetch('/api/notifications/send-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,7 +196,7 @@ export function usePushNotifications() {
    */
   const markAllAsRead = useCallback(async () => {
     try {
-      await fetch('/api/notifications/mark-read', {
+      await authFetch('/api/notifications/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userEmail: user?.email }),
