@@ -1,5 +1,7 @@
 name: Deploy Adeus Multa to Cloudflare
 
+# Cloudflare production deploy workflow; changes to this file intentionally trigger a deploy.
+
 on:
   push:
     branches: [main]
