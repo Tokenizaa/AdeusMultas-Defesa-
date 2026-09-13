@@ -25,6 +25,7 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+
   test-e2e:
     runs-on: ubuntu-latest
     needs: test-unit
@@ -42,3 +43,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run E2E (Playwright)
         run: npm test
+
+  production-golden-path:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[PHASE4-RUN]')
+    uses: ./.github/workflows/golden-path-production.yml
+    secrets: inherit

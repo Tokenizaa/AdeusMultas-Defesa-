@@ -102,174 +102,31 @@ export class CaseRepository {
   private rows: Map<string, CaseRow> = new Map();
   private client: SupabaseClient<Database> | null = null;
 
-  private getClient(): SupabaseClient<Database> | null {
-    if (this.client) return this.client;
-    this.client = getSupabaseServerClient();
-    return this.client;
-  }
+  private getClient(): SupabaseClient<Database> | null { if (this.client) return this.client; this.client = getSupabaseServerClient(); return this.client; }
+  get size(): number { return this.rows.size; }
+  get(id: string): CaseRow | undefined { return this.rows.get(id); }
 
-  get size(): number {
-    return this.rows.size;
-  }
-
-  get(id: string): CaseRow | undefined {
-    return this.rows.get(id);
-  }
-
-  /**
-   * Serverless-safe read for canonical onboarding routes. The synchronous Map
-   * remains a hot cache, but correctness never depends on a warm Lambda.
-   */
   async getPersisted(id: string): Promise<CaseRow | undefined> {
-    const cached = this.rows.get(id);
-    if (cached) return cached;
-
+    const cached = this.rows.get(id); if (cached) return cached;
     const client = this.getClient();
-    if (!client) {
-      if (allowInMemoryPersistence()) return undefined;
-      throw new Error('CaseRepository: Supabase client não configurado — leitura persistente obrigatória.');
-    }
-
-    const { data: byRef, error: refError } = await client
-      .from('cases')
-      .select('*')
-      .eq('app_ref', id)
-      .maybeSingle();
-
+    if (!client) { if (allowInMemoryPersistence()) return undefined; throw new Error('CaseRepository: Supabase client não configurado — leitura persistente obrigatória.'); }
+    const { data: byRef, error: refError } = await client.from('cases').select('*').eq('app_ref', id).maybeSingle();
     if (refError) throw new Error(`Falha ao carregar caso ${id}: ${refError.message}`);
-
     let row = byRef ? databaseRowToCaseRow(byRef) : undefined;
-    if (!row && isUuid(id)) {
-      const { data, error } = await client.from('cases').select('*').eq('id', id).maybeSingle();
-      if (error) throw new Error(`Falha ao carregar caso ${id}: ${error.message}`);
-      row = data ? databaseRowToCaseRow(data) : undefined;
-    }
-
+    if (!row && isUuid(id)) { const { data, error } = await client.from('cases').select('*').eq('id', id).maybeSingle(); if (error) throw new Error(`Falha ao carregar caso ${id}: ${error.message}`); row = data ? databaseRowToCaseRow(data) : undefined; }
     if (row) this.rows.set(row.id, row);
     return row;
   }
 
-  values(): IterableIterator<CaseRow> {
-    return this.rows.values();
-  }
-
-  async set(id: string, row: CaseRow): Promise<void> {
-    const payload = this.toPayload(row);
-    await this.persist(id, payload);
-    this.rows.set(id, row);
-  }
+  values(): IterableIterator<CaseRow> { return this.rows.values(); }
+  async set(id: string, row: CaseRow): Promise<void> { const payload = this.toPayload(row); await this.persist(id, payload); this.rows.set(id, row); }
 
   private toPayload(row: CaseRow): Database['public']['Tables']['cases']['Insert'] {
-    return {
-      id: domainIdToUuid(row.id) ?? undefined,
-      app_ref: isUuid(row.id) ? null : row.id,
-      title: row.title,
-      client_name: row.client_name,
-      client_email: row.client_email ?? null,
-      client_phone: row.client_phone ?? null,
-      client_cpf: row.client_cpf ?? null,
-      user_id: isUuid(row.user_id) ? row.user_id : null,
-      status: row.status,
-      current_stage: row.current_stage,
-      service_type: row.service_type,
-      vehicle_plate: row.vehicle_plate,
-      vehicle_brand_model: row.vehicle_brand_model,
-      vehicle_renavam: row.vehicle_renavam ?? null,
-      vehicle_chassis: row.vehicle_chassis ?? null,
-      vehicle_year: row.vehicle_year ?? null,
-      vehicle_color: row.vehicle_color ?? null,
-      ait_number: row.ait_number,
-      infraction_code: row.infraction_code ?? null,
-      infraction_description: row.infraction_description,
-      ctb_article: row.ctb_article,
-      severity: row.severity,
-      points: row.points,
-      fine_amount: row.fine_amount,
-      autuador_body: row.autuador_body,
-      date_time: toDate(row.date_time),
-      location: row.location ?? null,
-      speed_limit: toNumeric(row.speed_limit),
-      measured_speed: toNumeric(row.measured_speed),
-      considered_speed: toNumeric(row.considered_speed),
-      radar_equipment_id: row.radar_equipment_id ?? null,
-      inmetro_aferition_date: row.inmetro_aferition_date ?? null,
-      notification_expedition_date: row.notification_expedition_date ?? null,
-      defense_deadline: row.defense_deadline ?? null,
-      formal_flaws_json: parseJson(row.formal_flaws_json, []),
-      analysis_json: parseJson(row.analysis_json, null),
-      defense_draft_json: parseJson(row.defense_draft_json, null),
-      protocol_info_json: parseJson(row.protocol_info_json, null),
-      ocr_auxiliary_json: parseJson((row as any).ocr_auxiliary_json, null),
-      evidence_json: parseJson(row.evidence_json, null),
-      timeline_json: parseJson(row.timeline_json, []),
-      is_anonymous: row.is_anonymous,
-      claim_token: row.claim_token ?? null,
-      is_paid: row.is_paid,
-      paid_at: toDate(row.paid_at),
-      created_at: toDate(row.created_at),
-      updated_at: toDate(row.updated_at),
-    } as Database['public']['Tables']['cases']['Insert'];
+    return { id:domainIdToUuid(row.id) ?? undefined, app_ref:isUuid(row.id) ? null : row.id, title:row.title, client_name:row.client_name, client_email:row.client_email ?? null, client_phone:row.client_phone ?? null, client_cpf:row.client_cpf ?? null, user_id:isUuid(row.user_id) ? row.user_id : null, status:row.status, current_stage:row.current_stage, service_type:row.service_type, vehicle_plate:row.vehicle_plate, vehicle_brand_model:row.vehicle_brand_model, vehicle_renavam:row.vehicle_renavam ?? null, vehicle_chassis:row.vehicle_chassis ?? null, vehicle_year:row.vehicle_year ?? null, vehicle_color:row.vehicle_color ?? null, ait_number:row.ait_number, infraction_code:row.infraction_code ?? null, infraction_description:row.infraction_description, ctb_article:row.ctb_article, severity:row.severity, points:row.points, fine_amount:row.fine_amount, autuador_body:row.autuador_body, date_time:toDate(row.date_time), location:row.location ?? null, speed_limit:toNumeric(row.speed_limit), measured_speed:toNumeric(row.measured_speed), considered_speed:toNumeric(row.considered_speed), radar_equipment_id:row.radar_equipment_id ?? null, inmetro_aferition_date:row.inmetro_aferition_date ?? null, notification_expedition_date:row.notification_expedition_date ?? null, defense_deadline:row.defense_deadline ?? null, formal_flaws_json:parseJson(row.formal_flaws_json, []), analysis_json:parseJson(row.analysis_json, null), defense_draft_json:parseJson(row.defense_draft_json, null), protocol_info_json:parseJson(row.protocol_info_json, null), ocr_auxiliary_json:parseJson((row as any).ocr_auxiliary_json, null), evidence_json:parseJson(row.evidence_json, null), applicant_json:parseJson((row as any).applicant_json, null), timeline_json:parseJson(row.timeline_json, []), is_anonymous:row.is_anonymous, claim_token:row.claim_token ?? null, is_paid:row.is_paid, paid_at:toDate(row.paid_at), created_at:toDate(row.created_at), updated_at:toDate(row.updated_at) } as any;
   }
 
-  private async persist(id: string, payload: Database['public']['Tables']['cases']['Insert']): Promise<void> {
-    const client = this.getClient();
+  private async persist(id:string,payload:Database['public']['Tables']['cases']['Insert']):Promise<void>{ const client=this.getClient(); if(!client){ if(allowInMemoryPersistence()){logger.warn('supabase','case_repository','persist',`Supabase não configurado — caso ${id} persiste apenas em memória porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`,{caseId:id,persistenceResult:'explicit_in_memory_fallback'}); return;} throw new Error(`CaseRepository: Supabase client não configurado — persistência real obrigatória para o caso ${id}. Para testes unitários/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.`); } const {error}=await client.from('cases').upsert(payload); if(error){logger.error('supabase','case_repository','persist',`Falha ao persistir caso ${id}: ${error.message}`,{caseId:id,status:'failed',errorCode:'SUPABASE_UPSERT'}); eventBus.publish(EventTopics.AUDIT_LOG_RECORDED,{type:'persistence_failure',caseId:id,errorCode:'SUPABASE_UPSERT',message:error.message},'case_repository'); throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);} }
 
-    if (!client) {
-      if (allowInMemoryPersistence()) {
-        logger.warn('supabase', 'case_repository', 'persist', `Supabase não configurado — caso ${id} persiste apenas em memória porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
-          caseId: id,
-          persistenceResult: 'explicit_in_memory_fallback',
-        });
-        return;
-      }
-
-      throw new Error(
-        `CaseRepository: Supabase client não configurado — persistência real obrigatória para o caso ${id}. ` +
-        'Para testes unitários/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.'
-      );
-    }
-
-    const { error } = await client.from('cases').upsert(payload);
-    if (error) {
-      logger.error('supabase', 'case_repository', 'persist', `Falha ao persistir caso ${id}: ${error.message}`, {
-        caseId: id,
-        status: 'failed',
-        errorCode: 'SUPABASE_UPSERT',
-      });
-      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
-        type: 'persistence_failure',
-        caseId: id,
-        errorCode: 'SUPABASE_UPSERT',
-        message: error.message,
-      }, 'case_repository');
-      throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
-    }
-  }
-
-  async loadAllFromSupabase(): Promise<CaseRow[]> {
-    const client = this.getClient();
-
-    if (!client) {
-      if (allowInMemoryPersistence()) return [];
-      throw new Error('CaseRepository: Supabase client não configurado — cold start não pode ser considerado persistente.');
-    }
-
-    const { data, error } = await client
-      .from('cases')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('supabase', 'case_repository', 'loadAll', `Falha ao carregar casos: ${error.message}`, {
-        errorCode: 'SUPABASE_LOAD_ALL',
-      });
-      throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
-    }
-
-    const rows: CaseRow[] = (data || []).map(databaseRowToCaseRow);
-    for (const row of rows) this.rows.set(row.id, row);
-    return rows;
-  }
+  async loadAllFromSupabase():Promise<CaseRow[]>{ const client=this.getClient(); if(!client){if(allowInMemoryPersistence())return [];throw new Error('CaseRepository: Supabase client não configurado — cold start não pode ser considerado persistente.');} const {data,error}=await client.from('cases').select('*').order('created_at',{ascending:false}); if(error)throw new Error(`Falha ao carregar casos persistidos: ${error.message}`); const rows=(data||[]).map(databaseRowToCaseRow); for(const row of rows)this.rows.set(row.id,row); return rows; }
 }
-
 export const caseRepository = new CaseRepository();
