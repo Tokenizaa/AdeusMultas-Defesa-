@@ -70,4 +70,12 @@ export const RESOLUTIONS_DB: ResolutionModel[] = [
     keyArticles: 'Item 4.1 (Verificação inicial e periódica com periodicidade improrrogável de 12 meses).',
     impactOnDefenses: 'Regula o laudo técnico do IPEM/INMETRO obrigatório para validação da velocidade apurada.',
   },
+  {
+    number: 'Resolução CONTRAN nº 940/2022',
+    body: 'CONTRAN',
+    year: 2022,
+    subject: 'Estabelece critérios para a fiscalização de trânsito e dá outras providências, regulamentando o uso de equipamentos eletrônicos.',
+    keyArticles: 'Art. 1º a 15º (Fiscalização eletrônica, homologação INMETRO, margem de tolerância, sinalização, comprovação da infração); Anexo I (Formulário de autuação eletrônica); Anexo II (Critérios de instalação de equipamentos).',
+    impactOnDefenses: 'Complementa a Res. 798/2020 para fiscalização eletrônica. Estabelece requisitos de homologação, sinalização e margem de tolerância para equipamentos de fiscalização automatizada. A ausência de homologação ou laudo INMETRO válido invalida a autuação.',
+  },
 ];

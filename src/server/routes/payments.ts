@@ -1,9 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'node:crypto';
 import { pagBankIntegration } from '../integrations/pagbank';
 import { gatewayManager, processGatewayWebhook } from '../integrations/gateway';
 import type { GatewayId } from '../integrations/gateway';
 import { commercialService } from '../commercial/commercial-service';
-import { databaseRows, auditLogs } from '../app';
+import { databaseRows, auditLogs } from '../stores';
 import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
@@ -166,6 +167,38 @@ function validatePayerIdentity(name: unknown, email: unknown, cpf: unknown): { n
   return { name: normalizedName, email: normalizedEmail, cpf: normalizedCpf };
 }
 
+/**
+ * Autorização do pagamento: o pagador só pode criar pedido PIX se o caso
+ * pertence à sessão autenticada OU se o claim token válido do caso é
+ * apresentado. NUNCA confia em userId/role/caseId enviados pelo cliente como
+ * fonte de identidade — o caso é resolvido do repositório e cruzado com a
+ * sessão real (req.user) ou com o claim token armazenado (comparação em tempo
+ * constante). Admin segue autorizado por override.
+ */
+function canPayCase(req: Request, caseId: string): boolean {
+  const user = (req as any).user;
+  if (user?.role === 'admin') return true;
+  if (user?.id) {
+    const row = databaseRows.get(caseId);
+    if (!row) return false; // caso inexistente → negar (FAIL CLOSED)
+    return row.user_id === user.id;
+  }
+  // Anônimo/claim: exige claim token válido do caso.
+  const provided = req.header('X-Claim-Token');
+  const row = databaseRows.get(caseId);
+  if (typeof provided !== 'string' || !provided || !row?.claim_token) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(row.claim_token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function assertCanPayCase(req: Request, res: Response, caseId: string): boolean {
+  if (!caseId) return true; // sem caseId o fluxo legado segue; sem caso não há IDOR
+  if (canPayCase(req, caseId)) return true;
+  res.status(403).json({ error: 'Você não tem permissão para pagar este caso.' });
+  return false;
+}
+
 function prodAuth(req: Request, res: Response, next: NextFunction): void {
   if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     // Produção: pagar/consultar status exige Supabase JWT (qualquer role — admin
@@ -285,11 +318,11 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
 
-    // Autorização: usuário autenticado paga SOMENTE o próprio caso (403 p/ caso alheio).
-    if (caseId && typeof caseId === 'string') {
-      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), (req as any).user);
-      if (denied) return res.status(denied.status).json({ error: denied.error });
-    }
+    // Autorização canônica: caso do usuário autenticado ou claim token válido.
+    // Em PAYMENT_MODE=production o prodAuth já exige JWT real do Supabase;
+    // aqui garantimos que o caseId pertence à sessão (ou ao claim) — nunca
+    // ao userId enviado no body.
+    if (!assertCanPayCase(req, res, caseId)) return;
 
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
@@ -439,11 +472,8 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
 
     const gateway = gatewayManager.getActiveGateway();
 
-    // Autorização: usuário autenticado paga SOMENTE o próprio caso (403 p/ caso alheio).
-    if (caseId && typeof caseId === 'string') {
-      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), (req as any).user);
-      if (denied) return res.status(denied.status).json({ error: denied.error });
-    }
+    // Autorização canônica do caso (sessão ou claim token).
+    if (!assertCanPayCase(req, res, caseId)) return;
 
     if (gateway.id !== 'pagbank') {
       return res.status(400).json({
@@ -625,7 +655,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
             description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
             timestamp: new Date().toISOString(),
             type: 'defense',
-          });
+          );
         } catch (defenseError: any) {
           // Não-bloqueante: mantém o caso pago mesmo se a geração falhar.
           logger.error('payments', 'pagbank', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
@@ -791,7 +821,7 @@ router.post('/simulate-payment', async (req: Request, res: Response) => {
         description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação de pagamento simulado.`,
         timestamp: new Date().toISOString(),
         type: 'defense',
-      });
+      );
     } catch (defErr: any) {
       logger.warn('payments', 'simulation', 'defense_generation', 'Defense draft generation warning', {
         error: defErr?.message,

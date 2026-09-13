@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
-import { caseRepository } from './db/case-repository';
+import { databaseRows, auditLogs } from './stores';
 import type { AuditLogEntry } from '../types';
 import { CanonicalMapper } from '../core/mappers/canonical-mapper';
 import { authenticateToken, requireAdmin } from './middleware/auth-middleware';
@@ -28,6 +28,7 @@ import healthRoutes from './routes/health';
 import casesRoutes from './routes/cases';
 import auditRoutes from './routes/audit';
 import onboardingRoutes from './routes/onboarding';
+import onboardingV2Routes from './routes/onboarding-v2';
 import transitRoutes from './routes/transit';
 import governanceRoutes from './routes/governance';
 import analyticsRoutes from './routes/analytics';
@@ -37,8 +38,7 @@ import authRoutes from './routes/auth';
 import documensoRoutes from './routes/documenso';
 import { metaIntegration } from './integrations/meta';
 
-export const databaseRows = caseRepository;
-export const auditLogs: AuditLogEntry[] = [];
+export { databaseRows, auditLogs };
 
 export function createApp() {
   const app = express();
@@ -104,6 +104,7 @@ export function createApp() {
   app.use('/api', aiRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api', onboardingRoutes);
+  app.use('/api', onboardingV2Routes);
   app.use('/api', transitRoutes);
   app.use('/api', governanceRoutes);
   app.use('/api', analyticsRoutes);

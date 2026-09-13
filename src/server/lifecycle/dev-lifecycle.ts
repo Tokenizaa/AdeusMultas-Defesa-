@@ -10,13 +10,18 @@ import { contranCollector } from '../services/legislation-collector';
 import { marketingOrchestrator } from '../workers/marketing-orchestrator.worker';
 import { startMetaTokenRenewal } from '../workers/meta-token-renewal.worker';
 import { scrapeWorker } from '../services/scrape-worker';
+import { initializeWorkers } from './worker-manager';
 
 let started = false;
 
-export function startDevLifecycle(): void {
+export async function startDevLifecycle(): Promise<void> {
   if (process.env.NODE_ENV === 'production' || started) return;
   started = true;
 
+  // Initialize BullMQ workers (Redis + queues)
+  await initializeWorkers();
+
+  // Existing lifecycle
   contranCollector.start();
   marketingOrchestrator.start();
   startMetaTokenRenewal();

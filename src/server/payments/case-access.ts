@@ -3,12 +3,12 @@
  * Autorização de pagamento sobre um caso — decisão pura e testável.
  *
  * Regras:
- * - Sem usuário autenticado → 401 (endpoints de pagamento exigem JWT Supabase em produção).
- * - Admin → liberado (operações administrativas legítimas).
- * - Caso inexistente → liberado (o fluxo do wizard pode criar a ordem antes de persistir o caso;
- *   a vinculação case↔order acontece no webhook via reference_id).
+ * - Sem usuário autenticado → 401.
+ * - Admin → liberado para operações administrativas legítimas.
+ * - Caso inexistente → 404.
  * - Dono (user_id canônico == user.id) → liberado.
- * - Caso alheio → 403. NUNCA confia em userId/role vindo do corpo da requisição.
+ * - Caso alheio → 403.
+ * - NUNCA confia em userId/role vindo do corpo da requisição.
  */
 export interface PaymentCaseRowLike {
   user_id?: string;
@@ -27,15 +27,17 @@ export function assertPaymentCaseAccess(
   row: PaymentCaseRowLike | undefined,
   user: PaymentUserLike | undefined
 ): { status: number; error: string } | null {
+  if (!row) return { status: 404, error: 'Caso não encontrado.' };
   if (!user) return { status: 401, error: 'Não autenticado' };
-  if (!row || user.role === 'admin') return null;
-  // Dono = user_id canônico (UUID Supabase) == user.id. Nada de email/identidade do body.
-  return row.user_id === user.id ? null : { status: 403, error: 'Você não tem permissão para pagar este caso.' };
+  if (user.role === 'admin') return null;
+  return row.user_id === user.id
+    ? null
+    : { status: 403, error: 'Você não tem permissão para pagar este caso.' };
 }
 
 /**
- * Resolve a identidade a usar no pagamento/desconto:
- * usuário autenticado > dono do caso > undefined (anônimo em sandbox).
+ * Resolve a identidade a usar no pagamento:
+ * usuário autenticado > dono do caso.
  * Ignora userId/identidade enviados pelo frontend quando o servidor tem fonte melhor.
  */
 export function resolveEffectiveUser(

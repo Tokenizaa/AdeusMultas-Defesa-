@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { databaseRows } from '../app';
+import { databaseRows } from '../stores';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
