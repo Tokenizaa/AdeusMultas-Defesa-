@@ -1,34 +1,18 @@
 {
-  "compatibility_date": "2026-07-27",
+  "compatibility_date": "2026-09-13",
   "main": "index.mjs",
   "assets": {
     "binding": "ASSETS",
     "directory": "dist"
   },
-  "name": "tokenizaa-defesa-f-cil",
+  "name": "adeusmulta",
   "compatibility_flags": ["nodejs_compat"],
   "no_bundle": true,
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     {
-      "pattern": "multa.emprestamais.shop/*",
-      "zone_name": "emprestamais.shop"
-    },
-    {
-      "pattern": "multa.emprestamais.shop/api/webhooks/pagbank",
-      "zone_name": "emprestamais.shop"
-    },
-    {
-      "pattern": "www.multa.emprestamais.shop/api/webhooks/pagbank",
-      "zone_name": "emprestamais.shop"
-    },
-    {
-      "pattern": "multa.emprestamais.shop/api/webhooks/ggpix",
-      "zone_name": "emprestamais.shop"
-    },
-    {
-      "pattern": "www.multa.emprestamais.shop/api/webhooks/ggpix",
-      "zone_name": "emprestamais.shop"
+      "pattern": "adeusmulta.defesai.com.br/*",
+      "zone_name": "defesai.com.br"
     }
   ]
 }

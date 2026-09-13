@@ -1,14 +1,14 @@
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // Proxy do 9Router: /_9router/v1/* -> NINEROUTER_UPSTREAM/v1/*
-    if (url.pathname.startsWith("/_9router/v1/")) {
-      const upstream = new URL(env.NINEROUTER_UPSTREAM);
-      upstream.pathname = url.pathname.replace("/_9router", "");
-      upstream.search = url.search;
+    // Proxy /api/* to backend
+    if (url.pathname.startsWith("/api/")) {
+      const backendUrl = new URL("https://www.defesai.shop");
+      backendUrl.pathname = url.pathname;
+      backendUrl.search = url.search;
 
-      const proxyRequest = new Request(upstream.toString(), {
+      const proxyRequest = new Request(backendUrl.toString(), {
         method: request.method,
         headers: request.headers,
         body: request.body,
@@ -24,7 +24,7 @@ export default {
         });
       } catch (err) {
         return new Response(
-          JSON.stringify({ error: "NINEROUTER_UPSTREAM unavailable", detail: String(err) }),
+          JSON.stringify({ error: "Backend unavailable", detail: String(err) }),
           {
             status: 502,
             headers: { "content-type": "application/json" },
@@ -33,6 +33,7 @@ export default {
       }
     }
 
-    return new Response("DefesAI Worker", { status: 200 });
+    // Serve static assets
+    return env.ASSETS.fetch(request);
   },
 };
