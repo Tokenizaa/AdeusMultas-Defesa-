@@ -4,87 +4,22 @@ import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
+import { commercialRoutes } from './commercial';
 
 const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
-const PROCEDURE_TO_COMMERCIAL: Record<string, string> = {
-  defesa_previa: 'defesa_previa',
-  recurso_jari: 'recurso_jari',
-  recurso_cetran: 'recurso_cetran',
-  suspensao: 'suspensao',
-  cassacao: 'cassacao',
-  indicacao_condutor: 'indicacao_condutor',
-  conversao_advertencia: 'conversao_advertencia',
-  suspensao_cnh: 'suspensao',
-  cassacao_cnh: 'cassacao',
-  processo_suspensao: 'suspensao',
-  processo_cassacao: 'cassacao',
-};
-
-function normalizeServiceType(raw: string): string {
-  const key = raw.toLowerCase().trim();
-  return PROCEDURE_TO_COMMERCIAL[key] ?? key;
-}
-
-function production(env: Env): boolean {
-  return String((env as any).PAYMENT_MODE ?? 'sandbox').toLowerCase() === 'production';
-}
-
 async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?: string, userId?: string) {
-  const normalized = normalizeServiceType(serviceType);
-  if (!normalized) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
-
-  const supabase = createSupabaseAdminClient(env);
-  const { data: pricing, error } = await supabase
-    .from('service_pricings')
-    .select('*')
-    .eq('service_type', normalized)
-    .maybeSingle();
-  if (error) throw error;
-  if (!pricing || pricing.is_active === false) throw new HTTPException(404, { message: `Oferta não encontrada para "${normalized}".` });
-
-  const raw = Number(pricing.promotional_price ?? pricing.standard_price);
-  const base = Number(pricing.standard_price);
-  const amount = Number((raw > 1000 ? raw / 100 : raw).toFixed(2));
-  const standardAmount = Number((base > 1000 ? base / 100 : base).toFixed(2));
-
-  let documentNumber = 1;
-  if (userId) {
-    const { count } = await supabase.from('cases').select('id', { count: 'exact', head: true }).eq('user_id', userId);
-    documentNumber = (count ?? 0) + 1;
+  const request = new Request('https://internal/api/offers/resolve', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ serviceType, couponCode, userId }),
+  });
+  const response = await commercialRoutes.fetch(request, env);
+  const payload = await response.json<any>();
+  if (!response.ok || !payload?.ok || !payload?.data?.offer) {
+    throw new HTTPException(response.status || 502, { message: payload?.error?.message || payload?.reason || 'Oferta comercial indisponível.' });
   }
-
-  const firstDiscount = documentNumber <= 3 ? Number((amount * 0.5).toFixed(2)) : 0;
-  let finalAmount = Number((amount - firstDiscount).toFixed(2));
-  let couponDiscount = 0;
-
-  if (couponCode) {
-    const { data: coupon } = await supabase.from('coupons').select('*').eq('code', couponCode.trim().toUpperCase()).maybeSingle();
-    if (coupon?.is_active) {
-      const value = Number(coupon.discount_value);
-      couponDiscount = coupon.discount_type === 'percentage'
-        ? Number((finalAmount * value / 100).toFixed(2))
-        : Number((value > 1000 ? value / 100 : value).toFixed(2));
-      if (coupon.max_discount_amount) {
-        const max = Number(coupon.max_discount_amount) > 1000 ? Number(coupon.max_discount_amount) / 100 : Number(coupon.max_discount_amount);
-        couponDiscount = Math.min(couponDiscount, max);
-      }
-      couponDiscount = Math.min(couponDiscount, finalAmount);
-      finalAmount = Number(Math.max(0, finalAmount - couponDiscount).toFixed(2));
-    }
-  }
-
-  return {
-    serviceType: normalized,
-    serviceName: pricing.service_name || normalized,
-    baseAmount: standardAmount,
-    promotionDiscount: Number(Math.max(0, standardAmount - amount).toFixed(2)),
-    firstDocumentsDiscount: firstDiscount,
-    couponDiscount,
-    finalAmount,
-    documentNumber,
-    currency: 'BRL',
-  };
+  return payload.data.offer;
 }
 
 async function persistOrder(env: Env, input: {
@@ -98,7 +33,6 @@ async function persistOrder(env: Env, input: {
   gateway: string;
   qrCodeText?: string;
   qrCodeUrl?: string;
-  simulated: boolean;
 }) {
   const supabase = createSupabaseAdminClient(env);
   const { data, error } = await supabase.from('payment_orders').insert({
@@ -113,7 +47,6 @@ async function persistOrder(env: Env, input: {
     qr_code_text: input.qrCodeText ?? null,
     qr_code_url: input.qrCodeUrl ?? null,
     gateway: input.gateway,
-    simulated: input.simulated,
   }).select('*').single();
   if (error) throw error;
   return data;
@@ -136,11 +69,10 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   const user = c.get('user')!;
   const body = await c.req.json<any>().catch(() => ({}));
   if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
-
-  const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
 
+  const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   const referenceId = `defesai_case_${caseId}`;
   const payer = {
     name: body.customerName || 'Condutor DefesAi',
@@ -152,8 +84,8 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     caseId,
     referenceId,
     payer,
-    amountInCents: Math.round(offer.finalAmount * 100),
-    description: `DefesAi - ${offer.serviceName}`,
+    amountInCents: Math.round(Number(offer.finalAmount) * 100),
+    description: `DefesAi - ${offer.name}`,
     webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
   });
 
@@ -163,39 +95,21 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     referenceId,
     gatewayOrderId: order.orderId,
     gatewayTransactionId: order.gatewayTransactionId,
-    amount: offer.finalAmount,
+    amount: Number(offer.finalAmount),
     status: order.status,
     gateway: 'pagbank',
     qrCodeText: order.pixCopyPaste || order.qrCodeText,
     qrCodeUrl: order.qrCodeUrl,
-    simulated: order.simulated,
   });
 
-  return c.json({
-    success: true,
-    order,
-    paymentOrder: record,
-    pixCopyPasteString: order.pixCopyPaste,
-    qrCodeDataUrl: order.qrCodeUrl || undefined,
-    txId: order.gatewayTransactionId,
-    amount: offer.finalAmount,
-    serviceType: offer.serviceType,
-    status: order.status,
-    gateway: 'pagbank',
-    simulated: order.simulated,
-  });
+  return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
 });
 
 routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
   const user = c.get('user')!;
   const txId = c.req.param('txId');
   const supabase = createSupabaseAdminClient(c.env);
-  const { data, error } = await supabase
-    .from('payment_orders')
-    .select('*')
-    .eq('gateway_transaction_id', txId)
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const { data, error } = await supabase.from('payment_orders').select('*').eq('gateway_transaction_id', txId).eq('user_id', user.id).maybeSingle();
   if (error) throw error;
   if (!data) throw new HTTPException(404, { message: 'Ordem não encontrada.' });
   return c.json({ success: true, txId, status: data.status, paidAt: data.paid_at, paymentOrder: data });
@@ -210,19 +124,13 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
 
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
-  if (body.amount !== undefined && Number(body.amount) !== offer.finalAmount) {
-    throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
-  }
+  if (body.amount !== undefined && Number(body.amount) !== Number(offer.finalAmount)) throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
 
   const order = await createCreditCardOrder(c.env as any, {
     caseId,
     referenceId: `defesai_case_${caseId}`,
-    customer: {
-      name: body.customerName || 'Condutor DefesAi',
-      email: body.customerEmail || user.email || 'contato@defesai.shop',
-      taxId: String(body.customerCpf || '').replace(/\D/g, ''),
-    },
-    amount: offer.finalAmount,
+    customer: { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', taxId: String(body.customerCpf || '').replace(/\D/g, '') },
+    amount: Number(offer.finalAmount),
     installments: Number(body.installments || 1),
     cardToken: body.cardToken,
     authenticationMethod: body.authenticationMethod || 'CHALLENGE',
@@ -230,64 +138,43 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
     webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
   });
 
-  const record = await persistOrder(c.env, {
-    caseId,
-    userId: user.id,
-    referenceId: order.referenceId,
-    gatewayOrderId: order.orderId,
-    gatewayTransactionId: order.orderId,
-    amount: offer.finalAmount,
-    status: order.status,
-    gateway: 'pagbank',
-    simulated: order.simulated,
-  });
-
+  const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId: order.referenceId, gatewayOrderId: order.orderId, gatewayTransactionId: order.orderId, amount: Number(offer.finalAmount), status: order.status, gateway: 'pagbank' });
   return c.json({ success: true, orderId: order.orderId, status: order.status, amount: offer.finalAmount, serviceType: offer.serviceType, gateway: 'pagbank', simulated: order.simulated, paymentOrder: record });
 });
 
 routes.post('/webhooks/pagbank', async (c) => {
   const rawBody = await c.req.text();
   const signature = c.req.header('x-pagbank-signature') || c.req.header('x-hub-signature-256');
-  if (!(await verifyWebhookSignature(c.env as any, rawBody, signature))) {
-    throw new HTTPException(401, { message: 'Assinatura inválida.' });
-  }
+  if (!(await verifyWebhookSignature(c.env as any, rawBody, signature))) throw new HTTPException(401, { message: 'Assinatura inválida.' });
 
   let payload: PagBankWebhookPayload;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    throw new HTTPException(400, { message: 'Body inválido.' });
-  }
+  try { payload = JSON.parse(rawBody); } catch { throw new HTTPException(400, { message: 'Body inválido.' }); }
 
   const charge = payload.charges?.[0];
   const status = charge?.status || 'RECEIVED';
   const referenceId = payload.reference_id || charge?.reference_id || '';
   if (!referenceId) return c.json({ received: true, status, isDuplicate: false });
 
-  const caseMatch = referenceId.match(/^defesai_case_(.+)$/);
-  const caseId = caseMatch?.[1];
   const supabase = createSupabaseAdminClient(c.env);
-  const { data: existing } = await supabase
-    .from('payment_orders')
-    .select('*')
-    .eq('reference_id', referenceId)
-    .maybeSingle();
-
+  const { data: existing, error } = await supabase.from('payment_orders').select('*').eq('reference_id', referenceId).maybeSingle();
+  if (error) throw error;
   if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
 
   if (status === 'PAID') {
-    const alreadyPaid = String(existing.status).toUpperCase() === 'PAID' || existing.paid_at != null;
-    if (alreadyPaid) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
-
+    if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const now = new Date().toISOString();
-    await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, updated_at: now }).eq('id', existing.id);
-    if (caseId) {
-      await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', caseId);
+    const { error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, updated_at: now }).eq('id', existing.id);
+    if (paymentError) throw paymentError;
+    const match = referenceId.match(/^defesai_case_(.+)$/);
+    if (match?.[1]) {
+      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', match[1]);
+      if (caseError) throw caseError;
     }
     return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
   }
 
-  await supabase.from('payment_orders').update({ status, updated_at: new Date().toISOString() }).eq('id', existing.id);
+  const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: new Date().toISOString() }).eq('id', existing.id);
+  if (statusError) throw statusError;
   return c.json({ received: true, status, isDuplicate: false, matched: true });
 });
 
