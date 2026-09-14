@@ -34,7 +34,7 @@ export interface Publisher {
 async function graphRequest(graphApiBase: string, accessToken: string, path: string, body?: Record<string, unknown>): Promise<any> {
   const url = `${graphApiBase}/${path}`;
   const form = new URLSearchParams();
-  if (body) for (const [k, v] of Object.entries(body)) if (v !== undefined) form.set(k, String(v));
+  if (body) for (const [k, v] of Object.entries(body)) if (v !== undefined && v !== null) form.set(k, String(v));
   form.set('access_token', accessToken);
 
   const res = await fetch(url, {
@@ -99,8 +99,34 @@ export class MetaPublisherAdapter implements Publisher {
       caption,
     } as any);
 
+    const containerId = container.id;
+
+    // Reels/vídeos demoram para processar → polling de status_code.
+    // Imagens e stories: delay curto + publish direto (polling não suportado p/ story).
+    if (mediaType === 'REELS' || mediaType === 'VIDEO') {
+      let status: string | undefined;
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        try {
+          const st = await graphRequest(this.base, token, `${containerId}`, { fields: 'status_code' });
+          status = st.status_code;
+          if (status === 'FINISHED') break;
+          if (status === 'ERROR' || status === 'EXPIRED') {
+            return { ok: false, error: `Container IG em estado ${status}` };
+          }
+        } catch {
+          // falha de leitura do container → aguarda mais uma rodada
+        }
+      }
+      if (status !== 'FINISHED') {
+        return { ok: false, error: `Container IG não finalizou (status ${status || 'desconhecido'})` };
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+
     const published = await graphRequest(this.base, token, `${igUserId}/media_publish`, {
-      creation_id: container.id,
+      creation_id: containerId,
     } as any);
 
     return { ok: true, externalId: published.id };
