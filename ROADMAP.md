@@ -2,7 +2,8 @@
 
 ## Migração 100% Cloudflare / remoção do legado Vercel
 
-Documento executivo: [`docs/architecture/MIGRACAO-100-CLOUDFLARE.md`](docs/architecture/MIGRACAO-100-CLOUDFLARE.md)
+Documento executivo: [`docs/architecture/MIGRACAO-100-CLOUDFLARE.md`](docs/architecture/MIGRACAO-100-CLOUDFLARE.md)  
+Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/migration/PHASE-0-BASELINE-2026-09-14.md)
 
 **Meta final:** Cloudflare Worker + Supabase como arquitetura operacional única, sem proxy, fallback ou backend Vercel legado.
 
@@ -10,7 +11,7 @@ Documento executivo: [`docs/architecture/MIGRACAO-100-CLOUDFLARE.md`](docs/archi
 
 | Fase | Escopo | Status | Gate |
 |---|---|---|---|
-| 0 | Baseline, inventário e congelamento | ⬜ | Inventário autoritativo |
+| 0 | Baseline, inventário e congelamento | **CONCLUÍDA** | Inventário autoritativo |
 | 1 | Contratos e kernel compartilhado | ⬜ | Contratos canônicos |
 | 2 | OCR | ⬜ | OCR sem Vercel |
 | 3 | Knowledge / RAG | ⬜ | RAG sem Vercel |
