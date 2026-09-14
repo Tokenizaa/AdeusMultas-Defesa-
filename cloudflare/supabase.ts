@@ -5,8 +5,13 @@ export interface AssetsBinding {
   fetch: (request: Request) => Promise<Response>;
 }
 
+export interface WorkersAI {
+  run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
+}
+
 export interface Env {
   ASSETS: AssetsBinding;
+  AI: WorkersAI;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   VITE_SUPABASE_ANON_KEY: string;
