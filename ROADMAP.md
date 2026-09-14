@@ -17,8 +17,8 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 | 3 | Knowledge / RAG | **RUNTIME CONCLUÍDO — corpus pendente** | RAG sem Vercel |
 | 4 | AI | **RUNTIME CONCLUÍDO — paridade pendente** | Análise + geração sem Vercel |
 | 5 | Commercial / ofertas | **RUNTIME CONCLUÍDO — gate pendente** | Preço único |
-| 6 | Payments / webhooks | **RUNTIME CONCLUÍDO — gate pendente** | Pagamento real sem Vercel |
-| 7 | Documents / Storage | ⬜ | PDF persistido sem Vercel |
+| 6 | Payments / webhooks | **RUNTIME CONCLUÍDO — GATE EXTERNO PENDENTE (PagBank)** | Pagamento real sem Vercel |
+| 7 | Documents / Storage | **RUNTIME CONCLUÍDO — gate pendente** | PDF persistido sem Vercel |
 | 8 | Notifications / Audit | ⬜ | Persistência definitiva |
 | 9 | Admin | ⬜ | Admin 100% Cloudflare |
 | 10 | Marketing / Meta | ⬜ | Publicação sem Vercel |
@@ -37,6 +37,7 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 - Cada fase deve produzir evidência de teste e commit verificável.
 - Não duplicar domínio em versões paralelas.
 - A migração só termina quando o Golden Path funcionar com Vercel indisponível.
+- Gates externos de terceiros podem permanecer pendentes sem bloquear fases independentes, desde que a dependência esteja documentada e não seja mascarada como concluída.
 
 ## Definition of Done
 
@@ -80,10 +81,26 @@ A fase permanece com gate pendente até a prova de preço real no checkout e a b
 
 - `cloudflare/routes/payments.ts`
 - `cloudflare/routes/payments.test.ts`
-- `docs/migration/PHASE-6-PAYMENTS-2026-09-14.md`
+- `docs/migration/PHASE-6-GATE.md`
 - `payment_orders` como fonte persistente das ordens
 - polling PIX sem estado em memória
 - webhook PagBank idempotente por estado persistido
+- autenticidade PagBank por SHA-256
 - preço do pagamento resolvido exclusivamente pelo catálogo comercial Cloudflare/Supabase
 
-A fase permanece com gate pendente até CI verde e prova real do pagamento/homologação com reconciliação em `payment_orders` e `cases`.
+A Fase 6 permanece aberta somente para homologação externa PagBank. A ausência do token real neste momento não bloqueia a execução das fases independentes.
+
+## Evidência Fase 7
+
+- `cloudflare/routes/documents.ts`
+- `cloudflare/routes/documents.test.ts`
+- `docs/migration/PHASE-7-DOCUMENTS-STORAGE.md`
+- bucket privado `case-documents`
+- `POST /api/documents/:caseId/generate`
+- `GET /api/documents/:id`
+- PDF persistido no Supabase Storage
+- SHA-256 do arquivo persistido em `documents`
+- URL de download assinada
+- evento `case.document.generated`
+
+A Fase 7 permanece com gate pendente até prova real de geração, armazenamento, download, hash e reconciliação no ambiente Cloudflare.
