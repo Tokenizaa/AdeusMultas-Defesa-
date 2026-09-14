@@ -8,6 +8,9 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
+  "ai": {
+    "binding": "AI"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
