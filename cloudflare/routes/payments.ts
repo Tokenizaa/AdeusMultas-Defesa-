@@ -29,12 +29,20 @@ async function persistOrder(env: Env, input: {
   gatewayOrderId?: string;
   gatewayTransactionId: string;
   amount: number;
+  baseAmount?: number;
+  discountAmount?: number;
+  couponCode?: string;
   status: string;
   gateway: string;
+  paymentMethod?: string;
   qrCodeText?: string;
   qrCodeUrl?: string;
 }) {
   const supabase = createSupabaseAdminClient(env);
+  const now = new Date().toISOString();
+  const finalAmount = Number(input.amount);
+  const baseAmount = Number(input.baseAmount ?? finalAmount);
+  const discountAmount = Number(input.discountAmount ?? Math.max(0, baseAmount - finalAmount));
   const { data, error } = await supabase.from('payment_orders').insert({
     case_id: input.caseId,
     user_id: input.userId ?? null,
@@ -42,11 +50,20 @@ async function persistOrder(env: Env, input: {
     pagbank_order_id: input.gatewayOrderId ?? null,
     gateway_transaction_id: input.gatewayTransactionId,
     status: input.status,
-    amount: input.amount,
-    final_amount: input.amount,
+    amount: finalAmount,
+    currency: 'BRL',
+    payment_method: input.paymentMethod ?? 'pix',
     qr_code_text: input.qrCodeText ?? null,
     qr_code_url: input.qrCodeUrl ?? null,
+    base_amount: baseAmount,
+    discount_amount: discountAmount,
+    discount_type: discountAmount > 0 ? 'commercial' : null,
+    coupon_code: input.couponCode ?? null,
+    bonus_used_amount: 0,
+    final_amount: finalAmount,
     gateway: input.gateway,
+    created_at: now,
+    updated_at: now,
   }).select('*').single();
   if (error) throw error;
   return data;
@@ -96,8 +113,12 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     gatewayOrderId: order.orderId,
     gatewayTransactionId: order.gatewayTransactionId,
     amount: Number(offer.finalAmount),
+    baseAmount: Number(offer.baseAmount),
+    discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount),
+    couponCode: body.couponCode,
     status: order.status,
     gateway: 'pagbank',
+    paymentMethod: 'pix',
     qrCodeText: order.pixCopyPaste || order.qrCodeText,
     qrCodeUrl: order.qrCodeUrl,
   });
@@ -138,7 +159,20 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
     webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
   });
 
-  const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId: order.referenceId, gatewayOrderId: order.orderId, gatewayTransactionId: order.orderId, amount: Number(offer.finalAmount), status: order.status, gateway: 'pagbank' });
+  const record = await persistOrder(c.env, {
+    caseId,
+    userId: user.id,
+    referenceId: order.referenceId,
+    gatewayOrderId: order.orderId,
+    gatewayTransactionId: order.orderId,
+    amount: Number(offer.finalAmount),
+    baseAmount: Number(offer.baseAmount),
+    discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount),
+    couponCode: body.couponCode,
+    status: order.status,
+    gateway: 'pagbank',
+    paymentMethod: 'credit_card',
+  });
   return c.json({ success: true, orderId: order.orderId, status: order.status, amount: offer.finalAmount, serviceType: offer.serviceType, gateway: 'pagbank', simulated: order.simulated, paymentOrder: record });
 });
 
@@ -160,10 +194,17 @@ routes.post('/webhooks/pagbank', async (c) => {
   if (error) throw error;
   if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
 
+  const now = new Date().toISOString();
   if (status === 'PAID') {
     if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
-    const now = new Date().toISOString();
-    const { error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, updated_at: now }).eq('id', existing.id);
+    const gatewayTransactionId = payload.id || charge?.reference_id || existing.gateway_transaction_id;
+    const { error: paymentError } = await supabase.from('payment_orders').update({
+      status: 'PAID',
+      paid_at: now,
+      gateway_transaction_id: gatewayTransactionId,
+      pagbank_order_id: payload.id || existing.pagbank_order_id,
+      updated_at: now,
+    }).eq('id', existing.id).neq('status', 'PAID');
     if (paymentError) throw paymentError;
     const match = referenceId.match(/^defesai_case_(.+)$/);
     if (match?.[1]) {
@@ -173,7 +214,7 @@ routes.post('/webhooks/pagbank', async (c) => {
     return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
   }
 
-  const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: new Date().toISOString() }).eq('id', existing.id);
+  const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: now }).eq('id', existing.id);
   if (statusError) throw statusError;
   return c.json({ received: true, status, isDuplicate: false, matched: true });
 });
