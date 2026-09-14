@@ -4,12 +4,12 @@ import type { ApiErrorCode } from "./contracts";
 
 export function adapterOk<T>(c: Context, data: T, status = 200): Response {
   const requestId = c.req.header("x-request-id") || crypto.randomUUID();
-  return ok(data, requestId).status === status
-    ? ok(data, requestId)
-    : new Response(ok(data, requestId).body, {
-        status,
-        headers: ok(data, requestId).headers,
-      });
+  const response = ok(data, requestId);
+  if (response.status === status) return response;
+  return new Response(response.body, {
+    status,
+    headers: response.headers,
+  });
 }
 
 export function adapterError(
