@@ -13,7 +13,7 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 |---|---|---|---|
 | 0 | Baseline, inventário e congelamento | **CONCLUÍDA** | Inventário autoritativo |
 | 1 | Contratos e kernel compartilhado | **CONCLUÍDA** | Contratos canônicos |
-| 2 | OCR | ⬜ | OCR sem Vercel |
+| 2 | OCR | **CONCLUÍDA** | OCR sem Vercel |
 | 3 | Knowledge / RAG | ⬜ | RAG sem Vercel |
 | 4 | AI | ⬜ | Análise + geração sem Vercel |
 | 5 | Commercial / ofertas | ⬜ | Preço único |
