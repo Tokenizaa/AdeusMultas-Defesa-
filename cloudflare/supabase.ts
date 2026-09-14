@@ -9,9 +9,15 @@ export interface WorkersAI {
   run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface VectorizeBinding {
+  query: (vector: number[], options?: Record<string, unknown>) => Promise<{ matches?: unknown[] }>;
+  upsert: (vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>) => Promise<unknown>;
+}
+
 export interface Env {
   ASSETS: AssetsBinding;
   AI: WorkersAI;
+  VECTORIZE: VectorizeBinding;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   VITE_SUPABASE_ANON_KEY: string;
