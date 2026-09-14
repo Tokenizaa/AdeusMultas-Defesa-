@@ -17,7 +17,7 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 | 3 | Knowledge / RAG | **RUNTIME CONCLUÍDO — corpus pendente** | RAG sem Vercel |
 | 4 | AI | **RUNTIME CONCLUÍDO — paridade pendente** | Análise + geração sem Vercel |
 | 5 | Commercial / ofertas | **RUNTIME CONCLUÍDO — gate pendente** | Preço único |
-| 6 | Payments / webhooks | ⬜ | Pagamento real sem Vercel |
+| 6 | Payments / webhooks | **RUNTIME CONCLUÍDO — gate pendente** | Pagamento real sem Vercel |
 | 7 | Documents / Storage | ⬜ | PDF persistido sem Vercel |
 | 8 | Notifications / Audit | ⬜ | Persistência definitiva |
 | 9 | Admin | ⬜ | Admin 100% Cloudflare |
@@ -75,3 +75,15 @@ A fase não é declarada como paridade funcional final enquanto os consumidores 
 - `GET /api/payments/resolve-price`
 
 A fase permanece com gate pendente até a prova de preço real no checkout e a busca negativa de consumidores Vercel.
+
+## Evidência Fase 6
+
+- `cloudflare/routes/payments.ts`
+- `cloudflare/routes/payments.test.ts`
+- `docs/migration/PHASE-6-PAYMENTS-2026-09-14.md`
+- `payment_orders` como fonte persistente das ordens
+- polling PIX sem estado em memória
+- webhook PagBank idempotente por estado persistido
+- preço do pagamento resolvido exclusivamente pelo catálogo comercial Cloudflare/Supabase
+
+A fase permanece com gate pendente até CI verde e prova real do pagamento/homologação com reconciliação em `payment_orders` e `cases`.
