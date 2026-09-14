@@ -110,4 +110,43 @@ marketingRoutes.get('/marketing/status', async (c) => {
   return c.json({ total: total || 0, agendados: agendados || 0, publicados: publicados || 0, engine: 'nvidia-only' });
 });
 
+// POST /api/marketing/media/upload — sobe mídia para Supabase Storage público e retorna URL
+marketingRoutes.post('/marketing/media/upload', authenticateToken, requireAdmin, async (c) => {
+  const { base64, filename, mimeType } = await c.req.json<any>().catch(() => ({}));
+  if (!base64 || typeof base64 !== 'string') throw new HTTPException(400, { message: 'base64 é obrigatório' });
+
+  const clean = base64.replace(/^data:[^;]+;base64,/, '');
+  const bytes = Uint8Array.from(atob(clean), (ch) => ch.charCodeAt(0));
+  if (bytes.length === 0 || bytes.length > 50 * 1024 * 1024) {
+    throw new HTTPException(413, { message: 'Mídia deve ter entre 1 byte e 50MB' });
+  }
+
+  const ext = (String(filename || 'arquivo').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const key = `media/${crypto.randomUUID()}.${ext}`;
+  const supabaseUrl = (c.env as any).SUPABASE_URL;
+  const serviceKey = (c.env as any).SUPABASE_SERVICE_ROLE_KEY;
+
+  const res = await fetch(`${supabaseUrl}/storage/v1/object/${key}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': mimeType || 'application/octet-stream',
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'x-upsert': 'true',
+    },
+    body: bytes,
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new HTTPException(502, { message: `Upload falhou: ${res.status} ${detail.slice(0, 120)}` });
+  }
+
+  return c.json({
+    url: `${supabaseUrl}/storage/v1/object/public/${key}`,
+    key,
+    sizeBytes: bytes.length,
+  }, 201);
+});
+
 export default marketingRoutes;
