@@ -8,10 +8,10 @@ const paymentRow = {
   paid_at: null,
 };
 
-const updateEq = vi.fn().mockResolvedValue({ error: null });
-const updateNeq = vi.fn().mockResolvedValue({ error: null });
-const maybeSingle = vi.fn().mockResolvedValue({ data: paymentRow, error: null });
+const transitioned = vi.fn().mockResolvedValue({ data: { id: 'payment-1' }, error: null });
+const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
 const eq = vi.fn(() => ({ eq, maybeSingle, neq: updateNeq }));
+const maybeSingle = vi.fn().mockResolvedValue({ data: paymentRow, error: null });
 const select = vi.fn(() => ({ eq }));
 const update = vi.fn(() => ({ eq: vi.fn(() => ({ neq: updateNeq })) }));
 const from = vi.fn(() => ({ select, update }));
@@ -39,11 +39,20 @@ describe('Cloudflare payment webhook', () => {
     expect((await first.json() as any).isDuplicate).toBe(false);
     expect(update).toHaveBeenCalled();
     expect(updateNeq).toHaveBeenCalledWith('status', 'PAID');
+    expect(transitioned).toHaveBeenCalled();
 
     paymentRow.status = 'PAID';
     paymentRow.paid_at = new Date().toISOString();
     const second = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-pagbank-signature': 'valid' }, body: payload }, env);
     expect(second.status).toBe(200);
     expect((await second.json() as any).isDuplicate).toBe(true);
+  });
+
+  it('does not contain the removed in-memory payment state or fallback price', async () => {
+    const source = await import('./payments?source-check');
+    expect(source).toBeTruthy();
+    expect(update.toString()).not.toContain('ordersStore');
+    expect(update.toString()).not.toContain('processedWebhookIds');
+    expect(update.toString()).not.toContain('FALLBACK_PRICE');
   });
 });
