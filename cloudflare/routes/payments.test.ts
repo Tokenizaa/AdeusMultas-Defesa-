@@ -8,9 +8,11 @@ const paymentRow = {
   paid_at: null,
 };
 
-const update = vi.fn().mockResolvedValue({ error: null });
+const updateEq = vi.fn().mockResolvedValue({ error: null });
 const maybeSingle = vi.fn().mockResolvedValue({ data: paymentRow, error: null });
-const select = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) })), maybeSingle }));
+const eq = vi.fn(() => ({ eq, maybeSingle }));
+const select = vi.fn(() => ({ eq }));
+const update = vi.fn(() => ({ eq: updateEq }));
 const from = vi.fn(() => ({ select, update }));
 
 vi.mock('../supabase', () => ({
@@ -34,7 +36,7 @@ describe('Cloudflare payment webhook', () => {
     const first = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-pagbank-signature': 'valid' }, body: payload }, env);
     expect(first.status).toBe(200);
     expect((await first.json() as any).isDuplicate).toBe(false);
-    expect(update).toHaveBeenCalled();
+    expect(updateEq).toHaveBeenCalled();
 
     paymentRow.status = 'PAID';
     paymentRow.paid_at = new Date().toISOString();
