@@ -10,21 +10,19 @@ notificationsRoutes.post('/notifications/subscribe', authenticateToken, async (c
   const user = c.get('user');
   if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
   const body = await c.req.json<any>().catch(() => ({}));
-  const endpoint = body.endpoint || (body.fcmToken ? `fcm:${body.fcmToken}` : '');
-  if (!endpoint) throw new HTTPException(400, { message: 'Endpoint ou fcmToken é obrigatório' });
-
+  if (!body.endpoint && !body.fcmToken) throw new HTTPException(400, { message: 'Endpoint ou fcmToken é obrigatório' });
   const supabase = createSupabaseAdminClient(c.env);
-  const { data, error } = await supabase
-    .from('notification_subscriptions')
-    .upsert({
-      user_id: user.id,
-      endpoint,
-      subscription_json: body,
-      user_agent: body.userAgent || c.req.header('user-agent') || null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'endpoint' })
-    .select('id,endpoint,created_at,updated_at')
-    .single();
+  const payload = {
+    user_id: user.id,
+    endpoint: body.endpoint || null,
+    fcm_token: body.fcmToken || null,
+    user_agent: body.userAgent || c.req.header('user-agent') || null,
+    updated_at: new Date().toISOString(),
+  };
+  const query = body.endpoint
+    ? supabase.from('notification_subscriptions').upsert(payload, { onConflict: 'endpoint' })
+    : supabase.from('notification_subscriptions').upsert(payload, { onConflict: 'user_id,fcm_token' });
+  const { data, error } = await query.select('id,endpoint,fcm_token,created_at,updated_at').single();
   if (error) throw new HTTPException(400, { message: error.message });
   return c.json({ success: true, subscription: data });
 });
@@ -32,13 +30,11 @@ notificationsRoutes.post('/notifications/subscribe', authenticateToken, async (c
 notificationsRoutes.post('/notifications/unsubscribe', authenticateToken, async (c) => {
   const user = c.get('user');
   const body = await c.req.json<any>().catch(() => ({}));
-  if (!body.endpoint) throw new HTTPException(400, { message: 'Endpoint é obrigatório' });
+  if (!body.endpoint && !body.fcmToken) throw new HTTPException(400, { message: 'Endpoint ou fcmToken é obrigatório' });
   const supabase = createSupabaseAdminClient(c.env);
-  const { error } = await supabase
-    .from('notification_subscriptions')
-    .delete()
-    .eq('user_id', user?.id)
-    .eq('endpoint', body.endpoint);
+  let query = supabase.from('notification_subscriptions').delete().eq('user_id', user?.id);
+  query = body.endpoint ? query.eq('endpoint', body.endpoint) : query.eq('fcm_token', body.fcmToken);
+  const { error } = await query;
   if (error) throw new HTTPException(400, { message: error.message });
   return c.json({ success: true });
 });
@@ -48,12 +44,7 @@ notificationsRoutes.get('/notifications/history', authenticateToken, async (c) =
   if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
   const limit = Math.min(Number(c.req.query('limit') || 100), 200);
   const supabase = createSupabaseAdminClient(c.env);
-  const { data, error, count } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact' })
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error, count } = await supabase.from('notifications').select('*', { count: 'exact' }).eq('user_id', user.id).order('created_at', { ascending: false }).limit(limit);
   if (error) throw new HTTPException(500, { message: error.message });
   return c.json({ notifications: data || [], total: count ?? (data?.length || 0) });
 });
@@ -63,9 +54,8 @@ notificationsRoutes.post('/notifications/mark-read', authenticateToken, async (c
   if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
   const body = await c.req.json<any>().catch(() => ({}));
   const supabase = createSupabaseAdminClient(c.env);
-  let query = supabase.from('notifications').update({ read: true, read_at: new Date().toISOString() }).eq('user_id', user.id);
+  let query = supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null);
   if (body.id) query = query.eq('id', body.id);
-  else query = query.eq('read', false);
   const { error } = await query;
   if (error) throw new HTTPException(400, { message: error.message });
   return c.json({ success: true });
@@ -79,8 +69,8 @@ notificationsRoutes.post('/notifications/send-test', authenticateToken, async (c
     user_id: user.id,
     type: 'system',
     title: 'Notificação de teste',
-    message: 'Notificação criada pelo Worker Cloudflare.',
-    read: false,
+    body: 'Notificação criada pelo Worker Cloudflare.',
+    data: {},
     created_at: new Date().toISOString(),
   }).select().single();
   if (error) throw new HTTPException(400, { message: error.message });
