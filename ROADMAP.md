@@ -10,8 +10,8 @@ Documento executivo: [`docs/architecture/MIGRACAO-100-CLOUDFLARE.md`](docs/archi
 
 | Fase | Escopo | Status | Gate |
 |---|---|---|---|
-| 0 | Baseline, inventário e congelamento | ⬜ | Inventário autoritativo |
-| 1 | Contratos e kernel compartilhado | ⬜ | Contratos canônicos |
+| 0 | Baseline, inventário e congelamento | ✅ | Inventário autoritativo |
+| 1 | Contratos e kernel compartilhado | ✅ | Contratos canônicos |
 | 2 | OCR | ⬜ | OCR sem Vercel |
 | 3 | Knowledge / RAG | ⬜ | RAG sem Vercel |
 | 4 | AI | ⬜ | Análise + geração sem Vercel |
