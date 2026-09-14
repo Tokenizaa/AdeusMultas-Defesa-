@@ -2,64 +2,94 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
-
-// Registro de subscriptions e histórico em memória (volátil no worker).
-// ponytail: FCM push real (Workers API) e persistência em Supabase na Fase 3.
-const subscriptions = new Map<string, { endpoint: string; userEmail?: string; createdAt: string }>();
-const notificationHistory = new Map<string, any[]>();
+import { createSupabaseAdminClient } from '../supabase';
 
 export const notificationsRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
-// POST /api/notifications/subscribe
-notificationsRoutes.post('/notifications/subscribe', async (c) => {
-  const { endpoint, keys, userId, userEmail, userAgent, fcmToken } = await c.req.json<any>().catch(() => ({}));
-  if (!endpoint && !fcmToken) {
-    throw new HTTPException(400, { message: 'Endpoint ou fcmToken é obrigatório' });
-  }
-  const ep = endpoint || `fcm:${fcmToken}`;
-  subscriptions.set(ep, {
-    endpoint: ep,
-    userEmail,
-    createdAt: new Date().toISOString(),
-  });
-  return c.json({ success: true, subscriptionId: `sub_${Date.now()}` });
+notificationsRoutes.post('/notifications/subscribe', authenticateToken, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
+  const body = await c.req.json<any>().catch(() => ({}));
+  const endpoint = body.endpoint || (body.fcmToken ? `fcm:${body.fcmToken}` : '');
+  if (!endpoint) throw new HTTPException(400, { message: 'Endpoint ou fcmToken é obrigatório' });
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error } = await supabase
+    .from('notification_subscriptions')
+    .upsert({
+      user_id: user.id,
+      endpoint,
+      subscription_json: body,
+      user_agent: body.userAgent || c.req.header('user-agent') || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'endpoint' })
+    .select('id,endpoint,created_at,updated_at')
+    .single();
+  if (error) throw new HTTPException(400, { message: error.message });
+  return c.json({ success: true, subscription: data });
 });
 
-// POST /api/notifications/unsubscribe
-notificationsRoutes.post('/notifications/unsubscribe', async (c) => {
-  const { endpoint } = await c.req.json<any>().catch(() => ({}));
-  if (!endpoint) throw new HTTPException(400, { message: 'Endpoint é obrigatório' });
-  subscriptions.delete(endpoint);
+notificationsRoutes.post('/notifications/unsubscribe', authenticateToken, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<any>().catch(() => ({}));
+  if (!body.endpoint) throw new HTTPException(400, { message: 'Endpoint é obrigatório' });
+  const supabase = createSupabaseAdminClient(c.env);
+  const { error } = await supabase
+    .from('notification_subscriptions')
+    .delete()
+    .eq('user_id', user?.id)
+    .eq('endpoint', body.endpoint);
+  if (error) throw new HTTPException(400, { message: error.message });
   return c.json({ success: true });
 });
 
-// GET /api/notifications/history (auth)
 notificationsRoutes.get('/notifications/history', authenticateToken, async (c) => {
   const user = c.get('user');
-  if (!user?.email) throw new HTTPException(400, { message: 'Email do usuário é obrigatório' });
-  const notifications = notificationHistory.get(user.email) || [];
-  return c.json({ notifications, total: notifications.length });
+  if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
+  const limit = Math.min(Number(c.req.query('limit') || 100), 200);
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error, count } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact' })
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new HTTPException(500, { message: error.message });
+  return c.json({ notifications: data || [], total: count ?? (data?.length || 0) });
 });
 
-// POST /api/notifications/mark-read
-notificationsRoutes.post('/notifications/mark-read', async (c) => {
-  const { email } = await c.req.json<any>().catch(() => ({}));
-  if (email) {
-    const list = notificationHistory.get(email) || [];
-    notificationHistory.set(email, list.map((n) => ({ ...n, read: true })));
-  }
+notificationsRoutes.post('/notifications/mark-read', authenticateToken, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
+  const body = await c.req.json<any>().catch(() => ({}));
+  const supabase = createSupabaseAdminClient(c.env);
+  let query = supabase.from('notifications').update({ read: true, read_at: new Date().toISOString() }).eq('user_id', user.id);
+  if (body.id) query = query.eq('id', body.id);
+  else query = query.eq('read', false);
+  const { error } = await query;
+  if (error) throw new HTTPException(400, { message: error.message });
   return c.json({ success: true });
 });
 
-// POST /api/notifications/send-test — push real exige FCM (Fase 3)
-notificationsRoutes.post('/notifications/send-test', async (c) => {
-  throw new HTTPException(501, { message: 'Envio real de push (FCM) ainda não disponível no worker. (Fase 3)' });
+notificationsRoutes.post('/notifications/send-test', authenticateToken, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) throw new HTTPException(401, { message: 'Usuário não autenticado' });
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error } = await supabase.from('notifications').insert({
+    user_id: user.id,
+    type: 'system',
+    title: 'Notificação de teste',
+    message: 'Notificação criada pelo Worker Cloudflare.',
+    read: false,
+    created_at: new Date().toISOString(),
+  }).select().single();
+  if (error) throw new HTTPException(400, { message: error.message });
+  return c.json({ success: true, notification: data });
 });
 
-// GET /api/notifications/vapid-key
 notificationsRoutes.get('/notifications/vapid-key', (c) => {
   const key = (c.env as any).VAPID_PUBLIC_KEY;
-  if (!key) throw new HTTPException(501, { message: 'VAPID key não configurada. (Fase 3)' });
+  if (!key) throw new HTTPException(501, { message: 'VAPID key não configurada' });
   return c.json({ key });
 });
 
