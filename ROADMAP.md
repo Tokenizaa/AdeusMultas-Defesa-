@@ -14,8 +14,8 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 | 0 | Baseline, inventário e congelamento | **CONCLUÍDA** | Inventário autoritativo |
 | 1 | Contratos e kernel compartilhado | **CONCLUÍDA** | Contratos canônicos |
 | 2 | OCR | **CONCLUÍDA** | OCR sem Vercel |
-| 3 | Knowledge / RAG | ⬜ | RAG sem Vercel |
-| 4 | AI | ⬜ | Análise + geração sem Vercel |
+| 3 | Knowledge / RAG | **RUNTIME CONCLUÍDO — corpus pendente** | RAG sem Vercel |
+| 4 | AI | **RUNTIME CONCLUÍDO — paridade pendente** | Análise + geração sem Vercel |
 | 5 | Commercial / ofertas | ⬜ | Preço único |
 | 6 | Payments / webhooks | ⬜ | Pagamento real sem Vercel |
 | 7 | Documents / Storage | ⬜ | PDF persistido sem Vercel |
@@ -54,3 +54,13 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 - [ ] Admin/Marketing/Meta/WhatsApp sem Vercel.
 - [ ] Golden Path aprovado com Vercel indisponível.
 - [ ] Busca negativa sem referências operacionais ao Vercel.
+
+## Evidência Fase 4
+
+- `cloudflare/routes/ai.ts`
+- `cloudflare/routes/ai.test.ts`
+- `docs/migration/PHASE-4-AI-2026-09-14.md`
+- geração via `@cf/openai/gpt-oss-20b`
+- contexto jurídico recuperado pelo Vectorize antes da geração
+
+A fase não é declarada como paridade funcional final enquanto os consumidores reais e o corpus jurídico não forem validados em produção.
