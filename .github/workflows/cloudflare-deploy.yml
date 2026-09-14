@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Test Phase 8 persistence
+        run: bunx vitest run cloudflare/routes/notifications.test.ts
+
       - name: Build and deploy to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
