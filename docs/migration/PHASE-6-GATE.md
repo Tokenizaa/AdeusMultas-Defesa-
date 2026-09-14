@@ -20,6 +20,17 @@ Fechar o ciclo de pagamento no Cloudflare Worker usando o Supabase como estado p
 - não há `ordersStore`, `processedWebhookIds` ou `FALLBACK_PRICE` em `payments.ts`
 - `cloudflare/routes/payments.test.ts` cobre primeiro webhook `PAID` e repetição do mesmo evento
 
+## Correção de autenticidade PagBank
+
+A implementação foi corrigida para a especificação atual da API Order do PagBank:
+
+- header recebido: `x-authenticity-token`
+- assinatura: SHA-256 de `${tokenDaConta}-${payloadBruto}`
+- comparação feita sobre o corpo bruto, sem reformatar o JSON
+- em produção, ausência de assinatura ou token rejeita a notificação
+
+Fonte oficial: documentação PagBank de confirmação de autenticidade da notificação.
+
 ## Verificação do banco de produção
 
 Projeto Supabase: `llmxnpgjpxcvyrqjkfwb`
@@ -35,9 +46,18 @@ Consulta de reconciliação em 2026-09-14:
 
 Esses dados comprovam consistência do estado persistido existente, mas não constituem sozinhos uma nova homologação do Worker desta rodada.
 
+## Testes adicionados
+
+`cloudflare/pagbank.signature.test.ts` cobre:
+
+1. assinatura SHA-256 válida;
+2. assinatura com e sem prefixo `sha256=`;
+3. assinatura forjada;
+4. ausência de assinatura em produção.
+
 ## CI
 
-O gate de onboarding `34901352793` falhou antes dos testes por usar `npm ci` em um repositório sem `package-lock.json`. O workflow foi corrigido para usar `bun install --frozen-lockfile`, alinhado ao `bun.lock` do projeto.
+O CI global anterior falhou nos testes legados. A nova correção disparou o run `34904283509` (`CI/CD Pipeline`), ainda em execução no momento deste registro.
 
 ## Bloqueador restante para declarar CONCLUÍDA
 
@@ -45,7 +65,7 @@ Ainda é necessária uma execução real/homologada desta implementação contra
 
 1. criação de uma nova ordem PIX pelo Worker;
 2. registro correspondente em `payment_orders`;
-3. confirmação/recepção do webhook `PAID`;
+3. confirmação/recepção do webhook `PAID` usando `x-authenticity-token` real;
 4. reconciliação de `payment_orders` e `cases`;
 5. repetição do webhook sem nova transição.
 
