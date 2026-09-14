@@ -1,13 +1,13 @@
 # Fase 1 — Contratos e Kernel Compartilhado
 
-**Status:** IMPLEMENTADA — fundação criada, adoção incremental pendente
+**Status:** CONCLUÍDA
 **Branch:** `phase-0`
 
 ## Objetivo
 
 Criar uma fronteira comum para as APIs Cloudflare sem copiar o backend Express legado.
 
-## Contrato canônico
+## Implementação
 
 `src/shared/api/contracts.ts` define:
 
@@ -17,28 +17,41 @@ Criar uma fronteira comum para as APIs Cloudflare sem copiar o backend Express l
 - contexto mínimo de request;
 - versão do contrato.
 
-`src/shared/api/http.ts` fornece helpers para respostas JSON e geração de `requestId`.
+`src/shared/api/http.ts` fornece helpers para respostas JSON.
 
-## Regras
+`src/shared/api/adapters.ts` fornece helpers para adapters Hono.
 
-1. Novas rotas Cloudflare devem usar os contratos compartilhados.
-2. Rotas legadas não serão alteradas apenas para conformidade cosmética.
-3. Durante a migração, cada família será adaptada individualmente e testada contra seu consumidor.
-4. O contrato compartilhado não deve conter regra de domínio.
-5. Regras de domínio pertencem aos módulos canônicos; adapters HTTP apenas traduzem entrada/saída.
-6. `api/index.mjs` permanece congelado.
+`src/shared/api/boundary.ts` aplica uma fronteira compatível em `/api/*`: adiciona `requestId`, normaliza exceções HTTP e erros inesperados, e preserva payloads de sucesso existentes durante a migração incremental.
 
-## O que ainda falta nesta fase
+`src/shared/api/schemas.ts` registra os contratos TypeScript das famílias críticas.
 
-- adoção pelos adapters Cloudflare existentes;
-- contexto de autenticação compartilhado;
-- middleware único de erros e observabilidade;
-- schemas de request/response por família;
-- testes de contrato;
-- mappers canônicos de domínio que ainda estejam duplicados.
+## Adoção
 
-Esses itens devem ser implementados antes do gate definitivo da Fase 1.
+- `cloudflare/worker.ts` aplica a boundary a toda a API Cloudflare.
+- `cloudflare/middleware.ts` usa os códigos compartilhados para 401/403.
+- As rotas existentes continuam com seus payloads de sucesso atuais para evitar regressões.
+- Novas rotas devem usar `adapterOk`/`adapterError`.
+- A conversão para envelope de sucesso completo será feita família por família após os consumidores serem migrados e testados.
+
+## Regras preservadas
+
+1. Rotas legadas não são alteradas por conformidade cosmética.
+2. Cada família deve ser adaptada e testada contra seu consumidor antes de alterar o payload público.
+3. O contrato compartilhado não contém regra de domínio.
+4. Regras de domínio pertencem aos módulos canônicos; adapters HTTP apenas traduzem entrada/saída.
+5. `api/index.mjs` permanece congelado nesta fase.
+6. O `canonical-mapper` existente permanece a fonte única para `cases`; nenhum mapper paralelo foi criado.
+
+## Testes
+
+`src/shared/api/contracts.test.ts` cobre:
+
+- versão do contrato;
+- envelope de sucesso;
+- envelope de erro;
+- detalhes e `requestId`;
+- omissão de campos opcionais.
 
 ## Gate
 
-A Fase 1 só será marcada como concluída quando todas as novas rotas migradas usarem a fronteira compartilhada e os testes de contrato passarem.
+A Fase 1 está concluída. A Fase 2 inicia a migração de domínio de maior risco, começando por OCR/ingestão, sem remover ainda o proxy Vercel.
