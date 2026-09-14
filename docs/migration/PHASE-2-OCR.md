@@ -24,11 +24,11 @@ A rota nativa foi criada em `cloudflare/routes/ocr.ts`:
 - usa o contrato compartilhado da Fase 1 para sucesso/erro;
 - não possui fallback ou chamada ao Vercel.
 
-O Workers AI foi escolhido porque o catálogo atual oferece o Moondream 3.1 especificamente para tarefas de visão que incluem OCR e saída estruturada. A documentação da Cloudflare também confirma a execução via binding `env.AI.run()`. citeturn3search0turn3search1
+O Workers AI foi escolhido porque o catálogo atual oferece o Moondream 3.1 para tarefas de visão que incluem OCR e saída estruturada. A execução ocorre pelo binding `env.AI.run()`.
 
 ## Segurança e limites
 
-O Worker não recebe nenhuma chave de provider externo. O binding `AI` é provisionado pelo Wrangler/Cloudflare, mantendo a inferência dentro da plataforma. A documentação da Cloudflare descreve o binding `AI` como a forma nativa de acessar Workers AI pelo Worker. citeturn2search10
+O Worker não recebe nenhuma chave de provider externo. O binding `AI` é provisionado pelo Wrangler/Cloudflare, mantendo a inferência dentro da plataforma.
 
 O endpoint rejeita formatos não suportados e entradas acima de 12 MB antes de executar inferência.
 
