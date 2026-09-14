@@ -11,6 +11,12 @@
   "ai": {
     "binding": "AI"
   },
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "adeusmulta-knowledge"
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
