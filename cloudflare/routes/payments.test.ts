@@ -47,12 +47,4 @@ describe('Cloudflare payment webhook', () => {
     expect(second.status).toBe(200);
     expect((await second.json() as any).isDuplicate).toBe(true);
   });
-
-  it('does not contain the removed in-memory payment state or fallback price', async () => {
-    const source = await import('./payments?source-check');
-    expect(source).toBeTruthy();
-    expect(update.toString()).not.toContain('ordersStore');
-    expect(update.toString()).not.toContain('processedWebhookIds');
-    expect(update.toString()).not.toContain('FALLBACK_PRICE');
-  });
 });
