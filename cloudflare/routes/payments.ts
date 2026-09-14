@@ -198,14 +198,15 @@ routes.post('/webhooks/pagbank', async (c) => {
   if (status === 'PAID') {
     if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const gatewayTransactionId = payload.id || charge?.reference_id || existing.gateway_transaction_id;
-    const { error: paymentError } = await supabase.from('payment_orders').update({
+    const { data: transitioned, error: paymentError } = await supabase.from('payment_orders').update({
       status: 'PAID',
       paid_at: now,
       gateway_transaction_id: gatewayTransactionId,
       pagbank_order_id: payload.id || existing.pagbank_order_id,
       updated_at: now,
-    }).eq('id', existing.id).neq('status', 'PAID');
+    }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
     if (paymentError) throw paymentError;
+    if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const match = referenceId.match(/^defesai_case_(.+)$/);
     if (match?.[1]) {
       const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', match[1]);
