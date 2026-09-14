@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Env } from '../supabase';
-import { authenticateToken, requireAdmin } from '../middleware';
+import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
 import { createSupabaseAdminClient } from '../supabase';
 
-export const auditRoutes = new Hono<{ Bindings: Env }>();
+export const auditRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 auditRoutes.use('/audit-logs', authenticateToken, requireAdmin);
 auditRoutes.use('/audit/logs', authenticateToken, requireAdmin);
 
