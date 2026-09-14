@@ -45,6 +45,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Ensure Vectorize index exists
+        run: |
+          bunx wrangler vectorize list | grep -q adeusmulta-knowledge || bunx wrangler vectorize create adeusmulta-knowledge --dimensions=768 --metric=cosine || true
+
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
 
