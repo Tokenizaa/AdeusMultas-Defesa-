@@ -1,41 +1,36 @@
-name: Deploy Adeus Multa to Cloudflare
-
-# Cloudflare production deploy workflow; changes to this file intentionally trigger a deploy.
+name: Cloudflare Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "src/**"
-      - "public/**"
-      - "cloudflare/**"
-      - "wrangler.jsonc"
-      - "package.json"
-      - "bun.lock"
-      - "bun.lockb"
-      - "vite.config.*"
-      - "vitest.config.*"
-      - ".github/workflows/cloudflare-deploy.yml"
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: cloudflare-production
-  cancel-in-progress: true
+      - 'cloudflare/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'bun.lockb'
+      - 'vitest.config.*'
+      - 'scripts/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'cloudflare/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'bun.lockb'
+      - 'vitest.config.*'
+      - 'scripts/**'
 
 jobs:
-  deploy:
-    name: Build and deploy
+  build-and-deploy:
     runs-on: ubuntu-latest
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       VITE_API_MODE: real
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -46,21 +41,25 @@ jobs:
         run: bun install
 
       - name: Ensure Vectorize index exists
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_API_MODE: real
         run: |
-          bunx wrangler vectorize list --token ${{ secrets.CLOUDFLARE_API_TOKEN }} --account-id ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} | grep -q adeusmulta-knowledge || bunx wrangler vectorize create adeusmulta-knowledge --dimensions=768 --metric=cosine --token ${{ secrets.CLOUDFLARE_API_TOKEN }} --account-id ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} || true
+          # List indexes to verify we can authenticate and see if the index exists
+          if ! bunx wrangler vectorize list; then
+            echo "Failed to list Vectorize indexes. Check CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID permissions."
+            exit 1
+          fi
+          # Check if our index exists
+          if bunx wrangler vectorize list | grep -q adeusmulta-knowledge; then
+            echo "Vectorize index 'adeusmulta-knowledge' already exists."
+          else
+            echo "Creating Vectorize index 'adeusmulta-knowledge'..."
+            if ! bunx wrangler vectorize create adeusmulta-knowledge --dimensions=768 --metric=cosine; then
+              echo "Failed to create Vectorize index. Check permissions."
+              exit 1
+            fi
+          fi
 
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
 
       - name: Build and deploy to Cloudflare
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_API_MODE: real
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@latest deploy --config wrangler.jsonc
