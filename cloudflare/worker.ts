@@ -12,7 +12,9 @@ import { paymentsRoutes } from './routes/payments'
 import { notificationsRoutes } from './routes/notifications'
 import { auditRoutes } from './routes/audit'
 import { settingsRoutes } from './routes/settings'
+import { scheduledTick } from './cron'
 import { adminRoutes } from './routes/admin'
+import { marketingRoutes } from './routes/marketing'
 
 // Create Hono app
 const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
@@ -35,6 +37,7 @@ app.route('/api', notificationsRoutes)
 app.route('/api', auditRoutes)
 app.route('/api', settingsRoutes)
 app.route('/api', adminRoutes)
+app.route('/api', marketingRoutes)
 
 // Admin test route (protected)
 app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
@@ -76,4 +79,10 @@ app.get('*', async (c) => {
   return assetResponse
 })
 
-export default app
+export default {
+  fetch: app.fetch,
+  scheduled: async (event: any, env: Env, _ctx: any) => {
+    const result = await scheduledTick(env)
+    console.log('[cron] tick:', JSON.stringify(result))
+  },
+}
