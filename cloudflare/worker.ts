@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import type { Env } from './supabase'
 import { authenticateToken, requireAdmin, type AuthenticatedUser } from './middleware'
+import { apiBoundary } from '../src/shared/api/boundary'
 
 // Route modules
 import { authRoutes } from './routes/auth'
@@ -22,6 +23,7 @@ const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>
 // Apply middleware
 app.use('*', secureHeaders())
 app.use('*', cors())
+app.use('/api/*', apiBoundary)
 
 // Health check endpoint
 app.get('/api/health', (c) => {
