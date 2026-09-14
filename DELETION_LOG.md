@@ -35,3 +35,20 @@
 1. `src/server/integrations/gateway/gateway-manager.ts`
 2. `src/server/integrations/gateway/ggpix-adapter.ts`
 3. `src/server/routes/payments.ts`
+## 2026-09-13 — Remoção do Onboarding V2 (erro estrutural)
+
+**Decisão (usuário)**: o Onboarding V2 ("serviços/subserviços") foi um erro estrutural.
+O canônico é o **V1** (`src/components/onboarding/OnboardingWizard.tsx` — ServiceStep +
+USER_SITUATIONS, ativo em `/novo-caso` via App.tsx).
+
+**Removidos**:
+- `src/onboarding-v2/` (frontend órfão: UI/domain/application)
+- `cloudflare/routes/onboarding-v2.ts` (+ desmontado do `cloudflare/worker.ts`)
+- `src/server/routes/onboarding-v2.ts` (+ imports/mounts removidos de `src/server/app.ts`
+  e `src/server/routes/onboarding.ts`)
+
+**Validação**: build completo (vite + build-api Express + bundle worker) passou; dry-run 843 KiB.
+
+**Observação (não removido)**: `src/onboarding/application/http-application.ts` (família
+órfã `src/onboarding/`, sem importação ativa) ainda referencia endpoints `/api/onboarding-v2/*`.
+Código morto, não compilado para produção — candidato a remoção futura junto de `src/onboarding/`.

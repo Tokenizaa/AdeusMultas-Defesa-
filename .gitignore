@@ -63,3 +63,15 @@ test-results/
 screenshots/
 /*.png
 .env*.local
+
+# Cloudflare secrets locais (nunca commitar)
+.dev.vars
+cloudflare/.dev.vars
+# Backups/artefatos cloudflare
+cloudflare/*.backup
+cloudflare/*.original
+cloudflare/test/
+cloudflare/wrangler.toml
+wrangler.*.backup
+wrangler.*.temporary
+wrangler.test.json

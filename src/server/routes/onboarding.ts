@@ -4,7 +4,6 @@ import {
   USER_PROCESS_STAGES,
   RULES_MATRIX,
 } from '../../core/onboarding/rules-matrix';
-import onboardingV2Routes from './onboarding-v2';
 
 const router = Router();
 
@@ -49,6 +48,5 @@ router.get('/onboarding/rules', (_req, res) => {
 
 // Canonical Onboarding V2 API. The legacy /onboarding/rules endpoint above
 // remains available for compatibility, while V2 owns the case lifecycle.
-router.use(onboardingV2Routes);
 
 export default router;

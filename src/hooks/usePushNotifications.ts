@@ -152,7 +152,7 @@ export function usePushNotifications() {
       } catch (err) {
         console.warn('[Push Hook] Falha ao disparar notificação local:', err);
       }
-    }
+    },
     []
   );
 

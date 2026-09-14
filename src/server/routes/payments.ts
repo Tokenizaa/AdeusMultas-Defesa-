@@ -655,7 +655,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
             description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
             timestamp: new Date().toISOString(),
             type: 'defense',
-          );
+          });
         } catch (defenseError: any) {
           // Não-bloqueante: mantém o caso pago mesmo se a geração falhar.
           logger.error('payments', 'pagbank', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
@@ -821,7 +821,7 @@ router.post('/simulate-payment', async (req: Request, res: Response) => {
         description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação de pagamento simulado.`,
         timestamp: new Date().toISOString(),
         type: 'defense',
-      );
+      });
     } catch (defErr: any) {
       logger.warn('payments', 'simulation', 'defense_generation', 'Defense draft generation warning', {
         error: defErr?.message,

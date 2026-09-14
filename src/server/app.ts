@@ -28,7 +28,6 @@ import healthRoutes from './routes/health';
 import casesRoutes from './routes/cases';
 import auditRoutes from './routes/audit';
 import onboardingRoutes from './routes/onboarding';
-import onboardingV2Routes from './routes/onboarding-v2';
 import transitRoutes from './routes/transit';
 import governanceRoutes from './routes/governance';
 import analyticsRoutes from './routes/analytics';
@@ -104,7 +103,6 @@ export function createApp() {
   app.use('/api', aiRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api', onboardingRoutes);
-  app.use('/api', onboardingV2Routes);
   app.use('/api', transitRoutes);
   app.use('/api', governanceRoutes);
   app.use('/api', analyticsRoutes);
