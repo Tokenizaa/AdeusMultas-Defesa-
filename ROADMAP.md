@@ -16,7 +16,7 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 | 2 | OCR | **CONCLUÍDA** | OCR sem Vercel |
 | 3 | Knowledge / RAG | **RUNTIME CONCLUÍDO — corpus pendente** | RAG sem Vercel |
 | 4 | AI | **RUNTIME CONCLUÍDO — paridade pendente** | Análise + geração sem Vercel |
-| 5 | Commercial / ofertas | ⬜ | Preço único |
+| 5 | Commercial / ofertas | **RUNTIME CONCLUÍDO — gate pendente** | Preço único |
 | 6 | Payments / webhooks | ⬜ | Pagamento real sem Vercel |
 | 7 | Documents / Storage | ⬜ | PDF persistido sem Vercel |
 | 8 | Notifications / Audit | ⬜ | Persistência definitiva |
@@ -64,3 +64,14 @@ Baseline e evidências: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](docs/m
 - contexto jurídico recuperado pelo Vectorize antes da geração
 
 A fase não é declarada como paridade funcional final enquanto os consumidores reais e o corpus jurídico não forem validados em produção.
+
+## Evidência Fase 5
+
+- `cloudflare/routes/commercial.ts`
+- `cloudflare/routes/commercial.test.ts`
+- `docs/migration/PHASE-5-COMMERCIAL.md`
+- resolução de ofertas/preços via `service_pricings`, `promotion_campaigns`, `coupons` e `cases` no Supabase
+- `POST /api/offers/resolve`
+- `GET /api/payments/resolve-price`
+
+A fase permanece com gate pendente até a prova de preço real no checkout e a busca negativa de consumidores Vercel.
