@@ -12,6 +12,7 @@ import { paymentsRoutes } from './routes/payments'
 import { notificationsRoutes } from './routes/notifications'
 import { auditRoutes } from './routes/audit'
 import { settingsRoutes } from './routes/settings'
+import { adminRoutes } from './routes/admin'
 
 // Create Hono app
 const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
@@ -33,6 +34,7 @@ app.route('/api', paymentsRoutes)
 app.route('/api', notificationsRoutes)
 app.route('/api', auditRoutes)
 app.route('/api', settingsRoutes)
+app.route('/api', adminRoutes)
 
 // Admin test route (protected)
 app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
