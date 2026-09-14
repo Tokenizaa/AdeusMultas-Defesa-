@@ -59,6 +59,15 @@ function parseModelAnswer(answer: string): { rawText: string; fields: OcrFields 
   }
 }
 
+function toDataUri(bytes: Uint8Array, mimeType: string): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
 async function readInput(c: any): Promise<{ bytes: Uint8Array; mimeType: string }> {
   const contentType = c.req.header('content-type') || '';
   if (contentType.includes('multipart/form-data')) {
@@ -95,7 +104,7 @@ ocrRoutes.post('/ocr/analyze', async (c) => {
       return adapterError(c, 'VALIDATION_ERROR', 'A imagem deve ter entre 1 byte e 12 MB.', 400);
     }
 
-    const image = `data:${mimeType};base64,${btoa(String.fromCharCode(...bytes))}`;
+    const image = toDataUri(bytes, mimeType);
     const prompt = `Você é um OCR de documentos de trânsito brasileiros. Extraia o texto visível com máxima fidelidade e, quando existirem, identifique os campos abaixo. Não invente valores. Responda SOMENTE JSON válido no formato {"rawText":"...","fields":{"aitNumber":null,"plate":null,"infractionDate":null,"autuadorBody":null,"description":null,"ctbArticle":null,"vehicleBrandModel":null,"driverName":null,"driverCpf":null,"driverCnh":null}}. Preserve pontuação, números e acentos. Se um campo não estiver legível ou não existir, use null.`;
 
     const result = await c.env.AI.run(MODEL, {
