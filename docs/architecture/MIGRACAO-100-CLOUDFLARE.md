@@ -1,7 +1,9 @@
 # Migração 100% Cloudflare — Remoção do legado Vercel
 
-**Status:** PLANEJADA — execução não iniciada
+**Status:** FASE 0 CONCLUÍDA — execução da Fase 1 autorizada  
 **Objetivo:** eliminar completamente a dependência operacional do Vercel e do backend legado `api/index.mjs`, deixando o Cloudflare Worker como único runtime de API e aplicação.
+
+> Evidência da Fase 0: [`docs/migration/PHASE-0-BASELINE-2026-09-14.md`](../migration/PHASE-0-BASELINE-2026-09-14.md)
 
 ## 1. Objetivo final
 
@@ -63,13 +65,14 @@ O `api/index.mjs` continua sendo o backend legado monolítico e deverá ser remo
 
 ## 4. Roadmap executivo
 
-### Fase 0 — Baseline e congelamento
+### Fase 0 — Baseline e congelamento — CONCLUÍDA
 - Registrar commit/base de referência.
 - Inventariar rotas, consumidores, cron jobs, webhooks e integrações.
 - Congelar novas alterações no backend Vercel.
 - Definir matriz rota → consumidor → destino final → status.
 
-**Saída:** inventário autoritativo e critérios de aceite.
+**Saída:** inventário autoritativo e critérios de aceite.  
+**Evidência:** `docs/migration/PHASE-0-BASELINE-2026-09-14.md`.
 
 ### Fase 1 — Contratos e kernel compartilhado
 - Criar contratos de request/response.
