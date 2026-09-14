@@ -14,6 +14,7 @@ on:
       - "bun.lock"
       - "bun.lockb"
       - "vite.config.*"
+      - "vitest.config.*"
       - ".github/workflows/cloudflare-deploy.yml"
   workflow_dispatch:
 
