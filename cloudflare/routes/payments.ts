@@ -3,19 +3,10 @@ import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
-import { createPixOrder, createCreditCardOrder, processPagBankWebhook, type PagBankWebhookPayload } from '../pagbank';
+import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
 
-// Ordem em memória (status + tx) — idempotência de webhook.
-const ordersStore = new Map<string, any>();
-const processedWebhookIds = new Set<string>();
+const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
-const CURRENCY = 'BRL';
-const FALLBACK_PRICE = 89.9;
-const round2 = (v: number): number => Number((Math.round(v * 100) / 100).toFixed(2));
-const toBRL = (v: number | null | undefined): number | null =>
-  v == null ? null : round2(v > 1000 ? v / 100 : v);
-
-/** Mapeamento canônico ProcedureType → serviço comercial (espelho do offer-service.ts). */
 const PROCEDURE_TO_COMMERCIAL: Record<string, string> = {
   defesa_previa: 'defesa_previa',
   recurso_jari: 'recurso_jari',
@@ -30,156 +21,135 @@ const PROCEDURE_TO_COMMERCIAL: Record<string, string> = {
   processo_cassacao: 'cassacao',
 };
 
-const SERVICES_WITHOUT_OFFER = ['analise_tecnica', 'geracao_documento', 'relatorio_pericial'];
-
 function normalizeServiceType(raw: string): string {
-  const key = (raw || '').toLowerCase().trim();
+  const key = raw.toLowerCase().trim();
   return PROCEDURE_TO_COMMERCIAL[key] ?? key;
 }
 
-export const paymentsRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
+function production(env: Env): boolean {
+  return String((env as any).PAYMENT_MODE ?? 'sandbox').toLowerCase() === 'production';
+}
 
-// GET /api/payments/resolve-price?serviceType=...&userId=...&couponCode=...
-paymentsRoutes.get('/payments/resolve-price', async (c) => {
-  try {
-    const offer = await computeOffer(c.env, c.req.query().serviceType, c.req.query().couponCode);
-    if (!offer) return c.json({ error: 'Serviço não encontrado no catálogo.' }, 404);
-    return c.json(offer);
-  } catch (err: any) {
-    console.error('[payments] resolve-price error:', err?.stack || err?.message || err);
-    return c.json({ error: String(err?.message || err) }, 500);
-  }
-});
-
-async function computeOffer(env: Env, serviceType: string | undefined, couponCode?: string): Promise<any | null> {
-  if (!serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
-
+async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?: string, userId?: string) {
   const normalized = normalizeServiceType(serviceType);
-  if (SERVICES_WITHOUT_OFFER.includes(normalized)) {
-    throw new HTTPException(404, { message: `O serviço "${normalized}" ainda não possui oferta comercial disponível.` });
-  }
+  if (!normalized) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
 
   const supabase = createSupabaseAdminClient(env);
-  const now = new Date().toISOString();
-
-  // 1. Preço do catálogo (Supabase), com fallback 89.90
-  const { data: pricingRows } = await supabase
+  const { data: pricing, error } = await supabase
     .from('service_pricings')
     .select('*')
     .eq('service_type', normalized)
     .maybeSingle();
+  if (error) throw error;
+  if (!pricing || pricing.is_active === false) throw new HTTPException(404, { message: `Oferta não encontrada para "${normalized}".` });
 
-  const rawStandard = pricingRows?.standard_price ?? FALLBACK_PRICE;
-  const baseAmount = toBRL(rawStandard) ?? FALLBACK_PRICE;
+  const raw = Number(pricing.promotional_price ?? pricing.standard_price);
+  const base = Number(pricing.standard_price);
+  const amount = Number((raw > 1000 ? raw / 100 : raw).toFixed(2));
+  const standardAmount = Number((base > 1000 ? base / 100 : base).toFixed(2));
 
-  let promotionDiscount = 0;
-  let promotionId: string | undefined;
-  let promotionName: string | undefined;
-
-  // 2. Promoção ativa (fail-safe: tabela pode não existir)
-  let promos: any[] = [];
-  try {
-    const { data, error } = await supabase.from('promotions').select('*').eq('status', 'active');
-    if (!error) promos = data || [];
-  } catch {
-    // tabela ausente → sem promoção
+  let documentNumber = 1;
+  if (userId) {
+    const { count } = await supabase.from('cases').select('id', { count: 'exact', head: true }).eq('user_id', userId);
+    documentNumber = (count ?? 0) + 1;
   }
 
-  const activePromo = promos.find((p: any) => {
-    if (p.starts_at && p.starts_at > now) return false;
-    if (p.ends_at && p.ends_at < now) return false;
-    const svc = p.applicable_services || [];
-    return svc.includes('all') || svc.includes(normalized);
-  });
-
-  if (activePromo) {
-    promotionId = activePromo.id;
-    promotionName = activePromo.name;
-    promotionDiscount = activePromo.discount_type === 'percentage'
-      ? round2((baseAmount * Number(activePromo.discount_value)) / 100)
-      : round2(toBRL(activePromo.discount_value) ?? 0);
-  } else if (pricingRows?.promotional_price != null) {
-    const promo = toBRL(pricingRows.promotional_price) ?? baseAmount;
-    if (promo < baseAmount) {
-      promotionDiscount = round2(baseAmount - promo);
-      promotionName = 'Preço Promocional';
-    }
-  }
-
-  const priceAfterPromo = round2(baseAmount - promotionDiscount);
-
-  // 3. Desconto de 50% nos 3 primeiros documentos (por simplificação worker: sempre beneficiário)
-  const isFirstBeneficiary = true;
-  const firstDocumentsDiscount = isFirstBeneficiary ? round2(priceAfterPromo * 0.5) : 0;
-  let finalAmount = round2(priceAfterPromo - firstDocumentsDiscount);
-
-  // 4. Cupom (fail-safe: tabela pode não existir)
+  const firstDiscount = documentNumber <= 3 ? Number((amount * 0.5).toFixed(2)) : 0;
+  let finalAmount = Number((amount - firstDiscount).toFixed(2));
   let couponDiscount = 0;
-  if (couponCode) {
-    let coupon: any = null;
-    try {
-      const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('code', String(couponCode).trim().toUpperCase())
-        .maybeSingle();
-      if (!error) coupon = data;
-    } catch {
-      // tabela ausente → cupom ignorado
-    }
 
-    if (coupon && coupon.is_active) {
-      if (coupon.discount_type === 'percentage') {
-        let disc = round2((finalAmount * Number(coupon.discount_value)) / 100);
-        if (coupon.max_discount_amount) {
-          disc = Math.min(disc, toBRL(coupon.max_discount_amount) ?? disc);
-        }
-        couponDiscount = round2(disc);
-      } else {
-        couponDiscount = round2(Math.min(toBRL(coupon.discount_value) ?? 0, finalAmount));
+  if (couponCode) {
+    const { data: coupon } = await supabase.from('coupons').select('*').eq('code', couponCode.trim().toUpperCase()).maybeSingle();
+    if (coupon?.is_active) {
+      const value = Number(coupon.discount_value);
+      couponDiscount = coupon.discount_type === 'percentage'
+        ? Number((finalAmount * value / 100).toFixed(2))
+        : Number((value > 1000 ? value / 100 : value).toFixed(2));
+      if (coupon.max_discount_amount) {
+        const max = Number(coupon.max_discount_amount) > 1000 ? Number(coupon.max_discount_amount) / 100 : Number(coupon.max_discount_amount);
+        couponDiscount = Math.min(couponDiscount, max);
       }
-      finalAmount = round2(Math.max(0, finalAmount - couponDiscount));
+      couponDiscount = Math.min(couponDiscount, finalAmount);
+      finalAmount = Number(Math.max(0, finalAmount - couponDiscount).toFixed(2));
     }
   }
-
-  finalAmount = round2(Math.max(0, finalAmount));
 
   return {
-    price: finalAmount,
-    finalAmount,
-    baseAmount,
-    promotionDiscount,
-    firstDocumentsDiscount,
-    couponDiscount,
-    promotionId,
-    serviceName: pricingRows?.service_name || normalized,
     serviceType: normalized,
-    currency: CURRENCY,
-    documentNumber: 1,
+    serviceName: pricing.service_name || normalized,
+    baseAmount: standardAmount,
+    promotionDiscount: Number(Math.max(0, standardAmount - amount).toFixed(2)),
+    firstDocumentsDiscount: firstDiscount,
+    couponDiscount,
+    finalAmount,
+    documentNumber,
+    currency: 'BRL',
   };
 }
 
-// POST /api/payments/pix/create — cria ordem PIX (sandbox/homologação)
-paymentsRoutes.post('/payments/pix/create', authenticateToken, async (c) => {
+async function persistOrder(env: Env, input: {
+  caseId: string;
+  userId?: string;
+  referenceId: string;
+  gatewayOrderId?: string;
+  gatewayTransactionId: string;
+  amount: number;
+  status: string;
+  gateway: string;
+  qrCodeText?: string;
+  qrCodeUrl?: string;
+  simulated: boolean;
+}) {
+  const supabase = createSupabaseAdminClient(env);
+  const { data, error } = await supabase.from('payment_orders').insert({
+    case_id: input.caseId,
+    user_id: input.userId ?? null,
+    reference_id: input.referenceId,
+    pagbank_order_id: input.gatewayOrderId ?? null,
+    gateway_transaction_id: input.gatewayTransactionId,
+    status: input.status,
+    amount: input.amount,
+    final_amount: input.amount,
+    qr_code_text: input.qrCodeText ?? null,
+    qr_code_url: input.qrCodeUrl ?? null,
+    gateway: input.gateway,
+    simulated: input.simulated,
+  }).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+routes.get('/payments/resolve-price', async (c) => {
+  try {
+    const serviceType = c.req.query('serviceType');
+    if (!serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
+    const offer = await resolveCommercialOffer(c.env, serviceType, c.req.query('couponCode'), c.req.query('userId'));
+    return c.json({ ok: true, ...offer });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    console.error('[payments] resolve-price', error);
+    return c.json({ ok: false, error: 'Não foi possível resolver o preço.' }, 502);
+  }
+});
+
+routes.post('/payments/pix/create', authenticateToken, async (c) => {
   const user = c.get('user')!;
-  const { caseId, serviceType, couponCode, customerName, customerEmail, customerCpf } = await c.req.json<any>().catch(() => ({}));
-  if (!serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
+  const body = await c.req.json<any>().catch(() => ({}));
+  if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
 
-  // Preço resolvido server-side (nunca do frontend)
-  const offer = await computeOffer(c.env, serviceType, couponCode);
-  if (!offer) throw new HTTPException(400, { message: 'Não foi possível determinar a oferta comercial.' });
+  const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
+  const caseId = String(body.caseId || '');
+  if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
 
+  const referenceId = `defesai_case_${caseId}`;
   const payer = {
-    name: customerName || 'Condutor DefesAi',
-    email: customerEmail || (user.email || 'contato@defesai.shop'),
-    document: (customerCpf || '').replace(/\D/g, '') || '00000000000',
+    name: body.customerName || 'Condutor DefesAi',
+    email: body.customerEmail || user.email || 'contato@defesai.shop',
+    document: String(body.customerCpf || '').replace(/\D/g, ''),
   };
 
-  const referenceId = caseId ? `defesai_case_${caseId}` : `defesai_case_${Date.now()}`;
-  const gatewayId = (c.env as any).PAYMENT_MODE && (c.env as any).PAYMENT_MODE !== 'sandbox' ? 'pagbank' : 'pagbank';
-
   const order = await createPixOrder(c.env as any, {
-    caseId: caseId || `case_${Date.now()}`,
+    caseId,
     referenceId,
     payer,
     amountInCents: Math.round(offer.finalAmount * 100),
@@ -187,145 +157,139 @@ paymentsRoutes.post('/payments/pix/create', authenticateToken, async (c) => {
     webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
   });
 
-  ordersStore.set(order.gatewayTransactionId, {
+  const record = await persistOrder(c.env, {
     caseId,
-    txId: order.gatewayTransactionId,
-    status: 'aguardando_pagamento',
-    createdAt: new Date().toISOString(),
+    userId: user.id,
+    referenceId,
+    gatewayOrderId: order.orderId,
+    gatewayTransactionId: order.gatewayTransactionId,
+    amount: offer.finalAmount,
+    status: order.status,
+    gateway: 'pagbank',
+    qrCodeText: order.pixCopyPaste || order.qrCodeText,
+    qrCodeUrl: order.qrCodeUrl,
     simulated: order.simulated,
   });
 
   return c.json({
     success: true,
     order,
+    paymentOrder: record,
     pixCopyPasteString: order.pixCopyPaste,
     qrCodeDataUrl: order.qrCodeUrl || undefined,
     txId: order.gatewayTransactionId,
     amount: offer.finalAmount,
     serviceType: offer.serviceType,
-    status: 'aguardando_pagamento',
-    gateway: gatewayId,
-    simulated: order.simulated,
-  });
-});
-
-// GET /api/payments/pix/status/:txId — polling de status (webhook pode atrasar)
-paymentsRoutes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
-  const { txId } = c.req.param();
-  const order = ordersStore.get(txId);
-  if (!order) throw new HTTPException(404, { message: 'Ordem não encontrada' });
-  return c.json({ success: true, txId, status: order.status, paidAt: order.paidAt });
-});
-
-// POST /api/payments/credit-card/create — cartão de crédito (PagBank, sandbox por padrão)
-paymentsRoutes.post('/payments/credit-card/create', authenticateToken, async (c) => {
-  const user = c.get('user')!;
-  const body = await c.req.json<any>().catch(() => ({}));
-  const {
-    caseId, customerName, customerEmail, customerCpf, amount,
-    installments = 1, serviceType, cardToken, authenticationMethod = 'CHALLENGE',
-    softDescriptor, couponCode,
-  } = body;
-
-  if (!cardToken) throw new HTTPException(400, { message: 'cardToken é obrigatório para pagamento com cartão de crédito' });
-  if (!serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório para criar o pagamento.' });
-
-  const offer = await computeOffer(c.env, serviceType, couponCode);
-  if (!offer) throw new HTTPException(400, { message: 'Não foi possível determinar a oferta comercial.' });
-
-  if (amount !== undefined && Number(amount) !== offer.finalAmount) {
-    throw new HTTPException(400, {
-      message: 'Valor informado não corresponde ao preço da oferta. O backend recalcula automaticamente.',
-    });
-  }
-
-  const payer = {
-    name: customerName || 'Condutor DefesAi',
-    email: customerEmail || user.email || 'contato@defesai.shop',
-    document: (customerCpf || '').replace(/\D/g, '') || '00000000000',
-  };
-
-  const order = await createCreditCardOrder(c.env as any, {
-    caseId: caseId || `case_${Date.now()}`,
-    referenceId: caseId ? `defesai_case_${caseId}` : `defesai_case_${Date.now()}`,
-    customer: { name: payer.name, email: payer.email, taxId: payer.document },
-    amount: offer.finalAmount,
-    installments: Number(installments),
-    cardToken,
-    authenticationMethod,
-    softDescriptor,
-    webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
-  });
-
-  // Registra ordem para polling de status e webhook
-  ordersStore.set(order.orderId, {
-    caseId,
-    txId: order.orderId,
-    status: order.threeDsChallengeRequired ? 'aguardando_autenticacao' : 'aguardando_pagamento',
-    createdAt: new Date().toISOString(),
-    simulated: order.simulated,
-  });
-
-  return c.json({
-    success: true,
-    orderId: order.orderId,
     status: order.status,
-    threeDsChallengeRequired: order.threeDsChallengeRequired,
-    amount: offer.finalAmount,
-    serviceType: offer.serviceType,
     gateway: 'pagbank',
     simulated: order.simulated,
   });
 });
 
-// POST /api/webhooks/pagbank — webhook de pagamento (Hono lê body cru p/ assinatura)
-paymentsRoutes.post('/webhooks/pagbank', async (c) => {
-  const rawBody = await c.req.text();
-  const signature =
-    c.req.header('x-pagbank-signature') ||
-    c.req.header('x-hub-signature-256') ||
-    c.req.header('x-pagbank-signature') ||
-    null;
+routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
+  const user = c.get('user')!;
+  const txId = c.req.param('txId');
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error } = await supabase
+    .from('payment_orders')
+    .select('*')
+    .eq('gateway_transaction_id', txId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new HTTPException(404, { message: 'Ordem não encontrada.' });
+  return c.json({ success: true, txId, status: data.status, paidAt: data.paid_at, paymentOrder: data });
+});
 
-  let payload: PagBankWebhookPayload = {};
+routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
+  const user = c.get('user')!;
+  const body = await c.req.json<any>().catch(() => ({}));
+  if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
+  if (!body.cardToken) throw new HTTPException(400, { message: 'cardToken é obrigatório.' });
+  const caseId = String(body.caseId || '');
+  if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
+
+  const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
+  if (body.amount !== undefined && Number(body.amount) !== offer.finalAmount) {
+    throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
+  }
+
+  const order = await createCreditCardOrder(c.env as any, {
+    caseId,
+    referenceId: `defesai_case_${caseId}`,
+    customer: {
+      name: body.customerName || 'Condutor DefesAi',
+      email: body.customerEmail || user.email || 'contato@defesai.shop',
+      taxId: String(body.customerCpf || '').replace(/\D/g, ''),
+    },
+    amount: offer.finalAmount,
+    installments: Number(body.installments || 1),
+    cardToken: body.cardToken,
+    authenticationMethod: body.authenticationMethod || 'CHALLENGE',
+    softDescriptor: body.softDescriptor,
+    webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank`,
+  });
+
+  const record = await persistOrder(c.env, {
+    caseId,
+    userId: user.id,
+    referenceId: order.referenceId,
+    gatewayOrderId: order.orderId,
+    gatewayTransactionId: order.orderId,
+    amount: offer.finalAmount,
+    status: order.status,
+    gateway: 'pagbank',
+    simulated: order.simulated,
+  });
+
+  return c.json({ success: true, orderId: order.orderId, status: order.status, amount: offer.finalAmount, serviceType: offer.serviceType, gateway: 'pagbank', simulated: order.simulated, paymentOrder: record });
+});
+
+routes.post('/webhooks/pagbank', async (c) => {
+  const rawBody = await c.req.text();
+  const signature = c.req.header('x-pagbank-signature') || c.req.header('x-hub-signature-256');
+  if (!(await verifyWebhookSignature(c.env as any, rawBody, signature))) {
+    throw new HTTPException(401, { message: 'Assinatura inválida.' });
+  }
+
+  let payload: PagBankWebhookPayload;
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    throw new HTTPException(400, { message: 'Body inválido' });
+    throw new HTTPException(400, { message: 'Body inválido.' });
   }
 
-  const result = await processPagBankWebhook(c.env as any, rawBody, signature, payload, processedWebhookIds);
-  if (!result.signatureValid) {
-    throw new HTTPException(401, { message: 'Assinatura inválida' });
-  }
+  const charge = payload.charges?.[0];
+  const status = charge?.status || 'RECEIVED';
+  const referenceId = payload.reference_id || charge?.reference_id || '';
+  if (!referenceId) return c.json({ received: true, status, isDuplicate: false });
 
-  if (result.status === 'PAID') {
-    const refId = payload.reference_id || payload.charges?.[0]?.reference_id || '';
-    const caseIdMatch = String(refId).match(/^defesai_case_(.+)$/);
-    const caseId = caseIdMatch?.[1];
+  const caseMatch = referenceId.match(/^defesai_case_(.+)$/);
+  const caseId = caseMatch?.[1];
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: existing } = await supabase
+    .from('payment_orders')
+    .select('*')
+    .eq('reference_id', referenceId)
+    .maybeSingle();
 
+  if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
+
+  if (status === 'PAID') {
+    const alreadyPaid = String(existing.status).toUpperCase() === 'PAID' || existing.paid_at != null;
+    if (alreadyPaid) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+
+    const now = new Date().toISOString();
+    await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, updated_at: now }).eq('id', existing.id);
     if (caseId) {
-      const supabase = createSupabaseAdminClient(c.env);
-      const orderRecord = Array.from(ordersStore.values()).find((o) => o.caseId === caseId);
-      await supabase
-        .from('cases')
-        .update({
-          is_paid: true,
-          paid_at: new Date().toISOString(),
-          status: 'pago',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', caseId);
-
-      if (orderRecord) {
-        orderRecord.status = 'pago';
-        orderRecord.paidAt = new Date().toISOString();
-        ordersStore.set(orderRecord.txId, orderRecord);
-      }
+      await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', caseId);
     }
+    return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
   }
 
-  return c.json({ received: true, isDuplicate: result.isDuplicate, status: result.status });
+  await supabase.from('payment_orders').update({ status, updated_at: new Date().toISOString() }).eq('id', existing.id);
+  return c.json({ received: true, status, isDuplicate: false, matched: true });
 });
 
+export const paymentsRoutes = routes;
 export default paymentsRoutes;
