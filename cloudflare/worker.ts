@@ -16,6 +16,7 @@ import { scheduledTick } from './cron'
 import { adminRoutes } from './routes/admin'
 import { marketingRoutes } from './routes/marketing'
 import { ocrRoutes } from './routes/ocr'
+import { knowledgeRoutes } from './routes/knowledge'
 
 const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
 app.use('*', secureHeaders())
@@ -33,6 +34,7 @@ app.route('/api', settingsRoutes)
 app.route('/api', adminRoutes)
 app.route('/api', marketingRoutes)
 app.route('/api', ocrRoutes)
+app.route('/api', knowledgeRoutes)
 
 app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
   const user = c.get('user') as AuthenticatedUser
