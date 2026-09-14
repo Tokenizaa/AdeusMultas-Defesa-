@@ -8,7 +8,8 @@ const BUCKET = 'case-documents';
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 function pdfEscape(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const ascii = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7E\n\r]/g, '?');
+  return ascii.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
 function wrap(text: string, max = 92): string[] {
