@@ -18,6 +18,7 @@ import { marketingRoutes } from './routes/marketing'
 import { ocrRoutes } from './routes/ocr'
 import { knowledgeRoutes } from './routes/knowledge'
 import { aiRoutes } from './routes/ai'
+import { commercialRoutes } from './routes/commercial'
 
 const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
 app.use('*', secureHeaders())
@@ -37,6 +38,7 @@ app.route('/api', marketingRoutes)
 app.route('/api', ocrRoutes)
 app.route('/api', knowledgeRoutes)
 app.route('/api', aiRoutes)
+app.route('/api', commercialRoutes)
 
 app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
   const user = c.get('user') as AuthenticatedUser
