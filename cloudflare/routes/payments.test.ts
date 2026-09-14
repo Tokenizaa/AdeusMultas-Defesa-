@@ -34,7 +34,7 @@ describe('Cloudflare payment webhook', () => {
     const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test' } as any;
     const payload = JSON.stringify({ id: 'evt-1', reference_id: 'defesai_case_case-1', charges: [{ status: 'PAID' }] });
 
-    const first = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-pagbank-signature': 'valid' }, body: payload }, env);
+    const first = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-authenticity-token': 'valid' }, body: payload }, env);
     expect(first.status).toBe(200);
     expect((await first.json() as any).isDuplicate).toBe(false);
     expect(update).toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe('Cloudflare payment webhook', () => {
 
     paymentRow.status = 'PAID';
     paymentRow.paid_at = new Date().toISOString();
-    const second = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-pagbank-signature': 'valid' }, body: payload }, env);
+    const second = await app.request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-authenticity-token': 'valid' }, body: payload }, env);
     expect(second.status).toBe(200);
     expect((await second.json() as any).isDuplicate).toBe(true);
   });
