@@ -1,21 +1,16 @@
 import { Hono } from 'hono';
 import type { Env } from '../supabase';
-import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
+import { authenticateToken, requireAdmin } from '../middleware';
 import { createSupabaseAdminClient } from '../supabase';
 
-export const auditRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
-
+export const auditRoutes = new Hono<{ Bindings: Env }>();
 auditRoutes.use('/audit-logs', authenticateToken, requireAdmin);
 auditRoutes.use('/audit/logs', authenticateToken, requireAdmin);
 
 auditRoutes.get('/audit-logs', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') || 200), 500);
   const supabase = createSupabaseAdminClient(c.env);
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(limit);
   if (error) return c.json({ logs: [], error: error.message }, 500);
   return c.json(data || []);
 });
@@ -23,11 +18,7 @@ auditRoutes.get('/audit-logs', async (c) => {
 auditRoutes.get('/audit/logs', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') || 50), 500);
   const supabase = createSupabaseAdminClient(c.env);
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(limit);
   if (error) return c.json({ logs: [], error: error.message }, 500);
   return c.json({ logs: data || [] });
 });
@@ -35,21 +26,27 @@ auditRoutes.get('/audit/logs', async (c) => {
 export async function recordAuditLog(
   env: Env,
   entry: {
-    userId?: string | null;
+    actor: string;
+    actorRole?: string | null;
     action: string;
-    resource?: string | null;
-    resourceId?: string | null;
-    metadata?: Record<string, unknown>;
+    targetResource: string;
+    targetId?: string | null;
+    details?: Record<string, unknown>;
+    correlationId?: string | null;
+    gdprCompliant?: boolean;
   },
 ): Promise<void> {
   const supabase = createSupabaseAdminClient(env);
   const { error } = await supabase.from('audit_logs').insert({
-    user_id: entry.userId ?? null,
+    actor: entry.actor,
+    actor_role: entry.actorRole ?? null,
     action: entry.action,
-    resource: entry.resource ?? null,
-    resource_id: entry.resourceId ?? null,
-    metadata: entry.metadata ?? {},
-    created_at: new Date().toISOString(),
+    target_resource: entry.targetResource,
+    target_id: entry.targetId ?? null,
+    details: entry.details ?? {},
+    correlation_id: entry.correlationId ?? null,
+    gdpr_compliant: entry.gdprCompliant ?? true,
+    timestamp: new Date().toISOString(),
   });
   if (error) console.error('[audit] failed to persist audit log', error.message);
 }
