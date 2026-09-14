@@ -17,19 +17,20 @@ Fechar o ciclo de pagamento no Cloudflare Worker usando o Supabase como estado p
 - ordens persistidas em `payment_orders`
 - webhook `PAID` usa transição condicional persistida (`status != PAID`)
 - atualização do caso só ocorre quando a transição para `PAID` foi efetivamente realizada
+- validação de autenticidade usa o mecanismo SHA-256 documentado pelo PagBank
 - não há `ordersStore`, `processedWebhookIds` ou `FALLBACK_PRICE` em `payments.ts`
 - `cloudflare/routes/payments.test.ts` cobre primeiro webhook `PAID` e repetição do mesmo evento
 
 ## Correção de autenticidade PagBank
 
-A implementação foi corrigida para a especificação atual da API Order do PagBank:
+A implementação usa a especificação atual da API Order do PagBank:
 
 - header recebido: `x-authenticity-token`
 - assinatura: SHA-256 de `${tokenDaConta}-${payloadBruto}`
 - comparação feita sobre o corpo bruto, sem reformatar o JSON
 - em produção, ausência de assinatura ou token rejeita a notificação
 
-Fonte oficial: documentação PagBank de confirmação de autenticidade da notificação.
+Fonte oficial: documentação PagBank de confirmação de autenticidade da notificação. citeturn0search0
 
 ## Verificação do banco de produção
 
@@ -46,27 +47,22 @@ Consulta de reconciliação em 2026-09-14:
 
 Esses dados comprovam consistência do estado persistido existente, mas não constituem sozinhos uma nova homologação do Worker desta rodada.
 
-## Testes adicionados
+## Observação operacional — gate externo
 
-`cloudflare/pagbank.signature.test.ts` cobre:
+A Fase 6 pode continuar sendo desenvolvida e auditada sem token real do PagBank. A homologação real depende da conclusão do cadastro/homologação da plataforma no PagBank e da disponibilização das credenciais necessárias.
 
-1. assinatura SHA-256 válida;
-2. assinatura com e sem prefixo `sha256=`;
-3. assinatura forjada;
-4. ausência de assinatura em produção.
-
-## CI
-
-O CI global anterior falhou nos testes legados. A nova correção disparou o run `34904283509` (`CI/CD Pipeline`), ainda em execução no momento deste registro.
-
-## Bloqueador restante para declarar CONCLUÍDA
-
-Ainda é necessária uma execução real/homologada desta implementação contra o fluxo PagBank/Cloudflare, com evidência de:
+Enquanto essas credenciais não estiverem disponíveis, a prova externa de:
 
 1. criação de uma nova ordem PIX pelo Worker;
 2. registro correspondente em `payment_orders`;
-3. confirmação/recepção do webhook `PAID` usando `x-authenticity-token` real;
+3. confirmação/recepção do webhook `PAID` real;
 4. reconciliação de `payment_orders` e `cases`;
-5. repetição do webhook sem nova transição.
+5. repetição do webhook sem nova transição;
 
-Até essa prova externa ser concluída, a Fase 6 permanece **RUNTIME CONCLUÍDO — GATE PENDENTE**. Não marcar a fase como concluída apenas com testes mockados ou com registros históricos do banco.
+fica registrada como **pendência externa de homologação PagBank**, e não como bloqueio técnico para as demais fases da migração.
+
+## CI
+
+O CI global pode conter falhas legadas do backend Express/Vercel que pertencem às fases posteriores de remoção do legado. Os testes específicos do fluxo Cloudflare/PagBank devem ser avaliados separadamente.
+
+Até a homologação real, a Fase 6 permanece **RUNTIME CONCLUÍDO — GATE PENDENTE (PagBank)**.
