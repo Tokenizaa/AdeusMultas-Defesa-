@@ -24,7 +24,7 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 4. Geração de defesa com fallback CTB (POST /generate-defense)
 5. Documentos dinâmicos por tipo de procedimento (stage 2 UI)
 6. Meta integration adapter (meta-adapter.ts)
-7. Vercel deploy ativo (https://defesai-gd4n9yg9b-nettos-projects-dd3ebb4e.vercel.app)
+7. Vercel deploy ativo
 8. Supabase RLS + profiles + cases schema
 9. 0 P0/P1 blockers (PRODUCTION_BLOCKERS.md)
 10. Typecheck + build passando (AUDIT_PHASE2_RESULTS.md)
@@ -39,13 +39,13 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 
 ## Histórico de sessões (mantido pelo orquestrador)
 
-
-|-----------|---------|-----------|
+| Data | Sessão | Resultado |
+|---|---|---|
 | 2026-08-24T05:37:54Z | G0-gov-baseline | PASS feats: G0-01/02/03 commits: ecdaa42,149112f,05472be,cfabdb1 |
 | 2026-08-24T05:43:42Z | stash orphan | 19 arquivos de produção preservados em stash (pré-governança) |
 | 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved` |
-| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. Docs: `docs/adr/ADR-010-Automatic-Defense-Generation-and-Limit.md` + `.ticket.md`. Ver `docs/adr/`. |
+| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. |
 | 2026-09-14T22:00:00Z | G6-01 — Test unit gate passes | PASS feats: G6-01 commit: d0026cf57fc1ce9327f61259a831336d1112c4b6 |
 | 2026-09-14T22:40:00Z | G6-01 — Gate rule established | RULE: delete obsolete legacy tests; keep only Cloudflare admin test suite as gate for G6-01; do not mask failures; remove proxyToVercel after real consumers covered |
-| 2026-09-15T00:19:21Z | G6-01 — Admin endpoints & dashboard | **PASS** — gate unitário específico aprovado; autorização Cloudflare baseada em `user_profiles`; contrato `/api/admin/users` alinhado ao frontend; testes de middleware/Admin/rotas e correções do gate registrados em `d0026cf57fc1ce9327f61259a831336d1112c4b6`; `plan/features.json` atualizado para `passes=true`.
-
+| 2026-09-15T00:19:21Z | G6-01 — Admin endpoints & dashboard | PASS — autorização Cloudflare baseada em `user_profiles`; contrato `/api/admin/users` alinhado ao frontend. |
+| 2026-09-15T01:30:00Z | G6-01 — Cloudflare Admin final gate | **PASS** — removidos valores fabricados de NVIDIA/9Router, uptime e métricas de IA; `/api/admin/overview` agora retorna somente KPIs derivados do banco e observabilidade explicitamente delegada à Fase 13; suíte `cloudflare/routes/admin.test.ts` é a fonte autoritativa; proxy `/api/admin/*` para Vercel removido do Worker. Commits: `31be199`, `5443fd2`, `a740539`. |
