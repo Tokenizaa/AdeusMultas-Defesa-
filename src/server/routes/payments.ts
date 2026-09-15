@@ -293,11 +293,7 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     // pode obtê-los do caso (server-authoritative).
     const targetRow = caseId && typeof caseId === 'string' ? databaseRows.get(caseId) : undefined;
     const effectiveUserId = resolveEffectiveUser(targetRow, (req as any).user);
-
-    const payer = validatePayerIdentity(
-      targetRow?.client_name || customerName,
-      targetRow?.client_email || customerEmail,
-      targetRow?.client_cpf || customerCpf,
+    const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);
     );
     if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para criação do pagamento PIX.' });
 
@@ -441,11 +437,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     // Identidade e userId NUNCA vêm do frontend quando o servidor pode obtê-los do caso.
     const targetRow = caseId && typeof caseId === 'string' ? databaseRows.get(caseId) : undefined;
     const effectiveUserId = resolveEffectiveUser(targetRow, (req as any).user);
-
-    const payer = validatePayerIdentity(
-      targetRow?.client_name || customerName,
-      targetRow?.client_email || customerEmail,
-      targetRow?.client_cpf || customerCpf,
+    const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);
     );
     if (!payer) return res.status(400).json({ error: 'Nome, email e CPF válidos do pagador são obrigatórios para pagamento com cartão de crédito.' });
 

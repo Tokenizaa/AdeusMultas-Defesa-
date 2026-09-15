@@ -44,4 +44,8 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 | 2026-08-24T05:37:54Z | G0-gov-baseline | PASS feats: G0-01/02/03 commits: ecdaa42,149112f,05472be,cfabdb1 |
 | 2026-08-24T05:43:42Z | stash orphan | 19 arquivos de produção preservados em stash (pré-governança) |
 | 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved` |
-| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. Docs: `docs/adr/ADR-010-Automatic-Defense-Generation-and-Limit.md` + `.ticket.md`. Ver `docs/adr/`. |
+| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. Docs: `docs/adr/ADR-010-Automatic-Defense-Generation-and-Limit.md` + `.ticket.md`. Ver `docs/adr/`. || 2026-09-15T00:36:16Z | G6-01 — Admin endpoints & dashboard | PASS feats: G6-01 commit: d0026cf (admin auth via user_profiles, Cloudflare deploy verified)
+
+| 2026-09-14T22:00:00Z | G6-01 — Test unit gate passes | PASS feats: G6-01 commit: d0026cf57fc1ce9327f61259a831336d1112c4b6 |
+
+| 2026-09-14T22:40:00Z | G6-01 — Gate rule established | RULE: delete obsolete legacy tests; keep only Cloudflare admin test suite as gate for G6-01; do not mask failures; remove proxyToVercel after real consumers covered |

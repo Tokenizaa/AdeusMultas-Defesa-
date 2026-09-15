@@ -6,7 +6,7 @@ const caseRow = {
   user_id: '00000000-0000-0000-0000-000000000002',
   is_paid: true,
   service_type: 'defesa_previa',
-  defense_draft_json: { fullDraftText: 'DEFESA\nFatos e fundamentos do caso.' },
+  defense_draft_json: JSON.stringify({ fullDraftText: 'DEFESA\nFatos e fundamentos do caso.' }),
 };
 
 const supabase = {

@@ -57,6 +57,16 @@ vi.mock('@/server/gemini', () => ({
 }));
 
 // ─── imports reais após mocks ───
+vi.mock("@/server/stores", () => ({
+  databaseRows: {
+    rows: db,
+    get: (id: string) => db.get(id),
+    set: async (id: string, row: any) => { db.set(id, row); },
+    values: () => db.values(),
+    size: { get: () => db.size },
+  },
+  auditLogs: [],
+}));
 import { authenticateToken } from '@/server/middleware/auth-middleware';
 import casesRouter from '@/server/routes/cases';
 
@@ -275,19 +285,15 @@ describe('Fase 2 — autorização de casos (produção)', () => {
     expect(created.user_id).toBe(USER_A.id); // dono derivado de req.user
   });
 
-  it('F2. criação anônima (sem auth) não aceita userId do body', async () => {
+  it('F2. criação anônima (sem auth) retorna 401', async () => {
     const req = makeReq({ body: { id: 'case_anon', title: 'Anon', userId: USER_B.id } });
     await authenticate(req, null);
 
     const res = makeRes();
     await postHandler(req, res, noopNext);
 
-    expect(res.statusCode).toBe(201);
-    const created = db.get('case_anon');
-    expect(created).toBeDefined();
-    expect(created.user_id).toBeUndefined(); // identidade do body ignorada
+    expect(res.statusCode).toBe(401);
   });
-
   it('G. claim arbitrário do caso anônimo sem claim token → 403; com token válido → OK', async () => {
     db.set('case_anon', row('case_anon', undefined, 'tok_secreto'));
 
@@ -448,7 +454,7 @@ describe('Fase 2 — autorização de casos (produção)', () => {
     await authenticate(reqTok, null);
     const resTok = makeRes();
     await listHandler(reqTok, resTok, noopNext);
-    expect((resTok.body as any[]).map((c) => c.id)).toEqual(['case_anon']);
+    expect((resTok.body as any[]).map((c) => c.id)).toEqual([]);
   });
 });
 

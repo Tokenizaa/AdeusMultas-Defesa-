@@ -23,16 +23,29 @@ export interface Env {
   VITE_SUPABASE_ANON_KEY: string;
 }
 
+/** Helper to get env binding with fallback to process.env for testing. */
+function getEnvBinding<T extends keyof Env>(cEnv: Env | undefined, key: T): Env[T] {
+  if (cEnv && (cEnv as any)[key] !== undefined) {
+    return (cEnv as any)[key];
+  }
+  // @ts-ignore - process.env values are strings
+  return process.env[key] as any;
+}
+
 /** Cliente com service_role — bypass RLS (operações de backend). */
-export function createSupabaseAdminClient(env: Env) {
-  return createClient<any>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+export function createSupabaseAdminClient(cEnv: Env | undefined = undefined) {
+  const url = getEnvBinding(cEnv, 'SUPABASE_URL');
+  const key = getEnvBinding(cEnv, 'SUPABASE_SERVICE_ROLE_KEY');
+  return createClient<any>(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
 /** Cliente com chave anônima — usado para verificar tokens JWT do Supabase. */
-export function createSupabaseAnonClient(env: Env) {
-  return createClient<any>(env.SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
+export function createSupabaseAnonClient(cEnv: Env | undefined = undefined) {
+  const url = getEnvBinding(cEnv, 'SUPABASE_URL');
+  const key = getEnvBinding(cEnv, 'VITE_SUPABASE_ANON_KEY');
+  return createClient<any>(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

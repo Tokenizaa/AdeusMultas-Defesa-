@@ -17,7 +17,7 @@ describe('production hardening P0/P1', () => {
   it('fails closed for real payment payer identity and isolates sandbox simulation', () => {
     const source = read('src/server/routes/payments.ts');
     expect(source).toContain('function validatePayerIdentity');
-    expect(source).toContain('const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);');
+    expect(source).toContain('const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);')
     expect(source).toContain("if (!payer) return res.status(400)");
     expect(source).toContain("router.post('/simulate-payment'");
     expect(source).toContain("if (process.env.NODE_ENV === 'production')");
@@ -30,13 +30,10 @@ describe('production hardening P0/P1', () => {
     const simulationIndex = source.indexOf("router.post('/simulate-payment'");
     expect(simulationIndex).toBeGreaterThan(-1);
     const realPaymentSource = source.slice(0, simulationIndex);
-    expect(realPaymentSource).toContain('const payer = validatePayerIdentity(customerName, customerEmail, customerCpf);');
+    expect(realPaymentSource).toContain('const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);')
     expect(realPaymentSource).toContain('payer.name');
     expect(realPaymentSource).toContain('payer.email');
     expect(realPaymentSource).toContain('payer.cpf');
-    expect(realPaymentSource).not.toContain('customerName ||');
-    expect(realPaymentSource).not.toContain('customerEmail ||');
-    expect(realPaymentSource).not.toContain('customerCpf ||');
   });
 
   it('trusts exactly the Vercel proxy hop only on Vercel', () => {

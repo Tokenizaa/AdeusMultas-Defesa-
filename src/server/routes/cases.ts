@@ -51,6 +51,7 @@ function denyCaseAccess(
 router.get('/cases', authenticateToken, (req, res) => {
   const { userId } = req.query;
   const user = req.user;
+console.log("GET /cases user:", user);
   let allRows = Array.from(databaseRows.values());
 
   if (user && user.role !== 'admin') {
@@ -64,6 +65,7 @@ router.get('/cases', authenticateToken, (req, res) => {
   }
 
   const domains: CaseDomain[] = allRows.map((r) => CanonicalMapper.rowToDomain(r));
+console.log("GET /cases allRows length:", allRows.length);
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });

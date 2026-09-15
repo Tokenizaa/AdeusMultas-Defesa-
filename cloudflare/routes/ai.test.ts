@@ -2,6 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { aiRoutes } from './ai';
 
+vi.mock('../supabase', () => {
+  return {
+    createSupabaseAnonClient: vi.fn(() => ({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1', email: 'test@example.com' } }, error: null })
+      }
+    })),
+    createSupabaseAdminClient: vi.fn(() => ({
+      from: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { user_id: 'user-1', name: 'Test', email: 'test@example.com', role: 'user' }, error: null })
+    }))
+  };
+});
+
 describe('Cloudflare AI routes', () => {
   function app() {
     const app = new Hono<any>();
@@ -16,7 +32,7 @@ describe('Cloudflare AI routes', () => {
   it('rejects analysis without case data', async () => {
     const response = await app().request('/api/ai/analyze-infraction', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test' },
       body: JSON.stringify({}),
     }, {
       AI: { run: vi.fn() },

@@ -178,7 +178,7 @@
         "G5-01"
       ],
       "kind": "frontend",
-      "passes": false,
+      "passes": true,
       "acceptance": "src/components/admin/ com Overview, Users, Cases, Integrations views; src/server/routes/admin.ts com authorizeAdmin; GET /api/admin/overview retorna KPIs; /api/admin/users e /api/admin/cases suportam paginação"
     }
   ]

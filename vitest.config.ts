@@ -13,7 +13,7 @@ export default defineConfig({
       'tests/unit/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
     ],
-    setupFiles: ['./tests/vitest-network.setup.ts'],
+    setupFiles: ['./tests/vitest.env.setup.ts', './tests/vitest-network.setup.ts'],
     environment: 'node',
     fileParallelism: false,
     globals: true,

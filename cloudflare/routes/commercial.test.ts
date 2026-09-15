@@ -1,12 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
 import { commercialRoutes } from './commercial';
 
 describe('commercial Cloudflare routes', () => {
+  function app() {
+    const app = new Hono<any>();
+    app.route('/api', commercialRoutes);
+    return app;
+  }
+
   it('rejects resolve without serviceType', async () => {
     const request = new Request('https://example.com/api/offers/resolve', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     });
-    const response = await commercialRoutes.fetch(request, {} as any);
+    const response = await app().request(request, {});
     expect(response.status).toBe(400);
     const body = await response.json() as any;
     expect(body.ok).toBe(false);
@@ -15,7 +22,7 @@ describe('commercial Cloudflare routes', () => {
 
   it('exposes a health route without requiring Vercel', async () => {
     const request = new Request('https://example.com/api/offers/health');
-    const response = await commercialRoutes.fetch(request, {} as any);
+    const response = await app().request(request, {});
     expect(response.status).toBe(200);
     const body = await response.json() as any;
     expect(body.ok).toBe(true);
