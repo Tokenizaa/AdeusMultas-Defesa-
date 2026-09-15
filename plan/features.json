@@ -82,8 +82,11 @@
         "G1-02"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "client Supabase browser/admin e ambiente documentados"
+      "passes": true,
+      "acceptance": "client Supabase browser/admin e ambiente documentados",
+      "verification": {
+        "commit": "f0bde15"
+      }
     },
     {
       "id": "G2-01",

@@ -65,3 +65,4 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 | 2026-09-15T04:45:00Z | G6-13 — Automação Cloudflare | **CANCELADO** — teste removido do CI, não requisito da Fase 11. |
 | 2026-09-15T16:23:26Z | G1-01 — Schema de banco e RLS — Supabase migrações aplicadas | PASS — migrações aplicadas sem erro; RLS enabled em profiles e cases. Commit: b58471c |
 | 2026-09-15T16:26:14Z | G1-02 — Servidor Express com middleware de auth e rate-limit | PASS — auth middleware (authenticateToken, requireAdmin) and rate limit middleware (globalLimiter, strictLimiter) present in src/server/app.ts and middleware files. |
+| 2026-09-15T16:29:41Z | G1-03 — Supabase client e configuração de ambiente | PASS — Supabase client configurado em src/lib/supabase.ts (frontend) e cloudflare/supabase.ts (worker); variáveis de ambiente definidas em .env.example e .env. |
