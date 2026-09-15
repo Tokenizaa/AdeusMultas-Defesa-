@@ -1,4 +1,4 @@
- # Trigger workflow to test new token
+# Trigger workflow to test new token
 name: Cloudflare Deploy
 
 on:
@@ -45,12 +45,10 @@ jobs:
 
       - name: Ensure Vectorize index exists
         run: |
-          # List indexes to verify we can authenticate and see if the index exists
           if ! bunx wrangler vectorize list; then
             echo "Failed to list Vectorize indexes. Check CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID permissions."
             exit 1
           fi
-          # Check if our index exists
           if bunx wrangler vectorize list | grep -q adeusmulta-knowledge; then
             echo "Vectorize index 'adeusmulta-knowledge' already exists."
           else
@@ -63,6 +61,9 @@ jobs:
 
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
+
+      - name: Test Phase 10 marketing
+        run: bunx vitest run cloudflare/routes/marketing.test.ts
 
       - name: Build and deploy to Cloudflare
         run: bunx wrangler@latest deploy --config wrangler.jsonc
