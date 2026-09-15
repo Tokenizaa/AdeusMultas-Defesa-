@@ -242,7 +242,7 @@
         "commit": "b8e9341",
         "notes": "Test Phase 12 payments ✓ (6/6: resolve-price, caseId, cardToken, amount server-authoritative, PIX persist, webhook idempotente); build+deploy ✓; sem proxyToVercel /api/payments/*."
       }
-    },
+},
     {
       "id": "G6-05",
       "phase": "G6",
@@ -253,7 +253,7 @@
       ],
       "kind": "observability",
       "passes": true,
-      "acceptance": "ai.ts registra ai_execution_logs (ok/error, latency); /api/admin/ai/metrics agrega 24h com errorRate/avg/p50/p95/p99 sem fabricação; resposta não contém nvidia/9router; suíte cloudflare/routes/admin.ai-metrics.test.ts passa; CI roda o gate",
+      "acceptance": "ai.ts registra ai_execution_logs (ok/error, latency); /api/admin/ai/metrics agrega 24h com errorRate/avg/p50/p99 sem fabricação; resposta não contém nvidia/9router; suíte cloudflare/routes/admin.ai-metrics.test.ts passa; CI roda o gate",
       "verification": {
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
@@ -261,6 +261,28 @@
         "commit": "5624f87",
         "notes": "Test Phase 13 AI observability ✓ (3/3: log vazio zeros, agregação percentis/erro, sem nvidia/9router); build+deploy ✓; ai_execution_logs instrumentado."
       }
+    },
+    {
+      "id": "G6-06",
+      "phase": "G6",
+      "title": "OCR Cloudflare — análise de documentos de trânsito com Workers AI, validação de formato/tamanho, extração de campos estruturados",
+      "priority": 0,
+      "depends_on": [
+        "G6-01"
+      ],
+      "kind": "integration",
+      "passes": true,
+      "acceptance": "cloudflare/routes/ocr.ts atende /api/ocr/analyze sem proxyToVercel; valida MIME type (JPEG/PNG/WEBP/GIF) e tamanho (1-12 MB); usa Workers AI com modelo Moondream para OCR; extrai campos estruturados (AIT, placa, data, autoridade, descrição, artigo CTB, veículo, motorista); suíte cloudflare/routes/ocr.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T03:00:00Z",
+        "commit": "079811a",
+        "notes": "Test Phase 2 OCR ✓ (2/2: rejeição de mídia não suportada, extração normalizada de campos); build+deploy ✓; sem proxyToVercel /api/ocr/analyze."
+      }
+    }
+  ]
+}
     }
   ]
 }
