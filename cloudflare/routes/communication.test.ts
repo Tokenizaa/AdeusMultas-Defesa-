@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
 const fetchMock = vi.fn();
-vi.stubGlobal('fetch', fetchMock);
 
 vi.mock('../middleware', () => ({
   authenticateToken: async (c: any, next: any) => { c.set('user', { id: 'admin-1', role: 'admin' }); await next(); },
@@ -22,6 +21,7 @@ const env = {
   EVOLUTION_API_KEY: 'test-key',
   EVOLUTION_INSTANCE_NAME: 'defesai',
   EVOLUTION_WEBHOOK_SECRET: 'secret',
+  FETCH: fetchMock,
 } as any;
 
 function response(body: any, status = 200) {
