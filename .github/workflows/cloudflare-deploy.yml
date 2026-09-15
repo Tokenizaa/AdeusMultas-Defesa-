@@ -60,6 +60,9 @@ jobs:
             fi
           fi
 
+      - name: Test Phase 2 OCR
+        run: bunx vitest run cloudflare/routes/ocr.test.ts
+
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
 
