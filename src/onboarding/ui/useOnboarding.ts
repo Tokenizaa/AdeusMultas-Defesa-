@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { OnboardingApplication } from '../application/contracts';
 import type { CanonicalOnboardingPayload, CaseAnalysis, CaseApplicantData } from '../application/types-bridge';
 import type { OnboardingState, OnboardingStep } from '../domain/state';
 
 const CLAIM_STORAGE_KEY = 'defesai_onboarding_claim_token';
+const ONBOARDING_STORAGE_KEY = 'defesai_onboarding_payload';
 const initialPayload: CanonicalOnboardingPayload = { procedureType: 'defesa_previa', vehicle: { plate: '', brandModel: '' }, infraction: { aitNumber: '', infractionCode: '', autuadorBody: '' } };
 const stepOrder: OnboardingStep[] = ['case', 'facts', 'evidence', 'diagnosis', 'qualification', 'review', 'payment', 'generation'];
 
@@ -12,11 +13,29 @@ function loadClaimToken(): string {
 }
 
 export function useOnboarding(application: OnboardingApplication) {
-  const [payload, setPayload] = useState<CanonicalOnboardingPayload>(initialPayload);
+  const [payload, setPayload] = useState<CanonicalOnboardingPayload>(() => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved) as CanonicalOnboardingPayload;
+      }
+    } catch {}
+  }
+  return initialPayload;
+});
   const [state, setState] = useState<OnboardingState>({ status: 'collecting', step: 'case', updatedAt: new Date().toISOString() });
   const [analysis, setAnalysis] = useState<CaseAnalysis>();
   const [error, setError] = useState<string>();
   const stepIndex = useMemo(() => stepOrder.indexOf(state.step), [state.step]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(payload));
+      } catch {}
+    }
+  }, [payload]);
 
   function patchPayload(patch: Partial<CanonicalOnboardingPayload>) { setPayload((current) => ({ ...current, ...patch })); setError(undefined); }
 
