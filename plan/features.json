@@ -179,7 +179,14 @@
       ],
       "kind": "frontend",
       "passes": true,
-      "acceptance": "src/components/admin/ com Overview, Users, Cases, Integrations views; src/server/routes/admin.ts com authorizeAdmin; GET /api/admin/overview retorna KPIs; /api/admin/users e /api/admin/cases suportam paginação"
+      "acceptance": "src/components/admin/ com Overview, Users, Cases, Integrations views; src/server/routes/admin.ts com authorizeAdmin; GET /api/admin/overview retorna KPIs; /api/admin/users e /api/admin/cases suportam paginação",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare migration gate",
+        "at": "2026-09-15T00:19:21Z",
+        "commit": "d0026cf57fc1ce9327f61259a831336d1112c4b6",
+        "notes": "G6-01 guard tests pass; Cloudflare Admin auth uses user_profiles; Admin Users contract aligned; global suite still contains unrelated legacy failures."
+      }
     }
   ]
 }
