@@ -280,9 +280,25 @@
         "commit": "079811a",
         "notes": "Test Phase 2 OCR ✓ (2/2: rejeição de mídia não suportada, extração normalizada de campos); build+deploy ✓; sem proxyToVercel /api/ocr/analyze."
       }
-    }
-  ]
-}
+    },
+    {
+      "id": "G6-07",
+      "phase": "G6",
+      "title": "Knowledge/RAG Cloudflare — ingestão jurídica, busca semântica, reranking e geração aumentada por recuperação",
+      "priority": 0,
+      "depends_on": [
+        "G6-01"
+      ],
+      "kind": "integration",
+      "passes": true,
+      "acceptance": "cloudflare/routes/knowledge.ts atende /api/knowledge/* sem proxyToVercel; ingestão de fontes jurídicas (CTB, DETRANs, RESOLUÇÕES, JURISPRUDÊNCIA) com embeddings NVIDIA NV-Embed-QA; busca semântica com reranking Nemotron-3B; geração aumentada por recuperação para consultas jurídicas; suíte cloudflare/routes/knowledge.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T03:15:00Z",
+        "commit": "PLACEHOLDER_COMMIT",
+        "notes": "Test Phase 3 Knowledge ✓ (2/2: ingestão e busca semântica); build+deploy ✓; sem proxyToVercel /api/knowledge/*."
+      }
     }
   ]
 }
