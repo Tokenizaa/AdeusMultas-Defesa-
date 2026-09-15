@@ -52,8 +52,11 @@
         "G0-01"
       ],
       "kind": "database",
-      "passes": false,
-      "acceptance": "migrações Supabase aplicadas sem erro; RLS enabled em profiles e cases"
+      "passes": true,
+      "acceptance": "migrações Supabase aplicadas sem erro; RLS enabled em profiles e cases",
+      "verification": {
+        "commit": "b58471c"
+      }
     },
     {
       "id": "G1-02",
@@ -64,8 +67,11 @@
         "G1-01"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "rotas de auth e middleware de autorização existentes"
+      "passes": true,
+      "acceptance": "rotas de auth e middleware de autorização existentes",
+      "verification": {
+        "commit": "b58471c"
+      }
     },
     {
       "id": "G1-03",
@@ -220,7 +226,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T02:20:00Z",
-        "commit": "",
+        "commit": "387c40a",
         "notes": "Test Phase 11 WhatsApp communication ✓; build+deploy ✓; send/send-media/send-document/status/qrcode/webhook-config + webhook com EVOLUTION_WEBHOOK_SECRET; fetch runtime via Env.FETCH (testes mockam, produção usa fetch nativo); sem duplicação messaging_* no Supabase; sem fallback Vercel."
       }
     },
@@ -242,7 +248,7 @@
         "commit": "b8e9341",
         "notes": "Test Phase 12 payments ✓ (6/6: resolve-price, caseId, cardToken, amount server-authoritative, PIX persist, webhook idempotente); build+deploy ✓; sem proxyToVercel /api/payments/*."
       }
-},
+    },
     {
       "id": "G6-05",
       "phase": "G6",
@@ -299,7 +305,6 @@
         "commit": "921903a",
         "notes": "Test Phase 3 Knowledge ✓ (2/2: ingestão e busca semântica); build+deploy ✓; sem proxyToVercel /api/knowledge/*."
       }
-    }
     },
     {
       "id": "G6-08",
@@ -319,7 +324,6 @@
         "commit": "c377824",
         "notes": "Test Phase 4 AI ✓ (2/2: análise e geração); build+deploy ✓; sem proxyToVercel /api/ai/*."
       }
-    }
     },
     {
       "id": "G6-09",
@@ -339,7 +343,6 @@
         "commit": "04ba091",
         "notes": "Test Phase 5 Commercial ✓ (2/2: preço e webhook); build+deploy ✓; sem proxyToVercel /api/commercial/*."
       }
-    }
     },
     {
       "id": "G6-10",
@@ -359,7 +362,6 @@
         "commit": "2df63f3",
         "notes": "Test Phase 6 Documents ✓ (1/1: documento gerado); build+deploy ✓; sem proxyToVercel /api/documents/*."
       }
-    }
     },
     {
       "id": "G6-11",
@@ -379,7 +381,6 @@
         "commit": "0e5d227",
         "notes": "Test Phase 8 persistence ✓ (notifications test); build+deploy ✓; sem proxyToVercel /api/notifications/*."
       }
-    }
     },
     {
       "id": "G6-12",
@@ -399,7 +400,6 @@
         "commit": "12b52a3",
         "notes": "Test Phase 9 Admin ✓ (admin test); build+deploy ✓; sem proxyToVercel /api/admin/*."
       }
-    }
     },
     {
       "id": "G6-13",
@@ -410,7 +410,7 @@
         "G6-01"
       ],
       "kind": "backend",
-      "passes": true,
+      "passes": false,
       "acceptance": "cloudflare/cron.ts existe e exporta scheduledTick; sem referências a Vercel no código de automação; suíte cloudflare/routes/cron.test.ts passa; CI roda o gate",
       "verification": {
         "verdict": "PASS",
