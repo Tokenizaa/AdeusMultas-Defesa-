@@ -69,5 +69,8 @@ jobs:
       - name: Test Phase 11 WhatsApp communication
         run: bunx vitest run cloudflare/routes/communication.test.ts
 
+      - name: Test Phase 12 payments
+        run: bunx vitest run cloudflare/routes/payments.test.ts
+
       - name: Build and deploy to Cloudflare
         run: bunx wrangler@latest deploy --config wrangler.jsonc

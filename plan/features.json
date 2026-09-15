@@ -223,6 +223,18 @@
         "commit": "",
         "notes": "Test Phase 11 WhatsApp communication ✓; build+deploy ✓; send/send-media/send-document/status/qrcode/webhook-config + webhook com EVOLUTION_WEBHOOK_SECRET; fetch runtime via Env.FETCH (testes mockam, produção usa fetch nativo); sem duplicação messaging_* no Supabase; sem fallback Vercel."
       }
+    },
+    {
+      "id": "G6-04",
+      "phase": "G6",
+      "title": "Payments/Comercial Cloudflare — resolve-price, PIX/cartão via PagBank, webhook idempotente sem proxy Vercel",
+      "priority": 2,
+      "depends_on": [
+        "G6-03"
+      ],
+      "kind": "backend",
+      "passes": false,
+      "acceptance": "cloudflare/routes/payments.ts atende /api/payments/* e /api/webhooks/pagbank sem proxyToVercel; preço server-authoritative; webhook valida assinatura e é idempotente; suíte cloudflare/routes/payments.test.ts passa; CI roda o gate"
     }
   ]
 }
