@@ -252,8 +252,15 @@
         "G6-04"
       ],
       "kind": "observability",
-      "passes": false,
-      "acceptance": "ai.ts registra ai_execution_logs (ok/error, latency); /api/admin/ai/metrics agrega 24h com errorRate/avg/p50/p95/p99 sem fabricação; resposta não contém nvidia/9router; suíte cloudflare/routes/admin.ai-metrics.test.ts passa; CI roda o gate"
+      "passes": true,
+      "acceptance": "ai.ts registra ai_execution_logs (ok/error, latency); /api/admin/ai/metrics agrega 24h com errorRate/avg/p50/p95/p99 sem fabricação; resposta não contém nvidia/9router; suíte cloudflare/routes/admin.ai-metrics.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T02:40:05Z",
+        "commit": "5624f87",
+        "notes": "Test Phase 13 AI observability ✓ (3/3: log vazio zeros, agregação percentis/erro, sem nvidia/9router); build+deploy ✓; ai_execution_logs instrumentado."
+      }
     }
   ]
 }
