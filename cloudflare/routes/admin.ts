@@ -32,13 +32,26 @@ adminRoutes.get('/admin/overview', async (c) => {
     totalRevenue = (data || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0);
   } catch { totalRevenue = 0; }
   const { count: profileCount } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true });
-  const total = totalCases ?? 0; const paid = paidCases ?? 0; const analyzed = analyzedCases ?? 0; const ready = defenseReadyCases ?? 0;
-  return c.json({ metrics: {
-    totalUsers: profileCount ?? 0, totalCases: total, analyzedCases: analyzed, defenseReadyCases: ready, paidCases: paid, totalRevenue,
-    conversionRate: total > 0 ? Number(((paid / total) * 100).toFixed(1)) : 0,
-    analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
-    aiErrorRatePercent: 0, totalAiCalls: 0, pendingJobs: 0, systemUptimePercent: 100, thesesCount: 0,
-  }, aiStatus: { primaryProvider: 'nvidia', fallbackProvider: '9router', nvidiaHealthy: false, nineRouterHealthy: false, fallbackRatePercent: 0, p95LatencyMs: 0 }, integrationsHealth: { supabase: 'HEALTHY', pagbank: 'UNKNOWN', meta: 'UNKNOWN', ocr: 'UNKNOWN' } });
+  const total = totalCases ?? 0;
+  const paid = paidCases ?? 0;
+  const analyzed = analyzedCases ?? 0;
+  const ready = defenseReadyCases ?? 0;
+  return c.json({
+    metrics: {
+      totalUsers: profileCount ?? 0,
+      totalCases: total,
+      analyzedCases: analyzed,
+      defenseReadyCases: ready,
+      paidCases: paid,
+      totalRevenue,
+      conversionRate: total > 0 ? Number(((paid / total) * 100).toFixed(1)) : 0,
+      analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
+    },
+    observability: {
+      historicalMetrics: false,
+      metricsPhase: 13,
+    },
+  });
 });
 
 adminRoutes.get('/admin/users', async (c) => {
