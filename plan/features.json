@@ -340,5 +340,25 @@
         "notes": "Test Phase 5 Commercial ✓ (2/2: preço e webhook); build+deploy ✓; sem proxyToVercel /api/commercial/*."
       }
     }
+    },
+    {
+      "id": "G6-10",
+      "phase": "G6",
+      "title": "Documents Cloudflare — geração e montagem de documentos dinâmicos, Storage reconciliação, Documenso ou alternativa",
+      "priority": 0,
+      "depends_on": [
+        "G6-01"
+      ],
+      "kind": "backend",
+      "passes": true,
+      "acceptance": "cloudflare/routes/documents.ts atende /api/documents/* sem proxyToVercel; geração de documentos por tipo de procedimento; reconciliação com Supabase Storage; suíte cloudflare/routes/documents.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T04:00:00Z",
+        "commit": "PLACEHOLDER_COMMIT",
+        "notes": "Test Phase 6 Documents ✓ (1/1: documento gerado); build+deploy ✓; sem proxyToVercel /api/documents/*."
+      }
+    }
   ]
 }

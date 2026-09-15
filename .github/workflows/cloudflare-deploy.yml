@@ -72,6 +72,9 @@ jobs:
       - name: Test Phase 5 Commercial
         run: bunx vitest run cloudflare/routes/commercial.test.ts
 
+      - name: Test Phase 6 Documents
+        run: bunx vitest run cloudflare/routes/documents.test.ts
+
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
 
