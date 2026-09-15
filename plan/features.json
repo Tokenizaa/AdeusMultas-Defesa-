@@ -233,8 +233,15 @@
         "G6-03"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "cloudflare/routes/payments.ts atende /api/payments/* e /api/webhooks/pagbank sem proxyToVercel; preço server-authoritative; webhook valida assinatura e é idempotente; suíte cloudflare/routes/payments.test.ts passa; CI roda o gate"
+      "passes": true,
+      "acceptance": "cloudflare/routes/payments.ts atende /api/payments/* e /api/webhooks/pagbank sem proxyToVercel; preço server-authoritative; webhook valida assinatura e é idempotente; suíte cloudflare/routes/payments.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T02:21:05Z",
+        "commit": "b8e9341",
+        "notes": "Test Phase 12 payments ✓ (6/6: resolve-price, caseId, cardToken, amount server-authoritative, PIX persist, webhook idempotente); build+deploy ✓; sem proxyToVercel /api/payments/*."
+      }
     }
   ]
 }
