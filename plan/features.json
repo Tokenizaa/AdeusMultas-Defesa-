@@ -376,7 +376,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T04:15:00Z",
-        "commit": "PLACEHOLDER_COMMIT",
+        "commit": "0e5d227",
         "notes": "Test Phase 8 persistence ✓ (notifications test); build+deploy ✓; sem proxyToVercel /api/notifications/*."
       }
     }

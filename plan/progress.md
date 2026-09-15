@@ -61,4 +61,4 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 | 2026-09-15T03:30:00Z | G6-08 — AI Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 4 AI 2/2, build+deploy); sem proxyToVercel /api/ai/*; commit c377824 |
 | 2026-09-15T03:45:00Z | G6-09 — Commercial Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 5 Commercial 2/2, build+deploy); sem proxyToVercel /api/commercial/*; commit 04ba091 |
 | 2026-09-15T04:00:00Z | G6-10 — Documents Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 6 Documents 1/1, build+deploy); sem proxyToVercel /api/documents/*; commit 2df63f3 |
-| 2026-09-15T04:15:00Z | G6-11 — Notifications/Audit Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 8 persistence); build+deploy ✓; sem proxyToVercel /api/notifications/*; commit 004edfa |
+| 2026-09-15T04:15:00Z | G6-11 — Notifications/Audit Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 8 persistence); build+deploy ✓; sem proxyToVercel /api/notifications/*; commit 0e5d227 |
