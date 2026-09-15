@@ -58,3 +58,4 @@ Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
 | 2026-09-15T02:40:05Z | G6-05 — Observabilidade/Métricas IA Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 13 AI observability 3/3, build+deploy); ai_execution_logs real; endpoint /api/admin/ai/metrics sem fabricação; commit 5624f87 |
 | 2026-09-15T03:00:00Z | G6-06 — OCR Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 2 OCR 2/2, build+deploy); sem proxyToVercel /api/ocr/analyze; commit 079811a |
 | 2026-09-15T03:15:00Z | G6-07 — Knowledge/RAG Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 3 Knowledge 2/2, build+deploy); sem proxyToVercel /api/knowledge/*; commit 921903a |
+| 2026-09-15T03:30:00Z | G6-08 — AI Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 4 AI 2/2, build+deploy); sem proxyToVercel /api/ai/*; commit e450ecc |

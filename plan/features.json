@@ -300,5 +300,25 @@
         "notes": "Test Phase 3 Knowledge ✓ (2/2: ingestão e busca semântica); build+deploy ✓; sem proxyToVercel /api/knowledge/*."
       }
     }
+    },
+    {
+      "id": "G6-08",
+      "phase": "G6",
+      "title": "AI Cloudflare — análise de infração, geração de defesa e health endpoint com Workers AI",
+      "priority": 0,
+      "depends_on": [
+        "G6-01"
+      ],
+      "kind": "integration",
+      "passes": true,
+      "acceptance": "cloudflare/routes/ai.ts atende /api/ai/* sem proxyToVercel; análise de infração e geração de defesa usando Workers AI com modelos pré-configurados; health endpoint /api/ai/health disponível; métricas de execução instrumentadas em ai_execution_logs; suíte cloudflare/routes/ai.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T03:30:00Z",
+        "commit": "PLACEHOLDER_COMMIT",
+        "notes": "Test Phase 4 AI ✓ (2/2: análise e geração); build+deploy ✓; sem proxyToVercel /api/ai/*."
+      }
+    }
   ]
 }

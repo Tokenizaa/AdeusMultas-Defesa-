@@ -63,6 +63,12 @@ jobs:
       - name: Test Phase 2 OCR
         run: bunx vitest run cloudflare/routes/ocr.test.ts
 
+      - name: Test Phase 3 Knowledge
+        run: bunx vitest run cloudflare/routes/knowledge.test.ts
+
+      - name: Test Phase 4 AI
+        run: bunx vitest run cloudflare/routes/ai.test.ts
+
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
 
