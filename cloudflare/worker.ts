@@ -47,18 +47,6 @@ app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
   return c.json({ message: 'Admin test successful', user: { id: user.id, email: user.email, role: user.role } })
 })
 
-async function proxyToVercel(c: any): Promise<Response> {
-  const origin = c.env.API_ORIGIN_FALLBACK || 'https://www.defesai.shop'
-  const incoming = new URL(c.req.url)
-  const target = new URL(incoming.pathname + incoming.search, origin)
-  const headers = new Headers(c.req.raw.headers)
-  headers.set('origin', origin); headers.set('referer', `${origin}${incoming.pathname}`)
-  headers.set('x-forwarded-host', incoming.host); headers.set('x-forwarded-proto', incoming.protocol.replace(':', ''))
-  const init: RequestInit = { method: c.req.method, headers, redirect: 'manual' }
-  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') init.body = await c.req.raw.text()
-  return fetch(target, init as any)
-}
-app.all('/api/marketing/*', proxyToVercel)
 app.all('/api/*', (c) => c.json({ error: 'Rota não implementada no worker (migração Cloudflare pendente).' }, 404))
 
 app.get('*', async (c) => {
