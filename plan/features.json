@@ -1,209 +1,23 @@
 {
   "project": "DefesAi",
   "root": "/home/lg/workspace/projects/AdeusMultas-Defesa-",
-  "phases": [
-    "G0",
-    "G1",
-    "G2",
-    "G3",
-    "G4",
-    "G5",
-    "G6"
-  ],
+  "phases": ["G0", "G1", "G2", "G3", "G4", "G5", "G6"],
   "features": [
-    {
-      "id": "G0-01",
-      "phase": "G0",
-      "title": "Estrutura de governança inicial",
-      "priority": 0,
-      "depends_on": [],
-      "kind": "infrastructure",
-      "passes": true,
-      "acceptance": "loop/CHECKPOINT.md existe; loop/loop.config.json válido (JSON parseável); plan/features.json com ≥1 feature; loop/inbox.items.md inicializado"
-    },
-    {
-      "id": "G0-02",
-      "phase": "G0",
-      "title": "Suíte de invariantes",
-      "priority": 1,
-      "depends_on": [],
-      "kind": "infrastructure",
-      "passes": true,
-      "acceptance": "tests/invariants/ com ≥3 suítes; cada suíte falha ao ser deletada (PreToolUse + pre-commit ativos); runner de invariantes registra output"
-    },
-    {
-      "id": "G0-03",
-      "phase": "G0",
-      "title": "Registro de estado inicial do projeto",
-      "priority": 2,
-      "depends_on": [
-        "G0-01"
-      ],
-      "kind": "documentation",
-      "passes": true,
-      "acceptance": "plan/progress.md com estado inicial e mapa atual de funcionalidades"
-    },
-    {
-      "id": "G1-01",
-      "phase": "G1",
-      "title": "Schema de banco e RLS — Supabase migrações aplicadas",
-      "priority": 0,
-      "depends_on": [
-        "G0-01"
-      ],
-      "kind": "database",
-      "passes": false,
-      "acceptance": "migrações Supabase aplicadas sem erro; RLS enabled em profiles e cases"
-    },
-    {
-      "id": "G1-02",
-      "phase": "G1",
-      "title": "Servidor Express com middleware de auth e rate-limit",
-      "priority": 1,
-      "depends_on": [
-        "G1-01"
-      ],
-      "kind": "backend",
-      "passes": false,
-      "acceptance": "rotas de auth e middleware de autorização existentes"
-    },
-    {
-      "id": "G1-03",
-      "phase": "G1",
-      "title": "Supabase client e configuração de ambiente",
-      "priority": 2,
-      "depends_on": [
-        "G1-02"
-      ],
-      "kind": "backend",
-      "passes": false,
-      "acceptance": "client Supabase browser/admin e ambiente documentados"
-    },
-    {
-      "id": "G2-01",
-      "phase": "G2",
-      "title": "Onboarding Wizard — duas fases com persistência localStorage",
-      "priority": 0,
-      "depends_on": [
-        "G1-02"
-      ],
-      "kind": "frontend",
-      "passes": false,
-      "acceptance": "wizard com isAdmin, persistência local e bifurcação admin/cidadão"
-    },
-    {
-      "id": "G2-02",
-      "phase": "G2",
-      "title": "CRUD de casos com proteção IDOR",
-      "priority": 1,
-      "depends_on": [
-        "G2-01"
-      ],
-      "kind": "backend",
-      "passes": false,
-      "acceptance": "CaseRepository e proteção de acesso a casos"
-    },
-    {
-      "id": "G3-01",
-      "phase": "G3",
-      "title": "Pipeline de geração de defesa com fallback determinístico",
-      "priority": 0,
-      "depends_on": [
-        "G2-02"
-      ],
-      "kind": "backend",
-      "passes": false,
-      "acceptance": "pipeline de defesa com RAG/LLM e fallback determinístico"
-    },
-    {
-      "id": "G3-02",
-      "phase": "G3",
-      "title": "Gerenciador de documentos dinâmico por tipo de procedimento",
-      "priority": 1,
-      "depends_on": [
-        "G3-01"
-      ],
-      "kind": "frontend",
-      "passes": false,
-      "acceptance": "checklist, upload e documento final por procedimento"
-    },
-    {
-      "id": "G4-01",
-      "phase": "G4",
-      "title": "Integração Meta — adaptador unificado",
-      "priority": 0,
-      "depends_on": [
-        "G3-02"
-      ],
-      "kind": "integration",
-      "passes": false,
-      "acceptance": "adaptador Meta, status e webhook com assinatura"
-    },
-    {
-      "id": "G5-01",
-      "phase": "G5",
-      "title": "Gateway de pagamento unificado (PagBank + GGPIX)",
-      "priority": 0,
-      "depends_on": [
-        "G3-02"
-      ],
-      "kind": "backend",
-      "passes": false,
-      "acceptance": "gateway de pagamento com webhook idempotente"
-    },
-    {
-      "id": "G5-02",
-      "phase": "G5",
-      "title": "Landing page e páginas públicas",
-      "priority": 1,
-      "depends_on": [
-        "G5-01"
-      ],
-      "kind": "frontend",
-      "passes": false,
-      "acceptance": "páginas públicas responsivas, SEO e WCAG AA"
-    },
-    {
-      "id": "G6-01",
-      "phase": "G6",
-      "title": "Admin Cloudflare — dashboard e endpoints /api/admin",
-      "priority": 0,
-      "depends_on": [
-        "G5-01"
-      ],
-      "kind": "frontend",
-      "passes": true,
-      "acceptance": "Admin usa exclusivamente Cloudflare Worker + Supabase; autenticação admin usa user_profiles; GET /api/admin/overview retorna somente KPIs derivados do banco; GET/PUT /api/admin/users respeitam o contrato AuthUser; GET /api/admin/ai/overview descreve Workers AI/Vectorize atuais; não existe proxy Vercel para /api/admin/*; suíte autoritativa cloudflare/routes/admin.test.ts passa",
-      "verification": {
-        "verdict": "PASS",
-        "by": "Cloudflare migration gate",
-        "at": "2026-09-15T00:00:00Z",
-        "commits": [
-          "31be1995849aa3974ac6613f6adc464c255f0017",
-          "5443fd2153250dd6aa396bd26e3c77a40671f1ab",
-          "a7405394c5ca52240f1d3a8e2286b08f612fa751"
-        ],
-        "notes": "Legacy/obsolete admin overview expectations were not repaired. The current Cloudflare suite is authoritative. Fabricated NVIDIA/9Router, uptime and AI observability values were removed. Admin requests no longer proxy to Vercel. Historical observability remains Phase 13."
-      }
-    },
-    {
-      "id": "G6-02",
-      "phase": "G6",
-      "title": "Marketing/Meta Cloudflare — CRUD editorial_content, upload mídia, publicação Meta, engine cloudflare-meta",
-      "priority": 1,
-      "depends_on": [
-        "G6-01"
-      ],
-      "kind": "integration",
-      "passes": true,
-      "acceptance": "cloudflare/routes/marketing.ts atende /api/marketing/* sem proxyToVercel; CRUD editorial_content→Supabase; upload mídia→Supabase Storage; publish via MetaPublisherAdapter; status engine=cloudflare-meta; suíte cloudflare/routes/marketing.test.ts passa",
-      "verification": {
-        "verdict": "PASS",
-        "by": "Cloudflare Deploy GitHub Actions",
-        "at": "2026-09-15T01:58:35Z",
-        "commit": "e73bd99",
-        "notes": "Test Phase 10 marketing ✓; Test Phase 8 persistence ✓; Build and deploy to Cloudflare ✓; Vectorize adeusmulta-knowledge ✓."
-      }
-    }
+    {"id":"G0-01","phase":"G0","title":"Estrutura de governança inicial","priority":0,"depends_on":[],"kind":"infrastructure","passes":true,"acceptance":"loop/CHECKPOINT.md existe; loop/loop.config.json válido (JSON parseável); plan/features.json com ≥1 feature; loop/inbox.items.md inicializado"},
+    {"id":"G0-02","phase":"G0","title":"Suíte de invariantes","priority":1,"depends_on":[],"kind":"infrastructure","passes":true,"acceptance":"tests/invariants/ com ≥3 suítes; cada suíte falha ao ser deletada (PreToolUse + pre-commit ativos); runner de invariantes registra output"},
+    {"id":"G0-03","phase":"G0","title":"Registro de estado inicial do projeto","priority":2,"depends_on":["G0-01"],"kind":"documentation","passes":true,"acceptance":"plan/progress.md com estado inicial e mapa atual de funcionalidades"},
+    {"id":"G1-01","phase":"G1","title":"Schema de banco e RLS — Supabase migrações aplicadas","priority":0,"depends_on":["G0-01"],"kind":"database","passes":false,"acceptance":"migrações Supabase aplicadas sem erro; RLS enabled em profiles e cases"},
+    {"id":"G1-02","phase":"G1","title":"Servidor Express com middleware de auth e rate-limit","priority":1,"depends_on":["G1-01"],"kind":"backend","passes":false,"acceptance":"rotas de auth e middleware de autorização existentes"},
+    {"id":"G1-03","phase":"G1","title":"Supabase client e configuração de ambiente","priority":2,"depends_on":["G1-02"],"kind":"backend","passes":false,"acceptance":"client Supabase browser/admin e ambiente documentados"},
+    {"id":"G2-01","phase":"G2","title":"Onboarding Wizard — duas fases com persistência localStorage","priority":0,"depends_on":["G1-02"],"kind":"frontend","passes":false,"acceptance":"wizard com isAdmin, persistência local e bifurcação admin/cidadão"},
+    {"id":"G2-02","phase":"G2","title":"CRUD de casos com proteção IDOR","priority":1,"depends_on":["G2-01"],"kind":"backend","passes":false,"acceptance":"CaseRepository e proteção de acesso a casos"},
+    {"id":"G3-01","phase":"G3","title":"Pipeline de geração de defesa com fallback determinístico","priority":0,"depends_on":["G2-02"],"kind":"backend","passes":false,"acceptance":"pipeline de defesa com RAG/LLM e fallback determinístico"},
+    {"id":"G3-02","phase":"G3","title":"Gerenciador de documentos dinâmico por tipo de procedimento","priority":1,"depends_on":["G3-01"],"kind":"frontend","passes":false,"acceptance":"checklist, upload e documento final por procedimento"},
+    {"id":"G4-01","phase":"G4","title":"Integração Meta — adaptador unificado","priority":0,"depends_on":["G3-02"],"kind":"integration","passes":false,"acceptance":"adaptador Meta, status e webhook com assinatura"},
+    {"id":"G5-01","phase":"G5","title":"Gateway de pagamento unificado (PagBank + GGPIX)","priority":0,"depends_on":["G3-02"],"kind":"backend","passes":false,"acceptance":"gateway de pagamento com webhook idempotente"},
+    {"id":"G5-02","phase":"G5","title":"Landing page e páginas públicas","priority":1,"depends_on":["G5-01"],"kind":"frontend","passes":false,"acceptance":"páginas públicas responsivas, SEO e WCAG AA"},
+    {"id":"G6-01","phase":"G6","title":"Admin Cloudflare — dashboard e endpoints /api/admin","priority":0,"depends_on":["G5-01"],"kind":"frontend","passes":true,"acceptance":"Admin usa exclusivamente Cloudflare Worker + Supabase; autenticação admin usa user_profiles; GET /api/admin/overview retorna somente KPIs derivados do banco; GET/PUT /api/admin/users respeitam o contrato AuthUser; GET /api/admin/ai/overview descreve Workers AI/Vectorize atuais; não existe proxy Vercel para /api/admin/*; suíte autoritativa cloudflare/routes/admin.test.ts passa","verification":{"verdict":"PASS","by":"Cloudflare migration gate","at":"2026-09-15T00:00:00Z","commits":["31be1995849aa3974ac6613f6adc464c255f0017","5443fd2153250dd6aa396bd26e3c77a40671f1ab","a7405394c5ca52240f1d3a8e2286b08f612fa751"],"notes":"Legacy/obsolete admin overview expectations were not repaired. The current Cloudflare suite is authoritative. Fabricated NVIDIA/9Router, uptime and AI observability values were removed. Admin requests no longer proxy to Vercel. Historical observability remains Phase 13."}},
+    {"id":"G6-02","phase":"G6","title":"Marketing/Meta Cloudflare — CRUD editorial_content, upload mídia, publicação Meta, engine cloudflare-meta","priority":1,"depends_on":["G6-01"],"kind":"integration","passes":true,"acceptance":"cloudflare/routes/marketing.ts atende /api/marketing/* sem proxyToVercel; CRUD editorial_content→Supabase; upload mídia→Supabase Storage; publish via MetaPublisherAdapter; status engine=cloudflare-meta; suíte cloudflare/routes/marketing.test.ts passa","verification":{"verdict":"PASS","by":"Cloudflare Deploy GitHub Actions","at":"2026-09-15T01:58:35Z","commit":"e73bd99","notes":"Test Phase 10 marketing ✓; Test Phase 8 persistence ✓; Build and deploy to Cloudflare ✓; Vectorize adeusmulta-knowledge ✓."}},
+    {"id":"G6-03","phase":"G6","title":"WhatsApp/Comunicação Cloudflare — Evolution API","priority":2,"depends_on":["G6-02"],"kind":"integration","passes":false,"acceptance":"/api/communication/whatsapp/* é atendido pelo Cloudflare Worker; envio de texto, mídia e documento usam Evolution API; status e QR consultam a instância; webhook canônico valida EVOLUTION_WEBHOOK_SECRET; ausência de credenciais falha fechado; mensagens não são duplicadas nas tabelas messaging_* do Supabase; suíte autoritativa cloudflare/routes/communication.test.ts passa; Cloudflare Deploy executa o gate e publica o Worker","verification":{"verdict":"PENDING","by":"Cloudflare migration gate","at":"2026-09-15","notes":"Implementação e suíte foram criadas; aguardando execução do GitHub Actions para fechar o gate."}}
   ]
 }
