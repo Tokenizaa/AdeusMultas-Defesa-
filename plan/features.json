@@ -316,7 +316,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T03:30:00Z",
-        "commit": "PLACEHOLDER_COMMIT",
+        "commit": "c377824",
         "notes": "Test Phase 4 AI ✓ (2/2: análise e geração); build+deploy ✓; sem proxyToVercel /api/ai/*."
       }
     }
