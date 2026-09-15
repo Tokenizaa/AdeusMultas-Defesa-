@@ -142,8 +142,11 @@
         "G3-01"
       ],
       "kind": "frontend",
-      "passes": false,
-      "acceptance": "checklist, upload e documento final por procedimento"
+      "passes": true,
+      "acceptance": "checklist, upload e documento final por procedimento",
+      "verification": {
+        "commit": "415fbe4"
+      }
     },
     {
       "id": "G4-01",
