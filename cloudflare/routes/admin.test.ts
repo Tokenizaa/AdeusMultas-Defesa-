@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
 const mockFrom = vi.fn();
@@ -30,14 +30,14 @@ function query(data: any, error: any = null) {
 }
 
 describe('admin users contract', () => {
+  beforeEach(() => mockFrom.mockReset());
+
   it('maps user_profiles to the AuthUser frontend contract', async () => {
-    mockFrom.mockReturnValueOnce(query([
-      {
-        user_id: 'u1', name: 'Maria', email: 'maria@example.com', role: 'citizen',
-        cpf: '123', phone: '999', cnh: 'ABC', city_state: 'Porto Alegre/RS',
-        avatar_url: null, created_at: '2026-09-15T00:00:00Z'
-      }
-    ]));
+    mockFrom.mockReturnValueOnce(query([{
+      user_id: 'u1', name: 'Maria', email: 'maria@example.com', role: 'citizen',
+      cpf: '123', phone: '999', cnh: 'ABC', city_state: 'Porto Alegre/RS',
+      avatar_url: null, created_at: '2026-09-15T00:00:00Z'
+    }]));
 
     const response = await app().request('/api/admin/users');
     expect(response.status).toBe(200);
@@ -55,9 +55,7 @@ describe('admin users contract', () => {
       created_at: '2026-09-15T00:00:00Z'
     };
     const updated = { ...target, role: 'admin' };
-    mockFrom
-      .mockReturnValueOnce(query(target))
-      .mockReturnValueOnce(query(updated));
+    mockFrom.mockReturnValueOnce(query(target)).mockReturnValueOnce(query(updated));
 
     const response = await app().request('/api/admin/users', {
       method: 'PUT',
