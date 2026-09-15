@@ -157,8 +157,11 @@
         "G3-02"
       ],
       "kind": "integration",
-      "passes": false,
-      "acceptance": "adaptador Meta, status e webhook com assinatura"
+      "passes": true,
+      "acceptance": "adaptador Meta, status e webhook com assinatura",
+      "verification": {
+        "commit": "23f0519"
+      }
     },
     {
       "id": "G5-01",
