@@ -10,7 +10,6 @@ export const marketingRoutes = new Hono<{ Bindings: Env; Variables: { user?: Aut
 
 marketingRoutes.use('/marketing/*', authenticateToken, requireAdmin);
 
-// GET /api/marketing/contents — lista com filtros
 marketingRoutes.get('/marketing/contents', async (c) => {
   const { status, channel, limit = '100' } = c.req.query();
   const supabase = createSupabaseAdminClient(c.env);
@@ -22,7 +21,6 @@ marketingRoutes.get('/marketing/contents', async (c) => {
   return c.json({ contents: data || [] });
 });
 
-// POST /api/marketing/contents — cria conteúdo (agenda por scheduled_at)
 marketingRoutes.post('/marketing/contents', async (c) => {
   const body = await c.req.json<any>().catch(() => ({}));
   const supabase = createSupabaseAdminClient(c.env);
@@ -46,7 +44,6 @@ marketingRoutes.post('/marketing/contents', async (c) => {
   return c.json({ content: data }, 201);
 });
 
-// PUT /api/marketing/contents/:id — atualiza
 marketingRoutes.put('/marketing/contents/:id', async (c) => {
   const body = await c.req.json<any>().catch(() => ({}));
   const supabase = createSupabaseAdminClient(c.env);
@@ -58,7 +55,6 @@ marketingRoutes.put('/marketing/contents/:id', async (c) => {
   return c.json({ success: true });
 });
 
-// POST /api/marketing/publish/:id — publicação imediata
 marketingRoutes.post('/marketing/publish/:id', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
   const { data: content } = await supabase.from('editorial_content').select('*').eq('id', c.req.param('id')).maybeSingle();
@@ -84,9 +80,7 @@ marketingRoutes.post('/marketing/publish/:id', async (c) => {
   };
 
   const result = await publisher.publish(payload);
-  if (!result.ok) {
-    throw new HTTPException(502, { message: result.error || 'Falha na publicação' });
-  }
+  if (!result.ok) throw new HTTPException(502, { message: result.error || 'Falha na publicação' });
 
   await supabase
     .from('editorial_content')
@@ -101,25 +95,21 @@ marketingRoutes.post('/marketing/publish/:id', async (c) => {
   return c.json({ success: true, externalId: result.externalId });
 });
 
-// GET /api/marketing/status — resumo simples
 marketingRoutes.get('/marketing/status', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
   const { count: total } = await supabase.from('editorial_content').select('*', { count: 'exact', head: true });
   const { count: agendados } = await supabase.from('editorial_content').select('*', { count: 'exact', head: true }).eq('status', 'agendado');
   const { count: publicados } = await supabase.from('editorial_content').select('*', { count: 'exact', head: true }).eq('status', 'publicado');
-  return c.json({ total: total || 0, agendados: agendados || 0, publicados: publicados || 0, engine: 'nvidia-only' });
+  return c.json({ total: total || 0, agendados: agendados || 0, publicados: publicados || 0, engine: 'cloudflare-meta' });
 });
 
-// POST /api/marketing/media/upload — sobe mídia para Supabase Storage público e retorna URL
 marketingRoutes.post('/marketing/media/upload', authenticateToken, requireAdmin, async (c) => {
   const { base64, filename, mimeType } = await c.req.json<any>().catch(() => ({}));
   if (!base64 || typeof base64 !== 'string') throw new HTTPException(400, { message: 'base64 é obrigatório' });
 
   const clean = base64.replace(/^data:[^;]+;base64,/, '');
   const bytes = Uint8Array.from(atob(clean), (ch) => ch.charCodeAt(0));
-  if (bytes.length === 0 || bytes.length > 50 * 1024 * 1024) {
-    throw new HTTPException(413, { message: 'Mídia deve ter entre 1 byte e 50MB' });
-  }
+  if (bytes.length === 0 || bytes.length > 50 * 1024 * 1024) throw new HTTPException(413, { message: 'Mídia deve ter entre 1 byte e 50MB' });
 
   const ext = (String(filename || 'arquivo').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
   const key = `media/${crypto.randomUUID()}.${ext}`;
@@ -142,11 +132,7 @@ marketingRoutes.post('/marketing/media/upload', authenticateToken, requireAdmin,
     throw new HTTPException(502, { message: `Upload falhou: ${res.status} ${detail.slice(0, 120)}` });
   }
 
-  return c.json({
-    url: `${supabaseUrl}/storage/v1/object/public/${key}`,
-    key,
-    sizeBytes: bytes.length,
-  }, 201);
+  return c.json({ url: `${supabaseUrl}/storage/v1/object/public/${key}`, key, sizeBytes: bytes.length }, 201);
 });
 
 export default marketingRoutes;
