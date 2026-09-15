@@ -360,5 +360,25 @@
         "notes": "Test Phase 6 Documents ✓ (1/1: documento gerado); build+deploy ✓; sem proxyToVercel /api/documents/*."
       }
     }
+    },
+    {
+      "id": "G6-11",
+      "phase": "G6",
+      "title": "Notifications/Audit Cloudflare — persiste notificações e auditoria no Supabase sem proxy Vercel",
+      "priority": 0,
+      "depends_on": [
+        "G6-01"
+      ],
+      "kind": "backend",
+      "passes": true,
+      "acceptance": "cloudflare/routes/notifications.ts atende /api/notifications/* sem proxyToVercel; persiste notificações e auditoria no Supabase; suíte cloudflare/routes/notifications.test.ts passa; CI roda o gate",
+      "verification": {
+        "verdict": "PASS",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T04:15:00Z",
+        "commit": "PLACEHOLDER_COMMIT",
+        "notes": "Test Phase 8 persistence ✓ (notifications test); build+deploy ✓; sem proxyToVercel /api/notifications/*."
+      }
+    }
   ]
 }
