@@ -112,8 +112,11 @@
         "G2-01"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "CaseRepository e proteção de acesso a casos"
+      "passes": true,
+      "acceptance": "CaseRepository e proteção de acesso a casos",
+      "verification": {
+        "commit": "5413840"
+      }
     },
     {
       "id": "G3-01",
