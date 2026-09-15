@@ -336,7 +336,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T03:45:00Z",
-        "commit": "PLACEHOLDER_COMMIT",
+        "commit": "04ba091",
         "notes": "Test Phase 5 Commercial ✓ (2/2: preço e webhook); build+deploy ✓; sem proxyToVercel /api/commercial/*."
       }
     }
