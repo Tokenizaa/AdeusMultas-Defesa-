@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import type { Env } from './supabase'
-import { authenticateToken, requireAdmin, type AuthenticatedUser } from './middleware'
+import { createSupabaseAdminClient, type Env } from './supabase'
+import { authenticateToken, requireAdmin, type AuthenticatedUser, logRequest } from './middleware'
 import { apiBoundary } from '../src/shared/api/boundary'
 
 import { authRoutes } from './routes/auth'
@@ -25,9 +25,39 @@ import { documentsRoutes } from './routes/documents'
 const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
 app.use('*', secureHeaders())
 app.use('*', cors())
+app.use('*', logRequest)
 app.use('/api/*', apiBoundary)
 
-app.get('/api/health', (c) => c.json({ status: 'worker_is_working_v3', timestamp: new Date().toISOString() }))
+app.get('/api/health', async (c) => {
+  const start = Date.now();
+  let dbStatus = 'disconnected';
+  let dbError = null;
+  try {
+    const supabase = createSupabaseAdminClient(c.env);
+    // Simple query to test connection
+    const { data, error } = await supabase.from('request_logs').select('count').limit(1);
+    if (error) {
+      dbStatus = 'error';
+      dbError = error.message;
+    } else {
+      dbStatus = 'connected';
+    }
+  } catch (err) {
+    dbStatus = 'error';
+    dbError = err instanceof Error ? err.message : String(err);
+  }
+  const latencyMs = Date.now() - start;
+  return c.json({
+    status: 'ok',
+    worker: 'cloudflare-worker',
+    timestamp: new Date().toISOString(),
+    latency_ms: latencyMs,
+    database: {
+      status: dbStatus,
+      error: dbError,
+    },
+  });
+});
 app.route('/api', authRoutes)
 app.route('/api', onboardingRoutes)
 app.route('/api', casesRoutes)
@@ -64,3 +94,4 @@ export default {
     console.log('[cron] tick:', JSON.stringify(result))
   },
 }
+export { app };

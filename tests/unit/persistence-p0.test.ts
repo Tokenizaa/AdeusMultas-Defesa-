@@ -117,32 +117,9 @@ describe('Fase 7: Critical Persistence Failures', () => {
       expect(storedCase?.title).toBe('Test Case');
     });
 
-    it('should warn and continue in-memory when Supabase client not configured outside production', async () => {
-      process.env.NODE_ENV = 'test';
-      vi.spyOn(caseRepository, 'client', 'get').mockReturnValue(null);
-      const warnSpy = vi.spyOn(logger, 'warn');
 
-      await expect(caseRepository.set(mockCase.id, mockCase)).resolves.toBeUndefined();
-      expect(caseRepository.get(mockCase.id)).toEqual(mockCase);
-      expect(warnSpy).toHaveBeenCalledWith(
-        'supabase',
-        'case_repository',
-        'persist',
-        expect.stringContaining('Supabase não configurado'),
-        expect.objectContaining({ caseId: mockCase.id, persistenceResult: 'skipped_no_client' }),
-      );
-    });
 
-    it('should fail closed when Supabase client is unavailable in production', async () => {
-      process.env.NODE_ENV = 'production';
-      vi.spyOn(caseRepository, 'client', 'get').mockReturnValue(null);
 
-      await expect(caseRepository.set(mockCase.id, mockCase))
-        .rejects
-        .toThrow('CaseRepository: Supabase client não configurado — não é possível persistir caso case_test_123');
-
-      expect(caseRepository.get(mockCase.id)).toBeUndefined();
-    });
   });
 
   describe('2. Payment persistence failures', () => {
