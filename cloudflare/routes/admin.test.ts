@@ -29,7 +29,7 @@ function query(data: any, error: any = null) {
   return q;
 }
 
-describe('admin users contract', () => {
+describe('admin Cloudflare contract', () => {
   beforeEach(() => mockFrom.mockReset());
 
   it('exposes factual Cloudflare AI architecture without legacy providers', async () => {
@@ -50,6 +50,28 @@ describe('admin users contract', () => {
       status: 'configured',
     });
     expect(body.observability).toEqual({ historicalMetrics: false, metricsPhase: 13 });
+  });
+
+  it('returns only factual overview KPIs and defers observability to Phase 13', async () => {
+    mockFrom.mockImplementation(() => query(null));
+    const response = await app().request('/api/admin/overview');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.metrics).toMatchObject({
+      totalUsers: 0,
+      totalCases: 0,
+      analyzedCases: 0,
+      defenseReadyCases: 0,
+      paidCases: 0,
+      totalRevenue: 0,
+      conversionRate: 0,
+      analysisToDocRate: 0,
+    });
+    expect(body.observability).toEqual({ historicalMetrics: false, metricsPhase: 13 });
+    expect(body).not.toHaveProperty('aiStatus');
+    expect(JSON.stringify(body)).not.toContain('nvidia');
+    expect(JSON.stringify(body)).not.toContain('9router');
+    expect(JSON.stringify(body)).not.toContain('systemUptimePercent');
   });
 
   it('maps user_profiles to the AuthUser frontend contract', async () => {
