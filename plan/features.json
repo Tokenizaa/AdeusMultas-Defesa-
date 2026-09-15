@@ -296,7 +296,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T03:15:00Z",
-        "commit": "PLACEHOLDER_COMMIT",
+        "commit": "921903a",
         "notes": "Test Phase 3 Knowledge ✓ (2/2: ingestão e busca semântica); build+deploy ✓; sem proxyToVercel /api/knowledge/*."
       }
     }
