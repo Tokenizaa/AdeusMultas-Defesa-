@@ -25,6 +25,7 @@ export interface Env {
   EVOLUTION_API_KEY?: string;
   EVOLUTION_INSTANCE_NAME?: string;
   EVOLUTION_WEBHOOK_SECRET?: string;
+  FETCH?: typeof fetch;
 }
 
 /** Helper to get env binding with fallback to process.env for testing. */
