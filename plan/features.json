@@ -97,8 +97,11 @@
         "G1-02"
       ],
       "kind": "frontend",
-      "passes": false,
-      "acceptance": "wizard com isAdmin, persistência local e bifurcação admin/cidadão"
+      "passes": true,
+      "acceptance": "wizard com isAdmin, persistência local e bifurcação admin/cidadão",
+      "verification": {
+        "commit": "caf67e8"
+      }
     },
     {
       "id": "G2-02",
