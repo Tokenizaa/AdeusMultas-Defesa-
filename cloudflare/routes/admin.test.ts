@@ -49,7 +49,7 @@ describe('admin Cloudflare contract', () => {
       dimensions: 768,
       status: 'configured',
     });
-    expect(body.observability).toEqual({ historicalMetrics: false, metricsPhase: 13 });
+    expect(body.observability).toEqual({ historicalMetrics: true, metricsEndpoint: "/api/admin/ai/metrics" });
   });
 
   it('returns only factual overview KPIs and defers observability to Phase 13', async () => {
@@ -67,7 +67,7 @@ describe('admin Cloudflare contract', () => {
       conversionRate: 0,
       analysisToDocRate: 0,
     });
-    expect(body.observability).toEqual({ historicalMetrics: false, metricsPhase: 13 });
+    expect(body.observability).toEqual({ historicalMetrics: true, metricsEndpoint: "/api/admin/ai/metrics" });
     expect(body).not.toHaveProperty('aiStatus');
     expect(JSON.stringify(body)).not.toContain('nvidia');
     expect(JSON.stringify(body)).not.toContain('9router');
