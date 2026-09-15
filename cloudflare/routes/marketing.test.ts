@@ -72,7 +72,11 @@ describe('marketing Cloudflare contract', () => {
     const response = await app().request('/api/marketing/publish/c3', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-    });
+    }, {
+      META_ACCESS_TOKEN: 'test-token',
+      META_PAGE_ID: 'page-1',
+      IG_USER_ID: 'ig-1',
+    } as any);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, externalId: 'meta-123' });
     expect(mockPublish).toHaveBeenCalledOnce();
