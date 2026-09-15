@@ -396,7 +396,7 @@
         "verdict": "PASS",
         "by": "Cloudflare Deploy GitHub Actions",
         "at": "2026-09-15T04:30:00Z",
-        "commit": "PLACEHOLDER_COMMIT",
+        "commit": "12b52a3",
         "notes": "Test Phase 9 Admin ✓ (admin test); build+deploy ✓; sem proxyToVercel /api/admin/*."
       }
     }
