@@ -72,5 +72,8 @@ jobs:
       - name: Test Phase 12 payments
         run: bunx vitest run cloudflare/routes/payments.test.ts
 
+      - name: Test Phase 13 AI observability
+        run: bunx vitest run cloudflare/routes/admin.ai-metrics.test.ts
+
       - name: Build and deploy to Cloudflare
         run: bunx wrangler@latest deploy --config wrangler.jsonc

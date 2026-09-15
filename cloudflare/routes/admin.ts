@@ -15,7 +15,7 @@ adminRoutes.get('/admin/ai/overview', (c) => c.json({
   provider: { name: 'Cloudflare Workers AI', runtime: 'cloudflare', model: AI_MODEL, fallback: null },
   rag: { provider: 'Cloudflare Vectorize', index: VECTORIZE_INDEX, embeddingModel: EMBEDDING_MODEL, dimensions: 768, status: 'configured' },
   capabilities: { infractionAnalysis: '/api/ai/analyze-infraction', defenseGeneration: '/api/ai/generate-defense', ocr: '/api/ocr/analyze' },
-  observability: { historicalMetrics: false, metricsPhase: 13 },
+  observability: { historicalMetrics: true, metricsEndpoint: '/api/admin/ai/metrics' },
 }));
 
 adminRoutes.get('/admin/overview', async (c) => {
@@ -48,8 +48,8 @@ adminRoutes.get('/admin/overview', async (c) => {
       analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
     },
     observability: {
-      historicalMetrics: false,
-      metricsPhase: 13,
+      historicalMetrics: true,
+      metricsEndpoint: '/api/admin/ai/metrics',
     },
   });
 });
@@ -73,6 +73,37 @@ adminRoutes.put('/admin/users', async (c) => {
   const { data, error } = await supabase.from('user_profiles').update({ role, updated_at: new Date().toISOString() }).eq('user_id', target.user_id).select('user_id,name,email,role,cpf,phone,cnh,city_state,avatar_url,created_at').single();
   if (error) throw new Error(error.message);
   return c.json({ success: true, user: { id: data.user_id, name: data.name, email: data.email || '', role: data.role, cpf: data.cpf || undefined, phone: data.phone || undefined, cnh: data.cnh || undefined, cityState: data.city_state || undefined, avatarUrl: data.avatar_url || undefined, createdAt: data.created_at } });
+});
+
+adminRoutes.get('/admin/ai/metrics', async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('ai_execution_logs')
+    .select('operation,status,latency_ms')
+    .gte('created_at', since);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Array<{ operation: string; status: string; latency_ms: number }>;
+  const latencies = rows.map((r) => Number(r.latency_ms) || 0).sort((a, b) => a - b);
+  const pct = (p: number) => {
+    if (!latencies.length) return 0;
+    const idx = Math.min(latencies.length - 1, Math.floor((p / 100) * latencies.length));
+    return latencies[idx];
+  };
+  const errors = rows.filter((r) => r.status === 'error').length;
+  const byOperation: Record<string, number> = {};
+  for (const r of rows) byOperation[r.operation] = (byOperation[r.operation] ?? 0) + 1;
+  return c.json({
+    available: true,
+    windowHours: 24,
+    totalCalls: rows.length,
+    errorRatePercent: rows.length ? Number(((errors / rows.length) * 100).toFixed(2)) : 0,
+    avgLatencyMs: rows.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / rows.length) : 0,
+    p50LatencyMs: pct(50),
+    p95LatencyMs: pct(95),
+    p99LatencyMs: pct(99),
+    byOperation,
+  });
 });
 
 adminRoutes.get('/admin/payments', async (c) => {

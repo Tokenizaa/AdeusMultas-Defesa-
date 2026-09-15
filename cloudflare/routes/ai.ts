@@ -1,9 +1,37 @@
 import { Hono } from 'hono';
 import type { Env } from '../supabase';
+import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { adapterError, adapterOk } from '../../src/shared/api/adapters';
 
 const MODEL = '@cf/openai/gpt-oss-20b';
+
+/** Registro de métrica real de execução de IA em ai_execution_logs (Fase 13). Fire-and-forget. */
+function recordMetric(env: Env, input: { operation: string; status: string; latencyMs: number; caseId?: string; error?: string }) {
+  try {
+    const supabase = createSupabaseAdminClient(env);
+    void supabase
+      .from('ai_execution_logs')
+      .insert({
+        provider: 'cloudflare-workers-ai',
+        model: MODEL,
+        operation: input.operation,
+        status: input.status,
+        case_id: input.caseId ?? null,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        latency_ms: Math.round(input.latencyMs),
+        cost_estimate: 0,
+        error_message: input.error ?? null,
+        metadata: {},
+        created_at: new Date().toISOString(),
+      })
+      .then(() => undefined)
+      .catch(() => undefined);
+  } catch {
+    /* nunca derruba a resposta por falha de observabilidade */
+  }
+}
 const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 const MAX_QUERY = 6000;
 const MAX_CONTEXT = 18000;
@@ -87,6 +115,7 @@ aiRoutes.get('/ai/health', async (c) => {
 });
 
 aiRoutes.post('/ai/analyze-infraction', authenticateToken, async (c) => {
+  const started = Date.now();
   try {
     const body = await c.req.json<Record<string, unknown>>();
     const caseData = body.case ?? body.caseData ?? body;
@@ -96,14 +125,17 @@ aiRoutes.post('/ai/analyze-infraction', authenticateToken, async (c) => {
     const matches = await retrieve(c.env, `Análise de infração de trânsito brasileira: ${caseText}`);
     const prompt = `Analise o caso abaixo usando exclusivamente as fontes recuperadas. Retorne SOMENTE JSON válido com esta estrutura: {"summary":"...","formalFlaws":[],"recommendedArguments":[],"recommendedProcedure":"...","confidence":"low|medium|high","limitations":[]}. Cada item de recommendedArguments deve ter {"id":"source-id","title":"...","reason":"..."}. Não crie teses jurídicas que não estejam sustentadas pelas fontes. Caso as fontes sejam insuficientes, recommendedArguments deve ser [] e limitations deve explicar a insuficiência.\n\nCASO:\n${caseText}\n\nFONTES:\n${context(matches)}`;
     const analysis = await generate(c.env, prompt);
+    recordMetric(c.env, { operation: 'analyze-infraction', status: 'ok', latencyMs: Date.now() - started });
     return adapterOk(c, { provider: 'cloudflare-workers-ai', model: MODEL, analysis, sources: matches.map((m) => ({ id: m.id, score: m.score, metadata: m.metadata })) });
   } catch (error) {
+    recordMetric(c.env, { operation: 'analyze-infraction', status: 'error', latencyMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) });
     console.error('[ai/analyze-infraction] failed', error instanceof Error ? error.message : String(error));
     return adapterError(c, 'UPSTREAM_ERROR', 'Não foi possível analisar a infração.', 502);
   }
 });
 
 aiRoutes.post('/ai/generate-defense', authenticateToken, async (c) => {
+  const started = Date.now();
   try {
     const body = await c.req.json<Record<string, unknown>>();
     const caseData = body.case ?? body.caseData;
@@ -113,6 +145,7 @@ aiRoutes.post('/ai/generate-defense', authenticateToken, async (c) => {
     const matches = await retrieve(c.env, `Geração de defesa administrativa de trânsito brasileira: ${caseText}`);
     const prompt = `Gere uma minuta de defesa administrativa baseada somente nos fatos do caso e nas fontes recuperadas. Não invente fatos ou fundamentos jurídicos. Não cite artigo, súmula, precedente, prazo ou regra que não apareça nas fontes. Preserve campos identificadores exatamente como fornecidos. Estruture em: endereçamento, qualificação, fatos, fundamentos sustentados pelas fontes, pedidos e encerramento. Se faltar fundamento suficiente, deixe isso claro em vez de preencher com conteúdo inventado. Retorne somente o texto da minuta.\n\nCASO:\n${caseText}\n\nFATOS ADICIONAIS:\n${customFacts || '(nenhum)'}\n\nFONTES:\n${context(matches)}`;
     const draft = await generate(c.env, prompt);
+    recordMetric(c.env, { operation: 'generate-defense', status: 'ok', latencyMs: Date.now() - started });
     return adapterOk(c, {
       provider: 'cloudflare-workers-ai',
       model: MODEL,
@@ -121,6 +154,7 @@ aiRoutes.post('/ai/generate-defense', authenticateToken, async (c) => {
       sources: matches.map((m) => ({ id: m.id, score: m.score, metadata: m.metadata })),
     });
   } catch (error) {
+    recordMetric(c.env, { operation: 'generate-defense', status: 'error', latencyMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) });
     console.error('[ai/generate-defense] failed', error instanceof Error ? error.message : String(error));
     return adapterError(c, 'UPSTREAM_ERROR', 'Não foi possível gerar a defesa.', 502);
   }

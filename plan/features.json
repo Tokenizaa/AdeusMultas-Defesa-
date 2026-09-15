@@ -242,6 +242,18 @@
         "commit": "b8e9341",
         "notes": "Test Phase 12 payments ✓ (6/6: resolve-price, caseId, cardToken, amount server-authoritative, PIX persist, webhook idempotente); build+deploy ✓; sem proxyToVercel /api/payments/*."
       }
+    },
+    {
+      "id": "G6-05",
+      "phase": "G6",
+      "title": "Observabilidade/Métricas IA Cloudflare — ai_execution_logs instrumentado, /api/admin/ai/metrics real, sem valores fabricados",
+      "priority": 3,
+      "depends_on": [
+        "G6-04"
+      ],
+      "kind": "observability",
+      "passes": false,
+      "acceptance": "ai.ts registra ai_execution_logs (ok/error, latency); /api/admin/ai/metrics agrega 24h com errorRate/avg/p50/p95/p99 sem fabricação; resposta não contém nvidia/9router; suíte cloudflare/routes/admin.ai-metrics.test.ts passa; CI roda o gate"
     }
   ]
 }
