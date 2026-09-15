@@ -19,7 +19,8 @@ function evolutionConfig(env: Env) {
 
 async function evolutionRequest(env: Env, path: string, method = 'GET', body?: Record<string, unknown>) {
   const { apiUrl, apiKey } = evolutionConfig(env);
-  const response = await fetch(`${apiUrl}${path}`, {
+  const doFetch = env.FETCH || fetch;
+  const response = await doFetch(`${apiUrl}${path}`, {
     method,
     headers: { apikey: apiKey, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
