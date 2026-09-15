@@ -172,8 +172,14 @@
         "G3-02"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "gateway de pagamento com webhook idempotente"
+      "passes": true,
+      "acceptance": "gateway de pagamento com webhook idempotente",
+      "verification": {
+        "commit": "b67873f5f2e8dbf21bc7f63dee720ffb86c5b152",
+        "by": "Cloudflare Deploy GitHub Actions",
+        "at": "2026-09-15T18:17:12Z",
+        "notes": "GGPIX webhook route added; idempotent processing verified; gateway manager selects GGPIX in production."
+      }
     },
     {
       "id": "G5-02",
