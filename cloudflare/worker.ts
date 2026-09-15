@@ -58,7 +58,6 @@ async function proxyToVercel(c: any): Promise<Response> {
   if (c.req.method !== 'GET' && c.req.method !== 'HEAD') init.body = await c.req.raw.text()
   return fetch(target, init as any)
 }
-app.all('/api/admin/*', proxyToVercel)
 app.all('/api/marketing/*', proxyToVercel)
 app.all('/api/*', (c) => c.json({ error: 'Rota não implementada no worker (migração Cloudflare pendente).' }, 404))
 
