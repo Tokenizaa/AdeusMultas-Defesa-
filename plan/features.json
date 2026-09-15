@@ -127,8 +127,11 @@
         "G2-02"
       ],
       "kind": "backend",
-      "passes": false,
-      "acceptance": "pipeline de defesa com RAG/LLM e fallback determinístico"
+      "passes": true,
+      "acceptance": "pipeline de defesa com RAG/LLM e fallback determinístico",
+      "verification": {
+        "commit": "09698a5"
+      }
     },
     {
       "id": "G3-02",
