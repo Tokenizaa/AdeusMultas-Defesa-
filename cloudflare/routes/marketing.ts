@@ -6,6 +6,7 @@ import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../midd
 import { createMetaPublisher, type PublishContent } from '../publishers';
 
 /** CRUD editorial_content + publicação via adapters (Meta agora, abertos p/ mais). */
+// Fase 10 — Contrato runtime: publish exige binds META_ACCESS_TOKEN, META_PAGE_ID, IG_USER_ID.
 export const marketingRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
 marketingRoutes.use('/marketing/*', authenticateToken, requireAdmin);
