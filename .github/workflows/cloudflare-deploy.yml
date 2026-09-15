@@ -1,4 +1,4 @@
-# Trigger workflow to test new token
+# Cloudflare production deploy + authoritative migration gates
 name: Cloudflare Deploy
 
 on:
@@ -64,6 +64,9 @@ jobs:
 
       - name: Test Phase 10 marketing
         run: bunx vitest run cloudflare/routes/marketing.test.ts
+
+      - name: Test Phase 11 WhatsApp communication
+        run: bunx vitest run cloudflare/routes/communication.test.ts
 
       - name: Build and deploy to Cloudflare
         run: bunx wrangler@latest deploy --config wrangler.jsonc
