@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
 import { commercialRoutes } from './commercial';
+import { GGPIXAdapter } from '../../src/server/integrations/gateway/ggpix-adapter';
 
 const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
@@ -105,6 +106,59 @@ routes.post('/webhooks/pagbank', async (c) => {
     if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const gatewayTransactionId = payload.id || charge?.reference_id || existing.gateway_transaction_id;
     const { data: transitioned, error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, gateway_transaction_id: gatewayTransactionId, pagbank_order_id: payload.id || existing.pagbank_order_id, updated_at: now }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
+    if (paymentError) throw paymentError;
+    if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+    const match = referenceId.match(/^defesai_case_(.+)$/);
+    if (match?.[1]) {
+      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', match[1]);
+      if (caseError) throw caseError;
+    }
+    return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
+  }
+  const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: now }).eq('id', existing.id);
+  if (statusError) throw statusError;
+  return c.json({ received: true, status, isDuplicate: false, matched: true });
+});
+
+routes.post('/webhooks/ggpix', async (c) => {
+  const rawBody = await c.req.text();
+  let body: unknown;
+  try { body = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
+
+  // Debug: log c properties
+  console.error('GGPIX webhook c keys:', Object.keys(c));
+  console.error('GGPIX webhook c.env:', c.env);
+
+  // Convert Headers to plain object for the adapter
+  const headersObj = Object.fromEntries(c.req.raw.headers.entries());
+
+  // Use the adapter with the current Env binding
+  const ggpixAdapterInstance = new GGPIXAdapter(c.env);
+  let normalized: NormalizedWebhookEvent;
+  try {
+    normalized = ggpixAdapterInstance.processWebhook(rawBody, headersObj, body);
+  } catch (err: any) {
+    console.error('GGPIX webhook error caught:', err.message);
+    if (err.message.includes('Webhook GGPIXAPI rejeitado')) {
+      console.error('GGPIX webhook returning 401');
+      return c.json({ error: err.message }, 401);
+    }
+    console.error('GGPIX webhook returning 400');
+    return c.json({ error: 'Webhook inválido.' }, 400);
+  }
+
+  const { referenceId, status, gatewayTransactionId } = normalized;
+  if (!referenceId) return c.json({ received: true, status, isDuplicate: false });
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: existing, error } = await supabase.from('payment_orders').select('*').eq('reference_id', referenceId).maybeSingle();
+  if (error) throw error;
+  if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
+
+  const now = new Date().toISOString();
+  if (status === 'PAID') {
+    if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+    const { data: transitioned, error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, gateway_transaction_id: gatewayTransactionId, updated_at: now }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
     if (paymentError) throw paymentError;
     if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const match = referenceId.match(/^defesai_case_(.+)$/);
