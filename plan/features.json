@@ -184,8 +184,11 @@
         "G5-01"
       ],
       "kind": "frontend",
-      "passes": false,
-      "acceptance": "páginas públicas responsivas, SEO e WCAG AA"
+      "passes": true,
+      "acceptance": "páginas públicas responsivas, SEO e WCAG AA",
+      "verification": {
+        "commit": "0afab52"
+      }
     },
     {
       "id": "G6-01",
