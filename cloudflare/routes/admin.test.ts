@@ -22,7 +22,7 @@ function app() {
 
 function query(data: any, error: any = null) {
   const q: any = {};
-  for (const method of ['select', 'eq', 'order', 'limit', 'update']) q[method] = vi.fn(() => q);
+  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'not', 'or']) q[method] = vi.fn(() => q);
   q.maybeSingle = vi.fn(async () => ({ data, error }));
   q.single = vi.fn(async () => ({ data, error }));
   q.then = (resolve: any) => Promise.resolve({ data, error }).then(resolve);
@@ -31,6 +31,26 @@ function query(data: any, error: any = null) {
 
 describe('admin users contract', () => {
   beforeEach(() => mockFrom.mockReset());
+
+  it('exposes factual Cloudflare AI architecture without legacy providers', async () => {
+    const response = await app().request('/api/admin/ai/overview');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.provider).toMatchObject({
+      name: 'Cloudflare Workers AI',
+      runtime: 'cloudflare',
+      model: '@cf/openai/gpt-oss-20b',
+      fallback: null,
+    });
+    expect(body.rag).toMatchObject({
+      provider: 'Cloudflare Vectorize',
+      index: 'adeusmulta-knowledge',
+      embeddingModel: '@cf/baai/bge-base-en-v1.5',
+      dimensions: 768,
+      status: 'configured',
+    });
+    expect(body.observability).toEqual({ historicalMetrics: false, metricsPhase: 13 });
+  });
 
   it('maps user_profiles to the AuthUser frontend contract', async () => {
     mockFrom.mockReturnValueOnce(query([{
