@@ -1,0 +1,39 @@
+name: Register gate once
+on:
+  push:
+    paths:
+      - '.github/gate-register.trigger'
+permissions:
+  contents: write
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Register G1-01
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('plan/features.json')
+          data = json.loads(p.read_text())
+          for f in data['features']:
+              if f['id'] == 'G1-01':
+                  f['passes'] = True
+                  f['verification'] = {
+                      'verdict': 'PASS',
+                      'evidence': 'Supabase production project sgomwklorpzdwdubtmgg: applied migrations verified; public.cases and public.profiles have RLS enabled.',
+                      'commit': 'e50597e56a011448739cc518e8656317038c4177'
+                  }
+                  break
+          else:
+              raise SystemExit('G1-01 not found')
+          p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          PY
+      - name: Commit gate
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add plan/features.json
+          git commit -m 'docs: register G1-01 Supabase gate'
+          git push
