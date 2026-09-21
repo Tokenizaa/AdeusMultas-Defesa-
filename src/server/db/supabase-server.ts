@@ -30,7 +30,11 @@ function ensureClient(): SupabaseClient<Database> | null {
   if (clientInstance) return clientInstance;
 
   // O projeto de dados é único e canônico; não aceitar URLs históricas do ambiente.
-  const url = process.env.VITE_SUPABASE_URL || configService.get('VITE_SUPABASE_URL');
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    configService.get('SUPABASE_URL') ||
+    configService.get('VITE_SUPABASE_URL');
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY');

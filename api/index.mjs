@@ -2802,11 +2802,11 @@ var configService = new ConfigService();
 var clientInstance = null;
 function ensureClient() {
   if (clientInstance) return clientInstance;
-  const url2 = process.env.VITE_SUPABASE_URL || configService.get("VITE_SUPABASE_URL") || process.env.SUPABASE_URL || configService.get("SUPABASE_URL");
+  const url2 = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || configService.get("SUPABASE_URL") || configService.get("VITE_SUPABASE_URL");
   const serviceRoleKey2 = process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SERVICE_ROLE_KEY");
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || configService.get("VITE_SUPABASE_ANON_KEY");
   const serviceKey = serviceRoleKey2 || anonKey;
-  if (url2 && serviceKey && url2.startsWith("https://")) {
+  if (url2 && serviceKey) {
     if (!serviceRoleKey2) {
       logger.error(
         "supabase",
@@ -2885,16 +2885,90 @@ function isUuid2(value) {
 function allowInMemoryPersistence() {
   return process.env.ALLOW_IN_MEMORY_CASE_PERSISTENCE === "true";
 }
+function databaseRowToCaseRow(c) {
+  return {
+    id: c.app_ref ?? c.id,
+    title: c.title,
+    client_name: c.client_name,
+    client_email: c.client_email ?? void 0,
+    client_phone: c.client_phone ?? void 0,
+    client_cpf: c.client_cpf ?? void 0,
+    user_id: c.user_id ?? void 0,
+    status: c.status,
+    current_stage: c.current_stage,
+    service_type: c.service_type,
+    vehicle_plate: c.vehicle_plate,
+    vehicle_brand_model: c.vehicle_brand_model,
+    vehicle_renavam: c.vehicle_renavam ?? void 0,
+    vehicle_chassis: c.vehicle_chassis ?? void 0,
+    vehicle_year: c.vehicle_year ?? void 0,
+    vehicle_color: c.vehicle_color ?? void 0,
+    ait_number: c.ait_number,
+    infraction_code: c.infraction_code ?? void 0,
+    infraction_description: c.infraction_description,
+    ctb_article: c.ctb_article,
+    severity: c.severity,
+    points: c.points,
+    fine_amount: c.fine_amount,
+    autuador_body: c.autuador_body,
+    date_time: c.date_time ? new Date(c.date_time).toISOString() : "",
+    location: c.location ?? void 0,
+    speed_limit: c.speed_limit ?? void 0,
+    measured_speed: c.measured_speed ?? void 0,
+    considered_speed: c.considered_speed ?? void 0,
+    radar_equipment_id: c.radar_equipment_id ?? void 0,
+    inmetro_aferition_date: c.inmetro_aferition_date ?? void 0,
+    notification_expedition_date: c.notification_expedition_date ?? void 0,
+    defense_deadline: c.defense_deadline ?? void 0,
+    formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : void 0,
+    analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : void 0,
+    defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : void 0,
+    protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : void 0,
+    ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : void 0,
+    evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : void 0,
+    timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : void 0,
+    is_anonymous: c.is_anonymous,
+    claim_token: c.claim_token ?? void 0,
+    is_paid: c.is_paid,
+    paid_at: c.paid_at ? c.paid_at : void 0,
+    created_at: c.created_at,
+    updated_at: c.updated_at
+  };
+}
 var CaseRepository = class {
   constructor() {
     this.rows = /* @__PURE__ */ new Map();
+    this.client = null;
+  }
+  getClient() {
+    if (this.client) return this.client;
     this.client = getSupabaseServerClient();
+    return this.client;
   }
   get size() {
     return this.rows.size;
   }
   get(id) {
     return this.rows.get(id);
+  }
+  async getPersisted(id) {
+    const cached = this.rows.get(id);
+    if (cached) return cached;
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryPersistence()) return void 0;
+      throw new Error("CaseRepository: Supabase client n\xE3o configurado \u2014 leitura persistente obrigat\xF3ria.");
+    }
+    const { data: byRef, error: refError } = await client.from("cases").select("*").eq("app_ref", id).maybeSingle();
+    if (refError) throw new Error(`Falha ao carregar caso ${id}: ${refError.message}`);
+    let row = byRef ? databaseRowToCaseRow(byRef) : void 0;
+    if (!row && isUuid2(id)) {
+      const { data, error } = await client.from("cases").select("*").eq("id", id).maybeSingle();
+      if (error) throw new Error(`Falha ao carregar caso ${id}: ${error.message}`);
+      row = data ? databaseRowToCaseRow(data) : void 0;
+    }
+    if (row) this.rows.set(row.id, row);
+    return row;
   }
   values() {
     return this.rows.values();
@@ -2905,152 +2979,42 @@ var CaseRepository = class {
     this.rows.set(id, row);
   }
   toPayload(row) {
-    return {
-      id: domainIdToUuid(row.id) ?? void 0,
-      app_ref: isUuid2(row.id) ? null : row.id,
-      title: row.title,
-      client_name: row.client_name,
-      client_email: row.client_email ?? null,
-      client_phone: row.client_phone ?? null,
-      client_cpf: row.client_cpf ?? null,
-      user_id: isUuid2(row.user_id) ? row.user_id : null,
-      status: row.status,
-      current_stage: row.current_stage,
-      service_type: row.service_type,
-      vehicle_plate: row.vehicle_plate,
-      vehicle_brand_model: row.vehicle_brand_model,
-      vehicle_renavam: row.vehicle_renavam ?? null,
-      vehicle_chassis: row.vehicle_chassis ?? null,
-      vehicle_year: row.vehicle_year ?? null,
-      vehicle_color: row.vehicle_color ?? null,
-      ait_number: row.ait_number,
-      infraction_code: row.infraction_code ?? null,
-      infraction_description: row.infraction_description,
-      ctb_article: row.ctb_article,
-      severity: row.severity,
-      points: row.points,
-      fine_amount: row.fine_amount,
-      autuador_body: row.autuador_body,
-      date_time: toDate(row.date_time),
-      location: row.location ?? null,
-      speed_limit: toNumeric(row.speed_limit),
-      measured_speed: toNumeric(row.measured_speed),
-      considered_speed: toNumeric(row.considered_speed),
-      radar_equipment_id: row.radar_equipment_id ?? null,
-      inmetro_aferition_date: row.inmetro_aferition_date ?? null,
-      notification_expedition_date: row.notification_expedition_date ?? null,
-      defense_deadline: row.defense_deadline ?? null,
-      formal_flaws_json: parseJson(row.formal_flaws_json, []),
-      analysis_json: parseJson(row.analysis_json, null),
-      defense_draft_json: parseJson(row.defense_draft_json, null),
-      protocol_info_json: parseJson(row.protocol_info_json, null),
-      ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null),
-      evidence_json: parseJson(row.evidence_json, null),
-      timeline_json: parseJson(row.timeline_json, []),
-      is_anonymous: row.is_anonymous,
-      claim_token: row.claim_token ?? null,
-      is_paid: row.is_paid,
-      paid_at: toDate(row.paid_at),
-      created_at: toDate(row.created_at),
-      updated_at: toDate(row.updated_at)
-    };
+    return { id: domainIdToUuid(row.id) ?? void 0, app_ref: isUuid2(row.id) ? null : row.id, title: row.title, client_name: row.client_name, client_email: row.client_email ?? null, client_phone: row.client_phone ?? null, client_cpf: row.client_cpf ?? null, user_id: isUuid2(row.user_id) ? row.user_id : null, status: row.status, current_stage: row.current_stage, service_type: row.service_type, vehicle_plate: row.vehicle_plate, vehicle_brand_model: row.vehicle_brand_model, vehicle_renavam: row.vehicle_renavam ?? null, vehicle_chassis: row.vehicle_chassis ?? null, vehicle_year: row.vehicle_year ?? null, vehicle_color: row.vehicle_color ?? null, ait_number: row.ait_number, infraction_code: row.infraction_code ?? null, infraction_description: row.infraction_description, ctb_article: row.ctb_article, severity: row.severity, points: row.points, fine_amount: row.fine_amount, autuador_body: row.autuador_body, date_time: toDate(row.date_time), location: row.location ?? null, speed_limit: toNumeric(row.speed_limit), measured_speed: toNumeric(row.measured_speed), considered_speed: toNumeric(row.considered_speed), radar_equipment_id: row.radar_equipment_id ?? null, inmetro_aferition_date: row.inmetro_aferition_date ?? null, notification_expedition_date: row.notification_expedition_date ?? null, defense_deadline: row.defense_deadline ?? null, formal_flaws_json: parseJson(row.formal_flaws_json, []), analysis_json: parseJson(row.analysis_json, null), defense_draft_json: parseJson(row.defense_draft_json, null), protocol_info_json: parseJson(row.protocol_info_json, null), ocr_auxiliary_json: parseJson(row.ocr_auxiliary_json, null), evidence_json: parseJson(row.evidence_json, null), applicant_json: parseJson(row.applicant_json, null), timeline_json: parseJson(row.timeline_json, []), is_anonymous: row.is_anonymous, claim_token: row.claim_token ?? null, is_paid: row.is_paid, paid_at: toDate(row.paid_at), created_at: toDate(row.created_at), updated_at: toDate(row.updated_at) };
   }
   async persist(id, payload) {
-    if (!this.client) {
+    const client = this.getClient();
+    if (!client) {
       if (allowInMemoryPersistence()) {
-        logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, {
-          caseId: id,
-          persistenceResult: "explicit_in_memory_fallback"
-        });
+        logger.warn("supabase", "case_repository", "persist", `Supabase n\xE3o configurado \u2014 caso ${id} persiste apenas em mem\xF3ria porque ALLOW_IN_MEMORY_CASE_PERSISTENCE=true`, { caseId: id, persistenceResult: "explicit_in_memory_fallback" });
         return;
       }
-      throw new Error(
-        `CaseRepository: Supabase client n\xE3o configurado \u2014 persist\xEAncia real obrigat\xF3ria para o caso ${id}. Para testes unit\xE1rios/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.`
-      );
+      throw new Error(`CaseRepository: Supabase client n\xE3o configurado \u2014 persist\xEAncia real obrigat\xF3ria para o caso ${id}. Para testes unit\xE1rios/dev isolados, habilite explicitamente ALLOW_IN_MEMORY_CASE_PERSISTENCE=true.`);
     }
-    const { error } = await this.client.from("cases").upsert(payload);
+    const { error } = await client.from("cases").upsert(payload);
     if (error) {
-      logger.error("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${error.message}`, {
-        caseId: id,
-        status: "failed",
-        errorCode: "SUPABASE_UPSERT"
-      });
-      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, {
-        type: "persistence_failure",
-        caseId: id,
-        errorCode: "SUPABASE_UPSERT",
-        message: error.message
-      }, "case_repository");
+      logger.error("supabase", "case_repository", "persist", `Falha ao persistir caso ${id}: ${error.message}`, { caseId: id, status: "failed", errorCode: "SUPABASE_UPSERT" });
+      eventBus.publish(EventTopics.AUDIT_LOG_RECORDED, { type: "persistence_failure", caseId: id, errorCode: "SUPABASE_UPSERT", message: error.message }, "case_repository");
       throw new Error(`Falha ao persistir caso ${id}: ${error.message}`);
     }
   }
   async loadAllFromSupabase() {
-    if (!this.client) {
+    const client = this.getClient();
+    if (!client) {
       if (allowInMemoryPersistence()) return [];
       throw new Error("CaseRepository: Supabase client n\xE3o configurado \u2014 cold start n\xE3o pode ser considerado persistente.");
     }
-    const { data, error } = await this.client.from("cases").select("*").order("created_at", { ascending: false });
-    if (error) {
-      logger.error("supabase", "case_repository", "loadAll", `Falha ao carregar casos: ${error.message}`, {
-        errorCode: "SUPABASE_LOAD_ALL"
-      });
-      throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
-    }
-    const rows = (data || []).map((c) => ({
-      id: c.app_ref ?? c.id,
-      title: c.title,
-      client_name: c.client_name,
-      client_email: c.client_email ?? void 0,
-      client_phone: c.client_phone ?? void 0,
-      client_cpf: c.client_cpf ?? void 0,
-      user_id: c.user_id ?? void 0,
-      status: c.status,
-      current_stage: c.current_stage,
-      service_type: c.service_type,
-      vehicle_plate: c.vehicle_plate,
-      vehicle_brand_model: c.vehicle_brand_model,
-      vehicle_renavam: c.vehicle_renavam ?? void 0,
-      vehicle_chassis: c.vehicle_chassis ?? void 0,
-      vehicle_year: c.vehicle_year ?? void 0,
-      vehicle_color: c.vehicle_color ?? void 0,
-      ait_number: c.ait_number,
-      infraction_code: c.infraction_code ?? void 0,
-      infraction_description: c.infraction_description,
-      ctb_article: c.ctb_article,
-      severity: c.severity,
-      points: c.points,
-      fine_amount: c.fine_amount,
-      autuador_body: c.autuador_body,
-      date_time: c.date_time ? new Date(c.date_time).toISOString() : "",
-      location: c.location ?? void 0,
-      speed_limit: c.speed_limit ?? void 0,
-      measured_speed: c.measured_speed ?? void 0,
-      considered_speed: c.considered_speed ?? void 0,
-      radar_equipment_id: c.radar_equipment_id ?? void 0,
-      inmetro_aferition_date: c.inmetro_aferition_date ?? void 0,
-      notification_expedition_date: c.notification_expedition_date ?? void 0,
-      defense_deadline: c.defense_deadline ?? void 0,
-      formal_flaws_json: c.formal_flaws_json ? JSON.stringify(c.formal_flaws_json) : void 0,
-      analysis_json: c.analysis_json ? JSON.stringify(c.analysis_json) : void 0,
-      defense_draft_json: c.defense_draft_json ? JSON.stringify(c.defense_draft_json) : void 0,
-      protocol_info_json: c.protocol_info_json ? JSON.stringify(c.protocol_info_json) : void 0,
-      ocr_auxiliary_json: c.ocr_auxiliary_json ? JSON.stringify(c.ocr_auxiliary_json) : void 0,
-      evidence_json: c.evidence_json ? JSON.stringify(c.evidence_json) : void 0,
-      timeline_json: c.timeline_json ? JSON.stringify(c.timeline_json) : void 0,
-      is_anonymous: c.is_anonymous,
-      claim_token: c.claim_token ?? void 0,
-      is_paid: c.is_paid,
-      paid_at: c.paid_at ? c.paid_at : void 0,
-      created_at: c.created_at,
-      updated_at: c.updated_at
-    }));
-    for (const row of rows) {
-      this.rows.set(row.id, row);
-    }
+    const { data, error } = await client.from("cases").select("*").order("created_at", { ascending: false });
+    if (error) throw new Error(`Falha ao carregar casos persistidos: ${error.message}`);
+    const rows = (data || []).map(databaseRowToCaseRow);
+    for (const row of rows) this.rows.set(row.id, row);
     return rows;
   }
 };
 var caseRepository = new CaseRepository();
+
+// src/server/stores.ts
+var databaseRows = caseRepository;
+var auditLogs = [];
 
 // src/core/mappers/canonical-mapper.ts
 var CanonicalMapper = class _CanonicalMapper {
@@ -14167,6 +14131,260 @@ var CTB_ARTICLES_DB = [
     practicalApplication: "Distingue-se entre condutor manuseando aparelho solto e o uso de suporte veicular para navega\xE7\xE3o GPS ou comando de voz.",
     nullityConsequence: "Falta de descri\xE7\xE3o detalhada das circunst\xE2ncias f\xE1ticas pelo agente anula a autua\xE7\xE3o (Res. 985/2022).",
     relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT - Ficha 736-62)"]
+  },
+  {
+    article: "Art. 208",
+    title: "Avan\xE7o de Sinal Vermelho e Parada Obrigat\xF3ria",
+    caput: "Avan\xE7ar o sinal vermelho do sem\xE1foro ou, onde houver, o de parada obrigat\xF3ria:",
+    paragraphsAndIncidents: [
+      "Penalidade: multa (grav\xEDssima) e 7 (sete) pontos na CNH.",
+      "Inciso I: Avan\xE7ar o sinal vermelho do sem\xE1foro.",
+      "Inciso II: Parar o ve\xEDculo sobre a faixa de pedestres na mudan\xE7a de sinal luminoso.",
+      "Inciso III: Transpor, sem autoriza\xE7\xE3o, bloqueio vi\xE1rio policial."
+    ],
+    practicalApplication: "Verificar tempo de sinal amarelo (Res. 973/2022), visibilidade do sem\xE1foro, dilema do amarelo, e se houve parada obrigat\xF3ria em faixa.",
+    nullityConsequence: "Anula\xE7\xE3o se tempo de amarelo insuficiente, sinaliza\xE7\xE3o encoberta, ou inexist\xEAncia de dilema do amarelo configurado.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022 (Sinaliza\xE7\xE3o Semaf\xF3rica)", "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT)"]
+  },
+  {
+    article: "Art. 162",
+    title: "Dirigir sem CNH ou com CNH Cassada/Suspensa",
+    caput: "Dirigir ve\xEDculo automotor: I - sem possuir Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir; II - com Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir cassada ou suspensa; III - com Carteira Nacional de Habilita\xE7\xE3o ou Permiss\xE3o para Dirigir de categoria diferente da do ve\xEDculo que esteja conduzindo.",
+    paragraphsAndIncidents: [
+      "Inciso I: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x, apreens\xE3o do ve\xEDculo.",
+      "Inciso II: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x, recolhimento do documento.",
+      "Inciso III: Infra\xE7\xE3o grav\xEDssima, 7 pontos, multa 3x."
+    ],
+    practicalApplication: "Verificar se condutor possu\xEDa CNH v\xE1lida na data, se suspens\xE3o/cassa\xE7\xE3o j\xE1 tinha tr\xE2nsito em julgado, se categoria compat\xEDvel.",
+    nullityConsequence: "Nulidade se CNH j\xE1 regularizada na data ou se notifica\xE7\xE3o de suspens\xE3o n\xE3o entregue (decad\xEAncia/prescri\xE7\xE3o).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022"]
+  },
+  {
+    article: "Art. 163",
+    title: "Entregar ve\xEDculo a pessoa sem CNH ou com CNH Suspensa/Cassada",
+    caput: "Entregar a dire\xE7\xE3o do ve\xEDculo a pessoa que n\xE3o esteja habilitada, com habilita\xE7\xE3o cassada ou com o direito de dirigir suspenso, ou, ainda, a pessoa que, por seu estado f\xEDsico ou mental, ou por embriaguez, n\xE3o esteja em condi\xE7\xF5es de conduzi-lo com seguran\xE7a.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o grav\xEDssima (7 pontos, multa 3x).",
+      "Se o condutor n\xE3o habilitado causar acidente com v\xEDtima: crime de tr\xE2nsito (Art. 309 e 310 CTB)."
+    ],
+    practicalApplication: "Propriet\xE1rio responde solidariamente. Verificar se tinha ci\xEAncia da condi\xE7\xE3o do condutor.",
+    nullityConsequence: "Nulidade se comprovado que propriet\xE1rio n\xE3o tinha como saber da condi\xE7\xE3o.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 180",
+    title: "Licenciamento Anual Obrigat\xF3rio",
+    caput: "Deixar de efetuar o registro de ve\xEDculo ou de licenci\xE1-lo no prazo estabelecido pela autoridade de tr\xE2nsito.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o grav\xEDssima (7 pontos, multa 1x), apreens\xE3o e remo\xE7\xE3o do ve\xEDculo.",
+      "Art. 230, V: Transitando com ve\xEDculo sem o devido licenciamento."
+    ],
+    practicalApplication: "Verificar se CRLV-e dispon\xEDvel, se taxas pagas, se restri\xE7\xE3o administrativa indevida.",
+    nullityConsequence: "Anula\xE7\xE3o se licenciamento pago mas sistema n\xE3o atualizado, ou se notifica\xE7\xE3o n\xE3o entregue.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Portaria SENATRAN n\xBA 354/2022"]
+  },
+  {
+    article: "Art. 195",
+    title: "Transitar em Local/Hor\xE1rio n\xE3o Permitido",
+    caput: "Transitar em locais e hor\xE1rios n\xE3o permitidos pela regulamenta\xE7\xE3o estabelecida pela autoridade de tr\xE2nsito com circunscri\xE7\xE3o sobre a via:",
+    paragraphsAndIncidents: [
+      "Inciso I: Em \xE1reas de estacionamento proibido; II: Em ciclovias/ciclofaixas; III: Em acostamentos; IV: Na contram\xE3o de dire\xE7\xE3o.",
+      "Penalidade: m\xE9dia (4 pts) a grave (5 pts) conforme inciso."
+    ],
+    practicalApplication: "Verificar sinaliza\xE7\xE3o (placas R-6, R-45, etc.), hor\xE1rios, se regulamenta\xE7\xE3o publicada e vis\xEDvel.",
+    nullityConsequence: "Anula\xE7\xE3o se sinaliza\xE7\xE3o inexistente, encoberta, ou regulamenta\xE7\xE3o n\xE3o publicada.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022 (Sinaliza\xE7\xE3o)", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 230",
+    title: "Infra\xE7\xF5es de Estacionamento e Parada",
+    caput: "Conduzir ve\xEDculo: V - sem estar licenciado; IX - sem os equipamentos obrigat\xF3rios; XVIII - com lota\xE7\xE3o excedente; XXIII - transitando em ciclovia/ciclofaixa; XXIV - estacionamento em desacordo com sinaliza\xE7\xE3o; XXV - parada em desacordo com sinaliza\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Inciso V: Grav\xEDssima (7 pts, multa 1x, apreens\xE3o); IX: Grave (5 pts); XVIII: Grave (5 pts); XXIII: M\xE9dia (4 pts); XXIV/XXV: Leve (3 pts) ou M\xE9dia (4 pts)."
+    ],
+    practicalApplication: "Verificar placas R-6a/b/c, R-45, R-46, hor\xE1rios, se \xE1rea permitia estacionamento/parada, se sinaliza\xE7\xE3o vis\xEDvel.",
+    nullityConsequence: "Anula\xE7\xE3o se sinaliza\xE7\xE3o inexistente, irregular, ou equipamento obrigat\xF3rio presente.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 973/2022", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 231",
+    title: "Transitar sem Equipamentos Obrigat\xF3rios",
+    caput: "Conduzir ve\xEDculo: IX - sem os equipamentos obrigat\xF3rios ou estando estes em desacordo com as normas estabelecidas pelo CONTRAN.",
+    paragraphsAndIncidents: [
+      "Equipamentos: extintor, tri\xE2ngulo, macaco, chave de roda, estepe (conforme tipo), cinto de seguran\xE7a, encosto de cabe\xE7a, tac\xF3grafo (ve\xEDculos pesados).",
+      "Infra\xE7\xE3o grave (5 pontos)."
+    ],
+    practicalApplication: "Verificar se equipamento realmente ausente ou em desacordo, se ve\xEDculo isento (ex: extintor n\xE3o obrigat\xF3rio para carros de passeio desde 2015).",
+    nullityConsequence: "Anula\xE7\xE3o se equipamento n\xE3o exigido para categoria do ve\xEDculo, ou se presente mas n\xE3o identificado pelo agente.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022 (MBFT)"]
+  },
+  {
+    article: "Art. 244",
+    title: "Conduzir Motocicleta sem Capacete ou Vestu\xE1rio",
+    caput: "Conduzir motocicleta, motoneta ou ciclomotor: I - sem usar capacete de seguran\xE7a com viseira ou \xF3culos de prote\xE7\xE3o e vestu\xE1rio de acordo com as normas do CONTRAN; II - transportando passageiro sem capacete ou fora do banco; III - fazendo malabarismo ou equilibrando-se em uma roda; IV - com farol apagado.",
+    paragraphsAndIncidents: [
+      "Inciso I/II: Grav\xEDssima (7 pts, multa 1x, suspens\xE3o do direito de dirigir); III/IV: Grav\xEDssima (7 pts)."
+    ],
+    practicalApplication: "Verificar se capacete certificado INMETRO, viseira/\xF3culos, vestu\xE1rio adequado, farol aceso (obrigat\xF3rio dia e noite).",
+    nullityConsequence: "Anula\xE7\xE3o se capacete certificado, farol aceso, ou passageiro em banco pr\xF3prio com capacete.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 985/2022", "Portaria INMETRO (capacetes)"]
+  },
+  {
+    article: "Art. 256",
+    title: "Infra\xE7\xF5es de Cinto de Seguran\xE7a e Cadeirinha",
+    caput: "Deixar de usar o cinto de seguran\xE7a, conforme disp\xF5e o art. 65, ou transportar crian\xE7a sem observar as normas de seguran\xE7a (cadeirinha, assento de eleva\xE7\xE3o, beb\xEA conforto).",
+    paragraphsAndIncidents: [
+      "Inciso I: Condutor sem cinto \u2014 Grav\xEDssima (7 pts); II: Passageiro sem cinto \u2014 Grave (5 pts); III: Crian\xE7a sem dispositivo \u2014 Grav\xEDssima (7 pts, multa 1x)."
+    ],
+    practicalApplication: "Verificar se todos ocupantes usavam cinto, se crian\xE7a em dispositivo adequado \xE0 idade/peso/altura (Res. 819/2021).",
+    nullityConsequence: "Anula\xE7\xE3o se cinto usado, crian\xE7a em dispositivo correto, ou ve\xEDculo isento (\xF4nibus urbano, t\xE1xi em algumas cidades).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 819/2021", "Resolu\xE7\xE3o CONTRAN n\xBA 985/2022"]
+  },
+  {
+    article: "Art. 265",
+    title: "Dirigir sob Chuva Forte sem Farol Baixo",
+    caput: "Deixar de acender as luzes do ve\xEDculo: I - \xE0 noite; II - em t\xFAneis providos de ilumina\xE7\xE3o p\xFAblica; III - durante o dia, em rodovias, quando houver chuva forte, neblina ou cerra\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Infra\xE7\xE3o m\xE9dia (4 pontos).",
+      "Desde 2016 (Lei 13.154): farol baixo obrigat\xF3rio em rodovias mesmo de dia."
+    ],
+    practicalApplication: "Verificar se condi\xE7\xE3o clim\xE1tica justificava, se em rodovia, se farol realmente apagado.",
+    nullityConsequence: "Anula\xE7\xE3o se n\xE3o em rodovia, ou se farol aceso (DRL n\xE3o conta como farol baixo em alguns entendimentos).",
+    relatedResolutions: ["Lei 13.154/2015", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 267",
+    title: "Convers\xE3o em Advert\xEAncia por Escrito (Direito Subjetivo)",
+    caput: "Dever\xE1 ser imposta a penalidade de advert\xEAncia por escrito para as infra\xE7\xF5es de natureza leve ou m\xE9dia, pass\xEDveis de serem punidas com multa, caso o infrator n\xE3o tenha cometido nenhuma outra infra\xE7\xE3o nos \xFAltimos 12 (doze) meses.",
+    paragraphsAndIncidents: [
+      'Lei 14.071/2020: substituiu "poder\xE1" por "dever\xE1" \u2014 direito subjetivo vinculado.',
+      "N\xE3o se aplica a infra\xE7\xF5es graves/grav\xEDssimas, nem a reincidentes nos 12 meses."
+    ],
+    practicalApplication: "Para qualquer infra\xE7\xE3o leve (3 pts) ou m\xE9dia (4 pts), condutor sem hist\xF3rico nos 12 meses tem 100% direito \xE0 isen\xE7\xE3o da multa e cancelamento dos pontos.",
+    nullityConsequence: "Indeferimento ilegal pass\xEDvel de mandado de seguran\xE7a ou recurso ao CETRAN.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 918/2022, Art. 10", "Lei 14.071/2020"]
+  },
+  {
+    article: "Art. 273",
+    title: "Indica\xE7\xE3o de Condutor Infrator",
+    caput: "Sempre que o condutor for identificado no momento da infra\xE7\xE3o, a autoridade de tr\xE2nsito consignar\xE1 essa identifica\xE7\xE3o no auto de infra\xE7\xE3o. N\xE3o sendo poss\xEDvel a identifica\xE7\xE3o, o propriet\xE1rio do ve\xEDculo ser\xE1 notificado para, no prazo de 15 (quinze) dias contados da notifica\xE7\xE3o, identificar o condutor.",
+    paragraphsAndIncidents: [
+      "\xA71\xBA A n\xE3o indica\xE7\xE3o no prazo sujeita o propriet\xE1rio \xE0 multa (Grav\xEDssima, 7 pts, multa 1x).",
+      "\xA72\xBA A indica\xE7\xE3o falsa sujeita \xE0s penas de falsidade ideol\xF3gica.",
+      "\xA77\xBA O condutor indicado responder\xE1 pela infra\xE7\xE3o como se fosse o autuado origin\xE1rio."
+    ],
+    practicalApplication: "Prazo de 15 dias da NOTIFICA\xC7\xC3O (n\xE3o do fato). Indica\xE7\xE3o pode ser eletr\xF4nica (SNIE). Verificar se prazo respeitado.",
+    nullityConsequence: "Nulidade da multa por n\xE3o indica\xE7\xE3o se prazo n\xE3o respeitado ou se condutor j\xE1 identificado no ato.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022", "MBFT 985/2022"]
+  },
+  {
+    article: "Art. 277",
+    title: "Teste de Etil\xF4metro e Exame Cl\xEDnico",
+    caput: "Todo condutor de ve\xEDculo automotor, envolvido em acidente de tr\xE2nsito ou que for alvo de fiscaliza\xE7\xE3o de tr\xE2nsito, submeter-se-\xE1 a teste de etil\xF4metro, exame cl\xEDnico, per\xEDcia ou outro procedimento que permita certificar influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa.",
+    paragraphsAndIncidents: [
+      "Recusa (Art. 165-A): Grav\xEDssima 10x, suspens\xE3o 12 meses.",
+      "Resultado \u2265 0,34 mg/L ou 6 dg/L: Crime (Art. 306 CTB).",
+      "Resultado > 0,05 mg/L e < 0,34 mg/L: Infra\xE7\xE3o administrativa (Art. 165)."
+    ],
+    practicalApplication: "Verificar se etil\xF4metro homologado INMETRO (laudo v\xE1lido 12 meses), se termo circunstanciado preenchido (Anexo II Res. 432/2013), se oferecido contraprova.",
+    nullityConsequence: "Nulidade se etil\xF4metro sem laudo, termo n\xE3o preenchido, contraprova negada, ou agente n\xE3o habilitado.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013", "Portaria INMETRO n\xBA 369/2021"]
+  },
+  {
+    article: "Art. 283",
+    title: "Efeito Suspensivo do Recurso (Garantia)",
+    caput: "O recurso de que trata o art. 285, interposto no prazo legal, tem efeito suspensivo at\xE9 a decis\xE3o final do processo administrativo.",
+    paragraphsAndIncidents: [
+      "Garantia constitucional de n\xE3o sofrer restri\xE7\xE3o antes de julgamento final.",
+      "Lei 14.229/2021: Se n\xE3o julgado em 24 meses, efeito suspensivo de of\xEDcio."
+    ],
+    practicalApplication: "Durante recurso \xE0 JARI e CETRAN: sem bloqueio no licenciamento, sem restri\xE7\xE3o na CNH, sem inscri\xE7\xE3o em d\xEDvida ativa.",
+    nullityConsequence: "Qualquer restri\xE7\xE3o aplicada durante tramita\xE7\xE3o de recurso tempestivo \xE9 nula.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Lei 14.229/2021"]
+  },
+  {
+    article: "Art. 284",
+    title: "Prescri\xE7\xE3o da Pretens\xE3o Punitiva",
+    caput: "A pretens\xE3o de punir pela infra\xE7\xE3o de tr\xE2nsito prescreve em 5 (cinco) anos, contados da data do cometimento da infra\xE7\xE3o.",
+    paragraphsAndIncidents: [
+      "Prescri\xE7\xE3o intercorrente: 3 (tr\xEAs) anos de paralisa\xE7\xE3o do processo (Lei 9.873/99).",
+      "Interrup\xE7\xE3o: ato inequ\xEDvoco de impulso processual pela administra\xE7\xE3o."
+    ],
+    practicalApplication: "Verificar se processo paralisado > 3 anos (intercorrente) ou > 5 anos do fato (quinquenal).",
+    nullityConsequence: "Extin\xE7\xE3o da punibilidade, arquivamento do processo, cancelamento da multa e pontos.",
+    relatedResolutions: ["Lei 9.873/1999", "Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 290",
+    title: "Cassa\xE7\xE3o da Carteira Nacional de Habilita\xE7\xE3o",
+    caput: "A Carteira Nacional de Habilita\xE7\xE3o ser\xE1 cassada: I - quando o condutor, com o direito de dirigir suspenso, for flagrado conduzindo qualquer ve\xEDculo; II - em caso de reincid\xEAncia, no prazo de 12 (doze) meses, das infra\xE7\xF5es previstas nos arts. 162, I, 163, 164, 165, 173, 174, 175, 244 e 306.",
+    paragraphsAndIncidents: [
+      "Processo de Cassa\xE7\xE3o (PCDD) \u2014 inst\xE2ncia mais grave.",
+      "Ap\xF3s cassa\xE7\xE3o: 2 anos sem poder tirar nova CNH, necessidade de novo processo de forma\xE7\xE3o."
+    ],
+    practicalApplication: "Verificar se suspens\xE3o j\xE1 tinha tr\xE2nsito em julgado, se flagrante real, se reincid\xEAncia em 12 meses comprovada.",
+    nullityConsequence: "Anula\xE7\xE3o se suspens\xE3o n\xE3o transitada em julgado, ou se reincid\xEAncia n\xE3o comprovada no prazo.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022", "Resolu\xE7\xE3o CONTRAN n\xBA 918/2022"]
+  },
+  {
+    article: "Art. 306",
+    title: "Crime de Tr\xE2nsito \u2014 Conduzir com Capacidade Psicomotora Alterada",
+    caput: "Conduzir ve\xEDculo automotor com capacidade psicomotora alterada em raz\xE3o da influ\xEAncia de \xE1lcool ou de outra subst\xE2ncia psicoativa que determine depend\xEAncia.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 3 anos, multa, suspens\xE3o ou proibi\xE7\xE3o de se obter CNH.",
+      "Materialidade: etil\xF4metro \u2265 0,34 mg/L OU exame cl\xEDnico/per\xEDcia OU prova testemunhal/v\xEDdeo."
+    ],
+    practicalApplication: "Esfera criminal \u2014 n\xE3o julgada no administrativo. Administrativo: Art. 165 (0,05-0,34) ou 165-A (recusa).",
+    nullityConsequence: "Absolvi\xE7\xE3o criminal n\xE3o anula automaticamente administrativo (esferas independentes), mas prova emprestada pode ser usada.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013", "Lei 11.705/2008 (Lei Seca)"]
+  },
+  {
+    article: "Art. 309",
+    title: "Crime de Tr\xE2nsito \u2014 Dirigir sem Habilita\xE7\xE3o",
+    caput: "Dirigir ve\xEDculo automotor, em via p\xFAblica, sem a devida Permiss\xE3o para Dirigir ou Carteira de Habilita\xE7\xE3o ou, ainda, se cassado o direito de dirigir, gerando perigo de dano.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Perigo de dano presumido (n\xE3o precisa de acidente)."
+    ],
+    practicalApplication: "Esfera criminal. Administrativo: Art. 162 (sem CNH, cassada, suspensa, categoria errada).",
+    nullityConsequence: "Absolvi\xE7\xE3o criminal por atipicidade n\xE3o impede san\xE7\xE3o administrativa (independ\xEAncia das inst\xE2ncias).",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 310",
+    title: "Crime de Tr\xE2nsito \u2014 Permitir que Pessoa n\xE3o Habilitada Dirija",
+    caput: "Permitir, confiar ou entregar a dire\xE7\xE3o de ve\xEDculo automotor a pessoa n\xE3o habilitada, com habilita\xE7\xE3o cassada ou com o direito de dirigir suspenso, ou, ainda, a quem, por seu estado f\xEDsico ou mental, ou por embriaguez, n\xE3o esteja em condi\xE7\xF5es de conduzi-lo com seguran\xE7a.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Propriet\xE1rio responde se tinha ci\xEAncia da condi\xE7\xE3o."
+    ],
+    practicalApplication: "Esfera criminal. Administrativo: Art. 163.",
+    nullityConsequence: "Mesma independ\xEAncia entre esferas do Art. 309.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 311",
+    title: "Crime de Tr\xE2nsito \u2014 Afastar-se do Local do Acidente",
+    caput: "Afastar-se o condutor do ve\xEDculo do local do acidente, para fugir \xE0 responsabilidade penal ou civil que lhe possa ser atribu\xEDda.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "N\xE3o se aplica se para socorrer v\xEDtima ou buscar ajuda (em local ermo/sem sinal)."
+    ],
+    practicalApplication: "Verificar se condutor permaneceu, prestou socorro, acionou autoridades.",
+    nullityConsequence: "Exclus\xE3o de ilicitude se para socorro em local sem comunica\xE7\xE3o.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 900/2022"]
+  },
+  {
+    article: "Art. 312",
+    title: "Crime de Tr\xE2nsito \u2014 Entregar Ve\xEDculo a Pessoa Embriagada",
+    caput: "Entregar a dire\xE7\xE3o de ve\xEDculo automotor a pessoa embriagada ou sob efeito de subst\xE2ncia psicoativa.",
+    paragraphsAndIncidents: [
+      "Pena: deten\xE7\xE3o 6 meses a 1 ano, ou multa.",
+      "Administrativo: Art. 163, II."
+    ],
+    practicalApplication: "Verificar ci\xEAncia do propriet\xE1rio do estado do condutor.",
+    nullityConsequence: "Independ\xEAncia das esferas.",
+    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 432/2013"]
   }
 ];
 
@@ -14235,6 +14453,14 @@ var RESOLUTIONS_DB = [
     subject: "Regulamento T\xE9cnico Metrol\xF3gico para medidores de velocidade de ve\xEDculos automotores (radares).",
     keyArticles: "Item 4.1 (Verifica\xE7\xE3o inicial e peri\xF3dica com periodicidade improrrog\xE1vel de 12 meses).",
     impactOnDefenses: "Regula o laudo t\xE9cnico do IPEM/INMETRO obrigat\xF3rio para valida\xE7\xE3o da velocidade apurada."
+  },
+  {
+    number: "Resolu\xE7\xE3o CONTRAN n\xBA 940/2022",
+    body: "CONTRAN",
+    year: 2022,
+    subject: "Estabelece crit\xE9rios para a fiscaliza\xE7\xE3o de tr\xE2nsito e d\xE1 outras provid\xEAncias, regulamentando o uso de equipamentos eletr\xF4nicos.",
+    keyArticles: "Art. 1\xBA a 15\xBA (Fiscaliza\xE7\xE3o eletr\xF4nica, homologa\xE7\xE3o INMETRO, margem de toler\xE2ncia, sinaliza\xE7\xE3o, comprova\xE7\xE3o da infra\xE7\xE3o); Anexo I (Formul\xE1rio de autua\xE7\xE3o eletr\xF4nica); Anexo II (Crit\xE9rios de instala\xE7\xE3o de equipamentos).",
+    impactOnDefenses: "Complementa a Res. 798/2020 para fiscaliza\xE7\xE3o eletr\xF4nica. Estabelece requisitos de homologa\xE7\xE3o, sinaliza\xE7\xE3o e margem de toler\xE2ncia para equipamentos de fiscaliza\xE7\xE3o automatizada. A aus\xEAncia de homologa\xE7\xE3o ou laudo INMETRO v\xE1lido invalida a autua\xE7\xE3o."
   }
 ];
 
@@ -27870,6 +28096,7 @@ var ocr_default = router10;
 
 // src/server/routes/payments.ts
 import { Router as Router11 } from "express";
+import crypto5 from "node:crypto";
 
 // src/server/integrations/pagbank.ts
 import * as crypto4 from "crypto";
@@ -28578,29 +28805,34 @@ var pagbankAdapter = new PagBankAdapter();
 import QRCode2 from "qrcode";
 var GGRAPI_BASE_URL = "https://ggpixapi.com/api/v1";
 var GGRAPI_BACKUP_URL = "https://ggatepixapi.com/api/v1";
-function getConfig() {
-  const allowedIpsRaw = process.env.GGPIX_WEBHOOK_ALLOWED_IPS || "";
+function getConfig(env) {
+  const e = env || process.env;
+  const allowedIpsRaw = e.GGPIX_WEBHOOK_ALLOWED_IPS || "";
   const allowedIps = allowedIpsRaw.split(",").map((ip) => ip.trim()).filter(Boolean);
   return {
-    apiKey: process.env.GGPIX_API_KEY || "",
-    appUrl: process.env.APP_URL || "https://defesai.com.br",
-    enabled: process.env.GGPIX_ENABLED === "true",
+    apiKey: e.GGPIX_API_KEY || "",
+    appUrl: e.APP_URL || "https://defesai.com.br",
+    enabled: e.GGPIX_ENABLED === "true",
     webhookAllowedIps: allowedIps.length > 0 ? allowedIps : void 0
   };
 }
-function isProductionMode() {
-  return (process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
+function isProductionMode(env) {
+  const e = env || process.env;
+  return (e.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
 }
-function validateWebhookSourceIp(headers, allowedIps) {
+function validateWebhookSourceIp(headers, allowedIps, env) {
+  console.error("GGPIX validateWebhookSourceIp called with:", { headers, allowedIps, env });
   if (!allowedIps || allowedIps.length === 0) {
-    if (isProductionMode()) {
+    if (isProductionMode(env)) {
       logger.warn("payments", "ggpix", "webhook_ip", "GGPIX_WEBHOOK_ALLOWED_IPS n\xE3o configurado \u2014 webhook aceito mas configurar em produ\xE7\xE3o");
     }
     return true;
   }
   const forwardedFor = headers["x-forwarded-for"];
   const realIp = headers["x-real-ip"];
-  const clientIp = forwardedFor?.split(",")[0]?.trim() || realIp || "";
+  const cfConnectingIp = headers["cf-connecting-ip"];
+  const clientIp = forwardedFor?.split(",")[0]?.trim() || realIp || cfConnectingIp || "";
+  console.error("GGPIX webhook IP validation:", { clientIp, allowedIps, forwardedFor, realIp, cfConnectingIp });
   if (!clientIp) {
     logger.warn("payments", "ggpix", "webhook_ip", "N\xE3o foi poss\xEDvel determinar IP do cliente");
     return false;
@@ -28613,6 +28845,7 @@ function validateWebhookSourceIp(headers, allowedIps) {
       const mask = ~((1 << 32 - prefix) - 1);
       const clientNum = ipToNumber(clientIp);
       const baseNum = ipToNumber(baseIp);
+      console.error("GGPIX CIDR check:", { clientIp, baseIp, prefix, mask, clientNum, baseNum, clientNumMask: clientNum & mask, baseNumMask: baseNum & mask });
       return (clientNum & mask) === (baseNum & mask);
     }
     return allowed === clientIp;
@@ -28653,16 +28886,17 @@ async function ggFetch(path, options = {}, config = getConfig()) {
   }
 }
 var GGPIXAdapter = class {
-  constructor() {
+  constructor(customEnv) {
     this.id = "ggpixapi";
     this.displayName = "GGPIXAPI (PIX)";
+    console.error("GGPIXAdapter constructor customEnv:", customEnv);
+    this.config = getConfig(customEnv);
+    console.error("GGPIXAdapter config:", this.config);
   }
   isConfigured() {
-    const config = getConfig();
-    return config.enabled && Boolean(config.apiKey);
+    return this.config.enabled && Boolean(this.config.apiKey);
   }
   async createPix(input) {
-    const config = getConfig();
     const cleanDoc = (input.payer.document || "12345678909").replace(/\D/g, "");
     const referenceId = input.referenceId || `defesai_case_${input.caseId}_${Date.now()}`;
     if (!input.amountInCents || typeof input.amountInCents !== "number" || input.amountInCents <= 0) {
@@ -28675,7 +28909,7 @@ var GGPIXAdapter = class {
     let feeInCents = void 0;
     let netAmountInCents = void 0;
     if (this.isConfigured()) {
-      const webhookUrl = input.webhookUrl || `${config.appUrl.replace(/\/$/, "")}/api/webhooks/ggpix`;
+      const webhookUrl = input.webhookUrl || `${this.config.appUrl.replace(/\/$/, "")}/api/webhooks/ggpix`;
       try {
         const response = await ggFetch("/pix/in", {
           method: "POST",
@@ -28689,7 +28923,7 @@ var GGPIXAdapter = class {
             payerEmail: input.payer.email,
             payerPhone: input.payer.phone
           })
-        }, config);
+        }, this.config);
         if (response.ok) {
           const data = await response.json();
           transactionId = data.id || transactionId;
@@ -28751,10 +28985,9 @@ var GGPIXAdapter = class {
     );
   }
   async getPaymentStatus(gatewayTransactionId) {
-    const config = getConfig();
     const response = await ggFetch(`/transactions/${gatewayTransactionId}`, {
       method: "GET"
-    }, config);
+    }, this.config);
     if (!response.ok) {
       logger.warn("payments", "ggpix", "get_status", "Transaction query failed", {
         transactionId: gatewayTransactionId,
@@ -28775,8 +29008,8 @@ var GGPIXAdapter = class {
     };
   }
   processWebhook(_rawBody, headers, body) {
-    const config = getConfig();
-    if (!validateWebhookSourceIp(headers, config.webhookAllowedIps)) {
+    console.error("GGPIXAdapter.processWebhook called with headers:", headers);
+    if (!validateWebhookSourceIp(headers, this.config.webhookAllowedIps)) {
       throw new Error("Webhook GGPIXAPI rejeitado: IP de origem n\xE3o autorizado");
     }
     const payload = body && typeof body === "object" ? body : {};
@@ -28884,33 +29117,17 @@ var TestGatewayAdapter = class {
 var testAdapter = IS_DEV ? new TestGatewayAdapter() : null;
 
 // src/server/integrations/gateway/gateway-manager.ts
+function isProductionEnvironment() {
+  return (process.env.VERCEL_ENV || "").toLowerCase().trim() === "production" || (process.env.NODE_ENV || "").toLowerCase().trim() === "production" || (process.env.PAYMENT_MODE || "").toLowerCase().trim() === "production";
+}
 function resolveActiveGatewayIdFromEnv() {
   const configOverride = configService.get("PAYMENT_ACTIVE_GATEWAY_OVERRIDE");
-  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank" || configOverride === "test")) {
-    logger.info("payments", "gateway_manager", "resolve", "Using ConfigService override for active gateway", {
-      override: configOverride
-    });
-    return configOverride;
-  }
+  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank" || configOverride === "test")) return configOverride;
   const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || "").toLowerCase().trim();
-  const paymentMode = (process.env.PAYMENT_MODE || "sandbox").toLowerCase().trim();
-  const isProduction = paymentMode === "production";
   if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
-  if (envValue === "pagbank") {
-    if (isProduction) {
-      logger.warn("payments", "gateway_manager", "resolve", "PagBank bloqueado em PAYMENT_MODE=production", {
-        requestedGateway: "pagbank",
-        paymentMode,
-        forcedGateway: "ggpixapi"
-      });
-      return "ggpixapi";
-    }
-    return "pagbank";
-  }
+  if (envValue === "pagbank") return "pagbank";
   if (envValue === "test") return "test";
-  if (isProduction) {
-    return "ggpixapi";
-  }
+  if (isProductionEnvironment()) return pagbankAdapter.isConfigured() ? "pagbank" : "ggpixapi";
   return "pagbank";
 }
 var GatewayManager = class {
@@ -28918,130 +29135,54 @@ var GatewayManager = class {
     this.gateways = /* @__PURE__ */ new Map();
     this.gateways.set("pagbank", pagbankAdapter);
     this.gateways.set("ggpixapi", ggpixAdapter);
-    if (testAdapter) {
-      this.gateways.set("test", testAdapter);
-    }
-    logger.info("payments", "gateway_manager", "init", `Gateway manager initialized`, {
-      availableGateways: Array.from(this.gateways.keys())
-    });
+    if (testAdapter) this.gateways.set("test", testAdapter);
+    logger.info("payments", "gateway_manager", "init", "Gateway manager initialized", { availableGateways: Array.from(this.gateways.keys()) });
   }
-  /** Gateway ativo efetivo: ConfigService override > variável de ambiente. */
   resolveActiveGatewayId() {
     return resolveActiveGatewayIdFromEnv();
   }
-  /**
-   * Retorna o adapter do gateway ativo.
-   * Lança erro se o gateway configurado não estiver configurado.
-   */
   getActiveGateway() {
     const currentId = this.resolveActiveGatewayId();
     const active = this.gateways.get(currentId);
-    if (!active) {
-      throw new Error(`Gateway '${currentId}' not found.`);
-    }
-    if (!active.isConfigured()) {
-      throw new Error(`Gateway '${active.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais.`);
-    }
+    if (!active) throw new Error(`Gateway '${currentId}' not found.`);
+    if (!active.isConfigured()) throw new Error(`Gateway '${active.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais.`);
     return active;
   }
-  /**
-   * Retorna um adapter específico por ID.
-   * Usado pelo webhook handler quando o payload indica o gateway.
-   */
   getGateway(id) {
     return this.gateways.get(id);
   }
-  /**
-   * Registra um novo gateway (extensível para futuros gateways).
-   */
   registerGateway(gateway) {
     this.gateways.set(gateway.id, gateway);
     logger.info("payments", "gateway_manager", "register", `Gateway registered: ${gateway.id}`);
   }
-  /**
-   * Retorna informações sobre todos os gateways registrados.
-   * Usado pelo Admin UI para exibir status e permitir alternância.
-   */
   getGatewayStatus() {
     return Array.from(this.gateways.values()).map((gw) => {
       const isConfigured = gw.isConfigured();
       let notConfiguredReason;
       if (!isConfigured) {
-        if (gw.id === "pagbank") {
-          notConfiguredReason = "PAGBANK_TOKEN n\xE3o configurado";
-        } else if (gw.id === "ggpixapi") {
-          notConfiguredReason = "GGPIX_API_KEY ou GGPIX_ENABLED n\xE3o configurado";
-        } else if (gw.id === "test") {
-          notConfiguredReason = "Apenas para desenvolvimento/teste (NODE_ENV !== production)";
-        }
+        if (gw.id === "pagbank") notConfiguredReason = "PAGBANK_TOKEN n\xE3o configurado";
+        else if (gw.id === "ggpixapi") notConfiguredReason = "GGPIX_API_KEY ou GGPIX_ENABLED n\xE3o configurado";
+        else if (gw.id === "test") notConfiguredReason = "Apenas para desenvolvimento/teste (NODE_ENV !== production)";
       }
-      return {
-        id: gw.id,
-        displayName: gw.displayName,
-        status: isConfigured ? "configured" : "not_configured",
-        isActive: gw.id === this.resolveActiveGatewayId(),
-        supportsCreditCard: gw.id === "pagbank",
-        // Apenas PagBank suporta cartão
-        notConfiguredReason
-      };
+      return { id: gw.id, displayName: gw.displayName, status: isConfigured ? "configured" : "not_configured", isActive: gw.id === this.resolveActiveGatewayId(), supportsCreditCard: gw.id === "pagbank", notConfiguredReason };
     });
   }
-  /**
-   * Retorna o ID do gateway ativo (override runtime tem prioridade sobre env).
-   */
   getActiveGatewayId() {
     return this.resolveActiveGatewayId();
   }
-  /**
-   * Verifica se o gateway é de produção.
-   * Apenas GGPIXAPI é considerado gateway de produção (PagBank é sandbox/teste).
-   */
   isProductionGateway(id) {
-    return id === "ggpixapi";
+    return id === "ggpixapi" || id === "pagbank";
   }
-  /**
-   * Altera o gateway ativo (usado pelo Admin UI).
-   * NÃO migra pagamentos existentes — apenas afeta novos pagamentos.
-   *
-   * A alteração é persistida no ConfigService (PAYMENT_ACTIVE_GATEWAY_OVERRIDE)
-   * e reflete em todos os workers/instâncias após reinício.
-   */
   async setActiveGateway(id, updatedBy = "admin") {
     const gateway = this.gateways.get(id);
-    if (!gateway) {
-      return { success: false, message: `Gateway '${id}' n\xE3o encontrado.` };
-    }
-    if (!gateway.isConfigured()) {
-      return {
-        success: false,
-        message: `Gateway '${gateway.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais antes de ativ\xE1-lo.`
-      };
-    }
+    if (!gateway) return { success: false, message: `Gateway '${id}' n\xE3o encontrado.` };
+    if (!gateway.isConfigured()) return { success: false, message: `Gateway '${gateway.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais antes de ativ\xE1-lo.` };
     const previousId = this.resolveActiveGatewayId();
-    const updateResult = await configService.update({
-      key: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE",
-      value: id,
-      updatedBy
-    });
-    if (!updateResult.success) {
-      return { success: false, message: `Falha ao persistir override: ${updateResult.message}` };
-    }
-    logger.info(
-      "payments",
-      "gateway_manager",
-      "set_active",
-      `Gateway changed: ${previousId} \u2192 ${id} (persisted to ConfigService)`,
-      { previousGateway: previousId, newGateway: id, updatedBy }
-    );
-    return {
-      success: true,
-      message: `Gateway alterado para '${gateway.displayName}'. Novos pagamentos usar\xE3o este gateway.`
-    };
+    const updateResult = await configService.update({ key: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE", value: id, updatedBy });
+    if (!updateResult.success) return { success: false, message: `Falha ao persistir override: ${updateResult.message}` };
+    logger.info("payments", "gateway_manager", "set_active", `Gateway changed: ${previousId} \u2192 ${id} (persisted to ConfigService)`, { previousGateway: previousId, newGateway: id, updatedBy });
+    return { success: true, message: `Gateway alterado para '${gateway.displayName}'. Novos pagamentos usar\xE3o este gateway.` };
   }
-  /**
-   * Verifica se um gateway suporta cartão de crédito.
-   * Usado pelo Checkout para decidir se exibe a aba Cartão.
-   */
   supportsCreditCard(gatewayId) {
     const id = gatewayId || this.resolveActiveGatewayId();
     const gateway = this.gateways.get(id);
@@ -29141,11 +29282,6 @@ function hasValidDefenseIntegrity(draft, analysis) {
 }
 
 // src/server/payments/case-access.ts
-function assertPaymentCaseAccess(row, user) {
-  if (!user) return { status: 401, error: "N\xE3o autenticado" };
-  if (!row || user.role === "admin") return null;
-  return row.user_id === user.id ? null : { status: 403, error: "Voc\xEA n\xE3o tem permiss\xE3o para pagar este caso." };
-}
 function resolveEffectiveUser(row, user) {
   return user?.id || row?.user_id || void 0;
 }
@@ -29219,6 +29355,27 @@ function validatePayerIdentity(name, email, cpf) {
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
   if (!normalizedName || !emailValid || normalizedCpf.length !== 11) return null;
   return { name: normalizedName, email: normalizedEmail, cpf: normalizedCpf };
+}
+function canPayCase(req, caseId) {
+  const user = req.user;
+  if (user?.role === "admin") return true;
+  if (user?.id) {
+    const row2 = databaseRows.get(caseId);
+    if (!row2) return false;
+    return row2.user_id === user.id;
+  }
+  const provided = req.header("X-Claim-Token");
+  const row = databaseRows.get(caseId);
+  if (typeof provided !== "string" || !provided || !row?.claim_token) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(row.claim_token);
+  return a.length === b.length && crypto5.timingSafeEqual(a, b);
+}
+function assertCanPayCase(req, res, caseId) {
+  if (!caseId) return true;
+  if (canPayCase(req, caseId)) return true;
+  res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para pagar este caso." });
+  return false;
 }
 function prodAuth(req, res, next) {
   if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
@@ -29298,11 +29455,7 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
     } = req.body;
     const targetRow = caseId && typeof caseId === "string" ? databaseRows.get(caseId) : void 0;
     const effectiveUserId = resolveEffectiveUser(targetRow, req.user);
-    const payer = validatePayerIdentity(
-      targetRow?.client_name || customerName,
-      targetRow?.client_email || customerEmail,
-      targetRow?.client_cpf || customerCpf
-    );
+    const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);
     if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para cria\xE7\xE3o do pagamento PIX." });
     const offerResult = resolveOffer({
       serviceType,
@@ -29318,10 +29471,7 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
     }
     const finalAmount = offerResult.offer.price;
     const gateway = gatewayManager.getActiveGateway();
-    if (caseId && typeof caseId === "string") {
-      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), req.user);
-      if (denied) return res.status(denied.status).json({ error: denied.error });
-    }
+    if (!assertCanPayCase(req, res, caseId)) return;
     const orderResult = await gateway.createPix({
       caseId: caseId || `case_${Date.now()}`,
       referenceId: `defesai_case_${caseId || Date.now()}`,
@@ -29423,11 +29573,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     }
     const targetRow = caseId && typeof caseId === "string" ? databaseRows.get(caseId) : void 0;
     const effectiveUserId = resolveEffectiveUser(targetRow, req.user);
-    const payer = validatePayerIdentity(
-      targetRow?.client_name || customerName,
-      targetRow?.client_email || customerEmail,
-      targetRow?.client_cpf || customerCpf
-    );
+    const payer = validatePayerIdentity(targetRow?.client_name || customerName, targetRow?.client_email || customerEmail, targetRow?.client_cpf || customerCpf);
     if (!payer) return res.status(400).json({ error: "Nome, email e CPF v\xE1lidos do pagador s\xE3o obrigat\xF3rios para pagamento com cart\xE3o de cr\xE9dito." });
     const offerResult = resolveOffer({
       serviceType,
@@ -29449,10 +29595,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
       });
     }
     const gateway = gatewayManager.getActiveGateway();
-    if (caseId && typeof caseId === "string") {
-      const denied = assertPaymentCaseAccess(databaseRows.get(caseId), req.user);
-      if (denied) return res.status(denied.status).json({ error: denied.error });
-    }
+    if (!assertCanPayCase(req, res, caseId)) return;
     if (gateway.id !== "pagbank") {
       return res.status(400).json({
         error: "Gateway ativo n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito.",
@@ -30029,8 +30172,8 @@ import { Router as Router12 } from "express";
 // src/core/knowledge/monitoring/hash-generator.ts
 function calculateSha256Sync(text) {
   try {
-    const crypto6 = __require("crypto");
-    return crypto6.createHash("sha256").update(text, "utf8").digest("hex");
+    const crypto7 = __require("crypto");
+    return crypto7.createHash("sha256").update(text, "utf8").digest("hex");
   } catch (e) {
     let h1 = 3735928559 ^ text.length;
     let h2 = 1103547991 ^ text.length;
@@ -31904,6 +32047,9 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
    * Enfileira um novo job de scraping e retorna o registro inicial.
    */
   async createJob(config) {
+    if (!supabaseAdmin) {
+      throw new Error("ScrapeWorker: supabaseAdmin n\xE3o configurado \u2014 imposs\xEDvel criar job.");
+    }
     const id = randomUUID3();
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const jobRecord = {
@@ -32009,6 +32155,10 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
    */
   start() {
     if (this.fallbackTimer) return;
+    if (!supabaseAdmin) {
+      logger2.warn("ScrapeWorker: supabaseAdmin n\xE3o configurado \u2014 background loop N\xC3O iniciado.");
+      return;
+    }
     this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
     this.processNextDBJob();
     logger2.info("ScrapeWorker background loop iniciado.");
@@ -35683,6 +35833,7 @@ function denyCaseAccess(user, res) {
 router18.get("/cases", authenticateToken, (req, res) => {
   const { userId } = req.query;
   const user = req.user;
+  console.log("GET /cases user:", user);
   let allRows = Array.from(databaseRows.values());
   if (user && user.role !== "admin") {
     allRows = isCanonicalUserId(user.id) ? allRows.filter((r) => r.user_id === user.id) : [];
@@ -35692,6 +35843,7 @@ router18.get("/cases", authenticateToken, (req, res) => {
     allRows = [];
   }
   const domains = allRows.map((r) => CanonicalMapper.rowToDomain(r));
+  console.log("GET /cases allRows length:", allRows.length);
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });
@@ -36243,7 +36395,7 @@ router20.get("/onboarding/rules", (_req, res) => {
       ])
     )
   };
-  res.json(baseRules);
+  return res.json(baseRules);
 });
 var onboarding_default = router20;
 
@@ -36859,7 +37011,7 @@ var sync_default = router25;
 // src/server/routes/auth.ts
 import { Router as Router26 } from "express";
 var router26 = Router26();
-router26.get("/me", authenticateToken, async (req, res) => {
+router26.get("/auth/me", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
@@ -36925,7 +37077,7 @@ var DOCUMENSO_ENDPOINTS = {
 };
 
 // src/server/lib/documenso/client.ts
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 var DocumensoClient = class {
   constructor(config) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -37044,13 +37196,13 @@ var DocumensoClient = class {
       logger.warn("documenso", "client", "verify-webhook", "No signature header received");
       return false;
     }
-    const expected = crypto5.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
+    const expected = crypto6.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const receivedBuffer = Buffer.from(receivedSecret);
     const expectedBuffer = Buffer.from(expected);
     if (receivedBuffer.length !== expectedBuffer.length) {
       return false;
     }
-    return crypto5.timingSafeEqual(receivedBuffer, expectedBuffer);
+    return crypto6.timingSafeEqual(receivedBuffer, expectedBuffer);
   }
   /**
    * Get webhook configuration
@@ -38221,8 +38373,6 @@ router27.post("/polling/stop", authenticateToken, async (req, res) => {
 var documenso_default = router27;
 
 // src/server/app.ts
-var databaseRows = caseRepository;
-var auditLogs = [];
 function createApp() {
   const app = express2();
   const isProd = process.env.NODE_ENV === "production";
