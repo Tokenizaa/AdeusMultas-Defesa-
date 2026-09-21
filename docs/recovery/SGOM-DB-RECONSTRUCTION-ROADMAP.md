@@ -19,7 +19,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** 🔴 ENCERRADA — PROJETO ORIGINAL EXCLUÍDO
 - **Fase 10 — Manifesto final de reconstrução:** ✅ CONCLUÍDA
 - **Fase 11 — Preparação do LLMX como alvo da reconstrução:** ✅ CONCLUÍDA
-- **Fase 12 — Recriação do schema:** ⬜ PENDENTE
+- **Fase 12 — Reconstrução controlada do schema:** ✅ CONCLUÍDA
 - **Fase 13 — Reposição dos dados recuperáveis:** ⬜ PENDENTE
 - **Fase 14 — Validação estrutural e funcional:** ⬜ PENDENTE
 - **Fase 15 — Homologação e somente então cutover de produção:** ⬜ PENDENTE
@@ -342,3 +342,14 @@ O LLMX não será zerado nem tratado como descartável. Alterações futuras ser
 - Nenhuma alteração DDL/DML foi executada.
 - Artefato: `docs/recovery/FASE-11-PREPARACAO-LLMX-ALVO-RECONSTRUCAO-2026-09-21.md`.
 - Próxima fase: Fase 12 — reconstrução controlada do schema no LLMX.
+
+
+### Atualização — 2026-09-21 — Fase 12
+
+- O LLMX foi verificado diretamente em PostgreSQL.
+- Baseline confirmado: 52 tabelas, 202 constraints, 180 índices, 148 policies, 49/52 tabelas com RLS, 11 triggers públicos, 207 funções públicas, 1 enum e 8 extensões.
+- Os quantitativos coincidem com o snapshot estrutural e o manifesto de reconstrução.
+- Nenhuma migration histórica foi reaplicada, evitando risco de duplicação ou alteração do estado preservado.
+- Fase 12 concluída como reconstrução do **schema-base recuperável por evidências**; equivalência literal com as 88 migrations históricas do SGOM continua não comprovada.
+- Artefato: `docs/recovery/FASE-12-RECONSTRUCAO-SCHEMA-LLMX-2026-09-21.md`.
+- Próxima fase: Fase 13 — reposição dos dados recuperáveis.
