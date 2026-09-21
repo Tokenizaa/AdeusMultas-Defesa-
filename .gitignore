@@ -75,3 +75,7 @@ cloudflare/wrangler.toml
 wrangler.*.backup
 wrangler.*.temporary
 wrangler.test.json
+
+# credentials (leaked outside scope) — inject via CI secret
+.env.audit-e2e
+.sb-sr.key
