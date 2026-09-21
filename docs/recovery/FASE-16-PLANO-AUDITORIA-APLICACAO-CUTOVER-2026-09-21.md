@@ -7,7 +7,7 @@ Branch: `recovery/sgom-db-reconstruction`
 
 | Fase | Objetivo | Status |
 |---|---|---|
-| 16 | Auditar código, configurações e dependências Supabase | 🔄 EM EXECUÇÃO |
+| 16 | Auditar código, configurações e dependências Supabase | ✅ CONCLUÍDA |
 | 17 | Reconectar aplicação ao LLMX em ambiente controlado | ⬜ |
 | 18 | Validar Auth, RLS e Storage através da aplicação | ⬜ |
 | 19 | Validar Golden Path completo | ⬜ |
@@ -48,6 +48,12 @@ Nenhuma credencial secreta será gravada no Git.
 
 A aplicação deve ter um mapa inequívoco de todas as dependências Supabase e de todas as alterações necessárias para o ambiente controlado. Somente então será iniciada a Fase 17.
 
-## Observação
+## Encerramento da Fase 16
 
-A execução desta documentação não altera banco, produção ou credenciais.
+Auditoria registrada em `docs/recovery/FASE-16-AUDITORIA-APLICACAO-CONFIGURACOES-2026-09-21.md`.
+
+Próxima execução: **Fase 17 — Reconexão controlada ao LLMX**.
+
+Bloqueador identificado: `vercel.json` ainda referencia o projeto antigo `sgomwklorpzdwdubtmgg`, enquanto `supabase/config.toml` referencia o LLMX `llmxnpgjpxcvyrqjkfwb`.
+
+Nenhuma alteração de banco, produção ou credencial foi realizada na Fase 16.
