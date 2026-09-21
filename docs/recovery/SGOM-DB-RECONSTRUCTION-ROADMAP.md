@@ -10,7 +10,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 
 - **Fase 1 — Congelamento e definição do alvo:** ✅ CONCLUÍDA
 - **Fase 2 — Auditoria do projeto LLMX atual:** ✅ CONCLUÍDA
-- **Fase 3 — Inventário estrutural detalhado do LLMX:** 🟡 EM ANDAMENTO
+- **Fase 3 — Inventário estrutural detalhado do LLMX:** ✅ CONCLUÍDA
 - **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** 🟡 EM ANDAMENTO
 - **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ⬜ PENDENTE
 - **Fase 6 — Inventário e recuperação dos dados:** ⬜ PENDENTE
@@ -49,8 +49,9 @@ Constatações confirmadas:
 - 207 funções no schema public.
 - 1 enum customizado.
 - 0 views públicas.
-- Edge Functions: nenhuma identificada na auditoria anterior.
-- Buckets históricos observados: ai-policy, case-documents, lgpd-exports, marketing-assets, skill-assets, whatsapp-media.
+- Edge Functions: nenhuma identificada.
+- 6 buckets Storage; 8 objetos observados.
+- Publicação Realtime `supabase_realtime`.
 
 ### Dados atualmente preservados no LLMX
 
@@ -83,38 +84,59 @@ As demais tabelas públicas auditadas estão atualmente sem registros.
 
 ## Fase 3 — Inventário estrutural detalhado
 
-**Status: 🟡 EM ANDAMENTO — estrutura catalogada; documentação forense ainda não encerrada**
+**Status: ✅ CONCLUÍDA**
 
-Confirmado diretamente no LLMX:
+A auditoria somente leitura foi consolidada em dois artefatos versionados:
 
-- 52 tabelas públicas;
-- catálogo verbose de tabelas, colunas, tipos, defaults, nulabilidade, PKs e FKs;
-- 202 constraints;
-- 180 índices;
-- 148 policies;
-- 49/52 tabelas com RLS;
-- 11 triggers não internos;
-- 207 funções no schema public;
-- enum public.user_role com valores citizen, admin;
-- 0 views públicas;
-- extensões instaladas/inventariadas;
-- 0 Edge Functions.
+- `docs/recovery/llmx-structural-snapshot-2026-09-21.sql`
+- `docs/recovery/LLMX-STRUCTURAL-SNAPSHOT-2026-09-21.md`
 
-Também foram identificados os 3 objetos sem RLS: messaging_contacts, messaging_conversations e messaging_messages. Isso é uma característica observada do LLMX e **não deve ser corrigida durante a recuperação forense**.
+O snapshot reproduzível cobre:
 
-Ainda falta consolidar em artefatos versionados:
+- tabelas e colunas;
+- tipos, defaults, nulabilidade, identidade;
+- PKs, FKs, UNIQUE, CHECK e demais constraints;
+- índices;
+- RLS e policies;
+- triggers não internos;
+- funções normais de `public`, com assinatura, retorno, linguagem, volatilidade e atributos de segurança;
+- definições de funções via `pg_get_functiondef`;
+- ACLs/grants;
+- enums;
+- extensões;
+- publicações Realtime;
+- buckets, objetos e policies de Storage;
+- contagens compactas para repetição da auditoria.
 
-- catálogo completo de constraints por tabela;
-- catálogo completo de índices;
-- catálogo completo de policies;
-- definições das funções relevantes, excluindo funções internas/overloads sem utilidade para reconstrução;
-- grants;
-- storage buckets, objetos e policies;
-- realtime/publications;
-- extensões relevantes para reconstrução;
-- comparação estrutural objeto a objeto com Git e histórico SGOM.
+### Resultado estrutural confirmado
 
-**Critério de conclusão da Fase 3:** existir um snapshot estrutural versionado e reproduzível do LLMX, sem dados secretos e sem executar DDL no banco.
+| Item | Resultado |
+|---|---:|
+| Tabelas públicas | 52 |
+| Constraints públicas | 202 |
+| Índices públicos | 180 |
+| Policies públicas | 148 |
+| Tabelas com RLS | 49/52 |
+| Triggers públicos não internos | 11 |
+| Funções normais em public | 207 |
+| Views públicas | 0 |
+| Edge Functions | 0 |
+| Enum | public.user_role |
+| Valores | citizen, admin |
+| Buckets Storage | 6 |
+| Objetos Storage | 8 |
+
+As três tabelas públicas sem RLS permanecem documentadas como evidência, sem qualquer correção:
+
+- `messaging_contacts`
+- `messaging_conversations`
+- `messaging_messages`
+
+Extensões instaladas relevantes confirmadas: `pg_trgm`, `pgcrypto`, `uuid-ossp`, `citext`, `vector`, `pg_stat_statements`, `plpgsql` e `supabase_vault`.
+
+A publicação `supabase_realtime` existe e não está configurada como publicação global de todas as tabelas.
+
+**Critério de conclusão atendido:** existe snapshot estrutural versionado e reproduzível, sem DDL/DML e sem exposição de dados sensíveis no documento.
 
 ## Fase 4 — Auditoria Git/histórico
 
@@ -131,11 +153,11 @@ Evidências já encontradas:
 
 Exemplos de divergência relevantes:
 
-- 20260908000001_create_cases_table existe no Git atual, mas não aparece com esse nome no histórico LLMX; LLMX possui a tabela cases e migrations históricas relacionadas.
+- `20260908000001_create_cases_table` existe no Git atual, mas não aparece com esse nome no histórico LLMX; LLMX possui a tabela `cases` e migrations históricas relacionadas.
 - Há migrations históricas do LLMX para user_profiles, commercial_orders, gateway de pagamentos, content_versions, publisher_jobs, documentos, notificações e outras estruturas que não correspondem diretamente ao conjunto atual de arquivos Git.
-- Commit 4076f57f993e8d90b185c0efb53dd83a6fac9b04 registra explicitamente a distinção entre LLMX antigo e SGOM canônico.
-- Commit 98b077ca6bc48943977c30ddb5f165e8fd6bc2ca força o cliente server-side para SGOM.
-- Evidência loop/evidence/G1-01-2026-09-15.md registrou SGOM como autoridade e 88 migrations em 2026-09-15.
+- Commit `4076f57f993e8d90b185c0efb53dd83a6fac9b04` registra explicitamente a distinção entre LLMX antigo e SGOM canônico.
+- Commit `98b077ca6bc48943977c30ddb5f165e8fd6bc2ca` força o cliente server-side para SGOM.
+- Evidência `loop/evidence/G1-01-2026-09-15.md` registrou SGOM como autoridade e 88 migrations em 2026-09-15.
 
 ## Fase 5 — Matriz de divergência
 
@@ -238,10 +260,11 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
-- Criada branch recovery/sgom-db-reconstruction.
+- Criada branch `recovery/sgom-db-reconstruction`.
 - Iniciada documentação versionada da recuperação.
 - Confirmado inventário estrutural do LLMX.
 - Confirmadas contagens exatas de dados nas 52 tabelas públicas.
 - Nenhuma alteração foi executada no banco LLMX.
 - Nenhuma alteração foi executada no SGOM.
 - Inventário verbose do schema e catálogo de segurança/configuração consultados em modo somente leitura.
+- Fase 3 encerrada com snapshot estrutural reproduzível versionado em Git.
