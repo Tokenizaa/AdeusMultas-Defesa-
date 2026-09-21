@@ -21,8 +21,8 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 11 — Preparação do LLMX como alvo da reconstrução:** ✅ CONCLUÍDA
 - **Fase 12 — Reconstrução controlada do schema:** ✅ CONCLUÍDA
 - **Fase 13 — Reposição dos dados recuperáveis:** ✅ CONCLUÍDA
-- **Fase 14 — Validação estrutural e funcional:** ⬜ PENDENTE
-- **Fase 15 — Homologação e somente então cutover de produção:** ⬜ PENDENTE
+- **Fase 14 — Validação estrutural e funcional:** ✅ CONCLUÍDA
+- **Fase 15 — Homologação e somente então cutover de produção:** ⬜ PRÓXIMA
 
 ## Fase 1 — Congelamento e definição do alvo
 
@@ -365,3 +365,17 @@ O LLMX não será zerado nem tratado como descartável. Alterações futuras ser
 - As lacunas históricas continuam explicitamente classificadas como não recuperáveis por evidência disponível.
 - Artefato: docs/recovery/FASE-13-REPOSICAO-DADOS-RECUPERAVEIS-2026-09-21.md.
 - Próxima fase: Fase 14 — validação estrutural e funcional.
+
+
+### Atualização — 2026-09-21 — Fase 14
+
+- Fase 14 concluída com validação somente leitura do LLMX.
+- Confirmados 52 tabelas, 202 constraints, 180 índices, 148 policies, 49/52 tabelas com RLS, 11 triggers e 207 funções públicas.
+- Confirmadas 43 foreign keys, 52 primary keys, 20 unique constraints e 87 check constraints.
+- Nenhuma constraint pública está não validada.
+- Confirmados 351 registros públicos recuperáveis e 4 usuários Auth.
+- Storage e Realtime permanecem presentes conforme baseline recuperável.
+- Security/Performance Advisor foram consultados; findings existentes foram registrados sem correção nesta fase.
+- Nenhuma alteração DDL/DML foi executada.
+- Artefato: docs/recovery/FASE-14-VALIDACAO-ESTRUTURAL-FUNCIONAL-2026-09-21.md.
+- Próxima fase: Fase 15 — homologação e preparação para eventual cutover.
