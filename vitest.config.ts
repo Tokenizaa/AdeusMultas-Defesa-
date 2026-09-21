@@ -11,6 +11,7 @@ export default defineConfig({
       'src/core/**/*.test.ts',
       'tests/payments/**/*.test.ts',
       'tests/unit/**/*.test.ts',
+      'tests/integration/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
     ],
     setupFiles: ['./tests/vitest.env.setup.ts', './tests/vitest-network.setup.ts'],
