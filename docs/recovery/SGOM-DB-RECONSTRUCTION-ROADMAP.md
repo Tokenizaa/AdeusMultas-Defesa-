@@ -13,7 +13,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 3 — Inventário estrutural detalhado do LLMX:** ✅ CONCLUÍDA
 - **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** ✅ CONCLUÍDA
 - **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ✅ CONCLUÍDA
-- **Fase 6 — Inventário e recuperação dos dados:** ⬜ PENDENTE
+- **Fase 6 — Inventário e recuperação dos dados:** ✅ CONCLUÍDA
 - **Fase 7 — Recuperação de Storage e objetos:** ⬜ PENDENTE
 - **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ⬜ PENDENTE
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** ⬜ PENDENTE
@@ -207,6 +207,14 @@ Objetivo:
 
 Dados sensíveis não serão exportados desnecessariamente para documentação pública do Git.
 
+## Fase 6 — Inventário e recuperação dos dados
+
+**Status: ✅ CONCLUÍDA**
+
+Artefato: `docs/recovery/FASE-6-INVENTARIO-RECUPERACAO-DADOS-2026-09-21.md`.
+
+Foram auditadas as 52 tabelas públicas do LLMX: 19 possuem dados, 33 estão vazias e existem 351 registros públicos recuperáveis. O inventário confirma também 4 usuários Auth, 6 buckets e 8 objetos Storage. Nenhum dado foi alterado ou importado. A contagem não é considerada equivalente à contagem histórica do SGOM.
+
 ## Fase 7 — Storage
 
 **Status: ⬜ PENDENTE**
@@ -277,6 +285,8 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 6 encerrada com inventário completo dos dados recuperáveis do LLMX.
+- Criado `docs/recovery/FASE-6-INVENTARIO-RECUPERACAO-DADOS-2026-09-21.md`.
 - Fase 5 encerrada com matriz SGOM × LLMX × Git.
 - Criado `docs/recovery/FASE-5-MATRIZ-DIVERGENCIA-SGOM-LLMX-GIT-2026-09-21.md`.
 - Fase 4 encerrada com auditoria completa Git/LLMX e evidência histórica SGOM.
