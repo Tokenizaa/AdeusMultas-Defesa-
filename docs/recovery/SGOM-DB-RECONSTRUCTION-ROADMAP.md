@@ -14,7 +14,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** ✅ CONCLUÍDA
 - **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ✅ CONCLUÍDA
 - **Fase 6 — Inventário e recuperação dos dados:** ✅ CONCLUÍDA
-- **Fase 7 — Recuperação de Storage e objetos:** ⬜ PENDENTE
+- **Fase 7 — Recuperação de Storage e objetos:** ✅ CONCLUÍDA
 - **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ⬜ PENDENTE
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** ⬜ PENDENTE
 - **Fase 10 — Manifesto final de reconstrução:** ⬜ PENDENTE
@@ -228,6 +228,14 @@ Inventariar:
 - referências nas tabelas;
 - possibilidade de recuperação dos arquivos.
 
+## Fase 7 — Recuperação de Storage e objetos
+
+**Status: ✅ CONCLUÍDA**
+
+Artefato: `docs/recovery/FASE-7-RECUPERACAO-STORAGE-OBJETOS-2026-09-21.md`.
+
+Foram auditados os 6 buckets e os 8 objetos preservados no LLMX. Os 8 objetos estão em `marketing-assets`, totalizando 407.611 bytes. As 8 políticas relevantes de `storage.objects` foram comparadas com a migration Git de baseline. Nenhum objeto ou bucket foi alterado ou exportado para o Git. A existência de objetos históricos adicionais no SGOM continua não comprovada.
+
 ## Fase 8 — Funções, triggers, RLS e configuração
 
 **Status: ⬜ PENDENTE**
@@ -285,6 +293,8 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 7 encerrada com inventário dos buckets, objetos e políticas de Storage.
+- Criado `docs/recovery/FASE-7-RECUPERACAO-STORAGE-OBJETOS-2026-09-21.md`.
 - Fase 6 encerrada com inventário completo dos dados recuperáveis do LLMX.
 - Criado `docs/recovery/FASE-6-INVENTARIO-RECUPERACAO-DADOS-2026-09-21.md`.
 - Fase 5 encerrada com matriz SGOM × LLMX × Git.
