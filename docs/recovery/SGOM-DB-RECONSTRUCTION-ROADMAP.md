@@ -297,6 +297,9 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 9 investigada até o limite das permissões atuais: SGOM `sgomwklorpzdwdubtmgg` não está acessível pela conexão Supabase atual; backups/PITR permanecem não verificáveis. Nenhuma restauração ou alteração foi executada.
+- Criado `docs/recovery/FASE-9-BACKUP-PITR-SUPORTE-SGOM-2026-09-21.md`.
+
 - Fase 8 encerrada com auditoria somente leitura de funções, triggers, RLS, policies, grants, enum, extensões, Realtime e configurações PostgreSQL.
 - Criado `docs/recovery/FASE-8-FUNCOES-TRIGGERS-RLS-CONFIG-2026-09-21.md`.
 
