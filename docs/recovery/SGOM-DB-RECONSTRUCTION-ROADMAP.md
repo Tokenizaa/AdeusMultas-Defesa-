@@ -11,7 +11,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 1 — Congelamento e definição do alvo:** ✅ CONCLUÍDA
 - **Fase 2 — Auditoria do projeto LLMX atual:** ✅ CONCLUÍDA
 - **Fase 3 — Inventário estrutural detalhado do LLMX:** ✅ CONCLUÍDA
-- **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** 🟡 EM ANDAMENTO
+- **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** ✅ CONCLUÍDA
 - **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ⬜ PENDENTE
 - **Fase 6 — Inventário e recuperação dos dados:** ⬜ PENDENTE
 - **Fase 7 — Recuperação de Storage e objetos:** ⬜ PENDENTE
@@ -147,8 +147,9 @@ Evidências já encontradas:
 - Git atual possui 35 arquivos de migration.
 - LLMX possui 58 registros de migration e 54 nomes únicos.
 - Histórico SGOM documentado anteriormente indicou 88 migrations.
-- 21 migrations atuais do Git possuem correspondência nominal no histórico LLMX.
-- 14 migrations atuais do Git não possuem correspondência nominal direta no LLMX.
+- 21 migrations SQL atuais do Git possuem correspondência semântica no histórico LLMX.
+- 13 migrations SQL atuais do Git não possuem correspondência nominal direta no LLMX.
+- O diretório contém 35 arquivos, sendo 34 migrations SQL e 1 teste SQL.
 - A ausência nominal não será tratada como prova de ausência estrutural, pois há renomeações, squashes, substituições e migrations históricas fora do estado atual do Git.
 
 Exemplos de divergência relevantes:
@@ -158,6 +159,14 @@ Exemplos de divergência relevantes:
 - Commit `4076f57f993e8d90b185c0efb53dd83a6fac9b04` registra explicitamente a distinção entre LLMX antigo e SGOM canônico.
 - Commit `98b077ca6bc48943977c30ddb5f165e8fd6bc2ca` força o cliente server-side para SGOM.
 - Evidência `loop/evidence/G1-01-2026-09-15.md` registrou SGOM como autoridade e 88 migrations em 2026-09-15.
+
+## Fase 4 — Auditoria Git/histórico
+
+**Status: ✅ CONCLUÍDA**
+
+Artefato final: `docs/recovery/FASE-4-GIT-SGOM-MIGRATION-AUDIT-2026-09-21.md`.
+
+A auditoria consolidou a cadeia SGOM → LLMX → Git, confirmou 88 migrations históricas no SGOM por evidência de 2026-09-15, 58 registros/54 nomes únicos no LLMX e 35 arquivos/34 SQL no Git. Foram identificadas 21 correspondências semânticas e 13 migrations SQL do Git sem correspondência nominal direta. A ausência nominal não foi tratada como ausência estrutural.
 
 ## Fase 5 — Matriz de divergência
 
@@ -260,6 +269,8 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 4 encerrada com auditoria completa Git/LLMX e evidência histórica SGOM.
+- Criado `docs/recovery/FASE-4-GIT-SGOM-MIGRATION-AUDIT-2026-09-21.md`.
 - Criada branch `recovery/sgom-db-reconstruction`.
 - Iniciada documentação versionada da recuperação.
 - Confirmado inventário estrutural do LLMX.
