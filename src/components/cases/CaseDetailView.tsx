@@ -26,6 +26,7 @@ import { PROCEDURE_TITLES } from '../../data/knowledge-base';
 import { exportDefenseToPDF } from '../../lib/pdf-export';
 import { buildDocumentRollItems, normalizeProcedureId } from '../../core/documents/document-roll';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
+import { CaseDocumentsSection } from './CaseDocumentsSection';
 
 /**
  * Deriva a jornada processual do caso em linguagem legível ao cidadão,
@@ -833,6 +834,8 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
               ))}
             </div>
           </div>
+
+          <CaseDocumentsSection caseId={resolvedCaseId} />
         </div>
       )}
 
