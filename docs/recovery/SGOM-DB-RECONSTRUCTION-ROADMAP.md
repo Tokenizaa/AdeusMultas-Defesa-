@@ -15,7 +15,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ✅ CONCLUÍDA
 - **Fase 6 — Inventário e recuperação dos dados:** ✅ CONCLUÍDA
 - **Fase 7 — Recuperação de Storage e objetos:** ✅ CONCLUÍDA
-- **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ⬜ PENDENTE
+- **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ✅ CONCLUÍDA
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** ⬜ PENDENTE
 - **Fase 10 — Manifesto final de reconstrução:** ⬜ PENDENTE
 - **Fase 11 — Criação de novo projeto de reconstrução:** ⬜ PENDENTE
@@ -238,7 +238,11 @@ Foram auditados os 6 buckets e os 8 objetos preservados no LLMX. Os 8 objetos es
 
 ## Fase 8 — Funções, triggers, RLS e configuração
 
-**Status: ⬜ PENDENTE**
+**Status: ✅ CONCLUÍDA**
+
+Artefato: `docs/recovery/FASE-8-FUNCOES-TRIGGERS-RLS-CONFIG-2026-09-21.md`.
+
+A auditoria confirmou 207 funções públicas (196 pertencentes a extensões e 11 próprias), 11 triggers públicos não internos, 148 policies, 49/52 tabelas públicas com RLS, 1 enum, 8 extensões e a publicação `supabase_realtime`. Foram preservados também grants/ACLs das funções próprias e configurações PostgreSQL relevantes. O estado foi cruzado com o Git atual; parte das funções/policies possui correspondência direta no Git, enquanto outras dependem do estado LLMX e do histórico de migrations. Nenhuma alteração foi realizada.
 
 Reconstruir a definição histórica de:
 
@@ -292,6 +296,9 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 ## Registro de execução
 
 ### 2026-09-21
+
+- Fase 8 encerrada com auditoria somente leitura de funções, triggers, RLS, policies, grants, enum, extensões, Realtime e configurações PostgreSQL.
+- Criado `docs/recovery/FASE-8-FUNCOES-TRIGGERS-RLS-CONFIG-2026-09-21.md`.
 
 - Fase 7 encerrada com inventário dos buckets, objetos e políticas de Storage.
 - Criado `docs/recovery/FASE-7-RECUPERACAO-STORAGE-OBJETOS-2026-09-21.md`.
