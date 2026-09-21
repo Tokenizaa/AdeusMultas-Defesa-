@@ -83,27 +83,38 @@ As demais tabelas públicas auditadas estão atualmente sem registros.
 
 ## Fase 3 — Inventário estrutural detalhado
 
-**Status: 🟡 EM ANDAMENTO**
+**Status: 🟡 EM ANDAMENTO — estrutura catalogada; documentação forense ainda não encerrada**
 
-Já confirmado:
+Confirmado diretamente no LLMX:
 
-- catálogo completo de tabelas/colunas do schema public;
-- tipos, nulabilidade, defaults e identity das colunas;
-- contagem de constraints, índices, policies, RLS, triggers e funções.
+- 52 tabelas públicas;
+- catálogo verbose de tabelas, colunas, tipos, defaults, nulabilidade, PKs e FKs;
+- 202 constraints;
+- 180 índices;
+- 148 policies;
+- 49/52 tabelas com RLS;
+- 11 triggers não internos;
+- 207 funções no schema public;
+- enum public.user_role com valores citizen, admin;
+- 0 views públicas;
+- extensões instaladas/inventariadas;
+- 0 Edge Functions.
 
-Ainda falta consolidar em artefato versionado:
+Também foram identificados os 3 objetos sem RLS: messaging_contacts, messaging_conversations e messaging_messages. Isso é uma característica observada do LLMX e **não deve ser corrigida durante a recuperação forense**.
 
-- PK/FK/UNIQUE/CHECK por tabela;
-- definição completa de índices;
-- definição completa de policies;
-- definição completa de triggers;
-- definição das funções relevantes;
-- enum e valores;
+Ainda falta consolidar em artefatos versionados:
+
+- catálogo completo de constraints por tabela;
+- catálogo completo de índices;
+- catálogo completo de policies;
+- definições das funções relevantes, excluindo funções internas/overloads sem utilidade para reconstrução;
 - grants;
-- storage policies;
+- storage buckets, objetos e policies;
 - realtime/publications;
-- extensões;
-- comparação com migrations históricas.
+- extensões relevantes para reconstrução;
+- comparação estrutural objeto a objeto com Git e histórico SGOM.
+
+**Critério de conclusão da Fase 3:** existir um snapshot estrutural versionado e reproduzível do LLMX, sem dados secretos e sem executar DDL no banco.
 
 ## Fase 4 — Auditoria Git/histórico
 
@@ -233,3 +244,4 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 - Confirmadas contagens exatas de dados nas 52 tabelas públicas.
 - Nenhuma alteração foi executada no banco LLMX.
 - Nenhuma alteração foi executada no SGOM.
+- Inventário verbose do schema e catálogo de segurança/configuração consultados em modo somente leitura.
