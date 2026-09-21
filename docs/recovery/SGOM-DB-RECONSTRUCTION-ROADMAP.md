@@ -12,7 +12,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 2 — Auditoria do projeto LLMX atual:** ✅ CONCLUÍDA
 - **Fase 3 — Inventário estrutural detalhado do LLMX:** ✅ CONCLUÍDA
 - **Fase 4 — Auditoria completa das migrations do Git e histórico SGOM:** ✅ CONCLUÍDA
-- **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ⬜ PENDENTE
+- **Fase 5 — Matriz de divergência SGOM × LLMX × Git:** ✅ CONCLUÍDA
 - **Fase 6 — Inventário e recuperação dos dados:** ⬜ PENDENTE
 - **Fase 7 — Recuperação de Storage e objetos:** ⬜ PENDENTE
 - **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ⬜ PENDENTE
@@ -184,6 +184,14 @@ Classificação:
 - **D — Dependência de backup/PITR/Suporte:** somente evidência externa ao LLMX/Git pode recuperar.
 - **E — Não comprovado:** não há evidência suficiente ainda.
 
+## Fase 5 — Matriz de divergência
+
+**Status: ✅ CONCLUÍDA**
+
+Artefato: `docs/recovery/FASE-5-MATRIZ-DIVERGENCIA-SGOM-LLMX-GIT-2026-09-21.md`.
+
+A matriz classifica os objetos entre recuperação direta, Git, reconstrução combinada, dependência de backup/PITR/Suporte e não comprovado. Confirmou que o LLMX preserva uma base parcial recuperável, enquanto a equivalência histórica integral do SGOM ainda não pode ser afirmada. A principal lacuna é o estado SGOM não preservado no LLMX/Git.
+
 ## Fase 6 — Dados
 
 **Status: ⬜ PENDENTE**
@@ -269,6 +277,8 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 5 encerrada com matriz SGOM × LLMX × Git.
+- Criado `docs/recovery/FASE-5-MATRIZ-DIVERGENCIA-SGOM-LLMX-GIT-2026-09-21.md`.
 - Fase 4 encerrada com auditoria completa Git/LLMX e evidência histórica SGOM.
 - Criado `docs/recovery/FASE-4-GIT-SGOM-MIGRATION-AUDIT-2026-09-21.md`.
 - Criada branch `recovery/sgom-db-reconstruction`.
