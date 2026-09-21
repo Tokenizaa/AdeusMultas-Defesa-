@@ -26,6 +26,7 @@ import mediaRoutes from './routes/media';
 import notificationsRoutes from './routes/notifications';
 import healthRoutes from './routes/health';
 import casesRoutes from './routes/cases';
+import documentsRoutes from './routes/documents';
 import auditRoutes from './routes/audit';
 import onboardingRoutes from './routes/onboarding';
 import transitRoutes from './routes/transit';
@@ -100,6 +101,7 @@ export function createApp() {
     return next();
   });
   app.use('/api', casesRoutes);
+  app.use('/api', documentsRoutes);
   app.use('/api', aiRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api', onboardingRoutes);

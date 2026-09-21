@@ -8667,11 +8667,11 @@ var WhatsAppService = class {
     const key = this.apiKey;
     return Boolean(this.apiUrl && key && !key.startsWith("PLACEHOLDER"));
   }
-  async makeRequest(method, path, body) {
+  async makeRequest(method, path2, body) {
     if (!this.isConfigured) {
       throw new Error("WhatsApp service not configured. Set EVOLUTION_API_URL and EVOLUTION_API_KEY.");
     }
-    const url2 = `${this.apiUrl}${path}`;
+    const url2 = `${this.apiUrl}${path2}`;
     const headers = {
       "Content-Type": "application/json",
       apikey: this.apiKey
@@ -20155,11 +20155,11 @@ var ProviderRouter = class {
 // src/server/media/job-queue.ts
 import { randomUUID } from "crypto";
 var MediaJobQueue = class {
-  constructor(router28) {
+  constructor(router29) {
     this.jobs = /* @__PURE__ */ new Map();
     this.activeJobsCount = 0;
     this.cancelledJobIds = /* @__PURE__ */ new Set();
-    this.router = router28;
+    this.router = router29;
     const configuredMax = parseInt(process.env.MEDIA_MAX_CONCURRENT_JOBS || "2", 10);
     this.maxConcurrent = isNaN(configuredMax) || configuredMax < 1 ? 2 : configuredMax;
   }
@@ -27002,7 +27002,7 @@ async function resolveAndValidateAllIPs(hostname) {
   }
   return { valid: true, validatedIPs };
 }
-async function ssrfSafeFetch(validatedIP, hostname, port, isHTTPS, signal, path = "/") {
+async function ssrfSafeFetch(validatedIP, hostname, port, isHTTPS, signal, path2 = "/") {
   return new Promise((resolve, reject) => {
     const timeoutMs = 3e4;
     let socket;
@@ -27039,7 +27039,7 @@ async function ssrfSafeFetch(validatedIP, hostname, port, isHTTPS, signal, path 
         () => {
           clearTimeout(timeout);
           socket.write(
-            `GET ${path} HTTP/1.1\r
+            `GET ${path2} HTTP/1.1\r
 Host: ${hostname}\r
 Connection: close\r
 \r
@@ -27051,7 +27051,7 @@ Connection: close\r
       socket = net.connect({ host: validatedIP, port }, () => {
         clearTimeout(timeout);
         socket.write(
-          `GET ${path} HTTP/1.1\r
+          `GET ${path2} HTTP/1.1\r
 Host: ${hostname}\r
 Connection: close\r
 \r
@@ -28867,21 +28867,21 @@ function mapGGPixStatus(status) {
   };
   return map[status] || "PENDING";
 }
-async function ggFetch(path, options = {}, config = getConfig()) {
+async function ggFetch(path2, options = {}, config = getConfig()) {
   const headers = {
     "Content-Type": "application/json",
     "X-API-Key": config.apiKey,
     ...options.headers
   };
   try {
-    const res = await fetch(`${GGRAPI_BASE_URL}${path}`, { ...options, headers });
+    const res = await fetch(`${GGRAPI_BASE_URL}${path2}`, { ...options, headers });
     if (res.ok || res.status < 500) return res;
     throw new Error(`Server error ${res.status}`);
   } catch (err) {
     logger.warn("payments", "ggpix", "gg_fetch", "Primary host failed, trying contingency", {
       error: String(err)
     });
-    const res = await fetch(`${GGRAPI_BACKUP_URL}${path}`, { ...options, headers });
+    const res = await fetch(`${GGRAPI_BACKUP_URL}${path2}`, { ...options, headers });
     return res;
   }
 }
@@ -29192,8 +29192,8 @@ var GatewayManager = class {
 var gatewayManager = new GatewayManager();
 
 // src/server/integrations/gateway/webhook-handler.ts
-function detectGatewayFromPath(path) {
-  const normalized = path.toLowerCase();
+function detectGatewayFromPath(path2) {
+  const normalized = path2.toLowerCase();
   if (normalized.includes("pagbank")) return "pagbank";
   if (normalized.includes("ggpix")) return "ggpixapi";
   return null;
@@ -29992,10 +29992,10 @@ router11.post("/sandbox/trigger-webhook", async (req, res) => {
       return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
     }
     let payload;
-    let path;
+    let path2;
     let headers = {};
     if (gateway === "pagbank") {
-      path = "/webhooks/pagbank";
+      path2 = "/webhooks/pagbank";
       payload = {
         id: `evt_sim_${Date.now()}`,
         reference_id: `defesai_case_${caseId}`,
@@ -30014,7 +30014,7 @@ router11.post("/sandbox/trigger-webhook", async (req, res) => {
       };
       headers["x-hub-signature-256"] = "sha256=sandbox_dev_signature";
     } else {
-      path = "/webhooks/ggpix";
+      path2 = "/webhooks/ggpix";
       payload = {
         transactionId: `ggpix_tx_sim_${Date.now()}`,
         externalId: `defesai_case_${caseId}`,
@@ -30028,7 +30028,7 @@ router11.post("/sandbox/trigger-webhook", async (req, res) => {
       headers["x-forwarded-for"] = "127.0.0.1";
     }
     const rawBody = JSON.stringify(payload);
-    const result = processGatewayWebhook(path, rawBody, headers, payload);
+    const result = processGatewayWebhook(path2, rawBody, headers, payload);
     res.json({
       success: true,
       message: `Webhook sandbox disparado para ${gateway.toUpperCase()}`,
@@ -30172,8 +30172,8 @@ import { Router as Router12 } from "express";
 // src/core/knowledge/monitoring/hash-generator.ts
 function calculateSha256Sync(text) {
   try {
-    const crypto7 = __require("crypto");
-    return crypto7.createHash("sha256").update(text, "utf8").digest("hex");
+    const crypto8 = __require("crypto");
+    return crypto8.createHash("sha256").update(text, "utf8").digest("hex");
   } catch (e) {
     let h1 = 3735928559 ^ text.length;
     let h2 = 1103547991 ^ text.length;
@@ -36193,20 +36193,158 @@ router18.post("/cases/:id/generate-defense", authenticateToken, async (req, res)
 });
 var cases_default = router18;
 
-// src/server/routes/audit.ts
+// src/server/routes/documents.ts
 import { Router as Router19 } from "express";
+import crypto6 from "crypto";
+import path from "path";
 var router19 = Router19();
-router19.use(authenticateToken, requireAdmin);
-router19.get("/audit-logs", (_req, res) => {
+var BUCKET = "case-documents";
+function denyCaseAccess2(user, res) {
+  if (!user) {
+    res.status(401).json({ error: "N\xE3o autenticado" });
+    return true;
+  }
+  res.status(403).json({ error: "Voc\xEA n\xE3o tem permiss\xE3o para acessar este caso" });
+  return true;
+}
+async function findCaseByRef(caseRef) {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return null;
+  const { data: byRef } = await supabase.from("cases").select("id, user_id, service_type").eq("app_ref", caseRef).maybeSingle();
+  if (byRef) return byRef;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(caseRef)) {
+    const { data: byId } = await supabase.from("cases").select("id, user_id, service_type").eq("id", caseRef).maybeSingle();
+    if (byId) return byId;
+  }
+  return null;
+}
+function safeFileName(name) {
+  const base = path.basename(name || "").replace(/[^\w.\-]+/g, "_");
+  if (!base || base.length > 120) return null;
+  return base;
+}
+router19.get("/cases/:caseId/documents", authenticateToken, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) return res.status(500).json({ error: "Supabase n\xE3o configurado no servidor" });
+    const caseRow = await findCaseByRef(req.params.caseId);
+    if (!caseRow) return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+    if (req.user?.role !== "admin" && caseRow.user_id !== req.user?.id) {
+      return denyCaseAccess2(req.user, res);
+    }
+    const { data, error } = await supabase.from("documents").select("id, case_id, service_type, status, storage_path, mime_type, size_bytes, content_hash, created_at, generated_at").eq("case_id", caseRow.id).order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ documents: data });
+  } catch (err) {
+    logger.error("system", "documents_list_failed", "documents_list_failed", err.message, { caseId: req.params.caseId });
+    res.status(500).json({ error: err.message || "Erro ao listar documentos" });
+  }
+});
+router19.post("/cases/:caseId/documents", authenticateToken, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) return res.status(500).json({ error: "Supabase n\xE3o configurado no servidor" });
+    const caseRow = await findCaseByRef(req.params.caseId);
+    if (!caseRow) return res.status(404).json({ error: "Caso n\xE3o encontrado" });
+    if (req.user?.role !== "admin" && caseRow.user_id !== req.user?.id) {
+      return denyCaseAccess2(req.user, res);
+    }
+    const fileName = safeFileName(typeof req.body?.fileName === "string" ? req.body.fileName : "");
+    const contentBase64 = typeof req.body?.content === "string" ? req.body.content : "";
+    const mimeType = typeof req.body?.contentType === "string" && req.body.contentType.length <= 100 ? req.body.contentType : "application/octet-stream";
+    if (!fileName) return res.status(400).json({ error: "fileName inv\xE1lido" });
+    if (!contentBase64) return res.status(400).json({ error: "content ausente (base64)" });
+    let buffer;
+    try {
+      buffer = Buffer.from(contentBase64, "base64");
+    } catch {
+      return res.status(400).json({ error: "content base64 inv\xE1lido" });
+    }
+    if (buffer.length === 0) return res.status(400).json({ error: "content vazio" });
+    if (buffer.length > 8 * 1024 * 1024) return res.status(413).json({ error: "arquivo excede 8MB" });
+    const objectPath = `${caseRow.id}/${fileName}`;
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectPath, buffer, { contentType: mimeType, upsert: false });
+    if (uploadError) {
+      return res.status(500).json({ error: `Falha no upload: ${uploadError.message}` });
+    }
+    const contentHash = crypto6.createHash("sha256").update(buffer).digest("hex");
+    const { data: doc, error: insertError } = await supabase.from("documents").insert({
+      case_id: caseRow.id,
+      service_type: caseRow.service_type || "defesa",
+      status: "uploaded",
+      storage_path: objectPath,
+      mime_type: mimeType,
+      size_bytes: buffer.length,
+      content_hash: contentHash
+    }).select("id, case_id, service_type, status, storage_path, mime_type, size_bytes, content_hash, created_at, generated_at").single();
+    if (insertError) {
+      await supabase.storage.from(BUCKET).remove([objectPath]);
+      return res.status(500).json({ error: `Falha ao registrar documento: ${insertError.message}` });
+    }
+    logger.info("system", "document_uploaded", "document_uploaded", `Documento ${fileName} enviado para o caso ${caseRow.id}.`, {
+      caseId: caseRow.id,
+      storage_path: objectPath,
+      size_bytes: buffer.length
+    });
+    res.status(201).json({ document: doc });
+  } catch (err) {
+    logger.error("system", "document_upload_failed", "document_upload_failed", err.message, { caseId: req.params.caseId });
+    res.status(500).json({ error: err.message || "Erro ao enviar documento" });
+  }
+});
+router19.get("/cases/:caseId/documents/:documentId/download", authenticateToken, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) return res.status(500).json({ error: "Supabase n\xE3o configurado no servidor" });
+    const { data: doc } = await supabase.from("documents").select("id, case_id, storage_path, mime_type").eq("id", req.params.documentId).maybeSingle();
+    if (!doc || !doc.storage_path) return res.status(404).json({ error: "Documento n\xE3o encontrado" });
+    if (req.user?.role !== "admin") {
+      const { data: caseRow } = await supabase.from("cases").select("user_id").eq("id", doc.case_id).maybeSingle();
+      if (!caseRow || caseRow.user_id !== req.user?.id) return denyCaseAccess2(req.user, res);
+    }
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(doc.storage_path, 3600);
+    if (error || !data?.signedUrl) return res.status(500).json({ error: error?.message || "Falha ao gerar URL assinada" });
+    res.json({ signedUrl: data.signedUrl, fileName: path.basename(doc.storage_path), mimeType: doc.mime_type });
+  } catch (err) {
+    logger.error("system", "document_download_failed", "document_download_failed", err.message, { documentId: req.params.documentId });
+    res.status(500).json({ error: err.message || "Erro ao gerar download" });
+  }
+});
+router19.delete("/cases/:caseId/documents/:documentId", authenticateToken, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) return res.status(500).json({ error: "Supabase n\xE3o configurado no servidor" });
+    const { data: doc } = await supabase.from("documents").select("id, case_id, storage_path").eq("id", req.params.documentId).maybeSingle();
+    if (!doc) return res.status(404).json({ error: "Documento n\xE3o encontrado" });
+    if (req.user?.role !== "admin") {
+      const { data: caseRow } = await supabase.from("cases").select("user_id").eq("id", doc.case_id).maybeSingle();
+      if (!caseRow || caseRow.user_id !== req.user?.id) return denyCaseAccess2(req.user, res);
+    }
+    if (doc.storage_path) await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+    const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error("system", "document_delete_failed", "document_delete_failed", err.message, { documentId: req.params.documentId });
+    res.status(500).json({ error: err.message || "Erro ao remover documento" });
+  }
+});
+var documents_default = router19;
+
+// src/server/routes/audit.ts
+import { Router as Router20 } from "express";
+var router20 = Router20();
+router20.use(authenticateToken, requireAdmin);
+router20.get("/audit-logs", (_req, res) => {
   res.json(auditLogs);
 });
-router19.get("/audit/logs", (_req, res) => {
+router20.get("/audit/logs", (_req, res) => {
   res.json({ logs: auditLogs.slice(0, 50) });
 });
-var audit_default = router19;
+var audit_default = router20;
 
 // src/server/routes/onboarding.ts
-import { Router as Router20 } from "express";
+import { Router as Router21 } from "express";
 
 // src/core/onboarding/rules-matrix.ts
 var USER_SITUATIONS = [
@@ -36356,8 +36494,8 @@ var RULES_MATRIX = {
 };
 
 // src/server/routes/onboarding.ts
-var router20 = Router20();
-router20.get("/onboarding/rules", (_req, res) => {
+var router21 = Router21();
+router21.get("/onboarding/rules", (_req, res) => {
   const baseRules = {
     situations: USER_SITUATIONS.map((s) => ({
       id: s.id,
@@ -36397,12 +36535,12 @@ router20.get("/onboarding/rules", (_req, res) => {
   };
   return res.json(baseRules);
 });
-var onboarding_default = router20;
+var onboarding_default = router21;
 
 // src/server/routes/transit.ts
-import { Router as Router21 } from "express";
-var router21 = Router21();
-router21.get("/transit-database/query", (req, res) => {
+import { Router as Router22 } from "express";
+var router22 = Router22();
+router22.get("/transit-database/query", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o de consulta veicular n\xE3o dispon\xEDvel",
@@ -36490,7 +36628,7 @@ router21.get("/transit-database/query", (req, res) => {
     radarAfericao: radarMatch
   });
 });
-router21.get("/transit-database/inmetro-check", (req, res) => {
+router22.get("/transit-database/inmetro-check", (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Servi\xE7o INMETRO n\xE3o dispon\xEDvel",
@@ -36533,12 +36671,12 @@ router21.get("/transit-database/inmetro-check", (req, res) => {
     alertaPerito: cert.statusLaudo === "EXPIRADO_INVALIDO" ? "Aferi\xE7\xE3o expirada! V\xEDcio metrol\xF3gico insan\xE1vel perante a Resolu\xE7\xE3o CONTRAN 798/2020." : "Equipamento com laudo metrol\xF3gico v\xE1lido."
   });
 });
-var transit_default = router21;
+var transit_default = router22;
 
 // src/server/routes/governance.ts
-import { Router as Router22 } from "express";
-var router22 = Router22();
-router22.get("/governance/law-enforcement-verify", (req, res) => {
+import { Router as Router23 } from "express";
+var router23 = Router23();
+router23.get("/governance/law-enforcement-verify", (req, res) => {
   const { protocolOrHash, autoInfracao } = req.query;
   const allRows = Array.from(databaseRows.values());
   const matched = allRows.find((r) => {
@@ -36567,7 +36705,7 @@ router22.get("/governance/law-enforcement-verify", (req, res) => {
     source: "system"
   });
 });
-router22.post("/governance/manual-override", requireAdmin, async (req, res) => {
+router23.post("/governance/manual-override", requireAdmin, async (req, res) => {
   const { caseId, overrideField, oldValue, newValue, justification, specialistName } = req.body;
   const row = databaseRows.get(caseId);
   if (row) {
@@ -36596,12 +36734,12 @@ router22.post("/governance/manual-override", requireAdmin, async (req, res) => {
   auditLogs.unshift(auditEntry);
   res.json({ success: true, auditEntry });
 });
-var governance_default = router22;
+var governance_default = router23;
 
 // src/server/routes/analytics.ts
-import { Router as Router23 } from "express";
-var router23 = Router23();
-router23.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
+import { Router as Router24 } from "express";
+var router24 = Router24();
+router24.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res) => {
   const allCases = Array.from(databaseRows.values()).map((r) => CanonicalMapper.rowToDomain(r));
   const totalProcessed = allCases.length;
   const paidCases = allCases.filter(
@@ -36648,17 +36786,17 @@ router23.get("/analytics/dashboard", authenticateToken, requireAdmin, (req, res)
     topInfracoes
   });
 });
-var analytics_default = router23;
+var analytics_default = router24;
 
 // src/server/routes/ai.ts
-import { Router as Router24 } from "express";
-var router24 = Router24();
+import { Router as Router25 } from "express";
+var router25 = Router25();
 registerRefinementProvider({
   refineProse: async (draftText) => {
     return enrichDefenseWithGemini({ petitionText: draftText });
   }
 });
-router24.post("/ai/analyze-infraction", async (req, res) => {
+router25.post("/ai/analyze-infraction", async (req, res) => {
   try {
     const infraction = req.body;
     const ragContext = RagPipeline.retrieveContext(infraction);
@@ -36778,7 +36916,7 @@ Responda em formato JSON estrito com o seguinte schema:
     res.status(500).json({ error: "Erro ao processar an\xE1lise jur\xEDdica", details: err.message });
   }
 });
-router24.post("/ai/generate-defense", async (req, res) => {
+router25.post("/ai/generate-defense", async (req, res) => {
   try {
     const { caseData, customInstructions } = req.body;
     const rawInfraction = caseData?.dadosInfracao || caseData?.infraction || {};
@@ -36937,7 +37075,7 @@ Assinatura do Requerente`,
     res.status(500).json({ error: "Erro ao gerar minuta da defesa", details: err.message });
   }
 });
-router24.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
+router25.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
   try {
     const { message, prompt, caseContext, context } = req.body;
     const userMessage = message || prompt || "";
@@ -36975,12 +37113,12 @@ Pergunta do usu\xE1rio: ${userMessage}` : userMessage;
     res.status(500).json({ error: "Erro ao responder consulta", details: err.message });
   }
 });
-var ai_default = router24;
+var ai_default = router25;
 
 // src/server/routes/sync.ts
-import { Router as Router25 } from "express";
-var router25 = Router25();
-router25.post("/sync/offline-batch", authenticateToken, (req, res) => {
+import { Router as Router26 } from "express";
+var router26 = Router26();
+router26.post("/sync/offline-batch", authenticateToken, (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(501).json({
       error: "Sincroniza\xE7\xE3o offline n\xE3o implementada",
@@ -37006,12 +37144,12 @@ router25.post("/sync/offline-batch", authenticateToken, (req, res) => {
     message: `${processedCount} opera\xE7\xF5es offline sincronizadas com sucesso.`
   });
 });
-var sync_default = router25;
+var sync_default = router26;
 
 // src/server/routes/auth.ts
-import { Router as Router26 } from "express";
-var router26 = Router26();
-router26.get("/auth/me", authenticateToken, async (req, res) => {
+import { Router as Router27 } from "express";
+var router27 = Router27();
+router27.get("/auth/me", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
@@ -37041,10 +37179,10 @@ router26.get("/auth/me", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erro ao buscar usu\xE1rio" });
   }
 });
-var auth_default = router26;
+var auth_default = router27;
 
 // src/server/routes/documenso.ts
-import { Router as Router27 } from "express";
+import { Router as Router28 } from "express";
 import express from "express";
 
 // src/types/documenso.ts
@@ -37077,7 +37215,7 @@ var DOCUMENSO_ENDPOINTS = {
 };
 
 // src/server/lib/documenso/client.ts
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 var DocumensoClient = class {
   constructor(config) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -37196,13 +37334,13 @@ var DocumensoClient = class {
       logger.warn("documenso", "client", "verify-webhook", "No signature header received");
       return false;
     }
-    const expected = crypto6.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
+    const expected = crypto7.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const receivedBuffer = Buffer.from(receivedSecret);
     const expectedBuffer = Buffer.from(expected);
     if (receivedBuffer.length !== expectedBuffer.length) {
       return false;
     }
-    return crypto6.timingSafeEqual(receivedBuffer, expectedBuffer);
+    return crypto7.timingSafeEqual(receivedBuffer, expectedBuffer);
   }
   /**
    * Get webhook configuration
@@ -37216,8 +37354,8 @@ var DocumensoClient = class {
   /**
    * Internal request helper
    */
-  async request(path, options = {}) {
-    const url2 = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path}`;
+  async request(path2, options = {}) {
+    const url2 = `${this.baseUrl}${DOCUMENSO_BASE_PATH}${path2}`;
     const response = await fetch(url2, {
       ...options,
       headers: {
@@ -37232,7 +37370,7 @@ var DocumensoClient = class {
       } catch {
         errorData = { message: response.statusText };
       }
-      logger.error("documenso", "client", "request", "Documenso API error", { path, httpStatus: response.status, error: errorData, status: "failed" });
+      logger.error("documenso", "client", "request", "Documenso API error", { path: path2, httpStatus: response.status, error: errorData, status: "failed" });
       throw DocumensoError.fromResponse(response.status, errorData);
     }
     if (response.status === 204) {
@@ -38049,7 +38187,7 @@ var PollingJob = class {
 };
 
 // src/server/routes/documenso.ts
-var router27 = Router27();
+var router28 = Router28();
 var envelopeService;
 var webhookHandler;
 var pollingJob;
@@ -38083,7 +38221,7 @@ function ensureServices() {
     pollingJob = new PollingJob({}, documensoClient, envelopeService, webhookHandler);
   }
 }
-router27.use((req, res, next) => {
+router28.use((req, res, next) => {
   try {
     ensureServices();
   } catch (err) {
@@ -38099,7 +38237,7 @@ router27.use((req, res, next) => {
   }
   next();
 });
-router27.post("/envelopes", authenticateToken, async (req, res) => {
+router28.post("/envelopes", authenticateToken, async (req, res) => {
   try {
     const {
       caseId,
@@ -38176,7 +38314,7 @@ router27.post("/envelopes", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create envelope" });
   }
 });
-router27.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
+router28.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -38206,7 +38344,7 @@ router27.post("/envelopes/:id/send", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to send envelope" });
   }
 });
-router27.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -38225,7 +38363,7 @@ router27.get("/envelopes/:id/status", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope status" });
   }
 });
-router27.get("/envelopes/:id", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -38244,7 +38382,7 @@ router27.get("/envelopes/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to get envelope" });
   }
 });
-router27.get(
+router28.get(
   "/envelopes/:id/signing-url/:recipientId",
   authenticateToken,
   async (req, res) => {
@@ -38267,7 +38405,7 @@ router27.get(
     }
   }
 );
-router27.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
+router28.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!await authorizeEnvelope(id, req.user)) {
@@ -38296,7 +38434,7 @@ router27.get("/envelopes/:id/download", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to download envelope" });
   }
 });
-router27.post("/embedding-token", authenticateToken, async (req, res) => {
+router28.post("/embedding-token", authenticateToken, async (req, res) => {
   try {
     const { envelopeId, recipientId, redirectUrl } = req.body;
     if (!envelopeId || !recipientId) {
@@ -38318,14 +38456,14 @@ router27.post("/embedding-token", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to create embedding token" });
   }
 });
-router27.post(
+router28.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   (req, res, next) => {
     return documensoWebhookMiddleware(webhookHandler)(req, res, next);
   }
 );
-router27.get("/polling/status", authenticateToken, async (req, res) => {
+router28.get("/polling/status", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -38333,7 +38471,7 @@ router27.get("/polling/status", authenticateToken, async (req, res) => {
   const status = pollingJob.getStatus();
   res.json(status);
 });
-router27.post("/polling/trigger", authenticateToken, async (req, res) => {
+router28.post("/polling/trigger", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -38354,7 +38492,7 @@ router27.post("/polling/trigger", authenticateToken, async (req, res) => {
     }
   });
 });
-router27.post("/polling/start", authenticateToken, async (req, res) => {
+router28.post("/polling/start", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -38362,7 +38500,7 @@ router27.post("/polling/start", authenticateToken, async (req, res) => {
   pollingJob.start();
   res.json({ success: true, message: "Polling job started" });
 });
-router27.post("/polling/stop", authenticateToken, async (req, res) => {
+router28.post("/polling/stop", authenticateToken, async (req, res) => {
   const user = req.user;
   if (!user || user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
@@ -38370,7 +38508,7 @@ router27.post("/polling/stop", authenticateToken, async (req, res) => {
   pollingJob.stop();
   res.json({ success: true, message: "Polling job stopped" });
 });
-var documenso_default = router27;
+var documenso_default = router28;
 
 // src/server/app.ts
 function createApp() {
@@ -38466,6 +38604,7 @@ function createApp() {
     return next();
   });
   app.use("/api", cases_default);
+  app.use("/api", documents_default);
   app.use("/api", ai_default);
   app.use("/api/knowledge", knowledge_default);
   app.use("/api", onboarding_default);

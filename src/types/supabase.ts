@@ -705,27 +705,42 @@ export type Database = {
       documents: {
         Row: {
           case_id: string
+          content_hash: string | null
           created_at: string | null
+          generated_at: string | null
           id: string
+          mime_type: string | null
           order_id: string | null
           service_type: string
+          size_bytes: number | null
           status: string
+          storage_path: string | null
         }
         Insert: {
           case_id: string
+          content_hash?: string | null
           created_at?: string | null
+          generated_at?: string | null
           id?: string
+          mime_type?: string | null
           order_id?: string | null
           service_type: string
+          size_bytes?: number | null
           status?: string
+          storage_path?: string | null
         }
         Update: {
           case_id?: string
+          content_hash?: string | null
           created_at?: string | null
+          generated_at?: string | null
           id?: string
+          mime_type?: string | null
           order_id?: string | null
           service_type?: string
+          size_bytes?: number | null
           status?: string
+          storage_path?: string | null
         }
         Relationships: []
       }
