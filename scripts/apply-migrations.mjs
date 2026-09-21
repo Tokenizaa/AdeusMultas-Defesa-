@@ -6,7 +6,7 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 
-const ref = process.env.SUPABASE_PROJECT_ID || 'sgomwklorpzdwdubtmgg';
+const ref = process.env.SUPABASE_PROJECT_ID || 'llmxnpgjpxcvyrqjkfwb';
 const token = process.env.SUPABASE_ACCESS_TOKEN;
 if (!token) {
   console.error('SUPABASE_ACCESS_TOKEN ausente');

@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import 'dotenv/config';
 
-const projectRef = 'sgomwklorpzdwdubtmgg';
+const projectRef = 'llmxnpgjpxcvyrqjkfwb';
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 
 if (!accessToken) {

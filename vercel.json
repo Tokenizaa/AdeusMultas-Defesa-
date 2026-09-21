@@ -9,13 +9,13 @@
     }
   },
   "env": {
-    "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
-    "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+    "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
+    "VITE_SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co"
   },
   "build": {
     "env": {
-      "SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co",
-      "VITE_SUPABASE_URL": "https://sgomwklorpzdwdubtmgg.supabase.co"
+      "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
+      "VITE_SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co"
     }
   },
   "rewrites": [
