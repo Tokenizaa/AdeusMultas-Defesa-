@@ -1,5 +1,7 @@
 # Auditoria Completa — AdeusMultas-Defesa (Supabase `sgomwklorpzdwdubtmgg`)
 
+> **ATENÇÃO (2026-09-21, FASE 17):** o Supabase canônico do projeto foi corrigido para `llmxnpgjpxcvyrqjkfwb` (commits `7f2c233` + `d44b82a`). A referência a `sgomwklorpzdwdubtmgg` no título abaixo é histórica (pré-FASE 17) e não deve ser usada por gates futuros. Corpo do relatório preservado intacto.
+
 **Data:** 2026-09-08  
 **Usuário:** fariasnetto01@gmail.com  
 **Projeto:** AdeusMultas-Defesa  

@@ -124,6 +124,17 @@ Resultado: Build concluído com sucesso (assets gerados, vite build concluído, 
 
 4. **Variáveis de ambiente em produção**: As variáveis de ambiente necessárias para o produzir (como `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, etc.) devem ser configuradas no painel do Cloudflare Workers para o worker em produção.
 
+## Contradições documentais e reconciliação
+
+A FASE 17 corrigiu o canônico para `llmxnpgjpxcvyrqjkfwb`, mas registros documentais pré-FASE 17 declaravam `sgomwklorpzdwdubtmgg` como "autoritativo"/"projeto correto". Para impedir que gates futuros consultem o projeto errado, os seguintes arquivos foram anotados (aditivamente, sem reescrever histórico) em 2026-09-21:
+
+1. `plan/progress.md` — entrada nova no "Histórico de sessões" (2026-09-21) registrando o realinhamento; entradas G1-01 pré-FASE 17 (linhas 66-67, `INVALIDADO` de 2026-09-15T15:58:33Z e `VALIDADO — sgomwklorpzdwdubtmgg` de 2026-09-15T16:20:00Z) mantidas como histórico, agora invalidadas.
+2. `loop/evidence/G1-01-2026-09-15.md` — bloco "⚠️ ATUALIZAÇÃO 2026-09-21 (FASE 17)" no topo declarando a evidência como histórica e o canônico atual.
+3. `AUDIT_REPORT.md` — linha após o título declarando a correção de canônico.
+4. `docs/recovery/FASE-17-REALINHAMENTO-GIT-CLOUDFLARE-DOMINIO-2026-09-21.md` — esta seção.
+
+Nenhum registro original foi apagado; todos permanecem para rastreabilidade.
+
 ## Conclusão
 
 A Fase 17 foi executada com sucesso, realinhando o estado do projeto entre o Git, o ambiente local, a infraestrutura Cloudflare e o domínio `adeusmulta.defesai.com.br`, garantindo que todas as referências ao Supabase apontem para o projeto canônico `llmxnpgjpxcvyrqjkfwb` e que nenhuma credencial sensível seja exposta ao frontend.
