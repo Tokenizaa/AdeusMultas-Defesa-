@@ -22,7 +22,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 12 — Reconstrução controlada do schema:** ✅ CONCLUÍDA
 - **Fase 13 — Reposição dos dados recuperáveis:** ✅ CONCLUÍDA
 - **Fase 14 — Validação estrutural e funcional:** ✅ CONCLUÍDA
-- **Fase 15 — Homologação e somente então cutover de produção:** ⬜ PRÓXIMA
+- **Fase 15 — Homologação e somente então cutover de produção:** ✅ CONCLUÍDA — HOMOLOGAÇÃO READ-ONLY
 
 ## Fase 1 — Congelamento e definição do alvo
 
@@ -379,3 +379,19 @@ O LLMX não será zerado nem tratado como descartável. Alterações futuras ser
 - Nenhuma alteração DDL/DML foi executada.
 - Artefato: docs/recovery/FASE-14-VALIDACAO-ESTRUTURAL-FUNCIONAL-2026-09-21.md.
 - Próxima fase: Fase 15 — homologação e preparação para eventual cutover.
+
+
+### Atualização — 2026-09-21 — Fase 15
+
+- Fase 15 concluída com homologação final somente leitura do LLMX.
+- Projeto alvo confirmado: `llmxnpgjpxcvyrqjkfwb` (`Defesai-AdeusMultas`), sem criação de novo projeto e sem alteração destrutiva.
+- Baseline estrutural revalidado diretamente no PostgreSQL: 52 tabelas públicas, 202 constraints, 180 índices, 148 policies, 49/52 tabelas com RLS, 11 triggers públicos, 207 funções públicas.
+- Integridade revalidada: 43 foreign keys, 52 primary keys, 20 unique constraints, 87 check constraints e 0 constraints públicas não validadas.
+- Auth/Storage/Reatime revalidados: 4 usuários Auth, 6 buckets, 8 objetos e publicação `supabase_realtime` presente.
+- 5 funções públicas SECURITY DEFINER permanecem identificadas; nenhuma função, policy ou configuração foi alterada nesta homologação.
+- Security e Performance Advisors foram consultados novamente. Os findings existentes permanecem registrados como dívida técnica/estado atual e não foram alterados como parte da recuperação.
+- Histórico de migrations do LLMX foi preservado; nenhuma migration foi reaplicada.
+- Nenhuma operação DDL/DML foi executada na Fase 15.
+- Resultado de homologação: **APTO COMO ALVO RECONSTRUÍDO POR EVIDÊNCIAS, NÃO COMPROVADO COMO CÓPIA IDÊNTICA DO SGOM EXCLUÍDO**.
+- Cutover de produção: **NÃO EXECUTADO**. O SGOM original continua irrecuperável por ausência de backup/dump comprovado e não deve ser apresentado como restaurado.
+- Fase 15 encerra o ciclo de reconstrução forense. Qualquer cutover posterior exige decisão operacional separada e validação do frontend/backend contra o LLMX, incluindo credenciais, URLs, Auth, Storage, pagamentos e integrações.
