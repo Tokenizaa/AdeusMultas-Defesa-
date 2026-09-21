@@ -178,3 +178,23 @@ A fase permanece:
 Nenhum projeto foi criado.  
 Nenhum backup foi restaurado.  
 Nenhum banco foi alterado.
+
+
+## Atualização crítica — 2026-09-21
+
+O projeto Supabase SGOM foi confirmado como excluído. Portanto, esta fase não deve mais ser tratada como “aguardando acesso”. A documentação oficial atual do Supabase informa que a exclusão remove permanentemente o banco, os dados, os backups e os snapshots PITR associados ao projeto. Não foi encontrado no Git nem na Library um dump externo completo identificável do SGOM.
+
+### Consequência operacional
+
+O SGOM original deve ser tratado como **fonte original perdida**. A reconstrução deverá usar exclusivamente evidências preservadas fora do projeto: LLMX, Git, histórico, auditorias, artefatos locais e eventual backup externo que venha a ser localizado.
+
+### Resultado
+
+- Banco SGOM original: **não recuperável diretamente**.
+- Backups/PITR vinculados ao SGOM: **não recuperáveis após exclusão**, conforme documentação oficial.
+- Dump externo localizado: **não encontrado**.
+- Evidências LLMX/Git: **preservadas**.
+- Reconstrução por evidências: **prosseguir**.
+- Criação do novo projeto: **aguardar Fase 10**.
+
+Fonte oficial consultada: https://supabase.com/docs/guides/platform/delete-project
