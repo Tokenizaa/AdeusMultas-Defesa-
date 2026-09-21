@@ -93,6 +93,11 @@ Migrations aplicadas no canônico via MCP + arquivos versionados em `supabase/mi
 - **`messaging_messages`** (B — administrativa/interna, escrita server-side via
   `getSupabaseServerClient`): `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Zero policies →
   deny-all p/ anon/authenticated; acesso exclusivo service_role. **Fechou o ERROR do advisor.**
+- **`messaging_contacts` / `messaging_conversations`** (B — administrativa/interna): RLS
+  habilitado via MCP durante a fase (drift — fora de migration). Versionado em
+  `20260921000005_fase_18_messaging_rls_contacts_conversations.sql` para replay idempotente
+  (supabase db reset/recreate). Zero policies → deny-all p/ anon/authenticated, coerente com
+  messaging_messages. **As 3 tabelas de messaging estão RLS ON versionadas.**
 - **`documents`** (A — ownership usuário via cadeia `documents.case_id → cases.user_id`):
   policy `documents_select_own` (SELECT authenticated, EXISTS chain) + `documents_admin_all`
   (ALL authenticated admin). INSERT/UPDATE/DELETE sem policy → server-side service_role.
@@ -210,9 +215,11 @@ Saída bruta anexada no tracking da sessão (advisor pós-migração 2026-09-21T
 | `20260921000002_fase_18_rls_recursion_fix.sql` | `is_admin()` SECURITY DEFINER; reescrita das 5 policies self-referenciais de user_profiles |
 | `20260921000003_fase_18_role_update_hardening.sql` | `current_role_name()` SECURITY DEFINER; `user_profiles_own_update` WITH CHECK preserva role |
 | `20260921000004_fase_18_drop_legacy_profile_update_policy.sql` | Drop `user_profiles_update_own` (escalação) |
+| `20260921000005_fase_18_messaging_rls_contacts_conversations.sql` | RLS em messaging_contacts + messaging_conversations — deny-all (sem policies), coerente com messaging_messages; versiona estado real do banco (habilitadas via MCP fora da migration) p/ replay idempotente |
 
 Aplicadas no canônico via MCP (`fase_18_auth_rls_storage`, `fase_18_rls_recursion_fix`,
-`fase_18_role_update_hardening`, `fase_18_drop_legacy_profile_update_policy`). Nada destrutivo;
+`fase_18_role_update_hardening`, `fase_18_drop_legacy_profile_update_policy`,
+`fase_18_messaging_rls_contacts_conversations`). Nada destrutivo;
 todas idempotentes (DROP IF EXISTS + CREATE).
 
 ## 14. Build
