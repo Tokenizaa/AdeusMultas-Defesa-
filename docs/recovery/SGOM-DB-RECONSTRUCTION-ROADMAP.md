@@ -18,7 +18,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ✅ CONCLUÍDA
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** 🔴 ENCERRADA — PROJETO ORIGINAL EXCLUÍDO
 - **Fase 10 — Manifesto final de reconstrução:** ✅ CONCLUÍDA
-- **Fase 11 — Criação de novo projeto de reconstrução:** ⬜ PENDENTE
+- **Fase 11 — Preparação do LLMX como alvo da reconstrução:** ✅ CONCLUÍDA
 - **Fase 12 — Recriação do schema:** ⬜ PENDENTE
 - **Fase 13 — Reposição dos dados recuperáveis:** ⬜ PENDENTE
 - **Fase 14 — Validação estrutural e funcional:** ⬜ PENDENTE
@@ -289,9 +289,15 @@ Produzir o manifesto definitivo contendo:
 
 ## Fases 11–15 — Reconstrução e validação
 
-Só serão iniciadas depois que as fases forenses demonstrarem que temos evidência suficiente.
+A reconstrução será executada diretamente no projeto LLMX existente (`llmxnpgjpxcvyrqjkfwb`), que foi verificado como `ACTIVE_HEALTHY`. Não será criado um novo projeto por restrição de crédito.
 
-Nenhum novo projeto será criado antes do manifesto de reconstrução e da revisão das lacunas.
+O LLMX não será zerado nem tratado como descartável. Alterações futuras serão incrementais, documentadas e precedidas por comparação contra o manifesto da Fase 10.
+
+- **Fase 11:** preparar e verificar o LLMX como alvo controlado.
+- **Fase 12:** reconstruir o schema por evidências, sem perda do estado preservado.
+- **Fase 13:** repor os dados recuperáveis.
+- **Fase 14:** validar estrutura e comportamento.
+- **Fase 15:** homologar e somente então avaliar cutover de produção.
 
 ## Registro de execução
 
@@ -325,3 +331,14 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 - Nenhuma alteração foi executada no SGOM.
 - Inventário verbose do schema e catálogo de segurança/configuração consultados em modo somente leitura.
 - Fase 3 encerrada com snapshot estrutural reproduzível versionado em Git.
+
+
+### Atualização — 2026-09-21 — Fase 11
+
+- A criação de novo projeto foi descartada antes de qualquer provisionamento por ausência de crédito disponível.
+- O LLMX `llmxnpgjpxcvyrqjkfwb` foi selecionado como alvo da reconstrução.
+- Verificado: `Defesai-AdeusMultas`, região `sa-east-1`, PostgreSQL 17.6.1.141, status `ACTIVE_HEALTHY`.
+- Consulta somente leitura confirmou 52 tabelas públicas, 49 com RLS, 148 policies, 207 funções públicas e 4 usuários Auth.
+- Nenhuma alteração DDL/DML foi executada.
+- Artefato: `docs/recovery/FASE-11-PREPARACAO-LLMX-ALVO-RECONSTRUCAO-2026-09-21.md`.
+- Próxima fase: Fase 12 — reconstrução controlada do schema no LLMX.
