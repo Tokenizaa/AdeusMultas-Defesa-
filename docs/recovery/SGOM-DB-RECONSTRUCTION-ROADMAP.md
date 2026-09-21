@@ -17,7 +17,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 7 — Recuperação de Storage e objetos:** ✅ CONCLUÍDA
 - **Fase 8 — Recuperação de funções, triggers, RLS e configurações:** ✅ CONCLUÍDA
 - **Fase 9 — Investigação de backup/PITR/Suporte do SGOM:** 🔴 ENCERRADA — PROJETO ORIGINAL EXCLUÍDO
-- **Fase 10 — Manifesto final de reconstrução:** ⬜ PENDENTE
+- **Fase 10 — Manifesto final de reconstrução:** ✅ CONCLUÍDA
 - **Fase 11 — Criação de novo projeto de reconstrução:** ⬜ PENDENTE
 - **Fase 12 — Recriação do schema:** ⬜ PENDENTE
 - **Fase 13 — Reposição dos dados recuperáveis:** ⬜ PENDENTE
@@ -297,6 +297,8 @@ Nenhum novo projeto será criado antes do manifesto de reconstrução e da revis
 
 ### 2026-09-21
 
+- Fase 10 encerrada com o manifesto final de reconstrução versionado em `docs/recovery/FASE-10-MANIFESTO-FINAL-RECONSTRUCAO-2026-09-21.md`.
+- O manifesto consolida evidências, dados recuperáveis, estrutura, Storage, funções, triggers, RLS, migrations, lacunas e ordem oficial de reconstrução.
 - Fase 9 encerrada após confirmação de que o projeto Supabase SGOM `sgomwklorpzdwdubtmgg` foi excluído.
 - A documentação oficial atual do Supabase informa que a exclusão remove permanentemente banco, dados, backups e snapshots PITR associados ao projeto.
 - Git e Library foram pesquisados por dumps/exports externos identificáveis; nenhum backup completo do SGOM foi encontrado.
