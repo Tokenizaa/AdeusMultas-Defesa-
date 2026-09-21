@@ -20,7 +20,7 @@ Reconstruir, com evidências, o estado do projeto Supabase canônico **SGOM** (s
 - **Fase 10 — Manifesto final de reconstrução:** ✅ CONCLUÍDA
 - **Fase 11 — Preparação do LLMX como alvo da reconstrução:** ✅ CONCLUÍDA
 - **Fase 12 — Reconstrução controlada do schema:** ✅ CONCLUÍDA
-- **Fase 13 — Reposição dos dados recuperáveis:** ⬜ PENDENTE
+- **Fase 13 — Reposição dos dados recuperáveis:** ✅ CONCLUÍDA
 - **Fase 14 — Validação estrutural e funcional:** ⬜ PENDENTE
 - **Fase 15 — Homologação e somente então cutover de produção:** ⬜ PENDENTE
 
@@ -341,7 +341,7 @@ O LLMX não será zerado nem tratado como descartável. Alterações futuras ser
 - Consulta somente leitura confirmou 52 tabelas públicas, 49 com RLS, 148 policies, 207 funções públicas e 4 usuários Auth.
 - Nenhuma alteração DDL/DML foi executada.
 - Artefato: `docs/recovery/FASE-11-PREPARACAO-LLMX-ALVO-RECONSTRUCAO-2026-09-21.md`.
-- Próxima fase: Fase 12 — reconstrução controlada do schema no LLMX.
+- Próxima fase: Fase 13 — reposição dos dados recuperáveis.
 
 
 ### Atualização — 2026-09-21 — Fase 12
@@ -353,3 +353,15 @@ O LLMX não será zerado nem tratado como descartável. Alterações futuras ser
 - Fase 12 concluída como reconstrução do **schema-base recuperável por evidências**; equivalência literal com as 88 migrations históricas do SGOM continua não comprovada.
 - Artefato: `docs/recovery/FASE-12-RECONSTRUCAO-SCHEMA-LLMX-2026-09-21.md`.
 - Próxima fase: Fase 13 — reposição dos dados recuperáveis.
+
+
+### Atualização — 2026-09-21 — Fase 13
+
+- Fase 13 executada no LLMX existente, sem criação de novo projeto.
+- Os 351 registros públicos recuperáveis já estavam preservados no LLMX; não houve necessidade de INSERT/UPSERT.
+- Foram verificadas as fontes disponíveis para dumps, seeds e exports; nenhum dump completo do SGOM foi localizado.
+- Nenhuma operação DML/DDL foi executada: INSERT=0, UPDATE=0, DELETE=0, TRUNCATE=0, DROP=0, ALTER=0.
+- O LLMX permaneceu intacto e os dados existentes não foram sobrescritos.
+- As lacunas históricas continuam explicitamente classificadas como não recuperáveis por evidência disponível.
+- Artefato: docs/recovery/FASE-13-REPOSICAO-DADOS-RECUPERAVEIS-2026-09-21.md.
+- Próxima fase: Fase 14 — validação estrutural e funcional.
