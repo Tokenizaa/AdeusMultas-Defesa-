@@ -307,3 +307,29 @@ O mapa agora separa melhor:
 Nenhuma tabela, função, policy ou trigger foi removida.
 
 **Próximo passo:** validação final contra migrations e Golden Path e, somente depois, fechar a baseline definitiva de funções/triggers/policies.
+
+## Complemento — Validação final contra migrations + Golden Path (2026-09-23)
+
+Validação executada em modo somente leitura. Nenhuma tabela, dado, RLS, function ou trigger foi alterado.
+
+### Golden Path
+A FASE 19 confirma auth → case → análise determinística → documents/storage → list → signed download → delete → isolamento entre usuários, com 6/6 cenários de integração contra o Supabase canônico. PIX/webhook real e refinamento de defesa com IA real continuam pendentes e não são usados como evidência de uso das tabelas paralelas.
+
+### Migrations
+O Supabase canônico registra 64 migrations. O Git contém a linhagem versionada sobrevivente, incluindo o hardening FASE 18 e a correção aditiva 20260921000006_fase_19_add_applicant_json_cases.sql. Migrations duplicadas e diferenças históricas de nomes/versões impedem replay cego. A regra permanece reconstruir o estado final consolidado.
+
+### Snapshot real de dependências
+Nova consulta no canônico confirmou 153 policies públicas, 11 triggers públicos não internos e 209 funções públicas. O número anterior de 203 funções era snapshot anterior. As tabelas paralelas continuam com RLS habilitado quando expostas.
+
+### Resultado por grupo
+- Pagamentos: payment_orders + payment_webhook_events comprovadamente ativos. payments, payment_events e orders sem evidência suficiente de consumidor operacional atual para remoção. Como PIX/webhook real não foi provado no Golden Path, o grupo não é considerado fechado para limpeza.
+- Comercial: service_pricings, promotion_campaigns, coupons, bonus_ledger, commission_ledger, referral_relations, referral_config e commercial_audit_log comprovadamente persistidos pelo repository atual. commercial_offers/commercial_orders e promotions/commissions permanecem legados prováveis, sem remoção.
+- Documenso: ATIVO MODULAR, com consumidor real no repository; não é requisito comprovado do Golden Path B2C.
+- Notificações: rota atual mantém histórico/subscriptions em memória; as tabelas persistentes possuem policies, mas isso não prova consumidor atual. Permanecem INDETERMINADAS.
+- Observabilidade/auditoria: ai_execution_logs e audit_logs possuem RLS e histórico de implementação, mas esta rodada não encontrou evidência suficiente para reclassificação definitiva. Permanecem INDETERMINADAS.
+
+### Excesso técnico confirmado
+public.user_profiles possui dois triggers equivalentes de updated_at: trg_user_profiles_updated → set_updated_at() e update_user_profiles_updated_at → update_updated_at_column(). Não foi removido.
+
+### Gate de fechamento
+**FASE 3 — auditoria de superengenharia: FECHAMENTO PARCIAL VALIDADO.** A classificação já impede remoções arbitrárias, mas a baseline definitiva de functions/triggers/policies ainda não está pronta. Próximo gate: gerar essas três camadas a partir do estado real do canônico e validá-las em ambiente descartável, sem aplicar a baseline ao canônico.
