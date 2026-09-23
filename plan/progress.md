@@ -2,7 +2,7 @@
 
 ## Resultado
 
-**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso e coleta estadual iniciada com AC (Acre), com documentos iniciais coletados.**
+**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso e coleta estadual iniciada e avançada com AC (Acre).**
 
 Foram coletados com sucesso todos os documentos oficiais federais acessíveis diretamente via HTTP:
 - Código de Trânsito Brasileiro (CTB) compilado (HTML e PDF) do Planalto.
@@ -14,9 +14,10 @@ Foram coletados com sucesso todos os documentos oficiais federais acessíveis di
 - Jurisprudência em teses do STJ.
 - Resoluções do CONTRAN (página compilada e resolução individual exemplar).
 
-No estado do Acre (AC), foram coletados documentos iniciais do DETRAN-AC:
-- Formulário de Defesa Prévia (Pessoa Física) em PDF.
-- Três portarias oficiais (ex: Nova Portaria PROCURAA_A_O, Portaria n° 1159/2024, Portaria 1723).
+No estado do Acre (AC), foram realizados os seguintes esforços de coleta:
+- Coleta inicial de documentos do DETRAN-AC: formulário de defesa prévia (Pessoa Física) e três portarias oficiais.
+- Investigação do CETRAN-AC: confirmado que o URL oficial https://www.cetran.ac.gov.br não resolve (falha de DNS). Tentativas de acesso a URLs alternativas e busca no site do DETRAN-AC e no Portal da Transparência do Acre não localizaram o portal do CETRAN-AC.
+- Busca por documentos adicionais no DETRAN-AC: verificadas seções de legislação, normas, transparência e portarias; não foram localizados manuais de defesa prévia, resoluções do CETRAN-AC ou leis estaduais de trânsito via links diretos simples.
 
 O inventário documental foi atualizado e registrado em:
 `docs/recovery/FASE-8-INVENTARIO-DOCUMENTAL-OFICIAL-2026-09-23.md`
@@ -26,7 +27,7 @@ O inventário documental foi atualizado e registrado em:
 - Arquivo dnit.html com hash SHA-256: 67debf6e429639a2e6f504e5f78434ca68b3e34961a971d6bcd9cdafb612ad7a
 - Arquivo prf.html com hash SHA-256: 6d4ab6b742457c58ad4c8f3c2d5ddad2643d4e9f32ead6bba69aa67b61fd102d
 - Arquivo anttr.html com hash SHA-256: a7c1d5a923af59c401aab4b95e89f94ac3f10e4ce9bbe556f63c72510790efd5
-- Arquivo inmet.html com hash SHA-256: e67d72bfcf159b1a79cbd89560fca53fa85e8748c84c3e671da998cf3b62e239
+- Arquivo inmet.html com sha256: e67d72bfcf159b1a79cbd89560fca53fa85e8748c84c3e671da998cf3b62e239
 - Arquivo dou.html com hash SHA-256: 31d48bd3a918942e8233cfcd40cbac5cfc8807ecfa837060752af2eb0021f13a
 - Arquivo senatran.html com hash SHA-256: 3ec76f081ecd9ba75599ca8106be16c1039c15df7b11d6a3b8d74bc9265a1c4d
 - Arquivo stj.html com hash SHA-256: caea3a0b1ab3a8dd6d41d9c185f1ea5dcccb3cccbc116926b166b297286a73fb
@@ -42,16 +43,16 @@ O inventário documental foi atualizado e registrado em:
 ## Classificação
 
 - **COLETADO FEDERAL:** 9 fontes oficiais federais, total de 10 documentos coletados (incluindo variações).
-- **COLETADO ESTADUAL (AC):** DETRAN-AC - 4 documentos coletados (1 formulário de defesa prévia, 3 portarias).
-- **BLOQUEADO ESTADUAL:** CETRAN-AC (DNS não resolve) - requer investigação de URL alternativa ou confirmação de inaccessibilidade.
-- **EM COLETA ESTADUAL:** DETRAN-AC - continuando a coleta de outros documentos específicos (manuais, resoluções, leis estaduais de trânsito).
-- **PENDENTE:** Restante das 26 UFs (AL, AP, AM, BA, CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR).
+- **COLETADO INICIAL ESTADUAL (AC):** DETRAN-AC - 4 documentos coletados (1 formulário de defesa prévia, 3 portarias). Coleta inicial concluída; documentos adicionais requerem busca mais aprofundada ou acesso a sistemas internos.
+- **BLOQUEADO/INACESSÍVEL ESTADUAL:** CETRAN-AC (DNS não resolve, não localizado em portais oficiais) - requer investigação externa ou confirmação de inaccessibilidade.
+- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com AL (Alagoas) seguindo a mesma metodologia.
+- **PENDENTE:** Restante das 25 UFs (AP, AM, BA, CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AL em preparação).
 
 ## Próximos passos dentro da FASE 8
-1. Resolver o bloqueio do CETRAN-AC: tentar URLs alternativas (ex: verificar se há portal transparente ou outras abordagens) ou documentar oficialmente como inaccessível.
-2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e buscar manuais de defesa prévia, resoluções do CETRAN-AC, leis estaduais de trânsito e outros documentos relevantes para defesa de multas.
+1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
+2. Iniciar coleta estadual com AL (Alagoas): acessar o portal do DETRAN-AL (https://www.detran.al.gov.br/recursos) e buscar documentos específicos de defesa de multas (formulários, manuais, resoluções do CETRAN-AL, leis estaduais).
 3. Para cada documento coletado, calcular hash SHA-256 e registrar no inventário.
-4. Após concluir AC, passar para o estado seguinte (AL) e repetir o processo.
+4. Após concluir AL, passar para o estado seguinte (AP) e repetir o processo.
 5. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
 
 ## Próxima fase (após conclusão da FASE 8)
