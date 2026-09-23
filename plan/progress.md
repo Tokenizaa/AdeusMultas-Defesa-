@@ -1,158 +1,59 @@
-# FASE 5 — Backup de Segurança para Reconstrução — 2026-09-23
-
-## Objetivo
-
-Preparar a reconstrução no próprio projeto canônico, sem criar projeto/branch com custo adicional e sem apagar o banco antes de existir uma cópia de segurança verificável.
-
-## Estratégia
-
-Foi criada no projeto canônico a estrutura temporária `recovery_backup_20260923`.
-
-Ela contém cópias de dados das 52 tabelas públicas atuais, além de:
-
-- `auth_users`: cópia de `auth.users`
-- `storage_buckets`: cópia de `storage.buckets`
-- `storage_objects`: cópia de `storage.objects`
-
-Total materializado: 55 tabelas de backup.
-
-## Verificação
-
-Snapshot confirmado no banco:
-
-- Tabelas públicas atuais: 52
-- Tabelas no backup: 55
-- `auth.users`: 4 registros
-- `storage.buckets`: 6 registros
-- `storage.objects`: 8 registros
-- `cases`: 60 registros
-- `user_profiles`: 4 registros
-- `payment_orders`: 14 registros
-
-A migration remota criada para registrar esta operação é:
-
-`20260923202505_recovery_backup_20260923`
-
-## Limitação importante
-
-Este backup é um **snapshot de dados dentro do próprio banco**, não um dump físico completo do PostgreSQL.
-
-Ele não copia os bytes físicos dos arquivos armazenados no Storage; copia somente o catálogo `storage.objects` e os metadados dos buckets. Portanto, os 8 objetos devem ser tratados separadamente antes de qualquer limpeza que possa remover seus arquivos.
-
-Também não substitui os baselines estruturais já versionados em `supabase/recovery/`.
-
-## Regra para a próxima fase
-
-**NÃO executar DROP/TRUNCATE ainda.**
-
-Antes da limpeza:
-
-1. validar todos os snapshots;
-2. validar os objetos reais do Storage;
-3. registrar a correspondência entre backup e baseline;
-4. preparar a ordem de reconstrução;
-5. somente então executar a limpeza controlada.
-
-## Estado
-
-**FASE 5 — BACKUP E PREPARAÇÃO: EM VALIDAÇÃO.**
-
-Nenhuma tabela de produção foi apagada ou truncada.
-
-| 2026-09-23 | FASE 5 — Fechamento do backup e preparação da reconstrução | **CONCLUÍDA COM RESSALVA CONTROLADA** — snapshot no mesmo canônico validado: 52/52 tabelas públicas com contagens idênticas no backup; 4 auth.users, 6 buckets e 8 storage.objects preservados; metadados dos 8 arquivos registrados. Não foi possível obter verificação independente dos bytes do Storage neste ambiente, portanto nenhum objeto físico será apagado na próxima fase. Criado `supabase/recovery/VERIFY-RECOVERY-BACKUP-20260923.sql` e manifesto com ordem de reconstrução. Nenhum DROP/TRUNCATE executado. **Próxima:** FASE 6 — inventário estrutural final e saneamento da baseline executável. |
-
-
-# FASE 6 — Auditoria da Base Jurídica/RAG — 2026-09-23
-
-## Resultado
-
-**CONCLUÍDA — auditoria executada sem alterações de dados.**
-
-A verificação direta do Supabase confirmou zero registros nas seis tabelas RAG, tanto no canônico quanto no snapshot de backup:
-
-- knowledge_sources: 0
-- knowledge_documents: 0
-- knowledge_document_versions: 0
-- knowledge_chunks: 0
-- knowledge_embeddings: 0
-- knowledge_ingestions: 0
-
-O Git histórico, entretanto, preserva evidências da arquitetura RAG, ingestão, busca vetorial, catálogo jurídico determinístico, temporalidade, jurisdição, Knowledge Gap e monitoramento nacional.
-
-### Classificação
-
-- **RECUPERADO:** estrutura RAG, função de busca, arquitetura de ingestão/versionamento e parte dos catálogos jurídicos do código.
-- **RECONSTRUÍVEL:** base documental jurídica e embeddings, mediante coleta/validação de fontes oficiais.
-- **PERDIDO:** registros históricos efetivamente armazenados nas tabelas RAG e embeddings correspondentes.
-- **KNOWLEDGE_GAP:** volume histórico, lista completa de documentos e eventual jurisprudência não preservada.
-
-### Evidências Git
-
-- 5a6b832e0799fda8786371a764186f4b6347a2ed — migração Knowledge RAG para Vectorize.
-- e4f7f86433eb0619bd00e381a75cac865203f0b9 — rotas Knowledge RAG.
-- 921903a8e2ccc31c3c68cd1bc26a0bc437c4a783 — fase Cloudflare Knowledge/RAG.
-- 9326bdca99ccafc96ec34b2b23c8d4b373a6f34e — monitor nacional e Knowledge Hub.
-- 75609a241a46dcf4dab2cc7cb99cefa4eb0cc121 — composição determinística, validação e Knowledge Gap.
-
-Documento completo: docs/recovery/FASE-6-BASE-JURIDICA-RAG-2026-09-23.md
-
-## Próxima fase
-
-**FASE 7 — Catálogo Mestre de Fontes Jurídicas.**
-
-Antes de qualquer ingestão, mapear fontes oficiais, autoridade, jurisdição, vigência, URL, cobertura por serviço e estratégia de versionamento. Nenhum conteúdo jurídico será inventado.
-
-
-# FASE 7 — Catálogo Mestre de Fontes Jurídicas — 2026-09-23
-
-## Resultado
-
-**CONCLUÍDA — catálogo de fontes e regras de autoridade definido sem alterações no banco.**
-
-A camada nacional foi estruturada em fontes primárias e institucionais: CTB/legislação federal, CONTRAN, Senatran, MBFT, Manuais de Sinalização e demais atos oficiais. Também foram definidos versionamento, vigência, revogação, jurisdição e relacionamento com os serviços do produto.
-
-Fontes oficiais atuais identificadas:
-- Planalto — CTB compilado;
-- Ministério dos Transportes/Senatran — legislação, resoluções e portarias;
-- catálogo oficial de Resoluções CONTRAN;
-- manuais oficiais Senatran;
-- legislação oficial complementar do Senado.
-
-A auditoria também registrou a necessidade de considerar alterações recentes de 2026 e vigência diferenciada, evitando tratar o texto atual como automaticamente vigente para fatos passados.
-
-Documento: docs/recovery/FASE-7-CATALOGO-MESTRE-FONTES-JURIDICAS-2026-09-23.md
-
-## Regra
-
-Nenhum documento jurídico foi inserido no RAG nesta fase. Nenhuma tabela de produção foi alterada.
-
-
 # FASE 8 — Coleta e Inventário Documental Oficial — 2026-09-23
 
 ## Resultado
 
-**PARCIAL — coleta inicial de documentos federais executada, inventário iniciado.**
+**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso e coleta estadual iniciada com AC (Acre), com documentos iniciais coletados.**
 
-Foram coletados com sucesso dois documentos federais acessíveis diretamente via HTTP:
-- Código de Trânsito Brasileiro (CTB) compilado (HTML) do Planalto.
-- Página inicial do portal de multas do DNIT.
+Foram coletados com sucesso todos os documentos oficiais federais acessíveis diretamente via HTTP:
+- Código de Trânsito Brasileiro (CTB) compilado (HTML e PDF) do Planalto.
+- Portal de multas e defesas do DNIT.
+- Portal de multas e defesas da PRF.
+- Portal de multas e defesas da ANTT.
+- Consulta de radares e cronotacógrafos do INMETRO.
+- Diário Oficial da União (DOU).
+- Jurisprudência em teses do STJ.
+- Resoluções do CONTRAN (página compilada e resolução individual exemplar).
 
-Foram identificadas fontes que requerem investigação adicional devido a bloqueios ou caminhos alternativos (CONTRAN, SENATRAN, INMETRO, DOU, STJ).
+No estado do Acre (AC), foram coletados documentos iniciais do DETRAN-AC:
+- Formulário de Defesa Prévia (Pessoa Física) em PDF.
+- Três portarias oficiais (ex: Nova Portaria PROCURAA_A_O, Portaria n° 1159/2024, Portaria 1723).
 
-O inventário documental foi iniciado e registrado em:
+O inventário documental foi atualizado e registrado em:
 `docs/recovery/FASE-8-INVENTARIO-DOCUMENTAL-OFICIAL-2026-09-23.md`
 
-### Evidências de Coleta
+### Evidências de Coleta Federal
 - Arquivo ctb.html com hash SHA-256: 6a5e7d4ce6bd582acb0244b4b8a75837bb4cabc634842bbee2c99a58194e7d2e
 - Arquivo dnit.html com hash SHA-256: 67debf6e429639a2e6f504e5f78434ca68b3e34961a971d6bcd9cdafb612ad7a
+- Arquivo prf.html com hash SHA-256: 6d4ab6b742457c58ad4c8f3c2d5ddad2643d4e9f32ead6bba69aa67b61fd102d
+- Arquivo anttr.html com hash SHA-256: a7c1d5a923af59c401aab4b95e89f94ac3f10e4ce9bbe556f63c72510790efd5
+- Arquivo inmet.html com hash SHA-256: e67d72bfcf159b1a79cbd89560fca53fa85e8748c84c3e671da998cf3b62e239
+- Arquivo dou.html com hash SHA-256: 31d48bd3a918942e8233cfcd40cbac5cfc8807ecfa837060752af2eb0021f13a
+- Arquivo senatran.html com hash SHA-256: 3ec76f081ecd9ba75599ca8106be16c1039c15df7b11d6a3b8d74bc9265a1c4d
+- Arquivo stj.html com hash SHA-256: caea3a0b1ab3a8dd6d41d9c185f1ea5dcccb3cccbc116926b166b297286a73fb
+- Arquivo contran_resolutions.html com hash SHA-256: abbbe54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0
+- Arquivo contran_res_796_2020.pdf com hash SHA-256: 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258
+
+### Evidências de Coleta Estadual (AC)
+- Arquivo defesa_previa_pf.pdf com hash SHA-256: 15950ab7e5de613d9b086baae6894f7b452d8085edefcf4459276e7aa2b7d4f7
+- Arquivo nova-portaria-PROCURAA_A_O.pdf com hash SHA-256: 11ef1de1afb04c0100e1162b0b07ed052c7228e1029a5e66b9a6f1c6c52441ce
+- Arquivo Portaria_n__1159_2024_alteracao_portaria_assinatura_digital.pdf com hash SHA-256: 991e9fcb9edd07550298b4f81a88de13282263968da47f800244e587bf7b438c
+- Arquivo Portaria_1723.pdf com hash SHA-256: 175e22e4daa442ff3115804f7319e8a3c3979be1847252d32a972788f6a2794d
 
 ## Classificação
 
-- **COLETADO:** documentos acessíveis diretamente via HTTP sem autenticação.
-- **BLOQUEADO/REQUER INVESTIGAÇÃO:** fontes que retornam erro ou requerem caminhos alternativos (ex: CONTRAN resolutions).
-- **PENDENTE:** fontes federais restantes e todas as 27 UFs.
+- **COLETADO FEDERAL:** 9 fontes oficiais federais, total de 10 documentos coletados (incluindo variações).
+- **COLETADO ESTADUAL (AC):** DETRAN-AC - 4 documentos coletados (1 formulário de defesa prévia, 3 portarias).
+- **BLOQUEADO ESTADUAL:** CETRAN-AC (DNS não resolve) - requer investigação de URL alternativa ou confirmação de inaccessibilidade.
+- **EM COLETA ESTADUAL:** DETRAN-AC - continuando a coleta de outros documentos específicos (manuais, resoluções, leis estaduais de trânsito).
+- **PENDENTE:** Restante das 26 UFs (AL, AP, AM, BA, CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR).
 
-## Próxima fase
+## Próximos passos dentro da FASE 8
+1. Resolver o bloqueio do CETRAN-AC: tentar URLs alternativas (ex: verificar se há portal transparente ou outras abordagens) ou documentar oficialmente como inaccessível.
+2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e buscar manuais de defesa prévia, resoluções do CETRAN-AC, leis estaduais de trânsito e outros documentos relevantes para defesa de multas.
+3. Para cada documento coletado, calcular hash SHA-256 e registrar no inventário.
+4. Após concluir AC, passar para o estado seguinte (AL) e repetir o processo.
+5. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
 
-**FASE 9 — Expansão da coleta para as 27 UFs e validação documental** (se aplicável).
+## Próxima fase (após conclusão da FASE 8)
 
+**FASE 9 — Validação e versionamento documental** (se aplicável): após coleta de todos os documentos oficiais, validar integridade, verificar versionamento e preparar para possível ingestão futura no sistema de conhecimento.

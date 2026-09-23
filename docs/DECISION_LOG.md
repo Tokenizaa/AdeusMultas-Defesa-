@@ -11,6 +11,7 @@
 
 | ADR | Título |
 |-----|--------|
+| [ADR-018](docs/adr/ADR-018-Supabase-Forensic-Inventory-Findings.md) | Supabase Forensic Inventory Findings - Preserve existing data, inventory state vs Git |
 | [ADR-011](docs/adr/ADR-011-Remove-Legacy-Prospecting-Pages.md) | Remoção dos componentes legacy/mortos do módulo de Prospecção B2B (frontend) |
 | [ADR-010](docs/adr/ADR-010-Automatic-Defense-Generation-and-Limit.md) | Geração automática de defesa pós-pagamento + limite de 3 gerações |
 | [ADR-009](docs/adr/ADR-009-Payment-Orders-Table.md) | Criação da tabela `payment_orders` |

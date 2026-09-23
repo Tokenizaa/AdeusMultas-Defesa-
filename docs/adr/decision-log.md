@@ -41,6 +41,29 @@
 
 ---
 
+## 2026-09-23 — ADR-018: Supabase Forensic Inventory Findings
+
+**Decisão**: Adotar abordagem de inventário forense (FASE 0) antes de fazer alterações no banco de dados - preservar dados existentes, inventariar estado vs Git, resolver problemas de infraestrutura antes de mudanças de schema.
+
+**Detalhes**:
+- Projeto Supabase `llmxnpgjpxcvyrqjkfwb` está ATIVE_HEALTHY com dados reais de produção
+- 60 casos, 4 perfis de usuário, 14 ordens de pagamento e outros dados críticos presentes
+- Projeto antigo `sgomwklorpzdwdubtmgg` foi removido e não é acessível
+- Histórico de migrações mostra entradas duplicadas que precisam de limpeza
+- Consultores de segurança sinalizam políticas RLS faltantes e extensões no schema público
+
+**Próximos Passos**:
+1. NÃO executar migrações ou fazer alterações de schema imediatamente
+2. Resolver entradas duplicadas em supabase_migrations.schema_migrations
+3. Abordar lacunas de políticas RLS identificadas pelos consultores de segurança
+4. Mover extensões (vector, pg_trgm, citext) do schema público para schemas apropriados
+5. Verificar integridade dos dados através de verificações em nível de aplicação
+6. Só então considerar migrações de schema necessárias
+
+**ADR**: [ADR-018-Supabase-Forensic-Inventory-Findings.md](ADR-018-Supabase-Forensic-Inventory-Findings.md)
+
+---
+
 ## Próximos Handoffs
 
 | Task | Agent | Contexto |
