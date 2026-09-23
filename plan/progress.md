@@ -1,89 +1,62 @@
-# DefesAi — Progresso (Diário de Bordo)
+# FASE 5 — Backup de Segurança para Reconstrução — 2026-09-23
 
-Gerenciado por gov-loop-orchestrator. Cada linha é uma sessão fechada.
+## Objetivo
 
----
+Preparar a reconstrução no próprio projeto canônico, sem criar projeto/branch com custo adicional e sem apagar o banco antes de existir uma cópia de segurança verificável.
 
-## Estado inicial do projeto (snapshot 2026-08-24)
+## Estratégia
 
-### Stack
-- **Frontend**: React 18 + TypeScript + Vite + TailwindCSS (shadcn/ui)
-- **Backend**: Express + TypeScript (`src/server/app.ts` + workers)
-- **Database**: Supabase (PostgreSQL) — 5 migrations aplicadas
-- **Auth**: Supabase Auth + JWT
-- **AI**: Google GenAI (gemini.ts) + 9Router (NVIDIA free tier)
-- **Payments**: PagBank (PIX/cartão) + GGPIX — webhook com idempotência
-- **Marketing**: Meta/Facebook integration + ComfyUI OS + Evolution API (WhatsApp)
-- **Deploy**: Vercel (app + API stub)
-- **Testes**: Playwright E2E + invariantes (tests/invariants/)
+Foi criada no projeto canônico a estrutura temporária `recovery_backup_20260923`.
 
-### Funcionalidades confirmadas existentes
-1. Auth: login/register/forgot/reset/claim-anonymous-case
-2. Onboarding 2-fases com isAdmin (fix aplicado)
-3. CRUD de casos (CaseRepository com CanonicalMapper)
-4. Geração de defesa com fallback CTB (POST /generate-defense)
-5. Documentos dinâmicos por tipo de procedimento (stage 2 UI)
-6. Meta integration adapter (meta-adapter.ts)
-7. Vercel deploy ativo
-8. Supabase RLS + profiles + cases schema
-9. 0 P0/P1 blockers (PRODUCTION_BLOCKERS.md)
-10. Typecheck + build passando (AUDIT_PHASE2_RESULTS.md)
-11. E2E happy-path passing
+Ela contém cópias de dados das 52 tabelas públicas atuais, além de:
 
-### Governança
-- **loop/** criado em 2026-08-24
-- **plan/features.json** com fases G0-G6 mapeadas
-- Governança a partir desta sessão
+- `auth_users`: cópia de `auth.users`
+- `storage_buckets`: cópia de `storage.buckets`
+- `storage_objects`: cópia de `storage.objects`
 
----
+Total materializado: 55 tabelas de backup.
 
-## Histórico de sessões (mantido pelo orquestrador)
+## Verificação
 
-| Data | Sessão | Resultado |
-|---|---|---|
-| 2026-08-24T05:37:54Z | G0-gov-baseline | PASS feats: G0-01/02/03 commits: ecdaa42,149112f,05472be,cfabdb1 |
-| 2026-08-24T05:43:42Z | stash orphan | 19 arquivos de produção preservados em stash (pré-governança) |
-| 2026-08-24T05:44:10Z | checkpoint G0 | **PARADO** — aguardando `loop/checkpoints/G0.approved` |
-| 2026-08-26 | ADR-010 — Geração automática de defesa pós-pagamento + limite de 3 gerações | **Done** — bug fix validado por E2E. |
-| 2026-09-14T22:00:00Z | G6-01 — Test unit gate passes | PASS feats: G6-01 commit: d0026cf57fc1ce9327f61259a831336d1112c4b6 |
-| 2026-09-14T22:40:00Z | G6-01 — Gate rule established | RULE: delete obsolete legacy tests; keep only Cloudflare admin test suite as gate for G6-01; do not mask failures; remove proxyToVercel after real consumers covered |
-| 2026-09-15T00:19:21Z | G6-01 — Admin endpoints & dashboard | PASS — autorização Cloudflare baseada em `user_profiles`; contrato `/api/admin/users` alinhado ao frontend. |
-| 2026-09-15T01:30:00Z | G6-01 — Cloudflare Admin final gate | **PASS** — removidos valores fabricados de NVIDIA/9Router, uptime e métricas de IA; `/api/admin/overview` agora retorna somente KPIs derivados do banco e observabilidade explicitamente delegada à Fase 13; suíte `cloudflare/routes/admin.test.ts` é a fonte autoritativa; proxy `/api/admin/*` para Vercel removido do Worker. Commits: `31be199`, `5443fd2`, `a740539`. |
-| 2026-09-15T01:58:35Z | G6-02 — Marketing/Meta Cloudflare | **PASS** — Cloudflare Deploy ✓ (Test Phase 10 marketing, Phase 8 persistence, build+deploy, Vectorize); engine cloudflare-meta; sem proxyToVercel p/ /api/marketing/*; commit e73bd99 |
-| 2026-09-15T02:20:00Z | G6-03 — WhatsApp/Comunicação Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 11 WhatsApp communication, Phase 8 persistence, Phase 10 marketing, Phase 11, build+deploy); send/send-media/send-document/status/qrcode/webhook-config + webhook; Evolution API único gateway; sem fallback Vercel. Commits: ffbe591, 387687a, fb948e2, b97dc05, 9d546aa |
-| 2026-09-15T02:40:00Z | G6-04 — Payments/Comercial Cloudflare | **IMPLEMENTAÇÃO** — resolve-price/PIX/cartão/webhook no Worker; preço server-authoritative; webhook com assinatura e idempotência; suíte autoritativa cloudflare/routes/payments.test.ts (6 casos); step CI Fase 12 adicionado; GATE PENDENTE deploy |
-| 2026-09-15T02:21:05Z | G6-04 — Payments/Comercial Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 12 payments 6/6, build+deploy); preço server-authoritative; webhook assinatura+idempotente; sem fallback Vercel; commit b8e9341 |
-| 2026-09-15T02:50:00Z | G6-05 — Observabilidade/Métricas IA Cloudflare | **IMPLEMENTAÇÃO** — ai.ts instrumenta ai_execution_logs; /api/admin/ai/metrics agrega 24h real (errorRate, avg, p50/p95/p99); overview aponta historicalMetrics:true; suíte autoritativa admin.ai-metrics.test.ts (3 casos); GATE PENDENTE deploy |
-| 2026-09-15T02:40:05Z | G6-05 — Observabilidade/Métricas IA Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 13 AI observability 3/3, build+deploy); ai_execution_logs real; endpoint /api/admin/ai/metrics sem fabricação; commit 5624f87 |
-| 2026-09-15T03:00:00Z | G6-06 — OCR Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 2 OCR 2/2, build+deploy); sem proxyToVercel /api/ocr/analyze; commit 079811a |
-| 2026-09-15T03:15:00Z | G6-07 — Knowledge/RAG Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 3 Knowledge 2/2, build+deploy); sem proxyToVercel /api/knowledge/*; commit 921903a |
-| 2026-09-15T03:30:00Z | G6-08 — AI Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 4 AI 2/2, build+deploy); sem proxyToVercel /api/ai/*; commit c377824 |
-| 2026-09-15T03:45:00Z | G6-09 — Commercial Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 5 Commercial 2/2, build+deploy); sem proxyToVercel /api/commercial/*; commit 04ba091 |
-| 2026-09-15T04:00:00Z | G6-10 — Documents Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 6 Documents 1/1, build+deploy); sem proxyToVercel /api/documents/*; commit 2df63f3 |
-| 2026-09-15T04:15:00Z | G6-11 — Notifications/Audit Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 8 persistence); build+deploy ✓; sem proxyToVercel /api/notifications/*; commit 0e5d227 |
-| 2026-09-15T04:30:00Z | G6-12 — Admin Cloudflare | PASS — Cloudflare Deploy ✓ (Test Phase 9 Admin 5/5, build+deploy); sem proxyToVercel /api/admin/*; commit 12b52a3 |
-| 2026-09-15T04:45:00Z | G6-13 — Automação Cloudflare | CANCELADO — teste de automação removido do CI; não é requisito do gate de G6-03/Phase 11. Não deve ser tratado como gate PASS. |
-| 2026-09-15T15:58:33Z | G1-01 — Schema de banco e RLS (projeto incorreto) | **INVALIDADO** — a evidência anterior consultou o projeto Supabase errado `llmxnpgjpxcvyrqjkfwb` e não deve ser usada como gate. |
-| 2026-09-15T16:20:00Z | G1-01 — Schema de banco e RLS (projeto correto) | **VALIDADO** — projeto Supabase autoritativo `sgomwklorpzdwdubtmgg`; 88 migrações registradas em `supabase_migrations.schema_migrations`; `public.cases` e `public.profiles` com RLS habilitado; 3 policies em `cases` e 2 em `profiles`. Evidência: `loop/evidence/G1-01-2026-09-15.md`. Commit de evidência: `d166fd9280619455b25525090370796e72449435`. |
-| 2026-09-21 | FASE 17 — Realinhamento Supabase canônico | **REALINHADO** — FASE 17 concluída (commits `7f2c233` + `d44b82a`): projeto Supabase canônico corrigido para `llmxnpgjpxcvyrqjkfwb`, conforme `supabase/config.toml` e toda a configuração de deploy (vercel.json, .dev.vars, cloudflare/.dev.vars, scripts/). Referências a `sgomwklorpzdwdubtmgg` como "autoritativo"/"projeto correto" tornam-se histórico desatualizado. Entradas G1-01 pré-FASE 17 (incl. linha 67 `VALIDADO — sgomwklorpzdwdubtmgg` e a entrada `INVALIDADO` de 2026-09-15T15:58:33Z) foram invalidadas pelo realinhamento — mantidas como registro histórico, sem edição. Docs anotados aditivamente: `loop/evidence/G1-01-2026-09-15.md`, `AUDIT_REPORT.md`, `docs/recovery/FASE-17-REALINHAMENTO-GIT-CLOUDFLARE-DOMINIO-2026-09-21.md`. |
-| 2026-09-21 | FASE 18 — Auth + RLS + Storage (canônico `llmxnpgjpxcvyrqjkfwb`) | **CONCLUÍDA** — FASE 18 executada integralmente no Supabase canônico `llmxnpgjpxcvyrqjkfwb` (`supabase/config.toml`; `sgomwklorpzdwdubtmgg` continua PROIBIDO/histórico). Hardening: messaging_messages RLS OFF→ON (fechou ERROR do advisor, 13 linhas estavam expostas); escalação de role em user_profiles fechada (INSERT próprio role 'citizen' obrigatório + UPDATE próprio preserva role via current_role_name(), drop da policy legada user_profiles_update_own); recursão RLS latente eliminada via is_admin()/current_role_name() SECURITY DEFINER (policies self-referenciais reescritas); app_settings_select_public restrita a is_public=true; documents + notification_subscriptions com policies de ownership; storage case-documents com policies por cadeia case→user; search_path de domain_to_uuid e update_documenso_envelopes_updated_at fixado para pg_catalog. 4 migrations criadas/aplicadas (20260921000001…0004). Testes de isolamento reais (simulação JWT + ROLLBACK, 12 cenários) todos PASS: cidadão A × B zero vazamento em cases/documents/storage; anon bloqueado; escalação 42501; update legítimo preservado. Advisor security: ERROR 1→0, search_path 2→0, no-policy 17→16 (deny-all intencionais B-classe). Build ✅; tsc: 59 erros pré-existentes intocados. Pendências: leaked password protection (dashboard, externo), extensões em public (vector/pg_trgm/citext), rotação de chaves adiada — sync obrigatório .env/.dev.vars/cloudflare/.dev.vars/.env.audit-e2e/CF Workers/painel no momento da rotação. Doc: docs/recovery/FASE-18-AUTH-RLS-STORAGE-2026-09-21.md. **Follow-up (drift)**: RLS de messaging_contacts/messaging_conversations (habilitadas via MCP durante a fase, fora de migration) versionado em migration nova `20260921000005_fase_18_messaging_rls_contacts_conversations.sql` (aplicada no canônico, idempotente) — deny-all sem policies, coerente com messaging_messages; 3 tabelas de messaging RLS ON versionadas. |
-| 2026-09-21 | FASE 19 — Golden Path E2E (canônico `llmxnpgjpxcvyrqjkfwb`) | **CONCLUÍDA (core) com pendências registradas** — jornada vertical real provada por integração 6/6 contra o canônico: auth (login real) → POST /api/cases (persistência em public.cases, user_id do JWT, análise determinística RagPipeline) → upload PDF em case-documents (path `<case_id uuid>/<arquivo>`, policies FASE 18) → list → download (URL assinada server-side) → delete (objeto + registro) → isolamento entre usuários (403 list/download/delete). Wire: rota `src/server/routes/documents.ts` (GET/POST/DELETE + signed download, service_role server-side, zero service_role no frontend) + UI `src/components/cases/CaseDocumentsSection.tsx` montada na CaseDetailView (stage 4) + sync de types documents (storage_path/mime_type/size_bytes/content_hash/generated_at) em src/types/supabase.ts e src/lib/supabase.ts. Gap de schema real corrigido: `applicant_json` de cases ausente no canônico (migration repo 2026-09-08 nunca aplicada) → migration nova `20260921000006_fase_19_add_applicant_json_cases.sql` aplicada (aditiva/idempotente). Bucket case-documents respeitado: privado, 10MB, allowed_mime_types=['application/pdf']. Build ✅ (27.34s); tsc 59 erros (0 novos); vitest: 778 pass / 34 fail — **34 falhas pré-existentes confirmadas no HEAD 772e024 via stash** (auth-middleware-p0, routes-cases-legal-authority-p0, case-deletion-lgpd, payments, webhook-verification) — zero regressão. Pendências: E2E Playwright de tela (requer PLAYWRIGHT_BASE_URL https + creds Actions), defesa com refinamento IA real, PIX/webhook real (P0 da auditoria Fase 4, fora do critério). Doc: docs/recovery/FASE-19-GOLDEN-PATH-2026-09-21.md. |
-| 2026-09-23 | FASE 0 — Inventário Forense do Banco Atual + Git | **CONCLUÍDA (somente leitura)** — canônico confirmado como `llmxnpgjpxcvyrqjkfwb` (ACTIVE_HEALTHY); 60 `cases`, 14 `payment_orders`, 4 `auth.users`, 4 `user_profiles`, 3 `e2e_test_runs`, 36 `e2e_test_results`; 52 tabelas public com RLS, 153 policies, 6 buckets/8 objetos; 64 registros de migration remotos vs 41 arquivos SQL de migration no Git; projeto histórico `sgomwklorpzdwdubtmgg` permanece inacessível (permission denied). Nenhuma alteração em banco/schema/Auth/Storage/RLS. Doc: `docs/recovery/FASE-0-INVENTARIO-FORENSE-2026-09-23.md`. **Próxima:** FASE 1 — matriz de lineage migration→schema→dados, também somente leitura. |
-| 2026-09-23 | FASE 1 — Matriz de Lineage Migration → Schema → Dados | **CONCLUÍDA (somente leitura)** — `sgomwklorpzdwdubtmgg` tratado como definitivamente perdido; schema histórico classificado como majoritariamente reconstruível pelo Git; dados históricos não presentes no banco sobrevivente/Git classificados como PERDIDOS/KNOWLEDGE_GAP; migrations não serão reaplicadas cegamente. Doc: `docs/recovery/FASE-1-MATRIZ-LINEAGE-2026-09-23.md`. **Próxima:** FASE 2 — reconstrução da especificação/schema baseline, ainda sem aplicar migrations. |
-| 2026-09-23 | FASE 2 — Reconstrução da Especificação do Schema | **CONCLUÍDA (somente leitura)** — baseline lógica consolidada em camadas; identificados domínios, migrations de criação/correção/hardening, timestamp duplicado e regra de não concatenar migrations cegamente. Nenhuma alteração aplicada. Doc: `docs/recovery/FASE-2-RECONSTRUCAO-SCHEMA-2026-09-23.md`. **Próxima:** FASE 3 — construir baseline SQL consolidada, ainda sem aplicar. |
-| 2026-09-23 | FASE 3 — Construção da Baseline SQL | **EXECUTADA — baseline estrutural construída, sem aplicação no Supabase.** 52 tabelas, PKs, FKs, RLS, defaults/checks e extensões observadas. Fechamento das 153 policies, funções, triggers e validação isolada ainda pendentes. Docs: `docs/recovery/FASE-3-BASELINE-SQL-2026-09-23.md`. **Próxima:** fechar objetos de segurança/dependências e então validar a baseline em ambiente descartável. |
-| 2026-09-23 | FASE 3 — Auditoria de Superengenharia | **EXECUTADA (somente leitura)** — cruzamento inicial do schema canônico com as principais rotas do código. Confirmado núcleo `cases`, `documents`, `payment_orders`, `user_profiles`; módulos de marketing/comercial também possuem consumidores. Diversos objetos ainda não têm consumidor direto nas rotas auditadas e permanecem INDETERMINADOS até cruzamento com services/repositories/workers/funções SQL. Nenhuma remoção ou alteração no banco. Doc: `docs/recovery/FASE-3-AUDITORIA-SUPERENGENHARIA-2026-09-23.md`. **Próxima:** fechar auditoria de dependências antes de completar a baseline de funções/policies. |
+Snapshot confirmado no banco:
 
+- Tabelas públicas atuais: 52
+- Tabelas no backup: 55
+- `auth.users`: 4 registros
+- `storage.buckets`: 6 registros
+- `storage.objects`: 8 registros
+- `cases`: 60 registros
+- `user_profiles`: 4 registros
+- `payment_orders`: 14 registros
 
-| 2026-09-23 | FASE 3 — Auditoria interna de dependências | **EXECUTADA (somente leitura)** — segunda rodada cruzou services, repositories, workers e funções/triggers PostgreSQL. Confirmados como ativos: comercial (service_pricings, promotion_campaigns, coupons, ledgers, referrals, audit), marketing/automação, messaging, Knowledge/pgvector, Auth/user_profiles e platform_events. Confirmado excesso técnico localizado: dois triggers equivalentes de updated_at em user_profiles. Nenhuma remoção aplicada. Ainda pendente fechar grupos paralelos de pagamentos/comercial/Documenso/observabilidade/notificações contra Golden Path antes da baseline definitiva. Doc atualizado: `docs/recovery/FASE-3-AUDITORIA-SUPERENGENHARIA-2026-09-23.md`. **Próxima:** auditoria final dos grupos paralelos + fechamento da baseline de funções/triggers/policies. |
+A migration remota criada para registrar esta operação é:
 
-| 2026-09-23 | FASE 3 — Fechamento dos grupos paralelos | **EXECUTADA (somente leitura)** — pagamentos atuais confirmados em `payment_orders` + `payment_webhook_events`; `payments`/`payment_events` classificados como legado provável; comercial atual confirmado no `commercial-repository`, enquanto `commercial_offers`/`commercial_orders` e tabelas paralelas `promotions`/`commissions` ficaram como legado provável; Documenso confirmado como ATIVO MODULAR; notificações atuais são em memória e tabelas persistentes ficaram indeterminadas/legado provável; observabilidade/auditoria ainda requer fechamento. Nenhuma remoção. Doc: `docs/recovery/FASE-3-AUDITORIA-SUPERENGENHARIA-2026-09-23.md`. **Próxima:** validar contra migrations + Golden Path e fechar baseline definitiva de functions/triggers/policies. |
+`20260923202505_recovery_backup_20260923`
 
-| 2026-09-23 | FASE 3 — Validação final contra migrations + Golden Path | **FECHAMENTO PARCIAL VALIDADO (somente leitura)** — Golden Path 6/6 confirmado para auth→case→análise→documents/storage→download→delete→isolamento; PIX/webhook real e IA real continuam pendentes conforme FASE 19. Snapshot canônico atualizado: 153 policies, 11 triggers públicos e 209 funções públicas. Pagamentos/comercial/Documenso/notificações/observabilidade reclassificados apenas onde há evidência; nenhum legado foi removido. Excesso concreto confirmado: dois triggers equivalentes em user_profiles.updated_at. **Próxima:** gerar baseline definitiva de functions/triggers/policies e validá-la em ambiente descartável, sem aplicar ao canônico. |
+## Limitação importante
 
-| 2026-09-23 | FASE 4 — Baseline Functions/Triggers/Security | **EM EXECUÇÃO** — functions de aplicação capturadas em `supabase/recovery/BASELINE-20260923-FUNCTIONS.sql`; 11 triggers públicos capturados em `supabase/recovery/BASELINE-20260923-TRIGGERS.sql`; policies: 153 no canônico, extração completa ainda pendente. Security Advisors: 16 tabelas RLS sem policies, vector/pg_trgm/citext em public, `current_role_name()`/`is_admin()` SECURITY DEFINER executáveis externamente e leaked-password protection desabilitada. Nenhuma correção ou alteração no canônico executada. Doc: `docs/recovery/FASE-4-BASELINE-SECURITY-2026-09-23.md`. | 
+Este backup é um **snapshot de dados dentro do próprio banco**, não um dump físico completo do PostgreSQL.
 
-| 2026-09-23 | FASE 4 — Baseline Functions/Triggers/Security | **BASELINE CAPTURADA** — 13 funções próprias da aplicação identificadas e materializadas; 11 triggers públicos + 2 triggers de `auth.users` capturados; **153/153 policies** extraídas em lotes determinísticos e materializadas em `supabase/recovery/BASELINE-20260923-POLICIES.sql`; criado `supabase/recovery/VERIFY-BASELINE-SECURITY-20260923.sql` para validação somente leitura. Security Advisors continuam com 16 tabelas RLS sem policies, extensões vector/pg_trgm/citext em public, `current_role_name()`/`is_admin()` SECURITY DEFINER executáveis externamente e leaked-password protection desabilitada. Nenhuma correção ou alteração no canônico executada. **Próxima:** validar a baseline em ambiente descartável; se indisponível, executar validação estrutural somente leitura sem escrever no canônico. |
+Ele não copia os bytes físicos dos arquivos armazenados no Storage; copia somente o catálogo `storage.objects` e os metadados dos buckets. Portanto, os 8 objetos devem ser tratados separadamente antes de qualquer limpeza que possa remover seus arquivos.
 
-| 2026-09-23 | FASE 4 — Validação estrutural do baseline | **VALIDAÇÃO SOMENTE LEITURA CONCLUÍDA** — canônico confirmou 153 policies, 11 triggers públicos não internos e **203 funções públicas** no snapshot atual. A decomposição atual é 27 funções SQL/PLpgSQL, das quais 14 pertencem à extensão citext e 13 são da aplicação; o registro anterior de 209 funções foi identificado como snapshot anterior e corrigido. RLS sem policy permanece em 16 tabelas, sem alteração. Baselines não foram aplicadas ao canônico. Próxima: validação em ambiente descartável ou, na ausência de ambiente/crédito, seguir com fechamento estrutural/documental sem escrita no canônico. |
-| 2026-09-23 | FASE 5 — Backup para reconstrução | **BACKUP MATERIALIZADO E VERIFICADO** — criado no próprio projeto canônico o schema temporário `recovery_backup_20260923`, com snapshots das 52 tabelas públicas + `auth.users` + `storage.buckets` + `storage.objects` (55 tabelas). Verificados: 4 usuários, 6 buckets, 8 objetos, 60 cases, 4 profiles e 14 payment_orders. Migration remota registrada como `20260923202505_recovery_backup_20260923`. Nenhuma tabela de produção foi apagada/truncada. O backup não substitui dump físico nem preserva os bytes dos arquivos do Storage; essa limitação está documentada em `docs/recovery/FASE-5-BACKUP-RECONSTRUCAO-2026-09-23.md`. **Próxima:** validar Storage e preparar ordem de limpeza/reconstrução antes de qualquer DROP/TRUNCATE. |
+Também não substitui os baselines estruturais já versionados em `supabase/recovery/`.
+
+## Regra para a próxima fase
+
+**NÃO executar DROP/TRUNCATE ainda.**
+
+Antes da limpeza:
+
+1. validar todos os snapshots;
+2. validar os objetos reais do Storage;
+3. registrar a correspondência entre backup e baseline;
+4. preparar a ordem de reconstrução;
+5. somente então executar a limpeza controlada.
+
+## Estado
+
+**FASE 5 — BACKUP E PREPARAÇÃO: EM VALIDAÇÃO.**
+
+Nenhuma tabela de produção foi apagada ou truncada.
+
+| 2026-09-23 | FASE 5 — Fechamento do backup e preparação da reconstrução | **CONCLUÍDA COM RESSALVA CONTROLADA** — snapshot no mesmo canônico validado: 52/52 tabelas públicas com contagens idênticas no backup; 4 auth.users, 6 buckets e 8 storage.objects preservados; metadados dos 8 arquivos registrados. Não foi possível obter verificação independente dos bytes do Storage neste ambiente, portanto nenhum objeto físico será apagado na próxima fase. Criado `supabase/recovery/VERIFY-RECOVERY-BACKUP-20260923.sql` e manifesto com ordem de reconstrução. Nenhum DROP/TRUNCATE executado. **Próxima:** FASE 6 — inventário estrutural final e saneamento da baseline executável. |
