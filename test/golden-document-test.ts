@@ -1020,8 +1020,9 @@ async function evaluateTestCase(testCase: GoldenDocumentTestCase): Promise<Golde
       const avgScore = scores.reduce((sum, val) => sum + val, 0) / scores.length;
       testCase.verdict = avgScore >= 3.5 ? 'PASS' : 'FAIL'; // 70% threshold
     }
+    }
     
-  } catch (error) {
+   catch (error) {
     console.error(`Error evaluating ${testCase.id}:`, error);
     testCase.criticalFailure = `Execution error: ${error.message}`;
     testCase.verdict = 'FAIL';
