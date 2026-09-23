@@ -126,6 +126,33 @@ Documento: docs/recovery/FASE-7-CATALOGO-MESTRE-FONTES-JURIDICAS-2026-09-23.md
 
 Nenhum documento jurídico foi inserido no RAG nesta fase. Nenhuma tabela de produção foi alterada.
 
+
+# FASE 8 — Coleta e Inventário Documental Oficial — 2026-09-23
+
+## Resultado
+
+**PARCIAL — coleta inicial de documentos federais executada, inventário iniciado.**
+
+Foram coletados com sucesso dois documentos federais acessíveis diretamente via HTTP:
+- Código de Trânsito Brasileiro (CTB) compilado (HTML) do Planalto.
+- Página inicial do portal de multas do DNIT.
+
+Foram identificadas fontes que requerem investigação adicional devido a bloqueios ou caminhos alternativos (CONTRAN, SENATRAN, INMETRO, DOU, STJ).
+
+O inventário documental foi iniciado e registrado em:
+`docs/recovery/FASE-8-INVENTARIO-DOCUMENTAL-OFICIAL-2026-09-23.md`
+
+### Evidências de Coleta
+- Arquivo ctb.html com hash SHA-256: 6a5e7d4ce6bd582acb0244b4b8a75837bb4cabc634842bbee2c99a58194e7d2e
+- Arquivo dnit.html com hash SHA-256: 67debf6e429639a2e6f504e5f78434ca68b3e34961a971d6bcd9cdafb612ad7a
+
+## Classificação
+
+- **COLETADO:** documentos acessíveis diretamente via HTTP sem autenticação.
+- **BLOQUEADO/REQUER INVESTIGAÇÃO:** fontes que retornam erro ou requerem caminhos alternativos (ex: CONTRAN resolutions).
+- **PENDENTE:** fontes federais restantes e todas as 27 UFs.
+
 ## Próxima fase
 
-**FASE 8 — Coleta e Inventário Documental Oficial**, iniciando pelas fontes federais e depois pelas 27 UFs.
+**FASE 9 — Expansão da coleta para as 27 UFs e validação documental** (se aplicável).
+
