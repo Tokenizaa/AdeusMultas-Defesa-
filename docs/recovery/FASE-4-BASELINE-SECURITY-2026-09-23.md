@@ -13,9 +13,9 @@ Projeto canônico: `llmxnpgjpxcvyrqjkfwb`
 Foi feita a separação entre funções próprias da aplicação e funções fornecidas por extensões.
 
 Snapshot:
-- 209 funções públicas no total;
+- 203 funções públicas no total (snapshot atual; o número 209 registrado anteriormente era um snapshot anterior e foi corrigido nesta rodada);
 - 161 funções em C, 15 internas e 27 em SQL/PLpgSQL;
-- funções extension-owned foram identificadas e excluídas da baseline da aplicação;
+- 14 das 27 funções SQL/PLpgSQL são extension-owned (citext) e foram excluídas da baseline da aplicação; as 13 restantes são funções próprias da aplicação;
 - 13 funções SQL/PLpgSQL não pertencentes a extensões foram capturadas integralmente em `supabase/recovery/BASELINE-20260923-FUNCTIONS.sql`.
 
 Funções de aplicação capturadas:
@@ -112,7 +112,7 @@ Sequência:
 
 **FASE 4 — BASELINE DE SEGURANÇA CAPTURADA.**
 
-Functions: **CAPTURADAS — 13 de aplicação**  
+Functions: **CAPTURADAS — 13 de aplicação; 14 funções SQL de extensão excluídas**  
 Triggers: **CAPTURADOS — 11 públicos + 2 auth.users**  
 Policies: **CAPTURADAS — 153/153**  
 Verificação: **CRIADA**  
