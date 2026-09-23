@@ -60,3 +60,44 @@ Antes da limpeza:
 Nenhuma tabela de produção foi apagada ou truncada.
 
 | 2026-09-23 | FASE 5 — Fechamento do backup e preparação da reconstrução | **CONCLUÍDA COM RESSALVA CONTROLADA** — snapshot no mesmo canônico validado: 52/52 tabelas públicas com contagens idênticas no backup; 4 auth.users, 6 buckets e 8 storage.objects preservados; metadados dos 8 arquivos registrados. Não foi possível obter verificação independente dos bytes do Storage neste ambiente, portanto nenhum objeto físico será apagado na próxima fase. Criado `supabase/recovery/VERIFY-RECOVERY-BACKUP-20260923.sql` e manifesto com ordem de reconstrução. Nenhum DROP/TRUNCATE executado. **Próxima:** FASE 6 — inventário estrutural final e saneamento da baseline executável. |
+
+
+# FASE 6 — Auditoria da Base Jurídica/RAG — 2026-09-23
+
+## Resultado
+
+**CONCLUÍDA — auditoria executada sem alterações de dados.**
+
+A verificação direta do Supabase confirmou zero registros nas seis tabelas RAG, tanto no canônico quanto no snapshot de backup:
+
+- knowledge_sources: 0
+- knowledge_documents: 0
+- knowledge_document_versions: 0
+- knowledge_chunks: 0
+- knowledge_embeddings: 0
+- knowledge_ingestions: 0
+
+O Git histórico, entretanto, preserva evidências da arquitetura RAG, ingestão, busca vetorial, catálogo jurídico determinístico, temporalidade, jurisdição, Knowledge Gap e monitoramento nacional.
+
+### Classificação
+
+- **RECUPERADO:** estrutura RAG, função de busca, arquitetura de ingestão/versionamento e parte dos catálogos jurídicos do código.
+- **RECONSTRUÍVEL:** base documental jurídica e embeddings, mediante coleta/validação de fontes oficiais.
+- **PERDIDO:** registros históricos efetivamente armazenados nas tabelas RAG e embeddings correspondentes.
+- **KNOWLEDGE_GAP:** volume histórico, lista completa de documentos e eventual jurisprudência não preservada.
+
+### Evidências Git
+
+- 5a6b832e0799fda8786371a764186f4b6347a2ed — migração Knowledge RAG para Vectorize.
+- e4f7f86433eb0619bd00e381a75cac865203f0b9 — rotas Knowledge RAG.
+- 921903a8e2ccc31c3c68cd1bc26a0bc437c4a783 — fase Cloudflare Knowledge/RAG.
+- 9326bdca99ccafc96ec34b2b23c8d4b373a6f34e — monitor nacional e Knowledge Hub.
+- 75609a241a46dcf4dab2cc7cb99cefa4eb0cc121 — composição determinística, validação e Knowledge Gap.
+
+Documento completo: docs/recovery/FASE-6-BASE-JURIDICA-RAG-2026-09-23.md
+
+## Próxima fase
+
+**FASE 7 — Catálogo Mestre de Fontes Jurídicas.**
+
+Antes de qualquer ingestão, mapear fontes oficiais, autoridade, jurisdição, vigência, URL, cobertura por serviço e estratégia de versionamento. Nenhum conteúdo jurídico será inventado.
