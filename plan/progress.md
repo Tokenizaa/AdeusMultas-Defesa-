@@ -2,7 +2,7 @@
 
 ## Resultado
 
-**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso, coleta estadual iniciada e avançada com AC (Acre) e AL (Alagoas).**
+**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso, coleta estadual iniciada e avançada com AC (Acre), AL (Alagoas) e AM (Amazonas).**
 
 Foram coletados com sucesso todos os documentos oficiais federais acessíveis diretamente via HTTP:
 - Código de Trânsito Brasileiro (CTB) compilado (HTML e PDF) do Planalto.
@@ -20,6 +20,11 @@ No estado do Acre (AC), foram coletados documentos iniciais do DETRAN-AC:
 
 No estado de Alagoas (AL), foram coletados documentos do CETRAN-AL:
 - Três resoluções do CETRAN-AL (ex: RESOLUÇÃO CETRAN Nº 01/2000, RESOLUÇÃO CETRAN Nº 04/2002, RESOLUÇÃO CETRAN Nº 02/2000) acessíveis via página de legislatura do CETRAN-AL.
+
+No estado do Amazonas (AM), foram coletados documentos do DETRAN-AM:
+- Duas portarias normativas (No. 015/2026 e No. 014/2026).
+- Um memorando (MEMO N° 753/2026 - OPTRAN DETRAN).
+- Duas portarias numeradas (01.03.011210.078105/2026-96 e 01.03.011210.083647/2026-80).
 
 O inventário documental foi atualizado e registrado em:
 `docs/recovery/FASE-8-INVENTARIO-DOCUMENTAL-OFICIAL-2026-09-23.md`
@@ -47,21 +52,35 @@ O inventário documental foi atualizado e registrado em:
 - Arquivo resolucao_cetran_al_04_2002.pdf com hash SHA-256: f5b987626dde593893ce794da517d15271ef140b16ca3e0ab854175cbdde9796
 - Arquivo resolucao_cetran_al_02_2000.pdf com hash SHA-256: 2abb3ef1254836bf41eabf59c950fe2a80b7828e60d690dd2f4e63fc05ae06f0
 
+### Evidências de Coleta Estadual (AM)
+- Arquivo portaria_normativa_015_2026.pdf com hash SHA-256: 08add6a30898435dd9ab9ef4c16921d46fd4a79ab0ab9325ae0e9154ee14b020
+- Arquivo portaria_normativa_014_2026.pdf com hash SHA-256: 84772aed1d7464653f236b6e4d8fde92325de0f303687da7845a24e361a4f057
+- Arquivo memo_753_2026_opttran_detran.pdf com hash SHA-256: c52bb2a6c4c005407bce225a26f4be15ea0e38dc4f96d25b94feb62e93dd70b8
+- Arquivo portaria_01_03_011210_078105_2026_96.pdf com hash SHA-256: 5192f8b88dc0466a0993b667eb4f05b209bde835368d19aa3d8765cdf1c637c3
+- Arquivo portaria_01_03_011210_083647_2026_80.pdf com hash SHA-256: 82e54883faf4d63177788b9ff629d8b0907a6a98cb50e2d81b129471ed3af0de
+
 ## Classificação
 
 - **COLETADO FEDERAL:** 9 fontes oficiais federais, total de 10 documentos coletados (incluindo variações).
 - **COLETADO ESTADUAL (AC):** DETRAN-AC - 4 documentos coletados (1 formulário de defesa prévia, 3 portarias). Coleta inicial concluída; documentos adicionais requerem busca mais aprofundada ou acesso a sistemas internos.
 - **COLETADO ESTADUAL (AL):** CETRAN-AL - 3 documentos coletados (resoluções CETRAN-AL). DETRAN-AL acessível porém sem links óbvios para formulários de defesa em inspeção superficial.
-- **BLOQUEADO ESTADUAL:** CETRAN-AC (DNS não resolve) - requer investigação de URL alternativa ou confirmação de inaccessibilidade.
-- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com AP (Amapá) seguindo a mesma metodologia.
-- **PENDENTE:** Restante das 24 UFs (AM, BA, CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em preparação).
+- **COLETADO ESTADUAL (AM):** DETRAN-AM - 5 documentos coletados (2 portarias normativas, 1 memo, 2 portarias numeradas). CETRAN-AM inaccessível.
+- **BLOQUEADO/INACESSÍVEL ESTADUAL:** 
+  * CETRAN-AC (DNS não resolve) - requer investigação de URL alternativa ou confirmação de inaccessibilidade.
+  * DETRAN-AP (acesso restrito, possivelmente bloqueio ou reestruturação).
+  * CETRAN-AP (sem resposta).
+  * CETRAN-AM (sem resposta).
+- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com BA (Bahia) seguindo a mesma metodologia.
+- **PENDENTE:** Restante dos estados (CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em investigação, BA em preparação).
 
 ## Próximos passos dentro da FASE 8
 1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
 2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
 3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
-4. Após concluir AL, passar para o estado seguinte (AP) seguindo a mesma sequência.
-5. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
+4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
+5. Para o AP, investigar as causas do acesso restrito e tentar acessar via transparência ou outros portais.
+6. Após concluir AM, passar para o estado seguinte (BA) seguindo a mesma sequência.
+7. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
 
 ## Próxima fase (após conclusão da FASE 8)
 

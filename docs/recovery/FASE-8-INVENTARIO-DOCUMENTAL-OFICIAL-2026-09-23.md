@@ -38,11 +38,24 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_AL_CETRAN_RESOLUCAO_04_2002 | CETRAN-AL | Estadual | AL | Resolução | RESOLUÇÃO CETRAN Nº 04/2002 | https://www.cetran.al.gov.br/legislacao/resolucoes | https://www.cetran.al.gov.br/legislacao/resolucoes?task=download.send&id=71&catid=87&m=0 | f5b987626dde593893ce794da517d15271ef140b16ca3e0ab854175cbdde9796 | 2026-09-23T23:01:00Z | COLLECTED | legal_collected_2026_09_23/states/AL/resolucao_cetran_al_04_2002.pdf |
 | SRC_AL_CETRAN_RESOLUCAO_02_2000 | CETRAN-AL | Estadual | AL | Resolução | RESOLUÇÃO CETRAN Nº 02/2000 | https://www.cetran.al.gov.br/legislacao/resolucoes | https://www.cetran.al.gov.br/legislacao/resolucoes?task=download.send&id=69&catid=87&m=0 | 2abb3ef1254836bf41eabf59c950fe2a80b7828e60d690dd2f4e63fc05ae06f0 | 2026-09-23T23:02:00Z | COLLECTED | legal_collected_2026_09_23/states/AL/resolucao_cetran_al_02_2000.pdf |
 
+### Estaduais - Amazonas (AM)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_AM_DETRAN_PORTARIA_NORMATIVA_015_2026 | DETRAN-AM | Estadual | AM | Portaria | PORTARIA NORMATIVA No. 015/2026 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/07/PORTARIA-NORMATIVA-No-015.pdf | 08add6a30898435dd9ab9ef4c16921d46fd4a79ab0ab9325ae0e9154ee14b020 | 2026-09-23T23:30:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_normativa_015_2026.pdf |
+| SRC_AM_DETRAN_PORTARIA_NORMATIVA_014_2026 | DETRAN-AM | Estadual | AM | Portaria | PORTARIA NORMATIVA No. 014/2026 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/07/PORTARIA-NORMATIVA-No-014.pdf | 84772aed1d7464653f236b6e4d8fde92325de0f303687da7845a24e361a4f057 | 2026-09-23T23:31:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_normativa_014_2026.pdf |
+| SRC_AM_DETRAN_MEMO_753_2026 | DETRAN-AM | Estadual | AM | Memo | MEMO N° 753/2026 - OPTRAN DETRAN | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/MEMO_N_753_2026_OPTRAN_DETRAN_Portaria.pdf | c52bb2a6c4c005407bce225a26f4be15ea0e38dc4f96d25b94feb62e93dd70b8 | 2026-09-23T23:32:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/memo_753_2026_opttran_detran.pdf |
+| SRC_AM_DETRAN_PORTARIA_01_03_011210_078105_2026_96 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.078105/2026-96 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.078105_2026_96_Portaria.pdf | 5192f8b88dc0466a0993b667eb4f05b209bde835368d19aa3d8765cdf1c637c3 | 2026-09-23T23:33:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_078105_2026_96.pdf |
+| SRC_AM_DETRAN_PORTARIA_01_03_011210_083647_2026_80 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.083647/2026-80 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.083647_2026_80_Portaria.pdf | 82e54883faf4d63177788b9ff629d8b0907a6a98cb50e2d81b129471ed3af0de | 2026-09-23T23:34:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_083647_2026_80.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
 |----|-------|------------|-------------|--------|-------------|
 | SRC_AC_CETRAN_PORTAL | CETRAN-AC | Estadual | AC | Portal indisponível (DNS não resolve) | O URL oficial https://www.cetran.ac.gov.br não resolve. Tentativo de acesso falhou com erro de DNS. Necessário verificar URL alternativa ou confirmar inaccessibilidade. |
+| SRC_AP_DETRAN_PORTAL | DETRAN-AP | Estadual | AP | Acesso restrito (404/Not Found ou bloqueio) | O portal do DETRAN-AP retorna erros 404 para páginas como /recursos e /servicos, possivelmente devido a bloqueio ou reestruturação. |
+| SRC_AP_CETRAN_PORTAL | CETRAN-AP | Estadual | AP | Sem resposta | O portal do CETRAN-AP não respondeu às solicitações (conexão encerrada ou sem resposta). |
+| SRC_AM_CETRAN_PORTAL | CETRAN-AM | Estadual | AM | Sem resposta | O portal do CETRAN-AM não respondeu às solicitações (conexão encerrada ou sem resposta). |
 
 ## Estatísticas da Coleta
 
@@ -67,13 +80,21 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0 (DETRAN-AL acessível porém sem links óbvios para formulários de defesa; CETRAN-AL acessível com resoluções disponíveis)
 - Fontes pendentes de análise: 0
 
+### Estadual (AM)
+- Fontes oficiais identificadas (AM): 2 (DETRAN-AM e CETRAN-AM)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 5
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AM inaccessível)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
 2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
 3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
-4. Após concluir AL, passar para o próximo estado (AP) seguindo a mesma sequência.
-5. Atualizar o inventário com os resultados de cada etapa.
-6. Gerar relatório final de cobertura documental quando todos os estados forem processados.
+4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
+5. Após concluir AM, passar para o próximo estado (BA) seguindo a mesma sequência.
+6. Atualizar o inventário com os resultados de cada etapa.
+7. Gerar relatório final de cobertura documental quando todos os estados forem processados.
 
 ## Conclusão
-A infraestrutura de coleta (SourceFetcher, SnapshotStore, etc.) está funcionando corretamente. Foi possível coletar com sucesso todos os documentos jurídicos federais acessíveis diretamente via HTTP. A fase federal está concluída com 100% de coleta bem-sucedida. No estado do Acre (AC), coletamos documentos iniciais do DETRAN-AC, incluindo um formulário de defesa prévia e portarias oficiais. O CETRAN-AC permanece inaccessível devido à falha de resolução de DNS, requerendo investigação adicional. No estado de Alagoas (AL), coletamos três resoluções do CETRAL (CETRAN-AL) acessíveis via página de legislatura. O DETRAN-AL é acessível porém não apresentou links óbvios para formulários de defesa específicos em uma inspeção superficial. A coleta estadual prosseguirá com o estado seguinte (AP) após a conclusão dos trabalhos no AL.
+A infraestrutura de coleta (SourceFetcher, SnapshotStore, etc.) está funcionando corretamente. Foi possível coletar com sucesso todos os documentos jurídicos federais acessíveis diretamente via HTTP. A fase federal está concluída com 100% de coleta bem-sucedida. No estado do Acre (AC), coletamos documentos iniciais do DETRAN-AC, incluindo um formulário de defesa prévia e portarias oficiais. O CETRAN-AC permanece inaccessível devido à falha de resolução de DNS, requerendo investigação adicional. No estado de Alagoas (AL), coletamos três resoluções do CETRAN-AL acessíveis via página de legislatura. O DETRAN-AL é acessível porém não apresentou links óbvios para formulários de defesa específicos em uma inspeção superficial. No estado do Amazonas (AM), coletamos cinco documentos do DETRAN-AM, incluindo portarias normativas e memorandos. O CETRAN-AM permanece inaccessível. A coleta estadual prosseguirá com o estado seguinte (BA) após a conclusão dos trabalhos no AM.
