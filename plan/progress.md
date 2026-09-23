@@ -101,3 +101,31 @@ Documento completo: docs/recovery/FASE-6-BASE-JURIDICA-RAG-2026-09-23.md
 **FASE 7 — Catálogo Mestre de Fontes Jurídicas.**
 
 Antes de qualquer ingestão, mapear fontes oficiais, autoridade, jurisdição, vigência, URL, cobertura por serviço e estratégia de versionamento. Nenhum conteúdo jurídico será inventado.
+
+
+# FASE 7 — Catálogo Mestre de Fontes Jurídicas — 2026-09-23
+
+## Resultado
+
+**CONCLUÍDA — catálogo de fontes e regras de autoridade definido sem alterações no banco.**
+
+A camada nacional foi estruturada em fontes primárias e institucionais: CTB/legislação federal, CONTRAN, Senatran, MBFT, Manuais de Sinalização e demais atos oficiais. Também foram definidos versionamento, vigência, revogação, jurisdição e relacionamento com os serviços do produto.
+
+Fontes oficiais atuais identificadas:
+- Planalto — CTB compilado;
+- Ministério dos Transportes/Senatran — legislação, resoluções e portarias;
+- catálogo oficial de Resoluções CONTRAN;
+- manuais oficiais Senatran;
+- legislação oficial complementar do Senado.
+
+A auditoria também registrou a necessidade de considerar alterações recentes de 2026 e vigência diferenciada, evitando tratar o texto atual como automaticamente vigente para fatos passados.
+
+Documento: docs/recovery/FASE-7-CATALOGO-MESTRE-FONTES-JURIDICAS-2026-09-23.md
+
+## Regra
+
+Nenhum documento jurídico foi inserido no RAG nesta fase. Nenhuma tabela de produção foi alterada.
+
+## Próxima fase
+
+**FASE 8 — Coleta e Inventário Documental Oficial**, iniciando pelas fontes federais e depois pelas 27 UFs.
