@@ -229,3 +229,81 @@ O achado mais importante é outro: o banco contém uma mistura de **core + módu
 Portanto, a baseline deve continuar sendo construída como **estado final necessário**, mas sem eliminar módulos ativos por estarem vazios.
 
 **Próximo passo:** fechar os grupos paralelos de pagamentos/comercial/Documenso/observabilidade/notificações contra todas as chamadas de código e o Golden Path. Só depois gerar a baseline final de functions/triggers/policies.
+
+
+## Complemento — Fechamento dos grupos paralelos (2026-09-23)
+
+### Pagamentos
+
+O fluxo atual confirma `payment_orders` como fonte operacional principal:
+
+- `src/server/routes/payments.ts` cria/atualiza `payment_orders`;
+- `src/server/db/payment-repository.ts` faz load/upsert de `payment_orders`;
+- o mesmo repository persiste `payment_webhook_events` para idempotência;
+- `admin.ts` usa `payment_orders` para KPIs/admin.
+
+Não foram encontrados consumidores atuais no código auditado para as tabelas paralelas `payments` ou `payment_events`. A tabela `orders` aparece como referência histórica/compatibilidade no domínio de pagamentos, mas não foi comprovado consumidor Supabase ativo nesta rodada.
+
+**Classificação provisória:**
+- `payment_orders` → CORE
+- `payment_webhook_events` → ATIVO/SUPORTE
+- `payments`, `payment_events` → LEGADO PROVÁVEL, ainda sem remoção
+- `orders` → LEGADO/COMPATIBILIDADE A VALIDAR
+
+### Comercial
+
+A implementação atual não é apenas uma camada de rota: `commercial-repository.ts` persiste/carrega diretamente:
+
+- `service_pricings`
+- `promotion_campaigns`
+- `coupons`
+- `bonus_ledger`
+- `commission_ledger`
+- `referral_relations`
+- `referral_config`
+- `commercial_audit_log`
+
+O próprio repository informa que `commercial_orders` é atualmente um **stub em memória/no-op**. Não foi encontrado consumidor Supabase ativo para `commercial_offers` ou `commercial_orders`.
+
+As tabelas `promotions` e `commissions` permanecem como estruturas paralelas que não correspondem ao repository persistente atual.
+
+**Classificação provisória:**
+- conjunto acima persistido pelo repository → ATIVO
+- `commercial_offers`, `commercial_orders` → LEGADO PROVÁVEL
+- `promotions`, `commissions` → LEGADO PROVÁVEL, sujeito à confirmação por migrations/Golden Path
+
+### Documenso
+
+`envelope-repository.ts` faz acesso real a `documenso_envelopes`. Portanto Documenso não pode ser removido da baseline apenas por ausência de dados atuais.
+
+Ao mesmo tempo, não há evidência nesta rodada de que Documenso seja necessário para o Golden Path B2C principal. Deve permanecer separado como **ATIVO MODULAR**, não como CORE.
+
+### Notificações
+
+A rota `/api/notifications` usa `notification-service.ts`, cuja implementação mantém histórico/subscriptions **em memória**. Não foi identificado acesso Supabase atual às tabelas:
+
+- `notifications`
+- `notification_subscriptions`
+
+Portanto essas tabelas não devem ser promovidas a CORE por causa da existência da rota. Permanecem **INDETERMINADAS/LEGADO PROVÁVEL**, aguardando validação do fluxo de produção.
+
+### Observabilidade/Auditoria
+
+Não foi localizado consumidor direto atual das tabelas `audit_logs` e `ai_execution_logs` na rodada de código específica. Isso não basta para exclusão: a auditoria anterior registrou que observabilidade foi implementada historicamente e o roadmap contém endpoints de métricas.
+
+Assim, permanecem **INDETERMINADAS** até cruzamento completo dos módulos de observabilidade e seus testes.
+
+### Resultado
+
+A hipótese de "limpar tudo que está vazio" continua rejeitada.
+
+O mapa agora separa melhor:
+
+- **Core:** cases, documents, payment_orders, user_profiles;
+- **Ativos modulares:** Knowledge/RAG, comercial atual, marketing/automação, messaging, payment_webhook_events, Documenso, platform_events;
+- **Prováveis legados:** payments, payment_events, commercial_offers, commercial_orders, promotions, commissions;
+- **Indeterminados:** notifications, notification_subscriptions, audit_logs, ai_execution_logs e alguns objetos de compatibilidade.
+
+Nenhuma tabela, função, policy ou trigger foi removida.
+
+**Próximo passo:** validação final contra migrations e Golden Path e, somente depois, fechar a baseline definitiva de funções/triggers/policies.
