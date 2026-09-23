@@ -26,7 +26,7 @@ WHERE n.nspname='public'
   AND c.relrowsecurity
   AND p.policyname IS NULL;
 
--- Policy identity comparison
+-- Expected canonical snapshot: 203 public functions, 11 public non-internal triggers, 153 public policies.\n\n-- Policy identity comparison
 SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
 FROM pg_policies
 WHERE schemaname='public'
