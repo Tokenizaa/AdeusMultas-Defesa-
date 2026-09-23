@@ -15,10 +15,10 @@ Foi feita a separação entre funções próprias da aplicação e funções for
 Snapshot:
 - 209 funções públicas no total;
 - 161 funções em C, 15 internas e 27 em SQL/PLpgSQL;
-- as funções C/internal observadas pertencem ao ecossistema de extensões, principalmente pgvector/citext, e não devem ser reproduzidas manualmente como functions da aplicação;
-- baseline criada em `supabase/recovery/BASELINE-20260923-FUNCTIONS.sql`.
+- funções extension-owned foram identificadas e excluídas da baseline da aplicação;
+- 13 funções SQL/PLpgSQL não pertencentes a extensões foram capturadas integralmente em `supabase/recovery/BASELINE-20260923-FUNCTIONS.sql`.
 
-As funções de aplicação capturadas incluem:
+Funções de aplicação capturadas:
 - `match_knowledge_chunks`
 - `set_updated_at`
 - `emit_event`
@@ -41,7 +41,7 @@ Snapshot:
 - 11 triggers públicos não internos;
 - 2 triggers adicionais em `auth.users`, responsáveis pelos eventos de criação/atualização de usuário.
 
-Baseline criada em:
+Baseline:
 `supabase/recovery/BASELINE-20260923-TRIGGERS.sql`
 
 Foi preservada explicitamente a duplicação de `user_profiles.updated_at`:
@@ -52,13 +52,35 @@ Nenhum dos dois foi removido.
 
 ### Policies
 
-O canônico possui 153 policies públicas.
+O canônico possui **153 policies públicas**.
 
-A extração direta completa foi limitada pelo tamanho da resposta da interface de execução; portanto **não foi criada uma baseline de policies incompleta e apresentada como completa**.
+A baseline completa foi materializada em:
 
-A baseline de policies anterior continua marcada como incompleta e não deve ser usada para reconstrução.
+`supabase/recovery/BASELINE-20260923-POLICIES.sql`
 
-Próxima ação específica: extrair as 153 policies em lotes determinísticos e materializar a baseline completa.
+A extração foi feita em lotes determinísticos por faixa de tabelas, preservando:
+- nome da policy;
+- tabela;
+- permissive/restrictive;
+- roles;
+- comando;
+- `USING`;
+- `WITH CHECK`.
+
+A baseline é somente uma representação do estado atual. Ela não deve ser aplicada diretamente ao canônico.
+
+### Verificação
+
+Foi criado um script somente leitura:
+
+`supabase/recovery/VERIFY-BASELINE-SECURITY-20260923.sql`
+
+Ele permite conferir:
+- quantidade de policies;
+- quantidade de funções públicas;
+- quantidade de triggers públicos não internos;
+- tabelas com RLS sem policy;
+- identidade e expressões das 153 policies.
 
 ## Security Advisors
 
@@ -69,13 +91,15 @@ A execução dos advisors de segurança identificou:
 3. `current_role_name()` e `is_admin()` são SECURITY DEFINER e executáveis por anon/authenticated;
 4. proteção contra senhas vazadas está desabilitada.
 
-Esses achados são **observações de segurança**, não alterações automáticas. Nenhum foi corrigido nesta fase porque o objetivo ainda é recuperar e documentar o estado canônico antes de alterar comportamento.
+Esses achados continuam sendo **observações de segurança**, não alterações automáticas. Nenhum foi corrigido nesta fase porque o objetivo ainda é recuperar e documentar o estado canônico antes de alterar comportamento.
 
 ## Regra de reconstrução
 
-Nenhuma baseline será aplicada ao projeto canônico.
+Nenhuma baseline foi aplicada ao projeto canônico.
 
-O próximo ambiente de validação deve ser descartável e servir para:
+O próximo gate é a validação da baseline em ambiente descartável ou, se não houver ambiente/crédito disponível, uma validação estrutural completa sem escrita no canônico.
+
+Sequência:
 1. reproduzir schema;
 2. aplicar functions;
 3. aplicar triggers;
@@ -86,9 +110,11 @@ O próximo ambiente de validação deve ser descartável e servir para:
 
 ## Status
 
-**FASE 4 — EM EXECUÇÃO.**
+**FASE 4 — BASELINE DE SEGURANÇA CAPTURADA.**
 
-Functions: **CAPTURADAS**  
-Triggers: **CAPTURADOS**  
-Policies: **PENDENTES DE EXTRAÇÃO COMPLETA**  
-Aplicação ao canônico: **NÃO EXECUTADA**
+Functions: **CAPTURADAS — 13 de aplicação**  
+Triggers: **CAPTURADOS — 11 públicos + 2 auth.users**  
+Policies: **CAPTURADAS — 153/153**  
+Verificação: **CRIADA**  
+Aplicação ao canônico: **NÃO EXECUTADA**  
+Validação em ambiente descartável: **PENDENTE**
