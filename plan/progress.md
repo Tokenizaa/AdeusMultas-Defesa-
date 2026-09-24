@@ -163,3 +163,14 @@ Nenhum documento coletado. Fontes bloqueadas:
 
 **Próxima fase:**
 - FASE 9 — definição derivada do estado real: acesso a UFs bloqueadas (IP/ASN/VPN alternativo, contornar Akamai/Cloudflare com navegador real) e/ou início da preparação para ingestão jurídica (RAG) — decidir após análise deste fechamento.
+
+## FASE 9 — AUDITORIA/ESPECIFICAÇÃO (2026-09-24)
+
+> **FASE 9 — AUDITORIA/ESPECIFICAÇÃO: CONCLUÍDA** (2026-09-24)
+> **Implementação: NÃO INICIADA** | **RAG: NÃO INICIADO** | **Supabase: SOMENTE AUDITORIA**
+
+- Commit-base da auditoria: `8863ecfe504c580a34ce46fedadd30b73e12fd2d`
+- Modelo canônico: reutilizar schema Supabase existente (knowledge_sources → knowledge_documents → knowledge_document_versions → knowledge_chunks → knowledge_embeddings + knowledge_ingestions), com tabela aditiva de relações normativas.
+- Achado-chave: drift de migrations (6 tabelas knowledge existem no DB, mas não versionadas em supabase/migrations) — a fechar na Fase 9.1.
+- Artefatos: `FASE-9-ESPECIFICACAO-NORMALIZACAO-JURIDICA-2026-09-24.md`, `FASE-9-ROADMAP-IMPLEMENTACAO-2026-09-24.md`.
+- Próxima implementação: Fase 9.1–9.5 (roadmap) — aguardando análise.
