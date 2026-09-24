@@ -19,9 +19,10 @@
 - PR (Paraná)
 - RJ (Rio de Janeiro)
 - RN (Rio Grande do Norte)
+- RO (Rondônia)
 
 ## Próxima UF
-- RO (Rondônia)
+- RR (Roraima)
 
 ## Observações
 - Coleta federal concluída.

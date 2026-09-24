@@ -150,6 +150,11 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 
+### Estaduais - Rondônia (RO)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -171,6 +176,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_PE_CETRAN_PORTAL | CETRAN-PE | Estadual | PE | Transport error (connection failed/timeout) | O portal do CETRAN-PE não respondeu em http ou https (timeout). Alternativas cetranpe.pe.gov.br e cetran.pe.gov.br também irresponsivas. |
 | SRC_RN_DETRAN_PORTAL | DETRAN-RN | Estadual | RN | HTTP 503 Service Unavailable / timeout | O portal do DETRAN-RN retornou 503 e, após retries, não respondeu (timeout). Backend indisponível. |
 | SRC_RN_CETRAN_PORTAL | CETRAN-RN | Estadual | RN | Transport error (connection failed/timeout) | O portal do CETRAN-RN não respondeu em http ou https (timeout). |
+| SRC_RO_DETRAN_PORTAL | DETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do DETRAN-RO não respondeu em http ou https (timeout). |
+| SRC_RO_CETRAN_PORTAL | CETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do CETRAN-RO não respondeu em http ou https (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -314,11 +321,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-RN 503/timeout; CETRAN-RN inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (RO)
+- Fontes oficiais identificadas (RO): 2 (DETRAN-RO e CETRAN-RO)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-RO e CETRAN-RO inaccessíveis)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **RO**
+- Próxima UF: **RR**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
