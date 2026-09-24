@@ -13,9 +13,10 @@
 - MS (Mato Grosso do Sul)
 - MT (Mato Grosso)
 - PA (Pará)
+- PB (Paraíba)
 
 ## Próxima UF
-- PB (Paraíba)
+- PE (Pernambuco)
 
 ## Observações
 - Coleta federal concluída.

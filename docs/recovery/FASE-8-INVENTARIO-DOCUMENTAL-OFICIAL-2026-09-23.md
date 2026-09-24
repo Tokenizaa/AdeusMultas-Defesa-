@@ -108,6 +108,13 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_PA_DETRAN_PORTAL | DETRAN-PA | DETRAN-PA | PA | Portal | Portal oficial do DETRAN-PA (shell SPA) | https://www.detran.pa.gov.br/ | https://www.detran.pa.gov.br/ | d138c2e598299b6d0afd9a56b2a651f47e374d33c28b462e21b94fe9351191cf | 2026-09-24T15:29:16Z | COLLECTED | legal_collected_2026_09_23/states/PA/portal_detran_pa.html |
 
+### Estaduais - Paraíba (PB)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_PB_DETRAN_DEFESA_RECURSOS_ONLINE | DETRAN-PB | DETRAN-PB | PB | Serviço | Defesa/Recursos Online | https://detran.pb.gov.br/infracoes/recursos-defesa-online | https://detran.pb.gov.br/infracoes/recursos-defesa-online | 1914ae55909266741a03e0911c257cbbc1f66ea04296335675f96c51b5a6e573 | 2026-09-24T15:32:16Z | COLLECTED | legal_collected_2026_09_23/states/PB/defesa_recursos_online.html |
+| SRC_PB_CETRAN_REGIMENTO_INTERNO | CETRAN-PB | CETRAN-PB | PB | Regimento Interno | Regimento Interno CETRAN-PB | https://www.cetran.pb.gov.br/legislacao | https://www.cetran.pb.gov.br/legislacao/Regimento%20interno/@@download/file/Safari.pdf | 1bcb4fcc7b251e00d7569968715b02d9ed44507704db28a37912c5cd876ecbd2 | 2026-09-24T15:32:20Z | COLLECTED | legal_collected_2026_09_23/states/PB/regimento_interno_cetran.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -226,11 +233,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-PA inaccessível; DETRAN-PA acesso parcial - apenas raiz do portal SPA)
 - Fontes pendentes de análise: 0
 
+### Estadual (PB)
+- Fontes oficiais identificadas (PB): 2 (DETRAN-PB e CETRAN-PB)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **PB**
+- Próxima UF: **PE**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
