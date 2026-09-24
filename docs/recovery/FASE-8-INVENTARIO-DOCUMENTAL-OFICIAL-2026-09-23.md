@@ -145,6 +145,12 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Documentos coletados com sucesso: 0
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-MA e CETRAN-MA inaccessíveis)
 - Fontes pendentes de análise: 0
+### Estadual (MG)
+- Fontes oficiais identificadas (MG): 2 (DETRAN-MG e CETRAN-MG)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 1
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-MG inaccessível)
+- Fontes pendentes de análise: 0
 
 ### Estaduais - Goiás (GO)
 
@@ -160,10 +166,16 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 
 
 ## Próximos Passos
+### Estaduais - Minas Gerais (MG)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_MG_DETRAN_DEFESA_PREVIA_PF | DETRAN-MG | DETRAN-MG | MG | Serviço | Apresentar defesa prévia (multa) | https://www.detran.mg.gov.br/ | https://www.detran.mg.gov.br/infracoes/multa/apresentar-defesa-previa-infracao-1 | f0cbb02f78607f29809b718620ecc268a169b5382a0562215d21a24d1a227c91 | 2026-09-24T14:31:34Z | COLLECTED | legal_collected_2026_09_23/states/MG/apresentar_defesa_previa_mg.html
+
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **MG**
+- Próxima UF: **MS**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
