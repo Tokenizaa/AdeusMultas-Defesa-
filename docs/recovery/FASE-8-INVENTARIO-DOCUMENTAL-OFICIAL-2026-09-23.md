@@ -137,6 +137,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_PR_CETRAN_RESOLUCOES | CETRAN-PR | CETRAN-PR | PR | Legislação | Resoluções - CETRAN/PR | https://www.cetran.pr.gov.br/Pagina/Resolucoes | https://www.cetran.pr.gov.br/Pagina/Resolucoes | 051a5587291d4448ac1560096b4f06cc4f6cee47bb44427faaf2ee303d4a86c4 | 2026-09-24T15:39:05Z | COLLECTED | legal_collected_2026_09_23/states/PR/resolucoes.html |
 | SRC_PR_CETRAN_RESOLUCAO_077_2021 | CETRAN-PR | CETRAN-PR | PR | Resolução | Resolução 077/21 - regras e procedimentos para fiscalização de trânsito de ciclomotores, ciclomotores elétricos e equiparados | https://www.cetran.pr.gov.br/Pagina/Resolucoes | https://www.cetran.pr.gov.br/sites/cetran/arquivos_restritos/files/documento/2021-11/resolucao_077_-21_regras_e_procedimentos_para_a_fiscalizacao_de_transito_dos_ciclomotores_cicloeletricos_e_equiparados.pdf | ec783fd23c79bd4e6755a031fd9617fa8b05da90f087d28eb36a7d431f821d51 | 2026-09-24T15:39:05Z | COLLECTED | legal_collected_2026_09_23/states/PR/resolucao_077_21.pdf |
 
+### Estaduais - Rio de Janeiro (RJ)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_RJ_DETRAN_FORMULARIOS_INFRACOES | DETRAN-RJ | DETRAN-RJ | RJ | Serviço | Formulários de Infrações | https://www.detran.rj.gov.br/formulario/formularios-de-infracoes | https://www.detran.rj.gov.br/formulario/formularios-de-infracoes | 9faad6e62aaddccd2e504156d52be5829a532733b8d1b6b3a4821fdb9ec38b67 | 2026-09-24T15:41:00Z | COLLECTED | legal_collected_2026_09_23/states/RJ/formularios_infracoes.html |
+| SRC_RJ_DETRAN_FORMULARIO_DEFESA_RECURSO | DETRAN-RJ | DETRAN-RJ | RJ | Formulário | CJC0160 - Apresentação de Defesa/Recurso | https://www.detran.rj.gov.br/formulario/formularios-de-infracoes | https://www.detran.rj.gov.br/images/ascom/pdf/formularios/CJC0160_apresentacao_defesa_recurso.pdf | f0c237b48a530ef10988dd4f95c5c7864ca31d4692b7bb1f051cb710350bf11f | 2026-09-24T15:41:01Z | COLLECTED | legal_collected_2026_09_23/states/RJ/CJC0160_apresentacao_defesa_recurso.pdf |
+| SRC_RJ_CETRAN_RESOLUCOES | CETRAN-RJ | CETRAN-RJ | RJ | Legislação | Resoluções CETRAN-RJ | http://www.cetran.rj.gov.br/estadual/resolucoes-cetran | http://www.cetran.rj.gov.br/estadual/resolucoes-cetran | 01812bab2ee1d80fe13131cfdf56e863659c0b8d4646c6204edc76749378df2a | 2026-09-24T15:41:00Z | COLLECTED | legal_collected_2026_09_23/states/RJ/resolucoes_cetran.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -285,11 +293,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (RJ)
+- Fontes oficiais identificadas (RJ): 2 (DETRAN-RJ e CETRAN-RJ)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 0 (CETRAN-RJ em https irresponsivo, mas http funcional)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **RJ**
+- Próxima UF: **RN**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

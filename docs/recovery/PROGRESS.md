@@ -17,9 +17,10 @@
 - PE (Pernambuco)
 - PI (Piauí)
 - PR (Paraná)
+- RJ (Rio de Janeiro)
 
 ## Próxima UF
-- RJ (Rio de Janeiro)
+- RN (Rio Grande do Norte)
 
 ## Observações
 - Coleta federal concluída.
