@@ -1,5 +1,7 @@
 # FASE 8 — Coleta e Inventário Documental Oficial — 2026-09-23
 
+> **FASE 8 — AUDITORIA DE INTEGRIDADE: CONCLUÍDA** (2026-09-24) — 71 arquivos físicos auditados em `legal_collected_2026_09_23/` (sem modificação). Relatório completo: `docs/recovery/FASE-8-AUDITORIA-INTEGRIDADE-69-ARQUIVOS-2026-09-24.md`.
+
 ## Resultado
 
 *PARCIAL — primeira rodada estadual em andamento.*
