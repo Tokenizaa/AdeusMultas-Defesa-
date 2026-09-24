@@ -191,6 +191,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_SP_CETRAN_LEGISLACOES | CETRAN-SP | CETRAN-SP | SP | Legislação | Legislações - CETRAN/SP | https://www.cetran.sp.gov.br/CetranWeb | https://www.cetran.sp.gov.br/CetranWeb/institucional/legislacoes | 9c07d6e3888e386714707f4af1ccb884dfa7004d7ca69fbb1dd8ee3ae3b524c1 | 2026-09-24T15:58:53Z | COLLECTED | legal_collected_2026_09_23/states/SP/legislacoes.html |
 | SRC_SP_CETRAN_ATOS_NORMATIVOS | CETRAN-SP | CETRAN-SP | SP | Legislação | Atos Normativos - CETRAN/SP | https://www.cetran.sp.gov.br/CetranWeb | https://www.cetran.sp.gov.br/CetranWeb/atosnormativos | 28ebdd2f959c71454fa1e51163c9fc3cc290b212a95709684e63890f300c7232 | 2026-09-24T15:58:53Z | COLLECTED | legal_collected_2026_09_23/states/SP/atos_normativos.html |
 
+### Estaduais - Tocantins (TO)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_TO_DETRAN_PORTAL | DETRAN-TO | DETRAN-TO | TO | Portal | Portal DETRAN-TO | https://www.detran.to.gov.br/ | https://www.to.gov.br/detran/ | 0345b86e82372b3ef60c2d8f28d1fb89b8d9ee2dc0b82a5f0e95f8792e97294f | 2026-09-24T16:01:07Z | COLLECTED | legal_collected_2026_09_23/states/TO/portal_detran.html |
+| SRC_TO_DETRAN_FORMULARIO_RECURSOS | DETRAN-TO | DETRAN-TO | TO | Serviço | Formulário de Recursos | https://www.detran.to.gov.br/ | https://www.to.gov.br/detran/formulario-de-recursos/252b8affcn93 | 03ca65ebe74a3b75cc2a3c8f9d1832f45c7d8d3ec847622999016f2d4adaa50a | 2026-09-24T16:01:07Z | COLLECTED | legal_collected_2026_09_23/states/TO/formulario_recursos.html |
+| SRC_TO_DETRAN_RECURSO_MULTAS_CIDADAO | DETRAN-TO | DETRAN-TO | TO | Serviço | Recurso de Multas - Portal Cidadão | https://www.detran.to.gov.br/ | https://www.to.gov.br/detran/recurso-de-multas-portal-cidadao/77a9q0bazri | 8e334838abb447aac5c0955edf55996e9459d402dde3181d93b005316148e419 | 2026-09-24T16:01:07Z | COLLECTED | legal_collected_2026_09_23/states/TO/recurso_multas_portal_cidadao.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -217,6 +225,7 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RR_CETRAN_PORTAL | CETRAN-RR | Estadual | RR | Transport error (connection failed/timeout) | O portal do CETRAN-RR não respondeu em http ou https (timeout). |
 | SRC_SE_DETRAN_PORTAL | DETRAN-SE | Estadual | SE | Acesso bloqueado (403 Cloudflare challenge) | O portal do DETRAN-SE retorna 403 "Attention Required! | Cloudflare" (challenge de bot protection) em todos os paths, mesmo com User-Agent de navegador. |
 | SRC_SE_CETRAN_PORTAL | CETRAN-SE | Estadual | SE | Transport error (connection failed/timeout) | O portal do CETRAN-SE não respondeu em http ou https (timeout). |
+| SRC_TO_CETRAN_PORTAL | CETRAN-TO | Estadual | TO | Transport error (connection failed/timeout) | O portal do CETRAN-TO não respondeu em http ou https (timeout). Conteúdo do DETRAN-TO acessível via portal estadual www.to.gov.br/detran/. |
 
 ## Estatísticas da Coleta
 
@@ -402,11 +411,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (TO)
+- Fontes oficiais identificadas (TO): 2 (DETRAN-TO e CETRAN-TO)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-TO inaccessível; DETRAN-TO via portal www.to.gov.br/detran)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
-A primeira rodada nacional está sob controle sequencial.
+A primeira rodada nacional foi concluída (27 UFs + Federal).
 
-- Próxima UF: **TO**
+- Próxima UF: **— (rodada concluída)**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
