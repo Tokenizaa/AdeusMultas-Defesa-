@@ -129,6 +129,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_PI_CETRAN_DECRETO_22731_2024 | CETRAN-PI | CETRAN-PI | PI | Decreto | Decreto nº 22.731 de 02 de fevereiro de 2024 | https://www.detran.pi.gov.br/ | https://portal.pi.gov.br/detran/wp-content/uploads/sites/62/2025/11/DECRETO-No-22.731-DE-02-DE-FEVEREIRO-DE-2024.pdf | 8f1a3e2db72becc6e2a972f769a454e34327179cab5a02ad7a04b67dfeb7d922 | 2026-09-24T15:37:24Z | COLLECTED | legal_collected_2026_09_23/states/PI/decreto_22731_2024.pdf |
 | SRC_PI_CETRAN_DECRETO_24023_2025 | CETRAN-PI | CETRAN-PI | PI | Decreto | Decreto nº 24.023 de 19 de agosto de 2025 | https://www.detran.pi.gov.br/ | https://portal.pi.gov.br/detran/wp-content/uploads/sites/62/2025/11/DECRETO-No-24.023-DE-19-DE-AGOSTO-DE-2025.pdf | ddb7054313ef87af8e04b75b9795887401e2f447f887a9a11def169cb153eced | 2026-09-24T15:37:24Z | COLLECTED | legal_collected_2026_09_23/states/PI/decreto_24023_2025.pdf |
 
+### Estaduais - Paraná (PR)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_PR_DETRAN_RECURSOS | DETRAN-PR | DETRAN-PR | PR | Procedimento | Recursos - DETRAN/PR | https://www.detran.pr.gov.br/Pagina/Recursos | https://www.detran.pr.gov.br/Pagina/Recursos | 2e73369a4e953b449d41762b7288afb49c54046e3bc53a07ee7fc2b635b958e0 | 2026-09-24T15:39:05Z | COLLECTED | legal_collected_2026_09_23/states/PR/recursos.html |
+| SRC_PR_CETRAN_RESOLUCOES | CETRAN-PR | CETRAN-PR | PR | Legislação | Resoluções - CETRAN/PR | https://www.cetran.pr.gov.br/Pagina/Resolucoes | https://www.cetran.pr.gov.br/Pagina/Resolucoes | 051a5587291d4448ac1560096b4f06cc4f6cee47bb44427faaf2ee303d4a86c4 | 2026-09-24T15:39:05Z | COLLECTED | legal_collected_2026_09_23/states/PR/resolucoes.html |
+| SRC_PR_CETRAN_RESOLUCAO_077_2021 | CETRAN-PR | CETRAN-PR | PR | Resolução | Resolução 077/21 - regras e procedimentos para fiscalização de trânsito de ciclomotores, ciclomotores elétricos e equiparados | https://www.cetran.pr.gov.br/Pagina/Resolucoes | https://www.cetran.pr.gov.br/sites/cetran/arquivos_restritos/files/documento/2021-11/resolucao_077_-21_regras_e_procedimentos_para_a_fiscalizacao_de_transito_dos_ciclomotores_cicloeletricos_e_equiparados.pdf | ec783fd23c79bd4e6755a031fd9617fa8b05da90f087d28eb36a7d431f821d51 | 2026-09-24T15:39:05Z | COLLECTED | legal_collected_2026_09_23/states/PR/resolucao_077_21.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -270,11 +278,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0 (CETRAN-PI sem domínio próprio funcional; conteúdo acessível via portal.pi.gov.br/detran/cetran-pi)
 - Fontes pendentes de análise: 0
 
+### Estadual (PR)
+- Fontes oficiais identificadas (PR): 2 (DETRAN-PR e CETRAN-PR)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **PR**
+- Próxima UF: **RJ**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

@@ -16,9 +16,10 @@
 - PB (Paraíba)
 - PE (Pernambuco)
 - PI (Piauí)
+- PR (Paraná)
 
 ## Próxima UF
-- PR (Paraná)
+- RJ (Rio de Janeiro)
 
 ## Observações
 - Coleta federal concluída.
