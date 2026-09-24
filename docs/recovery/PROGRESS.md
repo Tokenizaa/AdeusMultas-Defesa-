@@ -24,9 +24,10 @@
 - RS (Rio Grande do Sul)
 - SC (Santa Catarina)
 - SE (Sergipe)
+- SP (São Paulo)
 
 ## Próxima UF
-- SP (São Paulo)
+- TO (Tocantins)
 
 ## Observações
 - Coleta federal concluída.

@@ -183,6 +183,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 
+### Estaduais - São Paulo (SP)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_SP_DETRAN_PORTAL_DETRANSP | DETRAN-SP | DETRAN-SP | SP | Portal | Portal Detran-SP (DetranSP) | https://www.detran.sp.gov.br/ | https://www.detran.sp.gov.br/detransp | 9a406ad41cf171461e9ae0b968088c433df193f097dfb9aef0d91a58019e8d26 | 2026-09-24T15:58:53Z | COLLECTED | legal_collected_2026_09_23/states/SP/portal_detransp.html |
+| SRC_SP_CETRAN_LEGISLACOES | CETRAN-SP | CETRAN-SP | SP | Legislação | Legislações - CETRAN/SP | https://www.cetran.sp.gov.br/CetranWeb | https://www.cetran.sp.gov.br/CetranWeb/institucional/legislacoes | 9c07d6e3888e386714707f4af1ccb884dfa7004d7ca69fbb1dd8ee3ae3b524c1 | 2026-09-24T15:58:53Z | COLLECTED | legal_collected_2026_09_23/states/SP/legislacoes.html |
+| SRC_SP_CETRAN_ATOS_NORMATIVOS | CETRAN-SP | CETRAN-SP | SP | Legislação | Atos Normativos - CETRAN/SP | https://www.cetran.sp.gov.br/CetranWeb | https://www.cetran.sp.gov.br/CetranWeb/atosnormativos | 28ebdd2f959c71454fa1e51163c9fc3cc290b212a95709684e63890f300c7232 | 2026-09-24T15:58:53Z | COLLECTED | legal_collected_2026_09_23/states/SP/atos_normativos.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -387,11 +395,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-SE bloqueado por Cloudflare 403; CETRAN-SE inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (SP)
+- Fontes oficiais identificadas (SP): 2 (DETRAN-SP e CETRAN-SP)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **SP**
+- Próxima UF: **TO**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
