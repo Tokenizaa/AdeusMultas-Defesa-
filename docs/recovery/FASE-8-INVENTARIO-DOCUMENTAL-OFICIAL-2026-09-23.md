@@ -128,14 +128,24 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes pendentes de análise: 0
 
 ## Próximos Passos
-1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
-2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
-3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
-4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
-5. Para o DF, documentar oficialmente a inaccessibilidade do DETRAN-DF e CETRAN-DF após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
-6. Após concluir DF, passar para o estado seguinte (ES) seguindo a mesma sequência.
-7. Atualizar o inventário com os resultados de cada etapa.
-8. Gerar relatório final de cobertura documental quando todos os estados forem processados.
+
+A primeira rodada nacional está sob controle sequencial.
+
+- Próxima UF: **ES**
+- UFs anteriores não devem ser reabertas nesta rodada.
+- Complementações serão tratadas em rodada posterior.
+- Este documento registra coleta/evidência, não declara cobertura jurídica completa.
 
 ## Conclusão
-A infraestrutura de coleta (SourceFetcher, SnapshotStore, etc.) está funcionando corretamente. Foi possível coletar com sucesso todos os documentos jurídicos federais acessíveis diretamente via HTTP. A fase federal está concluída com 100% de coleta bem-sucedida. No estado do Acre (AC), coletamos documentos iniciais do DETRAN-AC, incluindo um formulário de defesa prévia e portarias oficiais. O CETRAN-AC permanece inaccessível devido à falha de resolução de DNS, requerendo investigação adicional. No estado de Alagoas (AL), coletamos três resoluções do CETRAN-AL acessíveis via página de legislatura. O DETRAN-AL é acessível porém não apresentou links óbvios para formulários de defesa específicos em uma inspeção superficial. No estado do Amazonas (AM), coletamos cinco documentos do DETRAN-AM, incluindo portarias normativas e memorandos. O CETRAN-AM permanece inaccessível. No estado do Distrito Federal (DF), tanto o DETRAN-DF quanto o CETRAN-DF são inaccessíveis devido a erros de transporte (conexão recusada ou timeout) em todas as tentativas de acesso. A coleta estadual prosseguirá com o estado seguinte (ES) após a conclusão dos trabalhos no DF.
+
+A infraestrutura de coleta funciona e a primeira rodada estadual está em andamento. Os documentos existentes permanecem como evidência de raspagem.
+
+A classificação operacional das UFs foi corrigida para separar:
+- **PROCESSADA:** houve execução de coleta/análise;
+- **COBERTURA PARCIAL:** existem documentos relevantes, mas a coleta não pretendeu ser exaustiva;
+- **SEM COBERTURA VALIDADA:** documentos coletados não demonstram cobertura de trânsito suficiente;
+- **BLOQUEADA:** as fontes oficiais não puderam ser acessadas na execução.
+
+O documento da BA sobre Estratégia de Governo Digital permanece preservado, mas foi explicitamente excluído da evidência de cobertura de trânsito.
+
+A partir daqui, a Fase 8 segue em primeira rodada nacional, uma UF por execução, sem complementação das UFs anteriores.
