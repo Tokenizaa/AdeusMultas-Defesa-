@@ -2,7 +2,7 @@
 
 ## Resultado
 
-**PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso, coleta estadual iniciada e avançada com AC (Acre), AL (Alagoas) e AM (Amazonas).**
+*PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso, coleta estadual iniciada e avançada com AC (Acre), AL (Alagoas), AM (Amazonas) e CE (Ceará).
 
 Foram coletados com sucesso todos os documentos oficiais federais acessíveis diretamente via HTTP:
 - Código de Trânsito Brasileiro (CTB) compilado (HTML e PDF) do Planalto.
@@ -58,6 +58,44 @@ O inventário documental foi atualizado e registrado em:
 - Arquivo memo_753_2026_opttran_detran.pdf com hash SHA-256: c52bb2a6c4c005407bce225a26f4be15ea0e38dc4f96d25b94feb62e93dd70b8
 - Arquivo portaria_01_03_011210_078105_2026_96.pdf com hash SHA-256: 5192f8b88dc0466a0993b667eb4f05b209bde835368d19aa3d8765cdf1c637c3
 - Arquivo portaria_01_03_011210_083647_2026_80.pdf com hash SHA-256: 82e54883faf4d63177788b9ff629d8b0907a6a98cb50e2d81b129471ed3af0de
+### Evidências de Coleta Estadual (BA)
+- Arquivo decreto_legislabahia_23792_2025.pdf com hash SHA-256: 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2
+
+### Evidências de Coleta Estadual (CE)
+- Arquivo is004_2007_cohab.pdf com hash SHA-256: 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74
+- Arquivo defesa_autuar_infracao_transito.html com hash SHA-256: ebaded0d43931826c3a02c1527d57fe916bbc4ec78d24dbf304020ece1ea818a
+- Arquivo recurso_jari_detran_ce.html com hash SHA-256: ebaded0d43931826c3a02c1527d57fe916bbc4ec78d24dbf304020ece1ea818a
+- Arquivo resolucao_cetran_ce_003_2019.pdf com hash SHA-256: 8825a645a52be3e5a5428b3f9929d48c946a60536970d4f8d1ec597e5661590d
+- Arquivo resolucao_cetran_ce_001_2014.pdf com hash SHA-256: 27aa5bc7b7ad3bff97fbaf336a0bf72a4dca9244b3a4e68dfb69bab8a3cf15aa
+- Arquivo resolucao_cetran_ce_001_2013.pdf com hash SHA-256: 6e2835b007ad87f393623aa1e3095daf9eeb6a9560a0f59d55acbd48d08c8712
+- Arquivo regimento_interno_cetran_ce_2020.pdf com hash SHA-256: 676bbd60f4379d8641a132c41fbe5a77b5692ec2cd219808e6b1d3795e1e13c6
+
+- **COLETADO FEDERAL:** 9 fontes oficiais federais, total de 10 documentos coletados (incluindo variações).
+- **COLETADO ESTADUAL (AC):** DETRAN-AC - 4 documentos coletados (1 formulário de defesa prévia, 3 portarias). Coleta inicial concluída; documentos adicionais requerem busca mais aprofundada ou acesso a sistemas internos.
+- **COLETADO ESTADUAL (AL):** CETRAN-AL - 3 documentos coletados (resoluções CETRAN-AL). DETRAN-AL acessível porém sem links óbvios para formulários de defesa em inspeção superficial.
+- **COLETADO ESTADUAL (AM):** DETRAN-AM - 5 documentos coletados (2 portarias normativas, 1 memo, 2 portarias numeradas). CETRAN-AM inaccessível.
+- **BLOQUEADO/INACESSÍVEL ESTADUAL:** 
+- **COLETADO ESTADUAL (CE):** DETRAN-CE - 7 documentos coletados (1 instrução de serviços, 1 formulário de defesa, 1 recurso JARI, 3 resoluções, 1 regimento interno). Coleta em progresso; documentos adicionais incluem portarias, resoluções e manuais de defesa.
+  * CETRAN-AC (DNS não resolve) - requer investigação de URL alternativa ou confirmação de inaccessibilidade.
+  * DETRAN-AP (acesso restrito, possivelmente bloqueio ou reestruturação).
+  * CETRAN-AP (sem resposta).
+  * CETRAN-AM (sem resposta).
+- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com CE (Ceará) seguindo a mesma metodologia.
+- **PENDENTE:** Restante dos estados (DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em investigação, BA - coleta iniciada (1 documento coletado)).
+
+## Próximos passos dentro da FASE 8
+1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
+2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
+3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
+4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
+5. Para o AP, investigar as causas do acesso restrito e tentar acessar via transparência ou outros portais.
+6. Após concluir AM, passar para o estado seguinte (BA) seguindo a mesma sequência.
+7. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
+
+## Próxima fase (após conclusão da FASE 8)
+
+**FASE 9 — Validação e versionamento documental** (se aplicável): após coleta de todos os documentos oficiais, validar integridade, verificar versionamento e preparar para possível ingestão futura no sistema de conhecimento.
+- Arquivo decreto_legislabahia_23792_2025.pdf com hash SHA-256: 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2
 
 ## Classificação
 
@@ -70,8 +108,8 @@ O inventário documental foi atualizado e registrado em:
   * DETRAN-AP (acesso restrito, possivelmente bloqueio ou reestruturação).
   * CETRAN-AP (sem resposta).
   * CETRAN-AM (sem resposta).
-- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com BA (Bahia) seguindo a mesma metodologia.
-- **PENDENTE:** Restante dos estados (CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em investigação, BA em preparação).
+- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com CE (Ceará) seguindo a mesma metodologia.
+- **PENDENTE:** Restante dos estados (CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em investigação, BA - coleta iniciada (1 documento coletado)).
 
 ## Próximos passos dentro da FASE 8
 1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).

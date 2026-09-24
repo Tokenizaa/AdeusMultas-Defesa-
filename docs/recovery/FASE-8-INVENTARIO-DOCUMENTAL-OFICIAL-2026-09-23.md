@@ -87,6 +87,16 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AM inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (CE)
+- Fontes oficiais identificadas (CE): 2 (DETRAN-CE e CETRAN-CE)
+- Fontes analisados: 2
+- Documentos coletados com sucesso: 7
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
+| SRC_LEGISLATIVO_BA_DECRETO_23792_2025 | LEGISLABAHIA_BA | Estadual | BA | Decreto | Decreto nº 23.792/2025 - Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029 | https://www.legislabahia.ba.gov.br/documentos | https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025 | 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2 | 2026-09-23T23:58:03Z | COLLECTED | legal_collected_2026_09_23/states/BA/decreto_legislabahia_23792_2025.pdf |
+| SRC_CE_DETRAN_INSTRUCAO_SERVICO_004_2007_COHAB | DETRAN-CE | Estadual | CE | Instrução de Serviço | Instrução de Serviços nº 004/2007 – COHAB | https://www.ce.gov.br/detran/legislacao/ | https://www.ce.gov.br/detran/wp-content/uploads/sites/91/2010/06/is004_2007_cohab.pdf | 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/is004_2007_cohab.pdf
+
 ## Próximos Passos
 1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
 2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
