@@ -14,9 +14,10 @@
 - MT (Mato Grosso)
 - PA (Pará)
 - PB (Paraíba)
+- PE (Pernambuco)
 
 ## Próxima UF
-- PE (Pernambuco)
+- PI (Piauí)
 
 ## Observações
 - Coleta federal concluída.

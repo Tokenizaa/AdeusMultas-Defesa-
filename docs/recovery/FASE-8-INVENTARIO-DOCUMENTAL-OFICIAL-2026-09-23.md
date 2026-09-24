@@ -115,6 +115,11 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_PB_DETRAN_DEFESA_RECURSOS_ONLINE | DETRAN-PB | DETRAN-PB | PB | Serviço | Defesa/Recursos Online | https://detran.pb.gov.br/infracoes/recursos-defesa-online | https://detran.pb.gov.br/infracoes/recursos-defesa-online | 1914ae55909266741a03e0911c257cbbc1f66ea04296335675f96c51b5a6e573 | 2026-09-24T15:32:16Z | COLLECTED | legal_collected_2026_09_23/states/PB/defesa_recursos_online.html |
 | SRC_PB_CETRAN_REGIMENTO_INTERNO | CETRAN-PB | CETRAN-PB | PB | Regimento Interno | Regimento Interno CETRAN-PB | https://www.cetran.pb.gov.br/legislacao | https://www.cetran.pb.gov.br/legislacao/Regimento%20interno/@@download/file/Safari.pdf | 1bcb4fcc7b251e00d7569968715b02d9ed44507704db28a37912c5cd876ecbd2 | 2026-09-24T15:32:20Z | COLLECTED | legal_collected_2026_09_23/states/PB/regimento_interno_cetran.pdf |
 
+### Estaduais - Pernambuco (PE)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -132,6 +137,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_MT_CETRAN_PORTAL | CETRAN-MT | Estadual | MT | Transport error (connection failed/timeout) | O portal do CETRAN-MT não respondeu em http ou https (timeout). |
 | SRC_PA_CETRAN_PORTAL | CETRAN-PA | Estadual | PA | Transport error (connection failed/timeout) | O portal do CETRAN-PA não respondeu em http ou https (timeout). |
 | SRC_PA_DETRAN_PARCIAL | DETRAN-PA | Estadual | PA | Acesso parcial / backend flaky | O portal do DETRAN-PA (SPA) retorna apenas a raiz (200 intermitente); paths como /servicos, /infracoes, /multas e /recursos retornam timeout (000). CETRAN-PA inaccessível. |
+| SRC_PE_DETRAN_PORTAL | DETRAN-PE | Estadual | PE | Acesso bloqueado (403 Akamai/WAF) | O portal do DETRAN-PE retorna 403 Access Denied (Akamai edgesuite) em todos os paths, mesmo com User-Agent de navegador. Provável bot protection ou deny por geo/ASN. |
+| SRC_PE_CETRAN_PORTAL | CETRAN-PE | Estadual | PE | Transport error (connection failed/timeout) | O portal do CETRAN-PE não respondeu em http ou https (timeout). Alternativas cetranpe.pe.gov.br e cetran.pe.gov.br também irresponsivas. |
 
 ## Estatísticas da Coleta
 
@@ -240,11 +247,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (PE)
+- Fontes oficiais identificadas (PE): 2 (DETRAN-PE e CETRAN-PE)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-PE bloqueado por Akamai 403; CETRAN-PE inaccessível)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **PE**
+- Próxima UF: **PI**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
