@@ -18,9 +18,10 @@
 - PI (Piauí)
 - PR (Paraná)
 - RJ (Rio de Janeiro)
+- RN (Rio Grande do Norte)
 
 ## Próxima UF
-- RN (Rio Grande do Norte)
+- RO (Rondônia)
 
 ## Observações
 - Coleta federal concluída.

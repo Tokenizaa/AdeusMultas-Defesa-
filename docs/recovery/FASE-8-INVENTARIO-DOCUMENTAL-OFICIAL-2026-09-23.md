@@ -145,6 +145,11 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RJ_DETRAN_FORMULARIO_DEFESA_RECURSO | DETRAN-RJ | DETRAN-RJ | RJ | Formulário | CJC0160 - Apresentação de Defesa/Recurso | https://www.detran.rj.gov.br/formulario/formularios-de-infracoes | https://www.detran.rj.gov.br/images/ascom/pdf/formularios/CJC0160_apresentacao_defesa_recurso.pdf | f0c237b48a530ef10988dd4f95c5c7864ca31d4692b7bb1f051cb710350bf11f | 2026-09-24T15:41:01Z | COLLECTED | legal_collected_2026_09_23/states/RJ/CJC0160_apresentacao_defesa_recurso.pdf |
 | SRC_RJ_CETRAN_RESOLUCOES | CETRAN-RJ | CETRAN-RJ | RJ | Legislação | Resoluções CETRAN-RJ | http://www.cetran.rj.gov.br/estadual/resolucoes-cetran | http://www.cetran.rj.gov.br/estadual/resolucoes-cetran | 01812bab2ee1d80fe13131cfdf56e863659c0b8d4646c6204edc76749378df2a | 2026-09-24T15:41:00Z | COLLECTED | legal_collected_2026_09_23/states/RJ/resolucoes_cetran.html |
 
+### Estaduais - Rio Grande do Norte (RN)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -164,6 +169,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_PA_DETRAN_PARCIAL | DETRAN-PA | Estadual | PA | Acesso parcial / backend flaky | O portal do DETRAN-PA (SPA) retorna apenas a raiz (200 intermitente); paths como /servicos, /infracoes, /multas e /recursos retornam timeout (000). CETRAN-PA inaccessível. |
 | SRC_PE_DETRAN_PORTAL | DETRAN-PE | Estadual | PE | Acesso bloqueado (403 Akamai/WAF) | O portal do DETRAN-PE retorna 403 Access Denied (Akamai edgesuite) em todos os paths, mesmo com User-Agent de navegador. Provável bot protection ou deny por geo/ASN. |
 | SRC_PE_CETRAN_PORTAL | CETRAN-PE | Estadual | PE | Transport error (connection failed/timeout) | O portal do CETRAN-PE não respondeu em http ou https (timeout). Alternativas cetranpe.pe.gov.br e cetran.pe.gov.br também irresponsivas. |
+| SRC_RN_DETRAN_PORTAL | DETRAN-RN | Estadual | RN | HTTP 503 Service Unavailable / timeout | O portal do DETRAN-RN retornou 503 e, após retries, não respondeu (timeout). Backend indisponível. |
+| SRC_RN_CETRAN_PORTAL | CETRAN-RN | Estadual | RN | Transport error (connection failed/timeout) | O portal do CETRAN-RN não respondeu em http ou https (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -300,11 +307,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0 (CETRAN-RJ em https irresponsivo, mas http funcional)
 - Fontes pendentes de análise: 0
 
+### Estadual (RN)
+- Fontes oficiais identificadas (RN): 2 (DETRAN-RN e CETRAN-RN)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-RN 503/timeout; CETRAN-RN inaccessível)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **RN**
+- Próxima UF: **RO**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
