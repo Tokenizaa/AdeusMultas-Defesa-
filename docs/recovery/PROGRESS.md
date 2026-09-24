@@ -21,9 +21,10 @@
 - RN (Rio Grande do Norte)
 - RO (Rondônia)
 - RR (Roraima)
+- RS (Rio Grande do Sul)
 
 ## Próxima UF
-- RS (Rio Grande do Sul)
+- SC (Santa Catarina)
 
 ## Observações
 - Coleta federal concluída.

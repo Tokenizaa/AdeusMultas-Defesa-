@@ -163,6 +163,13 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RR_DETRAN_RECURSO_AUTUACAO_DEFESA | DETRAN-RR | DETRAN-RR | RR | Formulário | Recurso de Autuação - Defesa Prévia | https://www.detran.rr.gov.br/infracoes/downloads/ | https://www.detran.rr.gov.br/wp-content/uploads/2022/07/recurso_de_autuacao_-_defesa_previa.pdf | 72bca3ce26f57d945a79c071db8f1edd1d48941043a5cda46c921e39f4c30f92 | 2026-09-24T15:47:50Z | COLLECTED | legal_collected_2026_09_23/states/RR/recurso_de_autuacao_defesa_previa.pdf |
 | SRC_RR_DETRAN_RECURSO_CETRAN | DETRAN-RR | DETRAN-RR | RR | Formulário | Recurso ao CETRAN-RR | https://www.detran.rr.gov.br/infracoes/downloads/ | https://www.detran.rr.gov.br/wp-content/uploads/2022/07/recurso_ao_CETRAN_-_RR.pdf | 66207d91e9862d398d1aabcfa37f86682012ada90cfe636eee989cde5be4bb94 | 2026-09-24T15:47:51Z | COLLECTED | legal_collected_2026_09_23/states/RR/recurso_ao_cetran.pdf |
 
+### Estaduais - Rio Grande do Sul (RS)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_RS_DETRAN_APRESENTAR_DEFESA_RECURSO | DETRAN-RS | DETRAN-RS | RS | Serviço | Apresentar defesa e recurso | https://www.detran.rs.gov.br/apresentar-defesa-e-recurso | https://www.detran.rs.gov.br/apresentar-defesa-e-recurso | f3e49ba08f80a3d317d69ea7d7b65f63df117ae2c897d75bd925fb1c5d29f1d3 | 2026-09-24T15:50:39Z | COLLECTED | legal_collected_2026_09_23/states/RS/apresentar_defesa_recurso.html |
+| SRC_RS_CETRAN_RESOLUCOES | CETRAN-RS | CETRAN-RS | RS | Legislação | Resoluções - CETRAN/RS | https://www.cetran.rs.gov.br/resolucoes | https://www.cetran.rs.gov.br/resolucoes | e18ad19d629fc7fca869de819f4da0578f4d397cd48cd8302189d4a56e715e47 | 2026-09-24T15:50:39Z | COLLECTED | legal_collected_2026_09_23/states/RS/resolucoes.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -344,11 +351,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-RR inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (RS)
+- Fontes oficiais identificadas (RS): 2 (DETRAN-RS e CETRAN-RS)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **RS**
+- Próxima UF: **SC**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
