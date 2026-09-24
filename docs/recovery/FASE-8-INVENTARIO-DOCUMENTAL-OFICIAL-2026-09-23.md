@@ -10,22 +10,26 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_FED_PLANALTO_CTB | Planalto | Federal | Legislação | Código de Trânsito Brasileiro (Lei 9.503/1997) | Compilação do CTB | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | 6a5e7d4ce6bd582acb0244b4b8a75837bb4cabc634842bbee2c99a58194e7d2e | 2026-09-23T18:16:00Z | COLLECTED | legal_collected_2026_09_23/federal/ctb.html |
-| SRC_FED_PLANALTO_CTB_PDF | Planalto | Federal | Legislação | Código de Trânsito Brasileiro (Lei 9.503/1997) | Compilação do CTB (PDF) | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | 623f0a987426022735c217262f78ad0eae6e2058dc2077f725200f956031e7d6 | 2026-09-23T18:16:00Z | COLLECTED | legal_collected_2026_09_23/federal/ctb.pdf |
+| SRC_FED_PLANALTO_CTB_PDF | Planalto | Federal | Legislação | Código de Trânsito Brasileiro (Lei 9.503/1997) | Compilação do CTB (PDF) | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm | 623f0a987426022735c217262f78ad0eae6e2058dc2077f725200f956031e7d6 | 2026-09-23T18:16:00Z | COLETA_FALHOU_PAYLOAD_INVALIDO | legal_collected_2026_09_23/federal/ctb.pdf |
 | SRC_FED_SENATRAN_PORTAL | SENATRAN | Federal | Legislation | Portal da SENATRAN | Página inicial da SENATRAN | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran | 3ec76f081ecd9ba75599ca8106be16c1039c15df7b11d6a3b8d74bc9265a1c4d | 2026-09-23T19:10:00Z | COLLECTED | legal_collected_2026_09_23/federal/senatran.html |
-| SRC_FED_CONTRAN_RESOLUCOES | CONTRAN | Federal | Legislation | Resoluções do CONTRAN | Compilação de Resoluções do CONTRAN | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | abb e54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0 | 2026-09-23T19:17:00Z | COLLECTED | legal_collected_2026_09_23/federal/contran_resolutions.html |
-| SRC_FED_CONTRAN_RESOLUCOES_INDIVIDUAL | CONTRAN | Federal | Legislation | Resolução CONTRAN 796/2020 | Resolução CONTRAN 796/2020 | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T18:17:00Z | COLLECTED | legal_collected_2026_09_23/federal/contran_res_796_2020.pdf |
+| SRC_FED_CONTRAN_RESOLUCOES | CONTRAN | Federal | Legislation | Resoluções do CONTRAN | Compilação de Resoluções do CONTRAN | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | abbbe54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0 | 2026-09-23T19:17:00Z | COLLECTED | legal_collected_2026_09_23/federal/contran_resolutions.html |
+| SRC_FED_CONTRAN_RESOLUCOES_INDIVIDUAL | CONTRAN | Federal | Legislation | Resolução CONTRAN 796/2020 | Resolução CONTRAN 796/2020 | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T18:17:00Z | COLETA_FALHOU_PAYLOAD_INVALIDO | legal_collected_2026_09_23/federal/contran_res_796_2020.pdf |
 | SRC_FED_PRF_PORTAL | PRF | Federal | Portal de Recursos | Portal de Multas e Defesas da PRF | Página inicial do portal de multas da PRF | https://sistemas.prf.gov.br/portal/recursos | https://sistemas.prf.gov.br/portal/recursos | 6d4ab6b742457c58ad4c8f3c2d5ddad2643d4e9f32ead6bba69aa67b61fd102d | 2026-09-23T19:11:00Z | COLLECTED | legal_collected_2026_09_23/federal/prf.html |
 | SRC_FED_DNIT_PORTAL | DNIT | Federal | Portal de Recursos | Portal de Multas e Defesas do DNIT | Página inicial do portal de multas do DNIT | https://servicos.dnit.gov.br/multas | https://servicos.dnit.gov.br/multas | 67debf6e429639a2e6f504e5f78434ca68b3e34961a971d6bcd9cdafb612ad7a | 2026-09-23T18:18:00Z | COLLECTED | legal_collected_2026_09_23/federal/dnit.html |
 | SRC_FED_ANTT_PORTAL | ANTT | Federal | Portal de Recursos | Portal de Multas e Defesas da ANTT | Página inicial do portal de multas da ANTT | https://www.gov.br/antt/pt-br/assuntos/passageiros/fiscalizacao-e-multas | https://www.gov.br/antt/pt-br/assuntos/passageiros/fiscalizacao-e-multas | a7c1d5a923af59c401aab4b95e89f94ac3f10e4ce9bbe556f63c72510790efd5 | 2026-09-23T19:12:00Z | COLLECTED | legal_collected_2026_09_23/federal/anttr.html |
 | SRC_FED_INMETRO_RADARES | INMETRO | Federal | Metrologia | Consulta de Radares e Cronotacógrafos | Sistema de consulta de radares cronotacógrafos | https://cronotacografo.rbmlq.gov.br/certificados/consultar | https://cronotacografo.rbmlq.gov.br/certificados/consultar | e67d72bfcf159b1a79cbd89560fca53fa85e8748c84c3e671da998cf3b62e239 | 2026-09-23T19:13:00Z | COLLECTED | legal_collected_2026_09_23/federal/inmet.html |
 | SRC_FED_DOU | DOU | Federal | Diário Oficial | Diário Oficial da União | Consulta ao Diário Oficial da União | https://www.in.gov.br/leiturajornal | https://www.in.gov.br/leiturajornal | 31d48bd3a918942e8233cfcd40cbac5cfc8807ecfa837060752af2eb0021f13a | 2026-09-23T19:14:00Z | COLLECTED | legal_collected_2026_09_23/federal/dou.html |
 | SRC_FED_STJ_JURISPRUDENCIA | STJ | Federal | Jurisprudência | Jurisprudência em Teses - STJ | Portal de jurisprudência do STJ em teses | https://scon.stj.jus.br/SCON/ | https://scon.stj.jus.br/SCON/ | caea3a0b1ab3a8dd6d41d9c185f1ea5dcccb3cccbc116926b166b297286a73fb | 2026-09-23T19:15:00Z | COLLECTED | legal_collected_2026_09_23/federal/stj.html |
+| SRC_FED_CONTRAN_PAYLOAD_NOTFOUND_1 | CONTRAN | Federal | Legislation | Payload de falha de coleta | Resposta de erro {"error_type":"NotFound"} (26B) | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T19:17:00Z | COLETA_FALHOU_PAYLOAD_NOT_FOUND | legal_collected_2026_09_23/federal/contran.html |
+| SRC_FED_CONTRAN_PAYLOAD_NOTFOUND_2 | CONTRAN | Federal | Legislation | Payload de falha de coleta | Resposta de erro {"error_type":"NotFound"} (26B) | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T19:17:00Z | COLETA_FALHOU_PAYLOAD_NOT_FOUND | legal_collected_2026_09_23/federal/contran2.html |
+| SRC_FED_CONTRAN_PAYLOAD_NOTFOUND_3 | CONTRAN | Federal | Legislation | Payload de falha de coleta | Resposta de erro {"error_type":"NotFound"} (26B) | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T19:17:00Z | COLETA_FALHOU_PAYLOAD_NOT_FOUND | legal_collected_2026_09_23/federal/contran_res_7962020.pdf |
+| SRC_FED_CONTRAN_PAYLOAD_NOTFOUND_4 | CONTRAN | Federal | Legislation | Payload de falha de coleta | Resposta de erro {"error_type":"NotFound"} (26B) | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | https://www.gov.br/transportes/pt-br/assuntos/transito/senatran/contran | 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258 | 2026-09-23T19:17:00Z | COLETA_FALHOU_PAYLOAD_NOT_FOUND | legal_collected_2026_09_23/federal/contran_res_list.html |
 
 ### Estaduais - Acre (AC)
 
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
-| SRC_AC_DETRAN_DEFESA_PREVIA_PF | DETRAN-AC | Estadual | AC | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.ac.gov.br/infracoes-multas/multas-informacoes-de-servicos/defesa-previa/pessoa-fisica/ | https://www.detran.ac.gov.br//site/images/stories/downloads/requerimento%20de%20defesa%20previa.pdf | 15950ab7e5de613d9b086baae6894f7b452d8085edefcf4459276e7aa2b7d4f7 | 2026-09-23T22:40:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/defesa_previa_pf.pdf |
+| SRC_AC_DETRAN_DEFESA_PREVIA_PF | DETRAN-AC | Estadual | AC | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.ac.gov.br/infracoes-multas/multas-informacoes-de-servicos/defesa-previa/pessoa-fisica/ | https://www.detran.ac.gov.br//site/images/stories/downloads/requerimento%20de%20defesa%20previa.pdf | 15950ab7e5de613d9b086baae6894f7b452d8085edefcf4459276e7aa2b7d4f7 | 2026-09-23T22:40:00Z | COLETA_FALHOU_PAYLOAD_INVALIDO | legal_collected_2026_09_23/states/AC/defesa_previa_pf.pdf |
 | SRC_AC_DETRAN_PORTARIA_NOVA_PROCURAA | DETRAN-AC | Estadual | AC | Portaria | Nova Portaria PROCURAA_A_O | https://www.detran.ac.gov.br/institucional/portarias/ | https://www.detran.ac.gov.br/wp-content/uploads/2025/12/nova-portaria-PROCURAA_A_O.pdf | 11ef1de1afb04c0100e1162b0b07ed052c7228e1029a5e66b9a6f1c6c52441ce | 2026-09-23T22:42:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/portarias/nova-portaria-PROCURAA_A_O.pdf |
 | SRC_AC_DETRAN_PORTARIA_1159_2024 | DETRAN-AC | Estadual | AC | Portaria | Portaria n° 1159/2024 - Alteração de Portaria (assinatura digital) | https://www.detran.ac.gov.br/institucional/portarias/ | https://www.detran.ac.gov.br/wp-content/uploads/2025/03/Portaria_n__1159_2024_alteracao_portaria_assinatura_digital.pdf | 991e9fcb9edd07550298b4f81a88de13282263968da47f800244e587bf7b438c | 2026-09-23T22:43:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/portarias/Portaria_n__1159_2024_alteracao_portaria_assinatura_digital.pdf |
 | SRC_AC_DETRAN_PORTARIA_1723 | DETRAN-AC | Estadual | AC | Portaria | Portaria 1723 | https://www.detran.ac.gov.br/institucional/portarias/ | https://www.detran.ac.gov.br/wp-content/uploads/2024/04/Portaria_1723.pdf | 175e22e4daa442ff3115804f7319e8a3c3979be1847252d32a972788f6a2794d | 2026-09-23T22:44:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/portarias/Portaria_1723.pdf |
@@ -44,7 +48,7 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_AM_DETRAN_PORTARIA_NORMATIVA_015_2026 | DETRAN-AM | Estadual | AM | Portaria | PORTARIA NORMATIVA No. 015/2026 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/07/PORTARIA-NORMATIVA-No-015.pdf | 08add6a30898435dd9ab9ef4c16921d46fd4a79ab0ab9325ae0e9154ee14b020 | 2026-09-23T23:30:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_normativa_015_2026.pdf |
 | SRC_AM_DETRAN_PORTARIA_NORMATIVA_014_2026 | DETRAN-AM | Estadual | AM | Portaria | PORTARIA NORMATIVA No. 014/2026 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/07/PORTARIA-NORMATIVA-No-014.pdf | 84772aed1d7464653f236b6e4d8fde92325de0f303687da7845a24e361a4f057 | 2026-09-23T23:31:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_normativa_014_2026.pdf |
-| SRC_AM_DETRAN_MEMO_753_2026 | DETRAN-AM | Estadual | AM | Memo | MEMO N° 753/2026 - OPTRAN DETRAN | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/MEMO_N_753_2026_OPTRAN_DETRAN_Portaria.pdf | c52bb2a6c4c005407bce225a26f4be15ea0e38dc4f96d25b94feb62e93dd70b8 | 2026-09-23T23:32:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/memo_753_2026_opttran_detran.pdf |
+| SRC_AM_DETRAN_MEMO_753_2026 | DETRAN-AM | Estadual | AM | Memo | MEMO N° 753/2026 - OPTRAN DETRAN | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/MEMO_N_753_2026_OPTRAN_DETRAN_Portaria.pdf | c52bb2a6c4c005407bce225a26f4be15ea0e38dc4f96d25b94feb62e93dd70b8 | 2026-09-23T23:32:00Z | COLETA_FALHOU_PAYLOAD_INVALIDO | legal_collected_2026_09_23/states/AM/memo_753_2026_opttran_detran.pdf |
 | SRC_AM_DETRAN_PORTARIA_01_03_011210_078105_2026_96 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.078105/2026-96 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.078105_2026_96_Portaria.pdf | 5192f8b88dc0466a0993b667eb4f05b209bde835368d19aa3d8765cdf1c637c3 | 2026-09-23T23:33:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_078105_2026_96.pdf |
 | SRC_AM_DETRAN_PORTARIA_01_03_011210_083647_2026_80 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.083647/2026-80 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.083647_2026_80_Portaria.pdf | 82e54883faf4d63177788b9ff629d8b0907a6a98cb50e2d81b129471ed3af0de | 2026-09-23T23:34:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_083647_2026_80.pdf |
 
@@ -57,13 +61,21 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
-| SRC_LEGISLATIVO_BA_DECRETO_23792_2025 | LEGISLABAHIA_BA | Estadual | BA | Decreto | Decreto nº 23.792/2025 - Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029 | https://www.legislabahia.ba.gov.br/documentos | https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025 | 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2 | 2026-09-23T23:58:03Z | COLLECTED | legal_collected_2026_09_23/states/BA/decreto_legislabahia_23792_2025.pdf |
+| SRC_LEGISLATIVO_BA_DECRETO_23792_2025 | LEGISLABAHIA_BA | Estadual | BA | Decreto | Decreto nº 23.792/2025 - Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029 | https://www.legislabahia.ba.gov.br/documentos | https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025 | 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2 | 2026-09-23T23:58:03Z | FORA_DO_ESCOPO_TRANSITO | legal_collected_2026_09_23/states/BA/decreto_legislabahia_23792_2025.pdf |
 
 ### Estaduais - Ceará (CE)
 
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_CE_DETRAN_INSTRUCAO_SERVICO_004_2007_COHAB | DETRAN-CE | Estadual | CE | Instrução de Serviço | Instrução de Serviços nº 004/2007 – COHAB | https://www.ce.gov.br/detran/legislacao/ | https://www.ce.gov.br/detran/wp-content/uploads/sites/91/2010/06/is004_2007_cohab.pdf | 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/is004_2007_cohab.pdf |
+| SRC_CE_DETRAN_DEFESA_AUTUAR_INFRACAO | DETRAN-CE | DETRAN-CE | CE | Serviço | Defesa de autuação de infração de trânsito | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | ebaded0d43931826c3a02c1527d57fe916bbc4ec78d24dbf304020ece1ea818a | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/defesa_autuar_infracao_transito.html |
+| SRC_CE_DETRAN_RECURSO_JARI | DETRAN-CE | DETRAN-CE | CE | Serviço | Recurso JARI - DETRAN-CE | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | ebaded0d43931826c3a02c1527d57fe916bbc4ec78d24dbf304020ece1ea818a | 2026-09-24T00:12:29Z | DUPLICATA_EXATA | legal_collected_2026_09_23/states/CE/recurso_jari_detran_ce.html |
+| SRC_CE_CETRAN_REGIMENTO_INTERNO_2020 | CETRAN-CE | CETRAN-CE | CE | Regimento Interno | Regimento Interno CETRAN-CE 2020 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | 676bbd60f4379d8641a132c41fbe5a77b5692ec2cd219808e6b1d3795e1e13c6 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/regimento_interno_cetran_ce_2020.pdf |
+| SRC_CE_CETRAN_RESOLUCAO_001_2013 | CETRAN-CE | CETRAN-CE | CE | Resolução | Resolução CETRAN-CE 001/2013 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | 6e2835b007ad87f393623aa1e3095daf9eeb6a9560a0f59d55acbd48d08c8712 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/resolucao_cetran_ce_001_2013.pdf |
+| SRC_CE_CETRAN_RESOLUCAO_001_2014 | CETRAN-CE | CETRAN-CE | CE | Resolução | Resolução CETRAN-CE 001/2014 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | 27aa5bc7b7ad3bff97fbaf336a0bf72a4dca9244b3a4e68dfb69bab8a3cf15aa | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/resolucao_cetran_ce_001_2014.pdf |
+| SRC_CE_CETRAN_RESOLUCAO_003_2019 | CETRAN-CE | CETRAN-CE | CE | Resolução | Resolução CETRAN-CE 003/2019 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | 8825a645a52be3e5a5428b3f9929d48c946a60536970d4f8d1ec597e5661590d | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/resolucao_cetran_ce_003_2019.pdf |
+| SRC_CE_CETRAN_RESOLUCAO_005 | CETRAN-CE | CETRAN-CE | CE | Resolução | Resolução CETRAN-CE 005 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | 805fcf53c4e2abf2386fa3956de7c2b755c5b0aa22d3550ba073c6aedc3be7ec | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/resolucao_cetran_ce_005.pdf |
+| SRC_CE_CETRAN_RESOLUCAO_006 | CETRAN-CE | CETRAN-CE | CE | Resolução | Resolução CETRAN-CE 006 | https://www.ce.gov.br/detran/ | https://www.ce.gov.br/detran/ | de170addd262bd41704f5143169d4afa7b9d90471411252af1487f2d5284b5a3 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/resolucao_cetran_ce_006.pdf |
 
 ### Estaduais - Espírito Santo (ES)
 
@@ -232,14 +244,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 ### Federal
 - Fontes oficiais cadastradas (federal): 9 (do sources-registry)
 - Fontes analisadas: 9
-- Documentos coletados com sucesso: 10 (incluindo variações como PDF e resoluções individuais)
+- Documentos coletados com sucesso: 9 (após reconciliação: ctb.pdf e contran_res_796_2020.pdf reclassificados como payloads de falha)
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
 ### Estadual (AC)
 - Fontes oficiais identificadas (AC): 2 (DETRAN-AC e CETRAN-AC)
 - Fontes analisadas: 2
-- Documentos coletados com sucesso: 4
+- Documentos coletados com sucesso: 3 (defesa_previa_pf.pdf reclassificado como payload de falha na reconciliação)
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AC)
 - Fontes pendentes de análise: 0
 
@@ -253,7 +265,7 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 ### Estadual (AM)
 - Fontes oficiais identificadas (AM): 2 (DETRAN-AM e CETRAN-AM)
 - Fontes analisadas: 2
-- Documentos coletados com sucesso: 5
+- Documentos coletados com sucesso: 4 (memo_753_2026 reclassificado como payload de falha na reconciliação)
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AM inaccessível)
 - Fontes pendentes de análise: 0
 
@@ -267,14 +279,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 ### Estadual (BA)
 - Fontes oficiais identificadas (BA): 1 (LEGISLABAHIA_BA)
 - Fontes analisadas: 1
-- Documentos coletados com sucesso: 1
+- Documentos coletados com sucesso: 0 (decreto_legislabahia_23792_2025.pdf reclassificado como FORA_DO_ESCOPO_TRANSITO — não constitui evidência de cobertura jurídica de trânsito)
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
 ### Estadual (CE)
 - Fontes oficiais identificadas (CE): 2 (DETRAN-CE e CETRAN-CE)
 - Fontes analisados: 2
-- Documentos coletados com sucesso: 7
+- Documentos coletados com sucesso: 8 (7 arquivos CE registrados na reconciliação; 1 duplicata exata — recurso_jari_detran_ce.html = defesa_autuar_infracao_transito.html — não contabilizada como documento independente)
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
@@ -417,6 +429,23 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Documentos coletados com sucesso: 3
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-TO inaccessível; DETRAN-TO via portal www.to.gov.br/detran)
 - Fontes pendentes de análise: 0
+
+## Reconciliação Pós-Auditoria (2026-09-24)
+
+Registros desta execução (reconciliação documental após auditoria de integridade — commit auditado `5c86690`, relatórios: `FASE-8-AUDITORIA-INTEGRIDADE-69-ARQUIVOS-2026-09-24.md` e `FASE-8-RECONCILIACAO-DOCUMENTAL-2026-09-24.md`):
+
+- Primeira rodada nacional concluída e preservada no GitHub (push `5c86690`).
+- Auditoria de integridade concluída (commit `76e5b62`).
+- **71 arquivos físicos identificados** (15 federal + 56 estadual), não 69.
+- **50 válidos sem ressalva**; **3 alertas MIME** (prf.html, stj.html, RJ/formularios_infracoes.html — HTML válido, MIME detectado como JS); **9 inválidos**.
+- **Duplicidade CE:** `recurso_jari_detran_ce.html` é duplicata exata de `defesa_autuar_infracao_transito.html` (SHA `ebaded0d43931826c3a02c1527d57fe916bbc4ec78d24dbf304020ece1ea818a`). Ambos preservados; duplicata registrada explicitamente, não contabilizada como documento independente.
+- **12 arquivos anteriormente sem registro** reconciliados: 4 federais (contran.html, contran2.html, contran_res_7962020.pdf, contran_res_list.html → `COLETA_FALHOU_PAYLOAD_NOT_FOUND`) e 8 CE (registrados, ver seção CE).
+- **5 payloads de falha reclassificados** (arquivo físico preservado como evidência da tentativa, não contabilizado como documento jurídico válido): `federal/ctb.pdf`, `federal/contran_res_796_2020.pdf`, `states/AC/defesa_previa_pf.pdf`, `states/AM/memo_753_2026_opttran_detran.pdf`, `states/BA/decreto_legislabahia_23792_2025.pdf` → `COLETA_FALHOU_PAYLOAD_INVALIDO`.
+- **Hash corrigido:** `SRC_FED_CONTRAN_RESOLUCOES` (`federal/contran_resolutions.html`) — hash registrado estava malformado (`abb e540…`); corrigido para `abbbe54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0`.
+- **BA fora do escopo de trânsito:** `decreto_legislabahia_23792_2025.pdf` reclassificado como `FORA_DO_ESCOPO_TRANSITO` — não constitui evidência de cobertura jurídica de trânsito da BA. Arquivo mantido.
+- **Alertas MIME mantidos como válidos** (sem alteração de arquivo).
+- **Nenhuma nova raspagem realizada** nesta reconciliação.
+- Nenhuma alteração de classificação de cobertura jurídica de UFs (PROCESSADA/COBERTA etc.) — cobertura será analisada em etapa própria.
 
 ## Próximos Passos
 

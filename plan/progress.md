@@ -2,6 +2,8 @@
 
 > **FASE 8 — AUDITORIA DE INTEGRIDADE: CONCLUÍDA** (2026-09-24) — 71 arquivos físicos auditados em `legal_collected_2026_09_23/` (sem modificação). Relatório completo: `docs/recovery/FASE-8-AUDITORIA-INTEGRIDADE-69-ARQUIVOS-2026-09-24.md`.
 
+> **FASE 8 — RECONCILIAÇÃO DOCUMENTAL: CONCLUÍDA** (2026-09-24) — inventário reconciliado com a realidade física de 71 arquivos (15 federal + 56 estadual): 50 válidos, 3 alertas MIME, 9 inválidos, 2 grupos de duplicata, 12 órfãos registrados, 5 payloads de falha reclassificados, hash CONTRAN corrigido, BA reclassificada como FORA_DO_ESCOPO_TRANSITO. Zero arquivos físicos alterados; nenhuma nova raspagem. Relatório: `docs/recovery/FASE-8-RECONCILIACAO-DOCUMENTAL-2026-09-24.md`.
+
 ## Resultado
 
 *PARCIAL — primeira rodada estadual em andamento.*
@@ -26,7 +28,7 @@ O inventário documental foi atualizado e registrado em:
 - Arquivo ctb.html com hash SHA-256: 6a5e7d4ce6bd582acb0244b4b8a75837bb4cabc634842bbee2c99a58194e7d2e
 - Arquivo ctb.pdf com hash SHA-256: 623f0a987426022735c217262f78ad0eae6e2058dc2077f725200f956031e7d6
 - Arquivo senatran.html com hash SHA-256: 3ec76f081ecd9ba75599ca8106be16c1039c15df7b11d6a3b8d74bc9265a1c4d
-- Arquivo contran_resolutions.html com hash SHA-256: abb e54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0
+- Arquivo contran_resolutions.html com hash SHA-256: abbbe54018dde4f96fa27d3402e42f95e0ea93d754452ec7809f62a8249c13f0
 - Arquivo contran_res_796_2020.pdf com hash SHA-256: 6bbcea2b37bd092cc60604157a0ceec8944866fc2478f7af8aea3c3df40bc258
 - Arquivo prf.html com hash SHA-256: 6d4ab6b742457c58ad4c8f3c2d5ddad2643d4e9f32ead6bba69aa67b61fd102d
 - Arquivo dnit.html com hash SHA-256: 67debf6e429639a2e6f504e5f78434ca68b3e34961a971d6bcd9cdafb612ad7a
