@@ -35,6 +35,13 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_AC_DETRAN_PORTARIA_1159_2024 | DETRAN-AC | Estadual | AC | Portaria | Portaria n° 1159/2024 - Alteração de Portaria (assinatura digital) | https://www.detran.ac.gov.br/institucional/portarias/ | https://www.detran.ac.gov.br/wp-content/uploads/2025/03/Portaria_n__1159_2024_alteracao_portaria_assinatura_digital.pdf | 991e9fcb9edd07550298b4f81a88de13282263968da47f800244e587bf7b438c | 2026-09-23T22:43:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/portarias/Portaria_n__1159_2024_alteracao_portaria_assinatura_digital.pdf |
 | SRC_AC_DETRAN_PORTARIA_1723 | DETRAN-AC | Estadual | AC | Portaria | Portaria 1723 | https://www.detran.ac.gov.br/institucional/portarias/ | https://www.detran.ac.gov.br/wp-content/uploads/2024/04/Portaria_1723.pdf | 175e22e4daa442ff3115804f7319e8a3c3979be1847252d32a972788f6a2794d | 2026-09-23T22:44:00Z | COLLECTED | legal_collected_2026_09_23/states/AC/portarias/Portaria_1723.pdf |
 
+### Estaduais - Amapá (AP)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_AP_DETRAN_REQUERIMENTO_INFRACAO | DETRAN-AP | DETRAN-AP | AP | Formulário | Requerimento de Infração | https://www.detran.ap.gov.br/ | https://www.detran.ap.gov.br/detranap/wp-content/uploads/2026/04/requerimento-infracao.pdf | 7a2e6e7383a31724eedd7e2d498714cafcf50071b9cdb61d46f5c49e0e5ca953 | 2026-09-24T22:34:00Z | COLLECTED | legal_collected_2026_09_23/states/AP/requerimento_infracao.pdf |
+| SRC_AP_DETRAN_SOLICITACAO_SERVICOS | DETRAN-AP | DETRAN-AP | AP | Formulário | Solicitação de Serviços | https://www.detran.ap.gov.br/ | https://www.detran.ap.gov.br/detranap/wp-content/uploads/2026/04/solicitacao-de-servicos.pdf | 7cd67e5be101a37aea5f9e1cb1d4823a6cfb4906b2b046f3cded7c9bf54f4c49 | 2026-09-24T22:34:00Z | COLLECTED | legal_collected_2026_09_23/states/AP/solicitacao_de_servicos.pdf |
+
 ### Estaduais - Alagoas (AL)
 
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
@@ -218,8 +225,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
 |----|-------|------------|-------------|--------|-------------|
 | SRC_AC_CETRAN_PORTAL | CETRAN-AC | Estadual | AC | Portal indisponível (DNS não resolve) | O URL oficial https://www.cetran.ac.gov.br não resolve. Tentativo de acesso falhou com erro de DNS. Necessário verificar URL alternativa ou confirmar inaccessibilidade. |
-| SRC_AP_DETRAN_PORTAL | DETRAN-AP | Estadual | AP | Acesso restrito (404/Not Found ou bloqueio) | O portal do DETRAN-AP retorna erros 404 para páginas como /recursos e /servicos, possivelmente devido a bloqueio ou reestruturação. |
-| SRC_AP_CETRAN_PORTAL | CETRAN-AP | Estadual | AP | Sem resposta | O portal do CETRAN-AP não respondeu às solicitações (conexão encerrada ou sem resposta). |
+| SRC_AP_DETRAN_PORTAL | DETRAN-AP | Estadual | AP | Acesso restrito (404/Not Found ou bloqueio) — RECUPERADO em 2026-09-24 | Na primeira rodada o portal retornava 404; em 2026-09-24 o portal www.detran.ap.gov.br/detranap foi acessado e 2 formulários oficiais foram coletados (ver seção AP). Registro histórico preservado. |
+| SRC_AP_CETRAN_PORTAL | CETRAN-AP | Estadual | AP | Sem resposta / DNS não resolve | O domínio www.cetran.ap.gov.br não resolve DNS em 2026-09-24; rota arquivada sisget.detran.ap.gov.br/detranap/institucional-bkp/cetranap/ retornou 404. RECUPERACAO_BLOQUEADA. |
 | SRC_AM_CETRAN_PORTAL | CETRAN-AM | Estadual | AM | Sem resposta | O portal do CETRAN-AM não respondeu às solicitações (conexão encerrada ou sem resposta). |
 | SRC_DF_DETRAN_PORTAL | DETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
 | SRC_DF_CETRAN_PORTAL | CETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
@@ -255,6 +262,13 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes analisadas: 2
 - Documentos coletados com sucesso: 3 (defesa_previa_pf.pdf reclassificado como payload de falha na reconciliação)
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AC)
+- Fontes pendentes de análise: 0
+
+### Estadual (AP)
+- Fontes oficiais identificadas (AP): 2 (DETRAN-AP e CETRAN-AP)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2 (recuperação 2026-09-24: Requerimento de Infração + Solicitação de Serviços — DETRAN-AP)
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AP — DNS não resolve)
 - Fontes pendentes de análise: 0
 
 ### Estadual (AL)

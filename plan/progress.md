@@ -8,6 +8,8 @@
 
 > **FASE 8 — AUDITORIA DOS RECUPERADOS: CONCLUÍDA** (2026-09-24) — 2 PDFs auditados: CONTRAN 796/2020 e Memo 753/2026 AM → ambos `VALIDO_RECUPERADO` (magic `%PDF-`, file PDF 1.4/1.7, SHA-256 idêntico ao inventário, zero divergências). Evidências inválidas originais preservadas. Relatório: `docs/recovery/FASE-8-AUDITORIA-RECUPERADOS-2026-09-24.md`.
 
+> **FASE 8 — RECUPERAÇÃO DE UF BLOQUEADA AP: CONCLUÍDA** (2026-09-24) — DETRAN-AP recuperado: 2 formulários oficiais coletados (Requerimento de Infração, Solicitação de Serviços). CETRAN-AP permanece bloqueado (DNS não resolve). `AP: PROCESSADA — COBERTURA PARCIAL`. Relatório: `docs/recovery/FASE-8-COLETA-BLOQUEADA-AP-2026-09-24.md`.
+
 ## Resultado
 
 *PARCIAL — primeira rodada estadual em andamento.*
