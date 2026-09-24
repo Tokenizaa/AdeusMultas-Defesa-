@@ -174,3 +174,13 @@ Nenhum documento coletado. Fontes bloqueadas:
 - Achado-chave: drift de migrations (6 tabelas knowledge existem no DB, mas não versionadas em supabase/migrations) — a fechar na Fase 9.1.
 - Artefatos: `FASE-9-ESPECIFICACAO-NORMALIZACAO-JURIDICA-2026-09-24.md`, `FASE-9-ROADMAP-IMPLEMENTACAO-2026-09-24.md`.
 - Próxima implementação: Fase 9.1–9.5 (roadmap) — aguardando análise.
+
+## FASE 9.1 — SCHEMA JURÍDICO / MIGRATION DRIFT (2026-09-24)
+
+> **FASE 9.1: CONCLUÍDA** — schema jurídico versionado e drift fechado.
+> **Implementação RAG: NÃO INICIADA** | **Supabase: migration aditiva aplicada (sem DROP/DELETE)**.
+
+- Migration: `supabase/migrations/20260924233015_fase_9_1_knowledge_schema.sql` (6 tabelas knowledge + nova `knowledge_document_relations`, idempotente).
+- 7 tabelas `knowledge_*` com RLS ON; contagens preservadas (tudo 0); relations com 6 constraints + 4 índices.
+- Gaps registrados: policies RLS ausentes nas knowledge_* (padrão atual service-role), extensions em public, `updated_at` ausente em document_versions.
+- Relatório: `docs/recovery/FASE-9.1-MIGRATION-DRIFT-2026-09-24.md`.
