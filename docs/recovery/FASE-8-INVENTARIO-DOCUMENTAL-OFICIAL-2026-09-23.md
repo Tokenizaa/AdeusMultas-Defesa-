@@ -65,6 +65,12 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_CE_DETRAN_INSTRUCAO_SERVICO_004_2007_COHAB | DETRAN-CE | Estadual | CE | Instrução de Serviço | Instrução de Serviços nº 004/2007 – COHAB | https://www.ce.gov.br/detran/legislacao/ | https://www.ce.gov.br/detran/wp-content/uploads/sites/91/2010/06/is004_2007_cohab.pdf | 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/is004_2007_cohab.pdf |
 
+### Estaduais - Espírito Santo (ES)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_ES_DETRAN_RECURSO_MULTA_ONLINE | DETRAN-ES | Estadual | ES | Procedimento | Recurso de Multa On-line | https://detran.es.gov.br/recurso-de-multa-online | https://detran.es.gov.br/recurso-de-multa-online | 0cc85439233035f6bd95e4a20cbc72c2cc78a70758c5710aad7041b938dd49b4 | 2026-09-24T01:37:56Z | COLLECTED | legal_collected_2026_09_23/states/ES/recurso_de_multa_online.html |
+| SRC_ES_CETRAN_RESOLUCAO_20_2026 | CETRAN-ES | Estadual | ES | Resolução | RESOLUÇÃO CETRAN Nº 20-2026 | https://detran.es.gov.br/Media/detran/Legislacao/Resoluções/RESOLUÇÃO%20CETRAN%20Nº%2020-2026.pdf | https://detran.es.gov.br/Media/detran/Legislacao/Resoluções/RESOLUÇÃO%20CETRAN%20Nº%2020-2026.pdf | 5e59fc8be7ef37d6076db98210e1135820f9c08d0481cc3df806881d559bfae9 | 2026-09-24T01:37:56Z | COLLECTED | legal_collected_2026_09_23/states/ES/resolucao_cetran_es_2026_20.pdf |
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -127,11 +133,25 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (ES)
+- Fontes oficiais identificadas (ES): 2 (DETRAN-ES e CETRAN-ES)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
+### Estaduais - Goiás (GO)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_GO_DETRAN_DEFESA_PREVIA_PF | DETRAN-GO | DETRAN-GO | GO | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.go.gov.br/ | https://www.detran.go.gov.br/ | 0cccd1e18e850ae8279470c8900c34d3dc692eaf08b7178e445aa88f920c12d1 | 2026-09-24T02:50:55Z | COLLECTED | legal_collected_2026_09_23/states/GO/requerimento_defesa_previa_recurso_detran_go.pdf |
+| SRC_GO_CETRAN_RESOLUCAO_1999_003 | CETRAN-GO | CETRAN-GO | GO | Resolução | RESOLUÇÃO CETRAN GO nº 1999/003 | https://www.cetran.go.gov.br/ | https://www.cetran.go.gov.br/ | c6736863bc740f08d66104dd4081cb8bbbd439619e4d7bf75dde0f1dc02af511 | 2026-09-24T02:51:31Z | COLLECTED | legal_collected_2026_09_23/states/GO/resolucao_cetran_go_1999_003.pdf |
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **ES**
+- Próxima UF: **MA**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
