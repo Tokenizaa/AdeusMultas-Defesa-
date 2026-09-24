@@ -48,6 +48,23 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_AM_DETRAN_PORTARIA_01_03_011210_078105_2026_96 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.078105/2026-96 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.078105_2026_96_Portaria.pdf | 5192f8b88dc0466a0993b667eb4f05b209bde835368d19aa3d8765cdf1c637c3 | 2026-09-23T23:33:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_078105_2026_96.pdf |
 | SRC_AM_DETRAN_PORTARIA_01_03_011210_083647_2026_80 | DETRAN-AM | Estadual | AM | Portaria | Portaria 01.03.011210.083647/2026-80 | https://www.detran.am.gov.br/acesso-informacao/publicacoes/portarias/portarias-normativas/ | https://www.detran.am.gov.br/wp-content/uploads/2026/08/01.03.011210.083647_2026_80_Portaria.pdf | 82e54883faf4d63177788b9ff629d8b0907a6a98cb50e2d81b129471ed3af0de | 2026-09-23T23:34:00Z | COLLECTED | legal_collected_2026_09_23/states/AM/portaria_01_03_011210_083647_2026_80.pdf |
 
+### Estaduais - Distrito Federal (DF)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
+### Estaduais - Bahia (BA)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_LEGISLATIVO_BA_DECRETO_23792_2025 | LEGISLABAHIA_BA | Estadual | BA | Decreto | Decreto nº 23.792/2025 - Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029 | https://www.legislabahia.ba.gov.br/documentos | https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025 | 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2 | 2026-09-23T23:58:03Z | COLLECTED | legal_collected_2026_09_23/states/BA/decreto_legislabahia_23792_2025.pdf |
+
+### Estaduais - Ceará (CE)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_CE_DETRAN_INSTRUCAO_SERVICO_004_2007_COHAB | DETRAN-CE | Estadual | CE | Instrução de Serviço | Instrução de Serviços nº 004/2007 – COHAB | https://www.ce.gov.br/detran/legislacao/ | https://www.ce.gov.br/detran/wp-content/uploads/sites/91/2010/06/is004_2007_cohab.pdf | 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/is004_2007_cohab.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -56,6 +73,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_AP_DETRAN_PORTAL | DETRAN-AP | Estadual | AP | Acesso restrito (404/Not Found ou bloqueio) | O portal do DETRAN-AP retorna erros 404 para páginas como /recursos e /servicos, possivelmente devido a bloqueio ou reestruturação. |
 | SRC_AP_CETRAN_PORTAL | CETRAN-AP | Estadual | AP | Sem resposta | O portal do CETRAN-AP não respondeu às solicitações (conexão encerrada ou sem resposta). |
 | SRC_AM_CETRAN_PORTAL | CETRAN-AM | Estadual | AM | Sem resposta | O portal do CETRAN-AM não respondeu às solicitações (conexão encerrada ou sem resposta). |
+| SRC_DF_DETRAN_PORTAL | DETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
+| SRC_DF_CETRAN_PORTAL | CETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
 
 ## Estatísticas da Coleta
 
@@ -87,6 +106,20 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-AM inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (DF)
+- Fontes oficiais identificadas (DF): 2 (DETRAN-DF e CETRAN-DF)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-DF e CETRAN-DF inaccessíveis)
+- Fontes pendentes de análise: 0
+
+### Estadual (BA)
+- Fontes oficiais identificadas (BA): 1 (LEGISLABAHIA_BA)
+- Fontes analisadas: 1
+- Documentos coletados com sucesso: 1
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ### Estadual (CE)
 - Fontes oficiais identificadas (CE): 2 (DETRAN-CE e CETRAN-CE)
 - Fontes analisados: 2
@@ -94,17 +127,15 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
-| SRC_LEGISLATIVO_BA_DECRETO_23792_2025 | LEGISLABAHIA_BA | Estadual | BA | Decreto | Decreto nº 23.792/2025 - Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029 | https://www.legislabahia.ba.gov.br/documentos | https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025 | 4f319596d274eb379771b61e4390881c3200d489d9d8ec0aa38ba2e3745079f2 | 2026-09-23T23:58:03Z | COLLECTED | legal_collected_2026_09_23/states/BA/decreto_legislabahia_23792_2025.pdf |
-| SRC_CE_DETRAN_INSTRUCAO_SERVICO_004_2007_COHAB | DETRAN-CE | Estadual | CE | Instrução de Serviço | Instrução de Serviços nº 004/2007 – COHAB | https://www.ce.gov.br/detran/legislacao/ | https://www.ce.gov.br/detran/wp-content/uploads/sites/91/2010/06/is004_2007_cohab.pdf | 176f2ff596d4c54cb170acc2817952a17842ae0766ef206751caa9c302efba74 | 2026-09-24T00:12:29Z | COLLECTED | legal_collected_2026_09_23/states/CE/is004_2007_cohab.pdf
-
 ## Próximos Passos
 1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
 2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
 3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
 4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
-5. Após concluir AM, passar para o próximo estado (BA) seguindo a mesma sequência.
-6. Atualizar o inventário com os resultados de cada etapa.
-7. Gerar relatório final de cobertura documental quando todos os estados forem processados.
+5. Para o DF, documentar oficialmente a inaccessibilidade do DETRAN-DF e CETRAN-DF após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
+6. Após concluir DF, passar para o estado seguinte (ES) seguindo a mesma sequência.
+7. Atualizar o inventário com os resultados de cada etapa.
+8. Gerar relatório final de cobertura documental quando todos os estados forem processados.
 
 ## Conclusão
-A infraestrutura de coleta (SourceFetcher, SnapshotStore, etc.) está funcionando corretamente. Foi possível coletar com sucesso todos os documentos jurídicos federais acessíveis diretamente via HTTP. A fase federal está concluída com 100% de coleta bem-sucedida. No estado do Acre (AC), coletamos documentos iniciais do DETRAN-AC, incluindo um formulário de defesa prévia e portarias oficiais. O CETRAN-AC permanece inaccessível devido à falha de resolução de DNS, requerendo investigação adicional. No estado de Alagoas (AL), coletamos três resoluções do CETRAN-AL acessíveis via página de legislatura. O DETRAN-AL é acessível porém não apresentou links óbvios para formulários de defesa específicos em uma inspeção superficial. No estado do Amazonas (AM), coletamos cinco documentos do DETRAN-AM, incluindo portarias normativas e memorandos. O CETRAN-AM permanece inaccessível. A coleta estadual prosseguirá com o estado seguinte (BA) após a conclusão dos trabalhos no AM.
+A infraestrutura de coleta (SourceFetcher, SnapshotStore, etc.) está funcionando corretamente. Foi possível coletar com sucesso todos os documentos jurídicos federais acessíveis diretamente via HTTP. A fase federal está concluída com 100% de coleta bem-sucedida. No estado do Acre (AC), coletamos documentos iniciais do DETRAN-AC, incluindo um formulário de defesa prévia e portarias oficiais. O CETRAN-AC permanece inaccessível devido à falha de resolução de DNS, requerendo investigação adicional. No estado de Alagoas (AL), coletamos três resoluções do CETRAN-AL acessíveis via página de legislatura. O DETRAN-AL é acessível porém não apresentou links óbvios para formulários de defesa específicos em uma inspeção superficial. No estado do Amazonas (AM), coletamos cinco documentos do DETRAN-AM, incluindo portarias normativas e memorandos. O CETRAN-AM permanece inaccessível. No estado do Distrito Federal (DF), tanto o DETRAN-DF quanto o CETRAN-DF são inaccessíveis devido a erros de transporte (conexão recusada ou timeout) em todas as tentativas de acesso. A coleta estadual prosseguirá com o estado seguinte (ES) após a conclusão dos trabalhos no DF.
