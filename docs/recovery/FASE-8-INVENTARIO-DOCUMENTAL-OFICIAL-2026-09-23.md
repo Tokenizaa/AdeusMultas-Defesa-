@@ -155,6 +155,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 
+### Estaduais - Roraima (RR)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_RR_DETRAN_DEFESA_PREVIA | DETRAN-RR | DETRAN-RR | RR | Serviço | Multas em fase de Autuação – Defesa Prévia | https://www.detran.rr.gov.br/ | https://www.detran.rr.gov.br/infracoes/informacoes/multas-em-fase-de-autuacao-defesa-previa/ | e437a867c46791606da81b18e421760e92ba59ce12195497fe669f46d6addf34 | 2026-09-24T15:47:50Z | COLLECTED | legal_collected_2026_09_23/states/RR/defesa_previa.html |
+| SRC_RR_DETRAN_RECURSO_AUTUACAO_DEFESA | DETRAN-RR | DETRAN-RR | RR | Formulário | Recurso de Autuação - Defesa Prévia | https://www.detran.rr.gov.br/infracoes/downloads/ | https://www.detran.rr.gov.br/wp-content/uploads/2022/07/recurso_de_autuacao_-_defesa_previa.pdf | 72bca3ce26f57d945a79c071db8f1edd1d48941043a5cda46c921e39f4c30f92 | 2026-09-24T15:47:50Z | COLLECTED | legal_collected_2026_09_23/states/RR/recurso_de_autuacao_defesa_previa.pdf |
+| SRC_RR_DETRAN_RECURSO_CETRAN | DETRAN-RR | DETRAN-RR | RR | Formulário | Recurso ao CETRAN-RR | https://www.detran.rr.gov.br/infracoes/downloads/ | https://www.detran.rr.gov.br/wp-content/uploads/2022/07/recurso_ao_CETRAN_-_RR.pdf | 66207d91e9862d398d1aabcfa37f86682012ada90cfe636eee989cde5be4bb94 | 2026-09-24T15:47:51Z | COLLECTED | legal_collected_2026_09_23/states/RR/recurso_ao_cetran.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -178,6 +186,7 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RN_CETRAN_PORTAL | CETRAN-RN | Estadual | RN | Transport error (connection failed/timeout) | O portal do CETRAN-RN não respondeu em http ou https (timeout). |
 | SRC_RO_DETRAN_PORTAL | DETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do DETRAN-RO não respondeu em http ou https (timeout). |
 | SRC_RO_CETRAN_PORTAL | CETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do CETRAN-RO não respondeu em http ou https (timeout). |
+| SRC_RR_CETRAN_PORTAL | CETRAN-RR | Estadual | RR | Transport error (connection failed/timeout) | O portal do CETRAN-RR não respondeu em http ou https (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -328,11 +337,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-RO e CETRAN-RO inaccessíveis)
 - Fontes pendentes de análise: 0
 
+### Estadual (RR)
+- Fontes oficiais identificadas (RR): 2 (DETRAN-RR e CETRAN-RR)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-RR inaccessível)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **RR**
+- Próxima UF: **RS**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

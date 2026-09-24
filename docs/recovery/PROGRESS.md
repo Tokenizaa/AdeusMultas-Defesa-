@@ -20,9 +20,10 @@
 - RJ (Rio de Janeiro)
 - RN (Rio Grande do Norte)
 - RO (Rondônia)
+- RR (Roraima)
 
 ## Próxima UF
-- RR (Roraima)
+- RS (Rio Grande do Sul)
 
 ## Observações
 - Coleta federal concluída.
