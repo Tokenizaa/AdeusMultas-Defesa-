@@ -2,38 +2,20 @@
 
 ## Resultado
 
-*PARCIAL AVANÇADO — coleta federal concluída com 100% de sucesso, coleta estadual iniciada e avançada com AC (Acre), AL (Alagoas), AM (Amazonas), CE (Ceará) e DF (Distrito Federal) bloqueado.
+*PARCIAL — primeira rodada estadual em andamento.*
 
-Foram coletados com sucesso todos os documentos oficiais federais acessíveis diretamente via HTTP:
-- Código de Trânsito Brasileiro (CTB) compilado (HTML e PDF) do Planalto.
-- Portal de multas e defesas do DNIT.
-- Portal de multas e defesas da PRF.
-- Portal de multas e defesas da ANTT.
-- Consulta de radares e cronotacógrafos do INMETRO.
-- Diário Oficial da União (DOU).
-- Jurisprudência em teses do STJ.
-- Resoluções do CONTRAN (página compilada e resolução individual exemplar).
+A Fase 8 mantém a separação entre **processamento da UF** e **cobertura documental da UF**. Uma UF ter documentos coletados não significa que sua cobertura de trânsito esteja completa.
 
-No estado do Acre (AC), foram coletados documentos iniciais do DETRAN-AC:
-- Formulário de Defesa Prévia (Pessoa Física) em PDF.
-- Três portarias oficiais (ex: Nova Portaria PROCURAA_A_O, Portaria n° 1159/2024, Portaria 1723).
+Situação atual da primeira rodada:
+- AC: PROCESSADA — COBERTURA PARCIAL
+- AL: PROCESSADA — COBERTURA PARCIAL
+- AM: PROCESSADA — COBERTURA PARCIAL
+- BA: PROCESSADA — SEM COBERTURA DE TRÂNSITO VALIDADA (o documento coletado não é relevante para o escopo)
+- CE: PROCESSADA — COBERTURA PARCIAL
+- DF: PROCESSADA — BLOQUEADA (0 documentos)
+- ES: PRÓXIMA UF DA PRIMEIRA RODADA
 
-No estado de Alagoas (AL), foram coletados documentos do CETRAN-AL:
-- Três resoluções do CETRAN-AL (ex: RESOLUÇÃO CETRAN Nº 01/2000, RESOLUÇÃO CETRAN Nº 04/2002, RESOLUÇÃO CETRAN Nº 02/2000) acessíveis via página de legislatura do CETRAN-AL.
-
-No estado do Amazonas (AM), foram coletados documentos do DETRAN-AM:
-- Duas portarias normativas (No. 015/2026 e No. 014/2026).
-- Um memorando (MEMO N° 753/2026 - OPTRAN DETRAN).
-- Duas portarias numeradas (01.03.011210.078105/2026-96 e 01.03.011210.083647/2026-80).
-
-No estado do Ceará (CE), foram coletados documentos do DETRAN-CE:
-- Instrução de Serviços nº 004/2007 – COHAB.
-- Formulário de defesa de autuação de infração de trânsito.
-- Recurso JARI.
-- Três resoluções do CETRAN-CE (ex: RESOLUÇÃO CETRAN CE 003/003/2019, RESOLUÇÃO CETRAN CE 001/2014, RESOLUÇÃO CETRAN CE 001/2013).
-- Regimento interno do CETRAN-CE.
-
-No estado do Distrito Federal (DF), nenhuma coleta foi possível devido a erros de transporte (conexão recusada ou timeout) ao tentar acessar os portais do DETRAN-DF e CETRAN-DF.
+A documentação existente é preservada como evidência de coleta. Não serão realizadas complementações das UFs anteriores durante a primeira rodada nacional.
 
 O inventário documental foi atualizado e registrado em:
 `docs/recovery/FASE-8-INVENTARIO-DOCUMENTAL-OFICIAL-2026-09-23.md`
@@ -99,17 +81,16 @@ Nenhum documento coletado. Fontes bloqueadas:
   - CETRAN-AM (sem resposta).
   - DETRAN-DF (erro de transporte).
   - CETRAN-DF (erro de transporte).
-- **PRÓXIMO ESTADO:** Pronto para iniciar coleta com ES (Espírito Santo) seguindo a mesma metodologia.
+- **PRÓXIMO ESTADO:** ES — primeira rodada nacional.
 - **PENDENTE:** Restante dos estados (ES, GO, MA, MT, MS, MG, PA, PB, PE, PI, PR, RJ, RN, RO, RS, SC, SE, SP, TO, RR, AP em investigação, BA - coleta iniciada (1 documento coletado)).
 
 ## Próximos passos dentro da FASE 8
-1. Documentar oficialmente a inaccessibilidade do CETRAN-AC após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
-2. Continuar a coleta de documentos do DETRAN-AC: acessar o portal de recursos e baixar mais documentos específicos de defesa de multas (manuais, resoluções, leis estaduais).
-3. Para o AL, considerar a coleta de mais documentos do CETRAN-AL (outras resoluções, portarias, leis) e do DETRAN-AL (se houver links específicos para defesa).
-4. Para o AM, considerar a coleta de mais documentos do DETRAN-AM (outras portarias, resoluções, leis) e buscar acesso ao CETRAN-AM por meios alternativos.
-5. Para o DF, documentar oficialmente a inaccessibilidade do DETRAN-DF e CETRAN-DF após tentativa de verificação via fontes oficiais de transparência e contato indireto (se possível).
-6. Após concluir DF, passar para o estado seguinte (ES) seguindo a mesma sequência.
-7. Atualizar o inventário e este plano de progresso conforme avançar na coleta estadual.
+
+1. Executar **somente a raspagem/coleta documental da UF ES**.
+2. Não complementar AC, AL, AM, BA, CE ou DF durante a primeira rodada.
+3. Após ES, avançar sequencialmente para a próxima UF ainda não processada.
+4. Ao final da primeira rodada nacional, iniciar uma rodada separada de complementação das UFs com cobertura parcial.
+5. A classificação de cobertura será feita após a coleta nacional; a ausência de um documento específico durante a raspagem não deve gerar pesquisa aberta ou loop.
 
 ## Próxima fase (após conclusão da FASE 8)
 
