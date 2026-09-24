@@ -120,6 +120,15 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 
+### Estaduais - Piauí (PI)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_PI_DETRAN_MULTAS_ART320 | DETRAN-PI | DETRAN-PI | PI | Informação Jurídica | Multas de Trânsito DETRAN-PI - ART. 320 do CTB | https://www.detran.pi.gov.br/ | https://portal.pi.gov.br/detran/multas-de-transito-detran-pi-art-320-do-ctb/ | 582c2690a672dc0fc68d5a3b76ea2d1686a889a9689f9b04e3d9c036adeeabee | 2026-09-24T15:36:21Z | COLLECTED | legal_collected_2026_09_23/states/PI/multas_transito_art320_ctb.html |
+| SRC_PI_DETRAN_RECURSO_MULTA | DETRAN-PI | DETRAN-PI | PI | Serviço | Cadastro de Recurso de Multa (GETRAN) | https://www.detran.pi.gov.br/ | https://www.pi.getran.com.br/site/apps/multa/recurso/cadastrar-recurso.jsp | 9f9afcb1f1dce76e529d870f7f1a22f7c5a4f592287685b93a747a8285726f0c | 2026-09-24T15:36:21Z | COLLECTED | legal_collected_2026_09_23/states/PI/recurso_multa_cadastro.html |
+| SRC_PI_CETRAN_DECRETO_22731_2024 | CETRAN-PI | CETRAN-PI | PI | Decreto | Decreto nº 22.731 de 02 de fevereiro de 2024 | https://www.detran.pi.gov.br/ | https://portal.pi.gov.br/detran/wp-content/uploads/sites/62/2025/11/DECRETO-No-22.731-DE-02-DE-FEVEREIRO-DE-2024.pdf | 8f1a3e2db72becc6e2a972f769a454e34327179cab5a02ad7a04b67dfeb7d922 | 2026-09-24T15:37:24Z | COLLECTED | legal_collected_2026_09_23/states/PI/decreto_22731_2024.pdf |
+| SRC_PI_CETRAN_DECRETO_24023_2025 | CETRAN-PI | CETRAN-PI | PI | Decreto | Decreto nº 24.023 de 19 de agosto de 2025 | https://www.detran.pi.gov.br/ | https://portal.pi.gov.br/detran/wp-content/uploads/sites/62/2025/11/DECRETO-No-24.023-DE-19-DE-AGOSTO-DE-2025.pdf | ddb7054313ef87af8e04b75b9795887401e2f447f887a9a11def169cb153eced | 2026-09-24T15:37:24Z | COLLECTED | legal_collected_2026_09_23/states/PI/decreto_24023_2025.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -254,11 +263,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-PE bloqueado por Akamai 403; CETRAN-PE inaccessível)
 - Fontes pendentes de análise: 0
 
+### Estadual (PI)
+- Fontes oficiais identificadas (PI): 2 (DETRAN-PI e CETRAN-PI via portal.pi.gov.br)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 4
+- Fontes bloqueadas/requerendo ação manual: 0 (CETRAN-PI sem domínio próprio funcional; conteúdo acessível via portal.pi.gov.br/detran/cetran-pi)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **PI**
+- Próxima UF: **PR**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

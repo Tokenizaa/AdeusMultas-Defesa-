@@ -1,0 +1,388 @@
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+    <!-- Head -->
+    <head>
+        <meta charset="ISO-8859-1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta name="description" content="">
+        <meta name="author" content="">
+
+        <!-- metadados importados da página antiga do Detran PI  -->
+        <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+        <meta name="description" content="Departamento de Trânsito de Piauí-PI" />
+        <meta name="keywords" content="DETRAN,PIAUI,PI,DEPARTAMENTO DE TRANSITO" />
+        <meta name="author" content="Search Tecnologia" />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="pt_BR" />
+        <meta property="og:site_name" content="DETRAN-PI" /> 
+        <meta property="og:url" content="http://www.detran.pi.gov.br" />
+        <meta property="og:image" content="../../../images/detranPiaui_logo.png" />
+        <meta property="og:title" content="Departamento de Trânsito de Piauí-PI" />
+        <meta property="og:description" content="Departamento de Trânsito de Piauí-PI" />
+
+        <!-- favicon provisorio, pretendo melhorar a legibilidade do mesmo -->
+        <link rel="icon" type="image/x-icon" href="../../../images/favicon.ico" />
+
+        <title>Detran Piau&iacute;</title>
+
+        <!-- Bootstrap core CSS -->
+        <link href="../../../vendor/bootstrap/css/bootstrap.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/style-main.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/habilitacao.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/consulta_cfcs_credenciadas.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/marcar_reteste_teorico.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/cnh_definitiva.css" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="../../../css/segunda_via_cnh.css" rel="stylesheet">
+        <link rel="stylesheet" href="../../js/jquery-bundle/jquery-ui.theme.css" />
+        <link rel="stylesheet" href="../../js/jquery-bundle/jquery-ui.css" type="text/css" />
+
+        <!-- Font Awesome -->
+        <link rel="stylesheet" href="../../../node_modules/@fortawesome/fontawesome-free/css/all.css">
+        
+        <!-- Alto contraste -->
+        <link rel="stylesheet" href="../../../css/contrast.css">
+
+        <script language="javascript" src="../../js/ajax.js"></script>
+        <script language="JavaScript" src="../../js/validaCampo.js" type="text/JavaScript"></script>
+
+        <script src='https://www.google.com/recaptcha/api.js?hl=pt-BR'></script>
+        <script language="javascript" src="../../js/util_pessoa.js"></script>
+        <script language="javascript" src="../../js/SpryTabbedPanels.js"></script>
+<!-- JavaScript -->
+
+        <!-- Bootstrap core JavaScript -->
+        <script src="../../../vendor/jquery/jquery.min.js"></script>
+        <script src="../../js/jquery-bundle/jquery-ui.min.js" type="text/javascript"></script>
+        <script src="../../../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+        <!-- Plugin JavaScript -->
+        <script src="../../../vendor/jquery-easing/jquery.easing.min.js"></script>
+
+
+
+    </head>
+
+<body  onload="iniciar();">
+  
+  <!-- Cabeçalho -->
+    
+  
+  
+
+
+        
+       
+<script  type="text/javascript">
+    function lpad(originalstr, length, strToPad) {
+        while (originalstr.length < length)
+            originalstr = strToPad + originalstr;
+        return originalstr;
+    }
+
+    function ajustarTamanho(elemento, qnt){
+        if ( elemento.value != "" ) {
+            elemento.value = lpad(elemento.value,qnt,"0");
+        }
+    }
+
+    function validarDadosSolicitacao() {
+        var url = "validar-dados-solicitacao-recurso-exe.jsp";
+        var args = Array();
+
+        args[0] = "placa=" + document.form.NPzlggorTEAHROfwG.value;
+        args[1] = "renavam=" + document.form.UVlmrWKeC.value;
+        args[2] = "cpf=" + document.form.IIxbKLbbCunSn.value;
+        args[3] = "numero_auto=" + document.form.qsmMUsUufguLBdhg.value;
+        args[4] = "orgao_autuador=" + document.form.VAEAwncbqwUKdjq.value;
+        args[5] = "email=" + document.form.GNUgKIZPDrCJRJ.value;
+
+        var respValidar;
+        var tipoRetorno = "-1";
+        var mensagemErro = "Ocorreu ao validar os dados\ntente novamente mais tarde.";
+        try {
+            respValidar = openXmlDocument(url, false, args, 'GET', null);
+            if (respValidar !== null && hasElement(respValidar, 'codigo') && getElementData(respValidar, 'codigo') ==="0" ){
+                tipoRetorno = getElementData(respValidar, "codigo");
+                document.form.FHGHJgDBEI.value =  getElementData(respValidar, "nome-requerente")               
+
+            } else {
+               tipoRetorno = getElementData(respValidar, 'codigo')
+               mensagemErro = hasElement(respValidar, 'descricao')?getElementData(respValidar, 'descricao'):mensagemErro
+               throw Error(mensagemErro);
+            }
+        } catch (e) {
+            alert(e)
+            console.log('Falha na chamada AJAX(validarDadosSolicitacao): ' + e);
+            document.form.NPzlggorTEAHROfwG.focus();
+        }
+        return tipoRetorno;
+    }
+
+    function completaCampo(objCampo, len) {
+        var num = "";
+        var campo = "";
+        var retorno = "";
+        campo = objCampo.value;
+        if (campo.length < len && campo != "") {
+            for (i = 0; i < (len - campo.length); i++) {
+                num += "0";
+            }
+        }
+        retorno = num + campo;
+        objCampo.value = retorno.toUpperCase();
+    }
+
+    function FormataData(objCampo, teclapres) {
+        var campo = "";
+        var tecla = teclapres.keyCode;
+        vr = objCampo.value;
+        if ("0123456789".search(vr.substr(vr.length - 1, 1)) == -1) {
+            vr = vr.substr(0, vr.length - 1);
+            objCampo.value = vr;
+        } else {
+            vr = vr.replace(".", "");
+            vr = vr.replace("/", "");
+            vr = vr.replace("/", "");
+            tam = vr.length + 1;
+            if (tecla != 9 && tecla != 8) {
+                if (tam > 2 && tam < 5) {
+                    objCampo.value = vr.substr(0, tam - 2) + '/' + vr.substr(tam - 2, tam);
+                }
+                if (tam >= 5 && tam <= 10) {
+                    objCampo.value = vr.substr(0, 2) + '/' + vr.substr(2, 2) + '/' + vr.substr(4, 4);
+                }
+            }
+        }
+    }
+
+    function CompletaData(objCampo) {
+        vr = objCampo.value;
+
+        if (objCampo.value.length == 8) {
+            if (objCampo.value.length == 8 & vr.substr(6, 2) <= 30) {
+                objCampo.value = vr.substr(0, 6) + "20" + vr.substr(6, 2);
+            }
+            if (objCampo.value.length == 8 & vr.substr(6, 2) >= 30) {
+                objCampo.value = vr.substr(0, 6) + "19" + vr.substr(6, 2);
+            }
+        }
+    }
+
+    function enviar() {
+        if(document.form.NPzlggorTEAHROfwG.value=="" || document.form.NPzlggorTEAHROfwG.value.length < 5 ) {
+            alert("Placa inválida!");
+            document.form.NPzlggorTEAHROfwG.focus();
+            return false;
+        }
+        if (document.form.UVlmrWKeC.value=="" || document.form.UVlmrWKeC.value.length < 11 ) {
+            alert("Renavam inválido!");
+            document.form.UVlmrWKeC.focus();
+            return false;
+        }
+        
+        //Fazendo uma validação  aguçada de e-mail
+        var email = document.form.GNUgKIZPDrCJRJ.value;
+        var emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        
+        if (email == "" || !emailRegex.test(email)) {
+            alert("E-mail inválido! Certifique-se de que ele está no formato correto (exemplo: usuario@email.com).");
+            document.form.GNUgKIZPDrCJRJ.focus();
+            return false;
+        }
+
+        // validar PLACA
+        var letras, numeros;
+        if (document.form.NPzlggorTEAHROfwG.value.length == 7) {
+            letras = document.form.NPzlggorTEAHROfwG.value.toUpperCase().substring(0,3);
+            numeros = document.form.NPzlggorTEAHROfwG.value.substring(3);
+        } else {
+            letras = document.form.NPzlggorTEAHROfwG.value.toUpperCase().substring(0,2);
+            numeros = document.form.NPzlggorTEAHROfwG.value.substring(2);
+        }
+        var i=0, num=0, let=0;
+        var saida=true;
+
+        for (i=0; i<letras.length; i++) {
+            let = String(letras.substr(i, 1));
+            if ("QAZWSXEDCRFVTGBYHNUJMIKLOP".search(let) == -1) {
+                saida=false;
+                break;
+            }
+        }
+        /*for (i=0; i<numeros.length; i++) {
+            num = String(numeros.substr(i, 1));
+            if ("0123456789".search(num) == -1) {
+                saida=false;
+                break;
+            }
+        }*/
+        if (!saida) {
+            alert("Placa inválida!");
+            document.form.NPzlggorTEAHROfwG.focus();
+            return false;
+        }
+        // validar renavam
+        for (i=0; i<document.form.UVlmrWKeC.value.length; i++) {
+            num = String(document.form.UVlmrWKeC.value.substr(i, 1));
+            if ("0123456789".search(num) == -1) {
+                saida=false;
+                break;
+            }
+        }
+        if (!saida) {
+            alert("Renavam inválido!");
+            document.form.UVlmrWKeC.focus();
+            return false;
+        }
+
+        var validacao = validarDadosSolicitacao();
+        if (validacao === "0") {
+            return true;
+        }
+        return false;
+    }
+
+    function recaptchaCallback() {
+        document.getElementById("btnSubmit").removeAttribute('disabled');
+    };
+</script>
+
+<section class="bg-white text-dark">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <!--h1 class="pb-3 mb-4 border-bottom">
+                    Consulta editais de notificação de multas
+                </h1-->
+                <div>
+                    <div class="tab-pane fade show active mt-4" id="nav-com-foto" role="tabpanel" aria-labelledby="nav-com-foto-tab">
+                        <form class="needs-validation" name="form" class="form-validate" action="cadastrar-recurso.jsp" method="post" onSubmit="return enviar();" novalidate>
+                            <h3 style="text-transform: uppercase;">PROTOCOLAR DEFESA/RECURSO PARA AUTOS DE INFRAÇÃO Detran/PI</h3>
+                            <input type='hidden' id="FHGHJgDBEI" name='FHGHJgDBEI' />
+                            <input type="hidden" id="tipo-recurso" name="tipo-recurso" value="" />
+                            <div class="form-group">
+                                <div>
+                                    <p>
+                                        Preencha os dados abaixo e clique em "Consultar" para prosseguir!
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="hasTip required" for="NPzlggorTEAHROfwG" id="jform_contact_name-lbl">Placa:</label>
+                                    <input class="form-control" type="text" maxlength="7" pattern="[A-Za-z0-9]+" placeholder="Placa" title="Placa" aria-required="true" name="NPzlggorTEAHROfwG" id="NPzlggorTEAHROfwG"  type="text" title="Placa" class="required" value="" id="NPzlggorTEAHROfwG" aria-required="true" required="required" placeholder="BWC1140" required>
+
+                                    <div class="invalid-feedback">
+                                        Por favor, informe um número de placa válido.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label title="Renavam" class="hasTip required" for="UVlmrWKeC" id="jform_contact_email-lbl">Renavam:</label>
+                                    <input class="form-control" type="number" onkeypress="return isNumeric(event)" oninput="maxLengthCheckTypeNumber(this)" min="1"
+                                           max="99999999999" title="Renavam" name="UVlmrWKeC" onblur="ajustarTamanho(this, 11);" id="UVlmrWKeC" required="required" placeholder="Renavam" aria-required="true" value="" required>
+                                    <div class="invalid-feedback">
+                                        Por favor, informe um número de renavam válido.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label title="" class="hasTip required" for="cpf" id="nome-lbl">CPF:</label>
+                                    <input type="text" name="IIxbKLbbCunSn" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" maxlength="14" class="required form-control" title="CPF"  placeholder="CPF" id="IIxbKLbbCunSn" aria-required="true" required required="required"
+                                           onkeydown="FormataCPFCNPJ(this.name, event);" value="">
+                                    <div class="invalid-feedback">
+                                        Por favor, informe seu CPF.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="exampleInputEmail1">Email:</label>
+                                    <input type="email" placeholder="Email" id="GNUgKIZPDrCJRJ" name="GNUgKIZPDrCJRJ" class="required form-control" title="Email"  aria-required="true" required required="required">
+                                    <div class="invalid-feedback">
+                                        Por favor, informe seu Email.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label title="numeroAuto" class="hasTip required" for="qsmMUsUufguLBdhg" id="jform_contact_email-lbl">Número do Auto de Infração:</label>
+                                    <input class="form-control" type="text"  oninput="maxLengthCheckTypeNumber(this)" min="1"
+                                           max="99999999999" title="NumeroAuto" name="qsmMUsUufguLBdhg" onblur="ajustarTamanho(this, 10);" id="qsmMUsUufguLBdhg" required="required" placeholder="Número do Auto de Infração" aria-required="true" required>
+                                    <div class="invalid-feedback">
+                                        Por favor, informe um número de autuação válido.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-4 mb-3">
+                                    <label title="numeroAutuador" class="hasTip required" for="VAEAwncbqwUKdjq" id="jform_contact_email-lbl">Número do Órgão Autuador:</label>
+                                    <input class="form-control" type="number" onkeypress="return isNumeric(event)" oninput="maxLengthCheckTypeNumber(this)" min="1"
+                                           max="99999999999" title="NumeroAuto" name="VAEAwncbqwUKdjq" onblur="ajustarTamanho(this, 6);" id="VAEAwncbqwUKdjq" required="required" placeholder="Número do Órgão Autuador" aria-required="true" required>
+                                    <div class="invalid-feedback">
+                                        Por favor, informe um número do Autuador válido.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <label>Validação da Consulta <small>(Marque o campo para validar a consulta)</small></label>
+                            <div class="g-recaptcha" data-callback="recaptchaCallback" data-sitekey="6LfYKPEpAAAAAO_zO6sGiPbE_gS_xDc4ppjqIZuM"></div>
+                            <hr>
+                            <button
+                                class="btn bg-secondary text-white mb-3 validate"
+                                name="Consultar editais de notificação de multas"
+                                id="btnSubmit"
+                                type="submit"
+                                value="Submit"
+                                disabled>Consultar</button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Max length type number -->
+<script src="../../../js/max-length-check-type-number.js"></script>
+<!-- Max length type number -->
+<script src="../../../js/max-length-check-type-number.js"></script>
+
+<script language="JavaScript" type="text/JavaScript">
+    function iniciar() {
+        
+    }
+</script>
+
+  
+  <!-- Rodapé -->
+    
+    
+</body>
+</html>
+

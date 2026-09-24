@@ -15,9 +15,10 @@
 - PA (Pará)
 - PB (Paraíba)
 - PE (Pernambuco)
+- PI (Piauí)
 
 ## Próxima UF
-- PI (Piauí)
+- PR (Paraná)
 
 ## Observações
 - Coleta federal concluída.
