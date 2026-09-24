@@ -8,9 +8,10 @@
 - CE (Ceará)
 - ES (Espírito Santo)
 - GO (Goiás)
+- MA (Maranhão)
 
 ## Próxima UF
-- MA (Maranhão)
+- MG (Minas Gerais)
 
 ## Observações
 - Coleta federal concluída.

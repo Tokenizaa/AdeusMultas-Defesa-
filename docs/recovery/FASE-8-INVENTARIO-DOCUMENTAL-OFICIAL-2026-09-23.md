@@ -139,6 +139,12 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Documentos coletados com sucesso: 2
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
+### Estadual (MA)
+- Fontes oficiais identificadas (MA): 2 (DETRAN-MA e CETRAN-MA)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-MA e CETRAN-MA inaccessíveis)
+- Fontes pendentes de análise: 0
 
 ### Estaduais - Goiás (GO)
 
@@ -147,11 +153,17 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_GO_DETRAN_DEFESA_PREVIA_PF | DETRAN-GO | DETRAN-GO | GO | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.go.gov.br/ | https://www.detran.go.gov.br/ | 0cccd1e18e850ae8279470c8900c34d3dc692eaf08b7178e445aa88f920c12d1 | 2026-09-24T02:50:55Z | COLLECTED | legal_collected_2026_09_23/states/GO/requerimento_defesa_previa_recurso_detran_go.pdf |
 | SRC_GO_CETRAN_RESOLUCAO_1999_003 | CETRAN-GO | CETRAN-GO | GO | Resolução | RESOLUÇÃO CETRAN GO nº 1999/003 | https://www.cetran.go.gov.br/ | https://www.cetran.go.gov.br/ | c6736863bc740f08d66104dd4081cb8bbbd439619e4d7bf75dde0f1dc02af511 | 2026-09-24T02:51:31Z | COLLECTED | legal_collected_2026_09_23/states/GO/resolucao_cetran_go_1999_003.pdf |
 
+### Estaduais - Maranhão (MA)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **MA**
+- Próxima UF: **MG**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
