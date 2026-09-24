@@ -22,9 +22,10 @@
 - RO (Rondônia)
 - RR (Roraima)
 - RS (Rio Grande do Sul)
+- SC (Santa Catarina)
 
 ## Próxima UF
-- SC (Santa Catarina)
+- SE (Sergipe)
 
 ## Observações
 - Coleta federal concluída.

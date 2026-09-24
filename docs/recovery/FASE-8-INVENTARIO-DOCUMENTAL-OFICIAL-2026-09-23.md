@@ -170,6 +170,14 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RS_DETRAN_APRESENTAR_DEFESA_RECURSO | DETRAN-RS | DETRAN-RS | RS | Serviço | Apresentar defesa e recurso | https://www.detran.rs.gov.br/apresentar-defesa-e-recurso | https://www.detran.rs.gov.br/apresentar-defesa-e-recurso | f3e49ba08f80a3d317d69ea7d7b65f63df117ae2c897d75bd925fb1c5d29f1d3 | 2026-09-24T15:50:39Z | COLLECTED | legal_collected_2026_09_23/states/RS/apresentar_defesa_recurso.html |
 | SRC_RS_CETRAN_RESOLUCOES | CETRAN-RS | CETRAN-RS | RS | Legislação | Resoluções - CETRAN/RS | https://www.cetran.rs.gov.br/resolucoes | https://www.cetran.rs.gov.br/resolucoes | e18ad19d629fc7fca869de819f4da0578f4d397cd48cd8302189d4a56e715e47 | 2026-09-24T15:50:39Z | COLLECTED | legal_collected_2026_09_23/states/RS/resolucoes.html |
 
+### Estaduais - Santa Catarina (SC)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_SC_DETRAN_MULTAS_PENALIDADES | DETRAN-SC | DETRAN-SC | SC | Serviço | Multas e Penalidades | https://www.detran.sc.gov.br/multas-e-penalidades/ | https://www.detran.sc.gov.br/multas-e-penalidades/ | c8714689934c206696680fb2d5d1c41df77154168b8eb457b6b3bbe663d5b9a2 | 2026-09-24T15:52:59Z | COLLECTED | legal_collected_2026_09_23/states/SC/multas_penalidades.html |
+| SRC_SC_DETRAN_DEFESA_AUTUACAO | DETRAN-SC | DETRAN-SC | SC | Serviço | Defesa de Autuação | https://www.detran.sc.gov.br/defesa-de-autuacao/ | https://www.detran.sc.gov.br/defesa-de-autuacao/ | 0bfe2171ae4bc0ce082a21d086b42ee4288d44c7dc0433342a7daeb72cbc028e | 2026-09-24T15:52:59Z | COLLECTED | legal_collected_2026_09_23/states/SC/defesa_autuacao.html |
+| SRC_SC_CETRAN_RESOLUCOES | CETRAN-SC | CETRAN-SC | SC | Legislação | Resoluções - CETRAN/SC | https://cetran.sc.gov.br/resolucoes/ | https://cetran.sc.gov.br/resolucoes/ | 029b4d9f5c46d0e9abda66cdf2f83ca46d48c6e6a5621f43ae702a52ff888f24 | 2026-09-24T15:52:59Z | COLLECTED | legal_collected_2026_09_23/states/SC/resolucoes.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -358,11 +366,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (SC)
+- Fontes oficiais identificadas (SC): 2 (DETRAN-SC e CETRAN-SC)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 3
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **SC**
+- Próxima UF: **SE**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
