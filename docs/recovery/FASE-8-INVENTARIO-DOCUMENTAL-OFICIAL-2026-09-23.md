@@ -71,6 +71,32 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 | SRC_ES_DETRAN_RECURSO_MULTA_ONLINE | DETRAN-ES | Estadual | ES | Procedimento | Recurso de Multa On-line | https://detran.es.gov.br/recurso-de-multa-online | https://detran.es.gov.br/recurso-de-multa-online | 0cc85439233035f6bd95e4a20cbc72c2cc78a70758c5710aad7041b938dd49b4 | 2026-09-24T01:37:56Z | COLLECTED | legal_collected_2026_09_23/states/ES/recurso_de_multa_online.html |
 | SRC_ES_CETRAN_RESOLUCAO_20_2026 | CETRAN-ES | Estadual | ES | Resolução | RESOLUÇÃO CETRAN Nº 20-2026 | https://detran.es.gov.br/Media/detran/Legislacao/Resoluções/RESOLUÇÃO%20CETRAN%20Nº%2020-2026.pdf | https://detran.es.gov.br/Media/detran/Legislacao/Resoluções/RESOLUÇÃO%20CETRAN%20Nº%2020-2026.pdf | 5e59fc8be7ef37d6076db98210e1135820f9c08d0481cc3df806881d559bfae9 | 2026-09-24T01:37:56Z | COLLECTED | legal_collected_2026_09_23/states/ES/resolucao_cetran_es_2026_20.pdf |
+
+### Estaduais - Goiás (GO)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_GO_DETRAN_DEFESA_PREVIA_PF | DETRAN-GO | DETRAN-GO | GO | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.go.gov.br/ | https://www.detran.go.gov.br/ | 0cccd1e18e850ae8279470c8900c34d3dc692eaf08b7178e445aa88f920c12d1 | 2026-09-24T02:50:55Z | COLLECTED | legal_collected_2026_09_23/states/GO/requerimento_defesa_previa_recurso_detran_go.pdf |
+| SRC_GO_CETRAN_RESOLUCAO_1999_003 | CETRAN-GO | CETRAN-GO | GO | Resolução | RESOLUÇÃO CETRAN GO nº 1999/003 | https://www.cetran.go.gov.br/ | https://www.cetran.go.gov.br/ | c6736863bc740f08d66104dd4081cb8bbbd439619e4d7bf75dde0f1dc02af511 | 2026-09-24T02:51:31Z | COLLECTED | legal_collected_2026_09_23/states/GO/resolucao_cetran_go_1999_003.pdf |
+
+### Estaduais - Maranhão (MA)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
+### Estaduais - Minas Gerais (MG)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_MG_DETRAN_DEFESA_PREVIA_PF | DETRAN-MG | DETRAN-MG | MG | Serviço | Apresentar defesa prévia (multa) | https://www.detran.mg.gov.br/ | https://www.detran.mg.gov.br/infracoes/multa/apresentar-defesa-previa-infracao-1 | f0cbb02f78607f29809b718620ecc268a169b5382a0562215d21a24d1a227c91 | 2026-09-24T14:31:34Z | COLLECTED | legal_collected_2026_09_23/states/MG/apresentar_defesa_previa_mg.html |
+
+### Estaduais - Mato Grosso do Sul (MS)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_MS_DETRAN_PORTARIA_211_2026 | DETRAN-MS | DETRAN-MS | MS | Portaria | PORTARIA DETRAN/MS Nº 211 DE 18 DE JUNHO DE 2026 | https://www.detran.ms.gov.br/orgaos_colegiados/junta-administrativa-de-recursos-de-infracao-de-transito/ | https://www.detran.ms.gov.br/wp-content/uploads/2026/06/PORTARIA-DETRANMS-N-No-211-DE-18-DE-JUNHO-DE-2026.pdf | a00ac1712a499b4d04214c1dfad00e136a842b1437d158a449ad0d5304985cd6 | 2026-09-24T15:19:44Z | COLLECTED | legal_collected_2026_09_23/states/MS/portaria_detranms_211_2026.pdf |
+| SRC_MS_CETRAN_REGIMENTO_INTERNO | CETRAN-MS | CETRAN-MS | MS | Regimento Interno | Regimento Interno do CETRAN-MS | https://www.cetran.ms.gov.br/legislacao | https://www.sejusp.ms.gov.br/wp-content/uploads/2025/11/Regimento-Interno-CETRAN.pdf | 55b474d84c0daa8a733cc0cc3f2e80682144762ffd3800e09813a4457193bdc5 | 2026-09-24T15:19:46Z | COLLECTED | legal_collected_2026_09_23/states/MS/regimento_interno_cetran.pdf |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -81,6 +107,9 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_AM_CETRAN_PORTAL | CETRAN-AM | Estadual | AM | Sem resposta | O portal do CETRAN-AM não respondeu às solicitações (conexão encerrada ou sem resposta). |
 | SRC_DF_DETRAN_PORTAL | DETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
 | SRC_DF_CETRAN_PORTAL | CETRAN-DF | Estadual | DF | Transport error (connection failed) | Todas as tentativas de acesso falharam com erro de transporte (conexão recusada ou timeout). |
+| SRC_MA_DETRAN_PORTAL | DETRAN-MA | Estadual | MA | Sem resposta / JS redirect não resolvido | O portal do DETRAN-MA responde com redirect via JavaScript para paginas/Home.xhtml, que retorna 404. Não foi possível extrair conteúdo estático. |
+| SRC_MA_CETRAN_PORTAL | CETRAN-MA | Estadual | MA | Transport error (timeout) | O portal do CETRAN-MA não respondeu (timeout). |
+| SRC_MG_CETRAN_PORTAL | CETRAN-MG | Estadual | MG | Transport error (timeout) | O portal do CETRAN-MG não respondeu (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -139,12 +168,21 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Documentos coletados com sucesso: 2
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
+
+### Estadual (GO)
+- Fontes oficiais identificadas (GO): 2 (DETRAN-GO e CETRAN-GO)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
+
 ### Estadual (MA)
 - Fontes oficiais identificadas (MA): 2 (DETRAN-MA e CETRAN-MA)
 - Fontes analisadas: 2
 - Documentos coletados com sucesso: 0
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-MA e CETRAN-MA inaccessíveis)
 - Fontes pendentes de análise: 0
+
 ### Estadual (MG)
 - Fontes oficiais identificadas (MG): 2 (DETRAN-MG e CETRAN-MG)
 - Fontes analisadas: 2
@@ -152,30 +190,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-MG inaccessível)
 - Fontes pendentes de análise: 0
 
-### Estaduais - Goiás (GO)
-
-| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
-|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
-| SRC_GO_DETRAN_DEFESA_PREVIA_PF | DETRAN-GO | DETRAN-GO | GO | Formulário | Requerimento de Defesa Prévia - Pessoa Física | https://www.detran.go.gov.br/ | https://www.detran.go.gov.br/ | 0cccd1e18e850ae8279470c8900c34d3dc692eaf08b7178e445aa88f920c12d1 | 2026-09-24T02:50:55Z | COLLECTED | legal_collected_2026_09_23/states/GO/requerimento_defesa_previa_recurso_detran_go.pdf |
-| SRC_GO_CETRAN_RESOLUCAO_1999_003 | CETRAN-GO | CETRAN-GO | GO | Resolução | RESOLUÇÃO CETRAN GO nº 1999/003 | https://www.cetran.go.gov.br/ | https://www.cetran.go.gov.br/ | c6736863bc740f08d66104dd4081cb8bbbd439619e4d7bf75dde0f1dc02af511 | 2026-09-24T02:51:31Z | COLLECTED | legal_collected_2026_09_23/states/GO/resolucao_cetran_go_1999_003.pdf |
-
-### Estaduais - Maranhão (MA)
-
-| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
-|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
-
+### Estadual (MS)
+- Fontes oficiais identificadas (MS): 2 (DETRAN-MS e CETRAN-MS)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 2
+- Fontes bloqueadas/requerendo ação manual: 0
+- Fontes pendentes de análise: 0
 
 ## Próximos Passos
-### Estaduais - Minas Gerais (MG)
-
-| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
-|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
-| SRC_MG_DETRAN_DEFESA_PREVIA_PF | DETRAN-MG | DETRAN-MG | MG | Serviço | Apresentar defesa prévia (multa) | https://www.detran.mg.gov.br/ | https://www.detran.mg.gov.br/infracoes/multa/apresentar-defesa-previa-infracao-1 | f0cbb02f78607f29809b718620ecc268a169b5382a0562215d21a24d1a227c91 | 2026-09-24T14:31:34Z | COLLECTED | legal_collected_2026_09_23/states/MG/apresentar_defesa_previa_mg.html
-
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **MS**
+- Próxima UF: **MT**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

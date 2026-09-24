@@ -10,9 +10,10 @@
 - GO (Goiás)
 - MA (Maranhão)
 - MG (Minas Gerais)
+- MS (Mato Grosso do Sul)
 
 ## Próxima UF
-- MS (Mato Grosso do Sul)
+- MT (Mato Grosso)
 
 ## Observações
 - Coleta federal concluída.
