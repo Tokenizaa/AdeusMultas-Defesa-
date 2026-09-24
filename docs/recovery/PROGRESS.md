@@ -9,9 +9,10 @@
 - ES (Espírito Santo)
 - GO (Goiás)
 - MA (Maranhão)
+- MG (Minas Gerais)
 
 ## Próxima UF
-- MG (Minas Gerais)
+- MS (Mato Grosso do Sul)
 
 ## Observações
 - Coleta federal concluída.
