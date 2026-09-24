@@ -23,9 +23,10 @@
 - RR (Roraima)
 - RS (Rio Grande do Sul)
 - SC (Santa Catarina)
+- SE (Sergipe)
 
 ## Próxima UF
-- SE (Sergipe)
+- SP (São Paulo)
 
 ## Observações
 - Coleta federal concluída.

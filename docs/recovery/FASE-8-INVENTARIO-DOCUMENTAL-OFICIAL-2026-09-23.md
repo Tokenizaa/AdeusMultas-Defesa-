@@ -178,6 +178,11 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_SC_DETRAN_DEFESA_AUTUACAO | DETRAN-SC | DETRAN-SC | SC | Serviço | Defesa de Autuação | https://www.detran.sc.gov.br/defesa-de-autuacao/ | https://www.detran.sc.gov.br/defesa-de-autuacao/ | 0bfe2171ae4bc0ce082a21d086b42ee4288d44c7dc0433342a7daeb72cbc028e | 2026-09-24T15:52:59Z | COLLECTED | legal_collected_2026_09_23/states/SC/defesa_autuacao.html |
 | SRC_SC_CETRAN_RESOLUCOES | CETRAN-SC | CETRAN-SC | SC | Legislação | Resoluções - CETRAN/SC | https://cetran.sc.gov.br/resolucoes/ | https://cetran.sc.gov.br/resolucoes/ | 029b4d9f5c46d0e9abda66cdf2f83ca46d48c6e6a5621f43ae702a52ff888f24 | 2026-09-24T15:52:59Z | COLLECTED | legal_collected_2026_09_23/states/SC/resolucoes.html |
 
+### Estaduais - Sergipe (SE)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -202,6 +207,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_RO_DETRAN_PORTAL | DETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do DETRAN-RO não respondeu em http ou https (timeout). |
 | SRC_RO_CETRAN_PORTAL | CETRAN-RO | Estadual | RO | Transport error (connection failed/timeout) | O portal do CETRAN-RO não respondeu em http ou https (timeout). |
 | SRC_RR_CETRAN_PORTAL | CETRAN-RR | Estadual | RR | Transport error (connection failed/timeout) | O portal do CETRAN-RR não respondeu em http ou https (timeout). |
+| SRC_SE_DETRAN_PORTAL | DETRAN-SE | Estadual | SE | Acesso bloqueado (403 Cloudflare challenge) | O portal do DETRAN-SE retorna 403 "Attention Required! | Cloudflare" (challenge de bot protection) em todos os paths, mesmo com User-Agent de navegador. |
+| SRC_SE_CETRAN_PORTAL | CETRAN-SE | Estadual | SE | Transport error (connection failed/timeout) | O portal do CETRAN-SE não respondeu em http ou https (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -373,11 +380,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (SE)
+- Fontes oficiais identificadas (SE): 2 (DETRAN-SE e CETRAN-SE)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-SE bloqueado por Cloudflare 403; CETRAN-SE inaccessível)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **SE**
+- Próxima UF: **SP**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
