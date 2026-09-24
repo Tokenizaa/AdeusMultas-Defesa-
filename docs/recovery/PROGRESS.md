@@ -12,9 +12,10 @@
 - MG (Minas Gerais)
 - MS (Mato Grosso do Sul)
 - MT (Mato Grosso)
+- PA (Pará)
 
 ## Próxima UF
-- PA (Pará)
+- PB (Paraíba)
 
 ## Observações
 - Coleta federal concluída.

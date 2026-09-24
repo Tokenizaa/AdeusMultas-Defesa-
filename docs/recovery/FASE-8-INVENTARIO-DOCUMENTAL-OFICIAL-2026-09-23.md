@@ -102,6 +102,12 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
 |----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
 
+### Estaduais - Pará (PA)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+| SRC_PA_DETRAN_PORTAL | DETRAN-PA | DETRAN-PA | PA | Portal | Portal oficial do DETRAN-PA (shell SPA) | https://www.detran.pa.gov.br/ | https://www.detran.pa.gov.br/ | d138c2e598299b6d0afd9a56b2a651f47e374d33c28b462e21b94fe9351191cf | 2026-09-24T15:29:16Z | COLLECTED | legal_collected_2026_09_23/states/PA/portal_detran_pa.html |
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -117,6 +123,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_MG_CETRAN_PORTAL | CETRAN-MG | Estadual | MG | Transport error (timeout) | O portal do CETRAN-MG não respondeu (timeout). |
 | SRC_MT_DETRAN_PORTAL | DETRAN-MT | Estadual | MT | Transport error (TLS handshake ok, resposta HTTP nunca retorna) | O portal do DETRAN-MT redireciona para https://www.detran.mt.gov.br/, cujo TLS conecta mas a resposta HTTP nunca é retornada (timeout mesmo com 35s). F5 BigIP no ar, backend irresponsivo. |
 | SRC_MT_CETRAN_PORTAL | CETRAN-MT | Estadual | MT | Transport error (connection failed/timeout) | O portal do CETRAN-MT não respondeu em http ou https (timeout). |
+| SRC_PA_CETRAN_PORTAL | CETRAN-PA | Estadual | PA | Transport error (connection failed/timeout) | O portal do CETRAN-PA não respondeu em http ou https (timeout). |
+| SRC_PA_DETRAN_PARCIAL | DETRAN-PA | Estadual | PA | Acesso parcial / backend flaky | O portal do DETRAN-PA (SPA) retorna apenas a raiz (200 intermitente); paths como /servicos, /infracoes, /multas e /recursos retornam timeout (000). CETRAN-PA inaccessível. |
 
 ## Estatísticas da Coleta
 
@@ -211,11 +219,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-MT e CETRAN-MT inaccessíveis)
 - Fontes pendentes de análise: 0
 
+### Estadual (PA)
+- Fontes oficiais identificadas (PA): 2 (DETRAN-PA e CETRAN-PA)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 1
+- Fontes bloqueadas/requerendo ação manual: 1 (CETRAN-PA inaccessível; DETRAN-PA acesso parcial - apenas raiz do portal SPA)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **PA**
+- Próxima UF: **PB**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.
