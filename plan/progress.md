@@ -6,6 +6,8 @@
 
 > **FASE 8 — RECUPERAÇÃO DE PAYLOADS INVÁLIDOS: CONCLUÍDA** (2026-09-24) — 4 alvos: CONTRAN 796/2020 RECUPERADO (`contran_res_796_2020_recuperado.pdf`) e Memo 753/2026 AM RECUPERADO (`memo_753_2026_recuperado.pdf`); CTB PDF e Defesa Prévia AC RECUPERACAO_BLOQUEADA (fonte oficial não disponibiliza o PDF nos caminhos atuais). Arquivos de falha originais preservados. Relatório: `docs/recovery/FASE-8-RECUPERACAO-PAYLOADS-INVALIDOS-2026-09-24.md`.
 
+> **FASE 8 — AUDITORIA DOS RECUPERADOS: CONCLUÍDA** (2026-09-24) — 2 PDFs auditados: CONTRAN 796/2020 e Memo 753/2026 AM → ambos `VALIDO_RECUPERADO` (magic `%PDF-`, file PDF 1.4/1.7, SHA-256 idêntico ao inventário, zero divergências). Evidências inválidas originais preservadas. Relatório: `docs/recovery/FASE-8-AUDITORIA-RECUPERADOS-2026-09-24.md`.
+
 ## Resultado
 
 *PARCIAL — primeira rodada estadual em andamento.*
