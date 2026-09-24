@@ -97,6 +97,11 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_MS_DETRAN_PORTARIA_211_2026 | DETRAN-MS | DETRAN-MS | MS | Portaria | PORTARIA DETRAN/MS Nº 211 DE 18 DE JUNHO DE 2026 | https://www.detran.ms.gov.br/orgaos_colegiados/junta-administrativa-de-recursos-de-infracao-de-transito/ | https://www.detran.ms.gov.br/wp-content/uploads/2026/06/PORTARIA-DETRANMS-N-No-211-DE-18-DE-JUNHO-DE-2026.pdf | a00ac1712a499b4d04214c1dfad00e136a842b1437d158a449ad0d5304985cd6 | 2026-09-24T15:19:44Z | COLLECTED | legal_collected_2026_09_23/states/MS/portaria_detranms_211_2026.pdf |
 | SRC_MS_CETRAN_REGIMENTO_INTERNO | CETRAN-MS | CETRAN-MS | MS | Regimento Interno | Regimento Interno do CETRAN-MS | https://www.cetran.ms.gov.br/legislacao | https://www.sejusp.ms.gov.br/wp-content/uploads/2025/11/Regimento-Interno-CETRAN.pdf | 55b474d84c0daa8a733cc0cc3f2e80682144762ffd3800e09813a4457193bdc5 | 2026-09-24T15:19:46Z | COLLECTED | legal_collected_2026_09_23/states/MS/regimento_interno_cetran.pdf |
 
+### Estaduais - Mato Grosso (MT)
+
+| ID | Fonte | Autoridade | Jurisdicção | Tipo de Documento | Título | URL Oficial | URL de Coleta | Hash SHA-256 | Data da Coleta | Status | Arquivo |
+|----|-------|------------|-------------|-------------------|--------|-------------|---------------|--------------|----------------|--------|---------|
+
 ## Fontes Analisadas mas Não Coletadas (Bloqueadas ou Requerendo Ação Manual)
 
 | ID | Fonte | Autoridade | Jurisdicção | Motivo | Observações |
@@ -110,6 +115,8 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 | SRC_MA_DETRAN_PORTAL | DETRAN-MA | Estadual | MA | Sem resposta / JS redirect não resolvido | O portal do DETRAN-MA responde com redirect via JavaScript para paginas/Home.xhtml, que retorna 404. Não foi possível extrair conteúdo estático. |
 | SRC_MA_CETRAN_PORTAL | CETRAN-MA | Estadual | MA | Transport error (timeout) | O portal do CETRAN-MA não respondeu (timeout). |
 | SRC_MG_CETRAN_PORTAL | CETRAN-MG | Estadual | MG | Transport error (timeout) | O portal do CETRAN-MG não respondeu (timeout). |
+| SRC_MT_DETRAN_PORTAL | DETRAN-MT | Estadual | MT | Transport error (TLS handshake ok, resposta HTTP nunca retorna) | O portal do DETRAN-MT redireciona para https://www.detran.mt.gov.br/, cujo TLS conecta mas a resposta HTTP nunca é retornada (timeout mesmo com 35s). F5 BigIP no ar, backend irresponsivo. |
+| SRC_MT_CETRAN_PORTAL | CETRAN-MT | Estadual | MT | Transport error (connection failed/timeout) | O portal do CETRAN-MT não respondeu em http ou https (timeout). |
 
 ## Estatísticas da Coleta
 
@@ -197,11 +204,18 @@ Esta fase teve como objetivo produzir o inventário documental oficial e realiza
 - Fontes bloqueadas/requerendo ação manual: 0
 - Fontes pendentes de análise: 0
 
+### Estadual (MT)
+- Fontes oficiais identificadas (MT): 2 (DETRAN-MT e CETRAN-MT)
+- Fontes analisadas: 2
+- Documentos coletados com sucesso: 0
+- Fontes bloqueadas/requerendo ação manual: 2 (DETRAN-MT e CETRAN-MT inaccessíveis)
+- Fontes pendentes de análise: 0
+
 ## Próximos Passos
 
 A primeira rodada nacional está sob controle sequencial.
 
-- Próxima UF: **MT**
+- Próxima UF: **PA**
 - UFs anteriores não devem ser reabertas nesta rodada.
 - Complementações serão tratadas em rodada posterior.
 - Este documento registra coleta/evidência, não declara cobertura jurídica completa.

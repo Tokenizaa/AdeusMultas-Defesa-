@@ -11,9 +11,10 @@
 - MA (Maranhão)
 - MG (Minas Gerais)
 - MS (Mato Grosso do Sul)
+- MT (Mato Grosso)
 
 ## Próxima UF
-- MT (Mato Grosso)
+- PA (Pará)
 
 ## Observações
 - Coleta federal concluída.
