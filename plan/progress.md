@@ -136,3 +136,30 @@ Nenhum documento coletado. Fontes bloqueadas:
 ## Próxima fase (após conclusão da FASE 8)
 
 **FASE 9 — Validação e versionamento documental** (se aplicável): após coleta de todos os documentos oficiais, validar integridade, verificar versionamento e preparar para possível ingestão futura no sistema de conhecimento.
+
+## FECHAMENTO DA FASE 8 (2026-09-24)
+
+> **FASE 8 — RECUPERAÇÃO DOCUMENTAL OFICIAL**
+
+- Primeira rodada nacional: CONCLUÍDA
+- Auditoria física: CONCLUÍDA
+- Reconciliação: CONCLUÍDA
+- Recuperação de payloads inválidos: CONCLUÍDA (2/4 recuperados; CTB PDF e Defesa Prévia AC bloqueados)
+- Recuperação de UFs bloqueadas: CONCLUÍDA (AP recuperada — 2 formulários; DF, MA, MT, PE, RN, RO, SE permanecem RECUPERACAO_BLOQUEADA)
+- Validação de cobertura nacional: CONCLUÍDA
+
+**Status final (derivado da evidência):**
+- 75 arquivos físicos | 65 documentos válidos (10 federal + 55 estadual)
+- 7 UFs sem evidência: DF, MA, MT, PE, RN, RO, SE (bloqueio infraestrutura)
+- 13 CETRANs sem domínio acessível
+- BA: FORA_DO_ESCOPO_TRANSITO (sem cobertura de trânsito)
+- PA e demais COBERTURA_PARCIAL não implicam cobertura jurídica completa
+
+**Lacunas remanescentes:**
+- UFs bloqueadas por infraestrutura (DNS/Cloudflare/Akamai/TLS): DF, MA, MT, PE, RN, RO, SE
+- CTB em PDF e Defesa Prévia AC (fonte oficial não disponibiliza)
+- Verificação online de origens (ORIGEM_NAO_VERIFICADA)
+- Avaliação de cobertura jurídica por UF (etapa posterior, distinta da coleta)
+
+**Próxima fase:**
+- FASE 9 — definição derivada do estado real: acesso a UFs bloqueadas (IP/ASN/VPN alternativo, contornar Akamai/Cloudflare com navegador real) e/ou início da preparação para ingestão jurídica (RAG) — decidir após análise deste fechamento.

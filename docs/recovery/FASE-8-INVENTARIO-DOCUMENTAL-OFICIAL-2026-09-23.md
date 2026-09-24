@@ -463,6 +463,22 @@ Registros desta execução (reconciliação documental após auditoria de integr
 - **Nenhuma nova raspagem realizada** nesta reconciliação.
 - Nenhuma alteração de classificação de cobertura jurídica de UFs (PROCESSADA/COBERTA etc.) — cobertura será analisada em etapa própria.
 
+## Lote de UFs bloqueadas — Revalidação (2026-09-24)
+
+Revalidação em lote das 7 UFs que permaneceram sem documentos na primeira rodada (commit-base `c97fa2ec`). Limite de 2 rotas oficiais por alvo. Nenhum documento recuperado; classificação reafirmada.
+
+| UF | DETRAN | CETRAN | Rotas testadas | Resultado |
+| --- | --- | --- | --- | --- |
+| DF | 000 timeout (portal SPA `portal.detran.df.gov.br` = 200 sem docs estáticos) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| MA | 000 timeout (http/https; JS redirect `paginas/Home.xhtml` = 000) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| MT | 000 (TLS conecta, HTTP nunca retorna) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| PE | 403 Akamai/WAF (todos paths) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| RN | 503 Service Unavailable (http/https) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| RO | 000 timeout (http/https/servicos) | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+| SE | 403 Cloudflare challenge | 000 timeout | 2 | RECUPERACAO_BLOQUEADA |
+
+Relatórios individuais: `FASE-8-BLOQUEADAS-{UF}-2026-09-24.md`. Nenhum arquivo físico adicionado para estas UFs.
+
 ## Próximos Passos
 
 A primeira rodada nacional foi concluída (27 UFs + Federal).
