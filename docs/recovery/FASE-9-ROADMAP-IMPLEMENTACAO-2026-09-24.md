@@ -50,3 +50,16 @@
 
 ---
 **Nota:** quantidade de fases mantida em 5 (modelo/migration → canonicalização/lineage → versionamento/temporalidade → reconciliação → validação/ingestão) conforme auditoria; evitada fragmentação em micro-fases.
+## STATUS DE IMPLEMENTAÇÃO (2026-09-24)
+
+| Fase | Status | Evidência |
+| --- | --- | --- |
+| Fase 9.1 — Modelo e Migration | ✅ CONCLUÍDA | migration `20260924233015_fase_9_1_knowledge_schema.sql` + relations criada |
+| Fase 9.2 — Canonicalização e lineage | ✅ CONCLUÍDA (parcial por desenho) | IDs `SRC_*` → documents/versions; metadata de proveniência; content NÃO extraído (decisão: camada de ingestão) |
+| Fase 9.3 — Versionamento e temporalidade | ✅ CONCLUÍDA | 66 versions (v1.0, content_hash); temporalidade UNKNOWN explícita |
+| Fase 9.4 — Reconciliação do acervo | ✅ CONCLUÍDA | 39 sources / 66 docs / 66 versions; 0 unresolved; duplicata CE marcada; payloads excluídos |
+| Fase 9.5 — Validação e contrato de ingestão | ✅ CONCLUÍDA | critérios §20 satisfeitos; contrato dimensional definido; chunks/embeddings intactos |
+
+Relações (9.5/metadata): mecanismo pronto, **0 relações** — confirmação documental pendente (não inventar). Relatório: `FASE-9-IMPLEMENTACAO-NORMALIZACAO-2026-09-24.md`.
+
+**Conclusão:** Fase 9 implementada como pacote único — **CONCLUÍDA COM GAPS DOCUMENTADOS**.

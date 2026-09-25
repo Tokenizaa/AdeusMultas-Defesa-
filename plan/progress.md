@@ -184,3 +184,17 @@ Nenhum documento coletado. Fontes bloqueadas:
 - 7 tabelas `knowledge_*` com RLS ON; contagens preservadas (tudo 0); relations com 6 constraints + 4 índices.
 - Gaps registrados: policies RLS ausentes nas knowledge_* (padrão atual service-role), extensions em public, `updated_at` ausente em document_versions.
 - Relatório: `docs/recovery/FASE-9.1-MIGRATION-DRIFT-2026-09-24.md`.
+
+## FASE 9 — IMPLEMENTAÇÃO COMPLETA (2026-09-24)
+
+> **FASE 9 — IMPLEMENTAÇÃO: CONCLUÍDA COM GAPS DOCUMENTADOS**
+> RAG: NÃO INICIADO | Supabase: metadados populados via service role (sem DDL nova; sem policy aberta; chunks/embeddings intactos)
+
+- sources: **39** | documents: **66** | versions: **66** | relations: **0** (nenhuma inventada)
+- reconciliação: **66** | unresolved: **0** | duplicata CE: **1** (duplicate_of) | recuperados: **2** (CONTRAN 796, Memo 753 AM; +2 AP como COLLECTED)
+- candidatos estruturais ao RAG: **66** | bloqueados p/ RAG: **10** (9 payloads de falha + 1 fora do escopo BA)
+- vigência UNKNOWN: 66/66 (sem inferência); jurisdição: 0 UNKNOWN; content não armazenado (camada de ingestão futura)
+- Contrato de ingestão definido (dimensional) e no relatório: `docs/recovery/FASE-9-IMPLEMENTACAO-NORMALIZACAO-2026-09-24.md`
+- Roadmap atualizado: 9.1–9.5 ✅ (pacote único).
+
+**Próxima fase:** **FASE 10 — VALIDAÇÃO JURÍDICA / COBERTURA** (não iniciada).
