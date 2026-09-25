@@ -396,3 +396,26 @@ NÃO implementado (fora do escopo 12.4, para 12.5+):
 
 - Relatório: `docs/recovery/FASE-12.4-IMPLEMENTACAO-ANALYSIS-DOCUMENTASSEMBLY-2026-09-25.md`
 - **Próxima fase: FASE 12.5 — NÃO INICIADA.**
+
+## FASE 12.5 — QUALITY GATE / GOLDEN PATH VALIDATION (2026-09-25)
+
+> **FASE 12.5: CONCLUÍDA** — validar quality gate e golden path ponta-a-ponta.
+
+- Validação ponta-a-ponta da cadeia: Case → Analysis (RAG) → authorized arguments → DocumentAssemblyEngine → Quality Gate → IntegrityHash → Golden Path audit.
+- Testes de integração: 281 testes core + audit + cloudflare routes PASS + 6 testes Golden Path integration PASS.
+- TypeScript runtime Worker: 0 erros (12 out-of-scope: hooks PWA, workers Express, CLI, shared kernel, testes auxiliares).
+- Golden Path integration: `tests/integration/golden-path-documents.integration.test.ts` → 6/6 PASS.
+- Análise fresh: `generate-defense` sempre recomputa via `analyzeInfractionCompat()` (RAG + Rule Engine híbrido).
+- Analysis stale eliminada: `generate-defense` sempre recomputa analysis via RAG.
+- IntegrityHash: `computeDefenseIntegrityHash` + `hasValidDefenseIntegrity` verificação no GET /cases/:id.
+- Argumentos autorizados: DocumentAssemblyEngine usa `analysis.recommendedArguments` filtrado por catálogo canônico + `EVIDENCE_DEPENDENT_ARGUMENTS`.
+- Proveniência rastreável: RAG results → chunk → version → document → source → official URL.
+- Fail-closed testado: Analysis inexistente, RAG sem provenance, argumento não autorizado, fato inventado, placeholder, procedure mismatch, knowledge source incompatível, IntegrityHash inválido → todos BLOCK/FAIL.
+
+NÃO implementado (fora do escopo 12.5, para 12.6+):
+- DDL no schema `cases` (colunas 15 flags, `applicant_json` recovery, `commercial_offer_id`)
+- Unificação completa runtime Express → Worker
+- Nova arquitetura RAG/Analysis/DocumentAssembly (12.6+)
+
+- Relatório: `docs/recovery/FASE-12.5-GOLDEN-PATH-RESULTADO-2026-09-25.md`
+- **Próxima fase: FASE 12.6 — NÃO INICIADA.**
