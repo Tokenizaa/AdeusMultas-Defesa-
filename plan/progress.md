@@ -166,7 +166,7 @@ Nenhum documento coletado. Fontes bloqueadas:
 
 ## FASE 9 — AUDITORIA/ESPECIFICAÇÃO (2026-09-24)
 
-> **FASE 9 — AUDITORIA/ESPECIFICAÇÃO: CONCLUÍDA** (2026-09-24)
+> **[ESTADO HISTÓRICO ANTERIOR]** — **FASE 9 — AUDITORIA/ESPECIFICAÇÃO: CONCLUÍDA** (2026-09-24)
 > **Implementação: NÃO INICIADA** | **RAG: NÃO INICIADO** | **Supabase: SOMENTE AUDITORIA**
 
 - Commit-base da auditoria: `8863ecfe504c580a34ce46fedadd30b73e12fd2d`
@@ -198,3 +198,19 @@ Nenhum documento coletado. Fontes bloqueadas:
 - Roadmap atualizado: 9.1–9.5 ✅ (pacote único).
 
 **Próxima fase:** **FASE 10 — VALIDAÇÃO JURÍDICA / COBERTURA** (não iniciada).
+
+## FASE 10 — VALIDAÇÃO JURÍDICA E COBERTURA NACIONAL (2026-09-24)
+
+> **FASE 10: CONCLUÍDA COM GAPS DOCUMENTADOS**
+> Checkpoint inicial: `6649cb322a2d437c227a8e4773838d82bb585070`
+
+- 39 sources ✓ | 66 documents ✓ | 66 versions ✓ | current_version 66/66 ✓
+- relations: 0 (sem evidência) | chunks: 0 | embeddings: 0 | RAG: NÃO INICIADO
+- RLS: 7/7 ON | policies públicas: 0 | deleted rows: 0 | hash changes: 0 | inventory ids lost: 0
+- Cobertura nacional: 12 UFs CONFIRMADA doc. | 7 PARCIAL | 7 BLOQUEADA_POR_ACESSO (DF, MA, MT, PE, RN, RO, SE) | BA FORA_DO_ESCOPO | Federal PARCIAL
+- Procedimentos: Defesa Prévia/JARI/CETRAN PARTIALLY_CONFIRMED (por UF); suspensão/cassação/conversão UNKNOWN (sem evidência)
+- Classificação RAG: 66 RAG_REQUIRES_HUMAN_VALIDATION (conteúdo não extraído + vigência UNKNOWN); 10 RAG_BLOCKED (9 payloads + BA)
+- Gap 1 fechado: `supabase/recovery/FASE-9-RECONCILIACAO-DETERMINISTICA.sql` (artefato idempotente 39/66/66)
+- Gap 2 fechado: blocos históricos marcados `ESTADO HISTÓRICO ANTERIOR` (additivo; nada apagado)
+- Relatório: `docs/recovery/FASE-10-VALIDACAO-JURIDICA-COBERTURA-2026-09-24.md`
+- Próxima fase: **FASE 11 — INGESTÃO/CONTEÚDO (NÃO INICIADA)** — decisão após análise.

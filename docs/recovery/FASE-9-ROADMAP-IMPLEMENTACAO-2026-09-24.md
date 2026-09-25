@@ -1,6 +1,8 @@
 # FASE 9 — Roadmap de Implementação (Normalização Jurídica)
 
 **Data:** 2026-09-24 | **Natureza:** roadmap da futura implementação da Fase 9 — **não iniciada nesta execução**.
+
+> **[ESTADO HISTÓRICO ANTERIOR]** — Este documento foi criado na execução de especificação (checkpoint `c4ea4a7`). A Fase 9 foi **implementada posteriormente como pacote único** (checkpoint `6649cb3`); ver seção STATUS DE IMPLEMENTAÇÃO e `FASE-9-IMPLEMENTACAO-NORMALIZACAO-2026-09-24.md`. Os trechos abaixo descrevem o momento da especificação.
 **Depende de:** `FASE-9-ESPECIFICACAO-NORMALIZACAO-JURIDICA-2026-09-24.md`.
 
 ## Fase 9.1 — Modelo e Migration
