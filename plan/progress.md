@@ -214,3 +214,17 @@ Nenhum documento coletado. Fontes bloqueadas:
 - Gap 2 fechado: blocos históricos marcados `ESTADO HISTÓRICO ANTERIOR` (additivo; nada apagado)
 - Relatório: `docs/recovery/FASE-10-VALIDACAO-JURIDICA-COBERTURA-2026-09-24.md`
 - Próxima fase: **FASE 11 — INGESTÃO/CONTEÚDO (NÃO INICIADA)** — decisão após análise.
+
+## FASE 11 — PIPELINE JURÍDICO E RAG (2026-09-25)
+
+> **FASE 11: CONCLUÍDA COM GAPS DOCUMENTADOS** — extração→validação→canonicalização→chunks→embeddings→indexação→Golden Path.
+> Checkpoint inicial: `6649cb3` (planejamento `e64da3f`).
+
+- Reuso total da infra existente: chunking-service, embedding-service (NVIDIA/determinístico), vector-store (pgvector canônico), search/rag services.
+- documentos 66 | extraídos 53 | falhas 13 (PDFs scan/VAZIO, não indexados) | canonicalizados 53 | chunks 58 | embeddings 58 | órfãos 0 | duplicados 0
+- Golden Path: "defesa prévia multa" → 5 resultados com provenance ✓; caso bloqueado "suspensão/cassação" → nada de fonte bloqueada ✓
+- RLS preservado (7/7 ON); 0 DROP/delete; 39/66/66 intactos; dependência nova: pdf-parse@1.1.1
+- Testes: `src/core/knowledge/fase11-pipeline.test.ts` 4/4 ✓
+- Relatório: `docs/recovery/FASE-11-IMPLEMENTACAO-RAG-2026-09-25.md`
+- Gaps: OCR p/ 13 PDFs scan; validação humana dos 66 (vigência/status); RLS policies; relações (0).
+- Próxima: **FASE 12 — NÃO INICIADA** (decisão após auditoria).
