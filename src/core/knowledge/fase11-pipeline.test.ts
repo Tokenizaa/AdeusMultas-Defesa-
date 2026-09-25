@@ -61,3 +61,22 @@ describe('Fase 11 - chunking determinístico', () => {
     });
   });
 });
+describe('Fase 11 - auditoria pós-implementação', () => {
+  it('IDs de chunks únicos mesmo com content_hash compartilhado entre documentos distintos', () => {
+    const text = 'Art. 1º Conteúdo idêntico entre dois documentos distintos.';
+    const c1 = chunkingService.chunkDocument('v_docA', 'docA', 'srcA', text, { title: 'Doc A' });
+    const c2 = chunkingService.chunkDocument('v_docB', 'docB', 'srcA', text, { title: 'Doc B' });
+    const allIds = new Set([...c1, ...c2].map((c) => c.id));
+    expect(allIds.size).toBe(c1.length + c2.length); // IDs únicos
+    expect(c1[0]!.contentHash).toBe(c2[0]!.contentHash); // hash pode ser compartilhado
+    expect(c1[0]!.documentId).not.toBe(c2[0]!.documentId); // documentos distintos preservados
+  });
+
+  it('provenance chunk->version->document->source íntegra', () => {
+    const [c] = chunkingService.chunkDocument('v1', 'docX', 'srcX', 'Art. 1º Teste de provenance.', { title: 'X' });
+    expect(c!.documentVersionId).toBe('v1');
+    expect(c!.documentId).toBe('docX');
+    expect(c!.sourceId).toBe('srcX');
+    expect(c!.contentHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});

@@ -228,3 +228,15 @@ Nenhum documento coletado. Fontes bloqueadas:
 - Relatório: `docs/recovery/FASE-11-IMPLEMENTACAO-RAG-2026-09-25.md`
 - Gaps: OCR p/ 13 PDFs scan; validação humana dos 66 (vigência/status); RLS policies; relações (0).
 - Próxima: **FASE 12 — NÃO INICIADA** (decisão após auditoria).
+
+## AUDITORIA PÓS-FASE 11 — 2026-09-25
+
+- Checkpoint auditado: `5cc22b2d8f46b507d3a8f746b3f81b9baf9f1cff` (HEAD == origin/main)
+- 39/66/66 preservados · 58 chunks · 58 embeddings · órfãos 0 · chunk IDs únicos 58/58 · embedding IDs únicos 58/58
+- 1 content_hash compartilhado (CE): `73740653…` entre `chk_SRC_CE_DETRAN_DEFESA_AUTUAR_INFRACAO_0000` e `chk_SRC_CE_DETRAN_RECURSO_JARI_0000` — **classificado: duplicata exata já registrada na Fase 9 (DUPLICATA_EXATA + duplicate_of)**; nenhum DELETE; métrica ajustada (duplicate chunk IDs=0; hash compartilhado=1)
+- Provider efetivo embeddings: **DETERMINISTIC_LOCAL** (`defesai-legal-vectorizer-v1`, 1024) — NVIDIA primário indisponível no ambiente
+- Testes: `vitest run src/core/knowledge/fase11-pipeline.test.ts` → 6/6 ✓
+- Golden Path: in-process OK (5 + 5, sem fonte bloqueada); **gap: RPC `match_knowledge_chunks` ausente** (retrieval cross-process via pgvector pendente — registrado)
+- Gaps: OCR 13 PDFs scan · validação humana vigência/status · RLS policies · relações · verificação online · RPC retrieval
+- Relatório: `docs/recovery/FASE-11-AUDITORIA-POS-IMPLEMENTACAO-2026-09-25.md`
+- **FASE 12 — NÃO INICIADA.**

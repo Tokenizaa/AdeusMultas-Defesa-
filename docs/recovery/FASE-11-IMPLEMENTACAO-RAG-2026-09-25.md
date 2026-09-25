@@ -81,3 +81,13 @@ Pipeline jurídico **implementado, executado e validado** sobre a infraestrutura
 
 ## 18. Checkpoint final
 Commit único desta fase (§24); `HEAD == origin/main`.
+---
+## AUDITORIA PÓS-FASE 11 (addendum — 2026-09-25)
+
+A auditoria direta do banco identificou **58 chunks, 57 content_hash distintos e 1 hash compartilhado** por dois chunks CE (`73740653fc24bbc04b1ccc887f7f8f35d7fffe39b5b91ec8bcff5173c492a112`): `chk_SRC_CE_DETRAN_DEFESA_AUTUAR_INFRACAO_0000` e `chk_SRC_CE_DETRAN_RECURSO_JARI_0000`. Os IDs dos chunks permanecem distintos; os documentos eram byte-idênticos e **já classificados como DUPLICATA_EXATA (duplicate_of) na Fase 9**.
+
+A métrica anterior "duplicate chunks = 0" é reinterpretada como **"duplicate chunk IDs = 0"** — não como unicidade absoluta de content_hash. **ID único ≠ conteúdo único.**
+
+Embeddings efetivamente persistidos: **58** · provider **DETERMINISTIC_LOCAL** · model **defesai-legal-vectorizer-v1** · dimensions **1024**. NVIDIA era o provider primário disponível; o ambiente desta execução utilizou o fallback determinístico.
+
+Detalhes: `docs/recovery/FASE-11-AUDITORIA-POS-IMPLEMENTACAO-2026-09-25.md`.
