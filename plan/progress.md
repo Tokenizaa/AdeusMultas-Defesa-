@@ -239,4 +239,49 @@ Nenhum documento coletado. Fontes bloqueadas:
 - Golden Path: in-process OK (5 + 5, sem fonte bloqueada); **gap: RPC `match_knowledge_chunks` ausente** (retrieval cross-process via pgvector pendente — registrado)
 - Gaps: OCR 13 PDFs scan · validação humana vigência/status · RLS policies · relações · verificação online · RPC retrieval
 - Relatório: `docs/recovery/FASE-11-AUDITORIA-POS-IMPLEMENTACAO-2026-09-25.md`
-- **FASE 12 — NÃO INICIADA.**
+
+## FASE 12.1 — AUDITORIA DO ONBOARDING E CAPTURA DO CASO (2026-09-25)
+
+> **FASE 12.1: CONCLUÍDA** — auditoria integral do fluxo onboarding → captura → OCR → confirmação → Case.
+> Exclusivamente de AUDITORIA. **Nenhuma correção de código de aplicação. Nenhuma alteração no Supabase. Nenhuma migration. Nenhuma branch.**
+
+- Checkpoint auditado: `2cff13aa034f06b7644dae1e6804292220af8726` (HEAD == origin/main, 0/0 ahead/behind)
+- 0 arquivos rastreados modificados · 29 untracked pré-existentes (baseline md5 `e9a138254e2b0b2b0432a77b69c9a3b4`)
+- Agents: `backend` (escopo @defesa-transito) · `backend` (escopo @ocr-evidencias) · `banco` · `frontend` · `testes` · `explore` (escopo @base-legal, read-only) · `qualidade` · supervisor (orquestração e verificação)
+- Nota de topologia: `@defesa-transito`, `@ocr-evidencias` e `@base-legal` estão documentados em `AGENTS.md` mas **não existem no registro de subagents**; escopo declarado foi aplicado aos subagents reais correspondentes
+
+### Resposta às duas perguntas da fase
+
+**"Quais dados entram, de onde vêm, como são transformados, quais são confirmados, onde são persistidos, quais chegam ao Case e quais são perdidos antes da análise?"**
+Entrada pelo wizard V1 (`OnboardingWizard.tsx`, `App.tsx:420`); transformação por `CanonicalMapper.onboardingPayloadToDomain` → `domainToRow` → `case-repository.ts:125 toPayload()` → `case-repository.ts:128 upsert`. A cadeia se parte em três: 15 flags de fato + `real_driver_*` + `commercial_offer_id` descartadas no `toPayload`; `applicant_json` gravada e nunca lida de volta; `notificationDeliveryDate` sem coluna; leitura do Express serve um Map em memória nunca populado no boot.
+
+**"Quais limitações ainda são consequência da antiga base jurídica incompleta?"**
+`INFRACTION_CATALOG` com 34 entradas vs 27 DETRANs read-only para citação e não para decisão · `jurisdiction: 'federal'` em 10/10 regras com `getActiveRules` filtrando só por data · `validUntil: null` em 10/10 regras (engine temporal inerte) · `new Date()` como data de referência quando a data da infração falta · `EVIDENCE_DEPENDENT_ARGUMENTS` com 3 entradas enquanto o motor produz argumentos por `legalArgumentId` fixo — a KB cresce e o repertório de teses não.
+
+### Achados principais
+
+- **Runtime de produção é o Cloudflare Worker** (`wrangler.jsonc:4`), não o Express. E o Worker **apaga `analysis` sem recomputar** (`cloudflare/routes/cases.ts:126`) → peça com zero teses; e **grava `commercial_offer_id`, coluna que não existe em `cases`** → insert falha
+- `loadAllFromSupabase()` **nunca é chamado** → `GET /cases` vazio e 404 em casos legítimos após restart
+- `POST /cases` aceita `isPaid` do body; `PUT /cases/:id` aceita o domain inteiro
+- `uf` e `municipality` **não existem** (declarados, descartados no mapper, sem coluna) → `filterJurisdiction` sem entrada
+- **KB nacional 100% desacoplada do Case**: zero FK, coluna, rota ou chamada no fluxo de decisão
+- `evidenceFlags` sem produtor funcional (método inexistente) → ARG-012/019/020 permanentemente mortas
+- `findInfraction('')` retorna o primeiro item do catálogo → OCR mudo carimba multa de `745-50`
+- Upload de OCR decorativo (nunca envia bytes, sem Authorization, contrato divergente do Cloudflare) e **falha apresentada em caixa verde de sucesso**
+- Órgão autuador nunca é perguntado; `procedureType` escolhido pelo cidadão é ignorado pelo motor
+- 3 procedimentos vendidos (`suspensao_cnh`, `cassacao_cnh`, `conversao_advertencia`) com **0 documentos** na KB
+- **22 testes de IDOR/autoridade jurídica/LGPD vermelhos**; `tsc --noEmit` = 63 erros
+- Código morto: `src/onboarding/**` (6 arquivos), `onboarding-v2.ts` (7 rotas), `defense.ts`, `transitions.ts`, `ocr.worker.ts` (quebrado), `image-quality.service.ts` (órfão)
+- ~405 referências normativas literais no domínio de trânsito; KB nova consumida por 1 arquivo fora do onboarding
+- `cases`: 45 colunas núcleo sem `CREATE TABLE` versionado; ordering de migrations quebrado; 5 policies versionadas vs 6 canônicas (falta `cases_own_all` com `WITH CHECK`); `app_ref UNIQUE` inexistente
+
+### Decisões que o supervisor precisa tomar antes da 12.2
+
+1. Qual runtime é o canônico (Cloudflare vs Express)? **Requer ADR.**
+2. Promover ou remover `src/onboarding/**` + `onboarding-v2.ts`?
+3. A `RULES_MATRIX` serve frontend, backend ou os dois? Hoje existem **três** fontes divergentes.
+4. Persistência das 15 flags: coluna dedicada ou `jsonb`?
+5. A KB é vinculável ao Case na 12.2 ou na 12.3? Se agora, a **UF precisa ser capturada primeiro**.
+
+- Relatório completo (17 seções, matriz de dados, TOP 20 achados, riscos de regressão): `docs/recovery/FASE-12.1-AUDITORIA-ONBOARDING-2026-09-25.md`
+- **Próxima fase: FASE 12.2 — NÃO INICIADA.** Aguardando as 5 decisões acima.
