@@ -214,12 +214,15 @@ export type Database = {
           ait_number: string
           analysis_json: Json | null
           app_ref: string | null
+          applicant_json: Json | null
           autuador_body: string
+          cellphone_circumstance: string | null
           claim_token: string | null
           client_cpf: string | null
           client_email: string | null
           client_name: string
           client_phone: string | null
+          commercial_offer_id: string | null
           considered_speed: number | null
           created_at: string
           ctb_article: string
@@ -227,9 +230,18 @@ export type Database = {
           date_time: string | null
           defense_deadline: string | null
           defense_draft_json: Json | null
+          emergency_passage: boolean | null
+          evidence_json: Json | null
           fine_amount: number
           formal_flaws_json: Json
+          has_agent_detailed_observations: boolean | null
+          has_photo_proof: boolean | null
+          has_previous_infractions_last_12_months: boolean | null
+          has_psychomotor_term: boolean | null
+          has_regulatory_sign: boolean | null
+          has_r19_signage_proof: boolean | null
           id: string
+          indication_within_deadline: boolean | null
           infraction_code: string | null
           infraction_description: string
           inmetro_aferition_date: string | null
@@ -239,10 +251,15 @@ export type Database = {
           measured_speed: number | null
           notification_expedition_date: string | null
           ocr_auxiliary_json: Json | null
+          offered_retest: boolean | null
           paid_at: string | null
           points: number
           protocol_info_json: Json | null
           radar_equipment_id: string | null
+          real_driver_cnh: string | null
+          real_driver_cpf: string | null
+          real_driver_name: string | null
+          refused_test: boolean | null
           service_type: string
           severity: string
           speed_limit: number | null
@@ -257,17 +274,21 @@ export type Database = {
           vehicle_plate: string
           vehicle_renavam: string | null
           vehicle_year: string | null
+          yellow_phase_crossing: boolean | null
         }
         Insert: {
           ait_number: string
           analysis_json?: Json | null
           app_ref?: string | null
+          applicant_json?: Json | null
           autuador_body: string
+          cellphone_circumstance?: string | null
           claim_token?: string | null
           client_cpf?: string | null
           client_email?: string | null
           client_name: string
           client_phone?: string | null
+          commercial_offer_id?: string | null
           considered_speed?: number | null
           created_at?: string
           ctb_article: string
@@ -275,9 +296,18 @@ export type Database = {
           date_time?: string | null
           defense_deadline?: string | null
           defense_draft_json?: Json | null
+          emergency_passage?: boolean | null
+          evidence_json?: Json | null
           fine_amount?: number
           formal_flaws_json?: Json
+          has_agent_detailed_observations?: boolean | null
+          has_photo_proof?: boolean | null
+          has_previous_infractions_last_12_months?: boolean | null
+          has_psychomotor_term?: boolean | null
+          has_regulatory_sign?: boolean | null
+          has_r19_signage_proof?: boolean | null
           id?: string
+          indication_within_deadline?: boolean | null
           infraction_code?: string | null
           infraction_description: string
           inmetro_aferition_date?: string | null
@@ -287,10 +317,15 @@ export type Database = {
           measured_speed?: number | null
           notification_expedition_date?: string | null
           ocr_auxiliary_json?: Json | null
+          offered_retest?: boolean | null
           paid_at?: string | null
           points?: number
           protocol_info_json?: Json | null
           radar_equipment_id?: string | null
+          real_driver_cnh?: string | null
+          real_driver_cpf?: string | null
+          real_driver_name?: string | null
+          refused_test?: boolean | null
           service_type?: string
           severity?: string
           speed_limit?: number | null
@@ -305,17 +340,21 @@ export type Database = {
           vehicle_plate: string
           vehicle_renavam?: string | null
           vehicle_year?: string | null
+          yellow_phase_crossing?: boolean | null
         }
         Update: {
           ait_number?: string
           analysis_json?: Json | null
           app_ref?: string | null
+          applicant_json?: Json | null
           autuador_body?: string
+          cellphone_circumstance?: string | null
           claim_token?: string | null
           client_cpf?: string | null
           client_email?: string | null
           client_name?: string
           client_phone?: string | null
+          commercial_offer_id?: string | null
           considered_speed?: number | null
           created_at?: string
           ctb_article?: string
@@ -323,9 +362,18 @@ export type Database = {
           date_time?: string | null
           defense_deadline?: string | null
           defense_draft_json?: Json | null
+          emergency_passage?: boolean | null
+          evidence_json?: Json | null
           fine_amount?: number
           formal_flaws_json?: Json
+          has_agent_detailed_observations?: boolean | null
+          has_photo_proof?: boolean | null
+          has_previous_infractions_last_12_months?: boolean | null
+          has_psychomotor_term?: boolean | null
+          has_regulatory_sign?: boolean | null
+          has_r19_signage_proof?: boolean | null
           id?: string
+          indication_within_deadline?: boolean | null
           infraction_code?: string | null
           infraction_description?: string
           inmetro_aferition_date?: string | null
@@ -335,10 +383,15 @@ export type Database = {
           measured_speed?: number | null
           notification_expedition_date?: string | null
           ocr_auxiliary_json?: Json | null
+          offered_retest?: boolean | null
           paid_at?: string | null
           points?: number
           protocol_info_json?: Json | null
           radar_equipment_id?: string | null
+          real_driver_cnh?: string | null
+          real_driver_cpf?: string | null
+          real_driver_name?: string | null
+          refused_test?: boolean | null
           service_type?: string
           severity?: string
           speed_limit?: number | null
@@ -353,6 +406,7 @@ export type Database = {
           vehicle_plate?: string
           vehicle_renavam?: string | null
           vehicle_year?: string | null
+          yellow_phase_crossing?: boolean | null
         }
         Relationships: []
       }

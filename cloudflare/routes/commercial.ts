@@ -117,7 +117,7 @@ routes.get('/offers/health', async (c) => adapterOk(c, { provider: 'cloudflare-s
 
 routes.post('/offers/resolve', async (c) => {
   try {
-    const body = await c.req.json<{ serviceType?: string; stageId?: string | null; userId?: string; documentCount?: number; couponCode?: string }>();
+    const body = await c.req.json<{ serviceType: string; stageId?: string | null; userId?: string; documentCount?: number; couponCode?: string }>();
     if (!body.serviceType?.trim()) return adapterError(c, 'VALIDATION_ERROR', 'serviceType é obrigatório', 400);
     const result = await resolveOffer(c.env, body);
     return adapterOk(c, result);

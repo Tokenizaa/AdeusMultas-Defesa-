@@ -1,19 +1,21 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
 import { commercialRoutes } from './commercial';
 import { GGPIXAdapter } from '../../src/server/integrations/gateway/ggpix-adapter';
+import type { NormalizedWebhookEvent } from '../../src/server/integrations/gateway/types';
 
 const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
 async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?: string, userId?: string) {
-  const request = new Request('https://internal/api/offers/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceType, couponCode, userId }) });
+  const request = new globalThis.Request('https://internal/api/offers/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceType, couponCode, userId }) });
   const response = await commercialRoutes.fetch(request, env);
-  const payload = await response.json<any>();
-  if (!response.ok || !payload?.ok || !payload?.data?.offer) throw new HTTPException(response.status || 502, { message: payload?.error?.message || payload?.reason || 'Oferta comercial indisponível.' });
+  const payload = await response.json() as any;
+  if (!response.ok || !payload?.ok || !payload?.data?.offer) throw new HTTPException((response.status || 502) as ContentfulStatusCode, { message: payload?.error?.message || payload?.reason || 'Oferta comercial indisponível.' });
   return payload.data.offer;
 }
 
@@ -133,7 +135,8 @@ routes.post('/webhooks/ggpix', async (c) => {
   const headersObj = Object.fromEntries(c.req.raw.headers.entries());
 
   // Use the adapter with the current Env binding
-  const ggpixAdapterInstance = new GGPIXAdapter(c.env);
+  const envRecord = c.env as unknown as Record<string, string>;
+  const ggpixAdapterInstance = new GGPIXAdapter(envRecord);
   let normalized: NormalizedWebhookEvent;
   try {
     normalized = ggpixAdapterInstance.processWebhook(rawBody, headersObj, body);

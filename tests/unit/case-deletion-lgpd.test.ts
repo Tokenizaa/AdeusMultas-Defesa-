@@ -24,7 +24,7 @@ const getUserMock = vi.hoisted(() => vi.fn());
 // eventBus is imported directly by cases.ts from topics.ts
 const publishMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/server/app', () => ({
+vi.mock('@/server/stores', () => ({
   databaseRows: mockDb,
   auditLogs: [],
 }));
@@ -74,19 +74,19 @@ import casesRouter from '@/server/routes/cases';
 // ── test fixtures ─────────────────────────────────────────────────────────
 
 const USER_OWNER = {
-  id: 'owner-uuid-0000-0000-000000000001',
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   email: 'owner@example.com',
   user_metadata: { role: 'citizen' as const, name: 'Owner' },
 };
 
 const USER_OTHER = {
-  id: 'other-uuid-0000-0000-000000000002',
+  id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   email: 'other@example.com',
   user_metadata: { role: 'citizen' as const, name: 'Other' },
 };
 
 const USER_ADMIN = {
-  id: 'admin-uuid-0000-0000-000000000003',
+  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   email: 'admin@example.com',
   user_metadata: { role: 'admin' as const, name: 'Admin' },
 };

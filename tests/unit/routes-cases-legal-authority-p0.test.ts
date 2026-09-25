@@ -38,7 +38,7 @@ const runPipelineMock = vi.hoisted(() =>
 );
 const permittedThesesMock = vi.hoisted(() => vi.fn((analysis: any) => analysis?.recommendedArguments || []));
 
-vi.mock('@/server/app', () => ({
+vi.mock('@/server/stores', () => ({
   databaseRows: db,
   auditLogs: [],
 }));

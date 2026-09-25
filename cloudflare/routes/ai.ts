@@ -10,24 +10,26 @@ const MODEL = '@cf/openai/gpt-oss-20b';
 function recordMetric(env: Env, input: { operation: string; status: string; latencyMs: number; caseId?: string; error?: string }) {
   try {
     const supabase = createSupabaseAdminClient(env);
-    void supabase
-      .from('ai_execution_logs')
-      .insert({
-        provider: 'cloudflare-workers-ai',
-        model: MODEL,
-        operation: input.operation,
-        status: input.status,
-        case_id: input.caseId ?? null,
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        latency_ms: Math.round(input.latencyMs),
-        cost_estimate: 0,
-        error_message: input.error ?? null,
-        metadata: {},
-        created_at: new Date().toISOString(),
-      })
-      .then(() => undefined)
-      .catch(() => undefined);
+    // PostgrestFilterBuilder is a PromiseLike (has .then but not .catch)
+    // Use Promise.resolve to convert to real Promise, or use .then(null, handler)
+    Promise.resolve(
+      supabase
+        .from('ai_execution_logs')
+        .insert({
+          provider: 'cloudflare-workers-ai',
+          model: MODEL,
+          operation: input.operation,
+          status: input.status,
+          case_id: input.caseId ?? null,
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          latency_ms: Math.round(input.latencyMs),
+          cost_estimate: 0,
+          error_message: input.error ?? null,
+          metadata: {},
+          created_at: new Date().toISOString(),
+        })
+    ).catch(() => undefined);
   } catch {
     /* nunca derruba a resposta por falha de observabilidade */
   }

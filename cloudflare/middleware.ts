@@ -69,10 +69,13 @@ export const logRequest = async (c: AppContext, next: Next) => {
   let error: string | null = null;
   let status: number = 500; // default error
   try {
-    res = await next();
+    await next();
+    res = c.res;
     status = res.status;
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
+    status = 500;
+    res = c.res;
     // re-throw after logging
     throw err;
   } finally {
@@ -90,7 +93,7 @@ export const logRequest = async (c: AppContext, next: Next) => {
           user_id: userId,
           user_agent: userAgent,
           ip_address: ipAddress,
-          latency_ms,
+          latencyMs,
           // optionally we could store limited bodies, but omitted for simplicity
           request_body: null,
           response_body: null,

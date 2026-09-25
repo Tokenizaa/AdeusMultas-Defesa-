@@ -77,7 +77,7 @@ async function readInput(c: any): Promise<{ bytes: Uint8Array; mimeType: string 
     return { bytes: new Uint8Array(await file.arrayBuffer()), mimeType: file.type || 'image/jpeg' };
   }
 
-  const body = await c.req.json<{ image?: string; mimeType?: string }>();
+  const body = await c.req.json() as { image?: string; mimeType?: string };
   if (!body.image || typeof body.image !== 'string') throw new Error('Campo image ausente.');
   const match = body.image.match(/^data:([^;]+);base64,(.+)$/s);
   const mimeType = match?.[1] || body.mimeType || 'image/jpeg';
