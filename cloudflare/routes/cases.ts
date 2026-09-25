@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { computeDefenseIntegrityHash, hasValidDefenseIntegrity } from '../defense-integrity';
+import { RagPipeline } from '../../src/core/rag/rag-pipeline';
 
 const isCanonicalUserId = (value: string | undefined): boolean =>
   typeof value === 'string' &&
@@ -123,7 +124,10 @@ casesRoutes.post('/cases', authenticateToken, async (c) => {
   const domainData = await c.req.json<any>();
   domainData.id = domainData.id || `case_${crypto.randomUUID()}`;
   delete domainData.userId;
-  delete domainData.analysis;
+  // Recompute analysis server-side (canonical analysis)
+  if (domainData.infraction) {
+    domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
+  }
 
   if (domainData.isAnonymous && !domainData.claimToken) {
     domainData.claimToken = crypto.randomUUID();
@@ -155,6 +159,11 @@ casesRoutes.put('/cases/:id', authenticateToken, async (c) => {
   updatedDomain.id = c.req.param('id');
   updatedDomain.updatedAt = new Date().toISOString();
   updatedDomain.userId = existingRow.user_id;
+
+  // Recompute analysis if infraction data changed
+  if (updatedDomain.infraction) {
+    updatedDomain.analysis = RagPipeline.analyzeInfraction(updatedDomain.id, updatedDomain.infraction);
+  }
 
   const newRow = domainToRow(updatedDomain);
   newRow.user_id = existingRow.user_id;
@@ -266,6 +275,11 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
   const domain = rowToDomain(row);
   const body = await c.req.json<any>().catch(() => ({}));
 
+  // Recompute analysis from current infraction data (canonical, fresh)
+  if (domain.infraction) {
+    domain.analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction);
+  }
+
   // Resolve qualificação do requerente (body → applicant existente)
   const b = body.applicantData || {};
   const resolvedApplicant =
@@ -305,13 +319,13 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
     });
   }
 
+  // Use the fresh analysis for defense generation
   const defense = await generateDeterministicDraft(domain);
   if (body.customFacts) {
     defense.factsNarrative = body.customFacts;
   }
 
-  const analysis = domain.analysis || {};
-  defense.integrityHash = await computeDefenseIntegrityHash(defense as any, analysis);
+  defense.integrityHash = await computeDefenseIntegrityHash(defense as any, domain.analysis);
 
   domain.defenseDraft = defense;
   domain.currentStage = 3;
