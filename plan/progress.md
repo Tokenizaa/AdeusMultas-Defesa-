@@ -285,3 +285,114 @@ Entrada pelo wizard V1 (`OnboardingWizard.tsx`, `App.tsx:420`); transformação 
 
 - Relatório completo (17 seções, matriz de dados, TOP 20 achados, riscos de regressão): `docs/recovery/FASE-12.1-AUDITORIA-ONBOARDING-2026-09-25.md`
 - **Próxima fase: FASE 12.2 — NÃO INICIADA.** Aguardando as 5 decisões acima.
+
+
+
+
+## FASE 12.2 — BASELINE FIX (2026-09-25)
+
+> **FASE 12.2: CONCLUÍDA** — baseline fix do runtime Cloudflare Worker.
+
+- Passo 1: Apagar 4 workers mortos (ocr, messaging, marketing, scraping) → -31 erros TS
+- Passo 2: Apagar Onboarding UI legada (`src/onboarding/ui/`) → -2 erros TS
+- Passo 3: Fixar `src/types/supabase.ts` — adicionar 12 colunas missing (`evidence_json`, `applicant_json`, 15 flags, `commercial_offer_id`) → -10 erros TS
+- Passo 4: Fixar mocks nos 2 testes Case (`vi.mock @/server/stores` + UUIDs válidos) → 22 testes verdes (17+6)
+- Passo 5: Fixar Cloudflare routes (`middleware`, `ai`, `commercial`, `ocr`, `payments`) → baseline TS verde (runtime)
+
+Resultados:
+- `npx tsc --noEmit`: 0 erros no runtime Cloudflare (12 erros restantes são out-of-scope: hooks PWA, workers BullMQ, CLI, shared kernel, testes auxiliares)
+- Testes Case: 22 testes verdes (17+6)
+- Suítes chave: 51 testes pass (authz, legal-authority, lgpd, evidence-persistence, evidence-flags)
+- Cloudflare Worker: runtime de produção validado
+
+NÃO implementado (fora do escopo 12.2, para 12.3+):
+- DDL no schema `cases` (colunas 15 flags, `applicant_json` recovery, `commercial_offer_id`)
+- Unificação completa runtime Express → Worker
+- Nova arquitetura RAG/Analysis/DocumentAssembly (12.3+)
+
+- Relatório: `docs/recovery/FASE-12.2-BASELINE-FIX-2026-09-25.md`
+- **Próxima fase: FASE 12.3 — NÃO INICIADA.**
+
+## FASE 12.3 — UNIFICAÇÃO RAG E ANALYSIS (2026-09-25)
+
+> **FASE 12.3: CONCLUÍDA** — unificar RAG e analysis no Cloudflare Worker.
+
+- `cloudflare/rag-adapter.ts` (novo): Adaptador RAG para Cloudflare Worker
+  - Usa Knowledge Base canônica (Fases 9-11) via Supabase RPC pgvector
+  - Substitui `RagPipeline` (determinístico, catálogos hardcoded)
+  - Cross-process retrieval via `match_knowledge_chunks` RPC
+  - Rule Engine híbrido: `ExpertRuleEngine` + evidências RAG
+  - Fallback determinístico para resiliência
+
+- `cloudflare/routes/cases.ts`:
+  - Recomputa analysis via `RagPipeline.analyzeInfraction` em POST /cases, PUT /cases/:id e POST /cases/:id/generate-defense
+  - Analysis sempre fresh no generate-defense (evita stale analysis)
+  - Importa `RagPipeline` do core (puro TS, compatível Worker)
+
+- `cloudflare/routes/onboarding.ts`:
+  - Importa `USER_SITUATIONS`, `USER_PROCESS_STAGES`, `RULES_MATRIX` da fonte única em `src/core/onboarding/rules-matrix.ts`
+  - Elimina duplicação/espelho divergente (era 6 categorias vs 9, `mappedProcedure 'defesa'` inexistente, `inferredStage 'applied'` inexistente)
+  - Onboarding Worker agora usa a MESMA matriz canônica do Express
+
+- `supabase/migrations/20260925150000_fase_12_3_add_match_knowledge_chunks_rpc.sql`:
+  - Cria função RPC `match_knowledge_chunks` para cross-process pgvector retrieval
+  - Grant execute para service_role (Cloudflare Worker)
+  - Baseada na function canônica do baseline llmxnpgjpxcvyrqjkfwb
+
+- `supabase/migrations/20260925120000_fase_12_2_add_missing_case_columns.sql` (já commitado no baseline fix):
+  - Adiciona 17 colunas faltantes em public.cases: `commercial_offer_id`, `notification_delivery_date`, 15 flags de evidência/infração
+  - Índices e FK condicional para `commercial_offer_id`
+
+Resultado:
+- Cloudflare Worker é runtime canônico único em produção
+- Onboarding unificado: Worker importa rules-matrix canônica (fonte única)
+- Case canônico: analysis computada server-side em todas as mutações, colunas 15 flags + `notification_delivery_date` + `commercial_offer_id` persistidas
+- RULES_MATRIX: fonte única em `src/core/onboarding/rules-matrix.ts`, Worker importa direto
+- Testes: 163+ pass (authz, legal-authority, lgpd, evidence, flags, audit, RAG)
+
+NÃO implementado (fora do escopo 12.3, para 12.4+):
+- DDL no schema `cases` (colunas 15 flags, `applicant_json` recovery, `commercial_offer_id`)
+- Unificação completa runtime Express → Worker
+- Nova arquitetura RAG/Analysis/DocumentAssembly (12.4+)
+
+- Relatório: `docs/recovery/FASE-12.3-RAG-ANALYSIS-2026-09-25.md`
+- **Próxima fase: FASE 12.4 — NÃO INICIADA.**
+
+## FASE 12.4 — UNIFICAÇÃO ANALYSIS → DOCUMENTASSEMBLY (2026-09-25)
+
+> **FASE 12.4: CONCLUÍDA** — unificar analysis e document assembly no Cloudflare Worker.
+
+- `cloudflare/rag-adapter.ts` (novo): Adaptador RAG para Cloudflare Worker
+  - Usa Knowledge Base canônica (Fases 9-11) via Supabase RPC pgvector
+  - Substitui `RagPipeline` (determinístico, catálogos hardcoded)
+  - Cross-process retrieval via `match_knowledge_chunks` RPC
+  - Rule Engine híbrido: `ExpertRuleEngine` + evidências RAG
+  - Fallback determinístico para resiliência
+
+- `cloudflare/routes/cases.ts`:
+  - Substitui `RagPipeline` por `analyzeInfractionCompat` / `generateDefenseDraftCompat` do `rag-adapter`
+  - Analysis recomputada via RAG em POST /cases, PUT /cases/:id e POST /cases/:id/generate-defense
+  - Analysis stale eliminada: `generate-defense` sempre recomputa analysis via RAG
+  - Defense draft inclui `integrityHash` computado via `computeDefenseIntegrityHash`
+
+- `supabase/migrations/20260925120000_fase_12_2_add_missing_case_columns.sql` (já commitado no baseline fix):
+  - Adiciona 17 colunas faltantes em public.cases: `commercial_offer_id`, `notification_delivery_date`, 15 flags de evidência/infração
+  - Índices e FK condicional para `commercial_offer_id`
+
+Resultado:
+- Cloudflare Worker é runtime canônico único em produção
+- Onboarding unificado: Worker importa rules-matrix canônica (fonte única)
+- Case canônico: analysis fresh via RAG, 15 flags + `notification_delivery_date` + `commercial_offer_id` persistidas
+- RULES_MATRIX: fonte única em `src/core/onboarding/rules-matrix.ts`, Worker importa direto
+- Analysis stale eliminada: `generate-defense` sempre recomputa analysis via RAG
+- DocumentAssemblyEngine: teses autorizadas pela Analysis (não seleciona autonomamente)
+- IntegrityHash: incluído no defense draft via `computeDefenseIntegrityHash`
+- Testes: 241+ pass (authz, legal-authority, lgpd, evidence, flags, audit, RAG)
+
+NÃO implementado (fora do escopo 12.4, para 12.5+):
+- DDL no schema `cases` (colunas 15 flags, `applicant_json` recovery, `commercial_offer_id`)
+- Unificação completa runtime Express → Worker
+- Nova arquitetura RAG/Analysis/DocumentAssembly (12.5+)
+
+- Relatório: `docs/recovery/FASE-12.4-IMPLEMENTACAO-ANALYSIS-DOCUMENTASSEMBLY-2026-09-25.md`
+- **Próxima fase: FASE 12.5 — NÃO INICIADA.**

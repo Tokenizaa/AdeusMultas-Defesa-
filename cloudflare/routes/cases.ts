@@ -5,7 +5,7 @@ import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { computeDefenseIntegrityHash, hasValidDefenseIntegrity } from '../defense-integrity';
-import { RagPipeline } from '../../src/core/rag/rag-pipeline';
+import { analyzeInfractionCompat, generateDefenseDraftCompat } from '../rag-adapter';
 
 const isCanonicalUserId = (value: string | undefined): boolean =>
   typeof value === 'string' &&
@@ -17,50 +17,6 @@ const canAccessCase = (user: AuthenticatedUser | undefined, row: any): boolean =
   if (!row?.user_id || !isCanonicalUserId(user.id)) return false;
   return row.user_id === user.id;
 };
-
-/** Geração determinística de minuta (sem IA) — ampliada na Fase 2. */
-async function generateDeterministicDraft(domain: any): Promise<any> {
-  const analysis = domain.analysis || {};
-  const canonicalArguments = analysis.recommendedArguments || [];
-  const procedure = analysis.recommendedProcedure || domain.serviceType || 'recurso_jari';
-  const inf = domain.infraction || {};
-  const app = domain.applicant || {};
-  const applicantName = app.applicantName || domain.clientName || 'Condutor';
-
-  const fullDraftText = [
-    `DEFESA PRELIMINAR / ${procedure.toUpperCase()}`,
-    ``,
-    `AUTUAÇÃO: AIT ${inf.aitNumber || 'N/A'} — ${inf.description || ''} (${inf.ctbArticle || ''})`,
-    `ÓRGÃO AUTUADOR: ${inf.autuadorBody || 'N/A'}`,
-    `VEÍCULO: ${domain.vehicle?.plate || 'SEM PLACA'} — ${domain.vehicle?.brandModel || ''}`,
-    ``,
-    `REQUERENTE: ${applicantName} (CPF ${app.applicantCpf || 'N/A'})`,
-    ``,
-    `I. DOS FATOS`,
-    ``,
-    `O condutor foi autuado conforme circunstâncias descritas no auto de infração.`,
-    ``,
-    `II. DAS TESES APLICÁVEIS`,
-    ``,
-    ...(canonicalArguments.length
-      ? canonicalArguments.map((a: any) => `- ${a.title || a.text || a.id}`)
-      : ['- Nulidade formal do auto de infração']),
-    ``,
-    `III. DO PEDIDO`,
-    ``,
-    `Ante o exposto, requer o acolhimento da presente defesa para cancelamento da autuação.`,
-  ].join('\n');
-
-  const selectedArgumentIds = canonicalArguments.map((a: any) => a.id || '');
-
-  return {
-    id: `def_${crypto.randomUUID()}`,
-    fullDraftText,
-    selectedArgumentIds,
-    procedureType: procedure,
-    factsNarrative: domain.applicant?.factsNarrative,
-  };
-}
 
 export const casesRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
@@ -124,9 +80,9 @@ casesRoutes.post('/cases', authenticateToken, async (c) => {
   const domainData = await c.req.json<any>();
   domainData.id = domainData.id || `case_${crypto.randomUUID()}`;
   delete domainData.userId;
-  // Recompute analysis server-side (canonical analysis)
+  // Recompute analysis server-side (canonical analysis via RAG)
   if (domainData.infraction) {
-    domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
+    domainData.analysis = await analyzeInfractionCompat(c.env, domainData.id, domainData.infraction);
   }
 
   if (domainData.isAnonymous && !domainData.claimToken) {
@@ -160,9 +116,9 @@ casesRoutes.put('/cases/:id', authenticateToken, async (c) => {
   updatedDomain.updatedAt = new Date().toISOString();
   updatedDomain.userId = existingRow.user_id;
 
-  // Recompute analysis if infraction data changed
+  // Recompute analysis if infraction data changed (via RAG)
   if (updatedDomain.infraction) {
-    updatedDomain.analysis = RagPipeline.analyzeInfraction(updatedDomain.id, updatedDomain.infraction);
+    updatedDomain.analysis = await analyzeInfractionCompat(c.env, updatedDomain.id, updatedDomain.infraction);
   }
 
   const newRow = domainToRow(updatedDomain);
@@ -261,7 +217,7 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   return c.json(rowToDomain(data));
 });
 
-// POST /api/cases/:id/generate-defense — gera minuta determinística
+// POST /api/cases/:id/generate-defense — gera minuta determinística via RAG + DocumentAssemblyEngine
 casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
@@ -275,9 +231,9 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
   const domain = rowToDomain(row);
   const body = await c.req.json<any>().catch(() => ({}));
 
-  // Recompute analysis from current infraction data (canonical, fresh)
+  // Recompute analysis from current infraction data (canonical, fresh via RAG)
   if (domain.infraction) {
-    domain.analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction);
+    domain.analysis = await analyzeInfractionCompat(c.env, domain.id, domain.infraction);
   }
 
   // Resolve qualificação do requerente (body → applicant existente)
@@ -319,13 +275,19 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
     });
   }
 
-  // Use the fresh analysis for defense generation
-  const defense = await generateDeterministicDraft(domain);
+  // Use the fresh analysis for defense generation (via RAG + DocumentAssemblyEngine)
+  const defense = await generateDefenseDraftCompat(
+    c.env,
+    domain.id,
+    domain.infraction,
+    domain.vehicle?.plate || 'SEM PLACA',
+    domain.vehicle?.brandModel || 'Veículo não informado',
+    resolvedApplicant,
+    domain.serviceType || 'recurso_jari'
+  );
   if (body.customFacts) {
     defense.factsNarrative = body.customFacts;
   }
-
-  defense.integrityHash = await computeDefenseIntegrityHash(defense as any, domain.analysis);
 
   domain.defenseDraft = defense;
   domain.currentStage = 3;
@@ -336,7 +298,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
     {
       id: `tl_def_${Date.now()}`,
       title: 'Petição Administrativa Atualizada',
-      description: `Minuta da ${domain.serviceType} estruturada com ${defense.selectedArgumentIds.length} teses jurídicas.`,
+      description: `Minuta da ${domain.serviceType} estruturada com ${defense.selectedArgumentIds?.length || 0} teses jurídicas.`,
       timestamp: new Date().toISOString(),
       type: 'defense',
     },
