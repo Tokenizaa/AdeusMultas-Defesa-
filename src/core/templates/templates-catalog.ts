@@ -12,7 +12,7 @@ import { DOCUMENT_BLOCKS, DocumentBlockCategory } from './document-blocks';
  * Mapa determinístico category (DOCUMENT_BLOCKS) -> type (TemplateBlock).
  * Fase 3: elimina a inferência por posição (idx) para blocos do catálogo.
  */
-const BLOCK_TYPE_BY_CATEGORY: Record<DocumentBlockCategory, BlockType> = {
+export const BLOCK_TYPE_BY_CATEGORY: Record<DocumentBlockCategory, BlockType> = {
   enderecamento: 'header_addressing',
   qualificacao: 'applicant_qualification',
   fatos: 'facts_narrative',

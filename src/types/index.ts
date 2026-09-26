@@ -140,7 +140,7 @@ export interface LegalArgumentDomain {
 export interface EvaluatedRule {
   ruleId: string;
   name?: string;
-  status: 'PASS' | 'FAIL' | 'DATA_GAP';
+  status: 'PASS' | 'FAIL' | 'DATA_GAP' | 'NOT_APPLICABLE';
   evaluatedAt: string;
   inputs?: Record<string, unknown>;
   reason?: string;
@@ -201,6 +201,19 @@ export interface CaseAnalysis {
    * Árvore de decisão auditável (cada regra avaliada com status PASS/FAIL/DATA_GAP).
    */
   evaluatedRules?: EvaluatedRule[];
+  /**
+   * Classificação jurídica da infração (causa-raiz RC-1). Registra como a
+   * família foi determinada e quais teses são elegíveis — é o que permite
+   * auditar por que uma tese entrou ou não entrou.
+   */
+  infractionClassification?: {
+    family: string;
+    basis: string;
+    confidence: string;
+    catalogCodes: string[];
+    eligibleArgumentIds: string[];
+    notes: string[];
+  };
   /**
    * Vícios detectados normalizados — cadeia FACT → RULE → FLAW → ARGUMENT → BLOCK.
    * Espelho estruturado das detectedInconsistencies para auditoria.

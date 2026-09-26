@@ -13,11 +13,12 @@
  *   -> Output Ready-to-Print / PDF Legal Petition
  */
 
-import { TEMPLATES_CATALOG } from '../templates/templates-catalog';
+import { TEMPLATES_CATALOG, BLOCK_TYPE_BY_CATEGORY } from '../templates/templates-catalog';
 import { DOCUMENT_BLOCKS, DocumentBlockModel } from '../templates/document-blocks';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { buildDocumentRollText, buildDocumentRollTextForAnalysis } from './document-roll';
+import { buildFactsNarrative } from './facts-narrative';
 import { DefenseDraft, InfractionData, ProcedureType, CaseAnalysis } from '../../types';
 
 export interface DocumentAssemblyPayload {
@@ -227,6 +228,7 @@ export class DocumentAssemblyEngine {
     const expeditionDate = payload.dates?.expeditionDate || payload.infraction.notificationExpeditionDate || '';
     const daysElapsed = payload.dates?.daysElapsed;
 
+    const vehicleRenavam = payload.vehicle.renavam || '';
     const psddNumber = payload.processNumbers?.psddNumber || '';
     const pcddNumber = payload.processNumbers?.pcddNumber || '';
     const suspMonths = payload.processNumbers?.suspensionMonths;
@@ -252,6 +254,11 @@ export class DocumentAssemblyEngine {
       '{{descricao_infracao}}': infractionDesc,
       '{{local_infracao}}': infractionLocation,
       '{{gravidade_infracao}}': str(payload.infraction.severity).toUpperCase(),
+      '{{codigo_infracao}}': str(payload.infraction.infractionCode ?? (payload.infraction as any).code),
+      '{{pontos_infracao}}': str(payload.infraction.points),
+      '{{valor_multa}}': str(payload.infraction.fineAmount),
+      '{{equipamento_radar}}': str(payload.infraction.radarEquipmentId),
+      '{{data_afericao}}': str(payload.infraction.inmetroAferitionDate),
       '{{artigo_ctb}}': ctbArticle,
       '{{velocidade_medida}}': str(speedMeasured),
       '{{velocidade_considerada}}': str(speedConsidered),
@@ -285,6 +292,11 @@ export class DocumentAssemblyEngine {
       '{{cpf_representante}}': payload.company?.representativeCpf || payload.applicant.cpf,
 
       // Formatted Multi-Argument Blocks
+      // Cláusulas opcionais (A-12): campo ausente vira cadeia vazia, nunca
+      // "portador(a) do RG nº ," nem "código RENAVAM nº ,".
+      '{{rg_clausula}}': payload.applicant.rg ? `portador(a) do RG nº ${payload.applicant.rg}, ` : '',
+      '{{renavam_clausula}}': vehicleRenavam ? `código RENAVAM nº ${vehicleRenavam}, ` : '',
+
       '{{bloco_preliminares_formatado}}': formattedPreliminaries || '',
       '{{bloco_merito_formatado}}': formattedMerit || '',
 
@@ -301,17 +313,42 @@ export class DocumentAssemblyEngine {
     };
 
     // 6. Select Blocks: Use custom selected blocks or template default blocks
-    let blocksToAssemble: { id: string; title: string; contentTemplate: string }[] = [];
+    let blocksToAssemble: { id: string; title: string; contentTemplate: string; type?: string }[] = [];
 
     if (payload.selectedBlockIds && payload.selectedBlockIds.length > 0) {
       blocksToAssemble = payload.selectedBlockIds
         .map((bId) => DOCUMENT_BLOCKS.find((b) => b.id === bId))
-        .filter((b): b is DocumentBlockModel => !!b);
+        .filter((b): b is DocumentBlockModel => !!b)
+        .map((b) => ({ id: b.id, title: b.title, contentTemplate: b.contentTemplate, type: BLOCK_TYPE_BY_CATEGORY[b.category] }));
     } else {
       blocksToAssemble = template.blocks;
     }
 
     // 7. Interpolate Placeholders Across All Blocks
+    const factsNarrative = buildFactsNarrative({
+      aitNumber,
+      autuadorBody: autuador,
+      ctbArticle,
+      description: infractionDesc,
+      dateTime: infractionDate,
+      location: infractionLocation,
+      infractionCode: (payload.infraction as any).infractionCode ?? (payload.infraction as any).code,
+      severity: payload.infraction.severity as string,
+      points: payload.infraction.points,
+      fineAmount: payload.infraction.fineAmount,
+      speedLimit,
+      measuredSpeed: speedMeasured,
+      consideredSpeed: speedConsidered,
+      radarEquipmentId: payload.infraction.radarEquipmentId,
+      inmetroAferitionDate: payload.infraction.inmetroAferitionDate,
+      refusedTest: payload.infraction.refusedTest,
+      offeredRetest: payload.infraction.offeredRetest,
+      hasPsychomotorTerm: payload.infraction.hasPsychomotorTerm,
+      yellowPhaseCrossing: payload.infraction.yellowPhaseCrossing,
+      cellphoneCircumstance: payload.infraction.cellphoneCircumstance,
+      emergencyPassage: payload.infraction.emergencyPassage,
+      notes: payload.infraction.notes,
+    });
     const assembledBlockTexts: string[] = [];
     const unresolvedSet = new Set<string>();
 
@@ -334,6 +371,19 @@ export class DocumentAssemblyEngine {
               aitNumber
             )
           : buildDocumentRollText(payload.procedureType, aitNumber);
+      }
+
+      // Narrativa de FATOS derivada do Case (RC-5). Substitui o texto fixo do
+      // bloco de fatos: declara código, gravidade, multa, velocidades, radar e
+      // circunstâncias quando existem no Case, e nada quando não existem.
+      // Narrativa de FATOS derivada do Case (RC-5). O bloco de fatos de cada
+      // template é texto fixo que não declara código, gravidade, multa,
+      // velocidades, radar nem circunstâncias. Aqui preserva-se o TÍTULO do bloco
+      // e o corpo é substituído pela narrativa gerada do Case — que só afirma o
+      // que existe no caso e omite o que não existe.
+      if (block.type === 'facts_narrative') {
+        const heading = content.split('\n\n')[0].trim();
+        content = `${heading}\n\n${factsNarrative.text}`.trim();
       }
 
       for (const [placeholder, value] of Object.entries(variableMap)) {
@@ -367,7 +417,7 @@ export class DocumentAssemblyEngine {
       vehicleModel: payload.vehicle.model,
       vehicleRenavam: payload.vehicle.renavam || '',
       aitNumber: aitNumber,
-      factsNarrative: payload.customFacts || '',
+      factsNarrative: payload.customFacts || factsNarrative.text,
       selectedArgumentIds: activeArgIds,
       preliminaryArgumentsText: formattedPreliminaries,
       meritArgumentsText: formattedMerit,

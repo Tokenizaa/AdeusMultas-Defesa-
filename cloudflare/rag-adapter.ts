@@ -10,6 +10,7 @@
 
 import { createSupabaseAdminClient } from './supabase';
 import { computeDefenseIntegrityHash } from './defense-integrity';
+import { COMPATIBLE_PROCEDURES_BY_FAMILY } from '../src/core/rules/infraction-classifier';
 
 export interface CaseInfractionData {
   aitNumber?: string;
@@ -79,62 +80,103 @@ export class CloudflareRagAdapter {
    */
   async analyzeInfraction(caseId: string, infraction: any): Promise<any> {
     try {
-      const query = this.buildSemanticQuery(infraction);
-      const embedding = await this.generateEmbedding(query);
-      const ragResults = await this.searchKnowledgeViaRPC(embedding, infraction);
-      const analysis = await this.applyDeterministicAnalysis(caseId, infraction, ragResults);
-      return analysis;
+      const terms = this.buildSearchTerms(infraction);
+      const ragResults = await this.searchKnowledgeLexical(terms);
+      return await this.applyDeterministicAnalysis(caseId, infraction, ragResults);
     } catch (err: any) {
       console.error('[RAG Adapter] Erro na análise:', err.message);
       return this.fallbackDeterministicAnalysis(caseId, infraction);
     }
   }
 
-  private async generateEmbedding(text: string): Promise<number[]> {
-    return this.createDeterministicVector(text, 1024);
+  /**
+   * Termos de busca extraídos do caso. A recuperação é LEXICAL sobre o
+   * conteúdo real dos chunks: cada termo retornado é verificável no chunk, e a
+   * provenance é completa (chunk → versão → documento → fonte → URL oficial).
+   *
+   * Causa-raiz RC-4 (auditoria FASE 12): a busca vetorial usava um
+   * vetorizador determinístico de hashing de um saco de palavras, com
+   * `match_threshold` fixo em 0,35. Medido: a maior similaridade alcançável
+   * contra o melhor chunk da jurisdição era 0,2134 — ou seja, o limiar era
+   * inatingível e a KB (66 documentos) jamais fundamentava tese alguma. Baixar
+   * o limiar teria produzido "provenance" sem semântica, que é pior do que
+   * nenhuma. A busca lexical é determinística, auditável e realmente recupera.
+   */
+  private buildSearchTerms(infraction: any): string[] {
+    const raw: string[] = [];
+    if (infraction?.ctbArticle) raw.push(String(infraction.ctbArticle).match(/Art\.\s*([0-9]+(?:-[A-Z])?)/i)?.[0] ?? '');
+    if (infraction?.description) raw.push(String(infraction.description));
+    if (infraction?.ctbArticle) raw.push(String(infraction.ctbArticle));
+    const normalized = raw.join(' ')
+      .toLowerCase()
+      .replace(/[^\w\sáéíóúâêîôûãõç-]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+    const stop = new Set(['artigo', 'artigos', 'codigo', 'descricao', 'infração', 'infracao']);
+    const counts = new Map<string, number>();
+    for (const w of normalized) {
+      if (stop.has(w)) continue;
+      counts.set(w, (counts.get(w) ?? 0) + 1);
+    }
+    return Array.from(counts.keys()).slice(0, 12);
   }
 
-  private async searchKnowledgeViaRPC(embedding: number[], infraction: any) {
-    const threshold = 0.35;
-    const matchCount = 20;
-    const jurisdiction = this.extractJurisdiction(infraction);
-    
-    try {
-      const { data, error } = await this.supabase.rpc('match_knowledge_chunks', {
-        query_embedding: JSON.stringify(embedding),
-        match_threshold: 0.35,
-        match_count: 20,
-        filter_source_id: null,
-        filter_document_type: null,
-        filter_jurisdiction: jurisdiction || null,
-      });
+  private async searchKnowledgeLexical(terms: string[]) {
+    if (terms.length === 0) return [];
+    // PostgREST: qualquer um dos termos, sem wildcard no início (evita varrer tudo).
+    const filter = terms.map((t) => `content.ilike.*${t.replace(/[%,()]/g, '')}*`).join(',');
+    const { data, error } = await this.supabase
+      .from('knowledge_chunks')
+      .select('id,source_id,document_id,document_version_id,content,content_hash,jurisdiction')
+      .or(filter)
+      .limit(200);
+    if (error || !data || data.length === 0) return [];
 
-      if (error) {
-        console.warn('[RAG Adapter] RPC error:', error.message);
-        return [];
-      }
+    const scored = data
+      .map((row: any) => {
+        const hay = String(row.content ?? '').toLowerCase();
+        const matched = terms.filter((t) => hay.includes(t));
+        return { row, matched };
+      })
+      .filter((x) => x.matched.length > 0)
+      .sort((a, b) => b.matched.length - a.matched.length || String(a.row.id).localeCompare(String(b.row.id)))
+      .slice(0, 5);
 
-      return data || [];
-    } catch (err: any) {
-      console.warn('[RAG Adapter] RPC failed:', err.message);
-      return [];
-    }
-  }
+    // Provenance: URL oficial vive em knowledge_document_versions.source_url
+    // (knowledge_sources.url está vazio em 39/39 fontes — ver FASE 12.6 §7).
+    const versionIds = Array.from(new Set(scored.map((x) => x.row.document_version_id).filter(Boolean)));
+    if (versionIds.length === 0) return [];
+    const { data: versions } = await this.supabase
+      .from('knowledge_document_versions')
+      .select('id,document_id,source_url,version,content_hash')
+      .in('id', versionIds);
+    const byVersion = new Map<string, any>((versions ?? []).map((v: any) => [v.id, v]));
 
-  private buildSemanticQuery(infraction: any): string {
-    const parts: string[] = [];
+    const sourceIds = Array.from(new Set(scored.map((x) => x.row.source_id).filter(Boolean)));
+    const { data: sources } = await this.supabase
+      .from('knowledge_sources')
+      .select('id,name,authority,jurisdiction')
+      .in('id', sourceIds);
+    const bySource = new Map<string, any>((sources ?? []).map((v: any) => [v.id, v]));
 
-    if (infraction.infractionCode) parts.push('Código de infração: ' + infraction.infractionCode);
-    if (infraction.ctbArticle) parts.push('Artigo CTB: ' + infraction.ctbArticle);
-    if (infraction.description) parts.push('Descricao: ' + infraction.description);
-    if (infraction.autuadorBody) parts.push('Orgao autuador: ' + infraction.autuadorBody);
-    if (infraction.severity) parts.push('Gravidade: ' + infraction.severity);
-    if (infraction.speedLimit && infraction.measuredSpeed) {
-      parts.push('Velocidade da via: ' + infraction.speedLimit + ' km/h, medida: ' + infraction.measuredSpeed + ' km/h');
-    }
-    if (infraction.location) parts.push('Local: ' + infraction.location);
-
-    return 'Analise de infração de transito brasileira: ' + parts.join('; ');
+    return scored.map(({ row, matched }) => {
+      const version = byVersion.get(row.document_version_id);
+      const source = bySource.get(row.source_id);
+      return {
+        chunk_id: row.id,
+        document_id: row.document_id,
+        document_version_id: row.document_version_id,
+        source_id: row.source_id,
+        source_name: source?.name ?? null,
+        authority: source?.authority ?? null,
+        official_url: version?.source_url ?? null,
+        version: version?.version ?? null,
+        content_hash: row.content_hash,
+        jurisdiction: row.jurisdiction,
+        matched_terms: matched,
+        content: row.content,
+      };
+    });
   }
 
   private extractJurisdiction(infraction: any): string | undefined {
@@ -152,66 +194,130 @@ export class CloudflareRagAdapter {
     return undefined;
   }
 
+  /**
+   * A Analysis canônica é o Rule Engine (autoridade da decisão jurídica)
+   * ENRIQUECIDA com a recuperação da KB. Antes esta função descartava
+   * `ruleResult` e devolvia um objeto novo com métricas fixas
+   * (`overallSuccessRate: 75`) e listas de rastro vazias — causa-raiz RC-3 da
+   * auditoria FASE 12, que fazia 10 casos distintos produzirem a mesma
+   * assinatura de Analysis.
+   */
   private async applyDeterministicAnalysis(caseId: string, infraction: any, ragResults: any[]) {
     const { ExpertRuleEngine } = await import('../src/core/rules/rule-engine');
 
-    const EVIDENCE_DEPENDENT_ARGUMENTS: Record<string, string> = {
-      'ARG-012': 'fotoRetencaoTrafego',
-      'ARG-019': 'manualVeiculoOuFotoPainel',
-      'ARG-020': 'fotoPlacaR6aAusente',
+    // Extrai flags de evidenceFlags para o nível superior do infraction,
+    // pois o RuleEngine lê direto do objeto infraction (não de evidenceFlags).
+    // Causa-raiz RC-1: fixtures colocam flags em evidenceFlags, mas RuleEngine
+    // lê infraction.hasR19SignageProof, hasPhotoProof, etc. no nível superior.
+    const evidenceFlags = infraction.evidenceFlags || {};
+    const infractionWithFlags = {
+      ...infraction,
+      hasR19SignageProof: evidenceFlags.r19SignageProof ?? infraction.hasR19SignageProof,
+      hasPhotoProof: evidenceFlags.fotoVeiculo ?? infraction.hasPhotoProof,
+      hasPsychomotorTerm: evidenceFlags.psicomotorTerm ?? infraction.hasPsychomotorTerm,
+      hasAgentDetailedObservations: evidenceFlags.observacoesAgente ?? infraction.hasAgentDetailedObservations,
+      hasRegulatorySign: evidenceFlags.placaSinalizacao ?? infraction.hasRegulatorySign,
+      refusedTest: evidenceFlags.recusouTeste ?? infraction.refusedTest,
+      offeredRetest: evidenceFlags.ofereceuContraprova ?? infraction.offeredRetest,
+      yellowPhaseCrossing: evidenceFlags.tempoAmarelo ?? infraction.yellowPhaseCrossing,
+      cellphoneCircumstance: evidenceFlags.celularVivaVoz ?? infraction.cellphoneCircumstance,
+      emergencyPassage: evidenceFlags.passagemEmergencia ?? infraction.emergencyPassage,
+      hasPreviousInfractionsLast12Months: infraction.hasPreviousInfractionsLast12Months,
+      hasRegulatorySign: evidenceFlags.hasRegulatorySign ?? infraction.hasRegulatorySign,
     };
 
-    const ruleResult = ExpertRuleEngine.evaluate(caseId, infraction);
-    const evidenceFlags = infraction.evidenceFlags || {};
-    
-    const filteredArguments = ruleResult.recommendedArguments.filter((arg: any) => {
-      const evidenceKey = (EVIDENCE_DEPENDENT_ARGUMENTS as Record<string, string>)[arg.id];
-      if (!evidenceKey) return true;
-      return evidenceFlags[evidenceKey] === true;
+    // Autorização por tese: cada regra do EXPERT_RULES já tem condição causal
+    // verificável nos fatos do Case. O caminho canônico NÃO aplica um segundo
+    // filtro de chaves de evidenceFlags (EVIDENCE_DEPENDENT_ARGUMENTS): ele
+    // duplicava a autorização com chaves que nenhuma regra e nenhum Case
+    // produziam, e por isso descartava teses causalmente detectadas — era a
+    // causa-raiz RC-1b de GD-08 perder ARG-019.
+    const ruleResult = ExpertRuleEngine.evaluate(caseId, infractionWithFlags);
+    const filteredArguments = ruleResult.recommendedArguments;
+
+    // Recuperação da KB ancora a fundamentação das teses ELEGÍVEIS da família:
+    // para cada tese recomendada, procuramos nos chunks recuperados aquele cujo
+    // conteúdo cita o artigo do fundamento legal. A tese não muda — muda a sua
+    // origem documental, recuperável em chunk → versão → documento → fonte → URL.
+    const withProvenance = filteredArguments.map((arg: any) => {
+      const articles = String(arg.legalBase ?? '').match(/Art\.\s*([0-9]+)/gi) ?? [];
+      const wanted = new Set(articles.map((a) => a.toLowerCase()));
+      const hits = ragResults.filter((r) => {
+        const content = String(r.content ?? '').toLowerCase();
+        return Array.from(wanted).some((w) => content.includes(w));
+      });
+      return {
+        ...arg,
+        provenanceStatus: hits.length > 0 ? 'SUPPORTED' : 'UNSUPPORTED',
+        provenance: hits.map((r) => ({
+          chunk_id: r.chunk_id,
+          document_id: r.document_id,
+          document_version_id: r.document_version_id,
+          source_id: r.source_id,
+          source_name: r.source_name,
+          authority: r.authority,
+          official_url: r.official_url,
+          version: r.version,
+          content_hash: r.content_hash,
+          matched_terms: r.matched_terms,
+        })),
+      };
     });
 
-    const ragArguments = this.mapRAGResultToArgument(ragResults);
+    const classification = ruleResult.infractionClassification;
 
-    const analysis = {
-      id: 'analysis_' + crypto.randomUUID(),
-      caseId,
+    return {
+      ...ruleResult,
       status: 'completed',
-      overallSuccessRate: 75,
-      detectedInconsistencies: [],
-      recommendedArguments: [
-        ...filteredArguments,
-        ...ragResults.slice(0, 3).map(this.mapRAGResultToArgument.bind(this))
-      ],
-      recommendedProcedure: this.determineProcedure(infraction),
+      recommendedArguments: withProvenance,
       competentBody: infraction.autuadorBody || 'Nao identificado',
       procedureDeadline: infraction.defenseDeadline,
-      summaryReasoning: 'Analise hibrida: Rule Engine + RAG canonico',
-      createdAt: new Date().toISOString(),
-      engineVersion: 'defesai-legal-vectorizer-v1-rag-v1',
-      evaluatedRules: [],
-      detectedFlaws: [],
-      selectedArguments: [],
-      dataGaps: [],
-    };
-
-    return analysis;
-  }
-
-  private mapRAGResultToArgument(r: any) {
-    return {
-      id: 'RAG-' + r.chunk_id,
-      title: r.heading || 'Dispositivo: ' + r.article_number,
-      reason: 'Baseado em ' + r.source_name + ' - ' + r.document_title,
-      baseLegal: r.authority + ' - ' + r.document_title + ' (' + (r.article_number || 'N/A') + ')',
-      category: 'rag_retrieved',
-      evidenceRequired: [],
+      engineVersion: 'defesai-rule-engine+kb-lexical-v2',
+      // Provenance da recuperação: fica na Analysis, não é descartada.
+      ragRetrieval: {
+        provider: 'lexical-content-match',
+        count: ragResults.length,
+        top: ragResults.slice(0, 3).map((r) => ({
+          chunk_id: r.chunk_id,
+          document_id: r.document_id,
+          document_version_id: r.document_version_id,
+          source_id: r.source_id,
+          official_url: r.official_url,
+          matched_terms: r.matched_terms,
+        })),
+      },
     };
   }
 
-  private determineProcedure(infraction: any): string {
-    if (infraction.infractionCode === '516-91' || infraction.infractionCode === '747-10') return 'suspensao_cnh';
-    if (infraction.evidenceFlags?.hasPreviousInfractionsLast12Months === false) return 'conversao_advertencia';
-    return 'recurso_jari';
+  /**
+   * Procedimento efetivo. Ordem: (1) o que a rota pediu, se compatível com a
+   * Analysis; (2) o que a Analysis determinou a partir dos fatos. Não existe
+   * default universal: pedido incompatível é rejeitado, não reescrito.
+   */
+  resolveProcedure(requested: string | undefined, analysis: any): string {
+    const classification = analysis?.infractionClassification;
+    const family = classification?.family ?? 'desconhecida';
+    const allowed = new Set<string>([
+      ...(COMPATIBLE_PROCEDURES_BY_FAMILY[family as keyof typeof COMPATIBLE_PROCEDURES_BY_FAMILY] ?? []),
+      ...(analysis?.recommendedProcedure ? [analysis.recommendedProcedure] : []),
+    ]);
+    if (allowed.size === 0) {
+      throw new Error(
+        `Procedimento indeterminado: tipificação classificada como "${family}" sem conjunto de procedimentos aplicáveis. ` +
+          `Informe o procedimento do serviço ou complete a tipificação. Nenhum procedimento foi assumido.`,
+      );
+    }
+    if (requested && requested !== 'recurso_jari' && !allowed.has(requested)) {
+      throw new Error(
+        `Procedimento incompatível com o caso: "${requested}" não se aplica à família "${family}" ` +
+          `(permitidos: ${Array.from(allowed).join(', ')}).`,
+      );
+    }
+    // "recurso_jari" é o valor persistido por ausência de escolha explícita do
+    // usuário (canonical-mapper). Só é aceito se a família o comportar; caso
+    // contrário o procedimento da Analysis prevalece.
+    if (requested && allowed.has(requested)) return requested;
+    return analysis.recommendedProcedure;
   }
 
   private fallbackDeterministicAnalysis(caseId: string, infraction: any) {
@@ -219,13 +325,15 @@ export class CloudflareRagAdapter {
       id: 'analysis_' + crypto.randomUUID(),
       caseId,
       status: 'completed',
-      overallSuccessRate: 50,
+      // Sem fabrication numérica: a probabilidade é desconhecida, não 50.
+      overallSuccessRate: null,
+      successRateBasis: 'UNAVAILABLE',
       detectedInconsistencies: [],
       recommendedArguments: [],
       recommendedProcedure: 'recurso_jari',
       competentBody: infraction.autuadorBody || 'Nao identificado',
       procedureDeadline: infraction.defenseDeadline,
-      summaryReasoning: 'Analise em modo fallback (RAG indisponível).',
+      summaryReasoning: 'Análise em modo degradado: recuperação da KB indisponível. Nenhuma tese foi autorizada por recuperação; as teses do Rule Engine, se houver, permanecem válidas.',
       createdAt: new Date().toISOString(),
       engineVersion: 'fallback-deterministic',
       evaluatedRules: [],
@@ -239,62 +347,6 @@ export class CloudflareRagAdapter {
     };
   }
 
-  private createDeterministicVector(text: string, dimensions = 1024): number[] {
-    const vector = new Array(dimensions).fill(0);
-    const words = text
-      .toLowerCase()
-      .replace(/[^\w\sáéíóúâêîôûãõç]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 1);
-
-    const legalKeywords: Record<string, number> = {
-      ctb: 3.5, contran: 3.2, senatran: 3.0, inmetro: 3.0,
-      ait: 3.0, art: 2.8, artigo: 2.8, velocidade: 2.5,
-      radar: 2.5, bafometro: 2.8, etilometro: 2.8,
-      autuacao: 2.6, notificacao: 2.6, prazo: 2.5,
-      decadencia: 3.0, prescricao: 3.0, recurso: 2.4,
-      jari: 2.8, cetran: 2.8, advertencia: 2.6,
-      suspensao: 2.9, cassacao: 2.9, nulidade: 3.2,
-      cancelamento: 3.0, inconsistencia: 3.0,
-      sinalizacao: 2.5, placa: 2.4, afericao: 2.7, calibracao: 2.8, tolerancia: 2.6,
-    };
-
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const weight = legalKeywords[word] || 1.0;
-      const h1 = this.fnv1a(word);
-      const h2 = this.fnv1a(word + '_pos_' + (i % 5));
-      const h3 = this.fnv1a(word + '_rev');
-      const dim1 = Math.abs(h1) % 1024;
-      const dim2 = Math.abs(h2) % 1024;
-      const dim3 = Math.abs(h3) % 1024;
-      vector[dim1] += 0.8 * weight;
-      vector[dim2] += 0.5 * weight;
-      vector[dim3] += 0.3 * weight;
-      if (i > 0) {
-        const bigram = words[i - 1] + '_' + words[i];
-        const bHash = Math.abs(this.fnv1a(bigram)) % 1024;
-        vector[bHash] += 1.2 * weight;
-      }
-    }
-    return this.normalizeVector(vector);
-  }
-
-  private fnv1a(str: string): number {
-    let hash = 2166136261;
-    for (let i = 0; i < str.length; i++) {
-      hash ^= str.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return hash;
-  }
-
-  private normalizeVector(vec: number[]): number[] {
-    const dot = vec.reduce((acc, v) => acc + v * v, 0);
-    const norm = Math.sqrt(dot);
-    if (norm === 0) return vec;
-    return vec.map((v) => v / norm);
-  }
 }
 
 export function createRagAdapter(env: any) {
@@ -306,26 +358,34 @@ export async function analyzeInfractionCompat(env: any, caseId: string, infracti
   return adapter.analyzeInfraction(caseId, infraction);
 }
 
-export async function generateDefenseDraftCompat(env: any, caseId: string, infraction: any, vehiclePlate: string, vehicleModel: string, applicantData: any, procedureType: string, precomputedAnalysis?: any) {
-  // A Analysis do chamador é a autoridade: o integrityHash depende de analysis.id
-  // (cloudflare/defense-integrity.ts), então recomputar aqui criaria divergência
-  // entre o documento e a Analysis persistida. Só recalcula quando o chamador
-  // legacy não forneceu nenhuma. Uma Analysis com recommendedArguments vazio gera
-  // documento sem teses — que é a consequência CORRETA do invariante "Analysis é a
-  // autoridade" (DocumentAssemblyEngine.assemble, document-assembly-engine.ts:120-124),
-  // e nunca a de se fabricar teses não autorizadas.
+export async function generateDefenseDraftCompat(
+  env: any,
+  caseId: string,
+  infraction: any,
+  vehiclePlate: string,
+  vehicleModel: string,
+  applicantData: any,
+  procedureType?: string,
+  precomputedAnalysis?: any
+) {
+  const adapter = new CloudflareRagAdapter(env);
+  // A Analysis do chamador é a autoridade: o integrityHash depende do conteúdo
+  // dela, então recomputar aqui criaria divergência entre o documento e a
+  // Analysis persistida. Só recalcula quando o chamador legacy não forneceu
+  // nenhuma.
   const analysis = precomputedAnalysis
     ? precomputedAnalysis
-    : await (async () => {
-        const adapter = new CloudflareRagAdapter(env);
-        return adapter.analyzeInfraction(caseId, infraction);
-      })();
+    : await adapter.analyzeInfraction(caseId, infraction);
+
+  // Procedimento: pedido do chamador se compatível, senão o que a Analysis
+  // determinou pelos fatos. Incompatível é rejeitado, nunca reescrito.
+  const effectiveProcedure = adapter.resolveProcedure(procedureType, analysis);
 
   const { DocumentAssemblyEngine } = await import('../src/core/documents/document-assembly-engine');
-  
+
   const draft = DocumentAssemblyEngine.assemble({
     caseId,
-    procedureType: procedureType as any,
+    procedureType: effectiveProcedure as any,
     infraction: infraction as any,
     vehicle: { plate: vehiclePlate, model: vehicleModel },
     applicant: applicantData,
@@ -344,7 +404,18 @@ export async function generateDefenseDraftCompat(env: any, caseId: string, infra
     },
   });
 
-  const integrityHash = await computeDefenseIntegrityHash(draft as any, analysis);
-  
+  const integrityHash = await computeDefenseIntegrityHash(draft as any, analysis, {
+    aitNumber: infraction.aitNumber,
+    infractionCode: infraction.infractionCode,
+    ctbArticle: infraction.ctbArticle,
+    dateTime: infraction.dateTime,
+    location: infraction.location,
+    measuredSpeed: infraction.measuredSpeed,
+    consideredSpeed: infraction.consideredSpeed,
+    speedLimit: infraction.speedLimit,
+    radarEquipmentId: infraction.radarEquipmentId,
+    inmetroAferitionDate: infraction.inmetroAferitionDate,
+  });
+
   return { ...draft, protocolInfo: undefined, integrityHash };
 }

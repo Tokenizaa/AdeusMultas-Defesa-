@@ -6,6 +6,7 @@ import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { computeDefenseIntegrityHash, hasValidDefenseIntegrity } from '../defense-integrity';
 import { analyzeInfractionCompat, generateDefenseDraftCompat } from '../rag-adapter';
+import { runCanonicalQualityGate } from '../quality-gate';
 
 const isCanonicalUserId = (value: string | undefined): boolean =>
   typeof value === 'string' &&
@@ -59,7 +60,20 @@ casesRoutes.get('/cases/:id', authenticateToken, async (c) => {
   const domain = rowToDomain(row);
 
   if (domain.defenseDraft && domain.analysis) {
-    if (!(await hasValidDefenseIntegrity(domain.defenseDraft as any, domain.analysis as any))) {
+    if (
+      !(await hasValidDefenseIntegrity(domain.defenseDraft as any, domain.analysis as any, {
+        aitNumber: domain.infraction?.aitNumber,
+        infractionCode: domain.infraction?.infractionCode,
+        ctbArticle: domain.infraction?.ctbArticle,
+        dateTime: domain.infraction?.dateTime,
+        location: domain.infraction?.location,
+        measuredSpeed: domain.infraction?.measuredSpeed,
+        consideredSpeed: domain.infraction?.consideredSpeed,
+        speedLimit: domain.infraction?.speedLimit,
+        radarEquipmentId: domain.infraction?.radarEquipmentId,
+        inmetroAferitionDate: domain.infraction?.inmetroAferitionDate,
+      }))
+    ) {
       domain.defenseDraft = undefined;
       throw new HTTPException(409, {
         message: 'Documento de defesa inválido ou adulterado. Gere novamente a defesa antes de consultá-la.',
@@ -283,11 +297,27 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
     domain.vehicle?.plate || 'SEM PLACA',
     domain.vehicle?.brandModel || 'Veículo não informado',
     resolvedApplicant,
-    domain.serviceType || 'recurso_jari',
+    domain.serviceType,
     domain.analysis
   );
-  if (body.customFacts) {
-    defense.factsNarrative = body.customFacts;
+  // Quality Gate no runtime canônico (ACHADO A-06): antes ele existia apenas em
+  // src/core/ai/ai-orchestrator e em teste — o Worker gerava e devolvia peça sem
+  // qualquer verificação. Fail-closed: reprovar é bloquear.
+  const qualityGate = runCanonicalQualityGate({
+    infraction: domain.infraction,
+    analysis: domain.analysis,
+    draft: defense,
+    applicant: resolvedApplicant,
+    vehicle: domain.vehicle,
+    serviceType: domain.serviceType,
+  });
+  if (!qualityGate.overallPass) {
+    throw new HTTPException(422, {
+      message: `Documento reprovado no Quality Gate (${qualityGate.score}%): ${qualityGate.checks
+        .filter((check) => !check.passed)
+        .map((check) => `${check.check} — ${check.message}`)
+        .join(' | ')}`,
+    });
   }
 
   domain.defenseDraft = defense;
@@ -309,7 +339,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
   const { data, error } = await supabase.from('cases').update(updatedRow).eq('id', domain.id).select().single();
   if (error) throw new HTTPException(400, { message: error.message });
 
-  return c.json({ success: true, defenseDraft: defense, case: rowToDomain(data) });
+  return c.json({ success: true, defenseDraft: defense, qualityGate, case: rowToDomain(data) });
 });
 
 export default casesRoutes;

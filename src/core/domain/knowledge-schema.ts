@@ -272,6 +272,13 @@ export interface RuleEvaluationContext {
   hasAgentDetailedObservations?: boolean;
   hasPhotoProof?: boolean;
   hasR19SignageProof?: boolean;
+  hasRegulatorySign?: boolean;
+  refusedTest?: boolean;
+  offeredRetest?: boolean;
+  yellowPhaseCrossing?: boolean;
+  cellphoneCircumstance?: string;
+  emergencyPassage?: boolean;
+  evidenceFlags?: Record<string, boolean>;
   autuadorBody?: string;
 }
 
@@ -302,6 +309,12 @@ export interface RuleModel {
   requiredData: string[];
   /** Teses (IDs ARG-*) relacionadas que a regra pode fundamentar. */
   relatedArguments?: string[];
+  /**
+   * Famílias de infração às quais a regra se aplica (causa-raiz RC-1). Ausente
+   * = regra sem restrição de família. É o que impede, por exemplo, a regra de
+   * sinalização R-19 de disparar em alcool, semáforo, celular ou estacionamento.
+   */
+  families?: string[];
   /** Procedimentos afetados quando a regra dispara. */
   affectedProcedures?: ProcedureType[];
   /** Evidências documentais necessárias para sustentar a tese. */

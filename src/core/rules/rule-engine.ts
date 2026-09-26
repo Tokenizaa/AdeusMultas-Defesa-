@@ -11,6 +11,7 @@ import {
   DetectedInconsistencyResult,
 } from '../domain/knowledge-schema';
 import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
+import { classifyInfraction, CANONICAL_PROCEDURE_BY_FAMILY, type InfractionClassification } from './infraction-classifier';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 import { CaseAnalysis, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
@@ -28,6 +29,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['infractionDate', 'notificationExpeditionDate'],
     relatedArguments: ['ARG-048', 'ARG-049'],
+    families: ['excesso_velocidade', 'alcoolemia', 'semaforo', 'celular', 'estacionamento', 'cinto', 'documentos', 'circulacao', 'capacidade', 'lotacao'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
     evidenceRequired: ['Cópia da Notificação da Autuação com data de expedição/postagem', 'Extrato do histórico de notificações'],
     priority: 100,
@@ -67,6 +69,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['infractionDate', 'radarCalibrationDate'],
     relatedArguments: ['ARG-001'],
+    families: ['excesso_velocidade'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran', 'analise_tecnica'],
     evidenceRequired: ['Certidão do Portal de Serviços do INMETRO (PSInmetro) atestando a data da última verificação'],
     priority: 95,
@@ -108,6 +111,7 @@ export const EXPERT_RULES: RuleModel[] = [
     validUntil: null,
     requiredData: ['hasPreviousInfractionsLast12Months'],
     relatedArguments: ['ARG-051'],
+    families: ['excesso_velocidade', 'celular', 'estacionamento', 'cinto', 'circulacao', 'documentos', 'lotacao'],
     affectedProcedures: ['conversao_advertencia'],
     evidenceRequired: ['Extrato de prontuário e histórico de CNH sem infrações nos últimos 12 meses'],
     priority: 90,
@@ -152,6 +156,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['hasPsychomotorTerm'],
     relatedArguments: ['ARG-025'],
+    families: ['alcoolemia'],
     affectedProcedures: ['suspensao_cnh', 'recurso_jari'],
     evidenceRequired: ['Cópia integral do processo administrativo comprovando a ausência do Anexo II da Res. 432/2013'],
     priority: 88,
@@ -189,6 +194,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['hasAgentDetailedObservations'],
     relatedArguments: ['ARG-015'],
+    families: ['celular'],
     affectedProcedures: ['defesa_previa', 'recurso_jari'],
     evidenceRequired: ['Espelho do Auto de Infração com o campo de observações vago/genérico'],
     priority: 82,
@@ -220,6 +226,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['hasR19SignageProof'],
     relatedArguments: ['ARG-002', 'ARG-007'],
+    families: ['excesso_velocidade'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'analise_tecnica'],
     evidenceRequired: ['Fotografias do trecho demonstrado ausência/obstrução da placa R-19'],
     priority: 78,
@@ -254,6 +261,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['measuredSpeed', 'consideredSpeed', 'speedLimit'],
     relatedArguments: ['ARG-005'],
+    families: ['excesso_velocidade'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
     evidenceRequired: ['Cópia da Notificação com os campos de velocidade medida/considerada preenchidos'],
     priority: 85,
@@ -326,6 +334,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['infractionCode', 'hasPhotoProof'],
     relatedArguments: ['ARG-006', 'ARG-009'],
+    families: ['excesso_velocidade', 'semaforo'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
     evidenceRequired: ['Espelho fotográfico do Auto de Infração'],
     priority: 70,
@@ -334,12 +343,20 @@ export const EXPERT_RULES: RuleModel[] = [
       const isAutomated = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10'
         || code === '605-01' || code === '605-02';
       if (isAutomated && ctx.hasPhotoProof === false) {
+        // A tese da falta de foto é específica da família: em radar o defeito é
+        // a impossibilidade de individualizar o veículo (ARG-006); em semáforo,
+        // a ausência da foto de retenção da linha de retenção (ARG-009).
+        const isSemaphore = code === '605-01' || code === '605-02';
         return {
           ruleId: 'RULE_PHOTO_PROOF_REQUIRED',
-          title: 'Ausência de Comprovação Fotográfica em Infração Automatizada',
-          description: 'A autuação por equipamento automatizado carece de espelho fotográfico que demonstre inequivocamente o cometimento da infração.',
+          title: isSemaphore
+            ? 'Ausência de Foto de Retenção em Autuação Semafórica (Art. 208)'
+            : 'Ausência de Comprovação Fotográfica em Infração Automatizada',
+          description: isSemaphore
+            ? 'A autuação por avanço de sinal vermelho não traz a foto de retenção que demonstre a transposição da linha de retenção após o início do ciclo vermelho.'
+            : 'A autuação por equipamento automatizado carece de espelho fotográfico que demonstre inequivocamente o cometimento da infração.',
           severity: 'alta',
-          legalArgumentId: 'ARG-006',
+          legalArgumentId: isSemaphore ? 'ARG-009' : 'ARG-006',
           impact: 'Nulidade do auto por ausência de prova material idônea.',
           statutoryBasis: 'Art. 280, §2º do CTB c/c Res. CONTRAN nº 798/2020, art. 6º e Res. 985/2022 (MBFT)',
         };
@@ -368,6 +385,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['infractionCode', 'infractionDate', 'notificationExpeditionDate'],
     relatedArguments: ['ARG-039'],
+    families: ['documentos'],
     affectedProcedures: ['indicacao_condutor', 'recurso_jari'],
     evidenceRequired: ['Comprovante de protocolo do FICI tempestivo'],
     priority: 80,
@@ -396,6 +414,180 @@ export const EXPERT_RULES: RuleModel[] = [
     },
   },
 
+  // RULE-011: Semáforo — fase amarela insuficiente (Art. 90 c/c Res. CONTRAN 973/2022).
+  // O dado que autoriza é a própria circumstances do caso (atravessou na fase
+  // amarela / há registro de temporização), não o simples fato de ser multa.
+  {
+    id: 'RULE_SEMAFORO_TEMPO_AMARELO',
+    name: 'Fase Amarela Insuficiente para Parada Segura (Art. 208 c/c Res. CONTRAN 973/2022)',
+    description: 'Valida a autuação por avanço semafórico quando o próprio caso registra travessia na fase amarela ou inexistência de comprovação de temporização adequada.',
+    category: 'direito_material',
+    validFrom: '2022-01-01',
+    validUntil: null,
+    version: 1,
+    jurisdiction: 'federal',
+    requiredData: ['infractionCode'],
+    relatedArguments: ['ARG-010'],
+    families: ['semaforo'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Laudo de temporização do semáforo da concessionária ou relatório técnico', 'Registro fotográfico do ciclo semafórico'],
+    priority: 84,
+    evaluate: (ctx) => {
+      if (ctx.yellowPhaseCrossing === true) {
+        return {
+          ruleId: 'RULE_SEMAFORO_TEMPO_AMARELO',
+          title: 'Fase Amarela Insuficiente para a Travessia (Res. CONTRAN 973/2022)',
+          description: 'O caso registra que a travessia ocorreu durante a fase amarela, o que impõe demonstrar a adequação da temporização ao tempo de parada e retomada com segurança.',
+          severity: 'media',
+          legalArgumentId: 'ARG-010',
+          impact: 'Anulação da autuação por inadequação da temporização do equipamento.',
+          statutoryBasis: 'Artigo 90 do CTB c/c Resolução CONTRAN nº 973/2022',
+        };
+      }
+      return null;
+    },
+  },
+
+  // RULE-012: Celular em uso hands-free (Art. 252 c/c ficha CONTRAN 985/2022).
+  {
+    id: 'RULE_CELULAR_VIVA_VOZ',
+    name: 'Uso de Sistema Viva-Voz / Bluetooth (Art. 252)',
+    description: 'Valida a autuação de uso de celular quando o caso demonstra uso por sistema de viva-voz, sem manuseio do aparelho.',
+    category: 'direito_material',
+    validFrom: '2023-01-02',
+    validUntil: null,
+    version: 1,
+    jurisdiction: 'federal',
+    requiredData: ['infractionCode'],
+    relatedArguments: ['ARG-019'],
+    families: ['celular'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Registros do sistema de áudio do veículo', 'Nota fiscal do KIT hands-free homologado'],
+    priority: 84,
+    evaluate: (ctx) => {
+      const circum = String(ctx.cellphoneCircumstance ?? '').toLowerCase();
+      const handsFree = /viva[- ]?voz|bluetooth|hands[- ]?free|kit/.test(circum);
+      if (handsFree || ctx.evidenceFlags?.celularVivaVoz === true) {
+        return {
+          ruleId: 'RULE_CELULAR_VIVA_VOZ',
+          title: 'Uso por Sistema de Viva-Voz / Bluetooth (Art. 252)',
+          description: 'O caso registra uso por sistema de viva-voz, hipótese em que não há manuseio do aparelho e portanto inexiste a conduta tipificada no art. 252 do CTB.',
+          severity: 'media',
+          legalArgumentId: 'ARG-019',
+          impact: 'Anulação da autuação por ausência da conduta descrita no tipo.',
+          statutoryBasis: 'Art. 252 do CTB c/c Manual Brasileiro de Fiscalização de Trânsito (Res. CONTRAN 985/2022)',
+        };
+      }
+      return null;
+    },
+  },
+
+  // RULE-013: Estacionamento em vaga especial com credencial (Art. 181, XX).
+  {
+    id: 'RULE_ESTACIONAMENTO_VAGA_ESPECIAL',
+    name: 'Vaga Especial com Credencial de PCD/Idoso (Art. 181, XX c/c Res. 965/2022 e 966/2022)',
+    description: 'Valida a autuação de estacionamento quando o caso comprova credencial válida para vaga especial.',
+    category: 'direito_material',
+    validFrom: '2021-01-01',
+    validUntil: null,
+    version: 1,
+    jurisdiction: 'federal',
+    requiredData: ['infractionCode'],
+    relatedArguments: ['ARG-024'],
+    families: ['estacionamento', 'cinto'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Cartão de credencial de vaga especial vigente e afixado no veículo'],
+    priority: 84,
+    evaluate: (ctx) => {
+      const flags = ctx.evidenceFlags ?? {};
+      if (flags.creditoIdosoPc === true || flags.credencialPcd === true || flags.vagaDeficiente === true) {
+        return {
+          ruleId: 'RULE_ESTACIONAMENTO_VAGA_ESPECIAL',
+          title: 'Vaga Especial com Credencial Válida (Art. 181, XX)',
+          description: 'O veículo ocupava vaga especial credenciada, hipótese em que a restrição de horário não se aplica ao credenciado.',
+          severity: 'media',
+          legalArgumentId: 'ARG-024',
+          impact: 'Anulação da auticação de estacionamento.',
+          statutoryBasis: 'Art. 181, XX do CTB c/c Resoluções CONTRAN nº 965/2022 e 966/2022',
+        };
+      }
+      return null;
+    },
+  },
+
+  // RULE-014: Alcoolemia — recusa do teste com oferecimento de contraprova.
+  {
+    id: 'RULE_ALCOLEMAIA_RECUISA',
+    name: 'Recusa ao Teste do Etilômetro sem Termo de Sinais (Lei Seca)',
+    description: 'Valida a autuação de alcoolemia quando o caso registra recusa do teste sem termo de constatação de sinais psicomotores.',
+    category: 'direito_formal',
+    validFrom: '2008-06-20',
+    validUntil: null,
+    version: 1,
+    jurisdiction: 'federal',
+    requiredData: ['infractionCode'],
+    relatedArguments: ['ARG-027', 'ARG-025'],
+    families: ['alcoolemia'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'suspensao_cnh'],
+    evidenceRequired: ['Cópia do AIT com o registro da recusa', 'Termo de Constatação de Sinais (Anexo II da Res. 432/2013) quando existente'],
+    priority: 90,
+    evaluate: (ctx) => {
+      if (ctx.refusedTest !== true) return null;
+      if (ctx.hasPsychomotorTerm === false) {
+        return {
+          ruleId: 'RULE_ALCOLEMAIA_RECUISA',
+          title: 'Recusa ao Teste sem Termo de Constatação de Sinais (Res. 432/2013)',
+          description: 'A autuação por recusa exige o preenchimento do Termo do Anexo II da Resolução CONTRAN 432/2013 com o conjunto notório de sinais clínicos.',
+          severity: 'alta',
+          legalArgumentId: 'ARG-025',
+          impact: 'Anulação do AIT e do processo de suspensão da CNH.',
+          statutoryBasis: 'Art. 277 do CTB c/c Resolução CONTRAN nº 432/2013, Art. 5º e Anexo II',
+        };
+      }
+      return {
+        ruleId: 'RULE_ALCOLEMAIA_RECUISA',
+        title: 'Recusa ao Teste do Etilômetro (Art. 5º, LXIII da CF/88)',
+        description: 'A recusa ao teste de alcoolemia, ainda que válida, não prova a condução sob influência; o conjunto probatório deve ser autossuficiente.',
+        severity: 'alta',
+        legalArgumentId: 'ARG-027',
+        impact: 'Redução do poder probatório da recusa isolada.',
+        statutoryBasis: 'Art. 5º, LXIII da CF/88 c/c Art. 8º da CADH',
+      };
+    },
+  },
+
+  // RULE-015: Estacionamento sem sinalização regulamentar (Art. 90).
+  {
+    id: 'RULE_ESTACIONAMENTO_SEM_SIN_R6A',
+    name: 'Estacionamento sem Sinalização Regulamentar (Art. 90 c/c Res. 973/2022)',
+    description: 'Valida a autuação de estacionamento quando o caso registra inexistência de sinalização regulamentar.',
+    category: 'sinalizacao_viaria',
+    validFrom: '2022-01-01',
+    validUntil: null,
+    version: 1,
+    jurisdiction: 'federal',
+    requiredData: ['infractionCode'],
+    relatedArguments: ['ARG-020'],
+    families: ['estacionamento'],
+    affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
+    evidenceRequired: ['Fotografias do trecho demonstrando ausência da placa R-6a'],
+    priority: 80,
+    evaluate: (ctx) => {
+      if (ctx.hasRegulatorySign === false) {
+        return {
+          ruleId: 'RULE_ESTACIONAMENTO_SEM_SIN_R6A',
+          title: 'Ausência de Sinalização Regulamentar no Trecho (Art. 90)',
+          description: 'A via não possuia sinalização vertical R-6a de proibição de estacionamento, o que torna inexigível a sanção.',
+          severity: 'media',
+          legalArgumentId: 'ARG-020',
+          impact: 'Anulação da autuação por inexigibilidade.',
+          statutoryBasis: 'Art. 90 do CTB c/c Resolução CONTRAN nº 973/2022',
+        };
+      }
+      return null;
+    },
+  },
+
   // RULE-010: Validações formais complementares (prescrição intercorrente,
   // duplicidade de autuação, infração já convertida em advertência).
   // Tese vinculada: nenhuma específica — funciona como gate estrutural.
@@ -410,6 +602,7 @@ export const EXPERT_RULES: RuleModel[] = [
     jurisdiction: 'federal',
     requiredData: ['aitNumber', 'autuadorBody', 'infractionDate'],
     relatedArguments: ['ARG-049'],
+    families: ['excesso_velocidade', 'alcoolemia', 'semaforo', 'celular', 'estacionamento', 'cinto', 'documentos', 'circulacao', 'capacidade', 'lotacao'],
     affectedProcedures: ['defesa_previa', 'recurso_jari', 'recurso_cetran'],
     evidenceRequired: ['Cópia integral do Auto de Infração'],
     priority: 60,
@@ -472,8 +665,19 @@ export class ExpertRuleEngine {
 
     const engineStartedAt = new Date().toISOString();
 
+    // Classificação jurídica da infração (causa-raiz RC-1). Define quais
+    // argumentos são elegíveis e, portanto, quais regras podem sequer ser
+    // consideradas. A classificação nunca altera os FATOS do Case.
+    const classification = classifyInfraction(infraction);
+    const eligible = new Set(classification.eligibleArgumentIds);
+
     const context: RuleEvaluationContext = {
-      infractionCode: infraction.infractionCode,
+      // Usa o código real da infração se estiver no catálogo; caso contrário
+      // usa o primeiro código canônico da família (para códigos fora do catálogo
+      // como 275-10 → alcoolemia). Isso preserva a especificidade (745-70 vs 745-50).
+      infractionCode: classification.catalogCodes.some(c => c.replace('-', '') === classification.normalizedCode)
+        ? classification.normalizedCode
+        : classification.catalogCodes[0] ?? classification.inputCode,
       infractionDate: infraction.dateTime,
       notificationExpeditionDate: infraction.notificationExpeditionDate,
       notificationDeliveryDate: infraction.notificationDeliveryDate,
@@ -492,6 +696,13 @@ export class ExpertRuleEngine {
       hasAgentDetailedObservations: infraction.hasAgentDetailedObservations,
       hasPhotoProof: infraction.hasPhotoProof,
       hasR19SignageProof: infraction.hasR19SignageProof,
+      hasRegulatorySign: infraction.hasRegulatorySign,
+      refusedTest: infraction.refusedTest,
+      offeredRetest: infraction.offeredRetest,
+      yellowPhaseCrossing: infraction.yellowPhaseCrossing,
+      cellphoneCircumstance: infraction.cellphoneCircumstance,
+      emergencyPassage: infraction.emergencyPassage,
+      evidenceFlags: infraction.evidenceFlags,
     };
 
     const detectedInconsistencies: CaseAnalysis['detectedInconsistencies'] = [];
@@ -504,8 +715,25 @@ export class ExpertRuleEngine {
     // 1. Run all deterministic rules that are active on the effective date.
     //    FAIL CLOSED (Fase 2): regra com requiredData ausente => DATA_INSUFFICIENT,
     //    nunca vira vício detectado.
+    //    ELEGIBILIDADE (RC-1): regra cujas teses são todas inelegíveis para a
+    //    família da infração é registrada NOT_APPLICABLE e descartada — é o que
+    //    impede, por exemplo, ARG-002 (placa R-19) em álcool/semáforo/celular/
+    //    estacionamento.
     const activeRules = this.getActiveRules(effectiveDate);
     for (const rule of activeRules) {
+      const families = (rule as any).families as string[] | undefined;
+      const applicable = !families || families.includes(classification.family);
+      if (!applicable) {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: 'NOT_APPLICABLE',
+          evaluatedAt: nowIso,
+          reason: `Regra restrita às famílias [${families?.join(', ')}]; a infração foi classificada como "${classification.family}".`,
+          inputs: { infractionFamily: classification.family },
+        });
+        continue;
+      }
       const missingData = (rule.requiredData || []).filter((key) => {
         const value = (context as unknown as Record<string, unknown>)[key];
         return value === undefined || value === null || value === '';
@@ -589,56 +817,22 @@ export class ExpertRuleEngine {
       }
     }
 
-    // 2. Always inject Constitutional Due Process
-    const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
-    if (constArg && !recommendedArgs.some((r) => r.id === constArg.id)) {
-      recommendedArgs.push({
-        id: constArg.id,
-        code: constArg.code,
-        title: constArg.title,
-        category: constArg.category,
-        legalBase: constArg.legalBase,
-        contranResolution: constArg.resolutions.join(', '),
-        summary: constArg.description,
-        detailedText: constArg.formattedParagraphs.map((p) => `${p.heading}\n${p.text}`).join('\n\n'),
-        confidenceScore: constArg.confidenceScore,
-        applicabilityNote: constArg.whenToUse.join('; '),
-      });
+    // 2. Garantia constitucional: NÃO é injetada.
+    //    A auditoria FASE 12 classificou a ARG-049 (dupla notificação, Súmula 312
+    //    STJ) como UNSUPPORTED_ARGUMENT em 10/10 casos: ela entrava em toda peça
+    //    sem nenhum fato do Case que a autorizasse. Tese sem fato é tese
+    //    fabricada. A via correta é a regra que a detecta quando o dado existe
+    //    (RULE_DECADENCIA_30_DIAS / RULE_FORMAL_VALIDATIONS).
 
-      // Add detectedFlaw for lineage traceability (ARG-049 is injected as constitutional guarantee)
-      detectedFlaws.push({
-        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-        argumentId: 'ARG-049',
-        severity: 'alta',
-        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        description: 'Injeção obrigatória de tese constitucional de garantia do contraditório e ampla defesa',
-        impact: 'Nulidade do processo por ausência de dupla notificação',
-        statutoryBasis: 'Art. 5º, LIV e LV da CF/88 c/c Súmula 312 do STJ',
-      });
-
-      // Add evaluatedRule for lineage traceability
-      evaluatedRules.push({
-        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-        name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        status: 'FAIL',
-        evaluatedAt: nowIso,
-        legalArgumentId: 'ARG-049',
-        impact: 'Nulidade do processo por ausência de dupla notificação',
-        severity: 'alta',
-        reason: 'Injeção obrigatória de tese constitucional de garantia do contraditório',
-        inputs: {
-          notificationExpeditionDate: context.notificationExpeditionDate,
-          notificationDeliveryDate: context.notificationDeliveryDate,
-        },
-      });
-    }
-
-    // 3. Determine recommended procedure based on rules
-    let procedure: ProcedureType = 'recurso_jari';
-    if (infraction.infractionCode === '516-91' || infraction.infractionCode === '747-10') {
-      procedure = 'suspensao_cnh';
-    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-051')) {
+    // 3. Procedimento recomendado — derivado da família e dos fatos, nunca
+    //    default universal. Ordem: (1) conversão em advertência comprovada
+    //    (ARG-051); (2) suspensão por vício formal de alcoolemia (ARG-025);
+    //    >50%; (3) rito canônico da família; (4) vazio = INDETERMINADO.
+    let procedure: ProcedureType = (CANONICAL_PROCEDURE_BY_FAMILY[classification.family] || '') as ProcedureType;
+    if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-051')) {
       procedure = 'conversao_advertencia';
+    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')) {
+      procedure = 'suspensao_cnh';
     }
 
     // 4. Calculate deterministic success probability score
@@ -686,7 +880,7 @@ export class ExpertRuleEngine {
     return {
       id: `anl_${Date.now()}`,
       caseId,
-      engineVersion: '2.6.0',
+      engineVersion: '2.7.0',
       engineStartedAt,
       engineFinishedAt,
       overallSuccessRate,
@@ -701,6 +895,14 @@ export class ExpertRuleEngine {
       integrityScore,
       dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`,
+      infractionClassification: {
+        family: classification.family,
+        basis: classification.basis,
+        confidence: classification.confidence,
+        catalogCodes: classification.catalogCodes,
+        eligibleArgumentIds: classification.eligibleArgumentIds,
+        notes: classification.notes,
+      },
       createdAt: new Date().toISOString(),
     };
   }

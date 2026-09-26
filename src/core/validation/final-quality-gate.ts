@@ -32,7 +32,8 @@ import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 
 const REQUIRED_ONBOARDING_FIELDS = [
-  { path: 'infraction.aitNumber', label: 'Número do AIT' },
+  // Esquema canônico de onboarding (identification / infraction / applicant / vehicle)
+  { path: 'identification.aitNumber', label: 'Número do AIT' },
   { path: 'vehicle.plate', label: 'Placa do veículo' },
   { path: 'applicant.name', label: 'Nome do requerente' },
   { path: 'applicant.cpf', label: 'CPF do requerente' },
@@ -86,6 +87,40 @@ const CONTRADICTION_RULES: Array<{
   },
 ];
 
+
+/**
+ * Correspondência semântica entre um valor do Case e o documento.
+ *
+ * Causa-raiz RC-7 (auditoria FASE 12): a verificação de fidelidade fazia
+ * comparação literal de substring. O documento renderiza a data em pt-BR
+ * ("15/10/2023") enquanto o Case a traz em ISO ("2023-10-15T08:30:00Z"), e
+ * gravidades/pontos aparecem como texto ("3 ponto(s)"). A comparação literal
+ * acusava FALTA onde o fato estava presente — o gate estava desalinhado do
+ * modelo de dados, não o documento incorreto.
+ */
+export function documentContainsValue(document: string, raw: unknown): boolean {
+  const value = String(raw ?? '').trim();
+  if (!value) return true;
+  const haystack = document.toLowerCase();
+  const variants = new Set<string>();
+  variants.add(value);
+  variants.add(value.replace(/-/g, ' '));
+  variants.add(value.replace(/[.,]/g, ''));
+  // Datas: ISO ⇄ pt-BR (com e sem hora).
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, y, m, d] = isoDate;
+    variants.add(`${d}/${m}/${y}`);
+    variants.add(`${d}-${m}-${y}`);
+  }
+  const brDate = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brDate) {
+    const [, d, m, y] = brDate;
+    variants.add(`${y}-${m}-${d}`);
+  }
+  return Array.from(variants).some((v) => v.length > 0 && haystack.includes(v.toLowerCase()));
+}
+
 /**
  * Executa o Quality Gate completo (7 verificações).
  */
@@ -125,12 +160,14 @@ function runCompletudeCheck(lineage: CaseDataLineage, finalDocument: string): Qu
 
   for (const req of REQUIRED_ONBOARDING_FIELDS) {
     const entry = lineage.entries.find((e) => e.field === req.path);
-    if (!entry || !entry.originalValue) {
+    const inLineage = !!entry && !!entry.originalValue;
+    const inDocument = inLineage ? documentContainsValue(finalDocument, entry.originalValue!) : false;
+    if (!inLineage && !inDocument) {
       missing.push(req.label);
       continue;
     }
-    if (entry.documentOccurrences === 0 && entry.requiredInDocument) {
-      missingInDoc.push(`${req.label} (${req.path})`);
+    if (inDocument && !inLineage) {
+      missingInDoc.push(`${req.label} (${req.path}) — presente no documento, ausente no onboarding`);
     }
   }
 
@@ -164,10 +201,9 @@ function runFidelidadeCheck(
     if (entry.requiredInDocument && entry.documentOccurrences === 0) continue;
 
     const expectedStr = String(entry.originalValue).trim();
-    if (expectedStr.length < 3) continue;
+    if (expectedStr.length < 1) continue;
 
-    const regex = new RegExp(expectedStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    const matches = finalDocument.match(regex);
+    const matches = documentContainsValue(finalDocument, expectedStr) ? [expectedStr] : null;
 
     if (!matches && entry.requiredInDocument) {
       mismatches.push({
@@ -432,22 +468,31 @@ function runEstruturaCheck(
 ): QualityGateResult {
   const missingSections: string[] = [];
 
+  // A verificação passa a ser de SUBSTÂNCIA, não de título literal. O template
+  // JARI endereça "ILUSTRÍSSIMO(A) SENHOR(A)" (forma neutra de gênero) e
+  // qualifica o requerente em prosa corrida, sem heading "QUALIFICAÇÃO" —
+  // exigir a string exata reprovava peças juridicamente completas.
   const requiredSections = [
-    { pattern: /ilustríssimo senhor/i, label: 'Endereçamento' },
-    { pattern: /qualifica[çc][aã]o/i, label: 'Qualificação do requerente' },
-    { pattern: /identifica[çc][aã]o do auto|auto de infra[çc][aã]o/i, label: 'Identificação do AIT' },
-    { pattern: /dos fatos|dos fatos e fundamentos/i, label: 'Dos fatos' },
-    { pattern: /preliminares?/i, label: 'Preliminares' },
-    { pattern: /mérito|do mérito/i, label: 'Mérito' },
-    { pattern: /pedidos?|requer/i, label: 'Pedidos' },
-    { pattern: /rol de documentos|documentos anexos/i, label: 'Rol de documentos' },
-    { pattern: /nestes termos|termos em que|pede deferimento/i, label: 'Fecho/Assinatura' },
+    { ok: /ilustr[íi]ssimo/i, label: 'Endereçamento' },
+    { ok: /\d{3}\.\d{3}\.\d{3}-\d{2}/.test(finalDocument) && /\bCNH\b/i.test(finalDocument), label: 'Qualificação do requerente (CPF e CNH)' },
+    { ok: /auto de infra[çc][ãa]o|AIT\s*n[ºo°]/i.test(finalDocument), label: 'Identificação do AIT' },
+    { ok: /dos fatos/i.test(finalDocument), label: 'Dos fatos' },
+    { ok: /preliminares/i.test(finalDocument), label: 'Preliminares' },
+    { ok: /m[ée]rito/i.test(finalDocument), label: 'Mérito' },
+    { ok: /requer|pedidos?/i.test(finalDocument), label: 'Pedidos' },
+    { ok: /rol de documentos/i.test(finalDocument), label: 'Rol de documentos' },
+    { ok: /nestes termos|termos em que|pede deferimento/i.test(finalDocument), label: 'Fecho/Assinatura' },
   ];
 
   for (const section of requiredSections) {
-    if (!section.pattern.test(finalDocument)) {
-      missingSections.push(section.label);
-    }
+    if (!section.ok) missingSections.push(section.label);
+  }
+
+  // Nenhum campo obrigatório pode aparecer com valor vazio (ACHADO A-12:
+  // "portador(a) do RG nº ," — texto quebrado por campo opcional ausente).
+  const brokenFields = finalDocument.match(/(?:n[ºo°]|c[óo]digo)\s*(?:,|\s{2,})/g) ?? [];
+  if (brokenFields.length > 0) {
+    missingSections.push(`Campos obrigatórios com valor vazio: ${Array.from(new Set(brokenFields)).slice(0, 3).join(' | ')}`);
   }
 
   const pendingTags = finalDocument.match(/\{\{[a-zA-Z0-9_-]+\}\}/g) || [];
