@@ -58,21 +58,18 @@ const dateBR = (iso: unknown): string => {
   return d.toLocaleDateString('pt-BR');
 };
 
-const declared: string[] = [];
-const omitted: string[] = [];
-
-const mention = (field: string, value: unknown): string => {
-  if (!has(value)) {
-    omitted.push(field);
-    return '';
-  }
-  declared.push(field);
-  return str(value);
-};
-
 export function buildFactsNarrative(infraction: FactsNarrativeInput): FactsNarrativeResult {
-  declared.length = 0;
-  omitted.length = 0;
+  // Estado local por chamada: evita mistura de declared/omitted entre casos concorrentes.
+  const declared: string[] = [];
+  const omitted: string[] = [];
+  const mention = (field: string, value: unknown): string => {
+    if (!has(value)) {
+      omitted.push(field);
+      return '';
+    }
+    declared.push(field);
+    return str(value);
+  };
 
   const ait = mention('infraction.aitNumber', infraction.aitNumber);
   const orgao = mention('infraction.autuadorBody', infraction.autuadorBody);
