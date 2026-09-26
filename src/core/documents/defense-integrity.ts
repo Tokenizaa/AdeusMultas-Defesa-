@@ -46,7 +46,6 @@ export function computeDefenseIntegrityHash(
   infraction?: DefenseIntegrityInfraction
 ): string {
   const payload = {
-    // Hash do artefato final: alterações no texto invalidam a integridade.
     fullDraftText: draft.fullDraftText ?? '',
     factsNarrative: draft.factsNarrative ?? '',
     selectedArgumentIds: Array.isArray(draft.selectedArgumentIds)

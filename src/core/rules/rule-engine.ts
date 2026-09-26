@@ -14,7 +14,7 @@ import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { classifyInfraction, CANONICAL_PROCEDURE_BY_FAMILY, type InfractionClassification } from './infraction-classifier';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
-import { CaseAnalysis, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
+import { CaseAnalysis, DetectedFlaw, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
 
 export const EXPERT_RULES: RuleModel[] = [
   // Rule 1: Decadência de 30 dias da Notificação de Autuação (Art. 281, II CTB)
@@ -199,7 +199,8 @@ export const EXPERT_RULES: RuleModel[] = [
     evidenceRequired: ['Espelho do Auto de Infração com o campo de observações vago/genérico'],
     priority: 82,
     evaluate: (ctx) => {
-      if (ctx.infractionCode === '736-62' && ctx.hasAgentDetailedObservations === false) {
+      const normalizedCode = ctx.infractionCode.replace('-', '');
+      if (normalizedCode === '73662' && ctx.hasAgentDetailedObservations === false) {
         return {
           ruleId: 'RULE_AUTUACAO_SEM_ABORDAGEM_MBFT',
           title: 'Ausência de Descrição Circunstanciada no Campo de Observações',
@@ -817,12 +818,65 @@ export class ExpertRuleEngine {
       }
     }
 
-    // 2. Garantia constitucional: NÃO é injetada.
-    //    A auditoria FASE 12 classificou a ARG-049 (dupla notificação, Súmula 312
-    //    STJ) como UNSUPPORTED_ARGUMENT em 10/10 casos: ela entrava em toda peça
-    //    sem nenhum fato do Case que a autorizasse. Tese sem fato é tese
-    //    fabricada. A via correta é a regra que a detecta quando o dado existe
-    //    (RULE_DECADENCIA_30_DIAS / RULE_FORMAL_VALIDATIONS).
+    // 2. Garantia constitucional do devido processo legal (Súmula 312 STJ).
+    //    Aplicável SOMENTE quando há violação real da dupla notificação:
+    //    - Notificação de Autuação foi expedida (notificationExpeditionDate existe)
+    //    - MAS Notificação de Autuação NÃO foi entregue (notificationDeliveryDate ausente)
+    //    - Isso caracteriza envio direto de penalidade sem oportunidade de Defesa Prévia.
+    const hasDualNotificationViolation =
+      context.notificationExpeditionDate &&
+      !context.notificationDeliveryDate;
+
+    const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
+    if (constArg && hasDualNotificationViolation && !recommendedArgs.some((r) => r.id === constArg.id)) {
+      recommendedArgs.push({
+        id: constArg.id,
+        code: constArg.code,
+        title: constArg.title,
+        category: constArg.category,
+        legalBase: constArg.legalBase,
+        contranResolution: constArg.resolutions.join(', '),
+        summary: constArg.description,
+        detailedText: constArg.formattedParagraphs.map((p) => p.heading + '\n' + p.text).join('\n\n'),
+        confidenceScore: constArg.confidenceScore,
+        applicabilityNote: constArg.whenToUse.join('; '),
+      });
+
+      const flaw: DetectedFlaw = {
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        argumentId: 'ARG-049',
+        severity: 'alta' as const,
+        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        description: 'Injeção obrigatória de tese constitucional de garantia do contraditório e ampla defesa',
+        impact: 'Nulidade do processo por ausência de dupla notificação',
+        statutoryBasis: 'Art. 5º, LIV e LV da CF/88 c/c Súmula 312 do STJ',
+      };
+      detectedFlaws.push(flaw);
+
+      evaluatedRules.push({
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        status: 'FAIL',
+        evaluatedAt: nowIso,
+        legalArgumentId: 'ARG-049',
+        impact: 'Nulidade do processo por ausência de dupla notificação',
+        severity: 'alta',
+        reason: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
+        inputs: {
+          notificationExpeditionDate: context.notificationExpeditionDate,
+          notificationDeliveryDate: context.notificationDeliveryDate,
+        },
+      });
+
+      detectedInconsistencies.push({
+        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        description: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
+        severity: 'alta',
+        legalArgumentId: 'ARG-049',
+        impact: 'Nulidade do processo por ausência de dupla notificação',
+      });
+
+    } // Close if (constArg && hasDualNotificationViolation && ...)
 
     // 3. Procedimento recomendado — derivado da família e dos fatos, nunca
     //    default universal. Ordem: (1) conversão em advertência comprovada

@@ -33,7 +33,8 @@ import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 
 const REQUIRED_ONBOARDING_FIELDS = [
   // Esquema canônico de onboarding (identification / infraction / applicant / vehicle)
-  { path: 'identification.aitNumber', label: 'Número do AIT' },
+  // Corrigido: data-lineage gera 'infraction.aitNumber', não 'identification.aitNumber'
+  { path: 'infraction.aitNumber', label: 'Número do AIT' },
   { path: 'vehicle.plate', label: 'Placa do veículo' },
   { path: 'applicant.name', label: 'Nome do requerente' },
   { path: 'applicant.cpf', label: 'CPF do requerente' },
