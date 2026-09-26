@@ -78,10 +78,23 @@ describe('ExpertRuleEngine validation', () => {
     expect(result.recommendedProcedure).toBe('conversao_advertencia');
   });
 
-  it('should always include constitutional due process argument', () => {
+  it('should include ARG-049 ONLY when dual notification violation exists', () => {
+    // Without notification dates - no dual notification violation
     const result = ExpertRuleEngine.evaluate('case_123', validInfraction);
     const hasConstArg = result.recommendedArguments.some(a => a.id === 'ARG-049');
-    expect(hasConstArg).toBe(true);
+    expect(hasConstArg).toBe(false);
+
+    // With notificationExpeditionDate but NO notificationDeliveryDate - violation EXISTS
+    const infractionWithViolation = {
+      ...validInfraction,
+      notificationExpeditionDate: '2026-01-10T10:00:00',
+      // notificationDeliveryDate intentionally omitted = not delivered
+    };
+    const resultWithViolation = ExpertRuleEngine.evaluate('case_124', infractionWithViolation);
+    const hasConstArgWithViolation = resultWithViolation.recommendedArguments.some(a => a.id === 'ARG-049');
+    expect(hasConstArgWithViolation).toBe(true);
+    expect(resultWithViolation.detectedInconsistencies.some(i => i.legalArgumentId === 'ARG-049')).toBe(true);
+    expect(resultWithViolation.evaluatedRules.some(r => r.legalArgumentId === 'ARG-049' && r.status === 'FAIL')).toBe(true);
   });
 
   // ===== Fase 2: FAIL CLOSED — dados insuficientes nunca viram vício =====

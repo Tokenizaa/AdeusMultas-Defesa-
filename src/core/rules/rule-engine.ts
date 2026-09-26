@@ -819,9 +819,16 @@ export class ExpertRuleEngine {
     }
 
     // 2. Garantia constitucional do devido processo legal (Súmula 312 STJ).
-    //    Injetada incondicionalmente como salvaguarda processual.
+    //    Aplicável SOMENTE quando há violação real da dupla notificação:
+    //    - Notificação de Autuação foi expedida (notificationExpeditionDate existe)
+    //    - MAS Notificação de Autuação NÃO foi entregue (notificationDeliveryDate ausente)
+    //    - Isso caracteriza envio direto de penalidade sem oportunidade de Defesa Prévia.
+    const hasDualNotificationViolation =
+      context.notificationExpeditionDate &&
+      !context.notificationDeliveryDate;
+
     const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
-    if (constArg && !recommendedArgs.some((r) => r.id === constArg.id)) {
+    if (constArg && hasDualNotificationViolation && !recommendedArgs.some((r) => r.id === constArg.id)) {
       recommendedArgs.push({
         id: constArg.id,
         code: constArg.code,
@@ -854,7 +861,7 @@ export class ExpertRuleEngine {
         legalArgumentId: 'ARG-049',
         impact: 'Nulidade do processo por ausência de dupla notificação',
         severity: 'alta',
-        reason: 'Injeção obrigatória de tese constitucional de garantia do contraditório',
+        reason: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
         inputs: {
           notificationExpeditionDate: context.notificationExpeditionDate,
           notificationDeliveryDate: context.notificationDeliveryDate,
@@ -863,11 +870,13 @@ export class ExpertRuleEngine {
 
       detectedInconsistencies.push({
         title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        description: 'Injeção obrigatória de tese constitucional de garantia do contraditório e ampla defesa',
+        description: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
         severity: 'alta',
         legalArgumentId: 'ARG-049',
         impact: 'Nulidade do processo por ausência de dupla notificação',
       });
+
+    } // Close if (constArg && hasDualNotificationViolation && ...)
 
     // 3. Procedimento recomendado — derivado da família e dos fatos, nunca
     //    default universal. Ordem: (1) conversão em advertência comprovada
@@ -951,5 +960,4 @@ export class ExpertRuleEngine {
       createdAt: new Date().toISOString(),
     };
   }
-}
 }
