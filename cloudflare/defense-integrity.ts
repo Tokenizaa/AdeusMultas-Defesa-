@@ -57,6 +57,8 @@ export async function computeDefenseIntegrityHash(
   infraction?: DefenseIntegrityInfraction
 ): Promise<string> {
   const payload = {
+    // Hash do artefato final: alterações no texto invalidam a integridade.
+    fullDraftText: draft.fullDraftText ?? '',
     factsNarrative: draft.factsNarrative ?? '',
     selectedArgumentIds: Array.isArray(draft.selectedArgumentIds) ? draft.selectedArgumentIds : [],
     procedureType: draft.procedureType ?? '',
