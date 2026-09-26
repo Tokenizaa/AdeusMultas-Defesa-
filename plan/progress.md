@@ -419,3 +419,59 @@ NÃO implementado (fora do escopo 12.5, para 12.6+):
 
 - Relatório: `docs/recovery/FASE-12.5-GOLDEN-PATH-RESULTADO-2026-09-25.md`
 - **Próxima fase: FASE 12.6 — NÃO INICIADA.**
+
+## FASE 12.6 — AUDITORIA INTEGRADA FINAL / HARDENING / COBERTURA NACIONAL (2026-09-25)
+
+> **FASE 12.6: CONCLUÍDA** — auditoria integrada final da cadeia Fases 0–12.5. Somente leitura. Zero correções aplicadas. Zero migrations criadas.
+
+- Checkpoint: `911abf92742455bd9ad30df57a79eb1785100174` (HEAD == origin/main, 0/0 ahead/behind)
+- Snapshot banco `llmxnpgjpxcvyrqjkfwb`: 39 sources · 66 documents · 66 versions · 58 chunks · 58 embeddings · 0 relations (sem alteração; Δ=0 vs histórico)
+- Integridade RAG: 0 chunks órfãos · 0 embeddings órfãos · 0 versions órfãs · 0 sem `content_hash`/`source_id`/`document_version_id` · 57/58 hashes distintos (CE duplicata exata preservada, já classificada na Fase 9)
+- Embeddings: 58/58 `DETERMINISTIC_LOCAL` / `defesai-legal-vectorizer-v1` / 1024d — **FALLBACK, não produção comprovada** (NVIDIA é primário no código)
+- RPC `match_knowledge_chunks`: existe no canônico com body — **cross-process retrieval COMPROVADO**
+- Golden Path integration: `tests/integration/golden-path-documents.integration.test.ts` → **6/6 PASS**
+- Testes core: cloudflare routes + audit + case suites → **281/281 PASS**
+- TypeScript: 12 erros, **0 em `cloudflare/`** (PWA hooks, redis, CLI, shared api, test)
+- RLS `cases`: 6 policies incluindo `cases_own_all` COM `WITH CHECK` — gap da 12.1 **resolvido no canônico**
+- RLS knowledge: sources/documents/versions/chunks/embeddings 4 policies cada; **`knowledge_document_relations` sem policy** (deny-all, 0 linhas, sem impacto)
+- Cobertura nacional: **19/27 UFs (70,4%)** + 10 docs federal. 7 BLOQUEADAS (DF/MA/MT/PE/RN/RO/SE) + BA FORA_DO_ESCOPO
+- OCR: **13/66 documentos `ACTIVE` com 0 chunks** (AL 3, CE 6, GO 2, PI 1, AC 1) — `OCR_REQUIRED`
+- Vigência: **66/66 `effective_from` NULL, 66/66 `effective_until` NULL** — `KNOWLEDGE_GAP` BLOQUEANTE
+- Relações jurídicas: 0 (nenhuma inventada — correto)
+- `ai_execution_logs`: **0 registros** apesar de `recordMetric()` existir — observabilidade de IA não persiste
+- Segurança: 2 funções SECURITY DEFINER acessíveis por anon/authenticated (`is_admin`, `current_role_name`) — vazamento de papel, **não escalada** · 3 extensions em `public` · leaked password protection off · 17 tabelas RLS sem policy (padrão deny-all/service-role)
+- Autorização: 22 testes authz/legal-authority PASS + RLS 403 integration PASS + LGPD 6 PASS
+
+### 4 GAPS BLOQUEANTES
+
+1. **Vigência 66/66 UNKNOWN** + Quality Gate não verifica temporalidade → tese pode citar norma revogada sem detecção
+2. **7 UFs sem documento** → Case em DF/MA/MT/PE/RN/RO/SE sem fundamentação estadual
+3. **UF não é dado estruturado no Case** → `extractJurisdiction()` heurística por regex; `filterJurisdiction` frágil
+4. **Quality Gate não valida vigência nem jurisdição** → os gaps acima não bloqueiam a geração de documento
+
+### 11 GAPS NÃO BLOQUEANTES
+
+OCR (13 docs) · embeddings determinístico · 66/66 `RAG_REQUIRES_HUMAN_VALIDATION` · relations 0 ·
+`applicant_json` read path · `loadAllFromSupabase()` nunca chamado (Express) ·
+`integrityHash` não cobre fatos do Case · `procedureMismatch` não bloqueia · `ai_execution_logs` vazio ·
+17 RLS sem policy · 2 SECURITY DEFINER públicos
+
+### Classificação final
+
+```
+PRODUÇÃO TÉCNICA VALIDADA
++
+COBERTURA JURÍDICA/DOCUMENTAL PARCIAL
++
+4 GAPS BLOQUEANTES (conteúdo e validação)
++
+11 GAPS NÃO BLOQUEANTES
++
+NÃO VALIDADO (13 CETRANs, produção real, backup/RPO/RTO)
+```
+
+**O que falta é validação jurídica (vigência, cobertura nacional, jurisdição estruturada), não arquitetura.**
+A cadeia executa o Golden Path de forma íntegra, rastreável e segura do ponto de vista técnico.
+
+- Relatório: `docs/recovery/FASE-12.6-AUDITORIA-INTEGRADA-FINAL-2026-09-25.md`
+- **Próxima fase: NÃO DEFINIDA. HARD STOP.**
