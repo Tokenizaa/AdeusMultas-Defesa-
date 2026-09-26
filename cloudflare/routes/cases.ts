@@ -283,7 +283,8 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
     domain.vehicle?.plate || 'SEM PLACA',
     domain.vehicle?.brandModel || 'Veículo não informado',
     resolvedApplicant,
-    domain.serviceType || 'recurso_jari'
+    domain.serviceType || 'recurso_jari',
+    domain.analysis
   );
   if (body.customFacts) {
     defense.factsNarrative = body.customFacts;

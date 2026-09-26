@@ -475,3 +475,96 @@ A cadeia executa o Golden Path de forma íntegra, rastreável e segura do ponto 
 
 - Relatório: `docs/recovery/FASE-12.6-AUDITORIA-INTEGRADA-FINAL-2026-09-25.md`
 - **Próxima fase: NÃO DEFINIDA. HARD STOP.**
+---
+
+## Fase 12 — Auditoria de acurácia e diferenciação dos 10 Golden Documents (2026-09-25)
+
+- Checkpoint: `63699c3` · branch `main` · runtime canônico Cloudflare Worker · KB `llmxnpgjpxcvyrqjkfwb`
+- Relatório: `docs/recovery/FASE-12-GOLDEN-DOCUMENT-ACCURACY-2026-09-25.md`
+- Suíte canônica nova: `tests/integration/golden-document-accuracy.integration.test.ts`
+- Fonte única dos GD: `tests/fixtures/golden-documents.ts` (extraído **sem alteração de valor** de `test/golden-document-test.ts`, que segue preservado)
+
+### Pergunta central
+
+Dados diferentes de multas diferentes geram análises coerentes com cada caso, argumentos próprios,
+documentos correspondentes aos fatos daquele caso, com rastreabilidade completa e sem reutilização
+indevida de uma defesa genérica?
+
+### Resposta medida
+
+**NÃO.** Os 10 GD executaram pelo runtime canônico (Case → Analysis Fresh → RAG/KB → provenance →
+recommendedArguments → autorização → DocumentAssembly → Quality Gate → IntegrityHash), cada um
+como caso independente, e a cadeia é coerente apenas no que não depende do caso.
+
+| Métrica | Valor |
+|---|---|
+| GD executados pelo runtime canônico | 10/10 |
+| Analysis com id próprio | 10/10 (id = UUID aleatório, não prova) |
+| **ANALYSES ÚNICAS (fingerprint de conteúdo)** | **6/10** |
+| **CONJUNTOS DE ARGUMENTOS ÚNICOS** | **4/10** |
+| DOCUMENTOS únicos (hash) | 10/10 (não prova diferenciação) |
+| **DOCUMENTOS textualmente próprios** | **0/10** — 16/45 pares com >90% de tokens, máx. 0,9718 |
+| **Provenance de KB (chunk/source/version/URL)** | **0/40** |
+| **QUALITY GATE PASS** | **0/10** |
+| Contaminação cruzada / documento reaproveitado / fato inventado | 0 / 0 / 0 |
+| Fatos ausentes do documento | 49 ocorrências (código e gravidade em 10/10; velocidades, radar e aferição em 4–6/10) |
+
+### Achados
+
+- **A-01** Analysis genérica: 4 pares de casos com inputs distintos colidem no fingerprint de conteúdo.
+- **A-02** ARG-002 (ausência de R-19, Art. 90) em 10/10, inclusive em alcohol, semáforo, celular e estacionamento.
+- **A-03** Pares com tipificação distinta (275-10 × 208-10; 208-10 × 167-10) com Analysis idêntica.
+- **A-04** `IntegrityHash` não reproduzível entre execuções (inclui `analysisId`, UUID) — `LEGITIMATELY_CHANGED`.
+- **A-05** **Provenance inexistente**: 0 chunks. Causa medida: similaridade máxima alcançável 0,2134 < `match_threshold` 0,35; `filter_jurisdiction='BR_FEDERAL'` (GD-06/PRF) não casa com chunk algum. A KB de 66 documentos não fundamenta tese alguma.
+- **A-06** Quality Gate reprova 10/10 em `ESTRUTURA`, e o runtime não o invoca (`grep runFullQualityGate cloudflare/` vazio).
+- **A-07** Fatos decisivos ausentes do documento (velocidade nunca citada nos casos de velocidade).
+- **A-08** 16/45 pares de documentos com >90% de texto em comum.
+- **A-09** `overallSuccessRate: 75` constante em 10/10 (constante de código, não cálculo).
+- **A-10** `evaluatedRules`/`detectedFlaws`/`dataGaps` zerados pelo adapter → Analysis sem rastro causal.
+- **A-11** `recommendedProcedure` único (`recurso_jari`) em 10/10, inclusive Art. 306; o `recommendedProcedure` do Rule Engine é descartado.
+- **A-12** RG opcional vazio produz `portador(a) do RG nº ,` no documento.
+- **A-13** `factsNarrative` sobrescrito após o hash e fora do payload do hash (pré-existente).
+- **A-14** `cloudflare/` não consta da matriz de agentes do `AGENTS.md`.
+
+### Correção aplicada (1, motivada por evidência reproduzida)
+
+**Analysis↔Documento desvinculados.** `generateDefenseDraftCompat` recomputava a Analysis
+internamente, gerando `analysis_<uuid>` diferente da persistida; como o `IntegrityHash` inclui
+`analysis.id`, o documento era rejeitado na leitura (`GET /api/cases/:id` → **HTTP 409**).
+Reproduzido antes: `hasValidDefenseIntegrity(draft, analysisA) = false`. Corrigido com o 8º
+parâmetro opcional `precomputedAnalysis` (`cloudflare/rag-adapter.ts:309`) +
+`cloudflare/routes/cases.ts:286-287`. Depois: integridade válida, round-trip de persistência
+devolve 200, Analysis com `[]` gera documento **sem teses** em vez de fabricar teses. 2 arquivos,
+14 linhas. `tsc` permanece em 12 erros (0 em `cloudflare/`).
+
+A-01, A-02, A-05..A-12 **não** foram corrigidos: alteram a fundamentação jurídica emitida ao
+cliente e exigem decisão jurídica explícita + ADR.
+
+### Decisão
+
+```
+TECHNICAL_ACCURACY      APROVADO
+FACTUAL_ACCURACY        REPROVADO
+ARGUMENT_ACCURACY       REPROVADO
+PROVENANCE_ACCURACY     REPROVADO
+DOCUMENT_ACCURACY       REPROVADO
+LEGAL_COVERAGE          NÃO AVALIÁVEL (limitações da FASE 12.6 §19 do relatório)
+
+ACURÁCIA REPROVADA
+```
+
+Preservado e comprovado: execução ponta a ponta pelo runtime canônico, determinismo de conteúdo,
+ausência de fato inventado, ausência de contaminação entre casos, vínculo Analysis↔Documento
+verificável por hash e detecção de adulteração. GD-05 provou que o motor sabe derivar uma tese
+correta dos fatos (ARG-001, aferição metrológica vencida) — o caminho existe e está subaproveitado.
+
+### Testes
+
+- Suíte de auditoria: **9 passed + 7 expected fail** (os 7 gaps A-01..A-08 marcados com `it.fails`
+  e com asserção de origem da falha; corrigir um gap deixa o teste vermelho e força remover o marcador)
+- `npx vitest run`: 814 passed, 13 failed, 7 expected fail — os 13 failures são **pré-existentes**,
+  reproduzidos identicamente em `63699c3` com as alterações em stash (payments ×3, auth-middleware-p0,
+  case-deletion-lgpd, webhook-verification/Documenso)
+- `npx tsc --noEmit`: 12 erros — baseline inalterado
+
+**Próxima fase: NÃO DEFINIDA. HARD STOP.**

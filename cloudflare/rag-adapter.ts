@@ -306,10 +306,21 @@ export async function analyzeInfractionCompat(env: any, caseId: string, infracti
   return adapter.analyzeInfraction(caseId, infraction);
 }
 
-export async function generateDefenseDraftCompat(env: any, caseId: string, infraction: any, vehiclePlate: string, vehicleModel: string, applicantData: any, procedureType: string) {
-  const adapter = new CloudflareRagAdapter(env);
-  const analysis = await adapter.analyzeInfraction(caseId, infraction);
-  
+export async function generateDefenseDraftCompat(env: any, caseId: string, infraction: any, vehiclePlate: string, vehicleModel: string, applicantData: any, procedureType: string, precomputedAnalysis?: any) {
+  // A Analysis do chamador é a autoridade: o integrityHash depende de analysis.id
+  // (cloudflare/defense-integrity.ts), então recomputar aqui criaria divergência
+  // entre o documento e a Analysis persistida. Só recalcula quando o chamador
+  // legacy não forneceu nenhuma. Uma Analysis com recommendedArguments vazio gera
+  // documento sem teses — que é a consequência CORRETA do invariante "Analysis é a
+  // autoridade" (DocumentAssemblyEngine.assemble, document-assembly-engine.ts:120-124),
+  // e nunca a de se fabricar teses não autorizadas.
+  const analysis = precomputedAnalysis
+    ? precomputedAnalysis
+    : await (async () => {
+        const adapter = new CloudflareRagAdapter(env);
+        return adapter.analyzeInfraction(caseId, infraction);
+      })();
+
   const { DocumentAssemblyEngine } = await import('../src/core/documents/document-assembly-engine');
   
   const draft = DocumentAssemblyEngine.assemble({
