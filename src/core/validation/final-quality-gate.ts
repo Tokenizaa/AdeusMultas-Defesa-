@@ -253,34 +253,36 @@ function runConsistenciaCheck(lineage: CaseDataLineage): QualityGateResult {
 /**
  * 4. CAUSALIDADE
  */
+/**
+ * CAUSALIDADE: valida apenas fatos positivos realmente consumidos pela regra.
+ *
+ * Uma regra também pode ser disparada pela ausência explícita de um campo.
+ * Nessa situação undefined/null/'' é a própria condição factual e não deve
+ * ser tratado como "dado ausente". Além disso, false e 0 são valores válidos
+ * e devem ser reconhecidos pela existência da entrada no lineage, não por
+ * truthiness.
+ */
 function runCausalidadeCheck(lineage: CaseDataLineage, analysis: any): QualityGateResult {
   const causalFailures: string[] = [];
 
-  if (analysis?.evaluatedRules) {
-    for (const rule of analysis.evaluatedRules) {
-      if (rule.status === 'FAIL' && rule.legalArgumentId) {
-        const ruleInputs = rule.inputs || {};
-        for (const [inputKey, inputValue] of Object.entries(ruleInputs)) {
-          const mappedField = mapRuleInputToField(inputKey);
-          if (mappedField) {
-            const entry = lineage.entries.find((e) => e.field === mappedField);
-            if (!entry || !entry.originalValue) {
-              causalFailures.push(`${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`);
-            }
-          }
-        }
+  for (const rule of analysis?.evaluatedRules ?? []) {
+    if (rule.status !== 'FAIL' || !rule.legalArgumentId) continue;
+
+    for (const [inputKey, inputValue] of Object.entries(rule.inputs ?? {})) {
+      // Ausência intencional pode ser precisamente o fato que disparou a regra.
+      if (inputValue === undefined || inputValue === null || inputValue === '') continue;
+
+      const mappedField = mapRuleInputToField(inputKey);
+      if (!mappedField) continue;
+
+      // false e 0 são fatos válidos; a presença da entrada é o critério.
+      const entry = lineage.entries.find((e) => e.field === mappedField);
+      if (!entry) {
+        causalFailures.push(
+          `${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`
+        );
       }
     }
-
-    // DATA_GAP = regra não pôde concluir por dados opcionais ausentes — NÃO é falha de causalidade
-    // Apenas registrar como info/warning, não bloquear
-    // for (const rule of analysis.evaluatedRules) {
-    //   if (rule.status === 'DATA_GAP' && rule.inputs?.missingData) {
-    //     for (const missing of rule.inputs.missingData) {
-    //       causalFailures.push(`${rule.ruleId}: DATA_GAP por "${missing}" — regra não pode concluir`);
-    //     }
-    //   }
-    // }
   }
 
   return {
@@ -293,7 +295,6 @@ function runCausalidadeCheck(lineage: CaseDataLineage, analysis: any): QualityGa
     details: causalFailures[0] ? { field: 'causalidade', expected: 'dados presentes', actual: causalFailures[0] } : undefined,
   };
 }
-
 /**
  * 5. RASTREABILIDADE
  */

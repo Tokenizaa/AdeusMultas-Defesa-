@@ -215,6 +215,16 @@ export class DocumentAssemblyEngine {
     // velocidade, datas, nº de processo). AIT/ctbArticle/description/date são
     // valorizados apenas com dados reais do payload.
     const str = (v: unknown) => (v === undefined || v === null ? '' : String(v));
+    
+    const formatCaseDate = (value: unknown): string => {
+      const raw = str(value).trim();
+      if (!raw) return '';
+      const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return raw;
+      return parsed.toLocaleDateString('pt-BR');
+    };
 
     const speedMeasured = payload.speeds?.measured ?? payload.infraction.speedMeasured;
     const speedLimit = payload.speeds?.limit ?? payload.infraction.speedLimit;
@@ -249,7 +259,7 @@ export class DocumentAssemblyEngine {
       '{{veiculo_placa}}': (payload.vehicle.plate || '').toUpperCase(),
       '{{veiculo_renavam}}': payload.vehicle.renavam || '',
       '{{numero_ait}}': aitNumber,
-      '{{data_infracao}}': infractionDate,
+      '{{data_infracao}}': formatCaseDate(infractionDate),
       '{{enquadramento_ctb}}': ctbArticle,
       '{{descricao_infracao}}': infractionDesc,
       '{{local_infracao}}': infractionLocation,
@@ -397,6 +407,33 @@ export class DocumentAssemblyEngine {
       }
 
       assembledBlockTexts.push(content);
+    }
+
+    // 7.1. Fechamento canônico de conteúdo autorizado pelo Analysis.
+    // Alguns procedimentos especializados não possuem os placeholders de
+    // argumentos no template. Nesse caso, as teses autorizadas não podem
+    // desaparecer apenas por escolha de template: são anexadas como
+    // fundamentação complementar, preservando o conteúdo canônico.
+    const templateHasPreliminarySlot = blocksToAssemble.some((b) =>
+      b.contentTemplate.includes('{{bloco_preliminares_formatado}}')
+    );
+    const templateHasMeritSlot = blocksToAssemble.some((b) =>
+      b.contentTemplate.includes('{{bloco_merito_formatado}}')
+    );
+
+    if (formattedPreliminaries && !templateHasPreliminarySlot) {
+      assembledBlockTexts.push('FUNDAMENTAÇÃO COMPLEMENTAR — PRELIMINARES\n\n' + formattedPreliminaries);
+    }
+    if (formattedMerit && !templateHasMeritSlot) {
+      assembledBlockTexts.push('FUNDAMENTAÇÃO COMPLEMENTAR — MÉRITO\n\n' + formattedMerit);
+    }
+
+    // Todo documento deve carregar a narrativa factual canônica. Templates que
+    // não classificam seu bloco factual como facts_narrative ainda precisam
+    // preservar os fatos do Case no texto final.
+    const assembledBeforeFacts = assembledBlockTexts.join('\n\n\n');
+    if (factsNarrative.text && !assembledBeforeFacts.includes(factsNarrative.text)) {
+      assembledBlockTexts.push('DOS FATOS — DADOS DO CASO\n\n' + factsNarrative.text);
     }
 
     const fullDraftText = assembledBlockTexts.join('\n\n\n');

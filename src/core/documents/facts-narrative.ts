@@ -51,15 +51,27 @@ export interface FactsNarrativeResult {
 
 const str = (v: unknown): string => (v === undefined || v === null || v === '' ? '' : String(v));
 const has = (v: unknown): boolean => str(v).trim().length > 0;
-const dateBR = (iso: unknown): string => {
-  if (!has(iso)) return '';
-  const d = new Date(String(iso));
-  if (Number.isNaN(d.getTime())) return String(iso);
+
+/**
+ * Formata datas factuais sem deslocar datas ISO sem horário para o dia anterior.
+ * new Date('YYYY-MM-DD') é interpretado em UTC e, em fusos como America/Sao_Paulo,
+ * pode renderizar a véspera. Para datas de calendário do Case, isso é incorreto.
+ */
+const dateBR = (value: unknown): string => {
+  if (!has(value)) return '';
+  const raw = String(value).trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
+  if (iso) {
+    const calendarDate = iso[3] + '/' + iso[2] + '/' + iso[1];
+    return iso[4] ? calendarDate + ' às ' + iso[4] + ':' + iso[5] : calendarDate;
+  }
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
   return d.toLocaleDateString('pt-BR');
 };
 
 export function buildFactsNarrative(infraction: FactsNarrativeInput): FactsNarrativeResult {
-  // Estado local por chamada: evita mistura de declared/omitted entre casos concorrentes.
   const declared: string[] = [];
   const omitted: string[] = [];
   const mention = (field: string, value: unknown): string => {
@@ -93,7 +105,6 @@ export function buildFactsNarrative(infraction: FactsNarrativeInput): FactsNarra
   const vivaVoz = mention('infraction.cellphoneCircumstance', infraction.cellphoneCircumstance);
   const emergencia = mention('infraction.emergencyPassage', infraction.emergencyPassage === true ? 'sim' : '');
 
-  // ── Identificação da autuação ────────────────────────────────────────────
   const head: string[] = [];
   if (ait) head.push(`Auto de Infração nº ${ait}`);
   if (orgao) head.push(`lavrado pelo(a) ${orgao}`);
@@ -112,7 +123,6 @@ export function buildFactsNarrative(infraction: FactsNarrativeInput): FactsNarra
   }
   if (multa) sancoes.push(`multa de R$ ${multa}`);
 
-  // ── Evidência de medição (velocidade / radar) ────────────────────────────
   const medicao: string[] = [];
   if (vMedida) medicao.push(`velocidade medida de ${vMedida} km/h`);
   if (vConsiderada) medicao.push(`velocidade considerada de ${vConsiderada} km/h`);
@@ -120,7 +130,6 @@ export function buildFactsNarrative(infraction: FactsNarrativeInput): FactsNarra
   if (radar) medicao.push(`equipamento Fiscalizador ${radar}`);
   if (afericao) medicao.push(`última aferição metrológica em ${dateBR(afericao)}`);
 
-  // ── Circunstâncias específicas (só as que o caso registra) ───────────────
   const circunstancias: string[] = [];
   if (recusa) circunstancias.push('o condutor recusou-se a submeter-se ao teste do etilômetro');
   if (reteste) circunstancias.push('foi oferecido contraprova');

@@ -453,3 +453,41 @@ correta dos fatos (ARG-001, aferição vencida) — o caminho existe, está suba
 FASE 12 concluída. Nenhuma fase posterior iniciada. Nenhum dado de GD alterado.
 Correções de produto para A-01/A-02/A-05/A-06/A-07/A-08/A-09/A-10/A-11/A-12 exigem decisão
 jurídica e ADR — **não** foram aplicadas.
+
+
+---
+
+## Pós-merge — correção da medição de proveniência (2026-09-26)
+
+A revisão do código em `main` identificou que a suíte de acurácia procurava argumentos com IDs `RAG-*` e reconstruía fontes consultando a tabela por esses IDs. O adaptador canônico atual não cria esses IDs: ele anexa `provenance` aos argumentos recomendados e expõe `analysis.ragRetrieval`. Assim, a métrica anterior de proveniência não observava a estrutura efetivamente produzida pelo adaptador.
+
+A implementação atual também usa busca lexical sobre `knowledge_chunks`; portanto, descrições históricas de threshold vetorial/RPC não devem ser tratadas como diagnóstico da implementação atual sem nova evidência.
+
+### Alterações de teste nesta branch
+
+- A suíte integrada lê a proveniência diretamente de `analysis.recommendedArguments[*].provenance` e a recuperação de `analysis.ragRetrieval`.
+- Não consulta novamente a KB para reconstruir uma proveniência que a Analysis já fornece.
+- Registra provider, contagem, top chunks, argumento associado, IDs da cadeia documental, hash do conteúdo e validade HTTP(S) da URL.
+- Separa observabilidade de recuperação da cobertura: ausência de suporte por caso continua explícita como achado esperado, sem confundir chunk recuperado com tese juridicamente fundamentada.
+- O relatório por caso passa a mostrar recuperação, proveniência e argumentos sem suporte.
+- Foi adicionado um diagnóstico rápido de GD-06 (PRF/Lei Seca) e GD-01 (velocidade), sem montagem de documento, para permitir uma primeira execução curta.
+
+### Comando de diagnóstico
+
+```bash
+npm run test:unit -- tests/integration/golden-provenance-diagnostic.test.ts
+```
+
+O diagnóstico imprime linhas `[GOLDEN_PROVENANCE_DIAGNOSTIC]` com os resultados reais. Não exige que a busca encontre fontes; exige apenas que a análise conclua e exponha o contrato de observabilidade. A suíte completa deve ser executada depois da inspeção desses resultados.
+
+**Validação executada em 2026-09-26:**
+
+- Diagnóstico: **2/2 passaram** (`GD-06` e `GD-01`).
+- Suíte canônica: **17/17 executados; 10 passed + 7 expected fail** (os 7 correspondem a achados históricos modelados como `it.fails`).
+- A-01, A-02, A-03, A-05, A-06, A-07 e A-08 passaram na execução final.
+- O warning de chave duplicada `hasRegulatorySign` foi removido.
+- O fato `dateTime` de GD-06 passou a ser reproduzido sem deslocamento de fuso.
+
+**Escopo efetivo da branch:** além da observabilidade de proveniência, a validação revelou e corrigiu quatro problemas técnicos necessários para que a suíte medisse o runtime canônico corretamente: lineage com `undefined`, causalidade do Quality Gate para ausência intencional, preservação de teses/fatos na montagem documental e formatação de datas factuais. Também foi removida uma chave duplicada no adapter. Não foram alterados fixtures, embeddings, thresholds de recuperação ou catálogo de regras jurídicas.
+
+A proveniência observada continua sendo um fato de observabilidade do sistema: `SUPPORTED` não constitui, por si só, prova de pertinência jurídica da fonte ao argumento.
