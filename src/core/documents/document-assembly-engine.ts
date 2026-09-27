@@ -215,6 +215,16 @@ export class DocumentAssemblyEngine {
     // velocidade, datas, nº de processo). AIT/ctbArticle/description/date são
     // valorizados apenas com dados reais do payload.
     const str = (v: unknown) => (v === undefined || v === null ? '' : String(v));
+    
+    const formatCaseDate = (value: unknown): string => {
+      const raw = str(value).trim();
+      if (!raw) return '';
+      const dateOnly = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return raw;
+      return parsed.toLocaleDateString('pt-BR');
+    };
 
     const speedMeasured = payload.speeds?.measured ?? payload.infraction.speedMeasured;
     const speedLimit = payload.speeds?.limit ?? payload.infraction.speedLimit;
@@ -249,7 +259,7 @@ export class DocumentAssemblyEngine {
       '{{veiculo_placa}}': (payload.vehicle.plate || '').toUpperCase(),
       '{{veiculo_renavam}}': payload.vehicle.renavam || '',
       '{{numero_ait}}': aitNumber,
-      '{{data_infracao}}': infractionDate,
+      '{{data_infracao}}': formatCaseDate(infractionDate),
       '{{enquadramento_ctb}}': ctbArticle,
       '{{descricao_infracao}}': infractionDesc,
       '{{local_infracao}}': infractionLocation,
