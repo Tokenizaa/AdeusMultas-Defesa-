@@ -216,14 +216,13 @@ export class CloudflareRagAdapter {
       hasPhotoProof: evidenceFlags.fotoVeiculo ?? infraction.hasPhotoProof,
       hasPsychomotorTerm: evidenceFlags.psicomotorTerm ?? infraction.hasPsychomotorTerm,
       hasAgentDetailedObservations: evidenceFlags.observacoesAgente ?? infraction.hasAgentDetailedObservations,
-      hasRegulatorySign: evidenceFlags.placaSinalizacao ?? infraction.hasRegulatorySign,
+      hasRegulatorySign: evidenceFlags.hasRegulatorySign ?? evidenceFlags.placaSinalizacao ?? infraction.hasRegulatorySign,
       refusedTest: evidenceFlags.recusouTeste ?? infraction.refusedTest,
       offeredRetest: evidenceFlags.ofereceuContraprova ?? infraction.offeredRetest,
       yellowPhaseCrossing: evidenceFlags.tempoAmarelo ?? infraction.yellowPhaseCrossing,
       cellphoneCircumstance: evidenceFlags.celularVivaVoz ?? infraction.cellphoneCircumstance,
       emergencyPassage: evidenceFlags.passagemEmergencia ?? infraction.emergencyPassage,
       hasPreviousInfractionsLast12Months: infraction.hasPreviousInfractionsLast12Months,
-      hasRegulatorySign: evidenceFlags.hasRegulatorySign ?? infraction.hasRegulatorySign,
     };
 
     // Autorização por tese: cada regra do EXPERT_RULES já tem condição causal
