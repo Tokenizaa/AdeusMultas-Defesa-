@@ -60,8 +60,11 @@ const has = (v: unknown): boolean => str(v).trim().length > 0;
 const dateBR = (value: unknown): string => {
   if (!has(value)) return '';
   const raw = String(value).trim();
-  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnly) return dateOnly[3] + '/' + dateOnly[2] + '/' + dateOnly[1];
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
+  if (iso) {
+    const calendarDate = iso[3] + '/' + iso[2] + '/' + iso[1];
+    return iso[4] ? calendarDate + ' às ' + iso[4] + ':' + iso[5] : calendarDate;
+  }
 
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return raw;
