@@ -832,7 +832,7 @@ function printCrossCaseReport(ev: GdEvidence[]) {
   lines.push('--- FASE 12: diferenciação cruzada (10 GD) ---');
   for (const e of ev) {
     lines.push(
-      `${e.id} | args=${e.authorizedArgumentIds.join(',') || '(nenhuma)'} | qg=${e.qualityGate.overallPass ? 'PASS' : 'FAIL:' + e.qualityGate.failedChecks.join('+')} | integrity=${e.document.integrityValid}`,
+      `${e.id} | args=${e.authorizedArgumentIds.join(',') || '(nenhuma)'} | rag=${e.ragRetrieval.provider}/${e.ragRetrieval.count} | provenance=${e.provenance.length} | unsupported=${e.unsupportedArgumentIds.join(',') || '(nenhum)'} | qg=${e.qualityGate.overallPass ? 'PASS' : 'FAIL:' + e.qualityGate.failedChecks.join('+')} | integrity=${e.document.integrityValid}`,
     );
   }
   lines.push(`analysis fingerprints únicos: ${unique(ev.map((e) => e.analysis.contentFingerprint))}/10`);
@@ -841,7 +841,10 @@ function printCrossCaseReport(ev: GdEvidence[]) {
   lines.push(`documentos (hash normalizado) únicos: ${unique(ev.map((e) => e.document.normalizedHash))}/10`);
   lines.push(`integrityHash únicos: ${unique(ev.map((e) => e.document.integrityHash))}/10`);
   lines.push(`quality gate PASS: ${ev.filter((e) => e.qualityGate.overallPass).length}/10`);
-  lines.push(`provenance KB (chunk/source/version/url): ${ev.reduce((n, e) => n + e.provenance.length, 0)} de ${ev.length} casos`);
+  lines.push(`RAG chunks recuperados: ${ev.reduce((n, e) => n + e.ragRetrieval.count, 0)}`);
+  lines.push(`argumentos com provenance: ${unique(ev.flatMap((e) => e.provenance.map((p) => p.argumentId)))}/${unique(ev.flatMap((e) => e.authorizedArgumentIds))} argumentos autorizados`);
+  lines.push(`registros de provenance com URL válida: ${ev.reduce((n, e) => n + e.provenance.filter((p) => p.officialUrlValid).length, 0)}/${ev.reduce((n, e) => n + e.provenance.length, 0)}`);
+  lines.push(`argumentos sem suporte KB: ${ev.reduce((n, e) => n + e.unsupportedArgumentIds.length, 0)}`);
   lines.push(`procedimentos distintos: ${unique(ev.map((e) => e.analysis.recommendedProcedure))}/10`);
   const missingFacts = ev
     .map((e) => ({ id: e.id, m: e.fieldChecks.filter((f) => f.verdict === 'MISSING').map((f) => f.field.replace('infraction.', '')) }))
