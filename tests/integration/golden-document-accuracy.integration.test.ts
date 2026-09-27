@@ -310,6 +310,8 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
     .map((a: any) => String(a.id));
 
   // 3) Documento + IntegrityHash — Analysis do passo 1 é a autoridade (FASE 12.4/12.5)
+  const effectiveProcedure = analysis.recommendedProcedure || PROCEDURE_TYPE;
+
   const draft: any = await generateDefenseDraftCompat(
     env,
     caseId,
@@ -317,13 +319,13 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
     VEHICLE.plate,
     VEHICLE.model,
     APPLICANT as any,
-    PROCEDURE_TYPE as any,
+    effectiveProcedure as any,
     analysis,
   );
 
   // 4) Quality Gate — os mesmos 7 checks fail-closed do runtime
   const onboardingPayload: any = {
-    procedureType: PROCEDURE_TYPE,
+    procedureType: effectiveProcedure,
     identification: {
       aitNumber: infraction.aitNumber,
       infractionCode: infraction.infractionCode,
@@ -447,6 +449,19 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
     JSON.stringify({
       procedure: record.analysis.recommendedProcedure,
       body: record.analysis.competentBody,
+      classification: analysis.infractionClassification ?? null,
+      evaluatedRules: (analysis.evaluatedRules ?? []).map((r: any) => ({
+        ruleId: r.ruleId,
+        status: r.status,
+        legalArgumentId: r.legalArgumentId ?? null,
+        inputs: r.inputs ?? null,
+      })),
+      detectedFlaws: (analysis.detectedFlaws ?? []).map((f: any) => ({
+        id: f.id ?? f.ruleId ?? null,
+        legalArgumentId: f.legalArgumentId ?? null,
+        title: f.title ?? null,
+      })),
+      dataGaps: analysis.dataGaps ?? [],
       args: analysis.recommendedArguments.map((a: any) => ({ id: a.id, title: a.title, baseLegal: a.baseLegal })),
     }),
   );
