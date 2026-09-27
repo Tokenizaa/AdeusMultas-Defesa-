@@ -1340,8 +1340,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-27T03:43:28.543Z",
-    "duration": 554.5610000000001,
+    "startTime": "2026-09-27T14:49:48.270Z",
+    "duration": 367.18899999999985,
     "expected": 0,
     "skipped": 54,
     "unexpected": 0,

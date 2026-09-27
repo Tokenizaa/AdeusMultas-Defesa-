@@ -1,12 +1,9 @@
 /**
  * @file scrape-worker.ts
  * Worker assíncrono para processamento de jobs de scraping do Google Maps.
- * Utiliza BullMQ quando Redis está disponível e fornece fallback resiliente
- * acoplado ao Supabase (collection_runs) para ambientes sem Redis.
+ * Implementação nativa via Supabase (collection_runs) — sem dependência de Redis/BullMQ.
  */
 
-import { Queue, Worker, Job } from 'bullmq';
-import Redis from 'ioredis';
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '../../scraper-prospecting/supabase';
 import { logger } from '../../scraper-prospecting/logger';
@@ -37,14 +34,9 @@ export interface ScrapeJobRecord {
 
 export class ScrapeWorkerService {
   private static instance: ScrapeWorkerService | null = null;
-  private queue: Queue<ScrapeJobData> | null = null;
-  private worker: Worker<ScrapeJobData> | null = null;
-  private redisConnection: Redis | null = null;
   private fallbackTimer: NodeJS.Timeout | null = null;
   private isProcessingFallback = false;
-  private isBullMqActive = false;
   private readonly POLL_INTERVAL_MS = 4000;
-  private readonly QUEUE_NAME = 'google-maps-scrape-jobs';
 
   static getInstance(): ScrapeWorkerService {
     if (!ScrapeWorkerService.instance) {
@@ -54,73 +46,7 @@ export class ScrapeWorkerService {
   }
 
   constructor() {
-    this.initBullMQ();
-  }
-
-  private initBullMQ(): void {
-    const redisUrl = process.env.REDIS_URL || process.env.REDISCLOUD_URL;
-    const redisHost = process.env.REDIS_HOST;
-    const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
-
-    if (redisUrl || redisHost) {
-      try {
-        this.redisConnection = redisUrl
-          ? new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false })
-          : new Redis({
-              host: redisHost,
-              port: redisPort,
-              password: process.env.REDIS_PASSWORD || undefined,
-              maxRetriesPerRequest: null,
-              enableReadyCheck: false,
-            });
-
-        this.redisConnection.on('error', (err) => {
-          logger.warn('Aviso de conexão Redis (BullMQ Scraper):', { error: err.message });
-        });
-
-        this.queue = new Queue<ScrapeJobData>(this.QUEUE_NAME, {
-          connection: this.redisConnection,
-          defaultJobOptions: {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 3000 },
-            // Retenção operacional: jobs concluídos expiram após 24 h,
-            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
-            removeOnComplete: { age: 86400 },
-            removeOnFail: { age: 604800 },
-          },
-        });
-
-        this.worker = new Worker<ScrapeJobData>(
-          this.QUEUE_NAME,
-          async (job: Job<ScrapeJobData>) => {
-            return this.processJob(job.data.jobId, job.data.config, job.data.collectionRunId);
-          },
-          {
-            connection: this.redisConnection,
-            concurrency: 1, // Single headless browser at a time for stability and resource sanity
-          }
-        );
-
-        this.worker.on('completed', (job) => {
-          logger.info('BullMQ Scrape Job concluído com sucesso', { jobId: job.data.jobId });
-        });
-
-        this.worker.on('failed', (job, err) => {
-          logger.error('BullMQ Scrape Job falhou', { jobId: job?.data.jobId, error: err.message });
-        });
-
-        this.isBullMqActive = true;
-        logger.info('BullMQ Scrape Worker inicializado com sucesso.');
-      } catch (err) {
-        logger.warn('Não foi possível conectar ao Redis, utilizando engine de fila de banco:', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        this.isBullMqActive = false;
-      }
-    } else {
-      logger.info('Redis não configurado. Utilizando engine resiliente via Supabase.');
-      this.isBullMqActive = false;
-    }
+    logger.info('ScrapeWorkerService inicializado (modo Supabase nativo — sem Redis/BullMQ).');
   }
 
   /**
@@ -150,7 +76,7 @@ export class ScrapeWorkerService {
       updatedAt: now,
     };
 
-    // 1. Persistir no Supabase como collection_run com status 'queued'
+    // Persistir no Supabase como collection_run com status 'queued'
     const { error } = await supabaseAdmin.from('collection_runs').insert({
       id,
       status: 'queued',
@@ -172,24 +98,7 @@ export class ScrapeWorkerService {
       throw new Error(`Falha ao registrar job no banco: ${error.message}`);
     }
 
-    // 2. Se BullMQ estiver ativo, enfileirar no BullMQ
-    if (this.isBullMqActive && this.queue) {
-      try {
-        await this.queue.add(
-          'scrape',
-          { jobId: id, config, collectionRunId: id },
-          { jobId: id }
-        );
-        logger.info('Job enfileirado no BullMQ', { id });
-      } catch (err) {
-        logger.warn('Falha ao enfileirar no BullMQ, processamento será feito pelo worker DB:', {
-          id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    logger.info('Job de scraping registrado com sucesso', { id, config });
+    logger.info('Job de scraping registrado com sucesso (Supabase)', { id, config });
     return jobRecord;
   }
 
@@ -247,18 +156,6 @@ export class ScrapeWorkerService {
       return false;
     }
 
-    // Se estiver no BullMQ, tentar cancelar
-    if (this.isBullMqActive && this.queue) {
-      try {
-        const bullJob = await this.queue.getJob(id);
-        if (bullJob) {
-          await bullJob.remove().catch(() => undefined);
-        }
-      } catch {
-        // Ignora erro de remoção BullMQ se já em execução
-      }
-    }
-
     logger.info('Job de scraping cancelado com sucesso', { id });
     return true;
   }
@@ -278,7 +175,7 @@ export class ScrapeWorkerService {
     // Dispara checagem imediata
     this.processNextDBJob();
 
-    logger.info('ScrapeWorker background loop iniciado.');
+    logger.info('ScrapeWorker background loop iniciado (polling Supabase).');
   }
 
   /**
@@ -288,12 +185,6 @@ export class ScrapeWorkerService {
     if (this.fallbackTimer) {
       clearInterval(this.fallbackTimer);
       this.fallbackTimer = null;
-    }
-    if (this.worker) {
-      this.worker.close().catch(() => undefined);
-    }
-    if (this.queue) {
-      this.queue.close().catch(() => undefined);
     }
     logger.info('ScrapeWorker background loop parado.');
   }

@@ -32536,20 +32536,13 @@ init_supabase();
 // src/server/services/scrape-worker.ts
 init_supabase();
 init_logger();
-import { Queue, Worker } from "bullmq";
-import Redis from "ioredis";
 import { randomUUID as randomUUID3 } from "crypto";
 var ScrapeWorkerService = class _ScrapeWorkerService {
   constructor() {
-    this.queue = null;
-    this.worker = null;
-    this.redisConnection = null;
     this.fallbackTimer = null;
     this.isProcessingFallback = false;
-    this.isBullMqActive = false;
     this.POLL_INTERVAL_MS = 4e3;
-    this.QUEUE_NAME = "google-maps-scrape-jobs";
-    this.initBullMQ();
+    logger2.info("ScrapeWorkerService inicializado (modo Supabase nativo \u2014 sem Redis/BullMQ).");
   }
   static {
     this.instance = null;
@@ -32559,63 +32552,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       _ScrapeWorkerService.instance = new _ScrapeWorkerService();
     }
     return _ScrapeWorkerService.instance;
-  }
-  initBullMQ() {
-    const redisUrl = process.env.REDIS_URL || process.env.REDISCLOUD_URL;
-    const redisHost = process.env.REDIS_HOST;
-    const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
-    if (redisUrl || redisHost) {
-      try {
-        this.redisConnection = redisUrl ? new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false }) : new Redis({
-          host: redisHost,
-          port: redisPort,
-          password: process.env.REDIS_PASSWORD || void 0,
-          maxRetriesPerRequest: null,
-          enableReadyCheck: false
-        });
-        this.redisConnection.on("error", (err) => {
-          logger2.warn("Aviso de conex\xE3o Redis (BullMQ Scraper):", { error: err.message });
-        });
-        this.queue = new Queue(this.QUEUE_NAME, {
-          connection: this.redisConnection,
-          defaultJobOptions: {
-            attempts: 3,
-            backoff: { type: "exponential", delay: 3e3 },
-            // Retenção operacional: jobs concluídos expiram após 24 h,
-            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
-            removeOnComplete: { age: 86400 },
-            removeOnFail: { age: 604800 }
-          }
-        });
-        this.worker = new Worker(
-          this.QUEUE_NAME,
-          async (job) => {
-            return this.processJob(job.data.jobId, job.data.config, job.data.collectionRunId);
-          },
-          {
-            connection: this.redisConnection,
-            concurrency: 1
-            // Single headless browser at a time for stability and resource sanity
-          }
-        );
-        this.worker.on("completed", (job) => {
-          logger2.info("BullMQ Scrape Job conclu\xEDdo com sucesso", { jobId: job.data.jobId });
-        });
-        this.worker.on("failed", (job, err) => {
-          logger2.error("BullMQ Scrape Job falhou", { jobId: job?.data.jobId, error: err.message });
-        });
-        this.isBullMqActive = true;
-        logger2.info("BullMQ Scrape Worker inicializado com sucesso.");
-      } catch (err) {
-        logger2.warn("N\xE3o foi poss\xEDvel conectar ao Redis, utilizando engine de fila de banco:", {
-          error: err instanceof Error ? err.message : String(err)
-        });
-        this.isBullMqActive = false;
-      }
-    } else {
-      logger2.info("Redis n\xE3o configurado. Utilizando engine resiliente via Supabase.");
-      this.isBullMqActive = false;
-    }
   }
   /**
    * Enfileira um novo job de scraping e retorna o registro inicial.
@@ -32660,22 +32596,7 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       logger2.error("Erro ao persistir collection_run no banco", { error: error.message, id });
       throw new Error(`Falha ao registrar job no banco: ${error.message}`);
     }
-    if (this.isBullMqActive && this.queue) {
-      try {
-        await this.queue.add(
-          "scrape",
-          { jobId: id, config, collectionRunId: id },
-          { jobId: id }
-        );
-        logger2.info("Job enfileirado no BullMQ", { id });
-      } catch (err) {
-        logger2.warn("Falha ao enfileirar no BullMQ, processamento ser\xE1 feito pelo worker DB:", {
-          id,
-          error: err instanceof Error ? err.message : String(err)
-        });
-      }
-    }
-    logger2.info("Job de scraping registrado com sucesso", { id, config });
+    logger2.info("Job de scraping registrado com sucesso (Supabase)", { id, config });
     return jobRecord;
   }
   /**
@@ -32712,15 +32633,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       logger2.error("Erro ao cancelar job no banco", { id, error: error.message });
       return false;
     }
-    if (this.isBullMqActive && this.queue) {
-      try {
-        const bullJob = await this.queue.getJob(id);
-        if (bullJob) {
-          await bullJob.remove().catch(() => void 0);
-        }
-      } catch {
-      }
-    }
     logger2.info("Job de scraping cancelado com sucesso", { id });
     return true;
   }
@@ -32735,7 +32647,7 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
     }
     this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
     this.processNextDBJob();
-    logger2.info("ScrapeWorker background loop iniciado.");
+    logger2.info("ScrapeWorker background loop iniciado (polling Supabase).");
   }
   /**
    * Para o worker loop.
@@ -32744,12 +32656,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
     if (this.fallbackTimer) {
       clearInterval(this.fallbackTimer);
       this.fallbackTimer = null;
-    }
-    if (this.worker) {
-      this.worker.close().catch(() => void 0);
-    }
-    if (this.queue) {
-      this.queue.close().catch(() => void 0);
     }
     logger2.info("ScrapeWorker background loop parado.");
   }

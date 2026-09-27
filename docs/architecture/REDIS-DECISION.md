@@ -9,13 +9,13 @@
 
 ## 1. Resumo da Decisão
 
-**Redis e BullMQ foram removidos como dependência obrigatória** para:
-- Iniciar o servidor de desenvolvimento local (`npm run dev`)
-- Executar o Golden Path B2C (front-end real)
-- Executar testes Playwright E2E
-- Executar fluxos de desenvolvimento e validação local
+**Redis e BullMQ foram removidos completamente** do código de aplicação (runtime local, Golden Path, E2E):
+- `npm run dev` inicia sem Redis
+- Golden Path B2C (front-end real) funciona sem Redis
+- Testes Playwright E2E funcionam sem Redis
+- Fluxos de desenvolvimento/validação local funcionam sem Redis
 
-O projeto agora usa **Supabase como única persistência e fila** para processamento assíncrono. Redis/BullMQ tornam-se **integração opcional** apenas para otimização de performance (quando disponível), não requisito de inicialização.
+O projeto usa **Supabase como única persistência e fila** para processamento assíncrono. **Não há integração opcional** — BullMQ/ioredis foram removidos do `package.json`, `bun.lock` e `node_modules`. O `ScrapeWorkerService` foi reescrito para usar **apenas Supabase nativo** (polling direto em `collection_runs`).
 
 ---
 
@@ -46,7 +46,8 @@ O projeto agora usa **Supabase como única persistência e fila** para processam
   - Polling direto no Supabase (`collection_runs` status `queued`/`running`)
   - Intervalo: 4s (`POLL_INTERVAL_MS`)
   - Heartbeat/update no próprio banco
-  - **Fallback nativo** — não requer Redis
+  - **Implementação nativa Supabase** — sem Redis, sem BullMQ
+  - Reescrito para remover imports de `bullmq` e `ioredis`
 
 - **MarketingAutomationWorker** (`src/server/services/marketing-automation/worker.ts`)
   - Polling direto no Supabase (`marketing_automation_queue`)
@@ -67,18 +68,11 @@ O projeto agora usa **Supabase como única persistência e fila** para processam
   - Coleta legislação periódica
   - **Sem Redis**
 
-### Integração Opcional Redis (Performance)
-O `ScrapeWorkerService` mantém **capacidade opcional** de usar BullMQ/Redis **se configurado**:
-- Variáveis: `REDIS_URL` ou `REDIS_HOST` + `REDIS_PORT`
-- Se presentes → enfileira jobs no BullMQ **além** do Supabase
-- Se ausentes → **funciona 100% via Supabase** (comportamento padrão)
-- Isso permite escala horizontal futura sem refatoração
-
 ---
 
 ## 4. Referências Removidas e Arquivos Alterados
 
-### Removidos (5 arquivos)
+### Removidos (6 arquivos)
 | Arquivo | Motivo |
 |---------|--------|
 | `src/server/config/redis.ts` | Config central Redis/BullMQ — sem consumidores ativos |
@@ -88,17 +82,13 @@ O `ScrapeWorkerService` mantém **capacidade opcional** de usar BullMQ/Redis **s
 | `src/server/workers/marketing.worker.ts` | Stub, sem uso real |
 | `src/server/workers/scraping.worker.ts` | Stub, substituído por `scrape-worker.ts` nativo |
 
-### Alterados (3 arquivos)
+### Alterados (4 arquivos)
 | Arquivo | Alteração |
 |---------|-----------|
 | `src/server/lifecycle/dev-lifecycle.ts` | Removido `initializeWorkers()`; mantido `scrapeWorker.start()` (usa Supabase) |
+| `src/server/services/scrape-worker.ts` | **Reescrito** — removidos imports `bullmq`, `ioredis`, `Queue`, `Worker`, `Job`, `Redis`; lógica BullMQ removida; apenas polling Supabase nativo |
 | `package.json` | Removidas deps `bullmq@^6.3.4`, `ioredis@^6.0.0` |
-| `bun.lock` | Atualizado via `bun install` (limpo) |
-
-### Mantidos com Fallback Supabase (1 arquivo)
-| Arquivo | Status |
-|---------|--------|
-| `src/server/services/scrape-worker.ts` | **Mantido** — já implementa fallback Supabase nativo; Redis opcional |
+| `bun.lock` | Atualizado via `bun install` (limpo — zero referências a bullmq/ioredis) |
 
 ---
 
@@ -109,20 +99,21 @@ O `ScrapeWorkerService` mantém **capacidade opcional** de usar BullMQ/Redis **s
 npm run dev
 
 # Saída esperada:
-# [scraper-prospecting] INFO Redis não configurado. Utilizando engine resiliente via Supabase.
-# [scraper-prospecting] INFO ScrapeWorker background loop iniciado.
+# [scraper-prospecting] INFO ScrapeWorkerService inicializado (modo Supabase nativo — sem Redis/BullMQ).
+# [scraper-prospecting] INFO ScrapeWorker background loop iniciado (polling Supabase).
 # [dev] http://localhost:3000
 # [dev] API: createApp()
 ```
 
-### Variáveis de Ambiente (Opcionais — apenas para Redis)
+### Variáveis de Ambiente Redis (Removidas — não usadas)
 ```bash
-# NÃO NECESSÁRIAS para dev local
-# REDIS_URL=redis://localhost:6379
-# REDIS_HOST=localhost
-# REDIS_PORT=6379
-# REDIS_PASSWORD=
-# REDIS_TLS=false
+# NÃO EXISTEM MAIS no código de aplicação
+# REDIS_URL
+# REDISCLOUD_URL
+# REDIS_HOST
+# REDIS_PORT
+# REDIS_PASSWORD
+# REDIS_TLS
 ```
 
 ---
@@ -160,9 +151,9 @@ SUPABASE_SERVICE_ROLE_KEY=xxx  # apenas para admin ops
 PLAYWRIGHT_BASE_URL=http://localhost:3000
 ```
 
-### Não Mais Necessárias (Redis)
+### Removidas do Código (Redis)
 ```env
-# REMOVIDAS — não usadas no runtime local
+# NÃO USADAS — código não referencia mais
 REDIS_URL
 REDISCLOUD_URL
 REDIS_HOST
@@ -178,9 +169,9 @@ REDIS_TLS
 | Teste | Status | Evidência |
 |-------|--------|-----------|
 | `npm run lint` (tsc --noEmit) | **PASS** | Zero erros relacionados a Redis/BullMQ |
-| `npm run dev` (startup) | **PASS** | Server sobe em ~2s, logs confirmam Supabase fallback |
-| `npx playwright test --list` | **PASS** | 49 testes descobertos, 14 arquivos, 3 projetos |
-| TypeScript build | **PASS** | `npm run build` completo sem erros de Redis |
+| `npm run dev` (startup) | **PASS** | Server sobe em ~2s, logs confirmam Supabase nativo |
+| `npx playwright test --list` | **PASS** | 54 testes descobertos, 15 arquivos, 3 projetos |
+| TypeScript build (`npm run build`) | **PASS** | Build completo sem erros de Redis |
 
 ### Testes E2E (NOT TESTED — ambiente sem Supabase real)
 | Teste | Status | Motivo |
@@ -197,13 +188,15 @@ REDIS_TLS
 
 ## 9. Limitações Restantes
 
-1. **Scraping em produção de alta escala**: Se volume > 1 job/4s, polling Supabase pode ser limitante. Redis/BullMQ opcional resolve isso — basta configurar `REDIS_URL`.
+1. **Scraping em produção de alta escala**: Se volume > 1 job/4s, polling Supabase pode ser limitante. Reintrodução de Redis/BullMQ exigiria ADR novo, testes de ausência de Redis no CI, e aprovação do Supervisor.
 
 2. **Evolution API (WhatsApp)**: Exige Redis próprio em produção (docker-compose). Isso é **externo** ao nosso servidor — não afeta `npm run dev` nem Golden Path. Documentado em `src/server/services/whatsapp-service.ts`.
 
-3. **Workers Cloudflare**: Produção usa Cloudflare Workers (serverless) — não usa Redis local. Arquitetura separada em `/cloudflare/`.
+3. **Documenso Webhook Handler**: Comentário em `src/server/lib/documenso/webhook-handler.ts:32` menciona "use Redis in production" para idempotência — é apenas comentário, implementação atual usa `Map` em memória.
 
-4. **Selenium/ChromeDriver**: Scraping usa headless Chrome — requer Chrome instalado no ambiente. Não relacionado a Redis.
+4. **Workers Cloudflare**: Produção usa Cloudflare Workers (serverless) — não usa Redis local. Arquitetura separada em `/cloudflare/`.
+
+5. **Selenium/ChromeDriver**: Scraping usa headless Chrome — requer Chrome instalado no ambiente. Não relacionado a Redis.
 
 ---
 
@@ -237,4 +230,4 @@ REDIS_TLS
 
 **Objetivo atingido**: O servidor local, Golden Path B2C e testes Playwright E2E **não dependem mais de Redis**. 
 
-A arquitetura agora é **simples, resiliente e baseada em Supabase** como fonte única de verdade. Redis permanece como **otimização opcional** para escala, não como requisito de desenvolvimento.
+A arquitetura agora é **simples, resiliente e baseada em Supabase** como fonte única de verdade. **Redis/BullMQ foram removidos completamente** do código de aplicação, `package.json`, `bun.lock` e `node_modules`. Não há integração opcional residual.
