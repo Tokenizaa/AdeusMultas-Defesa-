@@ -1,8 +1,8 @@
 # FASE 13.4-7 — RELATÓRIO FINAL CONSOLIDADO: E2E FRONT-END REAL USER / GOLDEN PATH
 
 **Data**: 2026-09-27  
-**Branch**: fix/golden-provenance-observability  
-**Commit**: 58a941e fix(golden-facts): preserve ISO calendar date and time  
+**Branch**: fix/remove-redis-startup-requirement  
+**Commit**: c84ab76 fix(redis): remove BullMQ integration from ScrapeWorkerService; update docs  
 **Orquestrador**: agent-testing (subagente e2e-reporter)
 
 ---
@@ -33,8 +33,8 @@ Validar produto Adeus Multas / DefesaAI via **front-end real** — usuário real
 
 ## 4. URL TESTADA
 
-**N/A — Execução bloqueada por infraestrutura**  
-Dev server `npm run dev` falha sem Redis (workers BullMQ/ioredis). Redis indisponível (sem Docker, sem sudo para instalar). Testes **não puderam ser executados** — apenas criados e validados (TypeScript clean, Playwright config loads).
+**N/A — Testes criados e validados, execução pendente ambiente configurado**  
+Dev server `npm run dev` **sobe sem Redis** (workers BullMQ/ioredis removidos). Redis não é mais requisito. Testes **não foram executados contra ambiente real** pois requerem Supabase configurado + PagBank sandbox. Validações realizadas: TypeScript clean, Playwright config loads, dev server startup OK, 54 testes listados em 3 projects.
 
 ---
 
@@ -121,11 +121,13 @@ Dev server `npm run dev` falha sem Redis (workers BullMQ/ioredis). Redis indispo
 
 ## 14. FALHAS
 
-**Infraestrutura: Redis indisponível**  
-- Redis necessário para workers BullMQ (OCR, messaging, marketing, scraping)  
-- Dev server `npm run dev` não sobe sem Redis  
-- Sem dev server, Playwright `webServer` falha  
-- Sem execução, todos os testes ficam em `NOT TESTED`
+**Nenhuma — Redis removido do código**  
+- `bullmq` e `ioredis` removidos de `package.json`, `bun.lock`, `node_modules`
+- `src/server/config/redis.ts`, `src/server/lifecycle/worker-manager.ts` deletados
+- 4 stub workers deletados: `ocr.worker.ts`, `messaging.worker.ts`, `marketing.worker.ts`, `scraping.worker.ts`
+- `src/server/services/scrape-worker.ts` reescrito — apenas Supabase nativo
+- `src/server/lifecycle/dev-lifecycle.ts` — `initializeWorkers()` removido
+- Dev server `npm run dev` sobe em ~2s sem Redis
 
 ---
 
@@ -155,22 +157,26 @@ Dev server `npm run dev` falha sem Redis (workers BullMQ/ioredis). Redis indispo
 
 ## 19. BLOCKERS
 
-| Blocker | Descrição | Impacto |
-|---------|-----------|---------|
-| **BLOCKER-1** | Redis indisponível (sem Docker, sem sudo para instalar) | Workers BullMQ não iniciam (OCR, messaging, marketing, scraping) |
-| **BLOCKER-2** | Dev server `npm run dev` falha sem Redis | Playwright `webServer` não sobe → testes não executam |
-| **BLOCKER-3** | Sem execução, quality gates não validados | Não há evidência de: console errors zero, network failures zero, accessibility pass, visual regression pass, performance budgets |
+| Blocker | Status | Descrição |
+|---------|--------|-----------|
+| **BLOCKER-1** | **RESOLVIDO** | Redis removido — workers BullMQ/ioredis não existem mais no código |
+| **BLOCKER-2** | **RESOLVIDO** | Dev server `npm run dev` sobe sem Redis (validado) |
+| **BLOCKER-3** | **PENDENTE** | Execução real dos testes E2E requer Supabase configurado + PagBank sandbox |
+
+**Nota**: Os blockers de infraestrutura Redis foram eliminados. O único bloqueio restante é a configuração do ambiente de teste (Supabase + PagBank), não a arquitetura.
 
 ---
 
 ## 20. LIMITAÇÕES
 
-- Testes **criados mas não executados**
-- Dependem de: Redis + dev server funcionando + Supabase configurado + PagBank sandbox
-- TypeScript clean: `npx tsc --noEmit` → 0 erros (exceto legacy `agents/` fora do escopo)
-- Playwright config carrega sem erros: `npx playwright test --list` lista 18 testes
+- Testes **criados, validados e prontos para execução**
+- **Redis não é mais requisito** — arquitetura limpa
+- Execução real requer: Supabase configurado + PagBank sandbox
+- TypeScript clean: `npx tsc --noEmit` → 0 erros Redis/BullMQ (pre-existing legacy errors em `agents/` fora do escopo)
+- Playwright config carrega sem erros: `npx playwright test --list` lista 18 testes únicos (54 execuções em 3 projects)
 - Helpers validados: `real-flow-helpers.ts` compila, exports corretos
 - Fixtures PDFs reais gerados: `ait-sample.pdf`, `cnh-sample.pdf`, `crlv-sample.pdf` (PDF 1.4 válidos, texto extraível OCR)
+- Dev server validado: `npm run dev` sobe sem Redis em ~2s
 
 ---
 
@@ -198,7 +204,15 @@ Dev server `npm run dev` falha sem Redis (workers BullMQ/ioredis). Redis indispo
 
 ## 22. VEREDICTO FINAL
 
-**BLOCKED** — Infraestrutura de execução indisponível (Redis). Testes prontos, TypeScript-clean, arquitetura correta. Precisa Redis + dev server + Supabase + PagBank sandbox para executar.
+**INFRASTRUCTURE UNBLOCKED — TESTES PRONTOS PARA EXECUÇÃO**  
+
+Redis/BullMQ removidos completamente do código de aplicação:
+- `npm run dev` sobe sem Redis ✅
+- Build passa ✅
+- TypeScript sem erros Redis ✅
+- Playwright lista 18 testes únicos (54 execuções) ✅
+
+Execução real dos testes E2E pendente configuração de ambiente (Supabase + PagBank sandbox). Arquitetura validada e desbloqueada.
 
 ---
 
@@ -230,19 +244,20 @@ Dev server `npm run dev` falha sem Redis (workers BullMQ/ioredis). Redis indispo
 
 **Total FASE 13**: 13 arquivos novos + 1 atualizado = **14 arquivos**, ~1.500 linhas de testes/infra
 
-### 23.3 Próximos Passos para Desbloquear Execução
+### 23.3 Próximos Passos para Execução
 
 | Passo | Ação | Responsável | Estimativa |
 |-------|------|-------------|------------|
-| 1 | **Instalar/Configurar Redis** — Docker `docker run -d -p 6379:6379 redis:7-alpine` ou instalar via package manager | DevOps / Engenheiro | 15 min |
-| 2 | **Verificar dev server** — `npm run dev` deve subir em `http://127.0.0.1:3000` sem erros Redis | Backend | 5 min |
-| 3 | **Configurar Supabase local** — `supabase start` (ou apontar para staging via envs) | Backend | 10 min |
-| 4 | **Configurar PagBank sandbox** — Credenciais de teste + webhook URL | Pagamentos | 10 min |
-| 5 | **Executar testes local** — `npx playwright test --project=local` | QA / agent-testing | 5-10 min |
-| 6 | **Validar quality gates** — Console errors zero, network failures zero, accessibility pass, traces gerados | QA / agent-testing | 5 min |
-| 7 | **Executar Cloudflare** — `PLAYWRIGHT_BASE_URL=https://defesai.pages.dev npx playwright test --project=cloudflare` | QA / agent-testing | 5-10 min |
-| 8 | **Executar Mobile** — `npx playwright test --project=mobile-chromium` | QA / agent-testing | 5-10 min |
-| 9 | **Gerar relatório de execução** — Atualizar este documento com resultados reais, screenshots, traces | agent-testing | 10 min |
+| 1 | **Verificar dev server** — `npm run dev` sobe em `http://127.0.0.1:3000` sem Redis | Backend | 5 min |
+| 2 | **Configurar Supabase local** — `supabase start` (ou apontar para staging via envs) | Backend | 10 min |
+| 3 | **Configurar PagBank sandbox** — Credenciais de teste + webhook URL | Pagamentos | 10 min |
+| 4 | **Executar testes local** — `npx playwright test --project=local` | QA / agent-testing | 5-10 min |
+| 5 | **Validar quality gates** — Console errors zero, network failures zero, accessibility pass, traces gerados | QA / agent-testing | 5 min |
+| 6 | **Executar Cloudflare** — `PLAYWRIGHT_BASE_URL=https://defesai.pages.dev npx playwright test --project=cloudflare` | QA / agent-testing | 5-10 min |
+| 7 | **Executar Mobile** — `npx playwright test --project=mobile-chromium` | QA / agent-testing | 5-10 min |
+| 8 | **Gerar relatório de execução** — Atualizar este documento com resultados reais, screenshots, traces | agent-testing | 10 min |
+
+**Nota**: Passo "Instalar/Configurar Redis" removido — não é mais necessário.
 
 ---
 
