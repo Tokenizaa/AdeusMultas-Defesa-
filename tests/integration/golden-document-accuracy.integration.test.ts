@@ -86,15 +86,34 @@ interface GdEvidence {
     detectedFlaws: number;
     dataGaps: number;
   };
+  ragRetrieval: {
+    provider: string;
+    count: number;
+    top: Array<{
+      chunkId: string;
+      documentId: string | null;
+      documentVersionId: string | null;
+      sourceId: string | null;
+      officialUrl: string | null;
+      matchedTerms: string[];
+    }>;
+  };
   provenance: Array<{
     argumentId: string;
+    status: string;
     chunkId: string;
     sourceId: string;
+    sourceName: string;
+    authority: string;
     documentId: string;
     documentVersionId: string;
     officialUrl: string;
-    articleNumber: string | null;
+    officialUrlValid: boolean;
+    version: string;
+    contentHash: string;
+    matchedTerms: string[];
   }>;
+  unsupportedArgumentIds: string[];
   authorizedArgumentIds: string[];
   document: {
     hash: string;
@@ -220,22 +239,60 @@ function assertFinding(achado: string, fn: () => void) {
 
 const evidence: GdEvidence[] = [];
 
-async function readProvenance(chunkIds: string[]) {
-  if (chunkIds.length === 0) return [];
-  const url = `${SUPABASE_URL}/rest/v1/knowledge_chunks?select=id,source_id,document_id,document_version_id,article_number,knowledge_document_versions(source_url)&id=in.(${chunkIds.join(',')})`;
-  const res = await fetch(url, {
-    headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` },
-  });
-  if (!res.ok) return [];
-  const rows: any[] = await res.json();
-  return rows.map((r) => ({
-    chunkId: r.id,
-    sourceId: r.source_id,
-    documentId: r.document_id,
-    documentVersionId: r.document_version_id,
-    officialUrl: r.knowledge_document_versions?.source_url ?? '',
-    articleNumber: r.article_number,
-  }));
+/** A URL só é válida quando é absoluta e usa HTTP(S). */
+const isValidSourceUrl = (value: unknown): boolean => {
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Lê a proveniência da própria Analysis. Não infere chunks por prefixo RAG-:
+ * o adaptador canônico anexa provenance aos argumentos recomendados e mantém
+ * o resumo da recuperação em analysis.ragRetrieval.
+ */
+function readAnalysisProvenance(analysis: any) {
+  const recommended = Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments : [];
+  const provenance = recommended.flatMap((arg: any) =>
+    (Array.isArray(arg.provenance) ? arg.provenance : []).map((p: any) => ({
+      argumentId: String(arg.id ?? ''),
+      status: String(arg.provenanceStatus ?? 'UNKNOWN'),
+      chunkId: String(p.chunk_id ?? ''),
+      sourceId: String(p.source_id ?? ''),
+      sourceName: String(p.source_name ?? ''),
+      authority: String(p.authority ?? ''),
+      documentId: String(p.document_id ?? ''),
+      documentVersionId: String(p.document_version_id ?? ''),
+      officialUrl: String(p.official_url ?? ''),
+      officialUrlValid: isValidSourceUrl(p.official_url),
+      version: String(p.version ?? ''),
+      contentHash: String(p.content_hash ?? ''),
+      matchedTerms: Array.isArray(p.matched_terms) ? p.matched_terms.map(String) : [],
+    })),
+  );
+  const retrieval = analysis?.ragRetrieval ?? {};
+  return {
+    provenance,
+    ragRetrieval: {
+      provider: String(retrieval.provider ?? 'UNKNOWN'),
+      count: Number.isFinite(Number(retrieval.count)) ? Number(retrieval.count) : 0,
+      top: Array.isArray(retrieval.top) ? retrieval.top.map((r: any) => ({
+        chunkId: String(r.chunk_id ?? ''),
+        documentId: r.document_id == null ? null : String(r.document_id),
+        documentVersionId: r.document_version_id == null ? null : String(r.document_version_id),
+        sourceId: r.source_id == null ? null : String(r.source_id),
+        officialUrl: r.official_url == null ? null : String(r.official_url),
+        matchedTerms: Array.isArray(r.matched_terms) ? r.matched_terms.map(String) : [],
+      })) : [],
+    },
+    unsupportedArgumentIds: recommended
+      .filter((arg: any) => arg.provenanceStatus !== 'SUPPORTED')
+      .map((arg: any) => String(arg.id ?? '')),
+  };
 }
 
 async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
@@ -245,12 +302,12 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
   // 1) Analysis Fresh — runtime canônico (RAG/KB + Rule Engine)
   const analysis: any = await analyzeInfractionCompat(env, caseId, infraction);
 
-  // 2) provenance — os argumentos RAG carregam o chunk_id; a fonte é resolvida na KB
+  // 2) Proveniência real retornada pelo adaptador canônico.
+  const provenanceEvidence = readAnalysisProvenance(analysis);
+  const provenance = provenanceEvidence.provenance;
   const ragArgumentIds = analysis.recommendedArguments
-    .map((a: any) => a.id)
-    .filter((id: string) => id.startsWith('RAG-'));
-  const chunkIds = ragArgumentIds.map((id: string) => id.replace(/^RAG-/, ''));
-  const provenance = await readProvenance(chunkIds);
+    .filter((a: any) => Array.isArray(a.provenance) && a.provenance.length > 0)
+    .map((a: any) => String(a.id));
 
   // 3) Documento + IntegrityHash — Analysis do passo 1 é a autoridade (FASE 12.4/12.5)
   const draft: any = await generateDefenseDraftCompat(
@@ -345,15 +402,9 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
       detectedFlaws: analysis.detectedFlaws?.length ?? 0,
       dataGaps: analysis.dataGaps?.length ?? 0,
     },
-    provenance: ragArgumentIds.map((argumentId, i) => ({
-      argumentId,
-      chunkId: chunkIds[i],
-      sourceId: provenance[i]?.sourceId ?? 'NOT_FOUND',
-      documentId: provenance[i]?.documentId ?? 'NOT_FOUND',
-      documentVersionId: provenance[i]?.documentVersionId ?? 'NOT_FOUND',
-      officialUrl: provenance[i]?.officialUrl ?? 'NOT_FOUND',
-      articleNumber: provenance[i]?.articleNumber ?? null,
-    })),
+    ragRetrieval: provenanceEvidence.ragRetrieval,
+    provenance,
+    unsupportedArgumentIds: provenanceEvidence.unsupportedArgumentIds,
     authorizedArgumentIds,
     document: {
       hash: '',
@@ -490,29 +541,38 @@ describe.skipIf(skip)('FASE 12 — Acurácia e diferenciação dos Golden Docume
     }
   });
 
-  // ACHADO A-05: o RPC match_knowledge_chunks devolve 0 linhas para todos os 10
-  // GD. Causa medida: com o vetor determinístico, a maior similaridade possível
-  // contra o melhor chunk de SP é 0.2134, abaixo do match_threshold=0.35 fixo em
-  // cloudflare/rag-adapter.ts:98; e filter_jurisdiction='BR_FEDERAL' (GD-06,
-  // autuador PRF) não casa com nenhum chunk. Resultado: 0 argumentos RAG,
-  // 0 chunk_id, 0 source_id, 0 official_url — a fundamentação dos documentos vem
-  // só do ARGUMENTS_CATALOG estático, nunca da KB de 66 documentos.
-  it.fails('Fase 4 — ACHADO A-05: toda tese do documento tem provenance na KB (chunk/source/version/URL)', () => {
-    assertFinding('A-05', () => {
-      const withoutProvenance = evidence.filter((e) => e.provenance.length === 0).map((e) => e.id);
-      expect(
-        withoutProvenance.length,
-        `A-05: ${withoutProvenance.length} GD sem qualquer provenance de KB (${withoutProvenance.join(', ')}) — a KB não fundamenta nenhuma tese`,
-      ).toBe(0);
-      // Quando houver provenance, ela tem de ser completa e recuperável.
-      for (const e of evidence) {
-        for (const p of e.provenance) {
-          expect(p.chunkId, `A-05: ${e.id} provenance sem chunk_id`).toBeTruthy();
-          expect(p.sourceId, `A-05: ${e.id} provenance ${p.chunkId} sem source_id`).not.toBe('NOT_FOUND');
-          expect(p.documentVersionId, `A-05: ${e.id} provenance ${p.chunkId} sem document_version_id`).not.toBe('NOT_FOUND');
-          expect(p.officialUrl, `A-05: ${e.id} provenance ${p.chunkId} sem official_url`).not.toBe('NOT_FOUND');
-        }
+  // A-05 mede a saída real do adaptador. Não assume IDs RAG-* nem consulta
+  // a tabela novamente para reconstruir uma proveniência que a Analysis já contém.
+  it('Fase 4 — diagnóstico de recuperação e proveniência KB por GD', () => {
+    for (const e of evidence) {
+      expect(e.ragRetrieval.provider, `${e.id}: provider de recuperação ausente`).not.toBe('UNKNOWN');
+      expect(e.ragRetrieval.count, `${e.id}: contagem de recuperação inválida`).toBeGreaterThanOrEqual(0);
+      expect(e.ragRetrieval.top.length, `${e.id}: top de recuperação excede o count`).toBeLessThanOrEqual(e.ragRetrieval.count);
+      for (const p of e.provenance) {
+        expect(p.argumentId, `${e.id}: proveniência sem argumento associado`).toBeTruthy();
+        expect(p.chunkId, `${e.id}: proveniência sem chunk_id`).toBeTruthy();
+        expect(p.sourceId, `${e.id}: ${p.chunkId} sem source_id`).toBeTruthy();
+        expect(p.documentId, `${e.id}: ${p.chunkId} sem document_id`).toBeTruthy();
+        expect(p.documentVersionId, `${e.id}: ${p.chunkId} sem document_version_id`).toBeTruthy();
+        expect(p.officialUrlValid, `${e.id}: ${p.chunkId} sem URL HTTP(S) válida: ${p.officialUrl}`).toBe(true);
+        expect(p.contentHash, `${e.id}: ${p.chunkId} sem content_hash`).toBeTruthy();
       }
+    }
+  });
+
+  // Critério de cobertura permanece explícito e separado da observabilidade.
+  // A falha esperada identifica casos sem nenhum argumento ligado a fonte válida.
+  it.fails('Fase 4 — ACHADO A-05: cada GD possui ao menos uma tese com proveniência completa', () => {
+    assertFinding('A-05', () => {
+      const uncovered = evidence.filter((e) =>
+        !e.provenance.some((p) =>
+          p.chunkId && p.sourceId && p.documentId && p.documentVersionId && p.officialUrlValid,
+        ),
+      ).map((e) => e.id);
+      expect(
+        uncovered.length,
+        `A-05: ${uncovered.length}/10 GD sem tese ligada a chunk, documento, versão e URL HTTP(S): ${uncovered.join(', ')}`,
+      ).toBe(0);
     });
   });
 
