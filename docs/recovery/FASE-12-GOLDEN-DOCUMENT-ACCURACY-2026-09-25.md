@@ -480,4 +480,14 @@ npm run test:unit -- tests/integration/golden-provenance-diagnostic.test.ts
 
 O diagnóstico imprime linhas `[GOLDEN_PROVENANCE_DIAGNOSTIC]` com os resultados reais. Não exige que a busca encontre fontes; exige apenas que a análise conclua e exponha o contrato de observabilidade. A suíte completa deve ser executada depois da inspeção desses resultados.
 
-**Status:** código de teste preparado; ainda não executado nesta alteração. Nenhuma mudança no RAG de produção, threshold, embeddings, regras jurídicas ou fixtures. Nenhum resultado de teste é declarado.
+**Validação executada em 2026-09-26:**
+
+- Diagnóstico: **2/2 passaram** (`GD-06` e `GD-01`).
+- Suíte canônica: **17/17 executados; 10 passed + 7 expected fail** (os 7 correspondem a achados históricos modelados como `it.fails`).
+- A-01, A-02, A-03, A-05, A-06, A-07 e A-08 passaram na execução final.
+- O warning de chave duplicada `hasRegulatorySign` foi removido.
+- O fato `dateTime` de GD-06 passou a ser reproduzido sem deslocamento de fuso.
+
+**Escopo efetivo da branch:** além da observabilidade de proveniência, a validação revelou e corrigiu quatro problemas técnicos necessários para que a suíte medisse o runtime canônico corretamente: lineage com `undefined`, causalidade do Quality Gate para ausência intencional, preservação de teses/fatos na montagem documental e formatação de datas factuais. Também foi removida uma chave duplicada no adapter. Não foram alterados fixtures, embeddings, thresholds de recuperação ou catálogo de regras jurídicas.
+
+A proveniência observada continua sendo um fato de observabilidade do sistema: `SUPPORTED` não constitui, por si só, prova de pertinência jurídica da fonte ao argumento.
