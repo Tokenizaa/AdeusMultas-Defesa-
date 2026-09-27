@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html  lang="pt-br" dir="ltr" prefix="content: http://purl.org/rss/1.0/modules/content/  dc: http://purl.org/dc/terms/  foaf: http://xmlns.com/foaf/0.1/  og: http://ogp.me/ns#  rdfs: http://www.w3.org/2000/01/rdf-schema#  schema: http://schema.org/  sioc: http://rdfs.org/sioc/ns#  sioct: http://rdfs.org/sioc/types#  skos: http://www.w3.org/2004/02/skos/core#  xsd: http://www.w3.org/2001/XMLSchema# ">
+  <head>
+    <meta charset="utf-8" />
+<meta name="Generator" content="Drupal 8 (https://www.drupal.org)" />
+<meta name="MobileOptimized" content="width" />
+<meta name="HandheldFriendly" content="true" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="shortcut icon" href="/themes/custom/secom/favicon.ico" type="image/vnd.microsoft.icon" />
+<link rel="alternate" hreflang="pt-br" href="https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025" />
+<link rel="canonical" href="https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025" />
+<link rel="shortlink" href="https://www.legislabahia.ba.gov.br/node/147219" />
+<link rel="revision" href="https://www.legislabahia.ba.gov.br/documentos/decreto-no-23792-de-17-de-junho-de-2025" />
+
+    <title>Portal de Legislação do Estado da Bahia | Casa Civil</title>
+    <link rel="stylesheet" media="all" href="/sites/default/files/css/css_vkiLIOlXaI7ne5HpAB_m_zYNFC6g6hcZeg8rZ-s99UI.css" />
+<link rel="stylesheet" media="all" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css" />
+<link rel="stylesheet" media="all" href="https://cdn.jsdelivr.net/npm/@unicorn-fail/drupal-bootstrap-styles@0.0.2/dist/3.4.0/8.x-3.x/drupal-bootstrap.min.css" />
+<link rel="stylesheet" media="all" href="/sites/default/files/css/css_NtUdh06H_tpS-ilah2kPyyBBxRwNdDhW1gJS9OR1kKc.css" />
+<link rel="stylesheet" media="print" href="/sites/default/files/css/css_nPe9VhusmgX36fxHq1fxEDXnhi0G1jMqxM_V7j6i76E.css" />
+
+    
+<!--[if lte IE 8]>
+<script src="/sites/default/files/js/js_VtafjXmRvoUgAzqzYTA3Wrjkx9wcWhjP0G4ZnnqRamA.js"></script>
+<![endif]-->
+
+	<!-- Responsivo -->
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body class="path-node page-node-type-documento has-glyphicons">
+    <a href="#main-content" class="visually-hidden focusable skip-link">
+      Pular para o conteúdo principal
+    </a>
+    
+      <div class="dialog-off-canvas-main-canvas" data-off-canvas-main-canvas>
+    
+
+    	<header class="topo">
+		<div class="container barra-integradora">
+			<div id="inst-bar" class="center-block hidden-xs hidden-sm">
+				  <div class="region region-barra-integradora">
+    <nav role="navigation" aria-labelledby="block-barraintegradora-menu" id="block-barraintegradora">
+            
+  <h2 class="visually-hidden" id="block-barraintegradora-menu">Barra Integradora</h2>
+  
+
+        
+              <ul class="menu nav">
+                            <li class="expanded dropdown">
+        <a href="http://www.ba.gov.br/">Site do Governo</a>
+                  </li>
+                        <li class="expanded dropdown">
+        <a href="http://www.ba.gov.br/modules/conteudo/conteudo.php?conteudo=7">Transparência</a>
+                  </li>
+                        <li class="expanded dropdown">
+        <a href="http://www.ouvidoria.ba.gov.br/">Ouvidoria Geral</a>
+                  </li>
+                        <li class="expanded dropdown">
+        <a href="http://www.ba.gov.br/modules/conteudo/conteudo.php?conteudo=8">Acessibilidade</a>
+                  </li>
+        </ul>
+  
+
+
+  </nav>
+
+  </div>
+
+        <a id="font_size" href="#"> <img src="/themes/custom/secom/image/fontsize.png" alt="Aumentar Fonte" class="font_size img-responsive"/></a>
+			</div>
+		</div>
+	
+		    <div class="container topo-logo" role="heading">
+       <div class="row">
+          <div class="col-xs-7 col-sm-3 text-left">
+              <a href="/" title="Início" rel="home" >
+                <img src="/themes/custom/secom/image/logo_governo.png" alt="Início" class="logo_governo img-responsive"/>
+              </a>
+          </div>
+          <div class="col-xs-5 col-sm-2 text-center ">
+              <a href="/" title="Início" rel="home" >
+                <h1 class="title-home">Casa Civil</h1>
+                                              </a>
+          </div>
+          <div id="banner_topo" class="hidden-xs col-sm-7  text-right">
+                
+          </div>  
+       </div>
+    </div>
+		  
+	     				<div class="container-fluid menu-navegacao hidden-sm hidden-xs"     >
+        <div class="row" >
+            <div >
+                                                                                                    <div class="nav navbar navbar-default container" id="navbar" role="banner"  >
+                                                <div class="navbar-header">
+                            <div class="region region-navigation">
+    <section id="block-mainnavigation" class="block block-superfish block-superfishmain clearfix">
+  
+    
+
+      
+<ul id="superfish-main" class="menu sf-menu sf-main sf-horizontal sf-style-none">
+  
+<li id="main-standardfront-page--2" class="sf-depth-1 sf-no-children"><a href="/" class="sf-depth-1"><i class="fa fa-home" aria-hidden="true"></i> Início</a></li><li id="main-views-viewviewspesquisa-avancadapg-pesquisa--2" class="sf-depth-1 sf-no-children"><a href="/documentos" class="sf-depth-1"><i class="fa fa-home" aria-hidden="true"></i> Pesquisa</a></li><li id="main-menu-link-content9bb62340-819e-4ddc-b148-e9bc1929ca3f--2" class="sf-depth-1 sf-no-children"><a href="https://leismunicipais.com.br/prefeitura/ba/salvador" target="_blank" class="sf-depth-1 sf-external"><i class="fa fa-home" aria-hidden="true"></i> Legislação Municipal</a></li><li id="main-menu-link-content11999759-1b41-4b66-ac5b-5211ae2b2e9f--2" class="sf-depth-1 sf-no-children"><a href="http://www4.planalto.gov.br/legislacao" target="_blank" class="sf-depth-1 sf-external"><i class="fa fa-home" aria-hidden="true"></i> Legislação Federal</a></li><li id="main-menu-link-contenta8643ca4-5109-4868-9520-f805c60f5f99--2" class="sf-depth-1 menuparent"><a href="/" class="sf-depth-1 menuparent"><i class="fa fa-home" aria-hidden="true"></i> Links Úteis</a><ul><li id="main-menu-link-content96923144-0459-4a03-8e5d-2b03c88e6c84--2" class="sf-depth-2 menuparent"><a href="http://www.sefaz.ba.gov.br/" target="_blank" title="Secretaria da Fazenda do Estado da Bahia" class="sf-depth-2 sf-external menuparent">Sefaz</a><ul><li id="main-menu-link-contentf75c66ce-ad49-4222-92f6-89602f063d72--2" class="sf-depth-3 sf-no-children"><a href="https://www.sefaz.ba.gov.br/contribuinte/tributacao/textoslegais.htm" target="_blank" class="sf-depth-3 sf-external">Tributários</a></li><li id="main-menu-link-content9576bf8b-e76b-47fd-a1a8-801246e5311e--2" class="sf-depth-3 sf-no-children"><a href="https://www.sefaz.ba.gov.br/administracao/legislacao.htm" target="_blank" class="sf-depth-3 sf-external">Financeiros</a></li><li id="main-menu-link-contentc35fcc9b-b9b2-4d79-8503-c8d086d8c125--2" class="sf-depth-3 sf-no-children"><a href="https://www.sefaz.ba.gov.br/scripts/default/legislacao.asp" target="_blank" class="sf-depth-3 sf-external">Conselho da Fazenda</a></li><li id="main-menu-link-contentc4c34f0a-775c-469d-aa67-012503fcf2a0--2" class="sf-depth-3 sf-no-children"><a href="https://www.sefaz.ba.gov.br/contribuinte/tributacao/pareceres.htm" target="_blank" class="sf-depth-3 sf-external">Pareceres Tributários</a></li></ul></li><li id="main-menu-link-contenta047474f-bd20-4b10-ab00-a927794436c0--2" class="sf-depth-2 sf-no-children"><a href="http://www.pge.ba.gov.br/modules/conteudo/conteudo.php?conteudo=96" target="_blank" class="sf-depth-2 sf-external">PGE-BA</a></li><li id="main-menu-link-content72ddcd73-6e97-46c5-8ca2-e6c37b6694b6--2" class="sf-depth-2 sf-no-children"><a href="http://www.cjf.jus.br/cjf/orcamento-e-financas/legislacao/" target="_blank" title="Conselho da Justiça Federal" class="sf-depth-2 sf-external">Conselho da Justiça Federal - CJF</a></li><li id="main-menu-link-contente3d8e007-87dd-49cd-9e7f-f3f8efccf615--2" class="sf-depth-2 sf-no-children"><a href="https://www.tce.ba.gov.br/servicos/doe#conteudo" target="_blank" class="sf-depth-2 sf-external">Tribunal de Contas do Estado da Bahia - TCE</a></li><li id="main-menu-link-content4b004527-0936-4518-a97f-b856c1b68e86--2" class="sf-depth-2 sf-no-children"><a href="http://www2.tjba.jus.br/diario/internet/pesquisar.wsp" target="_blank" class="sf-depth-2 sf-external">Tribunal de Justiça da Bahia - TJBA</a></li><li id="main-menu-link-content047ef454-a402-417b-83c6-145487a94077--2" class="sf-depth-2 sf-no-children"><a href="http://egbanet.egba.ba.gov.br/alba" target="_blank" class="sf-depth-2 sf-external">Assembleia Legislativa da Bahia - ALBA</a></li><li id="main-menu-link-contentf4dac7d8-b471-4cca-ac08-bb979fc3bca3--2" class="sf-depth-2 sf-no-children"><a href="https://www.legislabahia.ba.gov.br/sites/default/files/2026-05/Cartilha%20Eleitoral%202026.pdf" class="sf-depth-2 sf-external">Cartilha Eleitoral 2026</a></li></ul></li><li id="main-menu-link-content89700bd3-7707-48e3-a520-70bc2112115c--2" class="sf-depth-1 sf-no-children"><a href="http://www.egba.ba.gov.br/" target="_blank" title="Empresa Gráfica da Bahia" class="sf-depth-1 sf-external"><i class="fa fa-home" aria-hidden="true"></i> EGBA</a></li><li id="main-menu-link-content95f0439f-75da-4fab-8aef-2b805c942bfc--2" class="sf-depth-1 sf-no-children"><a href="https://www.legislabahia.ba.gov.br/sites/default/files/2026-06/feriados2026.pdf" target="_blank" class="sf-depth-1 sf-external"><i class="fa fa-home" aria-hidden="true"></i> Feriados</a></li><li id="main-menu-link-content5803e5b2-49cc-4f71-8486-b437856f28a2--2" class="sf-depth-1 sf-no-children"><a href="/fale-conosco" target="_blank" class="sf-depth-1"><i class="fa fa-home" aria-hidden="true"></i> Fale Conosco</a></li>
+</ul>
+
+  </section>
+
+
+  </div>
+
+                                                                              
+                        </div>
+                                                <div class="block_acesso_info" >
+                          <a href="http://www.acessoainformacao.ba.gov.br">
+                            <img src="/themes/custom/secom/image/acessoinformacao.png">
+                          </a>
+                        </div>
+
+                      </div>
+                                                    </div>
+        </div> 
+    </div>
+         <div class="container topo-print" role="heading">      
+        <div class="col-sm-12">
+          <div class="row">
+            <img src="/themes/custom/secom/image/logo-print.jpg" alt="Casa Civil" class="logo-print img-responsive"/>
+            <p class="doe">"Este texto não substitui o publicado no Diário Oficial do Estado"</p>
+           </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="content-inner" role="main" class="main-container container js-quickedit-main-content">
+                    <div id="breadcrumb" class="row">
+        <div  class="col-sm-12">
+          <div class="region region-breadcrumb">
+        <ol class="breadcrumb">
+          <li >
+                  <a href="/">Início</a>
+              </li>
+          <li >
+                  <a href="/documentos">Pesquisa Avançada</a>
+              </li>
+      </ol>
+
+
+  </div>
+
+        </div>  
+      </div>  
+              <div class="row">
+      
+                  
+                  <section  class="col-sm-12">
+
+                                      <div class="highlighted">  <div class="region region-highlighted">
+    <div data-drupal-messages-fallback class="hidden"></div>
+
+  </div>
+</div>
+                          
+
+        
+
+                
+                
+                          <div id="main-content" class="content">
+            <div class="region region-content">
+        <div class="actions-documento row">
+    <div style="col-sm-12">    
+      <div style="float:right;margin-right:14px; margin-top:12px">
+        <a class="button btn-default btn" href="#" onClick="window.print()">Imprimir</a>
+      </div>
+  </div>
+</div>
+
+  <div data-history-node-id="147219" class="row bs-1col node node--type-documento node--view-mode-full">
+  
+  <div class="col-sm-12 bs-region bs-region--main node-block-content node-block-content-middle">
+    
+  <div class="field field--name-field-categoria-doc field--type-entity-reference field--label-inline">
+    <div class="field--label">Categoria</div>
+              <div class="field--item">Decretos Numerados</div>
+          </div>
+
+  <div class="field field--name-field-numero-doc field--type-string field--label-inline">
+    <div class="field--label">Número do Ato</div>
+              <div class="field--item">23792</div>
+          </div>
+
+  <div class="field field--name-field-data-doc field--type-datetime field--label-inline">
+    <div class="field--label">Data do Ato</div>
+              <div class="field--item"><time datetime="2025-06-17T12:00:00Z">terça-feira, 17 de Junho de 2025</time>
+</div>
+          </div>
+
+  <div class="field field--name-field-data-de-publicacao-no-doe field--type-datetime field--label-inline">
+    <div class="field--label">Data de Publicação no DOE</div>
+              <div class="field--item"><time datetime="2025-06-18T12:00:00Z">quarta-feira, 18 de Junho de 2025</time>
+</div>
+          </div>
+
+  <div class="field field--name-field-ementa field--type-string field--label-inline">
+    <div class="field--label">Ementa</div>
+              <div class="field--item">Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029, no âmbito dos órgãos e entidades do Poder Executivo Estadual.</div>
+          </div>
+
+            <div class="visivel-separador field field--name-body field--type-text-with-summary field--label-hidden field--item"><style type="text/css">
+<!--/*--><![CDATA[/* ><!--*/
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:"Calibri Light";
+	panose-1:2 15 3 2 2 2 4 3 2 4;}
+@font-face
+	{font-family:Calibri;
+	panose-1:2 15 5 2 2 2 4 3 2 4;}
+@font-face
+	{font-family:"Segoe UI";
+	panose-1:2 11 5 2 4 2 4 2 2 3;}
+@font-face
+	{font-family:"Liberation Serif";
+	panose-1:0 0 0 0 0 0 0 0 0 0;}
+@font-face
+	{font-family:"Liberation Sans";
+	panose-1:0 0 0 0 0 0 0 0 0 0;}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman",serif;}
+.field--name-body h1
+	{mso-style-link:"Título 1 Char";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:center;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:normal;}
+.field--name-body h3
+	{mso-style-link:"Título 3 Char";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:normal;}
+.field--name-body h4
+	{mso-style-link:"Título 4 Char";
+	margin-top:2.0pt;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:0cm;
+	margin-bottom:.0001pt;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:11.0pt;
+	font-family:"Calibri Light",sans-serif;
+	color:#2E74B5;
+	font-weight:normal;
+	font-style:italic;}
+.field--name-body h5
+	{mso-style-link:"Título 5 Char";
+	margin-top:12.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:50.4pt;
+	text-align:center;
+	text-indent:-50.4pt;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+.field--name-body h6
+	{mso-style-link:"Título 6 Char";
+	margin-top:12.0pt;
+	margin-right:0cm;
+	margin-bottom:3.0pt;
+	margin-left:57.6pt;
+	text-indent:-57.6pt;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Calibri",sans-serif;
+	color:black;}
+p.MsoHeader, li.MsoHeader, div.MsoHeader
+	{mso-style-link:"Cabeçalho Char";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.MsoFooter, li.MsoFooter, div.MsoFooter
+	{mso-style-link:"Rodapé Char";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:11.0pt;
+	font-family:"Calibri",sans-serif;}
+p.MsoCaption, li.MsoCaption, div.MsoCaption
+	{margin-top:6.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;
+	font-style:italic;}
+p.MsoList, li.MsoList, div.MsoList
+	{margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:7.0pt;
+	margin-left:0cm;
+	line-height:114%;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.MsoBodyText, li.MsoBodyText, div.MsoBodyText
+	{mso-style-link:"Corpo de texto Char";
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:11.0pt;
+	font-family:"Calibri",sans-serif;}
+p.MsoBodyTextIndent, li.MsoBodyTextIndent, div.MsoBodyTextIndent
+	{mso-style-link:"Recuo de corpo de texto Char";
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:141.6pt;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.MsoAcetate, li.MsoAcetate, div.MsoAcetate
+	{mso-style-link:"Texto de balão Char";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:9.0pt;
+	font-family:"Segoe UI",sans-serif;}
+p.MsoRMPane, li.MsoRMPane, div.MsoRMPane
+	{margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.MsoListParagraph, li.MsoListParagraph, div.MsoListParagraph
+	{margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:10.0pt;
+	margin-left:36.0pt;
+	line-height:114%;
+	text-autospace:none;
+	font-size:11.0pt;
+	font-family:"Calibri",sans-serif;}
+span.MsoSubtleEmphasis
+	{color:#404040;
+	font-style:italic;}
+p.DECADA, li.DECADA, div.DECADA
+	{mso-style-name:DECADA;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:18.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.TTULOPRINCIPAL, li.TTULOPRINCIPAL, div.TTULOPRINCIPAL
+	{mso-style-name:"TÍTULO PRINCIPAL";
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.SUBTTULO, li.SUBTTULO, div.SUBTTULO
+	{mso-style-name:SUBTÍTULO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:16.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.MSANO, li.MSANO, div.MSANO
+	{mso-style-name:MÊSANO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:16.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.NDICE, li.NDICE, div.NDICE
+	{mso-style-name:ÍNDICE;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;}
+p.LEI, li.LEI, div.LEI
+	{mso-style-name:LEI;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:70.85pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.LIVRO, li.LIVRO, div.LIVRO
+	{mso-style-name:LIVRO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	font-weight:bold;}
+p.TTULO, li.TTULO, div.TTULO
+	{mso-style-name:TÍTULO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	background:silver;
+	font-weight:bold;}
+p.CAPTULO, li.CAPTULO, div.CAPTULO
+	{mso-style-name:CAPÍTULO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	background:silver;
+	font-weight:bold;}
+p.SEO, li.SEO, div.SEO
+	{mso-style-name:SEÇÃO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	background:silver;
+	font-weight:bold;}
+p.SUBSEO, li.SUBSEO, div.SUBSEO
+	{mso-style-name:SUBSEÇÃO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;
+	background:silver;
+	font-weight:bold;}
+p.ARTIGO, li.ARTIGO, div.ARTIGO
+	{mso-style-name:ARTIGO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.85pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Calibri",sans-serif;}
+span.Ttulo5Char
+	{mso-style-name:"Título 5 Char";
+	mso-style-link:"Título 5";
+	font-family:"Times New Roman",serif;
+	color:black;
+	font-weight:bold;}
+span.Ttulo6Char
+	{mso-style-name:"Título 6 Char";
+	mso-style-link:"Título 6";
+	color:black;
+	font-weight:bold;}
+span.Ttulo1Char
+	{mso-style-name:"Título 1 Char";
+	mso-style-link:"Título 1";
+	font-family:"Times New Roman",serif;}
+span.Ttulo3Char
+	{mso-style-name:"Título 3 Char";
+	mso-style-link:"Título 3";
+	font-family:"Times New Roman",serif;}
+span.Ttulo4Char
+	{mso-style-name:"Título 4 Char";
+	mso-style-link:"Título 4";
+	font-family:"Calibri Light",sans-serif;
+	color:#2E74B5;
+	font-style:italic;}
+p.ACAO, li.ACAO, div.ACAO
+	{mso-style-name:ACAO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.ALINEA, li.ALINEA, div.ALINEA
+	{mso-style-name:ALINEA;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:175.8pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:-19.8pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.Alteracao, li.Alteracao, div.Alteracao
+	{mso-style-name:Alteracao;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:11.0pt;
+	font-family:"Times New Roman",serif;
+	color:gray;
+	font-weight:bold;
+	font-style:italic;}
+p.ANEXO, li.ANEXO, div.ANEXO
+	{mso-style-name:ANEXO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:21.25pt;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.Art, li.Art, div.Art
+	{mso-style-name:"Art\.";
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:2.0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.ARTIGO1, li.ARTIGO1, div.ARTIGO1
+	{mso-style-name:ARTIGO1;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.85pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.art-modificado, li.art-modificado, div.art-modificado
+	{mso-style-name:art-modificado;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:120.5pt;
+	margin-bottom:.0001pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman",serif;}
+p.ArtPar, li.ArtPar, div.ArtPar
+	{mso-style-name:ArtPar;
+	margin-top:12.0pt;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.9pt;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:#4C4C4C;}
+p.ArtPar0, li.ArtPar0, div.ArtPar0
+	{mso-style-name:Art_Par;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.85pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.ASS1, li.ASS1, div.ASS1
+	{mso-style-name:ASS_1;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;
+	font-style:italic;}
+p.ASS1nome, li.ASS1nome, div.ASS1nome
+	{mso-style-name:ASS_1_nome;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;
+	font-style:italic;}
+p.ASS2, li.ASS2, div.ASS2
+	{mso-style-name:ASS_2;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:center;
+	text-autospace:none;
+	font-size:11.0pt;
+	font-family:"Times New Roman",serif;}
+span.TextodebaloChar
+	{mso-style-name:"Texto de balão Char";
+	mso-style-link:"Texto de balão";
+	font-family:"Segoe UI",sans-serif;}
+span.CorpodetextoChar
+	{mso-style-name:"Corpo de texto Char";
+	mso-style-link:"Corpo de texto";}
+span.RecuodecorpodetextoChar
+	{mso-style-name:"Recuo de corpo de texto Char";
+	mso-style-link:"Recuo de corpo de texto";
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.CAPITULO, li.CAPITULO, div.CAPITULO
+	{mso-style-name:CAPITULO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.Caption1, li.Caption1, div.Caption1
+	{mso-style-name:Caption1;
+	margin-top:6.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;
+	font-style:italic;}
+p.Caption11, li.Caption11, div.Caption11
+	{mso-style-name:Caption11;
+	margin-top:6.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;
+	font-style:italic;}
+p.Centralizado, li.Centralizado, div.Centralizado
+	{mso-style-name:Centralizado;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.CITACAO, li.CITACAO, div.CITACAO
+	{mso-style-name:CITACAO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:127.55pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.Contedodatabela, li.Contedodatabela, div.Contedodatabela
+	{mso-style-name:"Conteúdo da tabela";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.Corpodetexto31, li.Corpodetexto31, div.Corpodetexto31
+	{mso-style-name:"Corpo de texto 31";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.Default, li.Default, div.Default
+	{mso-style-name:Default;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.EMENTA, li.EMENTA, div.EMENTA
+	{mso-style-name:EMENTA;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:127.55pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.Enunciado, li.Enunciado, div.Enunciado
+	{mso-style-name:Enunciado;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.85pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.ENUNCIADO1, li.ENUNCIADO1, div.ENUNCIADO1
+	{mso-style-name:ENUNCIADO_1;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:24.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+span.RodapChar
+	{mso-style-name:"Rodapé Char";
+	mso-style-link:Rodapé;
+	font-family:"Calibri",sans-serif;
+	color:black;}
+span.CabealhoChar
+	{mso-style-name:"Cabeçalho Char";
+	mso-style-link:Cabeçalho;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.Heading, li.Heading, div.Heading
+	{mso-style-name:Heading;
+	margin-top:12.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Liberation Sans",serif;}
+p.INCISO, li.INCISO, div.INCISO
+	{mso-style-name:INCISO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:70.85pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.Index, li.Index, div.Index
+	{mso-style-name:Index;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.ndice0, li.ndice0, div.ndice0
+	{mso-style-name:Índice;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.item, li.item, div.item
+	{mso-style-name:item;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:180.0pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.Item0, li.Item0, div.Item0
+	{mso-style-name:_Item;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Arial",sans-serif;}
+p.lei0, li.lei0, div.lei0
+	{mso-style-name:lei;
+	margin-top:5.0pt;
+	margin-right:0cm;
+	margin-bottom:5.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.LEI1, li.LEI1, div.LEI1
+	{mso-style-name:LEI_1;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:70.85pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.locdat, li.locdat, div.locdat
+	{mso-style-name:locdat;
+	margin-top:5.0pt;
+	margin-right:0cm;
+	margin-bottom:5.0pt;
+	margin-left:0cm;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.LOCDAT0, li.LOCDAT0, div.LOCDAT0
+	{mso-style-name:LOC_DAT;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.LOCDAT1, li.LOCDAT1, div.LOCDAT1
+	{mso-style-name:LOC_DAT_1;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.MESANO, li.MESANO, div.MESANO
+	{mso-style-name:MESANO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:23.95pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:16.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.NBCASP, li.NBCASP, div.NBCASP
+	{mso-style-name:"NBCASP\.";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.NormalAnexo, li.NormalAnexo, div.NormalAnexo
+	{mso-style-name:NormalAnexo;
+	margin-top:3.0pt;
+	margin-right:0cm;
+	margin-bottom:3.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.NormalPara, li.NormalPara, div.NormalPara
+	{mso-style-name:"Normal\:Para";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+p.SECAO, li.SECAO, div.SECAO
+	{mso-style-name:SECAO;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	background:silver;
+	text-autospace:none;
+	border:none;
+	padding:0cm;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.Standard, li.Standard, div.Standard
+	{mso-style-name:Standard;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.SUBITEM, li.SUBITEM, div.SUBITEM
+	{mso-style-name:SUBITEM;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:198.4pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:-14.15pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;}
+p.Tabela-Texto, li.Tabela-Texto, div.Tabela-Texto
+	{mso-style-name:Tabela-Texto;
+	margin-top:3.0pt;
+	margin-right:3.1pt;
+	margin-bottom:3.0pt;
+	margin-left:3.1pt;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman",serif;}
+p.TCS, li.TCS, div.TCS
+	{mso-style-name:T_C_S;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:12.0pt;
+	margin-left:0cm;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	font-weight:bold;}
+p.Textbody, li.Textbody, div.Textbody
+	{mso-style-name:"Text body";
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:7.0pt;
+	margin-left:0cm;
+	line-height:114%;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;}
+p.Titulao, li.Titulao, div.Titulao
+	{mso-style-name:_Titulao;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:35.45pt;
+	margin-bottom:.0001pt;
+	text-indent:-35.45pt;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Arial",sans-serif;
+	font-weight:bold;}
+p.Titulinho, li.Titulinho, div.Titulinho
+	{mso-style-name:_Titulinho;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:8.5pt;
+	margin-bottom:.0001pt;
+	text-align:justify;
+	text-justify:inter-ideograph;
+	text-indent:-8.5pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Arial",sans-serif;
+	font-weight:bold;}
+p.Titulo, li.Titulo, div.Titulo
+	{mso-style-name:_Titulo;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:42.55pt;
+	margin-bottom:.0001pt;
+	text-indent:-42.55pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Arial",sans-serif;
+	font-weight:bold;
+	font-style:italic;}
+p.Ttulo1, li.Ttulo1, div.Ttulo1
+	{mso-style-name:Título1;
+	margin-top:12.0pt;
+	margin-right:0cm;
+	margin-bottom:6.0pt;
+	margin-left:0cm;
+	page-break-after:avoid;
+	text-autospace:none;
+	font-size:14.0pt;
+	font-family:"Liberation Sans",serif;}
+p.Ttulodetabela, li.Ttulodetabela, div.Ttulodetabela
+	{mso-style-name:"Título de tabela";
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-align:center;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Liberation Serif",serif;
+	font-weight:bold;}
+p.WW-Padro1, li.WW-Padro1, div.WW-Padro1
+	{mso-style-name:WW-Padrão1;
+	margin:0cm;
+	margin-bottom:.0001pt;
+	text-autospace:none;
+	font-size:12.0pt;
+	font-family:"Times New Roman",serif;
+	color:black;}
+span.apple-converted-space
+	{mso-style-name:apple-converted-space;}
+span.Fontepargpadro1
+	{mso-style-name:"Fonte parág\. padrão1";}
+span.RodapChar0
+	{mso-style-name:"Rodapé  Char";}
+span.spelle
+	{mso-style-name:spelle;}
+span.TextodebalaoChar
+	{mso-style-name:"Texto de balao Char";
+	font-family:"Segoe UI",sans-serif;}
+span.DECLARADOINCONSTITUCIONAL
+	{mso-style-name:"DECLARADO INCONSTITUCIONAL";
+	background:yellow;}
+span.E-DOC
+	{mso-style-name:E-DOC;
+	font-family:"Times New Roman",serif;
+	background:yellow;
+	font-weight:bold;
+	font-style:italic;}
+span.REPUBLICAO
+	{mso-style-name:REPUBLICAÇÃO;
+	background:silver;}
+span.REVOGADO
+	{mso-style-name:REVOGADO;
+	background:red;}
+span.SEMEFEITO
+	{mso-style-name:"SEM EFEITO";
+	background:green;}
+span.IndexableObject
+	{mso-style-name:"Indexable Object";}
+span.Note
+	{mso-style-name:Note;}
+span.Popup
+	{mso-style-name:Popup;}
+span.Unindexed
+	{mso-style-name:Unindexed;}
+span.UnindexedToc
+	{mso-style-name:"Unindexed Toc";}
+.MsoChpDefault
+	{font-size:11.0pt;}
+.MsoPapDefault
+	{margin-bottom:8.0pt;
+	line-height:107%;}
+ /* Page Definitions */
+ @page WordSection1
+	{size:612.0pt 792.0pt;
+	margin:72.0pt 90.0pt 72.0pt 90.0pt;}
+div.WordSection1
+	{page:WordSection1;}
+-->
+
+/*--><!]]>*/
+</style>
+<div class="WordSection1">
+<p class="LEI"><a name="DEC 23.792" id="DEC 23.792"></a>DECRETO Nº 23.792 DE 17 DE JUNHO DE 2025</p>
+
+<p class="EMENTA"><span style="color:black">Institui a Estratégia de Governo Digital e sua Governança para o período de 2025 a 2029, no âmbito dos órgãos e entidades do Poder Executivo Estadual.</span></p>
+
+<p class="Enunciado"><b><span style="color:black">O GOVERNADOR DO ESTADO DA BAHIA</span></b><span style="color:black">, no uso das atribuições que lhe são conferidas pelo inciso V do art. 105 da Constituição Estadual,</span></p>
+
+<p class="ACAO"><span style="color:black">D E C R E T A</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 1º</span></b><span style="color:black"> - Fica instituída, para o período de 2025 a 2029, a Estratégia de Governo Digital - EGD-BA e sua Governança, a serem implementadas no âmbito dos órgãos e entidades do Poder Executivo Estadual.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">§ 1</span></b><span style="color:black">º - A EGD-BA de que trata o <i>caput</i> deste artigo, consiste em um conjunto de princípios, objetivos e diretrizes inerentes à Tecnologia da Informação e Comunicação - TIC voltadas para o Governo Digital.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">§ 2</span></b><span style="color:black">º - As empresas públicas e as sociedades de economia mista poderão adotar as disposições deste Decreto.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 2º</span></b><span style="color:black"> - As soluções de TIC voltadas para o Governo Digital desenvolvidas ou adquiridas pelos órgãos e entidades do Poder Executivo Estadual observarão as disposições deste Decreto.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 3º</span></b><span style="color:black"> - São princípios a serem observados pela EGD-BA:</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">I -</span></b><span style="color:black"> agilidade, simplificação, eficiência e segurança na oferta de serviços públicos através da plataforma <i>ba.gov.br</i>;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">II -</span></b><span style="color:black"> acessibilidade dos serviços digitais e habilitação dos cidadãos, independentemente de sua localização ou condição socioeconômica;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">III -</span></b><span style="color:black"> eficiência nas decisões governamentais e na implementação das políticas públicas fundamentadas em dados;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">IV -</span></b><span style="color:black"> qualificação de servidores em tecnologias digitais e novas metodologias agregando valor na prestação dos serviços públicos.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 4º</span></b><span style="color:black"> - A EGD-BA tem por objetivos estratégicos:</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">I -</span></b><span style="color:black"> modernizar a infraestrutura do governo, adotando tecnologias emergentes para otimizar processos e fortalecer a segurança da informação;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">II -</span></b><span style="color:black"> potencializar a plataforma única de serviços e comunicação <i>ba.gov.br</i>, com linguagem simples, utilizando Inteligência Artificial - IA de forma ética, personalizando e melhorando a acessibilidade e a experiência do cidadão;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">III -</span></b><span style="color:black"> capacitar servidores públicos em tecnologias digitais e novas metodologias por meio de treinamentos para aprimorar serviços;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">IV -</span></b><span style="color:black"> implementar a tomada de decisões baseada em evidências, adotando governança de dados que garanta qualidade, segurança, integridade e transparência das informações;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">V -</span></b><span style="color:black"> promover a inclusão digital, ampliando a infraestrutura de conectividade, criando soluções acessíveis e oferecendo capacitação digital para os cidadãos;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">VI -</span></b><span style="color:black"> estruturar a Governança, definindo políticas e mecanismos necessários para efetividade do Governo Digital;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">VII -</span></b><span style="color:black"> desenvolver uma cultura de inovação para a transformação digital, incrementando a efetividade da gestão e das entregas do governo.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 5º</span></b><span style="color:black"> - A EGD-BA tem por objetivos específicos:</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">I -</span></b><span style="color:black"> gerir os recursos, otimizando a sua alocação e assegurando que estejam em conformidade com os objetivos estratégicos previstos no art. 4º deste Decreto;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">II -</span></b><span style="color:black"> estimular e promover continuamente a inovação e modernização tecnológica, para dar suporte às atividades do governo;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">III -</span></b><span style="color:black"> promover e coordenar a comunicação entre os diferentes órgãos governamentais para integrar e engajar os servidores públicos, visando o reconhecimento e a valorização das manifestações dos cidadãos;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">IV -</span></b><span style="color:black"> desenvolver programas para viabilizar a capacitação e a experiência digital dos cidadãos, além de qualificar a usabilidade da plataforma única de serviços <i>ba.gov.br</i>;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">V -</span></b><span style="color:black"> otimizar, aperfeiçoar e manter a plataforma <i>ba.gov.br</i> para assegurar sua constante atualização tecnológica;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">VI -</span></b><span style="color:black"> promover continuamente a capacitação e qualificação dos servidores públicos para a gestão e o uso de tecnologias digitais;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">VII -</span></b><span style="color:black"> modernizar a infraestrutura educacional e tecnológica, criando um ambiente favorável ao aprendizado e à capacitação;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">VIII -</span></b><span style="color:black"> implementar políticas para estruturar a governança e a gestão de dados voltadas à qualidade, segurança, integridade e transparência de dados;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">IX -</span></b><span style="color:black"> implantar infraestrutura de TI para dados e voltada para ferramentas de <i>Business Intelligence</i> - BI, <i>Big Data</i> e Ciência de Dados;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">X -</span></b><span style="color:black"> analisar dados para a tomada de decisões estratégicas baseadas em evidências e monitorar essas decisões com foco na implementação de políticas públicas;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XI -</span></b><span style="color:black"> fomentar a alfabetização digital da população através de programas abrangentes, inclusivos e acessíveis;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XII -</span></b><span style="color:black"> promover a infraestrutura e expansão da conectividade, incluindo área rurais e remotas;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XIII -</span></b><span style="color:black"> desenvolver um modelo de governança para definir a política de Governo Digital, incluindo sua regulamentação, arranjos institucionais, modelo de investimento, diretrizes para planos e processos de priorização, monitoramento e avaliação;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XIV -</span></b><span style="color:black"> definir e implementar políticas de segurança da informação e cibernética, fortalecendo a governança digital por meio de uma abordagem intersetorial;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XV -</span></b><span style="color:black"> implementar políticas de transparência e responsabilização para garantir integridade do Governo Digital e fortalecer o relacionamento entre governo e cidadão;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XVI -</span></b><span style="color:black"> aprimorar modelo de gestão de TIC para otimizar investimentos, compartilhar soluções e racionalizar aquisições;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XVII -</span></b><span style="color:black"> promover a inovação e modernização de soluções, com o foco na adoção de tecnologias emergentes e inovadoras;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XVIII -</span></b><span style="color:black"> implantar laboratórios de inovação focados em experimentação e conectados com ecossistemas de inovação e empreendedorismo digital;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">XIX -</span></b><span style="color:black"> realizar a reengenharia e melhoria de processos, para simplificar, automatizar e aumentar a eficiência organizacional.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 6º</span></b><span style="color:black"> - A implementação e gestão da EGD-BA serão feitas em alinhamento com as competências do Comitê Gestor do Governo Digital - CGGD e do Comitê Executivo do Governo Digital - CEGD, previstas no Decreto nº 22.269, de 06 de setembro de 2023.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">§ 1</span></b><span style="color:black">º - A implementação e a gestão da EGD-BA serão feitas por Comissão Técnica de Governança - CTG da EGD-BA, instituída pelo CEGD, de acordo com a sua competêcia prevista no § 1º do art. 3º do Decreto nº 22.269, de 06 de setembro de 2023.  </span></p>
+
+<p class="ArtPar0"><b><span style="color:black">§ 2</span></b><span style="color:black">º - Para implementar a EGD-BA, os órgãos e entidades do Poder Executivo Estadual deverão priorizar projetos e iniciativas que contribuam para atingir os objetivos específicos previstos no art. 5º deste Decreto e em consonância com as diretrizes nacionais de Governo Digital.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 7º</span></b><span style="color:black"> - Os órgãos e entidades do Poder Executivo Estadual deverão observar as seguintes diretrizes na implementação da EGD-BA:</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">I -</span></b><span style="color:black"> Transformação Digital da Gestão Pública para simplificar e digitalizar os processos internos, adotando tecnologias que possibilitem a automação e a otimização das atividades administrativas;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">II -</span></b><span style="color:black"> Transformação Digital dos Serviços Públicos para oferecer serviços públicos digitais de forma simples, intuitiva e acessível, garantindo a integração entre os diferentes canais de atendimento;</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">III -</span></b><span style="color:black"> Infraestrutura Digital e Conectividade para modernizar a infraestrutura tecnológica do governo, ampliando a conectividade e garantindo a segurança da informação e a proteção dos dados.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 8º</span></b><span style="color:black"> - Os órgãos e entidades do Poder Executivo Estadual utilizarão, em suas ações e medidas de transformação digital, a marca "<i>ba.gov.br</i>”, de acordo com as diretrizes estabelecidas pela Secretaria de Comunicação - SECOM.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 9º</span></b><span style="color:black"> - A Casa Civil e a Secretaria da Administração - SAEB, conjuntamente, editarão normas complementares necessárias à execução deste Decreto.</span></p>
+
+<p class="ArtPar0"><b><span style="color:black">Art. 10</span></b><span style="color:black"> - Este Decreto entra em vigor na data de sua publicação.</span></p>
+
+<p class="LOCDAT0"><span style="color:black">PALÁCIO DO GOVERNO DO ESTADO DA BAHIA, em 17 de junho de 2025.</span></p>
+
+<p class="ASS1"><span style="color:black">JERÔNIMO RODRIGUES</span></p>
+
+<p class="ASS1"><span style="color:black">Governador</span></p>
+
+<p class="ASS2"><span style="color:black">Afonso Bandeira Florence</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário da Casa Civil</span></p>
+
+<p class="ASS2"><span style="color:black">Edelvino da Silva Góes Filho</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário da Administração</span></p>
+
+<p class="ASS2"><span style="color:black">Cláudio Ramos Peixoto</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário do Planejamento</span></p>
+
+<p class="ASS2"><span style="color:black">Manoel Vitório da Silva Filho</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário da Fazenda</span></p>
+
+<p class="ASS2"><span style="color:black">Marcelo Werner Derschum Filho</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário da Segurança Pública</span></p>
+
+<p class="ASS2"><span style="color:black">Rowenna dos Santos Brito</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária da Educação </span></p>
+
+<p class="ASS2"><span style="color:black">Roberta Silva de Carvalho Santana</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária da Saúde</span></p>
+
+<p class="ASS2"><span style="color:black">Angelo Mario Cerqueira de Almeida</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Desenvolvimento Econômico</span></p>
+
+<p class="ASS2"><span style="color:black">Felipe da Silva Freitas</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Justiça e Direitos Humanos</span></p>
+
+<p class="ASS2"><span style="color:black">Bruno Gomes Monteiro</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Cultura</span></p>
+
+<p class="ASS2"><span style="color:black">Ângela Cristina Santos Guimarães</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária de Promoção da Igualdade Racial e dos Povos e Comunidades Tradicionais </span></p>
+
+<p class="ASS2"><span style="color:black">Adolpho Henrique Almeida Loyola</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Relações Institucionais</span></p>
+
+<p class="ASS2"><span style="color:black">Larissa Gomes Moraes</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária de Infraestrutura Hídrica e Saneamento</span></p>
+
+<p class="ASS2"><span style="color:black">Augusto Sérgio Vasconcelos de Oliveira</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário do Trabalho, Emprego, Renda e Esporte</span></p>
+
+<p class="ASS2"><span style="color:black">Neusa Cadore</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária de Políticas para as Mulheres</span></p>
+
+<p class="ASS2"><span style="color:black">Jusmari Terezinha de Souza Oliveira</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária de Desenvolvimento Urbano</span></p>
+
+<p class="ASS2"><span style="color:black">Sérgio Luís Lacerda Brito</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Infraestrutura </span></p>
+
+<p class="ASS2"><span style="color:black">André Pinho Joazeiro</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Ciência, Tecnologia e Inovação</span></p>
+
+<p class="ASS2"><span style="color:black">Eduardo Mendonça Sodré Martins</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário do Meio Ambiente</span></p>
+
+<p class="ASS2"><span style="color:black">Pablo Rodrigo Barrozo dos Anjos Vale</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário da Agricultura, Pecuária, Irrigação, Pesca e Aquicultura</span></p>
+
+<p class="ASS2"><span style="color:black">Osni Cardoso de Araújo</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Desenvolvimento Rural</span></p>
+
+<p class="ASS2"><span style="color:black">Marcus Vinicius Di Flora</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Comunicação Social</span></p>
+
+<p class="ASS2"><span style="color:black">Luís Maurício Bacellar Batista</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Turismo</span></p>
+
+<p class="ASS2"><span style="color:black">Fabya dos Reis Santos</span></p>
+
+<p class="ASS2"><span style="color:black">Secretária de Assistência e Desenvolvimento Social</span></p>
+
+<p class="ASS2"><span style="color:black">José Carlos Souto de Castro Filho</span></p>
+
+<p class="ASS2"><span style="color:black">Secretário de Administração Penitenciária e Ressocialização</span></p>
+</div>
+</div>
+      
+            <div class="field field--name-field-criado-por-arquivo field--type-string field--label-hidden field--item">1</div>
+      
+  </div>
+</div>
+
+
+
+  </div>
+
+          </div>
+              </section>
+
+
+      
+ 
+                  </div>
+  </div>
+
+    <footer class="footer container-fluid no-print" role="contentinfo">
+      <div class="container">
+        <div class="row">
+            <div class="col-xs-6 col-sm-3 footer-aside">
+                          </div>
+            <div class="hidden-xs col-sm-4 endereco" >
+            <address>
+              <p style="font-weight:bold">Casa Civil | Estado da Bahia</p>
+              <p></p>              
+              <p>3ª Avenida, nº 390, Centro Administrativo da Bahia - Salvador - Bahia</p>
+              <p><span>CEP: </span>41.745-005</p>
+              <p><span style="display:block">Horário de funcionamento: </span>De segunda à sexta-feira das 08:30 às 12:00 e 13:30 às 18:00h</p>
+              <p><span>Email: </span><a href="mailto:#">ciled@casacivil.ba.gov.br</a></p>
+              
+              
+            </address>
+            <p class="info-complementar">
+                Exerça sua cidadania. Fale com a Ouvidoria, ligue <span class="tel">162</span>.
+              </p>
+              <p class="info-complementar">
+                <a rel="license" href="http://creativecommons.org/licenses/by-nd/3.0/br/" target="_blank">
+                <img alt="Licença Creative Commons" style="border-width:0" src="http://i.creativecommons.org/l/by-nd/3.0/br/88x31.png"></a>
+                <br>Todo o conteúdo desse site está publicado sob a licença<br> 
+                <a rel="license" href="http://creativecommons.org/licenses/by-nd/3.0/br/" target="_blank">Creative Commons Atribuição-SemDerivações 3.0 Brasil</a>.
+              </p>
+            </div>
+            <div class="col-xs-12 col-sm-5"> 
+              
+                  <ul id="socialnetwork" class="socialnetwork row">
+                                                                                
+                                        
+                  </ul>
+                            </div>
+        </div>  
+      </div>
+    </footer>
+
+  </div>
+
+    
+    <script type="application/json" data-drupal-selector="drupal-settings-json">{"path":{"baseUrl":"\/","scriptPath":null,"pathPrefix":"","currentPath":"node\/147219","currentPathIsAdmin":false,"isFront":false,"currentLanguage":"pt-br"},"pluralDelimiter":"\u0003","suppressDeprecationErrors":true,"data":{"extlink":{"extTarget":true,"extTargetNoOverride":false,"extNofollow":false,"extNoreferrer":false,"extFollowNoOverride":false,"extClass":"0","extLabel":"(link is external)","extImgClass":false,"extSubdomains":false,"extExclude":"","extInclude":"","extCssExclude":"","extCssExplicit":"","extAlert":false,"extAlertText":"Este link o levar\u00e1 a um web site externo. N\u00e3o somos respons\u00e1veis por seu conte\u00fado.","mailtoClass":"0","mailtoLabel":"(link sends email)","extUseFontAwesome":false,"extIconPlacement":"append","extFaLinkClasses":"fa fa-external-link","extFaMailtoClasses":"fa fa-envelope-o","whitelistedDomains":null}},"bootstrap":{"forms_has_error_value_toggle":1,"modal_animation":1,"modal_backdrop":"true","modal_focus_input":1,"modal_keyboard":1,"modal_select_text":1,"modal_show":1,"modal_size":"","popover_enabled":1,"popover_animation":1,"popover_auto_close":1,"popover_container":"body","popover_content":"","popover_delay":"0","popover_html":0,"popover_placement":"right","popover_selector":"","popover_title":"","popover_trigger":"click","tooltip_enabled":1,"tooltip_animation":1,"tooltip_container":"body","tooltip_delay":"0","tooltip_html":0,"tooltip_placement":"auto left","tooltip_selector":"","tooltip_trigger":"hover"},"superfish":{"superfish-main":{"id":"superfish-main","sf":{"animation":{"opacity":"show","height":"show"},"speed":"fast"},"plugins":{"smallscreen":{"mode":"window_width","expandText":"Expandir","collapseText":"Encolher","title":"Main navigation"},"supposition":true,"supersubs":true}}},"user":{"uid":0,"permissionsHash":"95ecc4b5255b88b2db81e8a1e0b1356e274a6f8f806f4900b7289241ae52af78"}}</script>
+<script src="/sites/default/files/js/js_gZWLAjTm3e4D-GIT7i-Prx4MO7zwunWAEazXYB2bSc0.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js" integrity="sha256-nuL8/2cJ5NDSSwnKD8VqreErSWHtnEP9E7AySL+1ev4=" crossorigin="anonymous"></script>
+<script src="/sites/default/files/js/js_QiM19YzBDBrVvXXNDDlLl-EAC74gykTKKk0fgwvybmE.js"></script>
+
+  </body>
+</html>

@@ -1,0 +1,1350 @@
+{
+  "config": {
+    "argv": [
+      "/home/lg/.nvm/versions/node/v24.18.0/bin/node",
+      "/home/lg/workspace/projects/AdeusMultas-Defesa-/node_modules/.bin/playwright",
+      "test",
+      "--list"
+    ],
+    "configFile": "/home/lg/workspace/projects/AdeusMultas-Defesa-/playwright.config.ts",
+    "rootDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/tests/e2e/golden-path",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/.superpowers/evidence/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "local",
+        "name": "local",
+        "testDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/tests/e2e/golden-path",
+        "testIgnore": [
+          "**/invariants/**",
+          "**/*.test.ts",
+          "**/unit/**",
+          "**/payments/**",
+          "**/knowledge/**",
+          "**/audit/**",
+          "**/core/**",
+          "**/e2e/services/**",
+          "**/e2e-infrastructure.ts",
+          "**/e2e-setup.ts",
+          "**/e2e-fixtures.ts",
+          "**/e2e-onboarding-executor.ts",
+          "**/e2e-validator.ts",
+          "**/e2e-runner.spec.ts",
+          "**/local/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/.superpowers/evidence/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "cloudflare",
+        "name": "cloudflare",
+        "testDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/tests/e2e/golden-path",
+        "testIgnore": [
+          "**/invariants/**",
+          "**/*.test.ts",
+          "**/unit/**",
+          "**/payments/**",
+          "**/knowledge/**",
+          "**/audit/**",
+          "**/core/**",
+          "**/e2e/services/**",
+          "**/e2e-infrastructure.ts",
+          "**/e2e-setup.ts",
+          "**/e2e-fixtures.ts",
+          "**/e2e-onboarding-executor.ts",
+          "**/e2e-validator.ts",
+          "**/e2e-runner.spec.ts",
+          "**/local/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/.superpowers/evidence/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "mobile-chromium",
+        "name": "mobile-chromium",
+        "testDir": "/home/lg/workspace/projects/AdeusMultas-Defesa-/tests/e2e/golden-path",
+        "testIgnore": [
+          "**/invariants/**",
+          "**/*.test.ts",
+          "**/unit/**",
+          "**/payments/**",
+          "**/knowledge/**",
+          "**/audit/**",
+          "**/core/**",
+          "**/e2e/services/**",
+          "**/e2e-infrastructure.ts",
+          "**/e2e-setup.ts",
+          "**/e2e-fixtures.ts",
+          "**/e2e-onboarding-executor.ts",
+          "**/e2e-validator.ts",
+          "**/e2e-runner.spec.ts",
+          "**/local/**"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": ".superpowers/evidence/html-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": ".superpowers/evidence/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://127.0.0.1:3000",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "anonymous-claim-flow.spec.ts",
+      "file": "anonymous-claim-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Golden Path: Anonymous → Claim → Checkout (Mobile)",
+          "file": "anonymous-claim-flow.spec.ts",
+          "line": 27,
+          "column": 6,
+          "specs": [
+            {
+              "title": "anonymous onboarding with UTM → claim → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-e79fc7e0c55db673ed2d",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "anonymous onboarding with UTM → claim → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-13402bd63551f32e150b",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "anonymous onboarding with UTM → claim → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-3d76f07ecfe9d0bbda04",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 36,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Golden Path: Anonymous Claim Desktop",
+          "file": "anonymous-claim-flow.spec.ts",
+          "line": 115,
+          "column": 6,
+          "specs": [
+            {
+              "title": "anonymous onboarding → claim via UI → authenticated flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-d51d9e93f90ce5a9ef7c",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 122,
+              "column": 3
+            },
+            {
+              "title": "anonymous onboarding → claim via UI → authenticated flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-890a5f6464f7e9919a74",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 122,
+              "column": 3
+            },
+            {
+              "title": "anonymous onboarding → claim via UI → authenticated flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ee545a3e6512122b41cc-46acaa69f41ee099c935",
+              "file": "anonymous-claim-flow.spec.ts",
+              "line": 122,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "full-golden-path.spec.ts",
+      "file": "full-golden-path.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Golden Path: Full Flow - Authenticated User",
+          "file": "full-golden-path.spec.ts",
+          "line": 17,
+          "column": 6,
+          "specs": [
+            {
+              "title": "logged user → new case → facts → upload → AI analysis → review → checkout sandbox → document → Supabase reconciliation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-9b906044a110db6402fb",
+              "file": "full-golden-path.spec.ts",
+              "line": 25,
+              "column": 3
+            },
+            {
+              "title": "logged user → new case → facts → upload → AI analysis → review → checkout sandbox → document → Supabase reconciliation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-fd88dc6800df65ec650c",
+              "file": "full-golden-path.spec.ts",
+              "line": 25,
+              "column": 3
+            },
+            {
+              "title": "logged user → new case → facts → upload → AI analysis → review → checkout sandbox → document → Supabase reconciliation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-baf2c4b438c102a29031",
+              "file": "full-golden-path.spec.ts",
+              "line": 25,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Golden Path: Supabase Reconciliation Only",
+          "file": "full-golden-path.spec.ts",
+          "line": 114,
+          "column": 6,
+          "specs": [
+            {
+              "title": "verify case persisted in database after complete flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-991a2041dd8546f6a2b4",
+              "file": "full-golden-path.spec.ts",
+              "line": 115,
+              "column": 3
+            },
+            {
+              "title": "verify case persisted in database after complete flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-bb44d44301d01ec49c84",
+              "file": "full-golden-path.spec.ts",
+              "line": 115,
+              "column": 3
+            },
+            {
+              "title": "verify case persisted in database after complete flow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "52149134f24fc0e8678b-6bca2ebe3c85e425cfd3",
+              "file": "full-golden-path.spec.ts",
+              "line": 115,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "mobile-viewport.spec.ts",
+      "file": "mobile-viewport.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Golden Path: Mobile Viewport (375x667)",
+          "file": "mobile-viewport.spec.ts",
+          "line": 29,
+          "column": 6,
+          "specs": [
+            {
+              "title": "mobile: signup → onboarding → upload → analysis → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-7bb37a86a286f109bfa0",
+              "file": "mobile-viewport.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "mobile: touch targets are functional - buttons and inputs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-217be01a74bdd3b12abb",
+              "file": "mobile-viewport.spec.ts",
+              "line": 102,
+              "column": 3
+            },
+            {
+              "title": "mobile: upload works on mobile viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-9e2479eb2d2fe47aa765",
+              "file": "mobile-viewport.spec.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "mobile: checkout sandbox functional",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-b6199c287daaff9c99ae",
+              "file": "mobile-viewport.spec.ts",
+              "line": 183,
+              "column": 3
+            },
+            {
+              "title": "mobile: signup → onboarding → upload → analysis → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-668db1479ceb535942ae",
+              "file": "mobile-viewport.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "mobile: touch targets are functional - buttons and inputs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-15a7e06062df1841d948",
+              "file": "mobile-viewport.spec.ts",
+              "line": 102,
+              "column": 3
+            },
+            {
+              "title": "mobile: upload works on mobile viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-f9020347ac5f2ebaf047",
+              "file": "mobile-viewport.spec.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "mobile: checkout sandbox functional",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-711e3161c7fca6aaf9c5",
+              "file": "mobile-viewport.spec.ts",
+              "line": 183,
+              "column": 3
+            },
+            {
+              "title": "mobile: signup → onboarding → upload → analysis → login → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-c96da4ed170a6f466a16",
+              "file": "mobile-viewport.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "mobile: touch targets are functional - buttons and inputs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-6d135c1f2a76e2b98884",
+              "file": "mobile-viewport.spec.ts",
+              "line": 102,
+              "column": 3
+            },
+            {
+              "title": "mobile: upload works on mobile viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-6e7a0e5987f9a5f01f81",
+              "file": "mobile-viewport.spec.ts",
+              "line": 130,
+              "column": 3
+            },
+            {
+              "title": "mobile: checkout sandbox functional",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76504ee89003e99600ca-8c797658b4af9767d6c0",
+              "file": "mobile-viewport.spec.ts",
+              "line": 183,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "multi-user-isolation.spec.ts",
+      "file": "multi-user-isolation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Golden Path: Multi-User Isolation",
+          "file": "multi-user-isolation.spec.ts",
+          "line": 20,
+          "column": 6,
+          "specs": [
+            {
+              "title": "User A creates case A (speeding)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-5b329d9acbeeacde0ef7",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 31,
+              "column": 3
+            },
+            {
+              "title": "User B creates case B (red light)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-ef2e58036745e65c2168",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 81,
+              "column": 3
+            },
+            {
+              "title": "User A sees only Case A in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-6835bbc7bde880ff9c00",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 131,
+              "column": 3
+            },
+            {
+              "title": "User B sees only Case B in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-4895024d864f46b5b07a",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "User A CANNOT access Case B URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-13270d9b3de0d0fc557d",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 175,
+              "column": 3
+            },
+            {
+              "title": "User B CANNOT access Case A URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-b439415edb2b803bb32f",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 193,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User A",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-0e69642ced87e46ba66a",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 211,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User B",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-9d2bcff2490f16d9da2e",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 235,
+              "column": 3
+            },
+            {
+              "title": "User A creates case A (speeding)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-0cc9b8bb19626a681e71",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 31,
+              "column": 3
+            },
+            {
+              "title": "User B creates case B (red light)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-8c61a721a56bbe8f15cf",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 81,
+              "column": 3
+            },
+            {
+              "title": "User A sees only Case A in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-6bdcd446ce645bc99725",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 131,
+              "column": 3
+            },
+            {
+              "title": "User B sees only Case B in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-33dc68082449d18be899",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "User A CANNOT access Case B URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-1489160108cdc9447697",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 175,
+              "column": 3
+            },
+            {
+              "title": "User B CANNOT access Case A URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-b442b41731b71f597305",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 193,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User A",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-4b73f9fa5eee3edb914c",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 211,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User B",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-bc20e0dc8a8d67d4388e",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 235,
+              "column": 3
+            },
+            {
+              "title": "User A creates case A (speeding)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-99c379b77b704fe54464",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 31,
+              "column": 3
+            },
+            {
+              "title": "User B creates case B (red light)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-7465a2abce39f86654c2",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 81,
+              "column": 3
+            },
+            {
+              "title": "User A sees only Case A in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-cbf83a3fea6e2829beec",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 131,
+              "column": 3
+            },
+            {
+              "title": "User B sees only Case B in dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-2d828a62e0b2fcc9257d",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "User A CANNOT access Case B URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-7f6bd4d6bf5b2d5e009d",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 175,
+              "column": 3
+            },
+            {
+              "title": "User B CANNOT access Case A URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-de60e0c84b53674dab6f",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 193,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User A",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-ca40c68c4c6a2d8cddb8",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 211,
+              "column": 3
+            },
+            {
+              "title": "Logout/Login preserves isolation for User B",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "2a684b56642c73f0dd8c-8e7dd1b87681a0a90a64",
+              "file": "multi-user-isolation.spec.ts",
+              "line": 235,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "signup-login-flow.spec.ts",
+      "file": "signup-login-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Golden Path: Signup → Login → Complete Flow",
+          "file": "signup-login-flow.spec.ts",
+          "line": 20,
+          "column": 6,
+          "specs": [
+            {
+              "title": "complete signup → onboarding → upload → analysis → signup → login → claim → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-0902bfcd9a76af307a55",
+              "file": "signup-login-flow.spec.ts",
+              "line": 29,
+              "column": 3
+            },
+            {
+              "title": "complete signup → onboarding → upload → analysis → signup → login → claim → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-1bee404ab9cb4e4ae8f6",
+              "file": "signup-login-flow.spec.ts",
+              "line": 29,
+              "column": 3
+            },
+            {
+              "title": "complete signup → onboarding → upload → analysis → signup → login → claim → checkout → document",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-b163a1d20d589cdb1934",
+              "file": "signup-login-flow.spec.ts",
+              "line": 29,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Golden Path: Email Confirmation Mechanism Discovery",
+          "file": "signup-login-flow.spec.ts",
+          "line": 93,
+          "column": 6,
+          "specs": [
+            {
+              "title": "discover email confirmation flow without bypassing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-bd1dd8fdf48bb41f323a",
+              "file": "signup-login-flow.spec.ts",
+              "line": 94,
+              "column": 3
+            },
+            {
+              "title": "discover email confirmation flow without bypassing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "cloudflare",
+                  "projectName": "cloudflare",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-8776afe3f17f090c48f8",
+              "file": "signup-login-flow.spec.ts",
+              "line": 94,
+              "column": 3
+            },
+            {
+              "title": "discover email confirmation flow without bypassing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "1bb7a0294d493d281dee-577e9024ac9b5fed7e39",
+              "file": "signup-login-flow.spec.ts",
+              "line": 94,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-27T03:43:28.543Z",
+    "duration": 554.5610000000001,
+    "expected": 0,
+    "skipped": 54,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

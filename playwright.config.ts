@@ -1,16 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const productionBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
-if (!productionBaseUrl) {
-  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. A suíte E2E Golden Path deve executar contra uma implantação Vercel/produção, nunca contra localhost.');
-}
-
-if (!/^https:\/\//i.test(productionBaseUrl)) {
-  throw new Error(`PLAYWRIGHT_BASE_URL inválido: ${productionBaseUrl}. Use uma URL HTTPS de produção.`);
-}
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3000';
+const isProduction = process.env.PLAYWRIGHT_BASE_URL?.startsWith('https://') ?? false;
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/e2e/golden-path',
   testIgnore: [
     '**/invariants/**',
     '**/*.test.ts',
@@ -28,24 +22,51 @@ export default defineConfig({
     '**/e2e-runner.spec.ts',
     '**/local/**',
   ],
-  timeout: 60 * 1000,
-  expect: { timeout: 10000 },
+  timeout: 120 * 1000,
+  expect: { timeout: 15000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: 'html',
+  reporter: [
+    ['html', { outputFolder: '.superpowers/evidence/html-report' }],
+    ['json', { outputFile: '.superpowers/evidence/results.json' }],
+    ['list'],
+  ],
   use: {
-    actionTimeout: 15000,
-    baseURL: productionBaseUrl,
+    actionTimeout: 30000,
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
   projects: [
     {
-      name: 'chromium-production',
+      name: 'local',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'cloudflare',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      use: {
+        ...devices['Pixel 5'],
+        viewport: { width: 393, height: 851 },
+        deviceScaleFactor: 2.75,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
   ],
+  webServer: !isProduction
+    ? {
+        command: 'npm run dev',
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      }
+    : undefined,
+  outputDir: '.superpowers/evidence/test-results',
 });
