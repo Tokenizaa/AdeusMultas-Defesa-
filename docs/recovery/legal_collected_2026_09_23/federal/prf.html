@@ -1,0 +1,874 @@
+
+
+<!doctype html>
+
+<html lang="en" class="newLayout accountPage">
+<!-- The AppSheet website and AppSheet apps make use of open source software subject to the licenses and copyright notices at https://www.appsheet.com/oss/notices -->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-itunes-app" content="app-id=732548900"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+    if (self.trustedTypes && self.trustedTypes.createPolicy && !self.trustedTypes.defaultPolicy) {
+      const createScriptURL = (input) => {
+        const stripeURL = /^https:\/\/([a-z0-9-]+\.)?js\.stripe\.com$/;
+        const url = new URL(input, document.baseURI);
+        if (stripeURL.test(url.origin)) {
+          return input;
+        }
+        throw new Error('Script src failed trusted types validation: ' + input);
+      };
+      const escapeScriptPolicy = trustedTypes.createPolicy("default", {
+        createHTML: (string) => {
+          if (string === "&#8203;" || string === "" || string === "&") {
+            return string;
+          }
+          return null;
+        },
+        createScriptURL,
+      });
+    }
+    </script>
+
+    <title>Login - AppSheet</title>
+
+    <meta name="description" content="Learn how to make mobile apps for iPhone, Android, and web.">
+
+
+  <meta name="author" content="AppSheet"/>
+  <meta name="google-site-verification" content="97jAB4aUdRiLxKkCyBUhJnpDEWTQAJ6tOzUKFwE1p8w"/>
+  <meta name="google-site-verification" content="qPkt9TxKqz8fFiALwco4ddvCCsGNrgRwTuE1aCBxG1k"/>
+
+  <meta property="og:title" content="AppSheet : mobile apps from spreadsheets : Login"/>
+  <meta property="og:image" content="/Content/img/Favicon-Material-Rebrand.png"/>
+  <meta property="og:site_name" content="AppSheet"/>
+
+    <meta name="robots" content="noindex, follow">
+
+
+  <link rel="shortcut icon" href="/Content/img/Favicon-Material-Rebrand.png" sizes="16x16"/>
+  <link rel="shortcut icon" href="/Content/img/Favicon-Material-Rebrand.png" sizes="32X32"/>
+
+
+    <!-- Reskinned stylesheet -->
+<link  href="https://www.appsheet.com/assets/f4a965eaae0dde00d0544bd388fc794e4b1f8d6186dc7354d1d9751d350ea85e.css" rel="stylesheet" type="text/css" media="screen, print" />    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700,700i" rel="stylesheet">
+
+    <!-- Navbar -->
+    <script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Content/scripts/web/navbar.js"></script>
+
+  
+  <link rel="stylesheet" href="/Content/css/jquery-modal-0.9.1.min.css"/>
+  <style type="text/css">
+        .jquery-modal .modal {
+            position: relative !important;
+            overflow: auto;
+            top:60px !important;
+        }
+        .modal a.close-modal {
+            top:2px !important;
+            right: 2px !important;
+        }
+    </style>
+
+
+  
+
+
+<!------------------------ TRACKING ------------------------>
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+    /**
+    * This is used by this page and MarketingRedirect.cshtml - moved above ShouldLogAnalytics
+    * since this returns false for test accounts and we have an integration test
+    */
+  function getQueryStrings() {
+    var assoc = {};
+    var decode = function (s) { return decodeURIComponent(s.replace(/\+/g, " ")); };
+    var queryString = location.search.substring(1);
+    var keyValues = queryString.split('&');
+
+    for (var i in keyValues) {
+      var key = keyValues[i].split('=');
+      if (key.length > 1) {
+        assoc[decode(key[0])] = decode(key[1]);
+      }
+    }
+    return assoc;
+  }
+</script>
+    <!-- Google tag (gtag.js) -->
+    <script nonce="9DI4MtqqypOHEOI7/OcqfQ==">
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+
+      function glueCookieNotificationBarLoaded() {
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});
+          var firstScript=d.getElementsByTagName(s)[0], dl=l!='dataLayer'?'&l='+l:'';
+          var script = d.createElement(s);
+          script.async = true;
+          var url = 'https://www.googletagmanager.com/gtm.js?id='+i+dl;
+          if (self.trustedTypes && self.trustedTypes.createPolicy) {
+            var policy = self.trustedTypes.createPolicy('gtm-load-fix', {
+              createScriptURL: function(_ignored) {
+                return url;
+              }
+            });
+            script.src = policy.createScriptURL('_ignored');
+          } else {
+            script.src = url;
+          }
+          firstScript.parentNode.insertBefore(script, firstScript);
+        })(window,document,'script','dataLayer','GTM-MXWLX3PF');
+      }
+    </script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/2026088309e61c81e0a0f73a7cd317c8a319f0fbf0a1173d1d841407c633192d.js" ></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/dbe9d523c72cd83096b72d7507a4689acf1977ee1e3e8f7db4cd6caf99e6ffb8.js" ></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/120bd820a4d0569140d44c5f4e884d5747ced420e0b1661dfe5ca934af9327a2.js" ></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/20e1b20876f340fa6721c1fa4a1972d311574d7c69696891c84000fbd80ce898.js" ></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/9809ec95483309ba279873167c584f89a7e536004e5b5749dd2ee0696bdfd00e.js" ></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="https://www.appsheet.com/assets/c1bead78e6d5bb30783c18577d6232162e331f29f8e08ad29e6abd326caf65e2.js" ></script>    <script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+            /**
+             * Checks whether all of the UTM fields are empty in local storage.
+             */
+            function hasNoSetUtmFields() {
+                return (
+                  window.localStorage.getItem('JeeneeNewUserCampaign') == null &&
+                  window.localStorage.getItem('JeeneeNewUserSource') == null &&
+                  window.localStorage.getItem('JeeneeNewUserMedium') == null &&
+                  window.localStorage.getItem('JeeneeNewUserContent') == null &&
+                  window.localStorage.getItem('JeeneeNewUserTerm') == null
+                );
+            }
+
+            /**
+             * Checks for UTM fields in URL params.
+             */
+            function hasUtmFieldsUrlparams(queryParams) {
+                return (
+                  queryParams.hasOwnProperty('utm_campaign') ||
+                  queryParams.hasOwnProperty('utm_source') ||
+                  queryParams.hasOwnProperty('utm_medium') ||
+                  queryParams.hasOwnProperty('utm_content') ||
+                  queryParams.hasOwnProperty('utm_term')
+                );
+            }
+
+            /**
+             * Sets UTM fields to direct/default values in local storage
+             * when none are passed in via the URL upon user's first visit.
+             * utm_content and utm_term are left undefined for direct and organic traffic.
+             */
+            function setDefaultUtmPropertiesOnUserLocalStorage() {
+                window.localStorage.setItem('JeeneeNewUserCampaign', 'direct');
+                window.localStorage.setItem('JeeneeNewUserSource', 'direct');
+                window.localStorage.setItem('JeeneeNewUserMedium', 'none');
+            }
+
+            /**
+             * Sets UTM values in local storage. Only process UTM parameters within the URL when
+             * all of UTM fields in local storage are undefined. This ensures first touch attribution.
+             * utm_campaign, utm_source, and utm_medium are required fields for every campaign, CTA, etc.
+             * Seeing any of these fields as undefined is an indication that there are invalid UTM parameters in the URL.
+             * utm_content and utm_term are optional.
+             */
+            function setUTMPropertiesOnUserLocalStorage() {
+                if (hasNoSetUtmFields()) {
+                    var queryParams = getQueryStrings();
+                    if (hasUtmFieldsUrlparams(queryParams)) {
+                        if (queryParams['utm_campaign'] != null) {
+                            window.localStorage.setItem('JeeneeNewUserCampaign', queryParams['utm_campaign']);
+                        }
+                        if (queryParams['utm_source'] != null) {
+                            window.localStorage.setItem('JeeneeNewUserSource', queryParams['utm_source']);
+                        }
+                        if (queryParams['utm_medium'] != null) {
+                            window.localStorage.setItem('JeeneeNewUserMedium', queryParams['utm_medium']);
+                        }
+                        if (queryParams['utm_content'] != null) {
+                            window.localStorage.setItem('JeeneeNewUserContent', queryParams['utm_content']);
+                        }
+                        if (queryParams['utm_term'] != null) {
+                            window.localStorage.setItem('JeeneeNewUserTerm', queryParams['utm_term']);
+                        }
+                    }
+                    else {
+                        setDefaultUtmPropertiesOnUserLocalStorage();
+                    }
+                }
+            }
+
+            function TrackSimpleConcordEvent(eventName) {
+                if (window.Concord && typeof window.Concord.TrackSimpleEvent === 'function') {
+                    window.Concord.TrackSimpleEvent(eventName);
+                }
+            }
+
+            setUTMPropertiesOnUserLocalStorage();
+
+            /* All DefunctEventCalled events are deprecated, do not use */
+            window.Track = function (event, properties, callback) {
+                TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+            window.TrackSuperProp = function (properties) {
+                TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+            window.TrackSuperPropOnce = function (properties) {
+                TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+            window.TrackPeopleProp = function (properties) {
+               TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+            window.TrackTabClick = function (pageName, tabName, properties) {
+               TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+            window.TrackActionClick = function (pageName, buttonName, properties) {
+                // Need to create an event in EventName for each combo here otherwise it's not very useful
+                // to just know that a user clicked on a button but not what it was
+                TrackSimpleConcordEvent('Button Click ' + pageName + ' ' + buttonName);
+            }
+
+            // Use this function to track user link clicks. You need a special function for this, since
+            // the browser reloads a new page when the user clicks a link.
+            window.TrackLinks = function (query, eventName, properties) {
+                TrackSimpleConcordEvent('Defunct Event Called');
+            }
+
+
+    </script>
+<!------------------------ END TRACKING ------------------------>
+
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Google+Sans+Text:wght@400&family=Google+Sans:wght@500&display=swap" as="style">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Text:wght@400&family=Google+Sans:wght@500&display=swap">
+  <link rel="stylesheet" href="/Content/css/cookienotificationbar.min.css">
+</head>
+
+<body class="gsuite-root">
+<div class="bodyWrapper">
+  <!-- Hidden logo to show up on links to page -->
+  <img src="/Content/img/Favicon-Material-Rebrand.png" alt="" class="hidden" style="display: none;"/>
+
+  <script nonce="9DI4MtqqypOHEOI7/OcqfQ==">
+            window.VerifiedAjaxPostToken = 'dummy:dummy';
+            var verifiedAjaxPost = function (options, errorOptions) {
+                if (!options.headers) {
+                    options.headers = {}
+                }
+                options.method = 'POST'
+
+                errorOptions = errorOptions || {};
+                return $.ajax(options).fail((jqXHR, textStatus, errorThrown) => {
+                    if (
+                        !errorOptions.disableErrorReporting &&
+                        window.ErrorHandling &&
+                        typeof window.ErrorHandling.ReportHttpError === 'function'
+                    ) {
+                        window.ErrorHandling.ReportHttpError('post', options.url, jqXHR.status, {
+                            error: errorOptions.error,
+                            errorThrown,
+                            textStatus,
+                            responseText: jqXHR.responseText,
+                        });
+                    }
+                });
+            }
+
+            window.verifiedAjaxPost = verifiedAjaxPost
+            var reloadPage = function (nonce) {
+                // if there is already a nonce=, remove it
+                var currentSearch = window.location.search
+                var currentSearchSplit = currentSearch.split("&nonce=")
+                if (currentSearchSplit.length > 1) {
+                    currentSearchSplit[1] = ""
+                    currentSearch = currentSearchSplit.join("")
+                }
+                window.location.search = currentSearch + "&nonce=" + (nonce ? nonce : Math.random())
+            }
+            // GLOBALS
+            window.DEBUG_MODE = false
+            window.ALLOW_DEBUG_LOGGING = false
+
+            window.getUserId = function () {
+              return '-1'
+            }
+            window.getUserRole = function() {
+              return 'Member';
+            }
+            window.getUserCorporatePlan = function() {
+              return 0;
+            }
+            window.getIsCoreAdmin = function () {
+              return false;
+            }
+
+            window.ServiceAccountFeatureUsage = {"GcsObjectStore":{"InAccount":false,"InTeam":false,"KeyExport":true,"FeatureName":"Google Cloud Storage object store","DocsLink":"https://support.google.com/appsheet/answer/10106382"},"BigQuery":{"InAccount":false,"InTeam":false,"KeyExport":true,"FeatureName":"BigQuery data source","DocsLink":"https://support.google.com/appsheet/answer/11905680#configure"},"IntegrationConnectors":{"InAccount":false,"InTeam":false,"KeyExport":false,"FeatureName":"Integration Connectors","DocsLink":"https://support.google.com/appsheet/answer/16178778#set-up-integration-connectors"},"AuditLogExport":{"InAccount":false,"InTeam":false,"KeyExport":false,"FeatureName":"Audit log export to BigQuery","DocsLink":"https://support.google.com/appsheet/answer/12469223#update-dataset-permissions"},"WhitelabelFirebase":{"Apps":[],"FeatureName":"Branded app push notifications","DocsLink":"https://support.google.com/appsheet/answer/10104711"},"ChatApps":{"Apps":[],"FeatureName":"Chat apps","DocsLink":"https://support.google.com/appsheet/answer/12849362#set-iam-policy-for-async-messages"}};
+
+          window.hasRolloutByUserId = (function () {
+          const rollouts = new Set(
+            ["AIVerbsCategorize","AIVerbsExtract","AIVerbsExtractTable","AIVerbsFastFollow","AIVerbsGA","Cascadia","DynamicValidityEnums","EnableQuickSyncForASDBApps","FirebaseHttpV1MigrationBrandedApps","FixCalendarViewEventTruncation","FixChildFormContext","HtmlReactParserPatch","ImportMigrationDatabaseButton","InContextActionsAndColumns","InputsWithIMEWorkaround","IntegrationConnectorModalFlow","LicenseV2ShowWarning","NewFakeIntercom","NewTemplatesPage","NormalizeInlineViewStates","RemoveDefaultSMSChannel","SmallActionsImprovements","TableCacheKey","TaskTesting","UseParentFilters","ValidateEnumValueOnRestAdd"]
+          );
+
+          return function (rolloutName) { return rollouts.has(rolloutName); }
+          })();
+        </script>
+
+<!-- Messages when creating or cloning apps -->
+<div id="cloningClickEater">
+    <div id="waitingClone">
+        <div class="loader">Loading...</div>
+        <p>We're setting up your new app...</p>
+    </div>
+    <div id="errorClick">
+        <div id="errorModal" class="modal fade modal-errors-new">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close AlwaysEditable" data-dismiss="modal">
+                          <i class="material">close</i>
+                        </button>
+                        <h5 class="modal-title-new">Error Creating App</h5>
+                    </div>
+                    <div id="modalErrorText" class="modal-body-new"></div>
+                    <div class="modal-more-errors-holder">
+                      <div>
+                        <div id="moreErrorsAvailableText"></div>
+                        <button type="button" id="seeMoreArrow">
+                          <i class='fa fa-chevron-down'></i>
+                        </button>
+                        <button type="button" id="seeLessArrow">
+                          <i class='fa fa-chevron-up'></i>
+                        </button>
+                      </div>
+                      <div id="moreErrorsText" class="modal-more-errors"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="ackErrorButton" class="btn btn-default AlwaysEditable" data-dismiss="modal">OK</button>
+                        <button id="templatesButton" class="btn btn-default AlwaysEditable" data-dismiss="modal">Start with a template</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+  
+
+    <header class="topNav">
+    </header>
+
+  <main>
+
+    
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+    (function() {
+        if (self.ReportingObserver) {
+            const observer = new ReportingObserver((reports) => {
+                reports.forEach((report) => {
+                    if (report.body.blockedURL === 'trusted-types-sink') {
+                        const ttMsg = "TT Error: " + report.body.sample;
+                        const data = {
+                            url: report.body.documentURL,
+                            msg: ttMsg,
+                            errorContext: report.body.sourceFile,
+                            line: report.body.lineNumber?.toString() || '',
+                        };
+
+                        const headers = {
+                            type: "application/json",
+                        };
+
+                        const blob = new Blob([JSON.stringify(data)], headers);
+                        navigator.sendBeacon('/telemetry/javascripterror', blob);
+                    }
+                });
+            },
+            {
+                types: ["csp-violation"],
+            });
+
+            // Start observing errors
+            observer.observe();
+        }
+    })();
+</script>
+
+
+
+
+
+<div class="login-page">
+  <section class="box" id="box_login">
+
+    <div class="sign-in-title">
+        <img class="AppHeader__image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAr4SURBVHgB7d0PcBTVHQfw39t/dyS5kJAA&#x2B;UcS8ofEClKJI4gVaVEQ0Cp0tNJqR9rav1JRi1ad0Vr6Z1rxz/ivwhRraxVtLBa0ULVqVFBHjTrUSS1cgvxNIISY5C53&#x2B;&#x2B;e917cXAuFfLthksu/295nJ7O27vMvl3nd33&#x2B;7evgVACCGEEEIIIYQQQgghhBBCCCGUggh4Dyk5bU6eFY0WBIzcEEhEURwnEm/ZW3P6L/Zs3DjPBAl4KgClFQvOJ2BdS5k1j3OWDRLiHJiqaFuAKM9a3ePua25e1Q0e5pkAFJfNupVz5XYAlg4pgoDyoa5kXNTY&#x2B;Nx&#x2B;8ChPBKC0bN71lJv3QwoioH6iK6NmNzY&#x2B;vQs8SIVhNmHCVwpNyv4mkhiAlMRzKYlFO9ubXgMPGvY1QHn1ZUsss&#x2B;uBvmWEkJhCtAhIiIu3z5idA0d9tsQMqPrIcHij5zqGGgwz6pgLjy4h8YyskjMaPljdBHIiZVULV9pWx3eOFPEAaFnTxIPXwWOGOwBix8kqI32XFQLxbkYPiIcMpMXaji3hJF4CHqTAMCoqOiegEAiCD9jx6EjwoGENAKXWgPog1ntjv83rR2/g7&#x2B;adDpIiQDh40LD3AQZCJXAH56SEEeouRecCGjTDugYYKM75WHcq9g4qwZuHr6UlRQAoZw&#x2B;JZv/UtNhSSOxpocEiRQACZx9Y9mxjblXa9ANPARpUUgTAfGf0zxaUtG0238m9EtCgkiIAmkZuV1V&#x2B;lqqQ7wMaVFIEQPT6MtypqkAWoEElRQDQ0JFjNxDQUJHkOABI8fUqGeEawOewD&#x2B;BzGACfwwD4HAbA5zAAPocB8DkMgM9hAHxOqgDgAaHBJ8vZwJg7pYy0ABpUcnwhxKLXROO8VtP5rYAGlRTfCk4/t22dmKwDNOiwE&#x2B;hzGACfwwD4HAbA5zAAPocB8DkMgM9JcRygqurKAtvuLOjvdxRFo&#x2B;Hw&#x2B;g/7lpWVzZsEScYeMgE69zRt2HpMMSkvnz&#x2B;Fc570QlRCCI9E7E/27XspChKSIgAmjS6j3Fza7y9RE8aVX7h8V&#x2B;PLd7iz&#x2B;fk1aQ43/yXOH4zpr5pKyGclFRfP2hF&#x2B;4YPessLCmYUWjW0WrZt84CoOphaiFbAPpAxASm0CCOM3l1TM/VVR0eUjBlpHLOVZjMY3FFfOuQA&#x2B;rxhIS4o1gO10PcMZT1dV7dreMsboJsqcNeIhURUlqCj6bzjwAKfWbUQ7&#x2B;F52ZmxDR1fgFqIFFxMgMw5V40RVf2uZ3bvdGUNP&#x2B;zLn9GuieCy36dOiKE/8OBHViaYxer2hZd7IuDPhUF2HUraccTsx/o9GtEvEa80ByUmxBtjzad07nNG1fctEo3/SsmvTI&#x2B;Ln4aAWfELkwO59jgHPamhosPbseutxwvn2I7U45OdNedat4/4YgcxNh58i3B3aLTFuYsfOTe3NO99eSRRl75G6xBqhp63trasbaq0IXR0h2ptO0LBAUlKsAbxoe/iV1WKyGiQnbQAYUfJLKy6b6T52uJMNED806innKgmcZJBJAu0du6aIeolRyBmz&#x2B;gzdpiQZ1JmrVIHpom6uJj411Qjt&#x2B;O&#x2B;WJ7aD5KQNgFi1z6e0a/6x5bqevq54&#x2B;sIXdm7feMJqsUjLqt4ZSg8Xdyt6cBlAv9cgBqgTXymClqincb5ClC0DyaXUXoCuj/i7BhnX1j2&#x2B;OH4q9TQ9eMuOrc8/cip13I4GpAB51wBEeV9Tgk/2znOFOMUFUx6tq/u50081rhuZDzg0Ljr/1tKe1yFdlm2/CcnZihq8WwWl1Z0JBLM&#x2B;gBQgbyeQ04&#x2B;aws8fNcT89q3rk1WC0aOrnug62PjviNlZw5lznjgOEFIUfldR0Q2Ldu&#x2B;&#x2B;r589emJrHNY0Nj7/MaQQX54LaGioFbtt2g3uwNSJAkYvVdO2XQQ&#x2B;JEUAKquvWKQH0288ulQ5t2riol8uWcJPeLi2pqZGL62cez9R9BlHSgm07m&#x2B;4veILX7&#x2B;c8a5OsRk5vP/ObfPXpZXz/1hd/c1J2WUXjCypmPcHxtnEI3W5ToEtL62&#x2B;eCakECkCYDuxszl1LuxbJo76neY48UtNs/6EN73Yuxd05liLxMZ&#x2B;fJ9iYtvRBY4VPZ3YNE88l3nk9Vi16OVfE4doTprphJgTv0psInL71NUpsy6z492lkEKk6ANoWqBD7O0fd98dQtTO/uopqtF6onJVNbq5olKiGse9pgqaZXFxlEENtooOonHc3wRFypM&#x2B;JyNFAGZMX3pPTBv90LHlgTTDWXX/&#x2B;BMewGlufj&#x2B;26HtbZ57ouYC1NxIKxfgBs/y40cerCiYcrBPZyd9bfybA8XetC0FXx6rwPyBVSBGAxx77UpeYdJ1aLcLXrIIDSX7pZAd&#x2B;3JtVJKubEvAbQT6HAfA5DIDPYQB8DgPgcxgAn8MA&#x2B;BwGwOcwAD6HAfA5DIDPYQBOAa8ffR2vH7POfiv3/D7F7mco7Ter8LqAARINfzfn8FP3sWooZWIyqfutnEJDV2vFqaPimNl9ZmhGpBUkg2uAAaDvj1nR2/judQemzVd0vztqXNBQNysEzlFUKFT14NUgIQxAEqLxHyYANyVmCHe6Tb6sKw4vBhX1RVFy6MISvm8EYX8FCeEmoB/Rt8f8QDT&#x2B;j9zHHLjdHYWbVI2vzQ2p74qScT2/xcOEWrPJtI7dICEMQD80wrN7blbOeSTClgY5vKqnKa/1Nr54ZhtQaw6Z2iHtJWIYgH4YGfAgi0O7wmEnVdnHepq&#x2B;XqwKKnue5WEAa67Mje/CAPSDTGx1LzJ91O3tZ6UZb4sVQc9qn/MmYjgLyOSORpAcBiAJLhqfG&#x2B;rrhxtfdPgIUy4gk9ulvzLYhXsBSViKslJMyg/NftzSYU8lU/elROO7MABJEML&#x2B;SYC0OQ6vswm9omDWZzsghWAAkjCmtj3U1uFM1llgXqCm7T&#x2B;QYrAPMAC5s9r2nFKFxGUFcvBgAEia2nVw2rjy2VIeWOFcI4w6k0ASngsA58yweHQjSIoA7TP0jPdhH8DnfNUHcMSSWZnPYWJ5O5iWDpu3hCBqg6/5JgAZAQr3XLcP5kxrg54RoDnERQjufTIfHl6XBZoOvuSLABDR2L9f1gwzJrcfVRo0HLht8U7ojKnw5CshUHy4QfTFvzy7JgbnnfFZ4vH&#x2B;dh0erM2Dp1/OER1O998ncPPVeyAr3Z/3JU35NYDbrFWlEXFEjyfmfveXAqh9IzOxtGeHbLFJ6ExMKwstqA8nHx0&#x2B;1Qz7GoALMMQc1nNghot/t60rmHhMRVFHtKfBxeFeEYghfxueXMUMawCam&#x2B;vjvP/hWf9vboevuTUz8em7fYEVP26CmZNisOTSDrhiVs93OFsOpMGO/UEYSkbaqIPgQcO9CWCaFmii1CqGIfTMq&#x2B;lw1UUZcFZVBHJG2vCnO7cdWh4T3/aBp17KgZaDMKSdQEa7PXkSyQudwCG/J7BhcPjGXeNh284M97Yi7m0jwG18t19w75piePC5UUO8B0CiZqT&#x2B;Q/CgpDdFGmrjx391rAOxBrGMjIIhpolGPqsqDoWj7EQf4KPGDGhsJqCqMKQ0Lf2O7dvWLwcPGvYAuMoqL15sOzH35gueeD&#x2B;DiRCyyVCyF4bDtZ68aMQTxwFqvvitP6ta4Ifi7Xiyo/T5uHs3ZHNZzYK5Xm18l6eWuJLqBecwK/pdhSgzGbPLQEacmKqmvwGMrM3JLlpdX7/K02cbPLnKnTr3zszdW17JE9vmkHt&#x2B;HSRhcdM00jPaAmWXtIU3/mRId28RQgghhBBCCCGEEEIIIYQQQgihfvwPYm7lbXSdsrUAAAAASUVORK5CYII="/>
+        <p class="app-name-header">
+          Marketplace PRF
+        </p>
+    </div>
+
+<form action="/Account/ExternalLogin?ReturnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d" method="post">      <input name="fullScope" type="hidden" value="no"/>
+      <input name="specificDomain" type="hidden" value=""/>
+      <div id=signUpWithLabel>
+        Sign in with:
+      </div>
+      <ul id="freeProviders" class="social data-sources SubSection specificProvider specificProvider">
+        
+
+
+
+    <li class="data-source">
+      <button id="Google" type="submit" name="provider" value="google">
+        <span class="image">
+          <img src="/Content/img/login/v2_Google.png" alt="Google">
+        </span>
+
+          <span class="description">
+            Google
+          </span>
+
+      </button>
+    </li>
+
+      </ul>
+<input name="__RequestVerificationToken" type="hidden" value="CfDJ8B4UJuWQalVEsAj1rIYlTJpzRM7imN9xDswXTzsb7xbvjSZF97IG54dzceKAEvEx4PfhhoXTtP7SHF-kn53AmXRyDavkxRjhiorzvwUTfypBze_T8fj21SpiODwO9DQpvg_frU4Y2ZxTyLNOo7NLz5w" /></form>    <p id="privacy-notice">
+      By signing in, you agree to the <a href="/appinfo/termsofuse?appId=512e89c0-0b83-4e8d-adab-b78f08fb346d" target="_self" rel="modal:open">terms of service</a> and
+      <a href="/appinfo/privacypolicy?appId=512e89c0-0b83-4e8d-adab-b78f08fb346d" target="_self" rel="modal:open">privacy policy</a>.
+    </p>
+  </section>
+
+
+  <style>
+        #google-login-error-overlay {
+            width: 100vw;
+            height: 8vh;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            z-index: 9999;
+            background-color: #444;
+            display: none;
+            padding: 40px;
+        }
+
+        #error-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-direction: row;
+        }
+
+        .error-item {
+            color: #eee;
+            font-size: 10pt;
+            font-weight: lighter;
+        }
+
+        @keyframes wiggle {
+            0% {
+                transform: scale(1)
+            }
+
+            100% {
+                transform: scale(1.1)
+            }
+        }
+
+        .error-link {
+            font-size: 12pt;
+            color: white;
+            font-weight: bold;
+            animation: wiggle 250ms 4 ease alternate;
+        }
+    </style>
+
+</div>
+
+<div id="google-login-error-overlay">
+  <div id="error-container">
+    <p class="error-item">Having trouble logging in?</p>
+    <p class="error-item error-link">Tap Here</p>
+  </div>
+</div>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==">
+    document.querySelector('#error-container .error-link').addEventListener('click', function() {
+        return JeeneeAndroid.triggerChromeInstall()
+    })
+</script>
+
+
+      <div class="modal" id="deleteAccountModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <button class="AlwaysEditable cancel" data-dismiss="modal">X</button>
+              <h5 class="modal-title">
+                Delete my account
+              </h5>
+            </div>
+            <form method="post" action="/account/delete">
+              <input type="hidden" name="id" value="-1">
+              <div class="modal-body">
+                <p>We're sorry to see you go! Why are you leaving?</p>
+                <p>
+                  <fieldset>
+                    <div>
+                      <input name="deleteAccountReason" type="radio" value="too hard" id="too-hard" style="width:auto;margin-right:10px"/><label for="too-hard" style="display:inline">It's too hard to figure out</label>
+                    </div>
+                    <div>
+                      <input name="deleteAccountReason" type="radio" value="unmet needs" id="unmet-needs" style="width:auto;margin-right:10px"/><label for="unmet-needs" style="display:inline">It doesn't do what I need it to do</label>
+                    </div>
+                    <div>
+                      <input name="deleteAccountReason" type="radio" value="just browsing" id="just-browsing" style="width:auto;margin-right:10px"/><label for="just-browsing" style="display:inline">I was just browsing</label>
+                    </div>
+                    <div>
+                      <input name="deleteAccountReason" type="radio" value="other" id="other" style="width:auto;margin-right:10px"/><label for="other" style="display:inline">Other</label>
+                    </div>
+                  </fieldset>
+                </p>
+                <p>
+                  <label for="delete-account-comment">Please tell us what we should improve<textarea rows="4" name="deleteAccountComment" id="delete-account-comment"></textarea></label>
+                </p>
+                <p>
+                  <a href="https://support.google.com/appsheet?p=reset-appsheet" class="link clear-devices-help-link">
+                    Deletion of this account will not delete the apps or app data already downloaded to app users' devices.
+                  </a>
+                </p>
+              </div>
+              <div class="modal-footer" style="overflow:auto">
+                <button type="submit">Delete my account</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+  </main>
+
+
+    <footer class="bottomNavCompact">
+    </footer>
+
+  <!-- SCRIPTS -->
+
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Scripts/jquery-3.6.2.min.js"></script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Scripts/jquery.unobtrusive-ajax.min.js"></script>
+
+<!-- Various utilities (modals, tooltips, etc.) -->
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Content/scripts/web/utilities.js?update=&#x27;20260915&#x27;.1"></script>
+
+
+<!-- This partial checks the account status every hour using accountStartup.js -->
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Content/scripts/web/accountStartup.js">
+</script>
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+$(function () {
+    var shouldCheck = false;
+    if (shouldCheck)
+    {
+        var oneHour = 60 * 60 * 1000;
+        initCheckAccountStatus(oneHour);
+    }
+});
+
+</script>
+
+  
+
+    <script type="text/javascript" nonce="9DI4MtqqypOHEOI7/OcqfQ==" src="/Content/scripts/_shared/external/jquery-modal-0.9.1.min.js"></script>
+
+
+    <script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+
+        function SafeGetLocalStorage(property) {
+          try {
+            return window.localStorage.getItem(property)
+          } catch {
+            return ""
+          }
+        }
+
+        function GetUtmCampaign() {
+          return SafeGetLocalStorage('JeeneeNewUserCampaign')
+        }
+
+        function GetUtmSource() {
+          return SafeGetLocalStorage('JeeneeNewUserSource')
+        }
+
+        function GetUtmMedium() {
+          return SafeGetLocalStorage('JeeneeNewUserMedium')
+        }
+
+        function GetUtmContent() {
+          return SafeGetLocalStorage('JeeneeNewUserContent')
+        }
+
+        function GetUtmTerm() {
+          return SafeGetLocalStorage('JeeneeNewUserTerm')
+        }
+
+        var isAndroidApp = false;
+        var isIOSApp = false;
+        var useNativeLoginIOS = false;
+        var useGoogleNativeLoginAndroid = false;
+
+
+        var callNativeURL = function (nativeURL) {
+            var data = { url: nativeURL };
+            if (typeof window.webkit !== 'undefined' && typeof window.webkit.messageHandlers.GoogleSignIn !== 'undefined') {
+                window.webkit.messageHandlers.GoogleSignIn.postMessage(data)
+            } else {
+                $.ajax({
+                    type: 'POST', async: false, url: '/jeenee_new?method=GoogleSignIn',
+                    data: data
+                })
+            }
+        }
+
+        var initPage = function () {
+
+            if ('True' === 'True') {
+                $('.access-info, footer.bottomNav, header.topNav').hide()
+            }
+
+          if (useNativeLoginIOS) {
+
+                    $("#Salesforce").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=salesforce');
+                   });
+                
+                    $("#Apple").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=apple');
+                   });
+                
+                    $("#Google").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=google');
+                   });
+                
+                    $("#Smartsheet").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=smartsheet');
+                   });
+                
+                    $("#Dropbox").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=dropbox');
+                   });
+                
+                    $("#Box").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=box');
+                   });
+                
+                    $("#Microsoft").on('click', function (e) {
+                      e.preventDefault();
+                      callNativeURL('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=microsoft');
+                   });
+                            }
+            if(isIOSApp){
+                $("#terms, #privacy").each(function(i,e){
+                    $(e).attr("href",'jeenee_method?TargetBlank?href=' + $(e).attr('href'));
+                });
+            }
+            if (isAndroidApp){
+              if (useGoogleNativeLoginAndroid) {
+
+                            $("#Salesforce").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=salesforce');
+                            });
+                          
+                            $("#Apple").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=apple');
+                            });
+                          
+                            $("#Google").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=google');
+                            });
+                          
+                            $("#Smartsheet").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=smartsheet');
+                            });
+                          
+                            $("#Dropbox").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=dropbox');
+                            });
+                          
+                            $("#Box").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=box');
+                            });
+                          
+                            $("#Microsoft").on('click', function (e) {
+                              e.preventDefault();
+                              JeeneeAndroid.GoogleSignIn('https://www.appsheet.com/Account/InitiateDeviceLogin?returnUrl=https%3A%2F%2Fwww.appsheet.com%2Fstart%2F512e89c0-0b83-4e8d-adab-b78f08fb346d&FullScope=False&provider=microsoft');
+                            });
+                                        }
+                $("#terms, #privacy").on('click', function(evt){
+                    evt.preventDefault();
+                    JeeneeAndroid.externalLink($(evt.target).attr('href'));
+                    return false;
+                });
+            }
+        }
+
+        $('form[action]').each(function (i, elem) {
+            if (elem.action) {
+                if (elem.action.includes("?")) {
+                    elem.action += "&"
+                } else {
+                    elem.action += "?"
+                }
+                elem.action += "utmCampaign=" + GetUtmCampaign()
+                elem.action += "&utmTerm=" + GetUtmTerm()
+                elem.action += "&utmContent=" + GetUtmContent()
+                elem.action += "&utmMedium=" + GetUtmMedium()
+                elem.action += "&utmSource=" + GetUtmSource()
+            }
+            if (elem.action && window.location.hash) {
+                elem.action += encodeURIComponent(window.location.hash)
+            }
+        });
+
+        window.shouldShowErrorDialog = true;
+
+        window.onLogin = function () {
+            // could get eaten while we are away from the app logging in in chrome or something
+            setTimeout(function () {
+                requestAnimationFrame(function () {
+                    // extra delay that happens when we are in the app
+                    setTimeout(function () {
+                        // check suppression global that gets set to false by native wrapper when we get a return ticket
+                        if (window.shouldShowErrorDialog) {
+                            // show the error dialog
+                            document.getElementById("google-login-error-overlay").style.display = "initial";
+                        }
+                    }, 2000)
+                });
+            }, 3000);
+
+        };
+
+        window.cancelOnLogin = function () {
+            window.shouldShowErrorDialog = false;
+            document.getElementById("google-login-error-overlay").style.display = "none";
+        }
+        </script>
+
+    
+
+
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+    /*!
+     * jQuery Cookie Plugin v1.3.1
+     * https://github.com/carhartl/jquery-cookie
+     *
+     * Copyright 2013 Klaus Hartl
+     * Released under the MIT license
+     */
+    (function (d) { "function" === typeof define && define.amd ? define(["jquery"], d) : d(jQuery) })(function (d) {
+        function n(a) { return a } function p(a) { return decodeURIComponent(a.replace(k, " ")) } function l(a) { 0 === a.indexOf('"') && (a = a.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\")); try { return e.json ? JSON.parse(a) : a } catch (c) { } } var k = /\+/g, e = d.cookie = function (a, c, b) {
+            if (void 0 !== c) {
+                b = d.extend({}, e.defaults, b); if ("number" === typeof b.expires) { var g = b.expires, f = b.expires = new Date; f.setDate(f.getDate() + g) } c = e.json ?
+        JSON.stringify(c) : String(c); return document.cookie = [e.raw ? a : encodeURIComponent(a), "=", e.raw ? c : encodeURIComponent(c), b.expires ? "; expires=" + b.expires.toUTCString() : "", b.path ? "; path=" + b.path : "", b.domain ? "; domain=" + b.domain : "", b.secure ? "; secure" : ""].join("")
+            } c = e.raw ? n : p; b = document.cookie.split("; "); for (var g = a ? void 0 : {}, f = 0, k = b.length; f < k; f++) { var h = b[f].split("="), m = c(h.shift()), h = c(h.join("=")); if (a && a === m) { g = l(h); break } a || (g[m] = l(h)) } return g
+        }; e.defaults = {}; d.removeCookie = function (a, c) {
+            return void 0 !==
+            d.cookie(a) ? (d.cookie(a, "", d.extend({}, c, { expires: -1 })), !0) : !1
+        }
+    });
+
+    var USTORE = (function () { var e, a, c, f, b, k, i, j, d; var g = { setValue: function (l, m, n) { if (e) { if (n && a) { sessionStorage.setItem(l, m) } else { localStorage.setItem(l, m) } } else { if (c) { if (n) { i.setAttribute(l, m); i.save(d) } else { f.setAttribute(l, m); f.save(ieDb) } } } }, getValue: function (m, n) { var l = ""; if (e) { if (n && a) { l = sessionStorage.getItem(m) } else { l = localStorage.getItem(m) } } else { if (c) { if (n) { i.load(d); l = i.getAttribute(m) } else { f.load(ieDb); l = f.getAttribute(m) } } } return l }, deleteValue: function (l, m) { if (e) { this.setValue(l, null, m) } else { if (c) { if (m) { i.removeAttribute(l); i.save(d) } else { f.removeAttribute(l); f.save(ieDb) } } } }, clearDB: function (l) { if (e) { if (l) { sessionStorage.clear() } else { localStorage.clear() } } else { if (c) { h.clearDB(l) } } } }; var h = { detectIE: function () { if (/MSIE (\d+\.\d+);/.test(navigator.userAgent)) { var l = new Number(RegExp.$1); if (l >= 5.5 && l <= 8) { return true } } return false }, init: function () { var n = document.createElement("meta"); n.name = "save"; n.content = "userdata"; document.getElementsByTagName("head")[0].appendChild(n); var m = new Date().getTime(); var l = document.createElement("div"); b = "ie-db-" + m; ieDb = "userStorage"; l.setAttribute("id", b); body.appendChild(l); f = document.getElementById(b); f.style.behavior = "url('#default#userData')"; f.style.display = "none"; if (window.name === null || window.name === undefined || window.name === "") { window.name = "ie-sesh-db-" + m } j = window.name; d = j; l = document.createElement("div"); l.setAttribute("id", j); f.appendChild(l); i = document.getElementById(j); i.style.behavior = "url('#default#userData')"; i.style.display = "none" }, clearDB: function (r) { var m = new Date().getTime(), t = document.createElement("div"), l = r ? i : f, p = r ? d : ieDb, s = l.xmlDocument, n = s.firstChild.attributes, q, o = n.length; while (0 <= --o) { q = n[o]; l.removeAttribute(q.nodeName) } l.save(p) } }; return { init: function () { if (typeof (window.localStorage) === "object") { e = true; try { if (typeof (window.sessionStorage) === "object") { a = true } } catch (l) { a = false } } else { if (h.detectIE()) { c = true; h.init() } } }, setValue: function (l, m) { g.setValue(l, m, false) }, setSessionValue: function (l, m) { g.setValue(l, m, true) }, getValue: function (l) { return g.getValue(l, false) }, getSessionValue: function (l) { return g.getValue(l, true) }, deleteValue: function (l) { g.deleteValue(l, false) }, deleteSessionValue: function (l) { g.deleteValue(l, true) }, clearLocalStorage: function () { g.clearDB(false) }, clearSessionStorage: function () { g.clearDB(true) }, clearDOMStorage: function () { g.clearDB(false); g.clearDB(true) } } })();
+
+</script>
+<script nonce="9DI4MtqqypOHEOI7/OcqfQ==" type="text/javascript">
+    $(function () {
+        $(".clickable").on('click', function () {
+            $("#HiddenForms, button.hide, .division.hide").removeClass("hide");
+            $(this).hide();
+            $.cookie("hideoptions", "false", { expires: 31, path: '/account' });
+            $.cookie("hideoptions", "false", { expires: 31, path: '/Account' });
+            USTORE.setValue("hideoptions", "false");
+        });
+        initPage();
+        if ($.cookie('hideoptions') || USTORE.getValue('hideoptions')) {
+            $(".clickable").trigger('click');
+        }
+
+        $(".ExpandableSection").on('click', function () {
+            $(this).find(".SectionTitle").toggleClass('collapsed');
+            $(this).find(".SubSection").toggle(500);
+        });
+        $('.ExpandableSection button[type="submit"]').on('click', function (e) {
+            e.stopPropagation();
+        });
+
+    });
+
+</script>
+
+  
+
+  <!-- MORE TRACKING -->
+  
+
+
+    <!-- Google tag (gtag.js) -->
+  <script nonce="9DI4MtqqypOHEOI7/OcqfQ==">
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    function glueCookieNotificationBarLoaded() {
+      (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+      new Date().getTime(),event:'gtm.js'});
+      var firstScript=d.getElementsByTagName(s)[0], dl=l!='dataLayer'?'&l='+l:'';
+      var script = d.createElement(s);
+      script.async = true;
+      var url = 'https://www.googletagmanager.com/gtm.js?id='+i+dl;
+      if (self.trustedTypes && self.trustedTypes.createPolicy) {
+        var policy = self.trustedTypes.createPolicy('gtm-load-fix', {
+          createScriptURL: function(_ignored) {
+            return url;
+          }
+        });
+        script.src = policy.createScriptURL('_ignored');
+      } else {
+        script.src = url;
+      }
+      firstScript.parentNode.insertBefore(script, firstScript);
+      })(window,document,'script','dataLayer','GTM-MXWLX3PF');
+    }
+    </script>
+
+
+
+
+</div>
+
+<div id="cookieConsentContainer"></div>
+</body>
+</html>

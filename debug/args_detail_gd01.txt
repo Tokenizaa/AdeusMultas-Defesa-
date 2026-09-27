@@ -1,0 +1,28 @@
+RECOMMENDED ARGUMENTS:
+
+[0] ARG-051: Direito Subjetivo à Conversão em Advertência por Escrito (Art. 267 do CTB)
+  Code: CONVERSAO_OBRIGATORIA_ADVERTENCIA_ART267
+  Category: merito
+  Legal Base: Art. 267 do Código de Trânsito Brasileiro (com redação da Lei nº 14.071/2020)
+  Summary: Imposição obrigatória da conversão de multa leve ou média em advertência por escrito quando o condutor não cometeu infrações nos últimos 12 meses (Lei 14.071/2020).
+
+[1] ARG-002: Ausência ou Ilegibilidade de Sinalização Regulamentadora R-19 (Art. 90 do CTB)
+  Code: LACK_OF_REGULATORY_SIGNAGE
+  Category: preliminar
+  Legal Base: Art. 90, caput e §1º do CTB
+  Summary: Inaplicabilidade de penalidade de trânsito em virtude de sinalização de velocidade inexistente, insuficiente, encoberta por vegetação/obstáculos ou instalada fora das distâncias regulamentares.
+
+[2] ARG-006: Imagem com Múltiplos Veículos no Campo de Enquadramento do Sensor
+  Code: FOTO_RADAR_VEICULO_MULTIPLO_CAMPO
+  Category: formal
+  Legal Base: Art. 281, parágrafo único, I do CTB
+  Summary: Inconsistência da medição quando a foto do radar captura dois ou mais veículos paralelos sobre as faixas de indução sem clareza do infrator.
+
+[3] ARG-049: Cerceamento de Defesa por Ausência de Dupla Notificação (Súmula 312 STJ)
+  Code: NULIDADE_SUMULA_312_STJ_FALTA_NOTIFICACAO
+  Category: preliminar
+  Legal Base: Art. 5º, LIV e LV da CF/88 c/c Súmula 312 do STJ
+  Summary: Nulidade insanável de processo de trânsito em que o órgão autuador aplicou penalidade sem a comprovação de envio da Notificação de Autuação prévia.
+
+
+SELECTED ARGUMENT IDS: ["ARG-051","ARG-002","ARG-006","ARG-049"]

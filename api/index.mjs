@@ -1632,8 +1632,8 @@ var StructuredLogger = class {
     }
     return cleaned;
   }
-  sanitizeString(str) {
-    let sanitized = str.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
+  sanitizeString(str2) {
+    let sanitized = str2.replace(/Bearer\s+[A-Za-z0-9\-_.]+/gi, "Bearer \u2022\u2022\u2022\u2022[PROTECTED]\u2022\u2022\u2022\u2022");
     sanitized = sanitized.replace(/nvapi-[A-Za-z0-9\-_]{20,}/g, "nvapi-\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
     sanitized = sanitized.replace(/AIza[0-9A-Za-z-_]{35}/g, "AIza\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022");
     sanitized = sanitized.replace(/(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})/g, "***.$2.***-$4");
@@ -16448,18 +16448,16 @@ REQUERIMENTO DE APLICA\xC7\xC3O DE DIREITO SUBJETIVO - ARTIGO 267 DO CTB`,
     category: "qualificacao",
     title: "Qualifica\xE7\xE3o Padr\xE3o do Requerente Pessoa F\xEDsica",
     description: "Qualifica\xE7\xE3o civil completa do condutor/propriet\xE1rio com dados do ve\xEDculo e do AIT impugnado.",
-    contentTemplate: `{{nome_requerente}}, brasileiro(a), inscrito(a) no CPF/MF sob o n\xBA {{cpf_requerente}}, portador(a) do RG n\xBA {{rg_requerente}}, titular da CNH n\xBA {{cnh_requerente}}, residente e domiciliado(a) na {{endereco_requerente}}, na comarca de {{cidade_requerente}}/{{uf_requerente}}, na qualidade de leg\xEDtimo(a) propriet\xE1rio(a) / condutor(a) do ve\xEDculo marca/modelo {{veiculo_modelo}}, ostentador da placa de identifica\xE7\xE3o {{veiculo_placa}}, c\xF3digo RENAVAM n\xBA {{veiculo_renavam}}, vem, respeitosamente e no prazo legal, com esteio no Artigo 5\xBA, incisos LIV e LV da Constitui\xE7\xE3o da Rep\xFAblica Federativa do Brasil e na Lei Federal n\xBA 9.503/1997, apresentar`,
+    contentTemplate: `{{nome_requerente}}, brasileiro(a), inscrito(a) no CPF/MF sob o n\xBA {{cpf_requerente}}, {{rg_clausula}}titular da CNH n\xBA {{cnh_requerente}}, residente e domiciliado(a) na {{endereco_requerente}}, na comarca de {{cidade_requerente}}/{{uf_requerente}}, na qualidade de leg\xEDtimo(a) propriet\xE1rio(a) / condutor(a) do ve\xEDculo marca/modelo {{veiculo_modelo}}, ostentador da placa de identifica\xE7\xE3o {{veiculo_placa}}, {{renavam_clausula}}vem, respeitosamente e no prazo legal, com esteio no Artigo 5\xBA, incisos LIV e LV da Constitui\xE7\xE3o da Rep\xFAblica Federativa do Brasil e na Lei Federal n\xBA 9.503/1997, apresentar`,
     supportedVariables: [
       "{{nome_requerente}}",
       "{{cpf_requerente}}",
-      "{{rg_requerente}}",
       "{{cnh_requerente}}",
       "{{endereco_requerente}}",
       "{{cidade_requerente}}",
       "{{uf_requerente}}",
       "{{veiculo_modelo}}",
-      "{{veiculo_placa}}",
-      "{{veiculo_renavam}}"
+      "{{veiculo_placa}}"
     ],
     recommendedProcedures: ["recurso_jari", "recurso_cetran"]
   },
@@ -16480,7 +16478,6 @@ REQUERIMENTO DE APLICA\xC7\xC3O DE DIREITO SUBJETIVO - ARTIGO 267 DO CTB`,
       "{{cpf_representante}}",
       "{{veiculo_modelo}}",
       "{{veiculo_placa}}",
-      "{{veiculo_renavam}}",
       "{{numero_ait}}"
     ],
     recommendedProcedures: ["recurso_jari"]
@@ -16495,7 +16492,6 @@ REQUERIMENTO DE APLICA\xC7\xC3O DE DIREITO SUBJETIVO - ARTIGO 267 DO CTB`,
     supportedVariables: [
       "{{nome_requerente}}",
       "{{cpf_requerente}}",
-      "{{rg_requerente}}",
       "{{cnh_requerente}}",
       "{{categoria_cnh}}",
       "{{endereco_requerente}}",
@@ -16543,13 +16539,11 @@ Endere\xE7o Residencial: {{condutor_indicado_endereco}} - {{condutor_indicado_ci
     supportedVariables: [
       "{{nome_requerente}}",
       "{{cpf_requerente}}",
-      "{{rg_requerente}}",
       "{{endereco_requerente}}",
       "{{cidade_requerente}}",
       "{{uf_requerente}}",
       "{{veiculo_modelo}}",
       "{{veiculo_placa}}",
-      "{{veiculo_renavam}}",
       "{{condutor_indicado_nome}}",
       "{{condutor_indicado_cpf}}",
       "{{condutor_indicado_rg}}",
@@ -17723,6 +17717,20 @@ var INFRACTION_CATALOG = [
     version: 1
   },
   {
+    code: "745-70",
+    article: "Art. 218, III do CTB",
+    description: "Transitar em velocidade superior \xE0 m\xE1xima permitida em mais de 20% at\xE9 50%",
+    severity: "grave",
+    points: 5,
+    fineAmount: 294.23,
+    typicalFlaws: ["Aferi\xE7\xE3o do radar vencida (+12 meses)", "Falta de placa R-19 de velocidade", "Erro na medi\xE7\xE3o considerada pelo INMETRO", "Notifica\xE7\xE3o expedida ap\xF3s 30 dias"],
+    recommendedArgumentCodes: ["ARG-001", "ARG-002", "ARG-003", "ARG-004", "ARG-008", "ARG-048", "ARG-051"],
+    validFrom: "1998-01-22",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
+  },
+  {
     code: "747-10",
     article: "Art. 218, III do CTB",
     description: "Transitar em velocidade superior \xE0 m\xE1xima permitida em mais de 50% (Suspensiva)",
@@ -18613,10 +18621,10 @@ var EmbeddingService = class _EmbeddingService {
   /**
    * Fast 32-bit FNV-1a hash function
    */
-  fnv1a(str) {
+  fnv1a(str2) {
     let hash = 2166136261;
-    for (let i = 0; i < str.length; i++) {
-      hash ^= str.charCodeAt(i);
+    for (let i = 0; i < str2.length; i++) {
+      hash ^= str2.charCodeAt(i);
       hash = Math.imul(hash, 16777619);
     }
     return hash;
@@ -21944,10 +21952,10 @@ var AprendizadoAgent = class {
   /**
    * Simple string hashing function for deterministic pseudo-random generation
    */
-  hashString(str) {
+  hashString(str2) {
     let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
+    for (let i = 0; i < str2.length; i++) {
+      const char = str2.charCodeAt(i);
       hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
@@ -23119,6 +23127,181 @@ var whatsapp_default = router9;
 // src/server/routes/ocr.ts
 import { Router as Router10 } from "express";
 
+// src/core/rules/infraction-classifier.ts
+var FAMILY_BY_CATALOG_CODE = {
+  "745-50": "excesso_velocidade",
+  "745-70": "excesso_velocidade",
+  "746-30": "excesso_velocidade",
+  "747-10": "excesso_velocidade",
+  "516-91": "alcoolemia",
+  "516-92": "alcoolemia",
+  "605-01": "semaforo",
+  "605-02": "semaforo",
+  "736-62": "celular",
+  "735-80": "celular",
+  "545-21": "estacionamento",
+  "554-12": "estacionamento",
+  "518-51": "cinto",
+  "518-52": "cinto",
+  "501-00": "documentos",
+  "504-50": "documentos",
+  "659-92": "documentos",
+  "581-70": "circulacao",
+  "596-70": "circulacao",
+  "758-70": "circulacao",
+  "759-50": "circulacao",
+  "703-81": "capacidade",
+  "704-81": "capacidade",
+  "685-80": "lotacao",
+  "672-61": "lotacao"
+};
+var FAMILY_BY_CODE_PREFIX = [
+  ["74", "excesso_velocidade"],
+  ["27", "alcoolemia"],
+  ["516", "alcoolemia"],
+  ["276", "alcoolemia"],
+  ["605", "semaforo"],
+  ["208", "semaforo"],
+  ["736", "celular"],
+  ["735", "celular"],
+  ["252", "celular"],
+  ["518", "cinto"],
+  ["162", "cinto"],
+  ["501", "documentos"],
+  ["504", "documentos"],
+  ["659", "documentos"],
+  ["232", "documentos"],
+  ["545", "estacionamento"],
+  ["554", "estacionamento"],
+  ["581", "circulacao"],
+  ["596", "circulacao"],
+  ["758", "circulacao"],
+  ["759", "circulacao"],
+  ["167", "estacionamento"],
+  ["181", "estacionamento"],
+  ["55", "estacionamento"],
+  ["67", "lotacao"],
+  ["672", "lotacao"],
+  ["703", "capacidade"],
+  ["704", "capacidade"],
+  ["685", "lotacao"],
+  ["244", "capacidade"]
+];
+var FAMILY_BY_ARTICLE = [
+  ["218", "excesso_velocidade"],
+  ["306", "alcoolemia"],
+  ["277", "alcoolemia"],
+  ["276", "alcoolemia"],
+  ["165", "alcoolemia"],
+  ["208", "semaforo"],
+  ["252", "celular"],
+  ["181", "estacionamento"],
+  ["167", "estacionamento"],
+  ["230", "documentos"],
+  ["232", "documentos"],
+  ["162", "cinto"],
+  ["231", "lotacao"],
+  ["244", "capacidade"],
+  ["184", "circulacao"],
+  ["193", "circulacao"],
+  ["203", "circulacao"]
+];
+var normalizeCode = (code) => String(code ?? "").replace(/\D/g, "");
+var extractArticle = (article) => {
+  const m = String(article ?? "").match(/(\d+)\s*-?\s*A?/);
+  if (!m) return null;
+  const digits = m[1];
+  return digits.length >= 3 ? digits : null;
+};
+var catalogEntry = (code) => INFRACTION_CATALOG.find((i) => normalizeCode(i.code) === code);
+var catalogCodesFor = (family) => family === "desconhecida" ? [] : INFRACTION_CATALOG.filter((i) => FAMILY_BY_CATALOG_CODE[i.code] === family).map((i) => i.code);
+var eligibleFor = (family) => {
+  if (family === "desconhecida") return [];
+  const ids = /* @__PURE__ */ new Set();
+  for (const code of catalogCodesFor(family)) {
+    const entry = catalogEntry(normalizeCode(code));
+    for (const argId of entry?.recommendedArgumentCodes ?? []) ids.add(argId);
+  }
+  return Array.from(ids).sort();
+};
+function classifyInfraction(infraction) {
+  const inputCode = String(infraction?.infractionCode ?? "").trim();
+  const normalizedCode = normalizeCode(inputCode);
+  const article = extractArticle(infraction?.ctbArticle);
+  const notes = [];
+  const exact = normalizedCode ? catalogEntry(normalizedCode) : void 0;
+  if (exact) {
+    const family = FAMILY_BY_CATALOG_CODE[exact.code] ?? "desconhecida";
+    return {
+      inputCode,
+      normalizedCode,
+      article,
+      family,
+      catalogCodes: catalogCodesFor(family),
+      eligibleArgumentIds: eligibleFor(family),
+      basis: "CATALOG_CODE",
+      confidence: "EXACT",
+      notes: [`C\xF3digo ${exact.code} presente no cat\xE1logo can\xF4nico de infra\xE7\xF5es.`]
+    };
+  }
+  if (normalizedCode) notes.push(`C\xF3digo "${inputCode}" ausente do cat\xE1logo can\xF4nico.`);
+  const prefix = FAMILY_BY_CODE_PREFIX.find(([p]) => normalizedCode.startsWith(p));
+  if (prefix) {
+    const family = prefix[1];
+    return {
+      inputCode,
+      normalizedCode,
+      article,
+      family,
+      catalogCodes: catalogCodesFor(family),
+      eligibleArgumentIds: eligibleFor(family),
+      basis: "CODE_FAMILY",
+      confidence: "INFERRED",
+      notes: [...notes, `Fam\xEDlia "${family}" determinada pelo prefixo do c\xF3digo.`]
+    };
+  }
+  const byArticle = article ? FAMILY_BY_ARTICLE.find(([a]) => article.startsWith(a)) : void 0;
+  if (byArticle) {
+    const family = byArticle[1];
+    return {
+      inputCode,
+      normalizedCode,
+      article,
+      family,
+      catalogCodes: catalogCodesFor(family),
+      eligibleArgumentIds: eligibleFor(family),
+      basis: "ARTICLE",
+      confidence: "INFERRED",
+      notes: [...notes, `Fam\xEDlia "${family}" determinada pelo artigo do CTB (${article}).`]
+    };
+  }
+  notes.push("Tipifica\xE7\xE3o n\xE3o classific\xE1vel: nenhuma tese jur\xEDdica pode ser autorizada sem classifica\xE7\xE3o.");
+  return {
+    inputCode,
+    normalizedCode,
+    article,
+    family: "desconhecida",
+    catalogCodes: [],
+    eligibleArgumentIds: [],
+    basis: "UNKNOWN",
+    confidence: "UNKNOWN",
+    notes
+  };
+}
+var CANONICAL_PROCEDURE_BY_FAMILY = {
+  excesso_velocidade: "recurso_jari",
+  alcoolemia: "defesa_previa",
+  semaforo: "recurso_jari",
+  celular: "recurso_jari",
+  estacionamento: "recurso_jari",
+  cinto: "recurso_jari",
+  documentos: "recurso_jari",
+  circulacao: "recurso_jari",
+  capacidade: "recurso_jari",
+  lotacao: "recurso_jari",
+  desconhecida: ""
+};
+
 // src/core/rules/rule-engine.ts
 var EXPERT_RULES = [
   // Rule 1: Decadência de 30 dias da Notificação de Autuação (Art. 281, II CTB)
@@ -23133,6 +23316,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["infractionDate", "notificationExpeditionDate"],
     relatedArguments: ["ARG-048", "ARG-049"],
+    families: ["excesso_velocidade", "alcoolemia", "semaforo", "celular", "estacionamento", "cinto", "documentos", "circulacao", "capacidade", "lotacao"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
     evidenceRequired: ["C\xF3pia da Notifica\xE7\xE3o da Autua\xE7\xE3o com data de expedi\xE7\xE3o/postagem", "Extrato do hist\xF3rico de notifica\xE7\xF5es"],
     priority: 100,
@@ -23169,6 +23353,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["infractionDate", "radarCalibrationDate"],
     relatedArguments: ["ARG-001"],
+    families: ["excesso_velocidade"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran", "analise_tecnica"],
     evidenceRequired: ["Certid\xE3o do Portal de Servi\xE7os do INMETRO (PSInmetro) atestando a data da \xFAltima verifica\xE7\xE3o"],
     priority: 95,
@@ -23208,6 +23393,7 @@ var EXPERT_RULES = [
     validUntil: null,
     requiredData: ["hasPreviousInfractionsLast12Months"],
     relatedArguments: ["ARG-051"],
+    families: ["excesso_velocidade", "celular", "estacionamento", "cinto", "circulacao", "documentos", "lotacao"],
     affectedProcedures: ["conversao_advertencia"],
     evidenceRequired: ["Extrato de prontu\xE1rio e hist\xF3rico de CNH sem infra\xE7\xF5es nos \xFAltimos 12 meses"],
     priority: 90,
@@ -23247,6 +23433,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["hasPsychomotorTerm"],
     relatedArguments: ["ARG-025"],
+    families: ["alcoolemia"],
     affectedProcedures: ["suspensao_cnh", "recurso_jari"],
     evidenceRequired: ["C\xF3pia integral do processo administrativo comprovando a aus\xEAncia do Anexo II da Res. 432/2013"],
     priority: 88,
@@ -23282,11 +23469,13 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["hasAgentDetailedObservations"],
     relatedArguments: ["ARG-015"],
+    families: ["celular"],
     affectedProcedures: ["defesa_previa", "recurso_jari"],
     evidenceRequired: ["Espelho do Auto de Infra\xE7\xE3o com o campo de observa\xE7\xF5es vago/gen\xE9rico"],
     priority: 82,
     evaluate: (ctx) => {
-      if (ctx.infractionCode === "736-62" && ctx.hasAgentDetailedObservations === false) {
+      const normalizedCode = ctx.infractionCode.replace("-", "");
+      if (normalizedCode === "73662" && ctx.hasAgentDetailedObservations === false) {
         return {
           ruleId: "RULE_AUTUACAO_SEM_ABORDAGEM_MBFT",
           title: "Aus\xEAncia de Descri\xE7\xE3o Circunstanciada no Campo de Observa\xE7\xF5es",
@@ -23312,6 +23501,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["hasR19SignageProof"],
     relatedArguments: ["ARG-002", "ARG-007"],
+    families: ["excesso_velocidade"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "analise_tecnica"],
     evidenceRequired: ["Fotografias do trecho demonstrado aus\xEAncia/obstru\xE7\xE3o da placa R-19"],
     priority: 78,
@@ -23345,6 +23535,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["measuredSpeed", "consideredSpeed", "speedLimit"],
     relatedArguments: ["ARG-005"],
+    families: ["excesso_velocidade"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
     evidenceRequired: ["C\xF3pia da Notifica\xE7\xE3o com os campos de velocidade medida/considerada preenchidos"],
     priority: 85,
@@ -23400,6 +23591,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["infractionCode", "hasPhotoProof"],
     relatedArguments: ["ARG-006", "ARG-009"],
+    families: ["excesso_velocidade", "semaforo"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
     evidenceRequired: ["Espelho fotogr\xE1fico do Auto de Infra\xE7\xE3o"],
     priority: 70,
@@ -23407,12 +23599,13 @@ var EXPERT_RULES = [
       const code = ctx.infractionCode || "";
       const isAutomated = code.startsWith("74") || code === "745-50" || code === "746-30" || code === "747-10" || code === "605-01" || code === "605-02";
       if (isAutomated && ctx.hasPhotoProof === false) {
+        const isSemaphore = code === "605-01" || code === "605-02";
         return {
           ruleId: "RULE_PHOTO_PROOF_REQUIRED",
-          title: "Aus\xEAncia de Comprova\xE7\xE3o Fotogr\xE1fica em Infra\xE7\xE3o Automatizada",
-          description: "A autua\xE7\xE3o por equipamento automatizado carece de espelho fotogr\xE1fico que demonstre inequivocamente o cometimento da infra\xE7\xE3o.",
+          title: isSemaphore ? "Aus\xEAncia de Foto de Reten\xE7\xE3o em Autua\xE7\xE3o Semaf\xF3rica (Art. 208)" : "Aus\xEAncia de Comprova\xE7\xE3o Fotogr\xE1fica em Infra\xE7\xE3o Automatizada",
+          description: isSemaphore ? "A autua\xE7\xE3o por avan\xE7o de sinal vermelho n\xE3o traz a foto de reten\xE7\xE3o que demonstre a transposi\xE7\xE3o da linha de reten\xE7\xE3o ap\xF3s o in\xEDcio do ciclo vermelho." : "A autua\xE7\xE3o por equipamento automatizado carece de espelho fotogr\xE1fico que demonstre inequivocamente o cometimento da infra\xE7\xE3o.",
           severity: "alta",
-          legalArgumentId: "ARG-006",
+          legalArgumentId: isSemaphore ? "ARG-009" : "ARG-006",
           impact: "Nulidade do auto por aus\xEAncia de prova material id\xF4nea.",
           statutoryBasis: "Art. 280, \xA72\xBA do CTB c/c Res. CONTRAN n\xBA 798/2020, art. 6\xBA e Res. 985/2022 (MBFT)"
         };
@@ -23439,6 +23632,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["infractionCode", "infractionDate", "notificationExpeditionDate"],
     relatedArguments: ["ARG-039"],
+    families: ["documentos"],
     affectedProcedures: ["indicacao_condutor", "recurso_jari"],
     evidenceRequired: ["Comprovante de protocolo do FICI tempestivo"],
     priority: 80,
@@ -23460,6 +23654,175 @@ var EXPERT_RULES = [
       return null;
     }
   },
+  // RULE-011: Semáforo — fase amarela insuficiente (Art. 90 c/c Res. CONTRAN 973/2022).
+  // O dado que autoriza é a própria circumstances do caso (atravessou na fase
+  // amarela / há registro de temporização), não o simples fato de ser multa.
+  {
+    id: "RULE_SEMAFORO_TEMPO_AMARELO",
+    name: "Fase Amarela Insuficiente para Parada Segura (Art. 208 c/c Res. CONTRAN 973/2022)",
+    description: "Valida a autua\xE7\xE3o por avan\xE7o semaf\xF3rico quando o pr\xF3prio caso registra travessia na fase amarela ou inexist\xEAncia de comprova\xE7\xE3o de temporiza\xE7\xE3o adequada.",
+    category: "direito_material",
+    validFrom: "2022-01-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode"],
+    relatedArguments: ["ARG-010"],
+    families: ["semaforo"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["Laudo de temporiza\xE7\xE3o do sem\xE1foro da concession\xE1ria ou relat\xF3rio t\xE9cnico", "Registro fotogr\xE1fico do ciclo semaf\xF3rico"],
+    priority: 84,
+    evaluate: (ctx) => {
+      if (ctx.yellowPhaseCrossing === true) {
+        return {
+          ruleId: "RULE_SEMAFORO_TEMPO_AMARELO",
+          title: "Fase Amarela Insuficiente para a Travessia (Res. CONTRAN 973/2022)",
+          description: "O caso registra que a travessia ocorreu durante a fase amarela, o que imp\xF5e demonstrar a adequa\xE7\xE3o da temporiza\xE7\xE3o ao tempo de parada e retomada com seguran\xE7a.",
+          severity: "media",
+          legalArgumentId: "ARG-010",
+          impact: "Anula\xE7\xE3o da autua\xE7\xE3o por inadequa\xE7\xE3o da temporiza\xE7\xE3o do equipamento.",
+          statutoryBasis: "Artigo 90 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 973/2022"
+        };
+      }
+      return null;
+    }
+  },
+  // RULE-012: Celular em uso hands-free (Art. 252 c/c ficha CONTRAN 985/2022).
+  {
+    id: "RULE_CELULAR_VIVA_VOZ",
+    name: "Uso de Sistema Viva-Voz / Bluetooth (Art. 252)",
+    description: "Valida a autua\xE7\xE3o de uso de celular quando o caso demonstra uso por sistema de viva-voz, sem manuseio do aparelho.",
+    category: "direito_material",
+    validFrom: "2023-01-02",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode"],
+    relatedArguments: ["ARG-019"],
+    families: ["celular"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["Registros do sistema de \xE1udio do ve\xEDculo", "Nota fiscal do KIT hands-free homologado"],
+    priority: 84,
+    evaluate: (ctx) => {
+      const circum = String(ctx.cellphoneCircumstance ?? "").toLowerCase();
+      const handsFree = /viva[- ]?voz|bluetooth|hands[- ]?free|kit/.test(circum);
+      if (handsFree || ctx.evidenceFlags?.celularVivaVoz === true) {
+        return {
+          ruleId: "RULE_CELULAR_VIVA_VOZ",
+          title: "Uso por Sistema de Viva-Voz / Bluetooth (Art. 252)",
+          description: "O caso registra uso por sistema de viva-voz, hip\xF3tese em que n\xE3o h\xE1 manuseio do aparelho e portanto inexiste a conduta tipificada no art. 252 do CTB.",
+          severity: "media",
+          legalArgumentId: "ARG-019",
+          impact: "Anula\xE7\xE3o da autua\xE7\xE3o por aus\xEAncia da conduta descrita no tipo.",
+          statutoryBasis: "Art. 252 do CTB c/c Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito (Res. CONTRAN 985/2022)"
+        };
+      }
+      return null;
+    }
+  },
+  // RULE-013: Estacionamento em vaga especial com credencial (Art. 181, XX).
+  {
+    id: "RULE_ESTACIONAMENTO_VAGA_ESPECIAL",
+    name: "Vaga Especial com Credencial de PCD/Idoso (Art. 181, XX c/c Res. 965/2022 e 966/2022)",
+    description: "Valida a autua\xE7\xE3o de estacionamento quando o caso comprova credencial v\xE1lida para vaga especial.",
+    category: "direito_material",
+    validFrom: "2021-01-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode"],
+    relatedArguments: ["ARG-024"],
+    families: ["estacionamento", "cinto"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["Cart\xE3o de credencial de vaga especial vigente e afixado no ve\xEDculo"],
+    priority: 84,
+    evaluate: (ctx) => {
+      const flags = ctx.evidenceFlags ?? {};
+      if (flags.creditoIdosoPc === true || flags.credencialPcd === true || flags.vagaDeficiente === true) {
+        return {
+          ruleId: "RULE_ESTACIONAMENTO_VAGA_ESPECIAL",
+          title: "Vaga Especial com Credencial V\xE1lida (Art. 181, XX)",
+          description: "O ve\xEDculo ocupava vaga especial credenciada, hip\xF3tese em que a restri\xE7\xE3o de hor\xE1rio n\xE3o se aplica ao credenciado.",
+          severity: "media",
+          legalArgumentId: "ARG-024",
+          impact: "Anula\xE7\xE3o da autica\xE7\xE3o de estacionamento.",
+          statutoryBasis: "Art. 181, XX do CTB c/c Resolu\xE7\xF5es CONTRAN n\xBA 965/2022 e 966/2022"
+        };
+      }
+      return null;
+    }
+  },
+  // RULE-014: Alcoolemia — recusa do teste com oferecimento de contraprova.
+  {
+    id: "RULE_ALCOLEMAIA_RECUISA",
+    name: "Recusa ao Teste do Etil\xF4metro sem Termo de Sinais (Lei Seca)",
+    description: "Valida a autua\xE7\xE3o de alcoolemia quando o caso registra recusa do teste sem termo de constata\xE7\xE3o de sinais psicomotores.",
+    category: "direito_formal",
+    validFrom: "2008-06-20",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode"],
+    relatedArguments: ["ARG-027", "ARG-025"],
+    families: ["alcoolemia"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "suspensao_cnh"],
+    evidenceRequired: ["C\xF3pia do AIT com o registro da recusa", "Termo de Constata\xE7\xE3o de Sinais (Anexo II da Res. 432/2013) quando existente"],
+    priority: 90,
+    evaluate: (ctx) => {
+      if (ctx.refusedTest !== true) return null;
+      if (ctx.hasPsychomotorTerm === false) {
+        return {
+          ruleId: "RULE_ALCOLEMAIA_RECUISA",
+          title: "Recusa ao Teste sem Termo de Constata\xE7\xE3o de Sinais (Res. 432/2013)",
+          description: "A autua\xE7\xE3o por recusa exige o preenchimento do Termo do Anexo II da Resolu\xE7\xE3o CONTRAN 432/2013 com o conjunto not\xF3rio de sinais cl\xEDnicos.",
+          severity: "alta",
+          legalArgumentId: "ARG-025",
+          impact: "Anula\xE7\xE3o do AIT e do processo de suspens\xE3o da CNH.",
+          statutoryBasis: "Art. 277 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, Art. 5\xBA e Anexo II"
+        };
+      }
+      return {
+        ruleId: "RULE_ALCOLEMAIA_RECUISA",
+        title: "Recusa ao Teste do Etil\xF4metro (Art. 5\xBA, LXIII da CF/88)",
+        description: "A recusa ao teste de alcoolemia, ainda que v\xE1lida, n\xE3o prova a condu\xE7\xE3o sob influ\xEAncia; o conjunto probat\xF3rio deve ser autossuficiente.",
+        severity: "alta",
+        legalArgumentId: "ARG-027",
+        impact: "Redu\xE7\xE3o do poder probat\xF3rio da recusa isolada.",
+        statutoryBasis: "Art. 5\xBA, LXIII da CF/88 c/c Art. 8\xBA da CADH"
+      };
+    }
+  },
+  // RULE-015: Estacionamento sem sinalização regulamentar (Art. 90).
+  {
+    id: "RULE_ESTACIONAMENTO_SEM_SIN_R6A",
+    name: "Estacionamento sem Sinaliza\xE7\xE3o Regulamentar (Art. 90 c/c Res. 973/2022)",
+    description: "Valida a autua\xE7\xE3o de estacionamento quando o caso registra inexist\xEAncia de sinaliza\xE7\xE3o regulamentar.",
+    category: "sinalizacao_viaria",
+    validFrom: "2022-01-01",
+    validUntil: null,
+    version: 1,
+    jurisdiction: "federal",
+    requiredData: ["infractionCode"],
+    relatedArguments: ["ARG-020"],
+    families: ["estacionamento"],
+    affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
+    evidenceRequired: ["Fotografias do trecho demonstrando aus\xEAncia da placa R-6a"],
+    priority: 80,
+    evaluate: (ctx) => {
+      if (ctx.hasRegulatorySign === false) {
+        return {
+          ruleId: "RULE_ESTACIONAMENTO_SEM_SIN_R6A",
+          title: "Aus\xEAncia de Sinaliza\xE7\xE3o Regulamentar no Trecho (Art. 90)",
+          description: "A via n\xE3o possuia sinaliza\xE7\xE3o vertical R-6a de proibi\xE7\xE3o de estacionamento, o que torna inexig\xEDvel a san\xE7\xE3o.",
+          severity: "media",
+          legalArgumentId: "ARG-020",
+          impact: "Anula\xE7\xE3o da autua\xE7\xE3o por inexigibilidade.",
+          statutoryBasis: "Art. 90 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 973/2022"
+        };
+      }
+      return null;
+    }
+  },
   // RULE-010: Validações formais complementares (prescrição intercorrente,
   // duplicidade de autuação, infração já convertida em advertência).
   // Tese vinculada: nenhuma específica — funciona como gate estrutural.
@@ -23474,6 +23837,7 @@ var EXPERT_RULES = [
     jurisdiction: "federal",
     requiredData: ["aitNumber", "autuadorBody", "infractionDate"],
     relatedArguments: ["ARG-049"],
+    families: ["excesso_velocidade", "alcoolemia", "semaforo", "celular", "estacionamento", "cinto", "documentos", "circulacao", "capacidade", "lotacao"],
     affectedProcedures: ["defesa_previa", "recurso_jari", "recurso_cetran"],
     evidenceRequired: ["C\xF3pia integral do Auto de Infra\xE7\xE3o"],
     priority: 60,
@@ -23527,8 +23891,13 @@ var ExpertRuleEngine = class {
     }
     const effectiveDate = referenceDate || infraction.dateTime || infraction.notificationExpeditionDate || (/* @__PURE__ */ new Date()).toISOString();
     const engineStartedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const classification = classifyInfraction(infraction);
+    const eligible = new Set(classification.eligibleArgumentIds);
     const context = {
-      infractionCode: infraction.infractionCode,
+      // Usa o código real da infração se estiver no catálogo; caso contrário
+      // usa o primeiro código canônico da família (para códigos fora do catálogo
+      // como 275-10 → alcoolemia). Isso preserva a especificidade (745-70 vs 745-50).
+      infractionCode: classification.catalogCodes.some((c) => c.replace("-", "") === classification.normalizedCode) ? classification.normalizedCode : classification.catalogCodes[0] ?? classification.inputCode,
       infractionDate: infraction.dateTime,
       notificationExpeditionDate: infraction.notificationExpeditionDate,
       notificationDeliveryDate: infraction.notificationDeliveryDate,
@@ -23546,7 +23915,14 @@ var ExpertRuleEngine = class {
       hasPsychomotorTerm: infraction.hasPsychomotorTerm,
       hasAgentDetailedObservations: infraction.hasAgentDetailedObservations,
       hasPhotoProof: infraction.hasPhotoProof,
-      hasR19SignageProof: infraction.hasR19SignageProof
+      hasR19SignageProof: infraction.hasR19SignageProof,
+      hasRegulatorySign: infraction.hasRegulatorySign,
+      refusedTest: infraction.refusedTest,
+      offeredRetest: infraction.offeredRetest,
+      yellowPhaseCrossing: infraction.yellowPhaseCrossing,
+      cellphoneCircumstance: infraction.cellphoneCircumstance,
+      emergencyPassage: infraction.emergencyPassage,
+      evidenceFlags: infraction.evidenceFlags
     };
     const detectedInconsistencies = [];
     const detectedFlaws = [];
@@ -23556,6 +23932,19 @@ var ExpertRuleEngine = class {
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     const activeRules = this.getActiveRules(effectiveDate);
     for (const rule of activeRules) {
+      const families = rule.families;
+      const applicable = !families || families.includes(classification.family);
+      if (!applicable) {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: "NOT_APPLICABLE",
+          evaluatedAt: nowIso,
+          reason: `Regra restrita \xE0s fam\xEDlias [${families?.join(", ")}]; a infra\xE7\xE3o foi classificada como "${classification.family}".`,
+          inputs: { infractionFamily: classification.family }
+        });
+        continue;
+      }
       const missingData = (rule.requiredData || []).filter((key) => {
         const value = context[key];
         return value === void 0 || value === null || value === "";
@@ -23634,8 +24023,9 @@ ${p.text}`).join("\n\n"),
         });
       }
     }
+    const hasDualNotificationViolation = context.notificationExpeditionDate && !context.notificationDeliveryDate;
     const constArg = ARGUMENTS_CATALOG.find((a) => a.id === "ARG-049");
-    if (constArg && !recommendedArgs.some((r) => r.id === constArg.id)) {
+    if (constArg && hasDualNotificationViolation && !recommendedArgs.some((r) => r.id === constArg.id)) {
       recommendedArgs.push({
         id: constArg.id,
         code: constArg.code,
@@ -23644,12 +24034,11 @@ ${p.text}`).join("\n\n"),
         legalBase: constArg.legalBase,
         contranResolution: constArg.resolutions.join(", "),
         summary: constArg.description,
-        detailedText: constArg.formattedParagraphs.map((p) => `${p.heading}
-${p.text}`).join("\n\n"),
+        detailedText: constArg.formattedParagraphs.map((p) => p.heading + "\n" + p.text).join("\n\n"),
         confidenceScore: constArg.confidenceScore,
         applicabilityNote: constArg.whenToUse.join("; ")
       });
-      detectedFlaws.push({
+      const flaw = {
         ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
         argumentId: "ARG-049",
         severity: "alta",
@@ -23657,7 +24046,8 @@ ${p.text}`).join("\n\n"),
         description: "Inje\xE7\xE3o obrigat\xF3ria de tese constitucional de garantia do contradit\xF3rio e ampla defesa",
         impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
         statutoryBasis: "Art. 5\xBA, LIV e LV da CF/88 c/c S\xFAmula 312 do STJ"
-      });
+      };
+      detectedFlaws.push(flaw);
       evaluatedRules.push({
         ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
         name: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
@@ -23666,18 +24056,25 @@ ${p.text}`).join("\n\n"),
         legalArgumentId: "ARG-049",
         impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
         severity: "alta",
-        reason: "Inje\xE7\xE3o obrigat\xF3ria de tese constitucional de garantia do contradit\xF3rio",
+        reason: "Viola\xE7\xE3o da dupla notifica\xE7\xE3o: autua\xE7\xE3o expedida mas n\xE3o entregue, seguido de penalidade direta",
         inputs: {
           notificationExpeditionDate: context.notificationExpeditionDate,
           notificationDeliveryDate: context.notificationDeliveryDate
         }
       });
+      detectedInconsistencies.push({
+        title: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
+        description: "Viola\xE7\xE3o da dupla notifica\xE7\xE3o: autua\xE7\xE3o expedida mas n\xE3o entregue, seguido de penalidade direta",
+        severity: "alta",
+        legalArgumentId: "ARG-049",
+        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o"
+      });
     }
-    let procedure = "recurso_jari";
-    if (infraction.infractionCode === "516-91" || infraction.infractionCode === "747-10") {
-      procedure = "suspensao_cnh";
-    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-051")) {
+    let procedure = CANONICAL_PROCEDURE_BY_FAMILY[classification.family] || "";
+    if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-051")) {
       procedure = "conversao_advertencia";
+    } else if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-025")) {
+      procedure = "suspensao_cnh";
     }
     let baseScore = 35;
     if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-048")) {
@@ -23706,7 +24103,7 @@ ${p.text}`).join("\n\n"),
     return {
       id: `anl_${Date.now()}`,
       caseId,
-      engineVersion: "2.6.0",
+      engineVersion: "2.7.0",
       engineStartedAt,
       engineFinishedAt,
       overallSuccessRate,
@@ -23721,6 +24118,14 @@ ${p.text}`).join("\n\n"),
       integrityScore,
       dataGaps: dataGaps.length > 0 ? dataGaps : void 0,
       summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.${gapSummary}`,
+      infractionClassification: {
+        family: classification.family,
+        basis: classification.basis,
+        confidence: classification.confidence,
+        catalogCodes: classification.catalogCodes,
+        eligibleArgumentIds: classification.eligibleArgumentIds,
+        notes: classification.notes
+      },
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
@@ -23788,6 +24193,98 @@ function formatRoll(items, aitNumber) {
   return `ROL DE DOCUMENTOS QUE INSTRUEM A PRESENTE PE\xC7A:
 
 ${list}`;
+}
+
+// src/core/documents/facts-narrative.ts
+var str = (v) => v === void 0 || v === null || v === "" ? "" : String(v);
+var has = (v) => str(v).trim().length > 0;
+var dateBR = (value) => {
+  if (!has(value)) return "";
+  const raw = String(value).trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
+  if (iso) {
+    const calendarDate = iso[3] + "/" + iso[2] + "/" + iso[1];
+    return iso[4] ? calendarDate + " \xE0s " + iso[4] + ":" + iso[5] : calendarDate;
+  }
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString("pt-BR");
+};
+function buildFactsNarrative(infraction) {
+  const declared = [];
+  const omitted = [];
+  const mention = (field, value) => {
+    if (!has(value)) {
+      omitted.push(field);
+      return "";
+    }
+    declared.push(field);
+    return str(value);
+  };
+  const ait = mention("infraction.aitNumber", infraction.aitNumber);
+  const orgao = mention("infraction.autuadorBody", infraction.autuadorBody);
+  const artigo = mention("infraction.ctbArticle", infraction.ctbArticle);
+  const descricao = mention("infraction.description", infraction.description);
+  const dataInfra = mention("infraction.dateTime", infraction.dateTime);
+  const local = mention("infraction.location", infraction.location);
+  const codigo = mention("infraction.infractionCode", infraction.infractionCode);
+  const gravidade = mention("infraction.severity", infraction.severity);
+  const pontos = mention("infraction.points", infraction.points);
+  const multa = mention("infraction.fineAmount", infraction.fineAmount);
+  const vMedida = mention("infraction.measuredSpeed", infraction.measuredSpeed);
+  const vConsiderada = mention("infraction.consideredSpeed", infraction.consideredSpeed);
+  const vLimite = mention("infraction.speedLimit", infraction.speedLimit);
+  const radar = mention("infraction.radarEquipmentId", infraction.radarEquipmentId);
+  const afericao = mention("infraction.inmetroAferitionDate", infraction.inmetroAferitionDate);
+  const recusa = mention("infraction.refusedTest", infraction.refusedTest === true ? "sim" : "");
+  const reteste = mention("infraction.offeredRetest", infraction.offeredRetest === true ? "sim" : "");
+  const psicomotor = mention("infraction.hasPsychomotorTerm", infraction.hasPsychomotorTerm === true ? "sim" : "");
+  const amarelo = mention("infraction.yellowPhaseCrossing", infraction.yellowPhaseCrossing === true ? "sim" : "");
+  const vivaVoz = mention("infraction.cellphoneCircumstance", infraction.cellphoneCircumstance);
+  const emergencia = mention("infraction.emergencyPassage", infraction.emergencyPassage === true ? "sim" : "");
+  const head = [];
+  if (ait) head.push(`Auto de Infra\xE7\xE3o n\xBA ${ait}`);
+  if (orgao) head.push(`lavrado pelo(a) ${orgao}`);
+  if (dataInfra) head.push(`na data de ${dateBR(dataInfra)}`);
+  if (local) head.push(`no local ${local}`);
+  const tipificacao = [];
+  if (artigo) tipificacao.push(artigo);
+  if (descricao) tipificacao.push(`"${descricao}"`);
+  if (codigo) tipificacao.push(`c\xF3digo ${codigo}`);
+  const sancoes = [];
+  if (gravidade) {
+    const g = `gravidade ${gravidade}`;
+    sancoes.push(pontos ? `${g}, ${pontos} ponto(s)` : g);
+  }
+  if (multa) sancoes.push(`multa de R$ ${multa}`);
+  const medicao = [];
+  if (vMedida) medicao.push(`velocidade medida de ${vMedida} km/h`);
+  if (vConsiderada) medicao.push(`velocidade considerada de ${vConsiderada} km/h`);
+  if (vLimite) medicao.push(`velocidade m\xE1xima permitida de ${vLimite} km/h`);
+  if (radar) medicao.push(`equipamento Fiscalizador ${radar}`);
+  if (afericao) medicao.push(`\xFAltima aferi\xE7\xE3o metrol\xF3gica em ${dateBR(afericao)}`);
+  const circunstancias = [];
+  if (recusa) circunstancias.push("o condutor recusou-se a submeter-se ao teste do etil\xF4metro");
+  if (reteste) circunstancias.push("foi oferecido contraprova");
+  if (psicomotor) circunstancias.push("foi lavrado Termo de Constata\xE7\xE3o de Sinais Psicomotores");
+  if (amarelo) circunstancias.push("a travessia ocorreu durante a fase amarela do sem\xE1foro");
+  if (vivaVoz) circunstancias.push(`registro de uso do aparelho: ${vivaVoz}`);
+  if (emergencia) circunstancias.push("passagem em emerg\xEAncia para ve\xEDculo de emerg\xEAncia");
+  if (has(infraction.notes)) {
+    mention("infraction.notes", infraction.notes);
+    circunstancias.push(str(infraction.notes));
+  }
+  const paragrafos = [];
+  paragrafos.push(`Constam dos autos ${head.join(", ") || "a autua\xE7\xE3o ora impugnada"}.`);
+  if (tipificacao.length) paragrafos.push(`A conduta imputada est\xE1 tipificada no ${tipificacao.join(" \u2014 ")}.`);
+  if (sancoes.length) paragrafos.push(`A autua\xE7\xE3o foi classificada com ${sancoes.join(", ")}.`);
+  if (medicao.length) paragrafos.push(`O registro da fiscaliza\xE7\xE3o aponta ${medicao.join(", ")}.`);
+  if (circunstancias.length) paragrafos.push(`O caso registra ${circunstancias.join("; ")}.`);
+  return {
+    text: paragrafos.filter((p) => p.trim().length > 0).join("\n\n"),
+    declaredFields: Array.from(new Set(declared)),
+    omittedFields: Array.from(new Set(omitted))
+  };
 }
 
 // src/core/documents/document-assembly-engine.ts
@@ -23883,7 +24380,16 @@ ${body}`;
       month: "long",
       year: "numeric"
     });
-    const str = (v) => v === void 0 || v === null ? "" : String(v);
+    const str2 = (v) => v === void 0 || v === null ? "" : String(v);
+    const formatCaseDate = (value) => {
+      const raw = str2(value).trim();
+      if (!raw) return "";
+      const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return raw;
+      return parsed.toLocaleDateString("pt-BR");
+    };
     const speedMeasured = payload.speeds?.measured ?? payload.infraction.speedMeasured;
     const speedLimit = payload.speeds?.limit ?? payload.infraction.speedLimit;
     const speedConsidered = payload.speeds?.considered ?? payload.infraction.speedConsidered;
@@ -23894,6 +24400,7 @@ ${body}`;
     const infractionDate = payload.dates?.infractionDate || payload.infraction.dateTime || "";
     const expeditionDate = payload.dates?.expeditionDate || payload.infraction.notificationExpeditionDate || "";
     const daysElapsed = payload.dates?.daysElapsed;
+    const vehicleRenavam = payload.vehicle.renavam || "";
     const psddNumber = payload.processNumbers?.psddNumber || "";
     const pcddNumber = payload.processNumbers?.pcddNumber || "";
     const suspMonths = payload.processNumbers?.suspensionMonths;
@@ -23913,22 +24420,27 @@ ${body}`;
       "{{veiculo_placa}}": (payload.vehicle.plate || "").toUpperCase(),
       "{{veiculo_renavam}}": payload.vehicle.renavam || "",
       "{{numero_ait}}": aitNumber,
-      "{{data_infracao}}": infractionDate,
+      "{{data_infracao}}": formatCaseDate(infractionDate),
       "{{enquadramento_ctb}}": ctbArticle,
       "{{descricao_infracao}}": infractionDesc,
       "{{local_infracao}}": infractionLocation,
-      "{{gravidade_infracao}}": str(payload.infraction.severity).toUpperCase(),
+      "{{gravidade_infracao}}": str2(payload.infraction.severity).toUpperCase(),
+      "{{codigo_infracao}}": str2(payload.infraction.infractionCode ?? payload.infraction.code),
+      "{{pontos_infracao}}": str2(payload.infraction.points),
+      "{{valor_multa}}": str2(payload.infraction.fineAmount),
+      "{{equipamento_radar}}": str2(payload.infraction.radarEquipmentId),
+      "{{data_afericao}}": str2(payload.infraction.inmetroAferitionDate),
       "{{artigo_ctb}}": ctbArticle,
-      "{{velocidade_medida}}": str(speedMeasured),
-      "{{velocidade_considerada}}": str(speedConsidered),
-      "{{velocidade_limite}}": str(speedLimit),
+      "{{velocidade_medida}}": str2(speedMeasured),
+      "{{velocidade_considerada}}": str2(speedConsidered),
+      "{{velocidade_limite}}": str2(speedLimit),
       "{{data_expedicao}}": expeditionDate,
-      "{{dias_decorridos}}": str(daysElapsed),
+      "{{dias_decorridos}}": str2(daysElapsed),
       "{{data_interposicao_recurso}}": payload.dates?.appealFilingDate || "",
       "{{data_atual}}": dateFormatted,
       "{{numero_processo_psdd}}": psddNumber,
       "{{numero_processo_pcdd}}": pcddNumber,
-      "{{tempo_suspensao_meses}}": str(suspMonths),
+      "{{tempo_suspensao_meses}}": str2(suspMonths),
       "{{data_peticao}}": dateFormatted,
       // Nominated Driver (FICI)
       "{{condutor_indicado_nome}}": payload.nominatedDriver?.name || "",
@@ -23948,6 +24460,10 @@ ${body}`;
       "{{nome_representante}}": payload.company?.representativeName || payload.applicant.name,
       "{{cpf_representante}}": payload.company?.representativeCpf || payload.applicant.cpf,
       // Formatted Multi-Argument Blocks
+      // Cláusulas opcionais (A-12): campo ausente vira cadeia vazia, nunca
+      // "portador(a) do RG nº ," nem "código RENAVAM nº ,".
+      "{{rg_clausula}}": payload.applicant.rg ? `portador(a) do RG n\xBA ${payload.applicant.rg}, ` : "",
+      "{{renavam_clausula}}": vehicleRenavam ? `c\xF3digo RENAVAM n\xBA ${vehicleRenavam}, ` : "",
       "{{bloco_preliminares_formatado}}": formattedPreliminaries || "",
       "{{bloco_merito_formatado}}": formattedMerit || "",
       // Direct Shorthand Aliases (User Request Phase 4.1)
@@ -23965,10 +24481,34 @@ ${body}`;
     };
     let blocksToAssemble = [];
     if (payload.selectedBlockIds && payload.selectedBlockIds.length > 0) {
-      blocksToAssemble = payload.selectedBlockIds.map((bId) => DOCUMENT_BLOCKS.find((b) => b.id === bId)).filter((b) => !!b);
+      blocksToAssemble = payload.selectedBlockIds.map((bId) => DOCUMENT_BLOCKS.find((b) => b.id === bId)).filter((b) => !!b).map((b) => ({ id: b.id, title: b.title, contentTemplate: b.contentTemplate, type: BLOCK_TYPE_BY_CATEGORY[b.category] }));
     } else {
       blocksToAssemble = template.blocks;
     }
+    const factsNarrative = buildFactsNarrative({
+      aitNumber,
+      autuadorBody: autuador,
+      ctbArticle,
+      description: infractionDesc,
+      dateTime: infractionDate,
+      location: infractionLocation,
+      infractionCode: payload.infraction.infractionCode ?? payload.infraction.code,
+      severity: payload.infraction.severity,
+      points: payload.infraction.points,
+      fineAmount: payload.infraction.fineAmount,
+      speedLimit,
+      measuredSpeed: speedMeasured,
+      consideredSpeed: speedConsidered,
+      radarEquipmentId: payload.infraction.radarEquipmentId,
+      inmetroAferitionDate: payload.infraction.inmetroAferitionDate,
+      refusedTest: payload.infraction.refusedTest,
+      offeredRetest: payload.infraction.offeredRetest,
+      hasPsychomotorTerm: payload.infraction.hasPsychomotorTerm,
+      yellowPhaseCrossing: payload.infraction.yellowPhaseCrossing,
+      cellphoneCircumstance: payload.infraction.cellphoneCircumstance,
+      emergencyPassage: payload.infraction.emergencyPassage,
+      notes: payload.infraction.notes
+    });
     const assembledBlockTexts = [];
     const unresolvedSet = /* @__PURE__ */ new Set();
     for (const block of blocksToAssemble) {
@@ -23985,6 +24525,12 @@ ${payload.customFacts.trim()}`;
           aitNumber
         ) : buildDocumentRollText(payload.procedureType, aitNumber);
       }
+      if (block.type === "facts_narrative") {
+        const heading = content.split("\n\n")[0].trim();
+        content = `${heading}
+
+${factsNarrative.text}`.trim();
+      }
       for (const [placeholder, value] of Object.entries(variableMap)) {
         content = content.replaceAll(placeholder, value);
       }
@@ -23993,6 +24539,22 @@ ${payload.customFacts.trim()}`;
         leftoverMatches.forEach((m) => unresolvedSet.add(m));
       }
       assembledBlockTexts.push(content);
+    }
+    const templateHasPreliminarySlot = blocksToAssemble.some(
+      (b) => b.contentTemplate.includes("{{bloco_preliminares_formatado}}")
+    );
+    const templateHasMeritSlot = blocksToAssemble.some(
+      (b) => b.contentTemplate.includes("{{bloco_merito_formatado}}")
+    );
+    if (formattedPreliminaries && !templateHasPreliminarySlot) {
+      assembledBlockTexts.push("FUNDAMENTA\xC7\xC3O COMPLEMENTAR \u2014 PRELIMINARES\n\n" + formattedPreliminaries);
+    }
+    if (formattedMerit && !templateHasMeritSlot) {
+      assembledBlockTexts.push("FUNDAMENTA\xC7\xC3O COMPLEMENTAR \u2014 M\xC9RITO\n\n" + formattedMerit);
+    }
+    const assembledBeforeFacts = assembledBlockTexts.join("\n\n\n");
+    if (factsNarrative.text && !assembledBeforeFacts.includes(factsNarrative.text)) {
+      assembledBlockTexts.push("DOS FATOS \u2014 DADOS DO CASO\n\n" + factsNarrative.text);
     }
     const fullDraftText = assembledBlockTexts.join("\n\n\n");
     const resultDraft = {
@@ -24010,7 +24572,7 @@ ${payload.customFacts.trim()}`;
       vehicleModel: payload.vehicle.model,
       vehicleRenavam: payload.vehicle.renavam || "",
       aitNumber,
-      factsNarrative: payload.customFacts || "",
+      factsNarrative: payload.customFacts || factsNarrative.text,
       selectedArgumentIds: activeArgIds,
       preliminaryArgumentsText: formattedPreliminaries,
       meritArgumentsText: formattedMerit,
@@ -27073,14 +27635,14 @@ Connection: close\r
     };
     const dataHandler = (chunk) => {
       if (!headersReceived) {
-        const str = bodyBuffer.length > 0 ? Buffer.concat([bodyBuffer, chunk]).toString("utf8") : chunk.toString("utf8");
-        const headerEndIdx = str.indexOf("\r\n\r\n");
+        const str2 = bodyBuffer.length > 0 ? Buffer.concat([bodyBuffer, chunk]).toString("utf8") : chunk.toString("utf8");
+        const headerEndIdx = str2.indexOf("\r\n\r\n");
         if (headerEndIdx === -1) {
-          bodyBuffer = Buffer.from(str, "utf8");
+          bodyBuffer = Buffer.from(str2, "utf8");
           return;
         }
-        const headerSection = str.slice(0, headerEndIdx);
-        const bodyStr = str.slice(headerEndIdx + 4);
+        const headerSection = str2.slice(0, headerEndIdx);
+        const bodyStr = str2.slice(headerEndIdx + 4);
         headersReceived = true;
         const lines = headerSection.split("\r\n");
         const statusLine = lines[0];
@@ -29265,20 +29827,32 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
 
 // src/core/documents/defense-integrity.ts
 import { createHash as createHash3 } from "node:crypto";
-function computeDefenseIntegrityHash(draft, analysis) {
+function computeDefenseIntegrityHash(draft, analysis, infraction) {
   const payload = {
     fullDraftText: draft.fullDraftText ?? "",
+    factsNarrative: draft.factsNarrative ?? "",
     selectedArgumentIds: Array.isArray(draft.selectedArgumentIds) ? draft.selectedArgumentIds : [],
     procedureType: draft.procedureType ?? "",
-    analysisId: analysis?.id ?? "",
     recommendedProcedure: analysis?.recommendedProcedure ?? "",
-    recommendedArgumentIds: Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments.map((argument) => argument.id ?? "") : []
+    recommendedArgumentIds: Array.isArray(analysis?.recommendedArguments) ? analysis.recommendedArguments.map((argument) => argument.id ?? "") : [],
+    infraction: {
+      aitNumber: infraction?.aitNumber ?? "",
+      infractionCode: infraction?.infractionCode ?? "",
+      ctbArticle: infraction?.ctbArticle ?? "",
+      dateTime: infraction?.dateTime ?? "",
+      location: infraction?.location ?? "",
+      measuredSpeed: infraction?.measuredSpeed ?? "",
+      consideredSpeed: infraction?.consideredSpeed ?? "",
+      speedLimit: infraction?.speedLimit ?? "",
+      radarEquipmentId: infraction?.radarEquipmentId ?? "",
+      inmetroAferitionDate: infraction?.inmetroAferitionDate ?? ""
+    }
   };
   return createHash3("sha256").update(JSON.stringify(payload), "utf8").digest("hex");
 }
-function hasValidDefenseIntegrity(draft, analysis) {
+function hasValidDefenseIntegrity(draft, analysis, infraction) {
   if (!draft.integrityHash) return false;
-  return draft.integrityHash === computeDefenseIntegrityHash(draft, analysis);
+  return draft.integrityHash === computeDefenseIntegrityHash(draft, analysis, infraction);
 }
 
 // src/server/payments/case-access.ts
@@ -31962,20 +32536,13 @@ init_supabase();
 // src/server/services/scrape-worker.ts
 init_supabase();
 init_logger();
-import { Queue, Worker } from "bullmq";
-import Redis from "ioredis";
 import { randomUUID as randomUUID3 } from "crypto";
 var ScrapeWorkerService = class _ScrapeWorkerService {
   constructor() {
-    this.queue = null;
-    this.worker = null;
-    this.redisConnection = null;
     this.fallbackTimer = null;
     this.isProcessingFallback = false;
-    this.isBullMqActive = false;
     this.POLL_INTERVAL_MS = 4e3;
-    this.QUEUE_NAME = "google-maps-scrape-jobs";
-    this.initBullMQ();
+    logger2.info("ScrapeWorkerService inicializado (modo Supabase nativo \u2014 sem Redis/BullMQ).");
   }
   static {
     this.instance = null;
@@ -31985,63 +32552,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       _ScrapeWorkerService.instance = new _ScrapeWorkerService();
     }
     return _ScrapeWorkerService.instance;
-  }
-  initBullMQ() {
-    const redisUrl = process.env.REDIS_URL || process.env.REDISCLOUD_URL;
-    const redisHost = process.env.REDIS_HOST;
-    const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
-    if (redisUrl || redisHost) {
-      try {
-        this.redisConnection = redisUrl ? new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false }) : new Redis({
-          host: redisHost,
-          port: redisPort,
-          password: process.env.REDIS_PASSWORD || void 0,
-          maxRetriesPerRequest: null,
-          enableReadyCheck: false
-        });
-        this.redisConnection.on("error", (err) => {
-          logger2.warn("Aviso de conex\xE3o Redis (BullMQ Scraper):", { error: err.message });
-        });
-        this.queue = new Queue(this.QUEUE_NAME, {
-          connection: this.redisConnection,
-          defaultJobOptions: {
-            attempts: 3,
-            backoff: { type: "exponential", delay: 3e3 },
-            // Retenção operacional: jobs concluídos expiram após 24 h,
-            // jobs falhados após 7 dias — ASVS 5.0 V14.2.7.
-            removeOnComplete: { age: 86400 },
-            removeOnFail: { age: 604800 }
-          }
-        });
-        this.worker = new Worker(
-          this.QUEUE_NAME,
-          async (job) => {
-            return this.processJob(job.data.jobId, job.data.config, job.data.collectionRunId);
-          },
-          {
-            connection: this.redisConnection,
-            concurrency: 1
-            // Single headless browser at a time for stability and resource sanity
-          }
-        );
-        this.worker.on("completed", (job) => {
-          logger2.info("BullMQ Scrape Job conclu\xEDdo com sucesso", { jobId: job.data.jobId });
-        });
-        this.worker.on("failed", (job, err) => {
-          logger2.error("BullMQ Scrape Job falhou", { jobId: job?.data.jobId, error: err.message });
-        });
-        this.isBullMqActive = true;
-        logger2.info("BullMQ Scrape Worker inicializado com sucesso.");
-      } catch (err) {
-        logger2.warn("N\xE3o foi poss\xEDvel conectar ao Redis, utilizando engine de fila de banco:", {
-          error: err instanceof Error ? err.message : String(err)
-        });
-        this.isBullMqActive = false;
-      }
-    } else {
-      logger2.info("Redis n\xE3o configurado. Utilizando engine resiliente via Supabase.");
-      this.isBullMqActive = false;
-    }
   }
   /**
    * Enfileira um novo job de scraping e retorna o registro inicial.
@@ -32086,22 +32596,7 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       logger2.error("Erro ao persistir collection_run no banco", { error: error.message, id });
       throw new Error(`Falha ao registrar job no banco: ${error.message}`);
     }
-    if (this.isBullMqActive && this.queue) {
-      try {
-        await this.queue.add(
-          "scrape",
-          { jobId: id, config, collectionRunId: id },
-          { jobId: id }
-        );
-        logger2.info("Job enfileirado no BullMQ", { id });
-      } catch (err) {
-        logger2.warn("Falha ao enfileirar no BullMQ, processamento ser\xE1 feito pelo worker DB:", {
-          id,
-          error: err instanceof Error ? err.message : String(err)
-        });
-      }
-    }
-    logger2.info("Job de scraping registrado com sucesso", { id, config });
+    logger2.info("Job de scraping registrado com sucesso (Supabase)", { id, config });
     return jobRecord;
   }
   /**
@@ -32138,15 +32633,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
       logger2.error("Erro ao cancelar job no banco", { id, error: error.message });
       return false;
     }
-    if (this.isBullMqActive && this.queue) {
-      try {
-        const bullJob = await this.queue.getJob(id);
-        if (bullJob) {
-          await bullJob.remove().catch(() => void 0);
-        }
-      } catch {
-      }
-    }
     logger2.info("Job de scraping cancelado com sucesso", { id });
     return true;
   }
@@ -32161,7 +32647,7 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
     }
     this.fallbackTimer = setInterval(() => this.processNextDBJob(), this.POLL_INTERVAL_MS);
     this.processNextDBJob();
-    logger2.info("ScrapeWorker background loop iniciado.");
+    logger2.info("ScrapeWorker background loop iniciado (polling Supabase).");
   }
   /**
    * Para o worker loop.
@@ -32170,12 +32656,6 @@ var ScrapeWorkerService = class _ScrapeWorkerService {
     if (this.fallbackTimer) {
       clearInterval(this.fallbackTimer);
       this.fallbackTimer = null;
-    }
-    if (this.worker) {
-      this.worker.close().catch(() => void 0);
-    }
-    if (this.queue) {
-      this.queue.close().catch(() => void 0);
     }
     logger2.info("ScrapeWorker background loop parado.");
   }
@@ -35094,10 +35574,10 @@ function report(artifact, issues) {
 
 // src/core/validation/data-lineage.ts
 function hashValue(value) {
-  const str = JSON.stringify(value);
+  const str2 = JSON.stringify(value);
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
+  for (let i = 0; i < str2.length; i++) {
+    const char = str2.charCodeAt(i);
     hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
@@ -35156,7 +35636,8 @@ function buildDataLineage(onboardingPayload, canonicalCase, analysis, finalDocum
   if (analysis?.evaluatedRules) {
     for (const rule of analysis.evaluatedRules) {
       const ruleInputs = rule.inputs || {};
-      for (const [inputKey] of Object.entries(ruleInputs)) {
+      for (const [inputKey, inputValue] of Object.entries(ruleInputs)) {
+        if (inputValue === void 0) continue;
         const mappedField = mapRuleInputToField(inputKey);
         if (mappedField) {
           const entry = entriesMap.get(mappedField);
@@ -35167,7 +35648,7 @@ function buildDataLineage(onboardingPayload, canonicalCase, analysis, finalDocum
           } else {
             entriesMap.set(mappedField, {
               field: mappedField,
-              valueHash: hashValue(ruleInputs[inputKey]),
+              valueHash: hashValue(inputValue),
               source: "rule_engine",
               usedByRules: [rule.ruleId],
               generatedArguments: [],
@@ -35319,6 +35800,8 @@ function mapRuleInputToField(ruleInput) {
 
 // src/core/validation/final-quality-gate.ts
 var REQUIRED_ONBOARDING_FIELDS = [
+  // Esquema canônico de onboarding (identification / infraction / applicant / vehicle)
+  // Corrigido: data-lineage gera 'infraction.aitNumber', não 'identification.aitNumber'
   { path: "infraction.aitNumber", label: "N\xFAmero do AIT" },
   { path: "vehicle.plate", label: "Placa do ve\xEDculo" },
   { path: "applicant.name", label: "Nome do requerente" },
@@ -35368,6 +35851,27 @@ var CONTRADICTION_RULES = [
     message: "Datas inconsistentes com decad\xEAncia"
   }
 ];
+function documentContainsValue(document2, raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return true;
+  const haystack = document2.toLowerCase();
+  const variants = /* @__PURE__ */ new Set();
+  variants.add(value);
+  variants.add(value.replace(/-/g, " "));
+  variants.add(value.replace(/[.,]/g, ""));
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, y, m, d] = isoDate;
+    variants.add(`${d}/${m}/${y}`);
+    variants.add(`${d}-${m}-${y}`);
+  }
+  const brDate = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brDate) {
+    const [, d, m, y] = brDate;
+    variants.add(`${y}-${m}-${d}`);
+  }
+  return Array.from(variants).some((v) => v.length > 0 && haystack.includes(v.toLowerCase()));
+}
 function runFinalQualityGate(input) {
   const { onboardingPayload, canonicalCase, analysis, finalDocument, lineage, argumentsCatalog, blocksCatalog } = input;
   const checks = [];
@@ -35396,12 +35900,14 @@ function runCompletudeCheck(lineage, finalDocument) {
   const missingInDoc = [];
   for (const req of REQUIRED_ONBOARDING_FIELDS) {
     const entry = lineage.entries.find((e) => e.field === req.path);
-    if (!entry || !entry.originalValue) {
+    const inLineage = !!entry && !!entry.originalValue;
+    const inDocument = inLineage ? documentContainsValue(finalDocument, entry.originalValue) : false;
+    if (!inLineage && !inDocument) {
       missing.push(req.label);
       continue;
     }
-    if (entry.documentOccurrences === 0 && entry.requiredInDocument) {
-      missingInDoc.push(`${req.label} (${req.path})`);
+    if (inDocument && !inLineage) {
+      missingInDoc.push(`${req.label} (${req.path}) \u2014 presente no documento, ausente no onboarding`);
     }
   }
   const allMissing = [...missing, ...missingInDoc];
@@ -35420,9 +35926,8 @@ function runFidelidadeCheck(lineage, finalDocument, onboardingPayload) {
     if (!entry.originalValue || entry.source !== "onboarding") continue;
     if (entry.requiredInDocument && entry.documentOccurrences === 0) continue;
     const expectedStr = String(entry.originalValue).trim();
-    if (expectedStr.length < 3) continue;
-    const regex = new RegExp(expectedStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const matches = finalDocument.match(regex);
+    if (expectedStr.length < 1) continue;
+    const matches = documentContainsValue(finalDocument, expectedStr) ? [expectedStr] : null;
     if (!matches && entry.requiredInDocument) {
       mismatches.push({
         field: entry.field,
@@ -35457,19 +35962,17 @@ function runConsistenciaCheck(lineage) {
 }
 function runCausalidadeCheck(lineage, analysis) {
   const causalFailures = [];
-  if (analysis?.evaluatedRules) {
-    for (const rule of analysis.evaluatedRules) {
-      if (rule.status === "FAIL" && rule.legalArgumentId) {
-        const ruleInputs = rule.inputs || {};
-        for (const [inputKey, inputValue] of Object.entries(ruleInputs)) {
-          const mappedField = mapRuleInputToField2(inputKey);
-          if (mappedField) {
-            const entry = lineage.entries.find((e) => e.field === mappedField);
-            if (!entry || !entry.originalValue) {
-              causalFailures.push(`${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`);
-            }
-          }
-        }
+  for (const rule of analysis?.evaluatedRules ?? []) {
+    if (rule.status !== "FAIL" || !rule.legalArgumentId) continue;
+    for (const [inputKey, inputValue] of Object.entries(rule.inputs ?? {})) {
+      if (inputValue === void 0 || inputValue === null || inputValue === "") continue;
+      const mappedField = mapRuleInputToField2(inputKey);
+      if (!mappedField) continue;
+      const entry = lineage.entries.find((e) => e.field === mappedField);
+      if (!entry) {
+        causalFailures.push(
+          `${rule.ruleId} (${rule.legalArgumentId}): dado disparador "${mappedField}" ausente no onboarding`
+        );
       }
     }
   }
@@ -35612,20 +36115,22 @@ function isStandardTemplatePhrase(text, description) {
 function runEstruturaCheck(finalDocument, canonicalCase, analysis, blocksCatalog) {
   const missingSections = [];
   const requiredSections = [
-    { pattern: /ilustríssimo senhor/i, label: "Endere\xE7amento" },
-    { pattern: /qualifica[çc][aã]o/i, label: "Qualifica\xE7\xE3o do requerente" },
-    { pattern: /identifica[çc][aã]o do auto|auto de infra[çc][aã]o/i, label: "Identifica\xE7\xE3o do AIT" },
-    { pattern: /dos fatos|dos fatos e fundamentos/i, label: "Dos fatos" },
-    { pattern: /preliminares?/i, label: "Preliminares" },
-    { pattern: /mérito|do mérito/i, label: "M\xE9rito" },
-    { pattern: /pedidos?|requer/i, label: "Pedidos" },
-    { pattern: /rol de documentos|documentos anexos/i, label: "Rol de documentos" },
-    { pattern: /nestes termos|termos em que|pede deferimento/i, label: "Fecho/Assinatura" }
+    { ok: /ilustr[íi]ssimo/i, label: "Endere\xE7amento" },
+    { ok: /\d{3}\.\d{3}\.\d{3}-\d{2}/.test(finalDocument) && /\bCNH\b/i.test(finalDocument), label: "Qualifica\xE7\xE3o do requerente (CPF e CNH)" },
+    { ok: /auto de infra[çc][ãa]o|AIT\s*n[ºo°]/i.test(finalDocument), label: "Identifica\xE7\xE3o do AIT" },
+    { ok: /dos fatos/i.test(finalDocument), label: "Dos fatos" },
+    { ok: /preliminares/i.test(finalDocument), label: "Preliminares" },
+    { ok: /m[ée]rito/i.test(finalDocument), label: "M\xE9rito" },
+    { ok: /requer|pedidos?/i.test(finalDocument), label: "Pedidos" },
+    { ok: /rol de documentos/i.test(finalDocument), label: "Rol de documentos" },
+    { ok: /nestes termos|termos em que|pede deferimento/i.test(finalDocument), label: "Fecho/Assinatura" }
   ];
   for (const section of requiredSections) {
-    if (!section.pattern.test(finalDocument)) {
-      missingSections.push(section.label);
-    }
+    if (!section.ok) missingSections.push(section.label);
+  }
+  const brokenFields = finalDocument.match(/(?:n[ºo°]|c[óo]digo)\s*(?:,|\s{2,})/g) ?? [];
+  if (brokenFields.length > 0) {
+    missingSections.push(`Campos obrigat\xF3rios com valor vazio: ${Array.from(new Set(brokenFields)).slice(0, 3).join(" | ")}`);
   }
   const pendingTags = finalDocument.match(/\{\{[a-zA-Z0-9_-]+\}\}/g) || [];
   if (pendingTags.length > 0) {
