@@ -119,7 +119,13 @@ export function buildDataLineage(
   if (analysis?.evaluatedRules) {
     for (const rule of analysis.evaluatedRules) {
       const ruleInputs = rule.inputs || {};
-      for (const [inputKey] of Object.entries(ruleInputs)) {
+      for (const [inputKey, inputValue] of Object.entries(ruleInputs)) {
+        // Inputs opcionais podem existir na estrutura da regra com valor undefined.
+        // Eles não representam um dado efetivamente consumido e não devem gerar
+        // uma entrada de lineage nem chegar ao hashValue (JSON.stringify(undefined)
+        // retorna undefined).
+        if (inputValue === undefined) continue;
+
         // Mapear input da regra para campo do onboarding
         const mappedField = mapRuleInputToField(inputKey);
         if (mappedField) {
@@ -132,7 +138,7 @@ export function buildDataLineage(
             // Campo usado pela regra mas não no onboarding (ex: calculado)
             entriesMap.set(mappedField, {
               field: mappedField,
-              valueHash: hashValue(ruleInputs[inputKey]),
+              valueHash: hashValue(inputValue),
               source: 'rule_engine',
               usedByRules: [rule.ruleId],
               generatedArguments: [],
