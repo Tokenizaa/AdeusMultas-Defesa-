@@ -25,7 +25,7 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   const response = await request.get(url, {
     headers: {
       apikey: required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY),
-      Authorization: `Bearer ${required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY)}`,
+      'User-Agent': 'AdeusMultas-E2E/1.0 (server-side reconciliation)',
     },
   });
   expect(response.ok(), `${table} reconciliation failed: HTTP ${response.status()}`).toBeTruthy();

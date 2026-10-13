@@ -16,6 +16,7 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   const response = await request.get(url, {
     headers: {
       apikey: required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY),
+      'User-Agent': 'AdeusMultas-E2E/1.0 (server-side reconciliation)',
     },
   });
   expect(response.ok(), `${table} reconciliation failed: HTTP ${response.status()}`).toBeTruthy();
@@ -27,7 +28,7 @@ test.afterEach(async ({ request }) => {
   const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
   const response = await request.delete(
     `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?ait_number=eq.${encodeURIComponent(generatedAit)}`,
-    { headers: { apikey: key } },
+    { headers: { apikey: key, 'User-Agent': 'AdeusMultas-E2E/1.0 (server-side cleanup)' } },
   );
   expect(response.ok(), `E2E cleanup for generated case failed: HTTP ${response.status()}`).toBeTruthy();
   generatedAit = undefined;

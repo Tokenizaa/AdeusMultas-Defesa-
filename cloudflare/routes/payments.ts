@@ -58,9 +58,16 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
+  if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
   const referenceId = `defesai_case_${caseId}`;
   const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
-  const order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(Number(offer.finalAmount) * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
+  let order;
+  try {
+    order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(Number(offer.finalAmount) * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
+  } catch {
+    throw new HTTPException(503, { message: 'Não foi possível iniciar o pagamento. Nenhuma cobrança foi confirmada.' });
+  }
+  if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
   const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId, gatewayOrderId: order.orderId, gatewayTransactionId: order.gatewayTransactionId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'pix', qrCodeText: order.pixCopyPaste || order.qrCodeText, qrCodeUrl: order.qrCodeUrl });
   return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
 });
@@ -84,7 +91,14 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   if (body.amount !== undefined && Number(body.amount) !== Number(offer.finalAmount)) throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
-  const order = await createCreditCardOrder(c.env as any, { caseId, referenceId: `defesai_case_${caseId}`, customer: { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', taxId: String(body.customerCpf || '').replace(/\D/g, '') }, amount: Number(offer.finalAmount), installments: Number(body.installments || 1), cardToken: body.cardToken, authenticationMethod: body.authenticationMethod || 'CHALLENGE', softDescriptor: body.softDescriptor, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
+  if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
+  let order;
+  try {
+    order = await createCreditCardOrder(c.env as any, { caseId, referenceId: `defesai_case_${caseId}`, customer: { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', taxId: String(body.customerCpf || '').replace(/\D/g, '') }, amount: Number(offer.finalAmount), installments: Number(body.installments || 1), cardToken: body.cardToken, authenticationMethod: body.authenticationMethod || 'CHALLENGE', softDescriptor: body.softDescriptor, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
+  } catch {
+    throw new HTTPException(503, { message: 'Não foi possível iniciar o pagamento. Nenhuma cobrança foi confirmada.' });
+  }
+  if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
   const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId: order.referenceId, gatewayOrderId: order.orderId, gatewayTransactionId: order.orderId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'credit_card' });
   return c.json({ success: true, orderId: order.orderId, status: order.status, amount: offer.finalAmount, serviceType: offer.serviceType, gateway: 'pagbank', simulated: order.simulated, paymentOrder: record });
 });

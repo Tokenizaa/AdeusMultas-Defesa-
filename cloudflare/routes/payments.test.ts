@@ -83,6 +83,23 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(400);
   });
 
+  it('fails closed when production payment credentials are absent', async () => {
+    const pix = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-no-gateway' }),
+    }, { PAYMENT_MODE: 'production', PAGBANK_ENV: 'production' } as any);
+    const card = await app().request('/api/payments/credit-card/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-no-gateway', cardToken: 'tok-test' }),
+    }, { PAYMENT_MODE: 'production', PAGBANK_ENV: 'production' } as any);
+
+    expect(pix.status).toBe(503);
+    expect(card.status).toBe(503);
+    expect(h.insertChain).not.toHaveBeenCalled();
+  });
+
   it('rejects a client-supplied amount that diverges from the server offer', async () => {
     const response = await app().request('/api/payments/credit-card/create', {
       method: 'POST',
@@ -97,7 +114,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
-    }, { APP_URL: 'https://adeusmulta.defesai.com.br' } as any);
+    }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production' } as any);
     expect(response.status).toBe(200);
     const body = await response.json() as any;
     expect(body.success).toBe(true);

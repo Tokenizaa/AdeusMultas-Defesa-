@@ -27,6 +27,10 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   SUPABASE_ANON_KEY?: string;
+  PAGBANK_TOKEN?: string;
+  PAGBANK_ENV?: 'sandbox' | 'production';
+  PAGBANK_WEBHOOK_SECRET?: string;
+  PAYMENT_MODE?: 'sandbox' | 'production';
   VITE_SUPABASE_ANON_KEY?: string;
   EVOLUTION_API_URL?: string;
   EVOLUTION_API_KEY?: string;
