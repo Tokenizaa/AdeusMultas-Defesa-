@@ -18,6 +18,7 @@ import type { NextFunction, Request, Response } from 'express';
 // ── hoisted mocks (must precede imports) ──────────────────────────────────
 
 const mockDb = vi.hoisted(() => new Map<string, any>());
+const auditLogsMock = vi.hoisted(() => [] as any[]);
 const getClientMock = vi.hoisted(() => vi.fn());
 const getUserMock = vi.hoisted(() => vi.fn());
 
@@ -26,7 +27,7 @@ const publishMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/stores', () => ({
   databaseRows: mockDb,
-  auditLogs: [],
+  auditLogs: auditLogsMock,
 }));
 
 vi.mock('@/core/events/topics', () => ({
@@ -301,9 +302,6 @@ describe('FASE 4.1 — DELETE /cases/:id — LGPD Art. 18', () => {
   // ── Audit log ─────────────────────────────────────────────────────────────
 
   it('records CASE_ANONYMIZED in auditLogs', async () => {
-    // Re-import to get the mock's auditLogs reference
-    const { auditLogs } = await import('@/server/app');
-
     mockDb.set('case_audit', makeRow('case_audit', USER_OWNER.id));
 
     const req = makeReq({ params: { id: 'case_audit' } });
@@ -312,7 +310,7 @@ describe('FASE 4.1 — DELETE /cases/:id — LGPD Art. 18', () => {
     await deleteHandler(req, res, noopNext);
 
     expect(res.statusCode).toBe(200);
-    const entry = auditLogs.find((l: any) => l.action === 'CASE_ANONYMIZED');
+    const entry = auditLogsMock.find((l: any) => l.action === 'CASE_ANONYMIZED');
     expect(entry).toBeDefined();
     expect(entry.targetResource).toBe('case_audit');
     expect(entry.gdprCompliant).toBe(true);

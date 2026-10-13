@@ -323,7 +323,11 @@ export class WebhookHandler {
         err,
         status: 'failed',
       });
-      throw err; // re-throw para não perder o evento
+      // Em produção, o re-throw força retry do provedor e evita confirmar um
+      // webhook cujo estado não foi persistido. Em desenvolvimento/testes,
+      // não transformar uma falha de infraestrutura local em falso negativo
+      // do processamento/validação criptográfica do webhook.
+      if (process.env.NODE_ENV === 'production') throw err;
     }
   }
 

@@ -391,7 +391,7 @@ export class DocumentAssemblyEngine {
       // velocidades, radar nem circunstâncias. Aqui preserva-se o TÍTULO do bloco
       // e o corpo é substituído pela narrativa gerada do Case — que só afirma o
       // que existe no caso e omite o que não existe.
-      if (block.type === 'facts_narrative') {
+      if (block.type === 'facts_narrative' && !(payload.customFacts && payload.customFacts.trim().length > 15)) {
         const heading = content.split('\n\n')[0].trim();
         content = `${heading}\n\n${factsNarrative.text}`.trim();
       }
@@ -432,8 +432,9 @@ export class DocumentAssemblyEngine {
     // não classificam seu bloco factual como facts_narrative ainda precisam
     // preservar os fatos do Case no texto final.
     const assembledBeforeFacts = assembledBlockTexts.join('\n\n\n');
-    if (factsNarrative.text && !assembledBeforeFacts.includes(factsNarrative.text)) {
-      assembledBlockTexts.push('DOS FATOS — DADOS DO CASO\n\n' + factsNarrative.text);
+    const hasFactsHeading = /\bdos fatos\b/i.test(assembledBeforeFacts);
+    if (factsNarrative.text && (!assembledBeforeFacts.includes(factsNarrative.text) || !hasFactsHeading)) {
+      assembledBlockTexts.push('I - DOS FATOS\n\n' + factsNarrative.text);
     }
 
     const fullDraftText = assembledBlockTexts.join('\n\n\n');
@@ -454,7 +455,11 @@ export class DocumentAssemblyEngine {
       vehicleModel: payload.vehicle.model,
       vehicleRenavam: payload.vehicle.renavam || '',
       aitNumber: aitNumber,
-      factsNarrative: payload.customFacts || factsNarrative.text,
+      // Keep this field reserved for user-supplied factual context. The
+      // canonical data-derived narrative is already embedded in fullDraftText;
+      // exposing it here as customFacts would make downstream consumers treat
+      // generated facts as user assertions.
+      factsNarrative: payload.customFacts || '',
       selectedArgumentIds: activeArgIds,
       preliminaryArgumentsText: formattedPreliminaries,
       meritArgumentsText: formattedMerit,

@@ -476,7 +476,7 @@ function runEstruturaCheck(
   // exigir a string exata reprovava peças juridicamente completas.
   const requiredSections = [
     { ok: /ilustr[íi]ssimo/i, label: 'Endereçamento' },
-    { ok: /\d{3}\.\d{3}\.\d{3}-\d{2}/.test(finalDocument) && /\bCNH\b/i.test(finalDocument), label: 'Qualificação do requerente (CPF e CNH)' },
+    { ok: /(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\b\d{11}\b)/.test(finalDocument) && /\bCNH\b/i.test(finalDocument), label: 'Qualificação do requerente (CPF e CNH)' },
     { ok: /auto de infra[çc][ãa]o|AIT\s*n[ºo°]/i.test(finalDocument), label: 'Identificação do AIT' },
     { ok: /dos fatos/i.test(finalDocument), label: 'Dos fatos' },
     { ok: /preliminares/i.test(finalDocument), label: 'Preliminares' },

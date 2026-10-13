@@ -142,7 +142,7 @@ export async function authenticateToken(
       }
 
       // 2b. Auto-login explícito via ADMIN_TEST_LOGIN/ADMIN_TEST_PASSWORD do .env (E2E).
-      if (process.env.ADMIN_TEST_LOGIN && !req.user) {
+      if (process.env.ADMIN_TEST_LOGIN && !token && !req.user) {
         req.user = {
           id: 'usr_admin_e2e',
           email: process.env.ADMIN_TEST_LOGIN,

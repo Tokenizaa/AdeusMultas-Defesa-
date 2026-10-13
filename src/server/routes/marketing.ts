@@ -169,7 +169,7 @@ router.post('/publish-7-cache', async (_req, res) => {
     res.json({ success: true, published, total: results.length, results });
   } catch (err: any) {
     logger.error('marketing', 'routes', 'publish_7_cache_failed', err.message);
-    res.status(500).json({ success: false, message: err.message, stack: err.stack });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

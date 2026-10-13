@@ -5,11 +5,8 @@
  * Client único reutilizável para a camada de dados do servidor.
  * Segue o padrão do vector-store.ts:
  *  - Usa o projeto Supabase canônico definido pelo runtime.
- *  - Prefere SUPABASE_SERVICE_ROLE_KEY (backend), com fallback para anon.
- *  - Fallback anon é LOUCO-LOGADO como erro: com RLS deny-all nas 14 tabelas
- *    internas (marketing_*, orders, payments, documents, commissions,
- *    collection_runs, commercial_*), backend sem service_role operaria às cegas.
- *    Uso legítimo do fallback: auth-middleware (supabase.auth.getUser/JWT).
+ *  - Usa exclusivamente SUPABASE_SERVICE_ROLE_KEY para operações server-side.
+ *    O cliente anon deve ser criado separadamente apenas para validação de JWT.
  *  - Se não configurado ou inválido, retorna null — os repositories
  *    operam via store local (memória) sem quebrar o fluxo.
  */
@@ -38,28 +35,14 @@ function ensureClient(): SupabaseClient<Database> | null {
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY');
-  const anonKey =
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    configService.get('VITE_SUPABASE_ANON_KEY');
-  const serviceKey = serviceRoleKey || anonKey;
+  const serviceKey = serviceRoleKey;
 
   if (url && serviceKey) {
-    if (!serviceRoleKey) {
-      logger.error(
-        'supabase',
-        'db_server',
-        'init',
-        'SUPABASE_SERVICE_ROLE_KEY ausente: client do servidor usando chave anon. ' +
-          'RLS deny-all (14 tabelas internas) bloqueará operações do backend. ' +
-          'Configure SUPABASE_SERVICE_ROLE_KEY no .env.',
-        { status: 'fallback' }
-      );
-    }
     try {
       clientInstance = createClient<Database>(url, serviceKey);
       logger.info('supabase', 'db_server', 'init', 'Supabase server client conectado.');
     } catch (err: any) {
-      logger.warn('supabase', 'db_server', 'init', `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
+      logger.error('supabase', 'db_server', 'init', `Falha ao inicializar Supabase: ${err.message}.`);
       clientInstance = null;
     }
   } else {

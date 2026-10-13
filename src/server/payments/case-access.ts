@@ -27,8 +27,10 @@ export function assertPaymentCaseAccess(
   row: PaymentCaseRowLike | undefined,
   user: PaymentUserLike | undefined
 ): { status: number; error: string } | null {
-  if (!row) return { status: 404, error: 'Caso não encontrado.' };
   if (!user) return { status: 401, error: 'Não autenticado' };
+  // A ordem pode ser criada antes da persistência do caso; nesse intervalo a
+  // identidade autenticada continua sendo a única autorização disponível.
+  if (!row) return null;
   if (user.role === 'admin') return null;
   return row.user_id === user.id
     ? null

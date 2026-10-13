@@ -127,8 +127,6 @@ export function createWorker<T = any>(
     connection,
     concurrency: options.concurrency || 1,
     limiter: options.limiter,
-    // Failed jobs go to DLQ after max attempts
-    failedAttempts: 3,
   });
 
   // Dead Letter Queue handling

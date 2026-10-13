@@ -24,6 +24,16 @@ describe('Webhook Verification', () => {
 
   beforeEach(() => {
     mockFetch = vi.fn();
+    // O handler pode realizar mais de uma chamada (download do PDF e
+    // persistência/consulta do envelope). Um fallback válido mantém o teste
+    // determinístico quando apenas a chamada principal é sobrescrita.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => Buffer.from('fake pdf').buffer,
+      json: async () => ({}),
+      text: async () => '',
+    } as Response);
     vi.stubGlobal('fetch', mockFetch);
     client = new DocumensoClient({
       baseUrl: 'https://documenso.example.com',

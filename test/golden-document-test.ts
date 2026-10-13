@@ -551,7 +551,7 @@ async function generateReport(results: GoldenDocumentTestCase[]) {
     report.push('**Expected Arguments**:');
     for (const argId of result.expectedArguments) {
       const arg = result.actualAnalysis?.recommendedArguments.find(a => a.id === argId);
-      report.push(`- ${argId}: ${arg?.title || 'Unknown'} ${arg ? `(recommended: ${arg.selectedArguments?.includes(argId) ? 'yes' : 'no'})` : ''}`);
+      report.push(`- ${argId}: ${arg?.title || 'Unknown'} ${arg ? `(recommended: ${result.actualAnalysis?.selectedArguments?.includes(argId) ? 'yes' : 'no'})` : ''}`);
     }
     report.push('');
     

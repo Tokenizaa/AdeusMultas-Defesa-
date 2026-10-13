@@ -16,9 +16,8 @@
  *     esteja em `analysis.recommendedArguments`;
  *  4. adiciona o check FUNDAMENTO VERIFICÁVEL, que exige que toda tese tenha
  *     `legalBase` no catálogo canônico;
- *  5. reporta, sem bloquear, a situação da PROVENANCE (KB) — a cobertura
- *     documental é parcial e declarada (FASE 12.6 §19), então tratar
- *     provenance ausente como erro fatal seria mascarar limitação de cobertura.
+ *  5. bloqueia PROVENANCE insuficiente quando existem teses jurídicas — uma
+ *     peça sem fonte verificável não é apta para produção.
  */
 
 import { runFullQualityGate } from '../src/core/validation/final-quality-gate';
@@ -173,24 +172,23 @@ export function runCanonicalQualityGate(input: CanonicalQualityGateInput): Canon
     ),
   );
 
-  // ── 6) PROVENANCE DA KB — reporte, não bloqueio ──────────────────────────
-  // A cobertura documental é parcial e declarada (FASE 12.6 §19: 19/27 UFs,
-  // 66/66 sem vigência comprovada, 13 sem OCR). Bloquear aqui transformaria
-  // limitação de cobertura em erro técnico e mascararia o problema real.
+  // ── 6) PROVENANCE DA KB — bloqueio quando há teses ────────────────────────
+  // A cobertura documental parcial não pode ser mascarada: se uma tese será
+  // usada na petição, ela precisa estar ancorada em uma fonte recuperada.
   const theses = analysis?.recommendedArguments ?? [];
   const supported = theses.filter((a: any) => a.provenanceStatus === 'SUPPORTED');
   checks.push(
     check(
       'PROVENANCE_KB',
       supported.length === theses.length,
-      supported.length === theses.length ? 'info' : 'warning',
+      supported.length === theses.length ? 'info' : 'error',
       supported.length === theses.length
         ? `Todas as ${theses.length} teses ancoradas em documento oficial recuperado da KB`
-        : `${supported.length}/${theses.length} teses ancoradas na KB — cobertura documental parcial (limitação conhecida, não bloqueia)`,
+        : `${supported.length}/${theses.length} teses ancoradas na KB — fonte oficial verificável ausente`,
     ),
   );
 
-  const passed = checks.filter((c) => !c.passed || c.severity === 'warning').length;
+  const passed = checks.filter((c) => c.passed).length;
   const blocking = checks.filter((c) => !c.passed && c.severity !== 'warning');
   const overallPass = blocking.length === 0;
   return {

@@ -60,11 +60,11 @@ function isProductionMode(env?: Record<string, string | undefined>): boolean {
 // ============================================================================
 
 function validateWebhookSourceIp(headers: Record<string, string | undefined>, allowedIps?: string[], env?: Record<string, string | undefined>): boolean {
-  console.error('GGPIX validateWebhookSourceIp called with:', { headers, allowedIps, env });
   if (!allowedIps || allowedIps.length === 0) {
-    // Se não configurado, permite em dev, bloqueia em prod com warning
+    // GGPIX não oferece HMAC; sem allowlist não há autenticação do webhook.
     if (isProductionMode(env)) {
-      logger.warn('payments', 'ggpix', 'webhook_ip', 'GGPIX_WEBHOOK_ALLOWED_IPS não configurado — webhook aceito mas configurar em produção');
+      logger.error('payments', 'ggpix', 'webhook_ip', 'GGPIX_WEBHOOK_ALLOWED_IPS não configurado — webhook rejeitado em produção');
+      return false;
     }
     return true;
   }
@@ -74,9 +74,6 @@ function validateWebhookSourceIp(headers: Record<string, string | undefined>, al
   const realIp = headers['x-real-ip'] as string | undefined;
   const cfConnectingIp = headers['cf-connecting-ip'] as string | undefined;
   const clientIp = forwardedFor?.split(',')[0]?.trim() || realIp || cfConnectingIp || '';
-
-  // Debug
-  console.error('GGPIX webhook IP validation:', { clientIp, allowedIps, forwardedFor, realIp, cfConnectingIp });
 
   if (!clientIp) {
     logger.warn('payments', 'ggpix', 'webhook_ip', 'Não foi possível determinar IP do cliente');
@@ -92,8 +89,6 @@ function validateWebhookSourceIp(headers: Record<string, string | undefined>, al
       const mask = ~((1 << (32 - prefix)) - 1);
       const clientNum = ipToNumber(clientIp);
       const baseNum = ipToNumber(baseIp);
-      // Debug
-      console.error('GGPIX CIDR check:', { clientIp, baseIp, prefix, mask, clientNum, baseNum, clientNumMask: clientNum & mask, baseNumMask: baseNum & mask });
       return (clientNum & mask) === (baseNum & mask);
     }
     return allowed === clientIp;
@@ -196,9 +191,7 @@ export class GGPIXAdapter implements PaymentGateway {
   private config: ReturnType<typeof getConfig>;
 
   constructor(customEnv?: Record<string, string | undefined>) {
-    console.error('GGPIXAdapter constructor customEnv:', customEnv);
     this.config = getConfig(customEnv);
-    console.error('GGPIXAdapter config:', this.config);
   }
 
   isConfigured(): boolean {
@@ -342,9 +335,10 @@ export class GGPIXAdapter implements PaymentGateway {
     headers: Record<string, string | undefined>,
     body: unknown
   ): NormalizedWebhookEvent {
-    console.error('GGPIXAdapter.processWebhook called with headers:', headers);
     // Validar IP de origem do webhook (segurança já que não há HMAC)
-    if (!validateWebhookSourceIp(headers, this.config.webhookAllowedIps)) {
+    const runtimeConfig = getConfig(process.env);
+    const allowedIps = runtimeConfig.webhookAllowedIps || this.config.webhookAllowedIps;
+    if (!validateWebhookSourceIp(headers, allowedIps, process.env)) {
       throw new Error('Webhook GGPIXAPI rejeitado: IP de origem não autorizado');
     }
 

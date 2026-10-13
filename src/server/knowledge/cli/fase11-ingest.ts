@@ -105,7 +105,7 @@ async function main() {
     });
     const embeds: KnowledgeEmbedding[] = [];
     for (const c of chunks) {
-      const gen = await embeddingService.generateEmbedding(c.content, { cache: true });
+      const gen = await embeddingService.generateEmbedding(c.content, { skipCache: false });
       embeds.push({ id: `emb_${c.id}`, chunkId: c.id, provider: gen.provider, model: gen.model, dimensions: gen.dimensions, embedding: gen.embedding, createdAt: new Date().toISOString() });
     }
     if (chunks.length) await vectorStore.upsertChunks(chunks);
@@ -117,10 +117,10 @@ async function main() {
   /* Golden path (um caso elegível) + caso bloqueado */
   let golden: string = 'NAO_EXECUTADO';
   try {
-    const q = await searchService.searchKnowledge('defesa prévia multa', { limit: 3 });
+    const q = await searchService.searchKnowledge('defesa prévia multa', { topN: 3 });
     golden = q.length ? `OK (${q.length} resultados, primeiro provenance: ${(q[0] as any)?.documentId || (q[0] as any)?.document_id || 'n/a'})` : 'VAZIO';
   } catch (e: any) { golden = `ERRO:${(e?.message || '').slice(0, 80)}`; }
-  const blockedQuery = await searchService.searchKnowledge('suspensão cassação CNH', { limit: 3 }).then((r: any[]) => r.length).catch(() => -1);
+  const blockedQuery = await searchService.searchKnowledge('suspensão cassação CNH', { topN: 3 }).then((r: any[]) => r.length).catch(() => -1);
   m.blocked_test = `consultas_executadas; suspensão/cassação retornou ${blockedQuery} resultado(s), nenhum de fonte bloqueada (DF/MA/MT/PE/RN/RO/SE fora do acervo)`;
 
   console.log(JSON.stringify({ metrics: m, warnings: wmap, golden_path: golden }, null, 2));

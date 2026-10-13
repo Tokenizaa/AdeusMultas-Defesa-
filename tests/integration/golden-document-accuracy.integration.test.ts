@@ -30,6 +30,7 @@ import { analyzeInfractionCompat, generateDefenseDraftCompat } from '../../cloud
 import { hasValidDefenseIntegrity } from '../../cloudflare/defense-integrity';
 import { domainToRow, rowToDomain } from '../../cloudflare/canonical-mapper';
 import { runFullQualityGate } from '../../src/core/validation/final-quality-gate';
+import { runCanonicalQualityGate } from '../../cloudflare/quality-gate';
 import { ARGUMENTS_CATALOG } from '../../src/core/arguments/arguments-catalog';
 import { ALL_GOLDEN_DOCUMENTS } from '../fixtures/golden-documents';
 
@@ -323,28 +324,15 @@ async function runGoldenDocument(gd: (typeof ALL_GOLDEN_DOCUMENTS)[number]) {
     analysis,
   );
 
-  // 4) Quality Gate — os mesmos 7 checks fail-closed do runtime
-  const onboardingPayload: any = {
-    procedureType: effectiveProcedure,
-    identification: {
-      aitNumber: infraction.aitNumber,
-      infractionCode: infraction.infractionCode,
-      autuadorBody: infraction.autuadorBody,
-      notificationExpeditionDate: infraction.notificationExpeditionDate,
-    },
-    vehicle: { plate: VEHICLE.plate, brandModel: VEHICLE.model },
-    infraction: { ...infraction },
-    applicant: {
-      name: APPLICANT.name,
-      cpf: APPLICANT.cpf,
-      cnh: APPLICANT.cnh,
-      address: APPLICANT.address,
-      addressCityState: APPLICANT.cityState,
-    },
-    specificFacts: {},
-    evidence: {},
-  };
-  const qg: any = runFullQualityGate(onboardingPayload, { id: caseId }, analysis, draft.fullDraftText);
+  // 4) Quality Gate — exatamente o gate canônico usado pela rota de produção.
+  const qg: any = runCanonicalQualityGate({
+    infraction,
+    analysis,
+    draft,
+    applicant: APPLICANT,
+    vehicle: VEHICLE,
+    serviceType: effectiveProcedure,
+  });
 
   const documentText: string = draft.fullDraftText || '';
   const fieldChecks: FieldCheck[] = factChecksFor(infraction).map(([field, value]) => ({

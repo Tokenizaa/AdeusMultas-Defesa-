@@ -21,13 +21,16 @@ function isProductionEnvironment(): boolean {
 }
 
 function resolveActiveGatewayIdFromEnv(): GatewayId {
+  const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || '').toLowerCase().trim();
+  // Em produção, uma seleção explícita de PagBank é sempre rejeitada.
+  if (isProductionEnvironment() && envValue === 'pagbank') return 'ggpixapi';
   const configOverride = configService.get('PAYMENT_ACTIVE_GATEWAY_OVERRIDE');
   if (configOverride && (configOverride === 'ggpixapi' || configOverride === 'pagbank' || configOverride === 'test')) return configOverride;
-  const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || '').toLowerCase().trim();
+  if (isProductionEnvironment()) return 'ggpixapi';
+  if (isProductionEnvironment()) return 'ggpixapi';
   if (envValue === 'ggpixapi' || envValue === 'ggpix') return 'ggpixapi';
   if (envValue === 'pagbank') return 'pagbank';
   if (envValue === 'test') return 'test';
-  if (isProductionEnvironment()) return pagbankAdapter.isConfigured() ? 'pagbank' : 'ggpixapi';
   return 'pagbank';
 }
 
@@ -62,7 +65,7 @@ export class GatewayManager {
     });
   }
   getActiveGatewayId(): GatewayId { return this.resolveActiveGatewayId(); }
-  isProductionGateway(id: GatewayId): boolean { return id === 'ggpixapi' || id === 'pagbank'; }
+  isProductionGateway(id: GatewayId): boolean { return id === 'ggpixapi'; }
   async setActiveGateway(id: GatewayId, updatedBy: string = 'admin'): Promise<{ success: boolean; message: string }> {
     const gateway = this.gateways.get(id);
     if (!gateway) return { success: false, message: `Gateway '${id}' não encontrado.` };
