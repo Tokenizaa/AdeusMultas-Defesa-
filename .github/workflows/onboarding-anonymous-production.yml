@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PLAYWRIGHT_BASE_URL: https://www.defesai.shop
+      PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
       E2E_TEST_EMAIL: ${{ secrets.USER_TEST_LOGIN }}
       E2E_TEST_PASSWORD: ${{ secrets.USER_TEST_PASSWORD }}
       E2E_RUN_ID: anonymous-${{ github.run_id }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
     steps:
       - name: Checkout
@@ -50,7 +50,7 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       - name: Verify production target
-        run: node -e 'const u = new URL(process.env.PLAYWRIGHT_BASE_URL); if (u.protocol !== "https:" || u.hostname !== "www.defesai.shop") process.exit(1); console.log(u.origin)'
+        run: node -e 'const u = new URL(process.env.PLAYWRIGHT_BASE_URL); if (u.protocol !== "https:" || u.hostname !== "adeusmulta.defesai.com.br") process.exit(1); console.log(u.origin)'
 
       - name: Run anonymous onboarding gate test
         run: bunx playwright test tests/onboarding-anonymous-production.spec.ts --project=chromium-production --workers=1 --retries=0

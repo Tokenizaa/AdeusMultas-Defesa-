@@ -19,9 +19,10 @@ export interface Env {
   AI: WorkersAI;
   VECTORIZE: VectorizeBinding;
   SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
-  VITE_SUPABASE_ANON_KEY: string;
+  SUPABASE_ANON_KEY?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
   EVOLUTION_API_URL?: string;
   EVOLUTION_API_KEY?: string;
   EVOLUTION_INSTANCE_NAME?: string;
@@ -39,16 +40,27 @@ function getEnvBinding<T extends keyof Env>(cEnv: Env | undefined, key: T): Env[
   return process.env[key] as any;
 }
 
-/** Cliente com service_role — bypass RLS (operações de backend). */
+function requireBinding(value: string | undefined, name: string): string {
+  if (!value?.trim()) throw new Error(`${name} binding is required`);
+  return value.trim();
+}
+
+/** Cliente privilegiado de backend; a chave secret moderna tem precedência. */
 export function createSupabaseAdminClient(cEnv: Env | undefined = undefined) {
-  const url = getEnvBinding(cEnv, 'SUPABASE_URL');
-  const key = getEnvBinding(cEnv, 'SUPABASE_SECRET_KEY') || getEnvBinding(cEnv, 'SUPABASE_SERVICE_ROLE_KEY');
+  const url = requireBinding(getEnvBinding(cEnv, 'SUPABASE_URL'), 'SUPABASE_URL');
+  const key = requireBinding(
+    getEnvBinding(cEnv, 'SUPABASE_SECRET_KEY') || getEnvBinding(cEnv, 'SUPABASE_SERVICE_ROLE_KEY'),
+    'SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY',
+  );
   return createClient<any>(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 /** Cliente com chave anônima — usado para verificar tokens JWT do Supabase. */
 export function createSupabaseAnonClient(cEnv: Env | undefined = undefined) {
-  const url = getEnvBinding(cEnv, 'SUPABASE_URL');
-  const key = getEnvBinding(cEnv, 'VITE_SUPABASE_ANON_KEY');
+  const url = requireBinding(getEnvBinding(cEnv, 'SUPABASE_URL'), 'SUPABASE_URL');
+  const key = requireBinding(
+    getEnvBinding(cEnv, 'VITE_SUPABASE_ANON_KEY') || getEnvBinding(cEnv, 'SUPABASE_ANON_KEY'),
+    'VITE_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY',
+  );
   return createClient<any>(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }

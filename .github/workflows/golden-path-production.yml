@@ -22,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      PLAYWRIGHT_BASE_URL: https://www.defesai.shop
+      PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
       E2E_TEST_EMAIL: ${{ secrets.USER_TEST_LOGIN }}
       E2E_TEST_PASSWORD: ${{ secrets.USER_TEST_PASSWORD }}
       E2E_RUN_ID: golden-${{ github.run_id }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
     steps:
       - name: Checkout
@@ -61,7 +61,7 @@ jobs:
 
       - name: Verify production target
         run: |
-          node -e 'const u = new URL(process.env.PLAYWRIGHT_BASE_URL); if (u.protocol !== "https:" || !["www.defesai.shop", "defesai.shop"].includes(u.hostname)) process.exit(1); console.log("Production target:", u.origin)'
+          node -e 'const u = new URL(process.env.PLAYWRIGHT_BASE_URL); if (u.protocol !== "https:" || u.hostname !== "adeusmulta.defesai.com.br") process.exit(1); console.log("Production target:", u.origin)'
 
       - name: Verify Golden Path Playwright project
         run: |

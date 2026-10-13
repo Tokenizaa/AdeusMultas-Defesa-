@@ -25,7 +25,7 @@
   },
   "vars": {
     "API_ORIGIN_PRIMARY": "https://adeusmulta.defesai.com.br",
-    "API_ORIGIN_FALLBACK": "https://www.defesai.shop"
+    "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co"
   },
   "build": {
     "command": "bun run build"

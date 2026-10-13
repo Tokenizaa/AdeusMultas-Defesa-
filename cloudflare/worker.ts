@@ -31,31 +31,25 @@ app.use('/api/*', apiBoundary)
 app.get('/api/health', async (c) => {
   const start = Date.now();
   let dbStatus = 'disconnected';
-  let dbError = null;
   try {
     const supabase = createSupabaseAdminClient(c.env);
-    // Simple query to test connection
-    const { data, error } = await supabase.from('request_logs').select('count').limit(1);
+    // Probe an existing, non-sensitive table without fetching application data.
+    const { error } = await supabase.from('cases').select('id', { head: true }).limit(0);
     if (error) {
       dbStatus = 'error';
-      dbError = error.message;
     } else {
       dbStatus = 'connected';
     }
-  } catch (err) {
+  } catch {
     dbStatus = 'error';
-    dbError = err instanceof Error ? err.message : String(err);
   }
   const latencyMs = Date.now() - start;
   return c.json({
-    status: 'ok',
+    status: dbStatus === 'connected' ? 'ok' : 'degraded',
     worker: 'cloudflare-worker',
     timestamp: new Date().toISOString(),
     latency_ms: latencyMs,
-    database: {
-      status: dbStatus,
-      error: dbError,
-    },
+    database: { status: dbStatus },
   });
 });
 app.route('/api', authRoutes)

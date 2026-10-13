@@ -42,68 +42,22 @@ export const requireAdmin = async (c: AppContext, next: Next) => {
   await next();
 };
 
-/**
- * Middleware to log requests to the request_logs table.
- * Logs method, path, status, user_id, user_agent, ip, latency.
- * Does not log request/response bodies to avoid excessive storage.
- */
+/** Emit privacy-minimized request metrics to Cloudflare Worker observability. */
 export const logRequest = async (c: AppContext, next: Next) => {
   const start = Date.now();
-  const path = c.req.path;
   const method = c.req.method;
-  const userAgent = c.req.header('user-agent') ?? null;
-  const ipAddress = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? null;
-
-  // We'll try to get user id after authentication (may be undefined if not yet set)
-  let userId: string | null = null;
-  try {
-    const user = c.get('user');
-    if (user && typeof user === 'object' && 'id' in user) {
-      userId = (user as { id: string }).id;
-    }
-  } catch (_) {
-    // ignore
-  }
-
-  let res: Response;
-  let error: string | null = null;
-  let status: number = 500; // default error
+  let status = 500;
   try {
     await next();
-    res = c.res;
-    status = res.status;
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
-    status = 500;
-    res = c.res;
-    // re-throw after logging
-    throw err;
+    status = c.res.status;
   } finally {
-    const latencyMs = Date.now() - start;
-
-    // Attempt to log; swallow any logging errors to not affect the main response
-    try {
-      const supabase = createSupabaseAdminClient(c.env);
-      await supabase
-        .from('request_logs')
-        .insert({
-          method,
-          path,
-          status,
-          user_id: userId,
-          user_agent: userAgent,
-          ip_address: ipAddress,
-          latencyMs,
-          // optionally we could store limited bodies, but omitted for simplicity
-          request_body: null,
-          response_body: null,
-          error,
-        });
-    } catch (logErr) {
-      // Log to console as fallback
-      console.error('[request logging failed]', logErr);
-    }
+    console.info(JSON.stringify({
+      event: 'http_request',
+      method,
+      status,
+      latency_ms: Date.now() - start,
+    }));
   }
 
-  return res;
+  return c.res;
 };

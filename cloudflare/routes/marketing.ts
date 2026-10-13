@@ -115,7 +115,8 @@ marketingRoutes.post('/marketing/media/upload', authenticateToken, requireAdmin,
   const ext = (String(filename || 'arquivo').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
   const key = `media/${crypto.randomUUID()}.${ext}`;
   const supabaseUrl = (c.env as any).SUPABASE_URL;
-  const serviceKey = (c.env as any).SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = (c.env as any).SUPABASE_SECRET_KEY || (c.env as any).SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) throw new HTTPException(503, { message: 'Supabase backend key is not configured' });
 
   const res = await fetch(`${supabaseUrl}/storage/v1/object/${key}`, {
     method: 'POST',
