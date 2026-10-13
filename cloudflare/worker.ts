@@ -44,12 +44,18 @@ app.get('/api/health', async (c) => {
     dbStatus = 'error';
   }
   const latencyMs = Date.now() - start;
+  const paymentReady = Boolean(c.env.PAGBANK_TOKEN)
   return c.json({
-    status: dbStatus === 'connected' ? 'ok' : 'degraded',
+    status: dbStatus === 'connected' && paymentReady ? 'ok' : 'degraded',
     worker: 'cloudflare-worker',
     timestamp: new Date().toISOString(),
     latency_ms: latencyMs,
     database: { status: dbStatus },
+    payments: {
+      status: paymentReady ? 'configured' : 'unavailable',
+      gateway: 'pagbank',
+      environment: c.env.PAGBANK_ENV || 'sandbox',
+    },
   });
 });
 app.route('/api', authRoutes)
