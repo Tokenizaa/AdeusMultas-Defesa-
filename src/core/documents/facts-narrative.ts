@@ -63,7 +63,8 @@ const dateBR = (value: unknown): string => {
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
   if (iso) {
     const calendarDate = iso[3] + '/' + iso[2] + '/' + iso[1];
-    return iso[4] ? calendarDate + ' às ' + iso[4] + ':' + iso[5] : calendarDate;
+    const readable = iso[4] ? calendarDate + ' às ' + iso[4] + ':' + iso[5] : calendarDate;
+    return `${readable} (ISO ${raw})`;
   }
 
   const d = new Date(raw);

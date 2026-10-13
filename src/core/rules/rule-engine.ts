@@ -16,6 +16,23 @@ import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 import { CaseAnalysis, DetectedFlaw, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
 
+/** Parse datas do payload sem depender da implementação local de Date.parse. */
+const parseLegalDate = (value: unknown): Date => {
+  const raw = String(value ?? '').trim();
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (br) {
+    const [, day, month, year, hour = '00', minute = '00', second = '00'] = br;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+  }
+  return new Date(raw);
+};
+
+const legalDateKey = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  return br ? `${br[3]}-${br[2]}-${br[1]}` : raw.slice(0, 10);
+};
+
 export const EXPERT_RULES: RuleModel[] = [
   // Rule 1: Decadência de 30 dias da Notificação de Autuação (Art. 281, II CTB)
   {
@@ -35,8 +52,8 @@ export const EXPERT_RULES: RuleModel[] = [
     priority: 100,
     evaluate: (ctx) => {
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
-        const infDate = new Date(ctx.infractionDate);
-        const expDate = new Date(ctx.notificationExpeditionDate);
+        const infDate = parseLegalDate(ctx.infractionDate);
+        const expDate = parseLegalDate(ctx.notificationExpeditionDate);
         const diffTime = expDate.getTime() - infDate.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -78,8 +95,8 @@ export const EXPERT_RULES: RuleModel[] = [
       const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
       if (isSpeed) {
         if (ctx.radarCalibrationDate && ctx.infractionDate) {
-          const infDate = new Date(ctx.infractionDate);
-          const calibDate = new Date(ctx.radarCalibrationDate);
+          const infDate = parseLegalDate(ctx.infractionDate);
+          const calibDate = parseLegalDate(ctx.radarCalibrationDate);
           const diffDays = Math.ceil((infDate.getTime() - calibDate.getTime()) / (1000 * 60 * 60 * 24));
           if (diffDays > 365) {
             return {
@@ -399,8 +416,8 @@ export const EXPERT_RULES: RuleModel[] = [
         return null;
       }
       if (ctx.infractionDate && ctx.notificationExpeditionDate) {
-        const infDate = new Date(ctx.infractionDate);
-        const expDate = new Date(ctx.notificationExpeditionDate);
+        const infDate = parseLegalDate(ctx.infractionDate);
+        const expDate = parseLegalDate(ctx.notificationExpeditionDate);
         const diffTime = expDate.getTime() - infDate.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         // A indicação tempestiva deve ocorrer ANTES do esgotamento do prazo
@@ -614,7 +631,7 @@ export const EXPERT_RULES: RuleModel[] = [
         return null; // outras regras tratarão como DATA_GAP
       }
       // Verifica coerência de datas
-      const infDate = new Date(ctx.infractionDate);
+      const infDate = parseLegalDate(ctx.infractionDate);
       if (isNaN(infDate.getTime())) {
         return {
           ruleId: 'RULE_FORMAL_VALIDATIONS',
@@ -637,7 +654,7 @@ export class ExpertRuleEngine {
    */
   public static isRuleActiveAtDate(rule: RuleModel, dateIso?: string): boolean {
     if (!dateIso) return true;
-    const target = dateIso.includes('T') ? dateIso.split('T')[0] : dateIso.slice(0, 10);
+    const target = legalDateKey(dateIso);
     if (rule.validFrom && target < rule.validFrom) {
       return false;
     }

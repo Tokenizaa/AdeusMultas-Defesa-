@@ -146,7 +146,7 @@ class SupabaseVaultBackend implements SecretBackend {
 
   constructor() {
     this.supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-    this.serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || '';
+    this.serviceRoleKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || '';
     this.available = !!(this.supabaseUrl && this.serviceRoleKey);
     if (!this.available) {
       logger.info('system', 'supabase_vault', 'init', 'Supabase Vault backend not configured (missing URL or service role key)');

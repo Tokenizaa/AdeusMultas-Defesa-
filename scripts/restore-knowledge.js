@@ -11,10 +11,11 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Credentials must come from the environment; never commit service-role keys.
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in the environment');
+  throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) are required in the environment');
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

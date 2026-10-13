@@ -220,7 +220,9 @@ export class DocumentAssemblyEngine {
       const raw = str(value).trim();
       if (!raw) return '';
       const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      // Mantém a forma legível e o valor ISO original para rastreabilidade e
+      // para que a validação de integridade detecte adulteração da data.
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]} (${raw})`;
       const parsed = new Date(raw);
       if (Number.isNaN(parsed.getTime())) return raw;
       return parsed.toLocaleDateString('pt-BR');
@@ -393,7 +395,12 @@ export class DocumentAssemblyEngine {
       // que existe no caso e omite o que não existe.
       if (block.type === 'facts_narrative' && !(payload.customFacts && payload.customFacts.trim().length > 15)) {
         const heading = content.split('\n\n')[0].trim();
-        content = `${heading}\n\n${factsNarrative.text}`.trim();
+        const proceduralIntro = block.id === 'BLK_FATOS_DEFESA_PREVIA'
+          ? '\n\nO(A) Requerente, em sede de DEFESA PRÉVIA, vem impugnar a Notificação de Autuação perante a autoridade autuadora.'
+          : block.id === 'BLK_FATOS_CETRAN'
+            ? '\n\nO(A) Recorrente interpõe o presente RECURSO ADMINISTRATIVO EM 2ª INSTÂNCIA perante o Egrégio CETRAN.'
+            : '';
+        content = `${heading}${proceduralIntro}\n\n${factsNarrative.text}`.trim();
       }
 
       for (const [placeholder, value] of Object.entries(variableMap)) {

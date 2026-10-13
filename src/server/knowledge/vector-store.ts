@@ -50,7 +50,7 @@ export class VectorStore {
 
   private initSupabaseClient() {
     const url = configService.get('VITE_SUPABASE_URL');
-    const serviceKey = configService.get('SUPABASE_SERVICE_ROLE_KEY');
+    const serviceKey = configService.get('SUPABASE_SECRET_KEY') || configService.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (url && serviceKey && url.startsWith('https://')) {
       try {

@@ -33,7 +33,9 @@ function ensureClient(): SupabaseClient<Database> | null {
     configService.get('SUPABASE_URL') ||
     configService.get('VITE_SUPABASE_URL');
   const serviceRoleKey =
+    process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    configService.get('SUPABASE_SECRET_KEY') ||
     configService.get('SUPABASE_SERVICE_ROLE_KEY');
   const serviceKey = serviceRoleKey;
 

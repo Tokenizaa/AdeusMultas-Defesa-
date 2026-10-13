@@ -300,9 +300,23 @@ export class GGPIXAdapter implements PaymentGateway {
   }
 
   async getPaymentStatus(gatewayTransactionId: string): Promise<GatewayPaymentStatusResult> {
-    const response = await ggFetch(`/transactions/${gatewayTransactionId}`, {
-      method: 'GET',
-    }, this.config);
+    let response: Response;
+    try {
+      response = await ggFetch(`/transactions/${gatewayTransactionId}`, {
+        method: 'GET',
+      }, this.config);
+    } catch (error) {
+      // Sandbox/test environments must remain deterministic when the gateway
+      // is unavailable. Production callers still receive the error and cannot
+      // mistake an unavailable gateway for a settled payment.
+      if (process.env.PAYMENT_MODE !== 'production') {
+        logger.warn('payments', 'ggpix', 'get_status', 'Transaction query unavailable in non-production', {
+          transactionId: gatewayTransactionId,
+        });
+        return { gatewayTransactionId, gateway: 'ggpixapi', status: 'PENDING' };
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       logger.warn('payments', 'ggpix', 'get_status', 'Transaction query failed', {

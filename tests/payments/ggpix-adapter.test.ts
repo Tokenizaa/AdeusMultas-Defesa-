@@ -145,6 +145,7 @@ describe('GGPIXAdapter — getPaymentStatus', () => {
   });
 
   it('should return PENDING when API fails in sandbox', async () => {
+    vi.stubEnv('GGPIX_ENABLED', 'false');
     const adapter = new GGPIXAdapter();
     const result = await adapter.getPaymentStatus('tx_nonexistent');
 
@@ -193,14 +194,14 @@ describe('GGPIXAdapter — processWebhook (IP Validation)', () => {
     expect(result.isDuplicate).toBe(false);
   });
 
-  it('should warn but accept webhook when no IP allowlist in production', () => {
+  it('should reject webhook when no IP allowlist is configured in production', () => {
     vi.stubEnv('GGPIX_WEBHOOK_ALLOWED_IPS', '');
     vi.stubEnv('PAYMENT_MODE', 'production');
 
     const adapter = new GGPIXAdapter();
-    const result = adapter.processWebhook('', { 'x-forwarded-for': '1.2.3.4' }, basePayload);
-
-    expect(result.status).toBe('PAID');
+    expect(() => {
+      adapter.processWebhook('', { 'x-forwarded-for': '1.2.3.4' }, basePayload);
+    }).toThrow('Webhook GGPIXAPI rejeitado: IP de origem não autorizado');
   });
 
   it('should accept webhook from allowed IP', () => {

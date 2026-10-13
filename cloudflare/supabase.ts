@@ -20,6 +20,7 @@ export interface Env {
   VECTORIZE: VectorizeBinding;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_SECRET_KEY?: string;
   VITE_SUPABASE_ANON_KEY: string;
   EVOLUTION_API_URL?: string;
   EVOLUTION_API_KEY?: string;
@@ -41,7 +42,7 @@ function getEnvBinding<T extends keyof Env>(cEnv: Env | undefined, key: T): Env[
 /** Cliente com service_role — bypass RLS (operações de backend). */
 export function createSupabaseAdminClient(cEnv: Env | undefined = undefined) {
   const url = getEnvBinding(cEnv, 'SUPABASE_URL');
-  const key = getEnvBinding(cEnv, 'SUPABASE_SERVICE_ROLE_KEY');
+  const key = getEnvBinding(cEnv, 'SUPABASE_SECRET_KEY') || getEnvBinding(cEnv, 'SUPABASE_SERVICE_ROLE_KEY');
   return createClient<any>(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 

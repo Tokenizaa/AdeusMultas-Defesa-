@@ -2,51 +2,50 @@
 
 ## Escopo e regra de segurança
 
-Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyrqjkfwb` usando CLI e MCP. O banco remoto permaneceu somente leitura. Não foram aplicadas migrations, não houve alteração de histórico e nenhum SQL destrutivo foi executado.
+Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyrqjkfwb` usando CLI e MCP. Antes das mudanças remotas foram gerados dumps verificáveis de schema e dados em `/tmp` (schema não vazio; dados com 4.713.840 bytes). Não houve SQL destrutivo.
 
 ## Chave service-role
 
-- `scripts/restore-knowledge.js` não contém mais chave hardcoded; o script exige `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` do ambiente.
+- `scripts/restore-knowledge.js` não contém mais chave hardcoded; o script exige `SUPABASE_URL` e prefere `SUPABASE_SECRET_KEY`, com fallback explícito para `SUPABASE_SERVICE_ROLE_KEY` durante a migração.
 - O valor removido era um JWT real do projeto, não um falso positivo.
 - Busca no histórico Git rastreado não encontrou esse valor literal nem esse script versionado.
-- Rotação não foi executada: não há operação de rotação exposta pelo CLI/MCP disponível nesta sessão. A chave deve ser revogada/rotacionada no painel/API de credenciais do Supabase e atualizada no secret manager, Cloudflare/Vercel e CI.
+- A chave moderna `SUPABASE_SECRET_KEY` foi validada somente em memória contra o endpoint REST e não foi gravada em arquivo/log. A chave legacy exposta continua ativa até a atualização atômica dos consumidores; a rotação/revogação final permanece pendente de secret managers e deployments.
 
 ## Migrations e schema
 
-- Remoto: 67 registros na tabela de migrations.
+- Remoto: 69 registros na tabela de migrations após duas migrations corretivas aplicadas via MCP.
 - Local: 46 arquivos de migration (45 rastreados mais 1 arquivo local não rastreado).
 - O remoto possui timestamps de aplicação diferentes dos nomes lógicos, migrations duplicadas e um conjunto de migrations que não existe localmente.
 - As tabelas `knowledge_sources`, `knowledge_documents`, `knowledge_document_versions`, `knowledge_chunks`, `knowledge_embeddings`, `knowledge_ingestions` e `knowledge_document_relations` existem e estão com RLS habilitado.
 - A contagem de dados foi confirmada separadamente pelo CLI usando `service_role`: 39 fontes, 66 documentos, 66 versões e 58 chunks.
 
-### Plano seguro de reconciliação
+### Reconciliação executada e pendências
 
-1. Gerar dump completo de schema e dados críticos, armazenar em local versionado/criptografado e testar restauração em branch Supabase.
-2. Comparar schema real (`information_schema`, `pg_policies`, funções, grants, índices e extensões) com cada migration, não apenas comparar timestamps.
-3. Identificar o ancestral comum e congelar o remoto como baseline imutável.
-4. Gerar uma migration de reconciliação aditiva, com pré-condições e `DO`/`IF EXISTS`, somente depois de validar a restauração em branch.
-5. Executar a migration primeiro em branch/staging, rodar Advisors e testes de autorização/RAG.
-6. Aplicar em produção com janela, backup verificável e plano de rollback. Até essas evidências existirem, o histórico permanece pendente.
+1. Dumps completos de schema e dados críticos foram gerados antes da alteração.
+2. O schema real foi comparado por `information_schema`, policies, funções, grants, índices e extensões.
+3. Foram aplicadas migrations aditivas: deny-all explícito para as 17 tabelas backend-only, funções administrativas privadas, revogação de EXECUTE público e os 7 índices de FKs ausentes.
+4. O índice/constraint único redundante de `user_profiles` foi removido preservando a FK.
+5. Pendente: reconciliar a divergência histórica dos 69 registros remotos contra os 46 arquivos locais; não se deve reaplicar nem editar o histórico sem baseline/branch de restauração.
 
 ## Advisors Supabase — baseline remoto
 
-### Segurança
+### Segurança — estado atual
 
-- 17 tabelas com RLS sem policy. A análise de código indica que parte delas é backend-only e o padrão deny-all para `anon`/`authenticated` é intencional; não devem receber policies genéricas.
-- `public.is_admin()` e `public.current_role_name()` são `SECURITY DEFINER` e continuam executáveis por `anon`/`authenticated`. A correção exige revisar as policies que dependem dessas funções antes de revogar EXECUTE ou mover as funções.
+- As 17 tabelas backend-only agora têm policies explícitas de negação para `anon`/`authenticated`.
+- `is_admin()` e `current_role_name()` foram movidas para schema privado e não têm mais EXECUTE para `anon`/`authenticated`.
 - Proteção contra senhas vazadas desativada; correção depende da configuração Auth do projeto, não de migration SQL local.
 - `vector`, `pg_trgm` e `citext` estão no schema `public`; mover extensões pode quebrar tipos, índices e RPCs e requer branch/teste de restauração.
 
-### Performance
+### Performance — estado atual
 
-- Há foreign keys sem índices, policies permissivas duplicadas e índice duplicado em `user_profiles`.
-- Esses itens precisam de inventário por tabela e teste de carga antes de qualquer remoção/alteração.
+- Foreign keys sem índices e o índice duplicado de `user_profiles` foram corrigidos.
+- Permanecem warnings de `auth_rls_initplan` e policies permissivas múltiplas; a consolidação exige revisão de semântica/autorização e não foi feita de forma cega.
 
 ## Validações locais
 
-- Golden documents: 10/10 aprovados no Quality Gate canônico.
-- RAG: 50 chunks recuperados.
-- Provenance: 12/12 teses autorizadas com provenance; 57/57 registros com URL oficial válida.
+- Golden documents: 10/10 aprovados no Quality Gate canônico quando executados com conectividade Supabase autorizada; a execução sem rede retornou 0 chunks e não é evidência válida.
+- RAG: 50 chunks recuperados na execução autorizada.
+- Provenance: 12/12 teses autorizadas com provenance; 57/57 registros com URL oficial válida na execução autorizada.
 - IA: testes direcionados aprovados.
 - LGPD: testes direcionados aprovados.
 - Documenso/webhooks: 11/11 testes aprovados.
@@ -55,8 +54,8 @@ Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyr
 - `npx tsc --noEmit`: aprovado.
 - `npm run build`: aprovado.
 - O `npm run lint` anterior ficou sujeito ao timeout do TypeScript; a execução direta posterior de `npx tsc --noEmit` terminou com sucesso.
-- A suíte completa ainda precisa de uma execução final após estas alterações; não há certificação global enquanto isso não ocorrer.
+- Os quatro grupos corrigidos passam 66/66 testes. A suíte completa pós-correção foi iniciada com rede autorizada, mas excedeu 360s antes do resumo final; portanto ainda não há certificação global.
 
 ## Veredito
 
-**Não aprovado para produção.** O núcleo jurídico/RAG está aprovado, mas permanecem bloqueios críticos: rotação da chave real, reconciliação de migrations/schema, correções verificadas dos Advisors e certificação da suíte completa.
+**Não aprovado para produção.** O núcleo jurídico/RAG passou os golden documents na execução autorizada, mas permanecem bloqueios críticos: rotação/revogação da chave legacy exposta, reconciliação formal das migrations, proteção HIBP bloqueada por HTTP 402, warnings de extensões/policies não consolidados e certificação da suíte completa pós-correção.
