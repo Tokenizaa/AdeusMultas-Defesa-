@@ -22,11 +22,6 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-function requiredEnv(name: string, value: string) {
-  if (!value) throw new Error(`${name} ausente — teste requer Supabase canônico configurado (não commitado).`);
-  return value;
-}
-
 const skip = !SUPABASE_URL || !SERVICE_ROLE;
 
 describe.skipIf(skip)('Golden Path FASE 19 (canônico)', () => {
@@ -39,8 +34,8 @@ describe.skipIf(skip)('Golden Path FASE 19 (canônico)', () => {
   let otherUser: { id: string; email: string; password: string } | null = null;
   let otherToken: string | null = null;
 
-  const url = requiredEnv('SUPABASE_URL', SUPABASE_URL);
-  const serviceRole = requiredEnv('SUPABASE_SERVICE_ROLE_KEY', SERVICE_ROLE);
+  const url = SUPABASE_URL;
+  const serviceRole = SERVICE_ROLE;
 
   async function api(path: string, token: string | null, init: RequestInit = {}) {
     const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };

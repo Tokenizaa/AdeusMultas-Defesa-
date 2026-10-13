@@ -29,31 +29,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Install dependencies deterministically
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Run postinstall
-        run: bun run postinstall
+      - name: Run package postinstall explicitly
+        run: npm run postinstall
 
       - name: Typecheck
-        run: bun run lint
+        run: npm run lint
 
       - name: Build
-        run: bun run build
+        run: npm run build
 
       - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Verify production target
         run: node -e 'const u = new URL(process.env.PLAYWRIGHT_BASE_URL); if (u.protocol !== "https:" || u.hostname !== "adeusmulta.defesai.com.br") process.exit(1); console.log(u.origin)'
 
       - name: Run anonymous onboarding gate test
-        run: bunx playwright test tests/onboarding-anonymous-production.spec.ts --project=chromium-production --workers=1 --retries=0
+        run: npx playwright test tests/onboarding-anonymous-production.spec.ts --project=chromium-production --workers=1 --retries=0
 
       - name: Upload Playwright report
         if: always()
