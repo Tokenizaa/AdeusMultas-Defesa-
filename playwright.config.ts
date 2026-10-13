@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const productionBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 if (!productionBaseUrl) {
-  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. A suíte E2E Golden Path deve executar contra uma implantação Vercel/produção, nunca contra localhost.');
+  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. A suíte E2E deve executar contra uma implantação Cloudflare/produção, nunca contra localhost.');
 }
 
 if (!/^https:\/\//i.test(productionBaseUrl)) {

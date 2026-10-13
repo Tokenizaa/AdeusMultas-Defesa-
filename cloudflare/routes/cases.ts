@@ -21,6 +21,111 @@ const canAccessCase = (user: AuthenticatedUser | undefined, row: any): boolean =
 
 export const casesRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
+const boundedString = (value: unknown, maxLength: number): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength
+    ? value.trim()
+    : undefined;
+
+function createClaimToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function claimTokensMatch(provided: unknown, stored: unknown): boolean {
+  if (typeof provided !== 'string' || typeof stored !== 'string' || !provided || provided.length !== stored.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let index = 0; index < stored.length; index += 1) {
+    difference |= provided.charCodeAt(index) ^ stored.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+// Public anonymous intake is deliberately separate from authenticated case creation.
+casesRoutes.post('/cases/anonymous', async (c) => {
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Criação anônima temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: ipAddress });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de novos casos atingido.' });
+  }
+
+  const body = await c.req.json<any>().catch(() => null);
+  const infractionInput = body?.infraction;
+  const vehicleInput = body?.vehicle;
+  const aitNumber = boundedString(infractionInput?.aitNumber, 80);
+  const infractionCode = boundedString(infractionInput?.infractionCode, 20);
+  const location = boundedString(infractionInput?.location, 240);
+  const plate = boundedString(vehicleInput?.plate, 8);
+  const brandModel = boundedString(vehicleInput?.brandModel, 120);
+  if (!aitNumber || !infractionCode || !location || location.length < 5 || !plate || plate.length < 7 || !brandModel) {
+    throw new HTTPException(400, { message: 'Dados mínimos da autuação e do veículo incompletos.' });
+  }
+
+  const claimToken = createClaimToken();
+  const now = new Date().toISOString();
+  const infraction = {
+    aitNumber,
+    infractionCode,
+    description: boundedString(infractionInput.description, 240) || '',
+    ctbArticle: boundedString(infractionInput.ctbArticle, 80) || '',
+    severity: boundedString(infractionInput.severity, 20) || 'media',
+    points: Number.isFinite(Number(infractionInput.points)) ? Number(infractionInput.points) : 0,
+    fineAmount: Number.isFinite(Number(infractionInput.fineAmount)) ? Number(infractionInput.fineAmount) : 0,
+    autuadorBody: boundedString(infractionInput.autuadorBody, 120) || '',
+    dateTime: boundedString(infractionInput.dateTime, 40) || undefined,
+    location,
+    speedLimit: Number.isFinite(Number(infractionInput.speedLimit)) ? Number(infractionInput.speedLimit) : undefined,
+    measuredSpeed: Number.isFinite(Number(infractionInput.measuredSpeed)) ? Number(infractionInput.measuredSpeed) : undefined,
+    consideredSpeed: Number.isFinite(Number(infractionInput.consideredSpeed)) ? Number(infractionInput.consideredSpeed) : undefined,
+    radarEquipmentId: boundedString(infractionInput.radarEquipmentId, 120) || undefined,
+    inmetroAferitionDate: boundedString(infractionInput.inmetroAferitionDate, 40) || undefined,
+    formalFlawsDetected: [],
+  };
+  const caseId = crypto.randomUUID();
+  const domainData: any = {
+    id: caseId,
+    title: `Diagnóstico Auto ${aitNumber}`,
+    clientName: boundedString(body?.userNome, 160) || 'Condutor',
+    clientPhone: boundedString(body?.userPhone, 40) || '',
+    serviceType: boundedString(body?.serviceType, 60) || 'defesa_previa',
+    userId: null,
+    isAnonymous: true,
+    claimToken,
+    isPaid: false,
+    status: 'analisado',
+    currentStage: 2,
+    vehicle: {
+      plate,
+      brandModel,
+      renavam: boundedString(vehicleInput.renavam, 40) || undefined,
+      year: boundedString(vehicleInput.year, 10) || undefined,
+      color: boundedString(vehicleInput.color, 40) || undefined,
+    },
+    infraction,
+    timeline: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  domainData.analysis = await analyzeInfractionCompat(c.env, caseId, infraction);
+  const row = domainToRow(domainData);
+  row.user_id = null;
+  row.is_anonymous = true;
+  row.claim_token = claimToken;
+  row.is_paid = false;
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error } = await supabase.from('cases').insert(row).select().single();
+  if (error || !data) throw new HTTPException(503, { message: 'Não foi possível salvar o diagnóstico.' });
+  return c.json({ ...rowToDomain(data), claimToken }, 201);
+});
+
 // GET /api/cases — lista casos (admin: todos/filtro; cidadão: próprios)
 casesRoutes.get('/cases', authenticateToken, async (c) => {
   const user = c.get('user');
@@ -193,20 +298,21 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!row) throw new HTTPException(404, { message: 'Caso anônimo não encontrado' });
 
+  const body = await c.req.json<any>().catch(() => ({}));
+
   const isOwner = row.user_id === user.id;
   if (row.user_id && !isOwner) {
     throw new HTTPException(403, { message: 'Caso já vinculado a outro usuário' });
   }
 
   if (!row.user_id) {
-    const body = await c.req.json<any>().catch(() => ({}));
-    if (!row.claim_token || body.claimToken !== row.claim_token) {
+    if (!claimTokensMatch(body.claimToken, row.claim_token)) {
       throw new HTTPException(403, { message: 'Token de claim inválido ou ausente' });
     }
   }
 
   const domain = rowToDomain(row);
-  const { name, email, phone, cpf } = await c.req.json<any>().catch(() => ({}));
+  const { name, email, phone, cpf } = body;
   domain.clientName = name || domain.clientName;
   domain.clientEmail = email || domain.clientEmail;
   domain.clientPhone = phone || domain.clientPhone;
@@ -226,8 +332,12 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   ];
 
   const updatedRow = domainToRow(domain);
-  const { data, error } = await supabase.from('cases').update(updatedRow).eq('id', domain.id).select().single();
-  if (error) throw new HTTPException(400, { message: error.message });
+  let update = supabase.from('cases').update(updatedRow).eq('id', domain.id);
+  if (!row.user_id) {
+    update = update.is('user_id', null).eq('claim_token', row.claim_token);
+  }
+  const { data, error } = await update.select().single();
+  if (error || !data) throw new HTTPException(409, { message: 'Caso já foi vinculado ou não pode ser atualizado.' });
   return c.json(rowToDomain(data));
 });
 

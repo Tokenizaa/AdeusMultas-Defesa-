@@ -369,7 +369,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleAnalysisCompleted = async () => {
     try {
-      const res = await authFetch('/api/cases', {
+      const res = await authFetch(isAuthenticated ? '/api/cases' : '/api/cases/anonymous', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -422,7 +422,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       setStep(8); // Início da Fase 2 (Qualificação)
     } else {
       // Persist wizard state before opening auth gate
-      saveWizardState({ step: 7, savedCaseId });
+      saveWizardState({ step: 7, savedCaseId, savedClaimToken });
       setAuthGateRedirectAction('generation');
       setIsAuthGateOpen(true);
     }
@@ -433,7 +433,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       navigate('/dashboard');
     } else {
       // Persist wizard state before opening auth gate
-      saveWizardState({ step: 7, savedCaseId });
+      saveWizardState({ step: 7, savedCaseId, savedClaimToken });
       setAuthGateRedirectAction('dashboard');
       setIsAuthGateOpen(true);
     }

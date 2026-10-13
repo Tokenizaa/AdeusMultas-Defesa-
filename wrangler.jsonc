@@ -17,6 +17,13 @@
       "index_name": "adeusmulta-knowledge"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "ANONYMOUS_CASE_LIMITER",
+      "namespace_id": "2026101301",
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

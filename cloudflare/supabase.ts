@@ -14,10 +14,15 @@ export interface VectorizeBinding {
   upsert: (vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>) => Promise<unknown>;
 }
 
+export interface RateLimitBinding {
+  limit: (options: { key: string }) => Promise<{ success: boolean }>;
+}
+
 export interface Env {
   ASSETS: AssetsBinding;
   AI: WorkersAI;
   VECTORIZE: VectorizeBinding;
+  ANONYMOUS_CASE_LIMITER?: RateLimitBinding;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
