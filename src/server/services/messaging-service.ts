@@ -12,6 +12,24 @@ import { whatsappService } from './whatsapp-service';
 import { metaGraphClient } from '../../integrations/meta/client/meta-graph-client';
 import { persistProspectingResponse } from './prospecting-responder';
 import { whatsappJourneyRouter } from './whatsapp-journey-router';
+
+const withDeadline = async <T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const isB2BIntent = (incoming: NormalizedIncomingMessage): boolean =>
+  /\b(parceria|despachante|assessoria|escrit[oó]rio|recursos? de tr[aâ]nsito|indica[cç][aã]o de clientes)\b/i
+    .test(`${incoming.senderName || ''} ${incoming.text || ''}`);
 import {
   SupportedChannel,
   MarketingContact,
@@ -912,12 +930,20 @@ export class MessagingService {
     // 4b. Acoplamento ADITIVO com prospecção B2B: resposta inbound de lead prospectado
     //     persiste em marketing_messages e marca marketing_lead_campaigns='responded'.
     //     Nunca lança erro — falhas são logadas internamente e engolidas.
-    await persistProspectingResponse(incoming);
+    await withDeadline(persistProspectingResponse(incoming), 700, {
+      matched: false,
+      messageInserted: false,
+      statusUpdated: false,
+    });
 
     // 4c. WhatsApp Journey Router (ADR-013 / P0.2) — decide B2C_AUTO vs B2B_RELATIONSHIP
     //     Deve rodar ANTES do auto-responder IA e ANTES da emissão de evento,
     //     para que conversation.metadata.journeyType esteja disponível downstream.
-    const journey = await whatsappJourneyRouter.resolveJourney(incoming);
+    const journey = await withDeadline(
+      whatsappJourneyRouter.resolveJourney(incoming),
+      700,
+      isB2BIntent(incoming) ? 'B2B_RELATIONSHIP' : 'B2C_AUTO'
+    );
     conversation.metadata = { ...conversation.metadata, journeyType: journey };
 
     // 5. Emissão de Evento para UI / WebSockets / Inbox
@@ -944,9 +970,9 @@ export class MessagingService {
 
     // Persistência Supabase (source of truth): espelha contato+conversa+mensagem.
     // Sequencial p/ respeitar FKs (contact → conversation → message). Nunca lança.
-    await this.persistContact(contact);
-    await this.persistConversation(conversation);
-    await this.persistMessage(message);
+    await withDeadline(this.persistContact(contact), 700, undefined);
+    await withDeadline(this.persistConversation(conversation), 700, undefined);
+    await withDeadline(this.persistMessage(message), 700, undefined);
 
     return { contact, conversation, message };
   }

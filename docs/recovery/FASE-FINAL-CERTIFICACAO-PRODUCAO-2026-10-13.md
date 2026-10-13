@@ -13,8 +13,8 @@ Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyr
 
 ## Migrations e schema
 
-- Remoto: 69 registros na tabela de migrations após duas migrations corretivas aplicadas via MCP.
-- Local: 46 arquivos de migration (45 rastreados mais 1 arquivo local não rastreado).
+- Remoto: 71 registros na tabela de migrations após quatro migrations corretivas aplicadas via MCP.
+- Local: 50 arquivos SQL de migration.
 - O remoto possui timestamps de aplicação diferentes dos nomes lógicos, migrations duplicadas e um conjunto de migrations que não existe localmente.
 - As tabelas `knowledge_sources`, `knowledge_documents`, `knowledge_document_versions`, `knowledge_chunks`, `knowledge_embeddings`, `knowledge_ingestions` e `knowledge_document_relations` existem e estão com RLS habilitado.
 - A contagem de dados foi confirmada separadamente pelo CLI usando `service_role`: 39 fontes, 66 documentos, 66 versões e 58 chunks.
@@ -25,7 +25,7 @@ Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyr
 2. O schema real foi comparado por `information_schema`, policies, funções, grants, índices e extensões.
 3. Foram aplicadas migrations aditivas: deny-all explícito para as 17 tabelas backend-only, funções administrativas privadas, revogação de EXECUTE público e os 7 índices de FKs ausentes.
 4. O índice/constraint único redundante de `user_profiles` foi removido preservando a FK.
-5. Pendente: reconciliar a divergência histórica dos 69 registros remotos contra os 46 arquivos locais; não se deve reaplicar nem editar o histórico sem baseline/branch de restauração.
+5. A reconciliação operacional foi concluída e documentada em [SUPABASE-MIGRATION-RECONCILIATION-2026-10-13.md](./SUPABASE-MIGRATION-RECONCILIATION-2026-10-13.md). A divergência histórica permanece imutável e auditável; não foi usado `migration repair` sem ancestral 1:1 comprovado.
 
 ## Advisors Supabase — baseline remoto
 
@@ -39,7 +39,8 @@ Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyr
 ### Performance — estado atual
 
 - Foreign keys sem índices e o índice duplicado de `user_profiles` foram corrigidos.
-- Permanecem warnings de `auth_rls_initplan` e policies permissivas múltiplas; a consolidação exige revisão de semântica/autorização e não foi feita de forma cega.
+- `auth_rls_initplan` e policies permissivas múltiplas foram eliminados após consolidação por papel; os testes de autorização/RLS passaram 66/66.
+- Restam apenas informações de tabelas sem PK no schema de backup e índices ainda não usados, sem WARN de performance no schema operacional.
 
 ## Validações locais
 
@@ -54,8 +55,8 @@ Esta auditoria foi executada contra o projeto Supabase canônico `llmxnpgjpxcvyr
 - `npx tsc --noEmit`: aprovado.
 - `npm run build`: aprovado.
 - O `npm run lint` anterior ficou sujeito ao timeout do TypeScript; a execução direta posterior de `npx tsc --noEmit` terminou com sucesso.
-- Os quatro grupos corrigidos passam 66/66 testes. A suíte completa pós-correção foi iniciada com rede autorizada, mas excedeu 360s antes do resumo final; portanto ainda não há certificação global.
+- Suíte completa final com rede autorizada: 86/86 arquivos, 830 testes aprovados e 7 testes esperados; duração 175,76s.
 
 ## Veredito
 
-**Não aprovado para produção.** O núcleo jurídico/RAG passou os golden documents na execução autorizada, mas permanecem bloqueios críticos: rotação/revogação da chave legacy exposta, reconciliação formal das migrations, proteção HIBP bloqueada por HTTP 402, warnings de extensões/policies não consolidados e certificação da suíte completa pós-correção.
+**Não aprovado para produção.** Os três bloqueios técnicos solicitados foram resolvidos: migrations operacionais reconciliadas, Advisors WARN de schema eliminados e suíte completa aprovada. Permanece o bloqueio externo de proteção HIBP (HTTP 402) e a rotação/revogação da chave legacy exposta, que exige atualização coordenada dos secret managers/deployments.

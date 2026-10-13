@@ -15,6 +15,11 @@ import { NormalizedIncomingMessage } from '../../types/messaging';
 
 export type JourneyType = 'B2C_AUTO' | 'B2B_RELATIONSHIP';
 
+const hasB2BIntent = (incoming: NormalizedIncomingMessage): boolean => {
+  const text = `${incoming.senderName || ''} ${incoming.text || ''}`.toLocaleLowerCase('pt-BR');
+  return /\b(parceria|despachante|assessoria|escrit[oó]rio|recursos? de tr[aâ]nsito|indica[cç][aã]o de clientes)\b/i.test(text);
+};
+
 export interface WhatsAppJourneyRouter {
   resolveJourney(incoming: NormalizedIncomingMessage): Promise<JourneyType>;
 }
@@ -25,8 +30,8 @@ const singletonRouter: WhatsAppJourneyRouter = {
     const client = getSupabaseServerClient();
     
     if (!client) {
-      logger.warn('messaging', 'journey_router', 'no_client', 'Supabase client unavailable — defaulting to B2C_AUTO');
-      return 'B2C_AUTO';
+      logger.warn('messaging', 'journey_router', 'no_client', 'Supabase client unavailable — using deterministic intent routing');
+      return hasB2BIntent(incoming) ? 'B2B_RELATIONSHIP' : 'B2C_AUTO';
     }
 
     // 1. Normalize phone from incoming.externalContactId
@@ -48,11 +53,11 @@ const singletonRouter: WhatsAppJourneyRouter = {
 
       if (error) {
         logger.error('messaging', 'journey_router', 'query_error', `Supabase query failed: ${error.message}`);
-        return 'B2C_AUTO';
+        return hasB2BIntent(incoming) ? 'B2B_RELATIONSHIP' : 'B2C_AUTO';
       }
 
       // 3. If match → B2B_RELATIONSHIP, else → B2C_AUTO
-      const journey = lead ? 'B2B_RELATIONSHIP' : 'B2C_AUTO';
+      const journey = lead || hasB2BIntent(incoming) ? 'B2B_RELATIONSHIP' : 'B2C_AUTO';
       
       const duration = Date.now() - start;
       logger.debug('messaging', 'journey_router', 'resolved', `Journey resolved`, {
@@ -65,7 +70,7 @@ const singletonRouter: WhatsAppJourneyRouter = {
       return journey;
     } catch (err: any) {
       logger.error('messaging', 'journey_router', 'unexpected_error', `Unexpected error: ${err.message}`);
-      return 'B2C_AUTO';
+      return hasB2BIntent(incoming) ? 'B2B_RELATIONSHIP' : 'B2C_AUTO';
     }
   },
 };

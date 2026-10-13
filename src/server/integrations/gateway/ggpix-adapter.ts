@@ -300,6 +300,10 @@ export class GGPIXAdapter implements PaymentGateway {
   }
 
   async getPaymentStatus(gatewayTransactionId: string): Promise<GatewayPaymentStatusResult> {
+    if (!this.isConfigured()) {
+      return { gatewayTransactionId, gateway: 'ggpixapi', status: 'PENDING' };
+    }
+
     let response: Response;
     try {
       response = await ggFetch(`/transactions/${gatewayTransactionId}`, {
