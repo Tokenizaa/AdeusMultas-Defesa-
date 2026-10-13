@@ -22,7 +22,8 @@ jobs:
       E2E_TEST_EMAIL: ${{ secrets.USER_TEST_LOGIN }}
       E2E_TEST_PASSWORD: ${{ secrets.USER_TEST_PASSWORD }}
       E2E_RUN_ID: anonymous-${{ github.run_id }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      # Keep production reconciliation on the same canonical project as Worker.
+      SUPABASE_URL: https://llmxnpgjpxcvyrqjkfwb.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
     steps:
