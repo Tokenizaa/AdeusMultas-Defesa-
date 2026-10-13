@@ -16,7 +16,6 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   const response = await request.get(url, {
     headers: {
       apikey: required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY),
-      Authorization: `Bearer ${required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY)}`,
     },
   });
   expect(response.ok(), `${table} reconciliation failed: HTTP ${response.status()}`).toBeTruthy();
@@ -28,7 +27,7 @@ test.afterEach(async ({ request }) => {
   const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
   const response = await request.delete(
     `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?ait_number=eq.${encodeURIComponent(generatedAit)}`,
-    { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    { headers: { apikey: key } },
   );
   expect(response.ok(), `E2E cleanup for generated case failed: HTTP ${response.status()}`).toBeTruthy();
   generatedAit = undefined;
@@ -47,6 +46,11 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   const ait = `ANON-${RUN_ID}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 45);
   generatedAit = ait;
   const plate = `AN${String(Date.now()).slice(-5)}`.slice(0, 7);
+  let anonymousSaveResult = 'request not observed';
+  page.on('response', async (response) => {
+    if (!response.url().includes('/api/cases/anonymous')) return;
+    anonymousSaveResult = `HTTP ${response.status()} ${((await response.text().catch(() => ''))).slice(0, 300)}`;
+  });
 
   await expect(page.getByRole('heading', { name: /Qual situação você quer resolver/i })).toBeVisible();
   await page.locator('#service-option-multa_transito').click();
@@ -76,16 +80,16 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   await expect(page.getByRole('heading', { name: /Acesso à Sua Defesa Jurídica/i })).toBeVisible();
   await expect(page.getByText(/100% dos Dados Coletados Preservados/i)).toBeVisible();
 
-  // The recovery token and case identifier must survive auth/reload before claim.
-  const wizardState = await page.evaluate(() => JSON.parse(sessionStorage.getItem('defesai_wizard_state') || 'null'));
-  expect(wizardState?.savedCaseId, 'anonymous case ID must be retained before authentication').toBeTruthy();
-  expect(wizardState?.savedClaimToken, 'server claim token must survive the authentication gate').toBeTruthy();
-
   // Server reconciliation: case exists, remains unclaimed, and no payment order exists.
   const cases = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
-  expect(cases.length, 'anonymous case must exist in Supabase').toBeGreaterThan(0);
+  expect(cases.length, `anonymous case must exist in Supabase (${anonymousSaveResult})`).toBeGreaterThan(0);
   const caseId = String(cases[0].id);
   expect(cases[0].user_id, 'case must remain unclaimed before authentication').toBeFalsy();
+
+  // The recovery token and case identifier must survive auth/reload before claim.
+  const wizardState = await page.evaluate(() => JSON.parse(sessionStorage.getItem('defesai_wizard_state') || 'null'));
+  expect(wizardState?.savedCaseId, `anonymous case ID must be retained (${anonymousSaveResult})`).toBeTruthy();
+  expect(wizardState?.savedClaimToken, 'server claim token must survive the authentication gate').toBeTruthy();
 
   const orders = await supabaseRows(request, 'payment_orders', `case_id=eq.${encodeURIComponent(caseId)}`);
   expect(orders.length, 'authentication gate test must not create a payment order').toBe(0);
