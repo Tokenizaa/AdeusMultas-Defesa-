@@ -62,8 +62,10 @@ casesRoutes.post('/cases/anonymous', async (c) => {
   const infractionCode = boundedString(infractionInput?.infractionCode, 20);
   const location = boundedString(infractionInput?.location, 240);
   const plate = boundedString(vehicleInput?.plate, 8);
-  const brandModel = boundedString(vehicleInput?.brandModel, 120);
-  if (!aitNumber || !infractionCode || !location || location.length < 5 || !plate || plate.length < 7 || !brandModel) {
+  // The public onboarding form does not collect make/model during free analysis.
+  // Preserve that uncertainty explicitly instead of rejecting a valid intake.
+  const brandModel = boundedString(vehicleInput?.brandModel, 120) || 'Não informado';
+  if (!aitNumber || !infractionCode || !location || location.length < 5 || !plate || plate.length < 7) {
     throw new HTTPException(400, { message: 'Dados mínimos da autuação e do veículo incompletos.' });
   }
 

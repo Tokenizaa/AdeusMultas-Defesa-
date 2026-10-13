@@ -75,6 +75,20 @@ describe('anonymous case intake', () => {
     expect(insertedRow.title).not.toBe(intake.title);
   });
 
+  it('accepts the actual free-onboarding payload without inventing vehicle make/model', async () => {
+    const { vehicle: _vehicle, ...formPayload } = intake;
+    const response = await casesRoutes.request('/cases/anonymous', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.12' },
+      body: JSON.stringify({ ...formPayload, vehicle: { plate: 'ABC1234' } }),
+    }, {
+      ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+
+    expect(response.status).toBe(201);
+    expect(insertedRow.vehicle_brand_model).toBe('Não informado');
+  });
+
   it('rejects new cases after the Cloudflare rate limit is reached', async () => {
     const response = await casesRoutes.request('/cases/anonymous', {
       method: 'POST',
