@@ -5,6 +5,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RUN_ID = process.env.E2E_RUN_ID || `anonymous-${Date.now()}`;
 let generatedAit: string | undefined;
+let anonymousSaveResult = 'request not observed';
 
 function required(name: string, value: string | undefined): string {
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
@@ -16,6 +17,7 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   const response = await request.get(url, {
     headers: {
       apikey: required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY),
+      Authorization: `Bearer ${required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY)}`,
       'User-Agent': 'AdeusMultas-E2E/1.0 (server-side reconciliation)',
     },
   });
@@ -28,10 +30,22 @@ test.afterEach(async ({ request }) => {
   const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
   const response = await request.delete(
     `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?ait_number=eq.${encodeURIComponent(generatedAit)}`,
-    { headers: { apikey: key, 'User-Agent': 'AdeusMultas-E2E/1.0 (server-side cleanup)' } },
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Prefer: 'return=representation',
+        'User-Agent': 'AdeusMultas-E2E/1.0 (server-side cleanup)',
+      },
+    },
   );
   expect(response.ok(), `E2E cleanup for generated case failed: HTTP ${response.status()}`).toBeTruthy();
+  const deletedRows = await response.json() as Record<string, unknown>[];
+  if (anonymousSaveResult.startsWith('HTTP 201')) {
+    expect(deletedRows.length, 'E2E cleanup must remove the exact generated case').toBe(1);
+  }
   generatedAit = undefined;
+  anonymousSaveResult = 'request not observed';
 });
 
 test('anonymous onboarding → authentication gate → safe stop before payment', async ({ page, request, context }) => {
@@ -47,7 +61,7 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   const ait = `ANON-${RUN_ID}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 45);
   generatedAit = ait;
   const plate = `AN${String(Date.now()).slice(-5)}`.slice(0, 7);
-  let anonymousSaveResult = 'request not observed';
+  anonymousSaveResult = 'request not observed';
   page.on('response', async (response) => {
     if (!response.url().includes('/api/cases/anonymous')) return;
     anonymousSaveResult = `HTTP ${response.status()} ${((await response.text().catch(() => ''))).slice(0, 300)}`;
