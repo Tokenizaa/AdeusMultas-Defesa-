@@ -4,8 +4,7 @@
  * - Import estático: o builder da Vercel rastreia/empacota todo o grafo
  *   (import dinâmico nativo NÃO é incluído no lambda).
  * - createApp() só roda na 1ª invocação: falhas de boot são capturadas e
- *   devolvidas como JSON legível (stack truncado) em vez do opaco
- *   FUNCTION_INVOCATION_FAILED, permitindo diagnóstico via curl.
+ *   devolvidas como JSON seguro em vez do opaco FUNCTION_INVOCATION_FAILED.
  */
 import { createApp, databaseRows } from '../src/server/app';
 import { commercialService } from '../src/server/commercial/commercial-service';
@@ -41,10 +40,7 @@ export default async function handler(
       res.end(
         JSON.stringify({
           error: 'API_FUNCTION_FAILURE',
-          message: String(err?.message || err),
-          stack: String(err?.stack || '')
-            .split('\n')
-            .slice(0, 10),
+          message: 'Internal server error',
         })
       );
     } else {
