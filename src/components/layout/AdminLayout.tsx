@@ -32,14 +32,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <span className="text-slate-600 hidden sm:inline">•</span>
           <span className="text-slate-400 hidden sm:inline">Ambiente Operacional Seguro</span>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-emerald-400 font-bold flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            99.98% Uptime
-          </span>
-          <span className="text-slate-600">•</span>
-          <span className="text-slate-400">Motor CTB v1</span>
-        </div>
+
       </div>
 
       {/* Main Workspace Row - Height constrained to prevent document body scrolling */}
@@ -95,11 +88,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <div>
               <span>DefesAi Plataforma Privada de Tecnologia Jurídica © {new Date().getFullYear()}</span>
             </div>
-            <div className="flex items-center gap-4">
-              <span>NVIDIA NIM AI • 9Router</span>
-              <span>PagBank Orders v2</span>
-              <span>LGPD Auditada</span>
-            </div>
+
           </footer>
         </div>
       </div>
