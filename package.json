@@ -15,7 +15,8 @@
     "test:e2e:failed": "playwright test --project=chromium --retries 0",
     "clean": "rm -rf dist server.js api/index.mjs",
     "lint": "tsc --noEmit",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "governance:check": "node scripts/governance-check.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

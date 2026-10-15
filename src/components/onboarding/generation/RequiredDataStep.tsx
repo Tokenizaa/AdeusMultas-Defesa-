@@ -24,6 +24,7 @@ interface RequiredDataStepProps {
   onNext: () => void;
   onBack: () => void;
   isAdmin?: boolean;
+  serviceType?: string;
 }
 
 export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
@@ -34,12 +35,24 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
   onNext,
   onBack,
   isAdmin = false,
+  serviceType = '',
 }) => {
+  const isSuspension = serviceType === 'suspensao_cnh' || serviceType === 'processo_suspensao';
+  const isCassation = serviceType === 'cassacao_cnh' || serviceType === 'processo_cassacao';
+  const processNumber = isSuspension
+    ? documentData.processNumbers?.psddNumber
+    : documentData.processNumbers?.pcddNumber;
   const isFormValid =
     (documentData.applicantName?.trim().length || 0) > 3 &&
-    (documentData.applicantCpf?.trim().length || 0) >= 11 &&
+    /^\d{11}$/.test((documentData.applicantCpf || '').replace(/\D/g, '')) &&
     (documentData.applicantCnh?.trim().length || 0) >= 5 &&
-    (documentData.applicantEmail?.includes('@') || false);
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(documentData.applicantEmail || '') &&
+    (documentData.applicantPhone?.replace(/\D/g, '').length || 0) >= 10 &&
+    (documentData.addressStreet?.trim().length || 0) >= 3 &&
+    (documentData.addressNumber?.trim().length || 0) > 0 &&
+    /^[^/]+\/\s*[A-Z]{2}$/i.test(documentData.addressCityState || '') &&
+    (infractionData.autuadorBody?.trim() || '').length > 0 &&
+    ((!isSuspension && !isCassation) || (Boolean(processNumber?.trim()) && Boolean(documentData.applicantRg?.trim())));
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-2xs space-y-6">
@@ -80,6 +93,56 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200">AIT: {infractionData.aitNumber || 'N/A'}</span>
           <span className="bg-white px-2 py-0.5 rounded border border-slate-200">Órgão: {infractionData.autuadorBody?.split('—')[0] || '— não informado —'}</span>
         </div>
+
+        {(isSuspension || isCassation) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <div>
+              <h3 className="text-xs font-bold text-amber-950">Dados do processo administrativo</h3>
+              <p className="text-[11px] text-amber-900 mt-1">
+                Informe exatamente o número exibido na notificação de {isSuspension ? 'suspensão (PSDD)' : 'cassação (PCDD)'}. Não invente esse número.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-700 font-mono block mb-1">
+                  Número do processo {isSuspension ? 'PSDD' : 'PCDD'} *
+                </label>
+                <input
+                  id={isSuspension ? 'input-psdd-number' : 'input-pcdd-number'}
+                  type="text"
+                  value={processNumber || ''}
+                  onChange={(e) => onUpdateDocumentData({
+                    ...documentData,
+                    processNumbers: {
+                      ...documentData.processNumbers,
+                      ...(isSuspension ? { psddNumber: e.target.value } : { pcddNumber: e.target.value }),
+                    },
+                  })}
+                  placeholder={isSuspension ? 'Ex.: PSDD-2026-004455' : 'Ex.: PCDD-2026-004455'}
+                  className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-2.5 py-2 outline-none focus:ring-2 focus:ring-[#155BCB]"
+                />
+              </div>
+              {isSuspension && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 font-mono block mb-1">Prazo da suspensão (meses)</label>
+                  <input
+                    id="input-suspension-months"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={documentData.processNumbers?.suspensionMonths ?? ''}
+                    onChange={(e) => onUpdateDocumentData({
+                      ...documentData,
+                      processNumbers: { ...documentData.processNumbers, suspensionMonths: Number(e.target.value) || undefined },
+                    })}
+                    placeholder="Ex.: 12"
+                    className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-2.5 py-2 outline-none focus:ring-2 focus:ring-[#155BCB]"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -151,14 +214,20 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
             <label className="text-[10px] font-bold text-slate-700 uppercase font-mono block mb-1">
               Categoria CNH
             </label>
-            <input
+            <select
               id="input-cnh-category"
-              type="text"
               value={documentData.cnhCategory || 'AB'}
               onChange={(e) => onUpdateDocumentData({ ...documentData, cnhCategory: e.target.value.toUpperCase() })}
-              placeholder="Ex: B ou AB"
               className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none"
-            />
+            >
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="AB">AB</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
+              <option value="ACC">ACC</option>
+            </select>
           </div>
         </div>
 

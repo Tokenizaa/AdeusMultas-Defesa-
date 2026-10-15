@@ -30,6 +30,11 @@ export interface Env {
   PAGBANK_TOKEN?: string;
   PAGBANK_ENV?: 'sandbox' | 'production';
   PAGBANK_WEBHOOK_SECRET?: string;
+  VENO_CLIENT_ID?: string;
+  VENO_CLIENT_SECRET?: string;
+  VENO_WEBHOOK_SECRET?: string;
+  VENO_PRIMARY_GATEWAY?: 'venopag' | 'pagbank';
+  APP_URL?: string;
   PAYMENT_MODE?: 'sandbox' | 'production';
   VITE_SUPABASE_ANON_KEY?: string;
   EVOLUTION_API_URL?: string;

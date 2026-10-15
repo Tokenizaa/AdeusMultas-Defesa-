@@ -240,10 +240,22 @@ export class CloudflareRagAdapter {
     // origem documental, recuperável em chunk → versão → documento → fonte → URL.
     const withProvenance = filteredArguments.map((arg: any) => {
       const articles = String(arg.legalBase ?? '').match(/Art\.\s*([0-9]+)/gi) ?? [];
-      const wanted = new Set(articles.map((a) => a.toLowerCase()));
+      const legalReferences = [
+        String(arg.legalBase ?? ''),
+        ...(Array.isArray(arg.resolutions) ? arg.resolutions.map((r: unknown) => String(r)) : []),
+      ].join(' ');
+      const resolutionNumbers = legalReferences.match(/(?:Resolu(?:ção|cao)|Res\.)[^0-9]{0,40}([0-9]+)/gi)?.map((r) => r.match(/[0-9]+/)?.[0]).filter(Boolean) ?? [];
+      const wanted = new Set([
+        ...articles.map((a) => a.toLowerCase()),
+        ...resolutionNumbers.map((r) => `resolução ${r}`),
+        ...resolutionNumbers.map((r) => `resolucao ${r}`),
+      ]);
       const hits = ragResults.filter((r) => {
         const content = String(r.content ?? '').toLowerCase();
-        return Array.from(wanted).some((w) => content.includes(w));
+        const resolutionHit = resolutionNumbers.some((number) =>
+          /^SRC_FED_CONTRAN/.test(String(r.source_id ?? '')) && content.includes(String(number)),
+        );
+        return Boolean(r.official_url) && (resolutionHit || Array.from(wanted).some((w) => content.includes(w)));
       });
       return {
         ...arg,
@@ -388,6 +400,7 @@ export async function generateDefenseDraftCompat(
     infraction: infraction as any,
     vehicle: { plate: vehiclePlate, model: vehicleModel },
     applicant: applicantData,
+    processNumbers: applicantData.processNumbers,
     selectedArgumentIds: analysis.recommendedArguments.map((a: any) => a.id),
     analysis,
     dates: {

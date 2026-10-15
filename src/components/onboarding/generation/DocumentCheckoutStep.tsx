@@ -36,6 +36,18 @@ interface DocumentCheckoutStepProps {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+function readableApiError(value: unknown, fallback: string): string {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (value && typeof value === 'object') {
+        const error = value as Record<string, unknown>;
+        for (const key of ['message', 'detail', 'reason', 'error']) {
+            if (typeof error[key] === 'string' && String(error[key]).trim()) return String(error[key]);
+        }
+        try { return JSON.stringify(value); } catch { return fallback; }
+    }
+    return fallback;
+}
+
 export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     currentCaseId,
     documentData,
@@ -155,11 +167,15 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                         couponCode: couponCode || null,
                     }),
                 });
-                const data = await res.json();
+                const rawBody = await res.text();
+                let data: any;
+                try { data = rawBody ? JSON.parse(rawBody) : {}; }
+                catch { data = { error: rawBody || 'Resposta inválida do servidor de pagamentos.' }; }
                 if (!res.ok || !data.success) {
-                    throw new Error(
-                        data.error || data.hint || 'Não foi possível gerar o PIX. Verifique o catálogo comercial.'
-                    );
+                    throw new Error(readableApiError(
+                        data.error ?? data.hint,
+                        'Não foi possível gerar o PIX. Verifique o catálogo comercial.'
+                    ));
                 }
                 setPixData(data);
             } catch (err: any) {
@@ -169,9 +185,12 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             }
         }
         loadPix();
-    }, [currentCaseId, serviceType, documentData.applicantCpf, documentData.applicantName, documentData.applicantEmail, paymentMethod, pixReloadKey]);
+    // Os dados do pagador não devem recriar a cobrança a cada tecla. O
+    // backend garante idempotência por caso/usuário; aqui só recarregamos
+    // quando muda o caso, a oferta, o método ou o pedido explicitamente.
+    }, [currentCaseId, serviceType, paymentMethod, pixReloadKey, couponCode]);
 
-    const gatewayLabel = pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank';
+    const gatewayLabel = pixData?.gateway === 'venopag' ? 'VenoPag' : pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank';
 
     const handleCopyPix = () => {
         if (pixData?.pixCopyPasteString) {
@@ -211,6 +230,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             vehicle: vehicleData,
             infraction: infractionData,
             applicant: documentData,
+            processNumbers: documentData.processNumbers,
             analysis,
             isAnonymous: false,
             isPaid: true,
@@ -250,15 +270,27 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     };
 
     const persistCase = async (): Promise<CaseDomain> => {
-        // 1. Create / Persist Case if not existing
+        // The payment webhook may mark the existing onboarding case as paid
+        // before the user clicks "Já paguei". Never POST that same case again:
+        // the primary key then produces a 400 duplicate response and blocks
+        // document generation.
         const casePayload = buildCasePayload();
-
-        const saveRes = await authFetch('/api/cases', {
-            method: 'POST',
+        const endpoint = currentCaseId ? `/api/cases/${encodeURIComponent(currentCaseId)}` : '/api/cases';
+        const saveRes = await authFetch(endpoint, {
+            method: currentCaseId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(casePayload),
         });
-        const savedCase = await saveRes.json();
+        const rawBody = await saveRes.text();
+        let savedCase: any;
+        try {
+            savedCase = rawBody ? JSON.parse(rawBody) : {};
+        } catch {
+            throw new Error(rawBody || 'Resposta inválida ao salvar o caso.');
+        }
+        if (!saveRes.ok) {
+            throw new Error(readableApiError(savedCase, 'Não foi possível salvar o caso para emissão do documento.'));
+        }
         return savedCase.id ? savedCase : casePayload;
     };
 
@@ -282,6 +314,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                 category: documentData.cnhCategory,
                                 address: `${documentData.addressStreet}, ${documentData.addressNumber || ''}`.trim(),
                                 cityState: documentData.addressCityState,
+                                processNumbers: documentData.processNumbers,
                             },
                             customFacts: documentData.factsNarrative,
                         }),

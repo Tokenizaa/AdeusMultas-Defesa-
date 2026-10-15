@@ -96,7 +96,7 @@ export function runCanonicalQualityGate(input: CanonicalQualityGateInput): Canon
     specificFacts: {},
     evidence: {},
   };
-  const base = runFullQualityGate(payload, { id: draft?.caseId }, analysis, document);
+  const base = runFullQualityGate(payload, { id: draft?.caseId, serviceType: draft?.procedureType || serviceType }, analysis, document);
   checks.push(...base.checks);
 
   // ── 2) TESE AUTORIZADA: nada no documento fora da Analysis ───────────────

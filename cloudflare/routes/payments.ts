@@ -8,18 +8,23 @@ import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type Pag
 import { commercialRoutes } from './commercial';
 import { GGPIXAdapter } from '../../src/server/integrations/gateway/ggpix-adapter';
 import type { NormalizedWebhookEvent } from '../../src/server/integrations/gateway/types';
+import { createVenoCashIn, getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
 
 const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
 async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?: string, userId?: string) {
-  const request = new globalThis.Request('https://internal/api/offers/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceType, couponCode, userId }) });
+  // `commercialRoutes` is mounted at `/api` by the worker, but its own
+  // sub-application receives paths relative to that mount. Calling it with
+  // `/api/offers/resolve` bypasses the route and makes checkout fail before
+  // any gateway request is attempted.
+  const request = new globalThis.Request('https://internal/offers/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceType, couponCode, userId }) });
   const response = await commercialRoutes.fetch(request, env);
   const payload = await response.json() as any;
   if (!response.ok || !payload?.ok || !payload?.data?.offer) throw new HTTPException((response.status || 502) as ContentfulStatusCode, { message: payload?.error?.message || payload?.reason || 'Oferta comercial indisponível.' });
   return payload.data.offer;
 }
 
-async function persistOrder(env: Env, input: { caseId: string; userId?: string; referenceId: string; gatewayOrderId?: string; gatewayTransactionId: string; amount: number; baseAmount?: number; discountAmount?: number; couponCode?: string; status: string; gateway: string; paymentMethod?: string; qrCodeText?: string; qrCodeUrl?: string }) {
+async function persistOrder(env: Env, input: { caseId: string; userId?: string; referenceId: string; serviceType?: string; gatewayOrderId?: string; gatewayTransactionId: string; amount: number; baseAmount?: number; discountAmount?: number; couponCode?: string; status: string; gateway: string; paymentMethod?: string; qrCodeText?: string; qrCodeUrl?: string }) {
   const supabase = createSupabaseAdminClient(env);
   const now = new Date().toISOString();
   const finalAmount = Number(input.amount);
@@ -51,6 +56,20 @@ routes.get('/payments/resolve-price', async (c) => {
   }
 });
 
+routes.get('/payments/gateway/status', (c) => {
+  const gateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
+  const configured = gateway === 'venopag'
+    ? Boolean(c.env.VENO_CLIENT_ID && c.env.VENO_CLIENT_SECRET && c.env.VENO_WEBHOOK_SECRET)
+    : Boolean(c.env.PAGBANK_TOKEN);
+  return c.json({
+    ok: configured,
+    configured,
+    gateway,
+    environment: gateway === 'venopag' ? 'production' : (c.env.PAGBANK_ENV || 'sandbox'),
+    simulated: false,
+  }, configured ? 200 : 503);
+});
+
 routes.post('/payments/pix/create', authenticateToken, async (c) => {
   const user = c.get('user')!;
   const body = await c.req.json<any>().catch(() => ({}));
@@ -58,9 +77,89 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
-  if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
   const referenceId = `defesai_case_${caseId}`;
+  // Idempotência: a tela de checkout pode remontar após alteração de campos,
+  // recarregamento ou retomada do caso. Nunca crie uma segunda cobrança PIX
+  // enquanto já existir uma cobrança pendente para o mesmo caso/usuário.
+  const admin = createSupabaseAdminClient(c.env);
+  const { data: existingOrder } = await admin
+    .from('payment_orders')
+    .select('*')
+    .eq('case_id', caseId)
+    .eq('user_id', user.id)
+    .eq('payment_method', 'pix')
+    .eq('status', 'PENDING')
+    .maybeSingle();
+  if (existingOrder?.gateway_transaction_id && existingOrder.amount === Number(offer.finalAmount)) {
+    return c.json({
+      success: true,
+      paymentOrder: existingOrder,
+      pixCopyPasteString: existingOrder.qr_code_text,
+      qrCodeDataUrl: existingOrder.qr_code_url?.startsWith('data:') ? existingOrder.qr_code_url : undefined,
+      qrCodeUrl: existingOrder.qr_code_url,
+      txId: existingOrder.gateway_transaction_id,
+      amount: existingOrder.amount,
+      serviceType: body.serviceType,
+      status: existingOrder.status,
+      gateway: existingOrder.gateway,
+      simulated: false,
+      reused: true,
+    });
+  }
   const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
+  const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
+  if (primaryGateway === 'venopag') {
+    if (!c.env.VENO_CLIENT_ID || !c.env.VENO_CLIENT_SECRET || !c.env.VENO_WEBHOOK_SECRET) {
+      throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
+    }
+    let venoOrder;
+    try {
+      venoOrder = await createVenoCashIn(c.env, {
+        amountInCents: Math.round(Number(offer.finalAmount) * 100),
+        payerName: payer.name,
+        payerDocument: payer.document,
+        description: `DefesAi - ${offer.name}`,
+        webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Não foi possível confirmar a criação do pagamento. Aguarde e verifique antes de tentar novamente.';
+      console.error('[payments] venopag cashin failed', message);
+      throw new HTTPException(502, { message });
+    }
+    if (venoOrder.status !== 'pending' || Math.round(venoOrder.amount * 100) !== Math.round(Number(offer.finalAmount) * 100)) {
+      throw new HTTPException(502, { message: 'Resposta inesperada do provedor. Verifique a transação antes de tentar novamente.' });
+    }
+    const qrCodeDataUrl = venoOrder.qr_img
+      ? `data:image/png;base64,${venoOrder.qr_img}`
+      : venoOrder.qr_url;
+    let record;
+    try {
+      record = await persistOrder(c.env, {
+        caseId, userId: user.id, referenceId, serviceType: body.serviceType, gatewayTransactionId: venoOrder.request_number,
+        amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount),
+        discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode,
+        status: 'PENDING', gateway: 'venopag', paymentMethod: 'pix',
+        qrCodeText: venoOrder.copyPaste, qrCodeUrl: venoOrder.qr_url,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error('[payments] venopag order persistence failed', {
+        caseId,
+        requestNumber: venoOrder.request_number,
+        detail,
+      });
+      throw new HTTPException(502, { message: 'O gateway gerou a cobrança, mas o sistema não conseguiu registrá-la. Não tente novamente; suporte deve reconciliar a transação.' });
+    }
+    return c.json({
+      success: true, order: venoOrder, paymentOrder: record,
+      pixCopyPasteString: venoOrder.copyPaste, qrCodeDataUrl, qrCodeUrl: venoOrder.qr_url,
+      txId: venoOrder.request_number, amount: offer.finalAmount,
+      serviceType: offer.serviceType, status: 'PENDING', gateway: 'venopag', simulated: false,
+    });
+  }
+  if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
   let order;
   try {
     order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(Number(offer.finalAmount) * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
@@ -68,7 +167,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     throw new HTTPException(503, { message: 'Não foi possível iniciar o pagamento. Nenhuma cobrança foi confirmada.' });
   }
   if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
-  const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId, gatewayOrderId: order.orderId, gatewayTransactionId: order.gatewayTransactionId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'pix', qrCodeText: order.pixCopyPaste || order.qrCodeText, qrCodeUrl: order.qrCodeUrl });
+  const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId, serviceType: body.serviceType, gatewayOrderId: order.orderId, gatewayTransactionId: order.gatewayTransactionId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'pix', qrCodeText: order.pixCopyPaste || order.qrCodeText, qrCodeUrl: order.qrCodeUrl });
   return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
 });
 
@@ -126,7 +225,7 @@ routes.post('/webhooks/pagbank', async (c) => {
     if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const match = referenceId.match(/^defesai_case_(.+)$/);
     if (match?.[1]) {
-      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', match[1]);
+      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, updated_at: now }).eq('id', match[1]);
       if (caseError) throw caseError;
     }
     return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
@@ -141,11 +240,7 @@ routes.post('/webhooks/ggpix', async (c) => {
   let body: unknown;
   try { body = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
 
-  // Debug: log c properties
-  console.error('GGPIX webhook c keys:', Object.keys(c));
-  console.error('GGPIX webhook c.env:', c.env);
-
-  // Convert Headers to plain object for the adapter
+  // Never log Worker bindings: c.env contains production credentials.
   const headersObj = Object.fromEntries(c.req.raw.headers.entries());
 
   // Use the adapter with the current Env binding
@@ -154,13 +249,10 @@ routes.post('/webhooks/ggpix', async (c) => {
   let normalized: NormalizedWebhookEvent;
   try {
     normalized = ggpixAdapterInstance.processWebhook(rawBody, headersObj, body);
-  } catch (err: any) {
-    console.error('GGPIX webhook error caught:', err.message);
-    if (err.message.includes('Webhook GGPIXAPI rejeitado')) {
-      console.error('GGPIX webhook returning 401');
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('Webhook GGPIXAPI rejeitado')) {
       return c.json({ error: err.message }, 401);
     }
-    console.error('GGPIX webhook returning 400');
     return c.json({ error: 'Webhook inválido.' }, 400);
   }
 
@@ -180,7 +272,7 @@ routes.post('/webhooks/ggpix', async (c) => {
     if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
     const match = referenceId.match(/^defesai_case_(.+)$/);
     if (match?.[1]) {
-      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, status: 'pago', updated_at: now }).eq('id', match[1]);
+      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, updated_at: now }).eq('id', match[1]);
       if (caseError) throw caseError;
     }
     return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
@@ -188,6 +280,61 @@ routes.post('/webhooks/ggpix', async (c) => {
   const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: now }).eq('id', existing.id);
   if (statusError) throw statusError;
   return c.json({ received: true, status, isDuplicate: false, matched: true });
+});
+
+routes.post('/webhooks/venopag', async (c) => {
+  const rawBody = await c.req.text();
+  const valid = await verifyVenoWebhook(
+    c.env, rawBody, c.req.header('x-veno-signature') || null, c.req.header('x-veno-client-id') || null,
+  );
+  if (!valid) return c.json({ error: 'Assinatura inválida.' }, 401);
+
+  let event: { type?: string; status?: string; request_number?: string; transaction_id?: string; amount?: number };
+  try { event = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
+  if (event.type !== 'cashin' || !event.request_number || typeof event.status !== 'string') {
+    return c.json({ received: true, ignored: true });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: existing, error } = await supabase.from('payment_orders').select('*')
+    .eq('gateway_transaction_id', event.request_number).eq('gateway', 'venopag').maybeSingle();
+  if (error) throw error;
+  if (!existing) return c.json({ received: true, matched: false });
+
+  // Verify every transition against the provider, not only "confirmed". This
+  // prevents forged/stale reversal callbacks from changing a paid order.
+  const verified = await getVenoCashInStatus(c.env, event.request_number);
+  if (!verified.ok || !verified.status || verified.request_number !== event.request_number ||
+      Math.round(Number(verified.amount) * 100) !== Math.round(Number(existing.amount) * 100)) {
+    return c.json({ error: 'Status da transação não pôde ser confirmado.' }, 502);
+  }
+  const currentStatus = verified.status;
+  const reversed = ['contested', 'chargedback', 'refunded'].includes(currentStatus);
+  if (currentStatus === 'confirmed') {
+    const now = new Date().toISOString();
+    const alreadyPaid = String(existing.status).toUpperCase() === 'PAID' || Boolean(existing.paid_at);
+    const { data: transitioned, error: updateError } = alreadyPaid
+      ? { data: null, error: null }
+      : await supabase.from('payment_orders').update({
+          status: 'PAID', paid_at: now, updated_at: now,
+        }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
+    if (updateError) throw updateError;
+    const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: existing.paid_at || now, updated_at: now }).eq('id', existing.case_id);
+    if (caseError) throw caseError;
+    return c.json({ received: true, matched: true, isDuplicate: alreadyPaid || !transitioned, status: 'PAID' });
+  }
+
+  const state = reversed ? 'REFUNDED' : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
+    : currentStatus === 'pending' ? 'PENDING' : 'CANCELED';
+  const { error: updateError } = await supabase.from('payment_orders').update({
+    status: state, paid_at: null, updated_at: new Date().toISOString(),
+  }).eq('id', existing.id);
+  if (updateError) throw updateError;
+  if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
+    const { error: caseError } = await supabase.from('cases').update({ is_paid: false, paid_at: null, status: 'aguardando_pagamento', updated_at: new Date().toISOString() }).eq('id', existing.case_id);
+    if (caseError) throw caseError;
+  }
+  return c.json({ received: true, matched: true, status: state });
 });
 
 export const paymentsRoutes = routes;

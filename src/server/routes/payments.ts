@@ -701,7 +701,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
 // ============================================================================
 // PRODUCTION: Block sandbox simulation endpoint — payment state must only be
 // changed by real gateway webhooks (PagBank HMAC or GGPIX IP allowlist).
-router.post('/simulate-payment', async (req: Request, res: Response) => {
+router.post('/simulate-payment', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(501).json({
       error: 'Endpoint de simulação não disponível em produção',

@@ -119,6 +119,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
     const [step, setStep] = useState<number>(savedState?.step ?? 1);
     const wizardTopRef = useRef<HTMLDivElement>(null);
+    // Keep the selected procedure available synchronously for persistence.
+    // The analysis step can finish before a state-derived closure is refreshed.
+    const mappedProcedureRef = useRef<ProcedureType>('defesa_previa');
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
   const [leadName, setLeadName] = useState<string>(user?.name || '');
@@ -174,7 +177,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     applicantName: user?.name || '',
     applicantCpf: user?.cpf || '',
     applicantRg: '',
-    applicantCnh: '',
+    applicantCnh: user?.cnh || '',
     cnhCategory: '',
     applicantPhone: user?.phone || '',
     applicantEmail: user?.email || '',
@@ -183,13 +186,31 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     addressComplement: '',
     addressNeighborhood: '',
     addressZipCode: '',
-    addressCityState: '',
+    addressCityState: user?.cityState || '',
     vehicleRenavam: '',
   });
 
   const [savedCaseId, setSavedCaseId] = useState<string | undefined>(savedState?.savedCaseId);
   // Token de claim gerado pelo servidor para casos anônimos — nunca o próprio ID.
   const [savedClaimToken, setSavedClaimToken] = useState<string | undefined>(savedState?.savedClaimToken);
+
+  // Sincroniza o perfil quando a sessão termina de carregar ou quando o
+  // usuário entra durante o onboarding. Só preenche campos vazios: dados que
+  // o usuário já editou nesta peça nunca são sobrescritos silenciosamente.
+  useEffect(() => {
+    if (!user) return;
+    setLeadName((prev) => prev || user.name || '');
+    setLeadPhone((prev) => prev || user.phone || '');
+    setDocumentData((prev) => ({
+      ...prev,
+      applicantName: prev.applicantName || user.name || '',
+      applicantCpf: prev.applicantCpf || user.cpf || '',
+      applicantCnh: prev.applicantCnh || user.cnh || '',
+      applicantPhone: prev.applicantPhone || user.phone || '',
+      applicantEmail: prev.applicantEmail || user.email || '',
+      addressCityState: prev.addressCityState || user.cityState || '',
+    }));
+  }, [user]);
 
   // Scroll to top of wizard on every step change and persist only non-sensitive metadata.
   useEffect(() => {
@@ -238,7 +259,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       ? 'recurso_jari'
       : processStage === 'recurso_cetran' || processStage === 'recurso_jari_negado'
       ? 'recurso_cetran'
-      : 'recurso_jari';
+      : 'defesa_previa';
 
   const isPhase1 = step <= 7;
   const isPhase2 = step >= 8;
@@ -271,6 +292,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setSituation(selected);
     const sitDef = USER_SITUATIONS.find((s) => s.id === selected);
 
+    if (sitDef?.mappedProcedure) {
+      mappedProcedureRef.current = sitDef.mappedProcedure;
+    }
+
     if (sitDef?.defaultInfractionCategory) {
       setInfractionCategory(sitDef.defaultInfractionCategory);
     }
@@ -289,6 +314,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleStageSelect = (selected: UserProcessStage) => {
     setProcessStage(selected);
+    // Suspension and cassation are already specialized procedures selected in
+    // step 1. Their generic phase question must not downgrade them to JARI.
+    if (situation !== 'suspensao_cnh' && situation !== 'cassacao_cnh') {
+      const stage = USER_PROCESS_STAGES.find((item) => item.id === selected);
+      if (stage?.mappedProcedure) {
+        mappedProcedureRef.current = stage.mappedProcedure;
+      }
+    }
     setStep(3); // Passo exclusivo de tipo/categoria da infração
   };
 
@@ -368,13 +401,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   };
 
   const handleAnalysisCompleted = async () => {
+    // O resultado da análise não deve ficar bloqueado pela persistência
+    // remota. Exiba a etapa 7 imediatamente; o salvamento continua abaixo e
+    // atualiza savedCaseId quando concluir.
+    setStep(7);
     try {
       const res = await authFetch(isAuthenticated ? '/api/cases' : '/api/cases/anonymous', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `Diagnóstico Auto ${infractionData.aitNumber || 'sem AIT'}`,
-          serviceType: mappedProcedure,
+          serviceType: mappedProcedureRef.current,
           infraction: infractionData,
           vehicle: vehicleData,
           isAnonymous: !isAuthenticated,
@@ -399,14 +436,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         // (dashboard/listagem refetcham imediatamente).
         emitCasesChanged();
       }
-      // Se o backend retornou análise com successRate > 0, usar a do backend
-      if (data.analysis && data.analysis.overallSuccessRate > 0) {
+      // A análise do backend é a fonte canônica mesmo quando a taxa é 0.
+      // O teste anterior descartava análises válidas sem teses elegíveis e
+      // deixava o estado inicial da UI (0%) mascarar o payload persistido.
+      if (data.analysis && typeof data.analysis === 'object') {
         setCaseAnalysis(data.analysis);
       }
     } catch (err) {
       console.error('Error saving case:', err);
     }
-    setStep(7); // Exibir resultado do diagnóstico gratuito
   };
 
   const handleProceedToDocumentGeneration = () => {
@@ -672,6 +710,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onNext={() => setStep(9)}
           onBack={() => setStep(7)}
           isAdmin={effectiveIsAdmin}
+          serviceType={mappedProcedure}
         />
       )}
 

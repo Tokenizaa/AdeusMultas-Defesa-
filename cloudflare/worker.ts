@@ -44,7 +44,10 @@ app.get('/api/health', async (c) => {
     dbStatus = 'error';
   }
   const latencyMs = Date.now() - start;
-  const paymentReady = Boolean(c.env.PAGBANK_TOKEN)
+  const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag'
+  const paymentReady = primaryGateway === 'venopag'
+    ? Boolean(c.env.VENO_CLIENT_ID && c.env.VENO_CLIENT_SECRET && c.env.VENO_WEBHOOK_SECRET)
+    : Boolean(c.env.PAGBANK_TOKEN)
   return c.json({
     status: dbStatus === 'connected' && paymentReady ? 'ok' : 'degraded',
     worker: 'cloudflare-worker',
@@ -53,8 +56,8 @@ app.get('/api/health', async (c) => {
     database: { status: dbStatus },
     payments: {
       status: paymentReady ? 'configured' : 'unavailable',
-      gateway: 'pagbank',
-      environment: c.env.PAGBANK_ENV || 'sandbox',
+      gateway: primaryGateway,
+      environment: primaryGateway === 'pagbank' ? (c.env.PAGBANK_ENV || 'sandbox') : 'production',
     },
   });
 });

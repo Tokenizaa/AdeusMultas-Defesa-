@@ -24,6 +24,18 @@ import { CreditCardForm } from './CreditCardForm';
 import { useAuth } from '../../core/auth/AuthContext';
 import { useRouter } from '../../core/router/RouterContext';
 
+function readableApiError(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (value && typeof value === 'object') {
+    const error = value as Record<string, unknown>;
+    for (const key of ['message', 'detail', 'reason', 'error']) {
+      if (typeof error[key] === 'string' && String(error[key]).trim()) return String(error[key]);
+    }
+    try { return JSON.stringify(value); } catch { return fallback; }
+  }
+  return fallback;
+}
+
 interface CheckoutViewProps {
   currentCase: CaseDomain;
   onPaymentSuccess: (updatedCase: CaseDomain) => void;
@@ -92,6 +104,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     pixCopyPasteString: string;
     txId: string;
     amount: number;
+    gateway?: string;
   } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [creditCardResult, setCreditCardResult] = useState<{
@@ -254,9 +267,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             couponCode: couponCode || null,
           }),
         });
-        const data = await res.json();
+        const rawBody = await res.text();
+        let data: any;
+        try { data = rawBody ? JSON.parse(rawBody) : {}; }
+        catch { data = { error: rawBody || 'Resposta inválida do servidor de pagamentos.' }; }
         if (!res.ok || !data.success) {
-          throw new Error(data.error || data.hint || 'Não foi possível gerar o PIX.');
+          throw new Error(readableApiError(data.error ?? data.hint, 'Não foi possível gerar o PIX.'));
         }
         setPixData(data);
       } catch (err: any) {
@@ -595,7 +611,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </div>
             <p className="text-sm text-slate-500 text-center mt-2 font-mono">
               {paymentMethod === 'pix'
-                ? 'Pagamento instantâneo via Banco Central / PagBank'
+                ? `Pagamento instantâneo via ${pixData?.gateway === 'venopag' ? 'VenoPag' : pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank'}`
                 : 'Parcelamento em até 12x — Tokenização segura PagBank'}
             </p>
           </div>
@@ -610,7 +626,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">Pagamento Instantâneo</h2>
-                    <p className="text-sm text-slate-500 font-mono">Via PagBank / Banco Central</p>
+                    <p className="text-sm text-slate-500 font-mono">Via {pixData?.gateway === 'venopag' ? 'VenoPag' : pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank'} / PIX</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -627,7 +643,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   <div className="inline-block p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
                     <img
                       src={pixData.qrCodeDataUrl}
-                      alt="QR Code PIX PagBank"
+                      alt={`QR Code PIX ${pixData?.gateway === 'venopag' ? 'VenoPag' : pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank'}`}
                       className="w-40 h-40 mx-auto object-contain"
                     />
                   </div>

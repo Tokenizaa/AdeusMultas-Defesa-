@@ -705,6 +705,11 @@ export interface CaseDomain {
 
   // Etapa 2: Dados complementares, pagamento e documento
   applicant?: CaseApplicantData;
+  processNumbers?: {
+    psddNumber?: string;
+    pcddNumber?: string;
+    suspensionMonths?: number;
+  };
   payment?: {
     status: PaymentStatus;
     amount: number;
@@ -962,6 +967,11 @@ export interface CaseDocumentData {
   addressCityState: string;
   vehicleRenavam?: string;
   factsNarrative?: string;
+  processNumbers?: {
+    psddNumber?: string;
+    pcddNumber?: string;
+    suspensionMonths?: number;
+  };
   /** Preço efetivo resolvido pelo catálogo comercial (em reais). */
   price?: number;
 }

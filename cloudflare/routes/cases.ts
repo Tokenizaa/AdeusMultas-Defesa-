@@ -79,7 +79,12 @@ casesRoutes.post('/cases/anonymous', async (c) => {
     severity: boundedString(infractionInput.severity, 20) || 'media',
     points: Number.isFinite(Number(infractionInput.points)) ? Number(infractionInput.points) : 0,
     fineAmount: Number.isFinite(Number(infractionInput.fineAmount)) ? Number(infractionInput.fineAmount) : 0,
-    autuadorBody: boundedString(infractionInput.autuadorBody, 120) || '',
+    // A análise gratuita ainda não coleta o órgão autuador. Preserve a
+    // incerteza explicitamente para que o motor determinístico possa avaliar
+    // as demais regras sem transformar a ausência em fallback silencioso.
+    // Isso não afirma um órgão: documentos e UI continuam exibindo
+    // "Não informado".
+    autuadorBody: boundedString(infractionInput.autuadorBody, 120) || 'Não informado',
     dateTime: boundedString(infractionInput.dateTime, 40) || undefined,
     location,
     speedLimit: Number.isFinite(Number(infractionInput.speedLimit)) ? Number(infractionInput.speedLimit) : undefined,
@@ -116,6 +121,10 @@ casesRoutes.post('/cases/anonymous', async (c) => {
   };
 
   domainData.analysis = await analyzeInfractionCompat(c.env, caseId, infraction);
+  // O procedimento escolhido pelo usuário é parte do contrato do caso. O
+  // Rule Engine classifica a infração, mas não pode substituir a fase
+  // processual explicitamente selecionada no onboarding.
+  domainData.analysis.recommendedProcedure = domainData.serviceType;
   const row = domainToRow(domainData);
   row.user_id = null;
   row.is_anonymous = true;
@@ -163,6 +172,9 @@ casesRoutes.get('/cases/:id', authenticateToken, async (c) => {
   if (!canAccessCase(user, row)) {
     throw new HTTPException(403, { message: 'Você não tem permissão para acessar este caso' });
   }
+  if (row.is_paid !== true) {
+    throw new HTTPException(402, { message: 'Pagamento necessário para gerar a defesa.' });
+  }
 
   const domain = rowToDomain(row);
 
@@ -204,6 +216,7 @@ casesRoutes.post('/cases', authenticateToken, async (c) => {
   // Recompute analysis server-side (canonical analysis via RAG)
   if (domainData.infraction) {
     domainData.analysis = await analyzeInfractionCompat(c.env, domainData.id, domainData.infraction);
+    domainData.analysis.recommendedProcedure = domainData.serviceType;
   }
 
   if (domainData.isAnonymous && !domainData.claimToken) {
@@ -360,6 +373,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
   // Recompute analysis from current infraction data (canonical, fresh via RAG)
   if (domain.infraction) {
     domain.analysis = await analyzeInfractionCompat(c.env, domain.id, domain.infraction);
+    domain.analysis.recommendedProcedure = domain.serviceType;
   }
 
   // Resolve qualificação do requerente (body → applicant existente)
@@ -375,6 +389,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
           category: b.category || b.cnhCategory,
           address: b.address || (b.addressStreet ? `${b.addressStreet}, ${b.addressNumber || ''}` : ''),
           cityState: b.cityState || b.addressCityState || '',
+          processNumbers: b.processNumbers,
         }
       : domain.applicant
         ? {
@@ -385,6 +400,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
             category: domain.applicant.cnhCategory,
             address: `${domain.applicant.addressStreet}, ${domain.applicant.addressNumber || ''}`,
             cityState: domain.applicant.addressCityState,
+            processNumbers: domain.processNumbers,
           }
         : undefined;
 

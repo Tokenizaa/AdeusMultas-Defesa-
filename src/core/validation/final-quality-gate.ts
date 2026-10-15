@@ -397,8 +397,9 @@ function runNaoInvencaoCheck(
   ];
 
   for (const check of checks) {
-    const matches = finalDocument.match(check.pattern) || [];
-    for (const match of matches) {
+    const matches = Array.from(finalDocument.matchAll(check.pattern));
+    for (const occurrence of matches) {
+      const match = occurrence[0];
       let hasSource = false;
 
       for (const allowedField of check.allowedFields) {
@@ -411,6 +412,21 @@ function runNaoInvencaoCheck(
 
       if (!hasSource && check.condition && check.condition(lineage)) {
         hasSource = true;
+      }
+
+      // A tese de ausência do Termo de Constatação precisa mencionar o termo
+      // para fundamentar a nulidade. Quando o onboarding confirma que o termo
+      // não foi entregue, uma formulação negativa próxima à ocorrência é
+      // evidência do fato, não invenção. Afirmações positivas continuam
+      // sujeitas ao bloqueio normal acima.
+      if (!hasSource && check.description === 'Referência a termo de constatação') {
+        const start = Math.max(0, (occurrence.index ?? 0) - 100);
+        const end = Math.min(finalDocument.length, (occurrence.index ?? 0) + match.length + 100);
+        const context = finalDocument.slice(start, end);
+        const termEntry = lineage.entries.find((e) => e.field === 'infraction.hasPsychomotorTerm');
+        if (String(termEntry?.originalValue) === 'false' && /ausên|ausente|não|nao|omiss|inexist|falta/i.test(context)) {
+          hasSource = true;
+        }
       }
 
       const isTemplateText = isStandardTemplatePhrase(match, check.description);
@@ -474,16 +490,21 @@ function runEstruturaCheck(
   // JARI endereça "ILUSTRÍSSIMO(A) SENHOR(A)" (forma neutra de gênero) e
   // qualifica o requerente em prosa corrida, sem heading "QUALIFICAÇÃO" —
   // exigir a string exata reprovava peças juridicamente completas.
+  const isFici = canonicalCase?.serviceType === 'indicacao_condutor' || canonicalCase?.procedureType === 'indicacao_condutor';
+  const isConversaoAdvertencia = canonicalCase?.serviceType === 'conversao_advertencia' || canonicalCase?.procedureType === 'conversao_advertencia';
   const requiredSections = [
     { ok: /ilustr[íi]ssimo/i, label: 'Endereçamento' },
     { ok: /(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\b\d{11}\b)/.test(finalDocument) && /\bCNH\b/i.test(finalDocument), label: 'Qualificação do requerente (CPF e CNH)' },
     { ok: /auto de infra[çc][ãa]o|AIT\s*n[ºo°]/i.test(finalDocument), label: 'Identificação do AIT' },
     { ok: /dos fatos/i.test(finalDocument), label: 'Dos fatos' },
-    { ok: /preliminares/i.test(finalDocument), label: 'Preliminares' },
-    { ok: /m[ée]rito/i.test(finalDocument), label: 'Mérito' },
+    ...(isFici
+      ? [{ ok: /tempestividade|apresenta[çc][ãa]o do condutor/i.test(finalDocument), label: 'Tempestividade/Apresentação do condutor' }]
+      : isConversaoAdvertencia
+        ? [{ ok: /advert[êe]ncia|art\.\s*267/i.test(finalDocument), label: 'Fundamentação da conversão em advertência' }]
+      : [{ ok: /preliminares/i.test(finalDocument), label: 'Preliminares' }, { ok: /m[ée]rito/i.test(finalDocument), label: 'Mérito' }]),
     { ok: /requer|pedidos?/i.test(finalDocument), label: 'Pedidos' },
-    { ok: /rol de documentos/i.test(finalDocument), label: 'Rol de documentos' },
-    { ok: /nestes termos|termos em que|pede deferimento/i.test(finalDocument), label: 'Fecho/Assinatura' },
+    { ok: isFici || isConversaoAdvertencia || /rol de documentos/i.test(finalDocument), label: 'Rol de documentos' },
+    { ok: /nestes termos|termos em que|pede deferimento|assinatura|signat[áa]rios/i.test(finalDocument), label: 'Fecho/Assinatura' },
   ];
 
   for (const section of requiredSections) {

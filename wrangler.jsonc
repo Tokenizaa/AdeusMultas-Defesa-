@@ -34,7 +34,8 @@
     "API_ORIGIN_PRIMARY": "https://adeusmulta.defesai.com.br",
     "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
     "PAGBANK_ENV": "production",
-    "PAYMENT_MODE": "production"
+    "PAYMENT_MODE": "production",
+    "VENO_PRIMARY_GATEWAY": "venopag"
   },
   "build": {
     "command": "bun run build"

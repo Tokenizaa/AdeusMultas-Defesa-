@@ -21,20 +21,23 @@ const allResults: (ValidationResult & { execution: any })[] = [];
 
 // Test cases for dynamic suite registration (top-level await; Playwright loads
 // spec files with top-level await as ESM).
-const testCasesForSuite = await (await getE2ETestManager()).getTestCases();
+const initializedTestManager = await getE2ETestManager();
+const testCasesForSuite = await initializedTestManager.getTestCases();
 
 test.describe.configure({ retries: 0 });
 
-test.describe.serial('E2E National Test Suite', () => {
+test.describe('E2E National Test Suite', () => {
   test.beforeAll(async () => {
     console.log(`\n========== E2E TEST RUN: ${TEST_RUN_ID} ==========\n`);
     
     // Initialize test manager
-    testManager = await getE2ETestManager();
+    // Reuse the manager initialized during test registration. Reinitializing
+    // here creates a second remote fixture setup and can race the first one.
+    testManager = initializedTestManager;
     validator = new E2EValidator();
     
     // Launch browser
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: process.env.E2E_HEADED !== '1' });
     context = await browser.newContext();
     
     // Generate document fixtures for all test cases
@@ -60,7 +63,12 @@ test.describe.serial('E2E National Test Suite', () => {
   const testCases = testCasesForSuite;
   for (const testCase of testCases) {
     test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType})`, async () => {
+      // In the real-payment mode the operator must have unlimited time to
+      // scan and pay the QR code. Playwright's project timeout would close
+      // the browser after three minutes otherwise.
+      if (process.env.E2E_STOP_AT_QR === '1') test.setTimeout(0);
       const page = await context.newPage();
+      await context.clearCookies();
       
       try {
         // Convert to TestCaseData format
@@ -85,7 +93,10 @@ test.describe.serial('E2E National Test Suite', () => {
 
         // Validate results against database
         console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
-        const validationResult = await validator.validateCase(testCase);
+        const validationCase = executionResult.persistedCaseId
+          ? { ...testCase, id: executionResult.persistedCaseId }
+          : testCase;
+        const validationResult = await validator.validateCase(validationCase);
 
         // Combine results
         const combinedResult = {

@@ -117,11 +117,24 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                     type EvidenceItem = { req: string; argIds: string[] };
                     const allItems: EvidenceItem[] = [];
 
+                    // ARG-005 é validado por cálculo determinístico a partir dos
+                    // campos de velocidade preenchidos. A notificação pode
+                    // fortalecer a prova no protocolo, mas não é upload
+                    // obrigatório para validar a tese ou gerar a minuta.
+                    const measured = Number(infractionData.measuredSpeed ?? infractionData.speedMeasured);
+                    const considered = Number(infractionData.consideredSpeed ?? infractionData.speedConsidered);
+                    const limit = Number(infractionData.speedLimit);
+                    const speedDataComplete = [measured, considered, limit].every(Number.isFinite);
+
                     for (const arg of analysis.recommendedArguments) {
                       const argModel = ARGUMENTS_CATALOG.find((a) => a.id === arg.id);
                       if (!argModel) continue;
-                      // requiredDocuments são evidências documentais (mapeáveis para flags)
+                      // requiredDocuments são evidências documentais
+                      // complementares. Para ARG-005, os dados preenchidos já
+                      // validam o cálculo; não classifique o upload como
+                      // pendência bloqueante.
                       for (const req of argModel.requiredDocuments || []) {
+                        if (arg.id === 'ARG-005' && speedDataComplete) continue;
                         const existing = allItems.find((i) => i.req === req);
                         if (existing) {
                           if (!existing.argIds.includes(arg.id)) existing.argIds.push(arg.id);
@@ -129,7 +142,8 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                           allItems.push({ req, argIds: [arg.id] });
                         }
                       }
-                      // requirements são condições, não evidências documentais → ficam como pendentes
+                      // requirements são condições verificáveis, não uploads.
+                      if (arg.id === 'ARG-005' && speedDataComplete) continue;
                       for (const req of argModel.requirements || []) {
                         const existing = allItems.find((i) => i.req === req);
                         if (existing) {
@@ -222,7 +236,16 @@ export const DocumentReviewStep: React.FC<DocumentReviewStepProps> = ({
                       );
                     }
 
-                    return evidenceEls;
+                    return (
+                      <>
+                        {speedDataComplete && analysis.recommendedArguments.some((arg) => arg.id === 'ARG-005') && (
+                          <div className="mb-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] text-emerald-700">
+                            Cálculo de velocidade medida/considerada validado com os dados informados. A cópia da notificação é complementar e não é obrigatória para esta validação.
+                          </div>
+                        )}
+                        {evidenceEls}
+                      </>
+                    );
                   })()}
                 </div>
               </div>

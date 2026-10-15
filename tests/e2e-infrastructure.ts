@@ -7,14 +7,19 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 // Supabase configuration
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://llmxnpgjpxcvyrqjkfwb.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 
-export const TEST_RUN_ID = `E2E-NATIONAL-${new Date().toISOString().split('T')[0]}`;
-export const EVIDENCE_DIR = path.join(__dirname, 'e2e-results', TEST_RUN_ID);
+// A rerun must get a fresh synthetic AIT/user set. Reusing a same-day
+// initial-state after a partial run causes legitimate unique-AIT conflicts.
+export const TEST_RUN_ID = process.env.E2E_TEST_RUN_ID
+  || `E2E-NATIONAL-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
+export const EVIDENCE_DIR = path.join(TESTS_DIR, 'e2e-results', TEST_RUN_ID);
 
 // Commercial Service Types with their 4 scenarios each
 export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
@@ -28,7 +33,7 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
     { scenario: '01', name: 'Recurso JARI - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Recurso JARI - Lei Seca', infractionCode: '516-91', uf: 'BA', autuador: 'DETRAN-BA' },
     { scenario: '03', name: 'Recurso JARI - Celular', infractionCode: '736-62', uf: 'PR', autuador: 'DETRAN-PR' },
-    { scenario: '04', name: 'Recurso JARI - Estacionamento', infractionCode: '666-10', uf: 'PE', autuador: 'DETRAN-PE' },
+    { scenario: '04', name: 'Recurso JARI - Estacionamento', infractionCode: '545-21', uf: 'PE', autuador: 'DETRAN-PE' },
   ],
   'recurso_cetran': [
     { scenario: '01', name: 'Recurso CETRAN - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
@@ -52,15 +57,32 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
     { scenario: '01', name: 'Indicação - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Indicação - Lei Seca', infractionCode: '516-91', uf: 'RJ', autuador: 'DETRAN-RJ' },
     { scenario: '03', name: 'Indicação - Sinal Vermelho', infractionCode: '746-30', uf: 'MG', autuador: 'DETRAN-MG' },
-    { scenario: '04', name: 'Indicação - Estacionamento', infractionCode: '666-10', uf: 'ES', autuador: 'DETRAN-ES' },
+    { scenario: '04', name: 'Indicação - Estacionamento', infractionCode: '545-21', uf: 'ES', autuador: 'DETRAN-ES' },
   ],
   'conversao_advertencia': [
     { scenario: '01', name: 'Conversão - Velocidade Leve', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Conversão - Celular', infractionCode: '736-62', uf: 'RJ', autuador: 'DETRAN-RJ' },
-    { scenario: '03', name: 'Conversão - Estacionamento', infractionCode: '666-10', uf: 'BA', autuador: 'DETRAN-BA' },
+    { scenario: '03', name: 'Conversão - Estacionamento', infractionCode: '545-21', uf: 'BA', autuador: 'DETRAN-BA' },
     { scenario: '04', name: 'Conversão - Sinal Vermelho Leve', infractionCode: '735-80', uf: 'CE', autuador: 'DETRAN-CE' },
   ],
 };
+
+// A matriz nacional deve exercer cada serviço com volume suficiente para
+// revelar regressões de estado, mapeamento e geração documental. Os quatro
+// cenários-base acima preservam cobertura jurídica distinta; as variações
+// adicionais repetem o contrato com identificadores e usuários isolados,
+// sem criar cobranças reais.
+for (const configs of Object.values(COMMERCIAL_SERVICES)) {
+  const seed = configs.slice();
+  for (let index = seed.length + 1; index <= 10; index += 1) {
+    const base = seed[(index - seed.length - 1) % seed.length];
+    configs.push({
+      ...base,
+      scenario: String(index).padStart(2, '0'),
+      name: `${base.name} — variação ${index}`,
+    });
+  }
+}
 
 export interface ServiceConfig {
   scenario: string;
@@ -126,11 +148,36 @@ export class E2ETestManager {
     console.log(`[${TEST_RUN_ID}] Initializing E2E test infrastructure...`);
     
     // Verify database connection
-    const { data, error } = await this.supabase.from('profiles').select('count').limit(1);
+    const { data, error } = await this.supabase.from('user_profiles').select('user_id').limit(1);
     if (error) {
       throw new Error(`Database connection failed: ${error.message}`);
     }
     console.log(`[${TEST_RUN_ID}] Database connected successfully`);
+
+    // Playwright evaluates the spec once for discovery and again in the
+    // worker. Reuse the persisted fixture set on the second evaluation so we
+    // do not create a second batch of remote users/cases.
+    const initialStatePath = path.join(this.evidenceDir, 'initial-state.json');
+    if (fs.existsSync(initialStatePath)) {
+      const state = JSON.parse(fs.readFileSync(initialStatePath, 'utf8'));
+      if (state.testRunId === TEST_RUN_ID && Array.isArray(state.users) && Array.isArray(state.cases)) {
+        this.testUsers = state.users;
+        this.testCases = state.cases;
+        const existing = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        for (const user of this.testUsers) {
+          const authUser = existing.data.users.find((candidate) => candidate.email === user.email);
+          if (authUser) {
+            user.id = authUser.id;
+            await this.supabase.auth.admin.updateUserById(authUser.id, {
+              password: user.password,
+              email_confirm: true,
+            });
+          }
+        }
+        console.log(`[${TEST_RUN_ID}] Reused ${this.testCases.length} persisted test cases`);
+        return;
+      }
+    }
 
     // Generate all test users
     await this.generateTestUsers();
@@ -248,7 +295,23 @@ export class E2ETestManager {
       });
       
       if (error) {
-        console.error(`[${TEST_RUN_ID}] Failed to create user ${user.email}:`, error.message);
+        // Execuções repetidas reutilizam contas sintéticas existentes. Não
+        // prosseguir com UUID local: cases/user_profiles dependem do UUID real
+        // emitido pelo Auth.
+        const existing = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const found = existing.data.users.find((candidate) => candidate.email === user.email);
+        if (found) {
+          user.id = found.id;
+          // Synthetic E2E accounts are owned by this harness. Reset only
+          // their known test password so the real login gate is reproducible
+          // across reruns (never applied to non-test addresses).
+          await this.supabase.auth.admin.updateUserById(found.id, {
+            password: user.password,
+            email_confirm: true,
+          });
+        } else {
+          throw new Error(`Failed to create test user ${user.email}: ${error.message}`);
+        }
       } else {
         user.id = data.user.id;
       }
@@ -259,11 +322,15 @@ export class E2ETestManager {
     for (const user of this.testUsers) {
       // Create profile
       const { error: profileError } = await this.supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
+        .from('user_profiles')
+        .upsert({
+          user_id: user.id,
           name: user.name,
-          phone_e164: user.phone.replace(/\D/g, ''),
+          email: user.email,
+          phone: user.phone.replace(/\D/g, ''),
+          cpf: user.cpf,
+          cnh: user.cnh,
+          city_state: user.addressCityState,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });

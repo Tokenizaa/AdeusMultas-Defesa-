@@ -88,6 +88,7 @@ export function rowToDomain(row: any): any {
     },
     analysis,
     applicant,
+    processNumbers: applicant?.processNumbers,
     ocrAuxiliaryData,
     defenseDraft,
     protocolInfo,
@@ -156,7 +157,9 @@ export function domainToRow(domain: any): any {
     analysis_json: domain.analysis || domain.analiseIA ? JSON.stringify(domain.analysis || domain.analiseIA) : undefined,
     defense_draft_json: domain.defenseDraft ? JSON.stringify(domain.defenseDraft) : undefined,
     protocol_info_json: domain.protocolInfo || domain.protocoloOrgao ? JSON.stringify(domain.protocolInfo || domain.protocoloOrgao) : undefined,
-    applicant_json: domain.applicant ? JSON.stringify(domain.applicant) : undefined,
+    applicant_json: domain.applicant
+      ? JSON.stringify({ ...domain.applicant, ...(domain.processNumbers ? { processNumbers: domain.processNumbers } : {}) })
+      : undefined,
     ocr_auxiliary_json: domain.ocrAuxiliaryData ? JSON.stringify(domain.ocrAuxiliaryData) : undefined,
     evidence_json: infraction.evidenceFlags ? JSON.stringify(infraction.evidenceFlags) : undefined,
     commercial_offer_id: domain.commercialOfferId,

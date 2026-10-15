@@ -13,6 +13,7 @@ export default defineConfig({
       'tests/unit/**/*.test.ts',
       'tests/integration/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
+      'cloudflare/venopag.test.ts',
     ],
     setupFiles: ['./tests/vitest.env.setup.ts', './tests/vitest-network.setup.ts'],
     environment: 'node',

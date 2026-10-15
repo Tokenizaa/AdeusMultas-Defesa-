@@ -76,6 +76,27 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
       userImpact: 'Se constatada ausência ou inadequação da sinalização, isso pode invalidar a medição de velocidade como prova da infração',
       confidenceBase: 'Art. 90 do CTB, Res. CONTRAN 798/2020'
     }
+    ,
+    'ARG-005': {
+      title: 'Conferência da velocidade considerada pelo INMETRO',
+      lawExplanation: 'A penalidade deve usar a velocidade considerada, obtida após a dedução da margem metrológica, e não a velocidade medida bruta. Para velocidades de até 100 km/h, a conferência usa a tolerância de 7 km/h prevista na tabela aplicável.',
+      evidenceCheck: (data) => {
+        const measured = Number(data.infraction.measuredSpeed ?? data.infraction.speedMeasured);
+        const considered = Number(data.infraction.consideredSpeed ?? data.infraction.speedConsidered);
+        const limit = Number(data.infraction.speedLimit);
+        if (![measured, considered, limit].every(Number.isFinite)) {
+          return 'Dados de velocidade insuficientes para conferência aritmética';
+        }
+        const tolerance = measured <= 100 ? 7 : measured * 0.07;
+        const expected = measured - tolerance;
+        const delta = Math.abs(expected - considered);
+        return delta <= 1
+          ? `Cálculo validado: ${measured} km/h − ${Number(tolerance.toFixed(1))} km/h = ${considered} km/h considerados (limite ${limit} km/h)`
+          : `Divergência calculada: esperado ${Number(expected.toFixed(1))} km/h considerados, informado ${considered} km/h`;
+      },
+      userImpact: 'A análise usa os dados de velocidade preenchidos. A cópia da notificação é evidência complementar para protocolo, não requisito para esta validação aritmética.',
+      confidenceBase: 'Res. CONTRAN 798/2020, Anexo II'
+    }
   };
 
   const explanation = govBrExplanations[arg.id] || {
@@ -190,7 +211,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             {successRate}%
           </div>
           <span className="text-lg text-emerald-800 font-medium">
-            Alto potencial de anulação
+            {defensePoints.length > 0 ? (isHighProbability ? 'Alto potencial de anulação' : 'Potencial identificado — análise detalhada disponível') : 'Nenhuma tese autorizada com os dados informados'}
           </span>
         </div>
       </div>

@@ -490,13 +490,13 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             <button
               id="regenerate-with-selected-button"
               onClick={handleRegenerateDefense}
-              disabled={isRegenerating || generationLimitReached}
+              disabled={isRegenerating || generationLimitReached || !caseData.isPaid}
               className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-tight ${
                 professionalMode
                   ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
                   : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-200 px-6 py-2.5'
               }`}
-              title={generationLimitReached ? 'Limite de 3 gerações atingido' : undefined}
+              title={!caseData.isPaid ? 'Pagamento necessário para gerar a defesa' : generationLimitReached ? 'Limite de 3 gerações atingido' : undefined}
             >
               {isRegenerating ? (
                 <>
@@ -514,6 +514,11 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                 </>
               )}
             </button>
+            {!caseData.isPaid && (
+              <span className="text-xs font-semibold text-amber-700">
+                Efetue o pagamento para liberar a geração da defesa.
+              </span>
+            )}
             {generationLimitReached ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-orange-600">
                 <AlertTriangle className="w-4 h-4" />

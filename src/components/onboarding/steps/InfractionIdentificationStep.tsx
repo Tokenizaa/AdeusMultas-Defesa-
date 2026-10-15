@@ -16,6 +16,7 @@ import {
     Phone,
     Hash,
     MapPin,
+    Landmark,
 } from 'lucide-react';
 import { InfractionData, VehicleData } from '../../../types';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
@@ -80,7 +81,8 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         (currentLeadPhone.trim().length >= 8) &&
         (vehicleData.plate?.trim().length || 0) >= 7 &&
         (infractionData.infractionCode?.trim().length || 0) >= 3 &&
-        (infractionData.location?.trim().length || 0) >= 5;
+        (infractionData.location?.trim().length || 0) >= 5 &&
+        (infractionData.autuadorBody?.trim().length || 0) >= 3;
 
     const handleFileUpload = async (file: File) => {
         setIsReadingFile(true);
@@ -319,6 +321,38 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             Placa no formato Mercosul ou padrão anterior cinza.
                         </span>
                     </div>
+                </div>
+
+                {/* Órgão autuador é indispensável para endereçar a peça formal. */}
+                <div>
+                    <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <Landmark className="w-3.5 h-3.5 text-[#155BCB]" />
+                        Órgão Autuador *
+                    </label>
+                    <input
+                        id="input-autuador-body"
+                        type="text"
+                        list="autuador-body-options"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        value={infractionData.autuadorBody || ''}
+                        onChange={(e) => onUpdateInfraction({ ...infractionData, autuadorBody: e.target.value })}
+                        placeholder="Ex: DETRAN-SP, CET-SP, PRF ou órgão municipal"
+                        className="w-full text-sm font-medium bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                        Consta no cabeçalho da notificação. Não informe “não informado” para gerar a peça formal.
+                    </span>
+                    <datalist id="autuador-body-options">
+                        <option value="DETRAN-SP" />
+                        <option value="DETRAN-RJ" />
+                        <option value="DETRAN-MG" />
+                        <option value="CET-SP / DSV" />
+                        <option value="DER-SP" />
+                        <option value="PRF" />
+                        <option value="DNIT" />
+                        <option value="Órgão municipal de trânsito" />
+                    </datalist>
                 </div>
 
                 {/* Código da Infração — FONTE DE VERDADE */}

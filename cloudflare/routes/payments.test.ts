@@ -65,6 +65,27 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(400);
   });
 
+  it('resolves the commercial offer through the sub-app relative path', async () => {
+    const response = await app().request('/api/payments/resolve-price?serviceType=defesa_previa');
+    expect(response.status).toBe(200);
+    expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
+    const request = (vi.mocked((await import('./commercial')).commercialRoutes.fetch)).mock.calls.at(-1)?.[0] as Request;
+    expect(new URL(request.url).pathname).toBe('/offers/resolve');
+  });
+
+  it('reports the configured primary gateway without exposing credentials', async () => {
+    const response = await app().request('/api/payments/gateway/status', {}, {
+      VENO_PRIMARY_GATEWAY: 'venopag',
+      VENO_CLIENT_ID: 'client-test',
+      VENO_CLIENT_SECRET: 'secret-test',
+      VENO_WEBHOOK_SECRET: 'webhook-secret',
+    } as any);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true, configured: true, gateway: 'venopag', environment: 'production', simulated: false,
+    });
+  });
+
   it('requires caseId before creating a PIX order', async () => {
     const response = await app().request('/api/payments/pix/create', {
       method: 'POST',
@@ -114,13 +135,49 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
-    }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production' } as any);
+    }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production', VENO_PRIMARY_GATEWAY: 'pagbank' } as any);
     expect(response.status).toBe(200);
     const body = await response.json() as any;
     expect(body.success).toBe(true);
     expect(body.gateway).toBe('pagbank');
     expect(body.amount).toBe(100);
     expect(h.insertChain).toHaveBeenCalled();
+  });
+
+  it('uses VenoPag as the primary PIX provider and persists its request number', async () => {
+    const providerFetch = vi.fn(async (_input: string | URL | Request) => Response.json({
+      ok: true, status: 'pending', amount: 100, request_number: 'veo_test_123',
+      transaction_id: 'tx_123', copyPaste: '000201venopag', qr_url: 'https://venopagments.com/qr', qr_img: 'cG5n',
+    }));
+    vi.stubGlobal('fetch', providerFetch);
+    try {
+      const response = await app().request('/api/payments/pix/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-veno', customerName: 'Cliente', customerCpf: '12345678909' }),
+      }, {
+        APP_URL: 'https://adeusmulta.defesai.com.br', VENO_CLIENT_ID: 'client-test',
+        VENO_CLIENT_SECRET: 'secret-test', VENO_WEBHOOK_SECRET: 'webhook-secret',
+      } as any);
+      expect(response.status).toBe(200);
+      const body = await response.json() as any;
+      expect(body.gateway).toBe('venopag');
+      expect(body.txId).toBe('veo_test_123');
+      expect(body.pixCopyPasteString).toBe('000201venopag');
+      expect(body.qrCodeDataUrl).toBe('data:image/png;base64,cG5n');
+      expect(providerFetch).toHaveBeenCalledOnce();
+      expect(h.insertChain).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects VenoPag webhooks without a valid configured signature before database access', async () => {
+    const response = await app().request('/api/webhooks/venopag', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'cashin', status: 'confirmed', request_number: 'veo_fake' }),
+    }, { VENO_CLIENT_ID: 'client-test', VENO_WEBHOOK_SECRET: 'webhook-secret' } as any);
+    expect(response.status).toBe(401);
   });
 
   it('persists PAID and treats a repeated PAID webhook as duplicate', async () => {
@@ -188,6 +245,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('rejects GGPIX webhook from IP not in allowlist', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
     const env = {
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test',
@@ -211,5 +269,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(401);
     const body = await response.json();
     expect(body.error).toContain('Webhook GGPIXAPI rejeitado');
+    expect(errorLog).not.toHaveBeenCalled();
+    errorLog.mockRestore();
   });
 });
