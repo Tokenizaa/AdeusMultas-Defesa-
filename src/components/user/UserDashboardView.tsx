@@ -283,7 +283,9 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, cas
                                 ? 'Rascunho'
                                 : c.status === 'analisando' || c.status === 'gerando_documento'
                                   ? 'Em processamento'
-                                  : 'Diagnóstico disponível'}
+                                  : c.status === 'analisado'
+                                    ? 'Diagnóstico disponível'
+                                    : 'Status indisponível'}
                       </span>
                     </div>
                     <p className="text-sm text-slate-600 truncate max-w-md">
