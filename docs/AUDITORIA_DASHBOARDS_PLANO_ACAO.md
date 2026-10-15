@@ -84,7 +84,7 @@ Alterações aplicadas em `src/components/user/UserDashboardView.tsx`:
 - Código de infração ausente passa a aparecer como “Código não informado”, sem inventar um código.
 - Textos auxiliares foram ajustados para não afirmar acompanhamento de todos os casos nem auditoria E2E sem evidência.
 
-**Validação ainda necessária:** a revisão de código e as verificações de conteúdo confirmaram a remoção dos falsos resultados e da senha fixa, mas isso não substitui execução real. Os comandos npm run lint, npm run test:unit e npm run build, além de testes E2E autenticados, ainda precisam ser executados. Não considerar a fase aprovada até esses comandos e os cenários autenticados passarem.
+**Validação atual:** o build de produção do preview Vercel concluiu com sucesso no commit `8bc0c135309b7dee87db4461099ec5f24bb3423e` (deployment `dpl_CFR7uiPrG1xNKBdM18XSshw3ehic`). A primeira tentativa de build falhou por fechamento JSX ausente; o erro foi corrigido e o build seguinte passou. Ainda faltam `npm run lint`, `npm run test:unit` e testes E2E autenticados em estados reais. A sessão de navegador automatizado não foi executada porque o provedor de browser não disponibilizou créditos. Não considerar a fase certificada até esses testes restantes passarem.
 
 **Limitação atual:** a alteração foi registrada no GitHub, mas ainda precisa passar por lint/typecheck, testes automatizados e validação visual autenticada antes de ser considerada concluída. A ausência desses resultados não deve ser interpretada como aprovação.
 
