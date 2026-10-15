@@ -171,6 +171,9 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, cas
                 );
               })
             )}
+          </div>
+        </div>
+      )}
 
       {/* KPI Metrics Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
