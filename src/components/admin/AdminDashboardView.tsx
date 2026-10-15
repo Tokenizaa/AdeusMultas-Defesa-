@@ -78,7 +78,7 @@ const recentCases = overviewData?.recentCases || [];
         [serviceKey]: data.success ? 'ok' : 'error',
       }));
     } catch {
-      setProbeStatus((prev) => ({ ...prev, [serviceKey]: 'ok' }));
+      setProbeStatus((prev) => ({ ...prev, [serviceKey]: 'error' }));
     }
   };
 
@@ -90,14 +90,14 @@ const recentCases = overviewData?.recentCases || [];
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-sm font-bold text-orange-400 uppercase tracking-wider font-mono">
-              ADMIN OS • CONSOLE OPERACIONAL EM TEMPO REAL
+              VISÃO GERAL
             </span>
           </div>
           <h1 className="text-xl font-bold text-white font-mono tracking-tight">
-            Central de Operações & Decisão
+            Resumo operacional
           </h1>
           <p className="text-sm text-slate-400 font-sans">
-            Visão consolidada de saúde da plataforma, exceções imediatas e processamento de autuações.
+            Indicadores principais e casos recentes da plataforma.
           </p>
         </div>
 
@@ -236,105 +236,11 @@ const recentCases = overviewData?.recentCases || [];
           </button>
         </div>
 
-        {/* Exceção: Minutas Prontas vs Pendentes */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-emerald-400 uppercase flex items-center gap-1.5">
-                <FileCheck className="w-3.5 h-3.5" />
-                Minutas Diagramadas
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                {overviewData?.metrics?.defenseReadyCases ?? 0} Prontas
-              </span>
-            </div>
-            <p className="text-sm text-slate-400 font-sans">
-              Peças jurídicas fundamentadas prontas para download ou envio aos órgãos julgadores.
-            </p>
-          </div>
 
-          <button
-            onClick={() => navigate('/admin/documents')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
-          >
-            <span>Ver Repositório de Peças</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Exceção: Motor Jurídico & Teses */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-sky-400 uppercase flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5" />
-                Motor CTB Canônico
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-sm font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                {overviewData?.metrics?.thesesCount ?? 0} Teses Ativas
-              </span>
-            </div>
-            <p className="text-sm text-slate-400 font-sans">
-              Templates determinísticos, jurisprudência vinculante e checklist de nulidades do AIT.
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate('/admin/knowledge')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
-          >
-            <span>Consultar Base Canônica</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Central de Testes E2E & QA (Item 14 da especificação) */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-orange-400 uppercase flex items-center gap-1.5">
-                <TestTube2 className="w-3.5 h-3.5" />
-                Testes E2E
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                PASS 36 • FAIL 0
-              </span>
-            </div>
-            <div className="text-xs font-mono text-slate-300">
-              <div className="text-slate-400 text-2xs">Última execução: 30/08/2026 16:30</div>
-              <div className="font-bold text-slate-200 mt-1">216 testes estruturais + 36 testes E2E reais</div>
-              <div className="flex items-center gap-2 text-2xs mt-1 text-slate-400 font-mono">
-                <span className="text-emerald-400 font-bold">PASS 36</span>
-                <span>•</span>
-                <span className="text-slate-400">FAIL 0</span>
-                <span>•</span>
-                <span className="text-slate-500">BLOCKED 0</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button
-              id="btn-admin-dash-view-e2e"
-              onClick={() => navigate('/admin/e2e-tests')}
-              className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-slate-700"
-            >
-              <span>Ver Central</span>
-            </button>
-            <button
-              id="btn-admin-dash-run-e2e"
-              onClick={() => navigate('/admin/e2e-tests')}
-              className="py-1.5 px-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>Executar</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* 3. KPIS ESSENCIAIS DE OPERAÇÃO */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 font-mono">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-sm">
             <span>Total de Casos</span>
@@ -355,14 +261,7 @@ const recentCases = overviewData?.recentCases || [];
           <div className="text-sm text-slate-500">{overviewData?.metrics?.paidCases ?? 0} defesas pagas via PIX</div>
         </div>
 
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-sm">
-            <span>Peças Finalizadas</span>
-            <FileCheck className="w-4 h-4 text-sky-400" />
-          </div>
-          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.defenseReadyCases ?? 0}</div>
-          <div className="text-sm text-slate-500">Minutas ABNT geradas</div>
-        </div>
+
 
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-sm">
@@ -378,9 +277,9 @@ const recentCases = overviewData?.recentCases || [];
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xs">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white font-mono">Fila Operacional de Autuações</h3>
+            <h3 className="text-sm font-bold text-white font-mono">Casos recentes</h3>
             <p className="text-sm text-slate-400 font-sans">
-              Casos recentes submetidos para diagnóstico e geração de defesa
+              Últimos casos recebidos pela plataforma
             </p>
           </div>
 
