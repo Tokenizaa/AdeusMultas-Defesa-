@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Activity,
+
   RefreshCw,
   CreditCard,
   Folders,
@@ -8,10 +8,6 @@ import {
   ChevronRight,
   ArrowRight,
   Clock,
-  Cpu,
-  Database,
-  MessageSquare,
-  Share2,
 } from 'lucide-react';
 
 import { useRouter } from '../../core/router/RouterContext';
@@ -26,13 +22,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelect
   const { navigate } = useRouter();
   const [overviewData, setOverviewData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [probeStatus, setProbeStatus] = useState<Record<string, 'ok' | 'checking' | 'error'>>({
-    ai: 'checking',
-    pagbank: 'checking',
-    database: 'checking',
-    meta: 'checking',
-    whatsapp: 'checking',
-  });
 
   const fetchOverview = async () => {
     try {
@@ -55,24 +44,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelect
 
 const recentCases = overviewData?.recentCases || [];
 
-// Simulate or execute quick probe
-  const handleQuickProbe = async (serviceKey: string) => {
-    setProbeStatus((prev) => ({ ...prev, [serviceKey]: 'checking' }));
-    try {
-      const res = await fetch('/api/health/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ service: serviceKey }),
-      });
-      const data = await res.json();
-      setProbeStatus((prev) => ({
-        ...prev,
-        [serviceKey]: data.success ? 'ok' : 'error',
-      }));
-    } catch {
-      setProbeStatus((prev) => ({ ...prev, [serviceKey]: 'error' }));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -108,95 +79,6 @@ const recentCases = overviewData?.recentCases || [];
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-        </div>
-      </div>
-
-      {/* 1. SEÇÃO SAÚDE DO SISTEMA (Observabilidade Direta) */}
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-300 font-mono">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span>Saúde dos Serviços Críticos</span>
-          </div>
-          <button
-            onClick={() => navigate('/admin/monitoring')}
-            className="text-sm font-mono text-orange-400 hover:text-orange-300 flex items-center gap-1 cursor-pointer"
-          >
-            <span>Ver telemetria completa</span>
-            <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-mono text-sm">
-          <div
-            onClick={() => handleQuickProbe('ai')}
-            className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-slate-200">IA (NVIDIA/9R)</span>
-            </div>
-            <span className={`flex items-center gap-1 text-sm ${probeStatus.ai === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${probeStatus.ai === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              {probeStatus.ai === 'checking' ? '...' : probeStatus.ai === 'error' ? 'ERRO' : 'OK'}
-            </span>
-          </div>
-
-          <div
-            onClick={() => handleQuickProbe('pagbank')}
-            className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-slate-200">PagBank PIX</span>
-            </div>
-            <span className={`flex items-center gap-1 text-sm ${probeStatus.pagbank === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${probeStatus.pagbank === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              {probeStatus.pagbank === 'checking' ? '...' : probeStatus.pagbank === 'error' ? 'ERRO' : 'OK'}
-            </span>
-          </div>
-
-          <div
-            onClick={() => handleQuickProbe('database')}
-            className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Database className="w-3.5 h-3.5 text-sky-400" />
-              <span className="text-slate-200">Supabase DB</span>
-            </div>
-            <span className={`flex items-center gap-1 text-sm ${probeStatus.database === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${probeStatus.database === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              {probeStatus.database === 'checking' ? '...' : probeStatus.database === 'error' ? 'ERRO' : 'OK'}
-            </span>
-          </div>
-
-          <div
-            onClick={() => handleQuickProbe('meta')}
-            className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Share2 className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-slate-200">Meta API</span>
-            </div>
-            <span className={`flex items-center gap-1 text-sm ${probeStatus.meta === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${probeStatus.meta === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              {probeStatus.meta === 'checking' ? '...' : probeStatus.meta === 'error' ? 'ERRO' : 'OK'}
-            </span>
-          </div>
-
-          <div
-            onClick={() => handleQuickProbe('whatsapp')}
-            className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
-              <span className="text-slate-200">WhatsApp Evo</span>
-            </div>
-            <span className={`flex items-center gap-1 text-sm ${probeStatus.whatsapp === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${probeStatus.whatsapp === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              {probeStatus.whatsapp === 'checking' ? '...' : probeStatus.whatsapp === 'error' ? 'ERRO' : 'OK'}
-            </span>
-          </div>
         </div>
       </div>
 
