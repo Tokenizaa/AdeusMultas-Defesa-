@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, Activity, Cpu, LogOut, Menu, ExternalLink, ChevronRight, Home } from 'lucide-react';
+import { LogOut, Menu, ExternalLink, ChevronRight } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
 import { NotificationBellDropdown } from '../notifications/NotificationBellDropdown';
@@ -109,13 +109,6 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2.5">
-        <div className="hidden lg:flex items-center gap-2 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-sm font-mono text-slate-300">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>API 200 OK</span>
-          <span className="text-slate-600">•</span>
-          <span className="text-slate-400">NVIDIA / 9Router</span>
-        </div>
-
         {/* Real-time Push & System Notification Center */}
         <NotificationBellDropdown />
 
