@@ -200,38 +200,7 @@ const recentCases = overviewData?.recentCases || [];
         </div>
       </div>
 
-      {/* 2. SEÇÃO EXCEÇÕES & ITENS REQUERENDO ATENÇÃO OPERACIONAL */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
-        {/* Exceção: Pagamentos Pendentes */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-amber-400 uppercase flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" />
-                Aguardando Pagamento
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-sm font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                {((overviewData?.metrics?.totalCases ?? 0) - (overviewData?.metrics?.paidCases ?? 0))} Casos
-              </span>
-            </div>
-            <p className="text-sm text-slate-400 font-sans">
-              Autuações diagnosticadas aguardando quitação PIX para liberação de minuta completa.
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate('/admin/payments')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
-          >
-            <span>Gerenciar Pagamentos</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-
-      </div>
-
-      {/* 3. KPIS ESSENCIAIS DE OPERAÇÃO */}
+      {/* Indicadores principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-sm">
