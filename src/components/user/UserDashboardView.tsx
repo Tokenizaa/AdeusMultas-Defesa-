@@ -81,7 +81,7 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, cas
             <div>
               <span className="font-bold text-orange-300">Usuário de Teste E2E Persistente:</span> {user?.name} ({user?.email})
               <p className="text-2xs text-orange-400/80">
-                Os casos vinculados a esta conta foram criados pelas suítes automatizadas Playwright com validação de marca-d'água.
+                Esta área exibe apenas resultados retornados pelo serviço de testes E2E.
               </p>
             </div>
           </div>
@@ -176,25 +176,25 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, cas
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Total de Processos</span>
-          <p className="text-2xl font-extrabold text-[#071D41]">{totalCases}</p>
-          <span className="text-sm text-slate-500 font-mono">Em acompanhamento</span>
+          <p className="text-2xl font-extrabold text-[#071D41]">{casesLoading || casesError ? '—' : totalCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Casos cadastrados</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Defesas Prontas</span>
-          <p className="text-2xl font-extrabold text-[#168821]">{readyCases}</p>
+          <p className="text-2xl font-extrabold text-[#168821]">{casesLoading || casesError ? '—' : readyCases}</p>
           <span className="text-sm text-slate-500 font-mono">Minutas A4 geradas</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Em análise</span>
-          <p className="text-2xl font-extrabold text-[#071D41]">{analysisCases}</p>
-          <span className="text-sm text-slate-500 font-mono">Diagnóstico ou documento em processamento</span>
+          <p className="text-2xl font-extrabold text-[#071D41]">{casesLoading || casesError ? '—' : analysisCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Análise ou documento em processamento</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Pagamento pendente</span>
-          <p className="text-2xl font-extrabold text-[#155BCB]">{pendingPaymentCases}</p>
+          <p className="text-2xl font-extrabold text-[#155BCB]">{casesLoading || casesError ? '—' : pendingPaymentCases}</p>
           <span className="text-sm text-slate-500 font-mono">Aguardando confirmação do checkout</span>
         </div>
       </div>
