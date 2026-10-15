@@ -6,8 +6,6 @@ import {
   Folders,
   Users,
   ChevronRight,
-  ArrowRight,
-  Clock,
 } from 'lucide-react';
 
 import { useRouter } from '../../core/router/RouterContext';
