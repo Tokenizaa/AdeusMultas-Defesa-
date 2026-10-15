@@ -1,25 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ShieldAlert,
   Activity,
-  CheckCircle2,
-  AlertTriangle,
   RefreshCw,
   CreditCard,
-  FileCheck,
   Folders,
   Users,
   ChevronRight,
-  ExternalLink,
-  Zap,
   ArrowRight,
   Clock,
   Cpu,
   Database,
   MessageSquare,
   Share2,
-  TestTube2,
-  ShieldCheck,
 } from 'lucide-react';
 
 import { useRouter } from '../../core/router/RouterContext';
