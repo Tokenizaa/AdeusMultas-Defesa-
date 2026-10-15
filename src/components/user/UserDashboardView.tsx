@@ -34,12 +34,11 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
 
   // Metrics for current driver
   const totalCases = cases.length;
-  const readyCases = cases.filter((c) => c.status === 'defense_ready' || c.status === 'filed').length;
-  const analysisCases = cases.filter((c) => c.status === 'analyzed' || c.status === 'paid').length;
-  const draftCases = cases.filter((c) => c.status === 'draft').length;
-
-  const estimatedSavedValue = readyCases * 293.47;
-  const estimatedPointsSaved = readyCases * 5;
+  // Sempre usar os estados canônicos definidos em src/types/index.ts.
+  const readyCases = cases.filter((c) => c.status === 'defesa_pronta').length;
+  const analysisCases = cases.filter((c) => c.status === 'analisando' || c.status === 'analisado' || c.status === 'gerando_documento').length;
+  const pendingPaymentCases = cases.filter((c) => c.status === 'aguardando_pagamento').length;
+  const draftCases = cases.filter((c) => c.status === 'draft' || c.status === 'novo' || c.status === 'aguardando_documentos').length;
 
   const isTestUser = Boolean(user?.email?.includes('@e2e.local') || user?.name?.startsWith('Teste '));
 
@@ -200,21 +199,15 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
-          <span className="text-sm font-semibold text-slate-600">Economia Potencial</span>
-          <p className="text-2xl font-extrabold text-[#071D41]">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-              estimatedSavedValue || 293.47
-            )}
-          </p>
-          <span className="text-sm text-slate-500 font-mono">Valores de multas</span>
+          <span className="text-sm font-semibold text-slate-600">Em análise</span>
+          <p className="text-2xl font-extrabold text-[#071D41]">{analysisCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Diagnóstico ou documento em processamento</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
-          <span className="text-sm font-semibold text-slate-600">Pontos em CNH Protegidos</span>
-          <p className="text-2xl font-extrabold text-[#155BCB]">
-            {estimatedPointsSaved || 5} pts
-          </p>
-          <span className="text-sm text-slate-500 font-mono">Efeito suspensivo</span>
+          <span className="text-sm font-semibold text-slate-600">Pagamento pendente</span>
+          <p className="text-2xl font-extrabold text-[#155BCB]">{pendingPaymentCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Aguardando confirmação do checkout</span>
         </div>
       </div>
 
@@ -275,16 +268,22 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                       </span>
                       <span
                         className={`text-[9px] font-bold font-mono px-1.5 py-0.2 rounded ${
-                          c.status === 'defense_ready' || c.status === 'filed'
+                          c.status === 'defesa_pronta'
                             ? 'bg-emerald-50 text-[#168821] border border-emerald-200'
                             : 'bg-blue-50 text-[#155BCB] border border-blue-200'
                         }`}
                       >
-                        {c.status === 'defense_ready'
-                          ? 'Minuta Pronta'
-                          : c.status === 'filed'
-                            ? 'Protocolado'
-                            : 'Em Análise'}
+                        {c.status === 'defesa_pronta'
+                          ? 'Defesa pronta'
+                          : c.status === 'aguardando_pagamento'
+                            ? 'Pagamento pendente'
+                            : c.status === 'finalizado'
+                              ? 'Finalizado'
+                              : c.status === 'draft' || c.status === 'novo' || c.status === 'aguardando_documentos'
+                                ? 'Rascunho'
+                                : c.status === 'analisando' || c.status === 'gerando_documento'
+                                  ? 'Em processamento'
+                                  : 'Diagnóstico disponível'}
                       </span>
                     </div>
                     <p className="text-sm text-slate-600 truncate max-w-md">
