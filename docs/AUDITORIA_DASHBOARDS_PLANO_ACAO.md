@@ -131,3 +131,37 @@ Alterações aplicadas em `src/components/user/UserDashboardView.tsx`:
 4. Executar auditoria de UX/acessibilidade e corrigir regressões.
 5. Reexecutar a certificação completa e publicar novo release.
 
+## Execução — Módulo Operação / Visão Geral administrativa
+
+**Branch:** `fix/admin-operation-overview-contract`  
+**PR:** [#28 — Corrige contrato e estados da Visão Geral de Operação](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/28)
+
+### Problemas confirmados na inspeção estática
+
+- `AdminDashboardView.tsx` solicitava `recentCases`, mas o endpoint Cloudflare `GET /api/admin/overview` não devolvia esse campo. Portanto, a tabela de casos recentes não tinha dados fornecidos pelo contrato oficial do Worker.
+- A tela ignorava respostas HTTP não-2xx e mantinha KPIs com aparência normal, sem informar a falha.
+- A consulta de receita ignorava o objeto `error` retornado pelo Supabase e podia transformar uma falha de leitura em receita zero.
+- A tela fazia `fetch` direto, sem usar o wrapper de autenticação da sessão Supabase.
+- Qualquer caso não marcado como pago era rotulado como “AGUARDANDO PIX”, mesmo sem comprovação de que existia uma cobrança PIX pendente.
+- O frontend mostrava zeros antes de confirmar a primeira resposta da API.
+
+### Correções registradas na branch
+
+- O endpoint retorna até oito casos recentes, com campos derivados do schema existente de `cases`.
+- Falhas nas consultas necessárias retornam HTTP 503 com código `ADMIN_OVERVIEW_UNAVAILABLE`, em vez de publicar KPIs incompletos como se fossem válidos.
+- A interface usa `useAuthFetch`, valida o contrato básico da resposta e apresenta erro e ação de nova tentativa.
+- A interface diferencia carregamento, ausência de casos e falha inicial; em falha de atualização, mantém os últimos dados válidos e informa que estão desatualizados.
+- O status visual foi alterado para “PAGO” ou “NÃO CONFIRMADO”; a tela não presume um PIX pendente sem consultar o estado real da cobrança.
+- Foram adicionados testes para o formato de `recentCases` e para falhas nas consultas administrativas.
+
+### Estado da validação
+
+- PR aberto; ainda não integrado em `main`.
+- CI reportado até o momento: verificação Vercel pendente.
+- Testes locais, typecheck/build e validação visual autenticada **não executados nesta sessão**.
+- Nenhum deploy ou alteração de banco de produção realizado.
+
+### Critério para concluir esta etapa
+
+A etapa só pode ser marcada como concluída depois que CI, testes, build e validação visual autenticada forem executados e registrados. O próximo módulo não deve ser considerado certificado com base apenas na inspeção estática.
+
