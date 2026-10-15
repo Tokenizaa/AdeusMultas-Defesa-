@@ -1786,6 +1786,13 @@ export type Database = {
           name: string
           phone: string | null
           referral_code: string | null
+          rg: string | null
+          cnh_category: string | null
+          address_street: string | null
+          address_number: string | null
+          address_complement: string | null
+          address_neighborhood: string | null
+          address_zip_code: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
           user_id: string
@@ -1801,6 +1808,13 @@ export type Database = {
           name: string
           phone?: string | null
           referral_code?: string | null
+          rg?: string | null
+          cnh_category?: string | null
+          address_street?: string | null
+          address_number?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_zip_code?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           user_id: string
@@ -1816,6 +1830,13 @@ export type Database = {
           name?: string
           phone?: string | null
           referral_code?: string | null
+          rg?: string | null
+          cnh_category?: string | null
+          address_street?: string | null
+          address_number?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_zip_code?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           user_id?: string

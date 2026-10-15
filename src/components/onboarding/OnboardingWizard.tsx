@@ -206,9 +206,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       applicantName: prev.applicantName || user.name || '',
       applicantCpf: prev.applicantCpf || user.cpf || '',
       applicantCnh: prev.applicantCnh || user.cnh || '',
+      applicantRg: prev.applicantRg || user.rg || '',
+      cnhCategory: prev.cnhCategory || user.cnhCategory || '',
       applicantPhone: prev.applicantPhone || user.phone || '',
       applicantEmail: prev.applicantEmail || user.email || '',
       addressCityState: prev.addressCityState || user.cityState || '',
+      addressStreet: prev.addressStreet || user.addressStreet || '',
+      addressNumber: prev.addressNumber || user.addressNumber || '',
+      addressComplement: prev.addressComplement || user.addressComplement || '',
+      addressNeighborhood: prev.addressNeighborhood || user.addressNeighborhood || '',
+      addressZipCode: prev.addressZipCode || user.addressZipCode || '',
     }));
   }, [user]);
 

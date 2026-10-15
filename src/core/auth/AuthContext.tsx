@@ -62,17 +62,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const roleFromProfile = await fetchUserRoleFromBackend();
+      const { data: profile } = await supabase.from('user_profiles')
+        .select('*').eq('user_id', sessionUser.id).maybeSingle();
       if (!mounted) return;
 
       const role = (roleFromProfile ?? (sessionUser.user_metadata?.role as UserRole)) ?? 'citizen';
       const authUser: AuthUser = {
         id: sessionUser.id,
-        name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Usuário',
+        name: profile?.name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Usuário',
         email: sessionUser.email || '',
         role,
-        cpf: sessionUser.user_metadata?.cpf,
-        phone: sessionUser.user_metadata?.phone,
-        cnh: sessionUser.user_metadata?.cnh,
+        cpf: profile?.cpf || sessionUser.user_metadata?.cpf,
+        phone: profile?.phone || sessionUser.user_metadata?.phone,
+        cnh: profile?.cnh || sessionUser.user_metadata?.cnh,
+        cityState: profile?.city_state || undefined,
+        referralCode: profile?.referral_code || undefined,
+        rg: profile?.rg || undefined,
+        cnhCategory: profile?.cnh_category || undefined,
+        addressStreet: profile?.address_street || undefined,
+        addressNumber: profile?.address_number || undefined,
+        addressComplement: profile?.address_complement || undefined,
+        addressNeighborhood: profile?.address_neighborhood || undefined,
+        addressZipCode: profile?.address_zip_code || undefined,
         createdAt: sessionUser.created_at,
       };
       setUser(authUser);
@@ -272,6 +283,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       });
       if (error) throw error;
+
+      const profileData = {
+        name: data.name ?? user.name,
+        cpf: data.cpf ?? user.cpf ?? null,
+        phone: data.phone ?? user.phone ?? null,
+        cnh: data.cnh ?? user.cnh ?? null,
+        city_state: data.cityState ?? user.cityState ?? null,
+        rg: data.rg ?? user.rg ?? null,
+        cnh_category: data.cnhCategory ?? user.cnhCategory ?? null,
+        address_street: data.addressStreet ?? user.addressStreet ?? null,
+        address_number: data.addressNumber ?? user.addressNumber ?? null,
+        address_complement: data.addressComplement ?? user.addressComplement ?? null,
+        address_neighborhood: data.addressNeighborhood ?? user.addressNeighborhood ?? null,
+        address_zip_code: data.addressZipCode ?? user.addressZipCode ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: profileError } = await supabase.from('user_profiles')
+        .update(profileData).eq('user_id', user.id);
+      if (profileError) throw profileError;
 
       const updated = { ...user, ...data, role: user.role };
       setUser(updated);

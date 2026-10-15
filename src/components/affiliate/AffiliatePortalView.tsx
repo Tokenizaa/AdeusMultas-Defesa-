@@ -26,6 +26,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { CommissionLedgerEntry, BonusLedgerEntry, ReferralTreeResponse } from '../../types/commercial';
+import { useAuth } from '../../core/auth/AuthContext';
 
 type AffiliateTab = 'overview' | 'links' | 'sales' | 'commissions' | 'network' | 'statement' | 'withdraw';
 
@@ -42,8 +43,9 @@ interface AffiliateStats {
 }
 
 export const AffiliatePortalView: React.FC = () => {
+  const { user, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<AffiliateTab>('overview');
-  const [currentUserId, setCurrentUserId] = useState<string>('usr_carlos');
+  const currentUserId = user?.id;
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,15 +53,15 @@ export const AffiliatePortalView: React.FC = () => {
 
   // Affiliate State
   const [stats, setStats] = useState<AffiliateStats>({
-    availableBalance: 32.48,
-    pendingBalance: 14.50,
-    totalWithdrawn: 150.00,
-    totalEarned: 196.98,
-    directReferralsCount: 5,
-    networkTotalCount: 14,
-    totalSalesVolume: 1420.80,
-    conversionRate: 8.4,
-    clicksCount: 168,
+    availableBalance: 0,
+    pendingBalance: 0,
+    totalWithdrawn: 0,
+    totalEarned: 0,
+    directReferralsCount: 0,
+    networkTotalCount: 0,
+    totalSalesVolume: 0,
+    conversionRate: 0,
+    clicksCount: 0,
   });
 
   const [commissions, setCommissions] = useState<CommissionLedgerEntry[]>([]);
@@ -68,7 +70,7 @@ export const AffiliatePortalView: React.FC = () => {
 
   // Withdraw Modal / Form State
   const [pixKeyType, setPixKeyType] = useState<'cpf' | 'email' | 'phone' | 'random'>('cpf');
-  const [pixKey, setPixKey] = useState('123.456.789-00');
+  const [pixKey, setPixKey] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState<number>(30);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawHistory, setWithdrawHistory] = useState<Array<{
@@ -79,42 +81,35 @@ export const AffiliatePortalView: React.FC = () => {
     status: 'COMPLETED' | 'PROCESSING' | 'PENDING';
     createdAt: string;
     paidAt?: string;
-  }>>([
-    {
-      id: 'wd_001',
-      amount: 150.00,
-      pixKey: '123.456.789-00',
-      pixKeyType: 'CPF',
-      status: 'COMPLETED',
-      createdAt: '2026-08-01T14:30:00Z',
-      paidAt: '2026-08-01T14:32:00Z',
-    },
-  ]);
+  }>>([]);
 
-  const affiliateCode = 'CARLOS10';
+  const affiliateCode = user?.referralCode || '';
   const referralUrl = `${window.location.origin}/?ref=${affiliateCode}`;
 
   const fetchData = async () => {
     setLoading(true);
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
     try {
       // 1. Fetch Commissions
-      const resComm = await fetch('/api/admin/commercial/commissions');
+      const resComm = await fetch(`/api/commercial/commissions?beneficiaryId=${encodeURIComponent(currentUserId)}`);
       if (resComm.ok) {
         const commData = await resComm.json();
-        const allComms: CommissionLedgerEntry[] = commData.commissions || [];
-        const userComms = allComms.filter((c) => c.beneficiaryId === currentUserId);
-        setCommissions(userComms.length > 0 ? userComms : allComms);
+        const userComms: CommissionLedgerEntry[] = commData.commissions || commData || [];
+        setCommissions(userComms);
 
         // Derive balance metrics
-        const available = (userComms.length > 0 ? userComms : allComms)
+        const available = userComms
           .filter((c) => c.status === 'AVAILABLE')
           .reduce((acc, c) => acc + c.commissionAmount, 0);
 
-        const pending = (userComms.length > 0 ? userComms : allComms)
+        const pending = userComms
           .filter((c) => c.status === 'PENDING')
           .reduce((acc, c) => acc + c.commissionAmount, 0);
 
-        const totalEarned = (userComms.length > 0 ? userComms : allComms)
+        const totalEarned = userComms
           .filter((c) => c.status === 'AVAILABLE' || c.status === 'PAID')
           .reduce((acc, c) => acc + c.commissionAmount, 0);
 
@@ -127,7 +122,7 @@ export const AffiliatePortalView: React.FC = () => {
       }
 
       // 2. Fetch User Tree
-      const resTree = await fetch(`/api/admin/commercial/referrals/tree/${currentUserId}`);
+      const resTree = await fetch(`/api/commercial/referral-tree/${encodeURIComponent(currentUserId)}`);
       if (resTree.ok) {
         const tData = await resTree.json();
         setTreeData(tData);
@@ -142,7 +137,7 @@ export const AffiliatePortalView: React.FC = () => {
       }
 
       // 3. Fetch Bonus Ledger
-      const resBonus = await fetch(`/api/admin/commercial/bonuses?userId=${currentUserId}`);
+      const resBonus = await fetch(`/api/commercial/bonuses?userId=${encodeURIComponent(currentUserId)}`);
       if (resBonus.ok) {
         const bData = await resBonus.json();
         setBonusLedger(bData.ledger || []);
@@ -156,7 +151,7 @@ export const AffiliatePortalView: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [currentUserId]);
+  }, [currentUserId, authLoading]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(referralUrl);
@@ -165,6 +160,7 @@ export const AffiliatePortalView: React.FC = () => {
   };
 
   const handleCopyCode = () => {
+    if (!affiliateCode) return;
     navigator.clipboard.writeText(affiliateCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);

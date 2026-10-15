@@ -9,6 +9,14 @@ export interface AuthUser {
   phone?: string;
   cnh?: string;
   cityState?: string;
+  rg?: string;
+  cnhCategory?: string;
+  addressStreet?: string;
+  addressNumber?: string;
+  addressComplement?: string;
+  addressNeighborhood?: string;
+  addressZipCode?: string;
+  referralCode?: string;
   avatarUrl?: string;
   createdAt: string;
 }
