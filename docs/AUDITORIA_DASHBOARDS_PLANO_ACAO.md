@@ -58,6 +58,21 @@ A navegação possui IDs e alguns labels acessíveis, mas a quantidade de painé
 
 **Ação:** executar matriz desktop/mobile, teclado-only e axe/Lighthouse; corrigir overflow, foco perdido em modais, tabelas sem alternativa móvel e botões sem nome acessível.
 
+## Execução inicial — Dashboard do usuário
+
+**Branch:** `fix/user-dashboard-canonical-status`  
+**Commit da implementação:** `479c2b7826ba5e73a285d61cc42051527071a82b`
+
+Alterações aplicadas em `src/components/user/UserDashboardView.tsx`:
+
+- Os contadores agora usam estados canônicos definidos em `src/types/index.ts`: `defesa_pronta`, `analisando`, `analisado`, `gerando_documento` e `aguardando_pagamento`.
+- Os estados legados `novo` e `aguardando_documentos` são apresentados como rascunho, sem serem confundidos com estados de análise.
+- A lista recente exibe rótulos compatíveis com os estados canônicos.
+- Foram removidos os valores fixos de economia potencial e pontos protegidos: esses indicadores não tinham base individual confiável e exibiam números mesmo quando não havia defesas prontas.
+- Os indicadores de análise e pagamento pendente passaram a exibir contagens derivadas dos casos carregados.
+
+**Limitação atual:** a alteração foi registrada no GitHub, mas ainda precisa passar por lint/typecheck, testes automatizados e validação visual autenticada antes de ser considerada concluída. A ausência desses resultados não deve ser interpretada como aprovação.
+
 ## Plano de ação
 
 ### Fase 1 — Contratos e segurança
