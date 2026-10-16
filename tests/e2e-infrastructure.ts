@@ -202,43 +202,59 @@ export class E2ETestManager {
 
   private async generateTestUsers(): Promise<void> {
     const ufData: Record<string, { city: string; state: string }> = {
-      'SP': { city: 'São Paulo', state: 'SP' },
-      'RJ': { city: 'Rio de Janeiro', state: 'RJ' },
-      'MG': { city: 'Belo Horizonte', state: 'MG' },
-      'RS': { city: 'Porto Alegre', state: 'RS' },
-      'PR': { city: 'Curitiba', state: 'PR' },
-      'PE': { city: 'Recife', state: 'PE' },
-      'BA': { city: 'Salvador', state: 'BA' },
-      'GO': { city: 'Goiânia', state: 'GO' },
-      'AM': { city: 'Manaus', state: 'AM' },
-      'DF': { city: 'Brasília', state: 'DF' },
-      'SC': { city: 'Florianópolis', state: 'SC' },
-      'ES': { city: 'Vitória', state: 'ES' },
+      'SP': { city: 'São Paulo', state: 'SP' }, 'RJ': { city: 'Rio de Janeiro', state: 'RJ' },
+      'MG': { city: 'Belo Horizonte', state: 'MG' }, 'RS': { city: 'Porto Alegre', state: 'RS' },
+      'PR': { city: 'Curitiba', state: 'PR' }, 'PE': { city: 'Recife', state: 'PE' },
+      'BA': { city: 'Salvador', state: 'BA' }, 'GO': { city: 'Goiânia', state: 'GO' },
+      'AM': { city: 'Manaus', state: 'AM' }, 'DF': { city: 'Brasília', state: 'DF' },
+      'SC': { city: 'Florianópolis', state: 'SC' }, 'ES': { city: 'Vitória', state: 'ES' },
       'CE': { city: 'Fortaleza', state: 'CE' },
     };
 
+    // Reutiliza cinco contas sintéticas já existentes. Os cenários continuam
+    // separados por serviço e por caso; apenas a identidade do cidadão é compartilhada.
+    const sharedEmails = [
+      'e2e+defesa_previa+01@test.local',
+      'e2e+defesa_previa+02@test.local',
+      'e2e+defesa_previa+03@test.local',
+      'e2e+defesa_previa+04@test.local',
+      'e2e+recurso_jari+01@test.local',
+    ];
+    const identities: TestUser[] = [];
+    for (let index = 0; index < sharedEmails.length; index += 1) {
+      const uf = 'SP';
+      identities.push({
+        id: randomUUID(),
+        email: sharedEmails[index],
+        password: 'Test@123456',
+        name: `Usuário E2E Compartilhado ${String(index + 1).padStart(2, '0')}`,
+        phone: this.generatePhone(uf),
+        cpf: this.generateCPF(),
+        cnh: this.generateCNH(),
+        cnhCategory: 'B',
+        addressStreet: `Rua de Teste Compartilhada ${index + 1}`,
+        addressNumber: String(index + 1).padStart(3, '0'),
+        addressNeighborhood: 'Centro',
+        addressZipCode: this.generateCEP(uf),
+        addressCityState: 'São Paulo/SP',
+        serviceType: '',
+        scenario: '',
+        testRunId: TEST_RUN_ID,
+      });
+    }
+
+    let scenarioIndex = 0;
     for (const [serviceType, configs] of Object.entries(COMMERCIAL_SERVICES)) {
       for (const config of configs) {
-        const ufInfo = ufData[config.uf] || { city: 'São Paulo', state: 'SP' };
-        const user: TestUser = {
-          id: randomUUID(),
-          email: `e2e+${serviceType}+${config.scenario}@test.local`,
-          password: 'Test@123456',
-          name: `Teste ${config.name}`,
-          phone: this.generatePhone(config.uf),
-          cpf: this.generateCPF(),
-          cnh: this.generateCNH(),
-          cnhCategory: 'B',
-          addressStreet: `Rua de Teste ${config.scenario}`,
-          addressNumber: config.scenario.padStart(3, '0'),
-          addressNeighborhood: 'Centro',
-          addressZipCode: this.generateCEP(config.uf),
-          addressCityState: `${ufInfo.city}/${ufInfo.state}`,
+        const identity = identities[scenarioIndex % identities.length];
+        this.testUsers.push({
+          ...identity,
+          id: identity.id,
           serviceType,
           scenario: config.scenario,
           testRunId: TEST_RUN_ID,
-        };
-        this.testUsers.push(user);
+        });
+        scenarioIndex += 1;
       }
     }
   }
