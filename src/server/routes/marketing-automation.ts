@@ -562,6 +562,17 @@ router.patch('/leads/:id/qualification', async (req, res) => {
       });
     }
 
+    const { data: existingLead, error: lookupError } = await supabaseAdmin
+      .from('marketing_leads')
+      .select('id, opt_out_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!existingLead) return res.status(404).json({ error: 'Lead não encontrado' });
+    if (existingLead.opt_out_at && qualification_status === 'qualified') {
+      return res.status(409).json({ error: 'Lead com opt-out não pode ser qualificado para contato.' });
+    }
+
     const now = new Date().toISOString();
     const { data, error } = await supabaseAdmin
       .from('marketing_leads')
@@ -577,10 +588,6 @@ router.patch('/leads/:id/qualification', async (req, res) => {
 
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Lead não encontrado' });
-    if (data.opt_out_at && qualification_status === 'qualified') {
-      return res.status(409).json({ error: 'Lead com opt-out não pode ser qualificado para contato.' });
-    }
-
     res.json({ success: true, lead: data });
   } catch (err) {
     res.status(500).json({
