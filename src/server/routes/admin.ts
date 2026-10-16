@@ -116,7 +116,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
     },
     integrationsHealth: {
       supabase: healthReport.services.find(s => s.id === 'supabase_db')?.status || 'UNKNOWN',
-      pagbank: healthReport.services.find(s => s.id === 'pagbank')?.status || 'UNKNOWN',
+      venopag: healthReport.services.find(s => s.id === 'venopag')?.status || 'UNKNOWN',
       meta: healthReport.services.find(s => s.id === 'meta')?.status || 'UNKNOWN',
       ocr: healthReport.services.find(s => s.id === 'ocr')?.status || 'UNKNOWN',
     },
