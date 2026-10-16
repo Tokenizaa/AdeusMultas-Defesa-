@@ -169,7 +169,6 @@ adminRoutes.get('/admin/payments/affiliates', async (c) => {
     ...referrals.map((row: any) => String(row.referrer_id)),
     ...(mappings || []).map((row: any) => String(row.user_id)),
   ].filter(Boolean))];
-  if (!ids.length) return c.json({ affiliates: [] });
   const [{ data: profiles, error: profileError }, { data: ledger, error: ledgerError }, { data: availableUsers, error: usersError }] = await Promise.all([
     ids.length
       ? supabase.from('user_profiles').select('user_id,name,email,referral_code').in('user_id', ids)
