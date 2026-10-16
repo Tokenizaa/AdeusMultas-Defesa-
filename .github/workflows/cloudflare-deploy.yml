@@ -95,4 +95,5 @@ jobs:
         run: bunx vitest run cloudflare/routes/admin.ai-metrics.test.ts
 
       - name: Build and deploy to Cloudflare
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bunx wrangler@latest deploy --config wrangler.jsonc
