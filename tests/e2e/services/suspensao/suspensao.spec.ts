@@ -1,40 +1,26 @@
 import { test, expect } from '@playwright/test';
-import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../e2e-infrastructure';
-import { executeOnboardingFlow, TestCaseData } from '../../e2e-onboarding-executor';
-import { E2EValidator, ValidationResult } from '../../e2e-validator';
+import { getE2ETestManager, TEST_RUN_ID, TestCase, TestUser } from '../../../e2e-infrastructure';
+import { executeOnboardingFlow, TestCaseData } from '../../../e2e-onboarding-executor';
+import { E2EValidator } from '../../../e2e-validator';
 
-test.describe('Suíte E2E: Defesa de Suspensão de CNH (PSDD)', () => {
-  let testManager: E2ETestManager;
-  let validator: E2EValidator;
-  const testUsers: TestUser[] = [];
-  const testCases: TestCase[] = [];
+test.describe('E2E por serviço: Processos de Suspensão da CNH', () => {
+  test('executa os 10 cenários do serviço reutilizando contas compartilhadas', async ({ browser }) => {
+    const manager = await getE2ETestManager();
+    const validator = new E2EValidator();
+    const allUsers = await manager.getTestUsers();
+    const cases = (await manager.getTestCases())
+      .filter((item: TestCase) => item.serviceType === 'suspensao')
+      .sort((a: TestCase, b: TestCase) => a.scenario.localeCompare(b.scenario, 'pt-BR'));
 
-  test.beforeAll(async () => {
-    // Initialize test manager
-    testManager = await getE2ETestManager();
-    validator = new E2EValidator();
-    
-    // Get all test users and cases for suspensao
-    const allUsers = await testManager.getTestUsers();
-    const allCases = await testManager.getTestCases();
-    
-    testUsers.push(...allUsers.filter(u => u.serviceType === 'suspensao'));
-    testCases.push(...allCases.filter(c => c.serviceType === 'suspensao'));
-    
-    console.log(`[Suspensão] Found ${testUsers.length} users and ${testCases.length} test cases`);
-  });
+    expect(cases, 'A infraestrutura deve preparar os cenários do serviço').toHaveLength(10);
+    const results: Array<{ scenario: string; execution: unknown; validation: unknown; status: string }> = [];
 
-  // Create a test for each user/case (at least 4 per service)
-  for (const testCase of testCases.slice(0, Math.max(4, testCases.length))) {
-    test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType}) - User ${testCase.id.slice(0, 8)}`, async ({ page }) => {
-      // Find the corresponding user
-      const user = testUsers.find(u => u.id === testCase.userId);
-      if (!user) {
-        throw new Error(`User not found for case ${testCase.id}`);
-      }
+    for (const testCase of cases) {
+      const user = allUsers.find((candidate: TestUser) => candidate.id === testCase.userId);
+      expect(user, `Usuário compartilhado não encontrado para cenário ${testCase.scenario}`).toBeTruthy();
+      if (!user) continue;
 
-      // Convert to TestCaseData format
-      const testCaseData: TestCaseData = {
+      const data: TestCaseData = {
         id: testCase.id,
         userId: testCase.userId,
         email: user.email,
@@ -48,27 +34,48 @@ test.describe('Suíte E2E: Defesa de Suspensão de CNH (PSDD)', () => {
         testRunId: TEST_RUN_ID,
       };
 
-      // Execute onboarding flow
-      console.log(`[${TEST_RUN_ID}] Running onboarding for ${testCase.serviceType}-${testCase.scenario}...`);
-      const executionResult = await executeOnboardingFlow(page, testCaseData);
+      const page = await browser.newPage();
+      let execution: unknown;
+      let validation: unknown;
+      let status = 'PASS';
+      try {
+        execution = await executeOnboardingFlow(page, data);
+        const validationResult = await validator.validateCase(testCase);
+        validation = validationResult;
+        status = (validationResult as { overall?: string }).overall ?? 'UNKNOWN';
+        await manager.saveEvidence('suspensao-${testCase.scenario}-${testCase.id}-result.json', {
+          serviceType: 'suspensao',
+          scenario: testCase.scenario,
+          testRunId: TEST_RUN_ID,
+          execution,
+          validation,
+          status,
+        });
+        expect.soft(status, `Falha no cenário ${testCase.scenario} do serviço suspensao`).toBe('PASS');
+      } catch (error) {
+        status = 'FAIL';
+        await manager.saveEvidence('suspensao-${testCase.scenario}-${testCase.id}-error.json', {
+          serviceType: 'suspensao',
+          scenario: testCase.scenario,
+          testRunId: TEST_RUN_ID,
+          status,
+          error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
+        });
+        expect.soft(error, `Erro de execução no cenário ${testCase.scenario} do serviço suspensao`).toBeUndefined();
+      } finally {
+        await page.close();
+      }
+      results.push({ scenario: testCase.scenario, execution, validation, status });
+    }
 
-      // Validate results against database
-      console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
-      const validationResult = await validator.validateCase(testCase);
-
-      // Combine results
-      const combinedResult = {
-        ...validationResult,
-        execution: executionResult,
-      };
-
-      // Save intermediate evidence
-      await testManager.saveEvidence(`suspensao-${testCase.id}-result.json`, combinedResult);
-
-      // Assert overall pass
-      expect(combinedResult.overall).toBe('PASS');
-      
-      console.log(`[${TEST_RUN_ID}] Case ${testCase.id}: ${combinedResult.overall}`);
+    await manager.saveEvidence('suspensao-summary.json', {
+      serviceType: 'suspensao',
+      testRunId: TEST_RUN_ID,
+      total: results.length,
+      passed: results.filter((item) => item.status === 'PASS').length,
+      failed: results.filter((item) => item.status !== 'PASS').length,
+      results,
     });
-  }
+    expect(results, 'Todos os dez cenários devem ser executados').toHaveLength(10);
+  });
 });
