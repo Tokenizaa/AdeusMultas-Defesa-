@@ -10,7 +10,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 // Supabase configuration
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://llmxnpgjpxcvyrqjkfwb.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 
@@ -136,6 +136,12 @@ export class E2ETestManager {
   private evidenceDir: string;
 
   constructor() {
+    if (!SUPABASE_URL) {
+      throw new Error('SUPABASE_URL must be set explicitly; persistent E2E tests must not silently target a default project.');
+    }
+    if (process.env.E2E_ALLOW_PERSISTENT_WRITES !== 'true') {
+      throw new Error('Set E2E_ALLOW_PERSISTENT_WRITES=true only after confirming the target project; this suite writes persistent test cases.');
+    }
     if (!SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
     }
