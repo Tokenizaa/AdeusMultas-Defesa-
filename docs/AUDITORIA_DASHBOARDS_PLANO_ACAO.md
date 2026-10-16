@@ -71,6 +71,21 @@ Alterações aplicadas em `src/components/user/UserDashboardView.tsx`:
 - Foram removidos os valores fixos de economia potencial e pontos protegidos: esses indicadores não tinham base individual confiável e exibiam números mesmo quando não havia defesas prontas.
 - Os indicadores de análise e pagamento pendente passaram a exibir contagens derivadas dos casos carregados.
 
+**Correções funcionais adicionais — 2026-10-15**
+
+- Removida a exibição de senha E2E fixa no dashboard.
+- Removidos os estados de teste que apareciam como aprovados e a data atual fictícia quando não havia execuções registradas.
+- Os resultados E2E agora distinguem carregamento, falha, ausência de resultados e status devolvido pela API; foi incluída ação de nova tentativa.
+- Removida a alegação visual de “Isolamento 100% Auditado”, que não era comprovada pelo componente.
+- O dashboard recebe do App os estados de carregamento e erro da API de casos, com tentativa manual de recuperação; erro não é apresentado como lista vazia.
+- Os KPIs ficam como “—” enquanto os dados carregam ou quando a API falha, evitando zeros enganosos.
+- “Em análise” conta apenas estados analisando e gerando_documento; analisado não é mais contado como processamento em andamento.
+- A lista recente usa botão semântico com foco visível e suporte a teclado.
+- Código de infração ausente passa a aparecer como “Código não informado”, sem inventar um código.
+- Textos auxiliares foram ajustados para não afirmar acompanhamento de todos os casos nem auditoria E2E sem evidência.
+
+**Validação atual:** o build de produção do preview Vercel concluiu com sucesso no commit `8bc0c135309b7dee87db4461099ec5f24bb3423e` (deployment `dpl_CFR7uiPrG1xNKBdM18XSshw3ehic`). A primeira tentativa de build falhou por fechamento JSX ausente; o erro foi corrigido e o build seguinte passou. Ainda faltam `npm run lint`, `npm run test:unit` e testes E2E autenticados em estados reais. A sessão de navegador automatizado não foi executada porque o provedor de browser não disponibilizou créditos. Não considerar a fase certificada até esses testes restantes passarem.
+
 **Limitação atual:** a alteração foi registrada no GitHub, mas ainda precisa passar por lint/typecheck, testes automatizados e validação visual autenticada antes de ser considerada concluída. A ausência desses resultados não deve ser interpretada como aprovação.
 
 ## Plano de ação

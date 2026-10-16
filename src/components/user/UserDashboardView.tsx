@@ -2,17 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   PlusCircle,
   FileText,
-  ShieldCheck,
-  AlertTriangle,
   ChevronRight,
-  Clock,
   Sparkles,
   ArrowRight,
-  CheckCircle2,
-  Calendar,
-  Building,
   TestTube2,
-  Check,
+  RefreshCw,
+  AlertCircle,
+  LoaderCircle,
 } from 'lucide-react';
 import { CaseDomain } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
@@ -21,42 +17,59 @@ import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 interface UserDashboardViewProps {
   cases: CaseDomain[];
+  casesLoading: boolean;
+  casesError: string | null;
+  onRetryCases: () => void;
   onSelectCase: (c: CaseDomain) => void;
 }
 
-export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onSelectCase }) => {
+export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, casesLoading, casesError, onRetryCases, onSelectCase }) => {
   const { navigate } = useRouter();
   const { user } = useAuth();
   const authFetch = useAuthFetch();
 
   const [userTestScenarios, setUserTestScenarios] = useState<any[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
+  const [testResultsError, setTestResultsError] = useState(false);
 
   // Metrics for current driver
   const totalCases = cases.length;
   // Sempre usar os estados canônicos definidos em src/types/index.ts.
   const readyCases = cases.filter((c) => c.status === 'defesa_pronta').length;
-  const analysisCases = cases.filter((c) => c.status === 'analisando' || c.status === 'analisado' || c.status === 'gerando_documento').length;
+  const analysisCases = cases.filter((c) => c.status === 'analisando' || c.status === 'gerando_documento').length;
   const pendingPaymentCases = cases.filter((c) => c.status === 'aguardando_pagamento').length;
-  const draftCases = cases.filter((c) => c.status === 'draft' || c.status === 'novo' || c.status === 'aguardando_documentos').length;
 
   const isTestUser = Boolean(user?.email?.includes('@e2e.local') || user?.name?.startsWith('Teste '));
 
   // Buscar resultados de testes do usuário conectado (Item 17 e 18 da especificação)
   useEffect(() => {
-    if (isTestUser && user?.email) {
-      setLoadingTests(true);
-      authFetch('/api/e2e-tests/user-results')
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data && data.testScenarios) {
-            setUserTestScenarios(data.testScenarios);
-          }
-        })
-        .catch((err) => console.error('Erro ao buscar testes do usuário:', err))
-        .finally(() => setLoadingTests(false));
+    let cancelled = false;
+    if (!isTestUser || !user?.email) {
+      setUserTestScenarios([]);
+      setTestResultsError(false);
+      setLoadingTests(false);
+      return;
     }
-  }, [user?.email, isTestUser]);
+    setLoadingTests(true);
+    setTestResultsError(false);
+    authFetch('/api/e2e-tests/user-results')
+      .then(async (res) => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setUserTestScenarios(Array.isArray(data?.testScenarios) ? data.testScenarios : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Erro ao buscar testes do usuário:', err);
+        setUserTestScenarios([]);
+        setTestResultsError(true);
+      })
+      .finally(() => { if (!cancelled) setLoadingTests(false); });
+    return () => { cancelled = true; };
+  }, [user?.email, isTestUser, authFetch]);
 
   return (
     <div className="space-y-6">
@@ -68,12 +81,12 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
             <div>
               <span className="font-bold text-orange-300">Usuário de Teste E2E Persistente:</span> {user?.name} ({user?.email})
               <p className="text-2xs text-orange-400/80">
-                Os casos vinculados a esta conta foram criados pelas suítes automatizadas Playwright com validação de marca-d'água.
+                Esta área exibe apenas resultados retornados pelo serviço de testes E2E.
               </p>
             </div>
           </div>
           <span className="px-2.5 py-1 rounded bg-orange-900/60 border border-orange-700 font-bold shrink-0 text-center">
-            SENHA: E2E@2026Teste
+            Ambiente de teste
           </span>
         </div>
       )}
@@ -118,67 +131,45 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                 </p>
               </div>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-              Isolamento 100% Auditado
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300">
+              Conta de teste
             </span>
           </div>
 
           <div className="p-4 divide-y divide-slate-100 space-y-3">
-            {userTestScenarios.length === 0 ? (
-              <div className="p-4 bg-slate-50 rounded-lg text-xs font-mono text-slate-600 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-2xs">
-                    APROVADO
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Onboarding ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Análise ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Documento ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> PDF ✓
-                    </span>
-                  </div>
-                </div>
-                <div className="text-slate-400 text-2xs">
-                  Execução: {new Date().toLocaleDateString('pt-BR')}
-                </div>
+            {loadingTests ? (
+              <div className="p-4 text-sm text-slate-600 flex items-center gap-2" role="status">
+                <LoaderCircle className="w-4 h-4 animate-spin" /> Carregando resultados de testes...
               </div>
+            ) : testResultsError ? (
+              <div className="p-4 bg-amber-50 rounded-lg text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3" role="alert">
+                <span>Não foi possível carregar os resultados. Nenhum teste foi marcado como aprovado.</span>
+                <button type="button" onClick={() => { setLoadingTests(true); setTestResultsError(false); authFetch('/api/e2e-tests/user-results').then(async (res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); }).then((data) => setUserTestScenarios(Array.isArray(data?.testScenarios) ? data.testScenarios : [])).catch(() => setTestResultsError(true)).finally(() => setLoadingTests(false)); }} className="inline-flex items-center gap-2 px-3 py-2 rounded border border-amber-300 font-semibold hover:bg-amber-100">
+                  <RefreshCw className="w-4 h-4" /> Tentar novamente
+                </button>
+              </div>
+            ) : userTestScenarios.length === 0 ? (
+              <p className="p-4 text-sm text-slate-600 bg-slate-50 rounded-lg">Nenhuma execução de teste foi registrada para esta conta.</p>
             ) : (
-              userTestScenarios.map((sc, i) => (
-                <div key={i} className="pt-3 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-2xs">
-                        {sc.status === 'PASSED' ? 'APROVADO' : sc.status}
-                      </span>
-                      <span className="font-bold text-slate-800">{sc.scenarioName || 'Cenário de Teste'}</span>
+              userTestScenarios.map((sc, i) => {
+                const status = String(sc.status || 'UNKNOWN').toUpperCase();
+                const passed = status === 'PASSED' || status === 'APROVADO';
+                const failed = status === 'FAILED' || status === 'FALHOU' || status === 'ERROR';
+                return (
+                  <div key={sc.id || String(sc.scenarioName || "scenario") + "-" + i} className="pt-3 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={"px-2 py-0.5 rounded font-bold text-2xs " + (passed ? "bg-emerald-600 text-white" : failed ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700")}>
+                          {passed ? 'APROVADO' : failed ? 'FALHOU' : status === 'RUNNING' ? 'EM EXECUÇÃO' : status}
+                        </span>
+                        <span className="font-bold text-slate-800">{sc.scenarioName || "Cenário de teste"}</span>
+                      </div>
+                      {(sc.aitNumber || sc.watermark) && <div className="flex items-center gap-2 text-slate-600 text-2xs">{sc.aitNumber && <span>Auto: {sc.aitNumber}</span>}{sc.aitNumber && sc.watermark && <span>•</span>}{sc.watermark && <span>Marca-d’água: {sc.watermark}</span>}</div>}
                     </div>
-                    <div className="flex items-center gap-2 text-slate-600 text-2xs">
-                      <span>Auto: {sc.aitNumber || 'AIT-E2E-PADRÃO'}</span>
-                      <span>•</span>
-                      <span>Marca-d’água: {sc.watermark}</span>
-                    </div>
+                    <span className="text-slate-400 text-2xs shrink-0">{sc.runDate && !Number.isNaN(Date.parse(sc.runDate)) ? new Date(sc.runDate).toLocaleString("pt-BR") : "Data não informada"}</span>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-2xs font-bold">
-                      Onboarding ✓ Análise ✓ Documento ✓ PDF ✓
-                    </span>
-                    <span className="text-slate-400 text-2xs">
-                      {sc.runDate ? new Date(sc.runDate).toLocaleDateString('pt-BR') : 'Hoje'}
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -188,25 +179,25 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Total de Processos</span>
-          <p className="text-2xl font-extrabold text-[#071D41]">{totalCases}</p>
-          <span className="text-sm text-slate-500 font-mono">Em acompanhamento</span>
+          <p className="text-2xl font-extrabold text-[#071D41]">{casesLoading || casesError ? '—' : totalCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Casos cadastrados</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Defesas Prontas</span>
-          <p className="text-2xl font-extrabold text-[#168821]">{readyCases}</p>
+          <p className="text-2xl font-extrabold text-[#168821]">{casesLoading || casesError ? '—' : readyCases}</p>
           <span className="text-sm text-slate-500 font-mono">Minutas A4 geradas</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Em análise</span>
-          <p className="text-2xl font-extrabold text-[#071D41]">{analysisCases}</p>
-          <span className="text-sm text-slate-500 font-mono">Diagnóstico ou documento em processamento</span>
+          <p className="text-2xl font-extrabold text-[#071D41]">{casesLoading || casesError ? '—' : analysisCases}</p>
+          <span className="text-sm text-slate-500 font-mono">Análise ou documento em processamento</span>
         </div>
 
         <div className="p-4 bg-white border border-[#CCCCCC] rounded-xl shadow-2xs space-y-1">
           <span className="text-sm font-semibold text-slate-600">Pagamento pendente</span>
-          <p className="text-2xl font-extrabold text-[#155BCB]">{pendingPaymentCases}</p>
+          <p className="text-2xl font-extrabold text-[#155BCB]">{casesLoading || casesError ? '—' : pendingPaymentCases}</p>
           <span className="text-sm text-slate-500 font-mono">Aguardando confirmação do checkout</span>
         </div>
       </div>
@@ -230,7 +221,18 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
         </div>
 
         <div className="divide-y divide-[#E6E6E6]">
-          {!cases || cases.length === 0 ? (
+          {casesLoading ? (
+            <div className="p-8 text-center text-sm text-slate-600 flex items-center justify-center gap-2" role="status">
+              <LoaderCircle className="w-4 h-4 animate-spin" /> Carregando seus processos...
+            </div>
+          ) : casesError ? (
+            <div className="p-8 text-center space-y-3" role="alert">
+              <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
+              <p className="text-sm text-slate-800 font-semibold">Não foi possível carregar seus processos.</p>
+              <p className="text-sm text-slate-600">{casesError}</p>
+              <button type="button" onClick={onRetryCases} className="inline-flex items-center gap-2 px-4 py-2 bg-[#155BCB] hover:bg-[#0C326F] text-white rounded-lg text-sm font-bold"><RefreshCw className="w-4 h-4" /> Tentar novamente</button>
+            </div>
+          ) : cases.length === 0 ? (
             <div className="p-8 text-center space-y-3">
               <FileText className="w-10 h-10 text-slate-400 mx-auto" />
               <p className="text-sm text-slate-600 font-medium">Nenhum recurso cadastrado até o momento.</p>
@@ -252,11 +254,12 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                 infractionDescription: rawCase.infractionDescription || inf.description,
               };
               return (
-                <div
+                <button
+                  type="button"
                   key={c.id}
                   onClick={() => onSelectCase(rawCase)}
-                  className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer"
-                  aria-label={`Selecionar caso ${c.aitNumber || c.id}`}
+                  className="w-full text-left p-4 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#155BCB] transition-colors flex items-center justify-between cursor-pointer"
+                  aria-label={"Abrir caso " + (c.aitNumber || c.id)}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -264,7 +267,7 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                         Auto {c.aitNumber || 'S/N'}
                       </span>
                       <span className="text-sm font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                        {c.infractionCode || '745-5-0'}
+                        {c.infractionCode || 'Código não informado'}
                       </span>
                       <span
                         className={`text-[9px] font-bold font-mono px-1.5 py-0.2 rounded ${
@@ -283,7 +286,9 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                                 ? 'Rascunho'
                                 : c.status === 'analisando' || c.status === 'gerando_documento'
                                   ? 'Em processamento'
-                                  : 'Diagnóstico disponível'}
+                                  : c.status === 'analisado'
+                                    ? 'Diagnóstico disponível'
+                                    : 'Status indisponível'}
                       </span>
                     </div>
                     <p className="text-sm text-slate-600 truncate max-w-md">
@@ -292,7 +297,7 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
                   </div>
 
                   <ChevronRight className="w-4 h-4 text-slate-400" />
-                </div>
+                </button>
               );
             })
           )}

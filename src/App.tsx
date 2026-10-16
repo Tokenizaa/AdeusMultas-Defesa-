@@ -64,6 +64,8 @@ function AppContent() {
   useSEO(undefined, currentPath);
 
   const [cases, setCases] = useState<CaseDomain[]>([]);
+  const [casesLoading, setCasesLoading] = useState<boolean>(true);
+  const [casesError, setCasesError] = useState<string | null>(null);
   const [activeCase, setActiveCase] = useState<CaseDomain | null>(null);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState<boolean>(false);
   const [whatsAppTargetCaseId, setWhatsAppTargetCaseId] = useState<string>('');
@@ -72,21 +74,36 @@ function AppContent() {
     if (!isAuthenticated) {
       setCases([]);
       setActiveCase(null);
+      setCasesError(null);
+      setCasesLoading(false);
       return;
+    }
+
+    if (retryCount === 0) {
+      setCasesLoading(true);
+      setCasesError(null);
     }
 
     try {
       const data = await api.get<CaseDomain[]>('/api/cases');
-      if (Array.isArray(data)) {
-        setCases(data);
-        if (!activeCase && data.length > 0) {
-          setActiveCase(data[0]);
-        }
+      if (!Array.isArray(data)) {
+        throw new Error('A API retornou um formato inesperado para a lista de processos.');
+      }
+      setCases(data);
+      setCasesError(null);
+      setCasesLoading(false);
+      if (data.length > 0) {
+        setActiveCase((current) => current && data.some((item) => item.id === current.id) ? data.find((item) => item.id === current.id) ?? data[0] : data[0]);
+      } else {
+        setActiveCase(null);
       }
     } catch (err) {
-      console.warn('Could not fetch cases from server, retrying in background...', err);
+      console.warn('Não foi possível carregar os processos do usuário.', err);
       if (retryCount < 3 && isAuthenticated) {
-        setTimeout(() => loadCases(retryCount + 1), 1000 * (retryCount + 1));
+        setTimeout(() => { void loadCases(retryCount + 1); }, 1000 * (retryCount + 1));
+      } else {
+        setCasesError('Verifique sua conexão e tente novamente. Seus dados não foram apagados.');
+        setCasesLoading(false);
       }
     }
   };
@@ -341,7 +358,7 @@ function AppContent() {
     return (
       <UserLayout activeCaseCount={cases.length} pageTitle={title} pageSubtitle={subtitle}>
         {currentPath === '/dashboard' && (
-          <UserDashboardView cases={cases} onSelectCase={handleSelectCaseFromList} />
+          <UserDashboardView cases={cases} casesLoading={casesLoading} casesError={casesError} onRetryCases={() => { void loadCases(); }} onSelectCase={handleSelectCaseFromList} />
         )}
 
         {(currentPath === '/afiliado' || currentPath === '/affiliate') && (
