@@ -114,30 +114,35 @@ const E2E_PAYMENT_ORDER_IDS = new Set([
 
 adminRoutes.get('/admin/payments', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, { data: paidAmounts, error: revenueError }] = await Promise.all([
+  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, { data: paidAmounts, error: revenueError }, { data: testRows, error: testError }] = await Promise.all([
     supabase.from('payment_orders').select('*').order('created_at', { ascending: false }).limit(500),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PAID'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).in('status', ['REFUNDED', 'CONTESTED', 'CHARGEDBACK']),
     supabase.from('payment_orders').select('id,amount').eq('status', 'PAID').limit(2000),
+    supabase.from('payment_orders').select('id,status').in('id', [...E2E_PAYMENT_ORDER_IDS]),
   ]);
   if (ordersError) throw new Error(ordersError.message);
   if (revenueError) throw new Error(revenueError.message);
+  if (testError) throw new Error(testError.message);
+  const knownTestRows = testRows || [];
   const orders = (rawOrders || []).map((order: any) => ({ ...order, is_test: E2E_PAYMENT_ORDER_IDS.has(String(order.id)) }));
   const revenue = (paidAmounts || []).filter((order: any) => !E2E_PAYMENT_ORDER_IDS.has(String(order.id)))
     .reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
-  const testCount = orders.filter((order: any) => order.is_test).length;
+  const testPaid = knownTestRows.filter((order: any) => order.status === 'PAID').length;
+  const testPending = knownTestRows.filter((order: any) => order.status === 'PENDING').length;
+  const testReversed = knownTestRows.filter((order: any) => ['REFUNDED', 'CONTESTED', 'CHARGEDBACK'].includes(String(order.status).toUpperCase())).length;
   return c.json({
     orders,
     summary: {
       revenue: Number(revenue.toFixed(2)),
-      paid: Math.max(0, (paid || 0) - (orders.filter((order: any) => order.is_test && order.status === 'PAID').length)),
-      pending: pending || 0,
-      total: Math.max(0, (total || 0) - testCount),
-      refunded: reversed || 0,
+      paid: Math.max(0, (paid || 0) - testPaid),
+      pending: Math.max(0, (pending || 0) - testPending),
+      total: Math.max(0, (total || 0) - knownTestRows.length),
+      refunded: Math.max(0, (reversed || 0) - testReversed),
     },
-    testOrders: testCount,
+    testOrders: knownTestRows.length,
     gateway: c.env.VENO_PRIMARY_GATEWAY || 'venopag',
   });
 });
