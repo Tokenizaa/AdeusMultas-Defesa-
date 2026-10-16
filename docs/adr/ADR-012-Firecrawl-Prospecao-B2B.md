@@ -183,3 +183,5 @@ Antes da implementação, confirmar os endpoints, parâmetros, autenticação, l
 - Rota administrativa de teste: `79db6a4fd2949481af5978b7085cd09197d4dc63`
 
 **Estado:** implementação estática da prova técnica adicionada em `main`; aprovação de testes e chamada real ainda pendentes. A Fase 2 não deve começar até concluir essas verificações.
+
+- **Status de checks remotos após os commits:** o check disponível para o commit documental final reportou contexto `Vercel` em falha por limite de builds da conta (`build-rate-limit`). Esse check não confirma a execução dos testes unitários desta alteração; não foi possível obter resultado de typecheck/testes do código nesta sessão.
