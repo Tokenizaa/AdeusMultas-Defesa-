@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => {
   const transitioned = vi.fn().mockResolvedValue({ data: { id: 'payment-1' }, error: null });
   const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
-  const eq = vi.fn(() => ({ eq, maybeSingle, neq: updateNeq }));
+  const eq = vi.fn(() => ({ eq, maybeSingle, limit: vi.fn(() => ({ maybeSingle })), neq: updateNeq }));
   const maybeSingle = vi.fn().mockResolvedValue({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
@@ -51,6 +51,7 @@ vi.mock('./commercial', () => ({
 
 import { Hono } from 'hono';
 import { paymentsRoutes } from './payments';
+import { verifyVenoWebhook } from '../venopag';
 import type { Env } from '../supabase';
 
 function app() {
@@ -172,13 +173,14 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     }
   });
 
-  it('rejects VenoPag webhooks without a valid configured signature before database access', async () => {
+  it('rejects VenoPag webhooks without a valid signature before database access', async () => {
     const response = await app().request('/api/webhooks/venopag', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'cashin', status: 'confirmed', request_number: 'veo_fake' }),
     }, { VENO_CLIENT_ID: 'client-test', VENO_WEBHOOK_SECRET: 'webhook-secret' } as any);
     expect(response.status).toBe(401);
   });
+
 
   it('persists PAID and treats a repeated PAID webhook as duplicate', async () => {
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });

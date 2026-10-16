@@ -10,13 +10,17 @@ describe('VenoPag Worker client', () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       expect(new Headers(init?.headers).get('X-Client-Id')).toBe(env.VENO_CLIENT_ID);
       expect(new Headers(init?.headers).get('X-Client-Secret')).toBe(env.VENO_CLIENT_SECRET);
-      expect(JSON.parse(String(init?.body))).toMatchObject({ amount: 89.9, document: '12345678909' });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        amount: 89.9, document: '12345678909',
+        splits: [{ username: 'affiliate_store', percentage: 7.5 }],
+      });
       return Response.json({ ok: true, status: 'pending', amount: 89.9, request_number: 'veo_test', copyPaste: '000201...' });
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await createVenoCashIn(env, {
       amountInCents: 8990, payerName: 'Pagador', payerDocument: '123.456.789-09',
       description: 'Pedido', webhookUrl: 'https://example.test/webhooks/venopag',
+      splits: [{ username: 'affiliate_store', percentage: 7.5 }],
     });
     expect(result.request_number).toBe('veo_test');
     expect(fetchMock).toHaveBeenCalledOnce();

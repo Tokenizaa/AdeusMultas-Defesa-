@@ -66,6 +66,7 @@ export async function createVenoCashIn(env: VenoPagEnv, input: {
   payerDocument: string;
   description: string;
   webhookUrl: string;
+  splits?: Array<{ username: string; percentage: number }>;
 }): Promise<VenoCashIn> {
   if (!Number.isSafeInteger(input.amountInCents) || input.amountInCents <= 0) {
     throw new Error('Valor inválido para cobrança PIX.');
@@ -83,6 +84,7 @@ export async function createVenoCashIn(env: VenoPagEnv, input: {
       document,
       description: input.description.slice(0, 120),
       webhook_url: input.webhookUrl,
+      ...(input.splits?.length ? { splits: input.splits } : {}),
     }),
   });
   if (!data.request_number || typeof data.copyPaste !== 'string' || !data.copyPaste.trim()) {

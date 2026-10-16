@@ -18,6 +18,7 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentPath(canonicalPath); setQueryParams(parseQueryParams(search));
   }, []);
   useEffect(() => { const handlePopState = () => { setCurrentPath(canonicalizePath(window.location.pathname || '/')); setQueryParams(parseQueryParams(window.location.search)); }; window.addEventListener('popstate', handlePopState); return () => window.removeEventListener('popstate', handlePopState); }, []);
+  useEffect(() => { if (queryParams.ref?.trim()) { try { window.sessionStorage.setItem('defesai_affiliate_ref', queryParams.ref.trim().slice(0, 120)); } catch { /* session storage may be disabled */ } } }, [queryParams.ref]);
   useEffect(() => {
     const segments = currentPath.split('/').filter(Boolean); const newParams: Record<string, string> = {};
     if (segments[0] === 'cases' && segments[1]) { newParams.id = segments[1]; if (segments[2]) newParams.subview = segments[2]; }

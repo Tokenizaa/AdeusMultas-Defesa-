@@ -46,9 +46,6 @@ import { AdminAiGatewayView } from './components/admin/AdminAiGatewayView';
 import { AdminIntegrationsView } from './components/admin/AdminIntegrationsView';
 import { AdminSettingsView } from './components/admin/AdminSettingsView';
 import { AdminMonitoringView } from './components/admin/AdminMonitoringView';
-import { AdminE2ETestsView } from './components/admin/AdminE2ETestsView';
-import { AdminE2ERunDetailView } from './components/admin/AdminE2ERunDetailView';
-import { AdminIntegrityTestView } from './components/admin/AdminIntegrityTestView';
 
 // Commercial Admin Central Hub
 import { CommercialHubView } from './components/commercial/CommercialHubView';
@@ -186,8 +183,8 @@ function AppContent() {
       title = 'Repositório de Petições & Minutas';
       subtitle = 'Peças jurídicas geradas pelo motor CTB e modelos de RAG';
     } else if (currentPath === '/admin/payments') {
-      title = 'Gestão Financeira (PagBank)';
-      subtitle = 'Monitoramento de liquidação PIX, conciliação e webhooks';
+      title = 'Pagamentos & Afiliados (VenoPag)';
+      subtitle = 'Conciliação PIX, afiliados, comissões e splits';
     } else if (currentPath === '/admin/ai') {
       title = 'IA Core & Gateway de Provedores';
       subtitle = 'Orquestração multi-provider (NVIDIA NIM ➔ 9Router ➔ RAG CTB)';
@@ -227,12 +224,6 @@ function AppContent() {
     } else if (currentPath === '/admin/audit') {
       title = 'Auditoria & LGPD';
       subtitle = 'Trilha de eventos imutável com mascaramento criptográfico';
-    } else if (currentPath === '/admin/e2e-tests' || currentPath.startsWith('/admin/e2e-tests/')) {
-      title = 'Central de Testes E2E (Playwright)';
-      subtitle = 'Suítes automatizadas por serviço, usuários persistentes e validação de documentos';
-    } else if (currentPath === '/admin/integrity-tests') {
-      title = 'Auditoria de Marca-d’Água (QA)';
-      subtitle = 'Validador determinístico de fidelidade de dados e isolamento de contexto';
     } else if (currentPath === '/admin/commercial') {
       title = 'Visão Geral Comercial & Economia';
       subtitle = 'Monitoramento de receita (GMV), conversões e indicadores';
@@ -254,9 +245,6 @@ function AppContent() {
     } else if (currentPath === '/admin/commercial/commissions') {
       title = 'Ledger de Comissões';
       subtitle = 'Comissões geradas por pagamentos confirmados e liquidações';
-    } else if (currentPath === '/admin/commercial/tests') {
-      title = 'Test Center Comercial Automatizado';
-      subtitle = '15 cenários de teste para precificação, cupom e indicações';
     } else if (currentPath === '/admin/commercial/settings') {
       title = 'Configurações Comerciais & Permissões';
       subtitle = 'Governança, matriz de acesso e trilha de auditoria';
@@ -288,12 +276,6 @@ function AppContent() {
         {currentPath === '/admin/logs' && <AdminAuditView />}
         {currentPath === '/admin/monitoring' && <AdminMonitoringView />}
         {currentPath === '/admin/audit' && <AdminAuditView />}
-        {currentPath === '/admin/e2e-tests' && <AdminE2ETestsView />}
-        {currentPath.startsWith('/admin/e2e-tests/runs/') && (
-          <AdminE2ERunDetailView runId={currentPath.replace('/admin/e2e-tests/runs/', '')} />
-        )}
-        {currentPath === '/admin/integrity-tests' && <AdminIntegrityTestView />}
-
         {/* Commercial Management Hub with Sub-Tabs */}
         {currentPath === '/admin/commercial' && <CommercialHubView initialTab="overview" />}
         {currentPath === '/admin/commercial/prices' && <CommercialHubView initialTab="prices" />}
@@ -303,8 +285,6 @@ function AppContent() {
         {currentPath === '/admin/commercial/referrals' && <CommercialHubView initialTab="referrals" />}
         {currentPath === '/admin/commercial/commissions' && <CommercialHubView initialTab="commissions" />}
         {currentPath === '/admin/commercial/settings' && <CommercialHubView initialTab="settings" />}
-        {currentPath === '/admin/commercial/tests' && <CommercialHubView initialTab="tests" />}
-
         {/* PWA Mobile & Desktop Install Prompt */}
         <PWAInstallBanner />
       </AdminLayout>

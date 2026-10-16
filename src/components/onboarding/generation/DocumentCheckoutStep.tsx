@@ -36,6 +36,11 @@ interface DocumentCheckoutStepProps {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+function readAffiliateReferralCode(): string | null {
+    try { return window.sessionStorage.getItem('defesai_affiliate_ref'); }
+    catch { return null; }
+}
+
 function readableApiError(value: unknown, fallback: string): string {
     if (typeof value === 'string' && value.trim()) return value;
     if (value && typeof value === 'object') {
@@ -165,6 +170,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                         customerCpf: documentData.applicantCpf,
                         userId: userId || null,
                         couponCode: couponCode || null,
+                        referralCode: readAffiliateReferralCode(),
                     }),
                 });
                 const rawBody = await res.text();
