@@ -50,7 +50,7 @@ async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?:
   const { data: referrer, error: referrerError } = await supabase
     .from('user_profiles')
     .select('user_id,referral_code')
-    .eq('referral_code', code)
+    .ilike('referral_code', code)
     .limit(1)
     .maybeSingle();
   if (referrerError) throw referrerError;
@@ -76,7 +76,7 @@ async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?:
   if (insertError && insertError.code !== '23505') throw insertError;
 }
 
-async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
+async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string): Promise<Array<{ userId: string; level: number; username: string; percentage: number }>> {
   const supabase = createSupabaseAdminClient(env);
   const chain: Array<{ userId: string; level: number }> = [];
   const seen = new Set<string>([buyerUserId]);
@@ -110,12 +110,12 @@ async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
 
   const levelByUser = new Map(chain.map((item) => [item.userId, item.level]));
   const splits = (profiles || []).map((profile: any) => ({
+    userId: String(profile.user_id),
     username: String(profile.venopag_username || '').trim(),
     percentage: Number(profile.split_percent) || 0,
     level: levelByUser.get(String(profile.user_id)) || 1,
   })).filter((split: any) => split.username && split.percentage > 0)
-    .sort((a: any, b: any) => a.level - b.level)
-    .map(({ username, percentage }: any) => ({ username, percentage }));
+    .sort((a: any, b: any) => a.level - b.level);
   const totalPercent = splits.reduce((sum: number, split: any) => sum + split.percentage, 0);
   if (totalPercent > 100) {
     throw new HTTPException(409, { message: 'A soma dos splits de afiliados ativos ultrapassa 100%. Ajuste os percentuais antes de gerar a cobrança.' });
@@ -193,16 +193,17 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
       throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
     }
     let venoOrder;
+    let affiliateSplits: Array<{ userId: string; level: number; username: string; percentage: number }> = [];
     try {
       await registerReferralFromCode(c.env, user.id, body.referralCode);
-      const splits = await resolveVenoAffiliateSplits(c.env, user.id);
+      affiliateSplits = await resolveVenoAffiliateSplits(c.env, user.id);
       venoOrder = await createVenoCashIn(c.env, {
         amountInCents: Math.round(Number(offer.finalAmount) * 100),
         payerName: payer.name,
         payerDocument: payer.document,
         description: `DefesAi - ${offer.name}`,
         webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
-        splits,
+        splits: affiliateSplits.map(({ username, percentage }) => ({ username, percentage })),
       });
     } catch (error) {
       const message = error instanceof Error && error.message
@@ -234,6 +235,29 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
         detail,
       });
       throw new HTTPException(502, { message: 'O gateway gerou a cobrança, mas o sistema não conseguiu registrá-la. Não tente novamente; suporte deve reconciliar a transação.' });
+    }
+    if (affiliateSplits.length) {
+      const now = new Date().toISOString();
+      const ledgerRows = affiliateSplits.map((split) => ({
+        payment_id: record.id,
+        case_id: caseId,
+        beneficiary_id: split.userId,
+        buyer_user_id: user.id,
+        level: split.level,
+        applied_percent: split.percentage,
+        base_amount: Number(offer.finalAmount),
+        commission_amount: Number((Number(offer.finalAmount) * split.percentage / 100).toFixed(2)),
+        status: 'PENDING',
+        created_at: now,
+      }));
+      const { error: ledgerError } = await createSupabaseAdminClient(c.env)
+        .from('commission_ledger')
+        .upsert(ledgerRows, { onConflict: 'payment_id,beneficiary_id,level', ignoreDuplicates: true });
+      if (ledgerError) {
+        // A gateway charge already exists. Do not invite the customer to pay again;
+        // log the reconciliation failure for the finance module instead.
+        console.error('[payments] affiliate commission ledger reconciliation required', { paymentOrderId: record.id, detail: ledgerError.message });
+      }
     }
     return c.json({
       success: true, order: venoOrder, paymentOrder: record,
