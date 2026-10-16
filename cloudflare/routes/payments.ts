@@ -43,6 +43,43 @@ async function persistOrder(env: Env, input: { caseId: string; userId?: string; 
   return data;
 }
 
+async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
+  const supabase = createSupabaseAdminClient(env);
+  const { data: relations, error: relationError } = await supabase
+    .from('referral_relations')
+    .select('referrer_id,level,status')
+    .eq('referred_id', buyerUserId)
+    .eq('status', 'active')
+    .in('level', [1, 2, 3]);
+  if (relationError) throw relationError;
+  const affiliateIds = [...new Set((relations || []).map((r: any) => String(r.referrer_id)).filter(Boolean))];
+  if (!affiliateIds.length) return [];
+  const { data: profiles, error: profileError } = await supabase
+    .from('affiliate_gateway_profiles')
+    .select('user_id,venopag_username,split_percent,is_active')
+    .in('user_id', affiliateIds)
+    .eq('is_active', true);
+  if (profileError) throw profileError;
+  const relationLevels = new Map<string, number>();
+  for (const relation of relations || []) {
+    const id = String((relation as any).referrer_id);
+    const level = Number((relation as any).level);
+    if (!relationLevels.has(id) || level < relationLevels.get(id)!) relationLevels.set(id, level);
+  }
+  const splits = (profiles || []).map((profile: any) => ({
+    username: String(profile.venopag_username || '').trim(),
+    percentage: Number(profile.split_percent) || 0,
+    level: relationLevels.get(String(profile.user_id)) || 1,
+  })).filter((split: any) => split.username && split.percentage > 0)
+    .sort((a: any, b: any) => a.level - b.level)
+    .map(({ username, percentage }: any) => ({ username, percentage }));
+  const totalPercent = splits.reduce((sum: number, split: any) => sum + split.percentage, 0);
+  if (totalPercent > 100) {
+    throw new HTTPException(409, { message: 'A soma dos splits de afiliados ativos ultrapassa 100%. Ajuste os percentuais antes de gerar a cobrança.' });
+  }
+  return splits;
+}
+
 routes.get('/payments/resolve-price', async (c) => {
   try {
     const serviceType = c.req.query('serviceType');
@@ -114,12 +151,14 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     }
     let venoOrder;
     try {
+      const splits = await resolveVenoAffiliateSplits(c.env, user.id);
       venoOrder = await createVenoCashIn(c.env, {
         amountInCents: Math.round(Number(offer.finalAmount) * 100),
         payerName: payer.name,
         payerDocument: payer.document,
         description: `DefesAi - ${offer.name}`,
         webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
+        splits,
       });
     } catch (error) {
       const message = error instanceof Error && error.message
