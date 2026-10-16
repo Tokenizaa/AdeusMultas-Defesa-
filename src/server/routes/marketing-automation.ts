@@ -538,6 +538,58 @@ router.get('/leads', async (req, res) => {
   }
 });
 
+router.patch('/leads/:id/qualification', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { qualification_status, qualification_notes } = req.body || {};
+    const allowedStatuses = ['pending', 'qualified', 'disqualified'];
+
+    if (!allowedStatuses.includes(qualification_status)) {
+      return res.status(400).json({
+        error: 'qualification_status deve ser pending, qualified ou disqualified',
+      });
+    }
+
+    const notes = typeof qualification_notes === 'string' ? qualification_notes.trim() : '';
+    if (qualification_status === 'qualified' && notes.length < 20) {
+      return res.status(400).json({
+        error: 'Para qualificar um lead, registre uma justificativa com pelo menos 20 caracteres.',
+      });
+    }
+    if (qualification_status === 'disqualified' && notes.length < 10) {
+      return res.status(400).json({
+        error: 'Para desqualificar um lead, registre o motivo com pelo menos 10 caracteres.',
+      });
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from('marketing_leads')
+      .update({
+        qualification_status,
+        qualification_notes: notes || null,
+        qualified_at: qualification_status === 'qualified' ? now : null,
+        updated_at: now,
+      })
+      .eq('id', id)
+      .select('id, name, audience, lead_type, qualification_status, qualification_notes, qualified_at, opt_out_at')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Lead não encontrado' });
+    if (data.opt_out_at && qualification_status === 'qualified') {
+      return res.status(409).json({ error: 'Lead com opt-out não pode ser qualificado para contato.' });
+    }
+
+    res.json({ success: true, lead: data });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Falha ao atualizar qualificação do lead',
+      message: (err as Error).message,
+    });
+  }
+});
+
 router.get('/leads/:id', async (req, res) => {
   try {
     const { id } = req.params;
