@@ -18,7 +18,7 @@ marketingRoutes.use('/marketing/*', authenticateToken, requireAdmin);
  * sem scraping de contatos e sem iniciar campanhas ou mensagens.
  */
 marketingRoutes.post('/marketing/prospecting/firecrawl/test', async (c) => {
-  const body = await c.req.json<{ query?: unknown; limit?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{ query?: unknown; limit?: unknown }>().catch(() => ({} as { query?: unknown; limit?: unknown }));
   if (typeof body.query !== 'string') {
     return c.json({ success: false, error: { code: 'INVALID_QUERY', message: 'query deve ser um texto.' } }, 400);
   }

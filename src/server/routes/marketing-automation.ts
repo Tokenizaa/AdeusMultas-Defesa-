@@ -5,8 +5,13 @@ import { scrapeWorker } from '../services/scrape-worker';
 import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
 import { configService } from '../config/config-service';
+import { isEligibleLeadForCampaign } from '../services/marketing-automation/eligibility';
+import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
+
+// This router exposes lead data, campaign control and qualification decisions; admin-only.
+router.use(authenticateToken, requireAdmin);
 
 router.get('/status', async (_req, res) => {
   try {
@@ -260,9 +265,13 @@ router.patch('/campaigns/:id', async (req, res) => {
 });
 
 router.post('/campaigns/:id/start', async (req, res) => {
+  let insertedLeadCampaignIds: string[] = [];
   try {
     const { id } = req.params;
-    const { limit = 20 } = req.body;
+    const requestedLimit = req.body?.limit ?? 20;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+      return res.status(400).json({ error: 'limit deve ser um inteiro entre 1 e 100' });
+    }
 
     const { data: campaign, error: campaignError } = await supabaseAdmin
       .from('marketing_campaigns')
@@ -273,81 +282,124 @@ router.post('/campaigns/:id/start', async (req, res) => {
     if (campaignError || !campaign) {
       return res.status(404).json({ error: 'Campanha não encontrada' });
     }
+    if (campaign.status !== 'active') {
+      return res.status(409).json({ error: 'Campanha não está ativa; ativar antes de iniciar.' });
+    }
 
-    // Filter leads by lead_type, audience, and phone_normalized
-    const leadQuery = supabaseAdmin
-      .from('marketing_leads')
-      .select('*')
-      .eq('lead_type', campaign.lead_type)
-      .eq('audience', campaign.audience)
-      .not('phone_normalized', 'is', null)
-      .limit(limit);
-
-    const { data: leads, error: leadsError } = await leadQuery;
-
-    if (leadsError) throw leadsError;
-
-    const { data: existingLinks } = await supabaseAdmin
+    const maxContacts = Number(campaign.max_contacts) || 3;
+    const { data: existingLinks, error: linksError } = await supabaseAdmin
       .from('marketing_lead_campaigns')
       .select('lead_id')
       .eq('campaign_id', id);
+    if (linksError) throw linksError;
 
-    const existingLeadIds = new Set((existingLinks || []).map((l: any) => l.lead_id));
-    const newLeads = (leads || []).filter((l: any) => !existingLeadIds.has(l.id));
-
-    // Respect max_contacts - limit total lead_campaigns for this campaign
-    const maxContacts = campaign.max_contacts || 3;
-    const existingCount = existingLeadIds.size;
-    const remainingSlots = Math.max(0, maxContacts - existingCount);
-    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
-
-    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
-      return res.json({ 
-        success: true, 
-        enqueued: 0, 
+    const existingLeadIds = new Set((existingLinks || []).map((link: any) => link.lead_id));
+    const remainingSlots = Math.max(0, maxContacts - existingLeadIds.size);
+    if (remainingSlots === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
         campaign: campaign.name,
-        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
+        remainingSlots: 0,
+        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`,
       });
     }
 
-    const leadCampaigns = leadsToEnqueue.map((lead: any) => ({
+    // Candidate retrieval is deliberately bounded; eligibility is checked before linking.
+    const { data: leads, error: leadsError } = await supabaseAdmin
+      .from('marketing_leads')
+      .select('id, lead_type, audience, qualification_status, phone_normalized, city, opt_out_at')
+      .eq('lead_type', campaign.lead_type)
+      .eq('audience', campaign.audience)
+      .eq('qualification_status', 'qualified')
+      .not('phone_normalized', 'is', null)
+      .is('opt_out_at', null)
+      .limit(500);
+    if (leadsError) throw leadsError;
+
+    const targetCities = Array.isArray(campaign.target_cities)
+      ? campaign.target_cities
+          .filter((city: unknown): city is string => typeof city === 'string')
+          .map((city: string) => city.trim().toLocaleLowerCase('pt-BR'))
+          .filter(Boolean)
+      : [];
+    if (campaign.audience === 'B2B' && targetCities.length === 0) {
+      return res.status(409).json({
+        error: 'Campanha B2B sem cidades-alvo válidas; nenhum lead foi enfileirado.',
+      });
+    }
+
+    const eligibleLeads = (leads || []).filter((lead: any) =>
+      isEligibleLeadForCampaign(lead, campaign, existingLeadIds)
+    );
+    const leadsToEnqueue = eligibleLeads.slice(0, Math.min(requestedLimit, remainingSlots));
+
+    if (leadsToEnqueue.length === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
+        campaign: campaign.name,
+        remainingSlots,
+        message: 'Nenhum lead elegível novo encontrado para os critérios desta campanha.',
+      });
+    }
+
+    // Read generated UUIDs from Postgres; never assume INSERT mutates the input objects.
+    const leadCampaignRows = leadsToEnqueue.map((lead: any) => ({
       lead_id: lead.id,
       campaign_id: id,
       status: 'queued',
       current_step: 0,
       contact_count: 0,
     }));
+    const { data: insertedLinks, error: lcError } = await supabaseAdmin
+      .from('marketing_lead_campaigns')
+      .insert(leadCampaignRows)
+      .select('id, lead_id');
+    if (lcError) throw lcError;
 
-    if (leadCampaigns.length > 0) {
-      const { error: lcError } = await supabaseAdmin
-        .from('marketing_lead_campaigns')
-        .insert(leadCampaigns);
-
-      if (lcError) throw lcError;
+    const createdLinks = insertedLinks || [];
+    insertedLeadCampaignIds = createdLinks.map((link: any) => link.id).filter(Boolean);
+    if (createdLinks.length !== leadsToEnqueue.length || insertedLeadCampaignIds.length !== leadsToEnqueue.length) {
+      throw new Error('Não foi possível recuperar todos os IDs dos vínculos criados; fila não iniciada.');
     }
 
-    const queues = leadsToEnqueue.map((lead: any) => ({
-      lead_campaign_id: (leadCampaigns.find((lc: any) => lc.lead_id === lead.id) as any)?.id,
+    const queues = createdLinks.map((link: any) => ({
+      lead_campaign_id: link.id,
       action: 'send_message',
       scheduled_at: new Date().toISOString(),
       max_attempts: 3,
-    })).filter((q: any) => q.lead_campaign_id);
-
-    if (queues.length > 0) {
-      const { error: qError } = await supabaseAdmin
-        .from('marketing_automation_queue')
-        .insert(queues);
-
-      if (qError) throw qError;
+    }));
+    const { error: queueError } = await supabaseAdmin
+      .from('marketing_automation_queue')
+      .insert(queues);
+    if (queueError) {
+      // Best-effort compensation prevents orphaned queued links when queue creation fails.
+      const { error: cleanupError } = await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .delete()
+        .in('id', insertedLeadCampaignIds);
+      if (cleanupError) {
+        throw new Error(`Falha ao criar fila (${queueError.message}) e ao limpar vínculos (${cleanupError.message})`);
+      }
+      insertedLeadCampaignIds = [];
+      throw queueError;
     }
 
-    res.json({ 
-      success: true, 
-      enqueued: queues.length, 
+    res.json({
+      success: true,
+      enqueued: queues.length,
       campaign: campaign.name,
-      remainingSlots: remainingSlots - queues.length
+      remainingSlots: remainingSlots - queues.length,
     });
   } catch (err) {
+    // Avoid leaving newly created links behind when a later step fails.
+    if (insertedLeadCampaignIds.length > 0) {
+      await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .delete()
+        .in('id', insertedLeadCampaignIds);
+    }
     res.status(500).json({ error: 'Falha ao iniciar campanha', message: (err as Error).message });
   }
 });
@@ -483,6 +535,92 @@ router.get('/leads', async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: 'Falha ao buscar leads', message: (err as Error).message });
+  }
+});
+
+router.patch('/leads/:id/qualification', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { qualification_status, qualification_notes } = req.body || {};
+    const allowedStatuses = ['pending', 'qualified', 'disqualified'];
+
+    if (!allowedStatuses.includes(qualification_status)) {
+      return res.status(400).json({
+        error: 'qualification_status deve ser pending, qualified ou disqualified',
+      });
+    }
+
+    const notes = typeof qualification_notes === 'string' ? qualification_notes.trim() : '';
+    if (qualification_status === 'qualified' && notes.length < 20) {
+      return res.status(400).json({
+        error: 'Para qualificar um lead, registre uma justificativa com pelo menos 20 caracteres.',
+      });
+    }
+    if (qualification_status === 'disqualified' && notes.length < 10) {
+      return res.status(400).json({
+        error: 'Para desqualificar um lead, registre o motivo com pelo menos 10 caracteres.',
+      });
+    }
+
+    const { data: existingLead, error: lookupError } = await supabaseAdmin
+      .from('marketing_leads')
+      .select('id, opt_out_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!existingLead) return res.status(404).json({ error: 'Lead não encontrado' });
+    if (existingLead.opt_out_at && qualification_status === 'qualified') {
+      return res.status(409).json({ error: 'Lead com opt-out não pode ser qualificado para contato.' });
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from('marketing_leads')
+      .update({
+        qualification_status,
+        qualification_notes: notes || null,
+        qualified_at: qualification_status === 'qualified' ? now : null,
+        updated_at: now,
+      })
+      .eq('id', id)
+      .select('id, name, audience, lead_type, qualification_status, qualification_notes, qualified_at, opt_out_at')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Lead não encontrado' });
+
+    // Revoking qualification must also cancel already queued campaign work.
+    if (qualification_status !== 'qualified') {
+      const { data: activeLinks, error: linksError } = await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .select('id')
+        .eq('lead_id', id)
+        .in('status', ['queued', 'sent', 'delivered']);
+      if (linksError) throw linksError;
+
+      const activeLinkIds = (activeLinks || []).map((link: any) => link.id).filter(Boolean);
+      if (activeLinkIds.length > 0) {
+        const now = new Date().toISOString();
+        const { error: pauseError } = await supabaseAdmin
+          .from('marketing_lead_campaigns')
+          .update({ status: 'paused', updated_at: now })
+          .in('id', activeLinkIds);
+        if (pauseError) throw pauseError;
+
+        const { error: queueError } = await supabaseAdmin
+          .from('marketing_automation_queue')
+          .delete()
+          .in('lead_campaign_id', activeLinkIds);
+        if (queueError) throw queueError;
+      }
+    }
+
+    res.json({ success: true, lead: data });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Falha ao atualizar qualificação do lead',
+      message: (err as Error).message,
+    });
   }
 });
 

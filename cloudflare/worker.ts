@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import { createSupabaseAdminClient, type Env } from './supabase'
-import { authenticateToken, requireAdmin, type AuthenticatedUser, logRequest } from './middleware'
+import { createSupabaseAdminClient } from './supabase'
+import type { Env } from './supabase'
+import { authenticateToken, requireAdmin, logRequest } from './middleware'
+import type { AuthenticatedUser } from './middleware'
 import { apiBoundary } from '../src/shared/api/boundary'
 
 import { authRoutes } from './routes/auth'

@@ -11,6 +11,7 @@ function parseArgs(): { command: string; config: SearchConfig } {
     cities: [],
     states: [],
     limitPerQuery: 10,
+    source: 'google_maps',
   };
 
   for (let i = 1; i < args.length; i++) {
@@ -26,6 +27,15 @@ function parseArgs(): { command: string; config: SearchConfig } {
       i += 1;
     } else if ((arg === '--limit' || arg === '-l') && args[i + 1]) {
       config.limitPerQuery = Math.max(1, Math.min(50, parseInt(args[i + 1] || '10', 10) || 10));
+      i += 1;
+    } else if ((arg === '--source' || arg === '-src') && args[i + 1]) {
+      const source = args[i + 1];
+      if (source === 'google_maps' || source === 'firecrawl') {
+        config.source = source;
+      } else {
+        logger.warn(`Invalid source "${source}". Defaulting to google_maps.`);
+        config.source = 'google_maps';
+      }
       i += 1;
     }
   }
