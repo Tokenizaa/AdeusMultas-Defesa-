@@ -57,23 +57,28 @@ export const AdminPaymentsView: React.FC = () => {
         authFetch('/api/admin/payments/commissions'),
         authFetch('/api/admin/payments/gateway'),
       ]);
-      const payloads = await Promise.all([paymentRes, affiliateRes, commissionRes, gatewayRes].map(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body?.error?.message || body?.message || 'Não foi possível carregar o módulo financeiro.');
-        return body;
-      }));
-      const [paymentData, affiliateData, commissionData, gatewayData] = payloads;
-      setPayments(paymentData.orders || []);
-      setSummary(paymentData.summary || { revenue: 0, paid: 0, pending: 0, total: 0, refunded: 0 });
-      const nextAffiliates: Affiliate[] = affiliateData.affiliates || [];
-      setAffiliates(nextAffiliates);
-      setEdits(Object.fromEntries(nextAffiliates.map((a) => [a.userId, {
-        venopagUsername: a.venopagUsername || '',
-        splitPercent: String(a.splitPercent ?? 0),
-        active: Boolean(a.active),
-      }])));
-      setCommissions(commissionData.commissions || []);
-      setGateway(gatewayData);
+      const responses = await Promise.all([paymentRes, affiliateRes, commissionRes, gatewayRes].map(async (res) => ({
+        ok: res.ok, body: await res.json().catch(() => ({})),
+      })));
+      const [paymentResult, affiliateResult, commissionResult, gatewayResult] = responses;
+      if (!paymentResult.ok) throw new Error(paymentResult.body?.error?.message || paymentResult.body?.message || 'Não foi possível carregar pagamentos.');
+      setPayments(paymentResult.body.orders || []);
+      setSummary(paymentResult.body.summary || { revenue: 0, paid: 0, pending: 0, total: 0, refunded: 0 });
+      if (affiliateResult.ok) {
+        const nextAffiliates: Affiliate[] = affiliateResult.body.affiliates || [];
+        setAffiliates(nextAffiliates);
+        setEdits(Object.fromEntries(nextAffiliates.map((a) => [a.userId, {
+          venopagUsername: a.venopagUsername || '',
+          splitPercent: String(a.splitPercent ?? 0),
+          active: Boolean(a.active),
+        }])));
+      } else {
+        setAffiliates([]);
+        setError('A gestão de afiliados precisa da migration affiliate_gateway_profiles aplicada no Supabase.');
+      }
+      if (commissionResult.ok) setCommissions(commissionResult.body.commissions || []);
+      else setError((previous) => previous || 'Não foi possível carregar o livro de comissões.');
+      if (gatewayResult.ok) setGateway(gatewayResult.body);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar dados financeiros.');
     } finally {
@@ -187,7 +192,7 @@ export const AdminPaymentsView: React.FC = () => {
                 {loading ? <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Carregando transações…</td></tr>
                   : filteredPayments.length === 0 ? <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Nenhuma transação para os filtros selecionados.</td></tr>
                   : filteredPayments.map((p) => <tr key={p.id} className="hover:bg-slate-50/70">
-                    <td className="px-4 py-3"><div className="font-medium text-slate-900">{p.reference_id || p.case_id || p.id}</div><div className="mt-1 max-w-xs truncate font-mono text-xs text-slate-500">{p.gateway_transaction_id || p.id}</div></td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2 font-medium text-slate-900">{p.reference_id || p.case_id || p.id}{p.is_test && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">Teste E2E</span>}</div><div className="mt-1 max-w-xs truncate font-mono text-xs text-slate-500">{p.gateway_transaction_id || p.id}</div></td>
                     <td className="px-4 py-3"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium">{String(p.gateway || '—').toUpperCase()}</span><div className="mt-1 text-xs text-slate-500">{p.payment_method || '—'}</div></td>
                     <td className="px-4 py-3 font-medium tabular-nums">{money(p.amount)}</td>
                     <td className="px-4 py-3"><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(p.status)}`}>{['PAID', 'CONFIRMED'].includes(String(p.status).toUpperCase()) ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{statusLabel(p.status)}</span></td>
