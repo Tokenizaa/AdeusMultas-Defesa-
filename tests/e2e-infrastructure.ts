@@ -171,6 +171,13 @@ export class E2ETestManager {
             await this.supabase.auth.admin.updateUserById(authUser.id, {
               password: user.password,
               email_confirm: true,
+              user_metadata: {
+                name: user.name,
+                phone_e164: user.phone.replace(/\\D/g, ''),
+                cpf: user.cpf,
+                cnh: user.cnh,
+                test_run_id: TEST_RUN_ID,
+              },
             });
           }
         }
@@ -324,6 +331,13 @@ export class E2ETestManager {
           await this.supabase.auth.admin.updateUserById(found.id, {
             password: user.password,
             email_confirm: true,
+            user_metadata: {
+              name: user.name,
+              phone_e164: user.phone.replace(/\\D/g, ''),
+              cpf: user.cpf,
+              cnh: user.cnh,
+              test_run_id: TEST_RUN_ID,
+            },
           });
         } else {
           throw new Error(`Failed to create test user ${user.email}: ${error.message}`);
