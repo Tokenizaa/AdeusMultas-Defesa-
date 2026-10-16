@@ -350,6 +350,7 @@ export const ProspectingAutomationView: React.FC = () => {
                   <th className="pb-2 font-semibold">Cidade</th>
                   <th className="pb-2 font-semibold">Telefone</th>
                   <th className="pb-2 font-semibold">Fonte</th>
+                  <th className="pb-2 font-semibold">Qualificação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -364,6 +365,18 @@ export const ProspectingAutomationView: React.FC = () => {
                     <td className="py-2 text-slate-600">{lead.city || '—'}</td>
                     <td className="py-2 text-slate-600">{lead.phone || '—'}</td>
                     <td className="py-2 text-slate-500 text-xs">{lead.source}</td>
+                    <td className="py-2 whitespace-nowrap">
+                      {(() => {
+                        const qualification = lead.qualification_status || 'pending';
+                        const styles = qualification === 'qualified'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : qualification === 'disqualified'
+                            ? 'bg-red-50 text-red-700'
+                            : 'bg-amber-50 text-amber-700';
+                        const label = qualification === 'qualified' ? 'Qualificado' : qualification === 'disqualified' ? 'Desqualificado' : 'Pendente';
+                        return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${styles}`}>{label}</span>;
+                      })()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
