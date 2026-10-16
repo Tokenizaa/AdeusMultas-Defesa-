@@ -26,8 +26,6 @@ import {
   Gift,
   UsersRound,
   Wallet,
-  TestTube2,
-  ShieldAlert,
   ListChecks,
   Settings2,
   List,
@@ -47,25 +45,10 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
-    title: 'Testes & Qualidade',
-    items: [
-      {
-        label: 'Central de Testes E2E',
-        path: '/admin/e2e-tests',
-        icon: TestTube2,
-      },
-      {
-        label: 'Auditoria Marca-d’Água',
-        path: '/admin/integrity-tests',
-        icon: ShieldAlert,
-      },
-    ],
-  },
-  {
     title: 'Operação',
     items: [
       {
-        label: 'Casos & Autuações',
+        label: 'Casos e Documentos',
         path: '/admin/cases',
         icon: Folders,
       },
@@ -73,11 +56,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         label: 'Usuários & Contas',
         path: '/admin/users',
         icon: Users,
-      },
-      {
-        label: 'Documentos & Petições',
-        path: '/admin/documents',
-        icon: FileText,
       },
       {
         label: 'Pagamentos (PagBank)',
@@ -245,16 +223,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         label: 'Auditoria & LGPD',
         path: '/admin/audit',
         icon: FolderLock,
-      },
-      {
-        label: 'Central de Testes E2E',
-        path: '/admin/e2e-tests',
-        icon: TestTube2,
-      },
-      {
-        label: 'Auditoria Marca-d’Água',
-        path: '/admin/integrity-tests',
-        icon: ShieldAlert,
       },
     ],
   },
