@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   PlusCircle,
   FileText,
@@ -11,13 +11,10 @@ import {
   CheckCircle2,
   Calendar,
   Building,
-  TestTube2,
-  Check,
 } from 'lucide-react';
 import { CaseDomain } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
-import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 interface UserDashboardViewProps {
   cases: CaseDomain[];
@@ -27,10 +24,6 @@ interface UserDashboardViewProps {
 export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onSelectCase }) => {
   const { navigate } = useRouter();
   const { user } = useAuth();
-  const authFetch = useAuthFetch();
-
-  const [userTestScenarios, setUserTestScenarios] = useState<any[]>([]);
-  const [loadingTests, setLoadingTests] = useState(false);
 
   // Metrics for current driver
   const totalCases = cases.length;
@@ -40,44 +33,8 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
   const pendingPaymentCases = cases.filter((c) => c.status === 'aguardando_pagamento').length;
   const draftCases = cases.filter((c) => c.status === 'draft' || c.status === 'novo' || c.status === 'aguardando_documentos').length;
 
-  const isTestUser = Boolean(user?.email?.includes('@e2e.local') || user?.name?.startsWith('Teste '));
-
-  // Buscar resultados de testes do usuário conectado (Item 17 e 18 da especificação)
-  useEffect(() => {
-    if (isTestUser && user?.email) {
-      setLoadingTests(true);
-      authFetch('/api/e2e-tests/user-results')
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data && data.testScenarios) {
-            setUserTestScenarios(data.testScenarios);
-          }
-        })
-        .catch((err) => console.error('Erro ao buscar testes do usuário:', err))
-        .finally(() => setLoadingTests(false));
-    }
-  }, [user?.email, isTestUser]);
-
   return (
     <div className="space-y-6">
-      {/* Test User Badge if active */}
-      {isTestUser && (
-        <div className="bg-orange-950/80 border border-orange-700/80 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-orange-200 font-mono text-xs shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <TestTube2 className="w-5 h-5 text-orange-400 shrink-0" />
-            <div>
-              <span className="font-bold text-orange-300">Usuário de Teste E2E Persistente:</span> {user?.name} ({user?.email})
-              <p className="text-2xs text-orange-400/80">
-                Os casos vinculados a esta conta foram criados pelas suítes automatizadas Playwright com validação de marca-d'água.
-              </p>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 rounded bg-orange-900/60 border border-orange-700 font-bold shrink-0 text-center">
-            SENHA: E2E@2026Teste
-          </span>
-        </div>
-      )}
-
       {/* Driver Welcome Hero & Primary CTA */}
       <div className="p-6 bg-[#071D41] text-white rounded-xl shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b-4 border-[#155BCB]">
         <div className="space-y-2 max-w-xl">
@@ -104,85 +61,6 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ cases, onS
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
-
-      {/* Seção Testes e Validações (Itens 17 e 18 da especificação para usuários de teste) */}
-      {isTestUser && (
-        <div className="bg-white border border-[#CCCCCC] rounded-xl shadow-2xs overflow-hidden">
-          <div className="p-4 border-b border-[#E6E6E6] flex items-center justify-between bg-slate-50">
-            <div className="flex items-center gap-2">
-              <TestTube2 className="w-5 h-5 text-orange-600" />
-              <div>
-                <h3 className="font-bold text-sm text-[#071D41]">Testes e Validações</h3>
-                <p className="text-xs text-slate-500">
-                  Histórico de execuções automatizadas Playwright deste usuário
-                </p>
-              </div>
-            </div>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-              Isolamento 100% Auditado
-            </span>
-          </div>
-
-          <div className="p-4 divide-y divide-slate-100 space-y-3">
-            {userTestScenarios.length === 0 ? (
-              <div className="p-4 bg-slate-50 rounded-lg text-xs font-mono text-slate-600 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-2xs">
-                    APROVADO
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Onboarding ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Análise ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Documento ✓
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> PDF ✓
-                    </span>
-                  </div>
-                </div>
-                <div className="text-slate-400 text-2xs">
-                  Execução: {new Date().toLocaleDateString('pt-BR')}
-                </div>
-              </div>
-            ) : (
-              userTestScenarios.map((sc, i) => (
-                <div key={i} className="pt-3 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-2xs">
-                        {sc.status === 'PASSED' ? 'APROVADO' : sc.status}
-                      </span>
-                      <span className="font-bold text-slate-800">{sc.scenarioName || 'Cenário de Teste'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600 text-2xs">
-                      <span>Auto: {sc.aitNumber || 'AIT-E2E-PADRÃO'}</span>
-                      <span>•</span>
-                      <span>Marca-d’água: {sc.watermark}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-2xs font-bold">
-                      Onboarding ✓ Análise ✓ Documento ✓ PDF ✓
-                    </span>
-                    <span className="text-slate-400 text-2xs">
-                      {sc.runDate ? new Date(sc.runDate).toLocaleDateString('pt-BR') : 'Hoje'}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
       {/* KPI Metrics Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
