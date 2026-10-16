@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { createSupabaseAdminClient } from './supabase'
 import type { Env } from './supabase'
-import { authenticateToken, requireAdmin } from './middleware'
+import { authenticateToken, requireAdmin, logRequest } from './middleware'
 import type { AuthenticatedUser } from './middleware'
 import { apiBoundary } from '../src/shared/api/boundary'
 
