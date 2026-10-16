@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => {
   const transitioned = vi.fn().mockResolvedValue({ data: { id: 'payment-1' }, error: null });
   const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
-  const eq = vi.fn(() => ({ eq, maybeSingle, neq: updateNeq }));
+  const eq = vi.fn(() => ({ eq, maybeSingle, limit: vi.fn(() => ({ maybeSingle })), neq: updateNeq }));
   const maybeSingle = vi.fn().mockResolvedValue({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
