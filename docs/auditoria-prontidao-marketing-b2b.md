@@ -225,3 +225,21 @@ Esta seção registra a primeira validação documental feita após a criação 
 **Fase A documental: concluída parcialmente.** O contrato e as divergências foram mapeados a partir das migrations e do código no GitHub. A fase não é considerada tecnicamente fechada até confirmar o schema efetivo do Supabase, revisar testes existentes e decidir a política de qualificação/supressão e de atribuição entre campanhas. Não foram feitas alterações em código, banco, automação, webhook ou produção.
 
 **Próxima etapa segura:** Fase B em branch isolada, com testes de regressão primeiro, implementando elegibilidade compartilhada e supressão global antes de qualquer tentativa de iniciar campanha. Não iniciar worker nem enviar mensagens reais.
+
+
+## 10. Execução técnica — branch isolada (2026-10-16)
+
+Branch de implementação: `fix/marketing-b2b-qualification-routing`. Nenhuma alteração foi feita em `main`, produção ou banco real.
+
+Implementado no branch:
+- A rota de início recusa campanhas inativas e limites inválidos.
+- A elegibilidade exige qualificação explícita, público/tipo compatíveis, telefone normalizado, ausência de opt-out e cidade-alvo para B2B.
+- Os IDs dos vínculos são lidos do retorno do INSERT antes de criar a fila; falha de fila aciona limpeza compensatória dos vínculos recém-criados.
+- O worker bloqueia envio para lead com `opt_out_at`, vínculo pausado/terminal ou campanha inativa.
+- O responder grava opt-out em `opt_out_at` e usa `paused`, estado permitido pela restrição existente, verificando erros de persistência.
+- Nova migration adiciona `qualification_status` (`pending` por padrão), notas e timestamp; endpoint administrativo `PATCH /api/marketing/automation/leads/:id/qualification` registra a decisão com justificativa.
+- Adicionada função pura de elegibilidade e testes unitários para qualificação, opt-out, telefone, cidade, duplicidade, tipo e público.
+
+**Ainda pendente:** executar testes, lint/typecheck e build; validar migrations contra o schema efetivo; revisar a UI de Marketing para permitir a qualificação; confirmar o webhook/runtime ativo; testar associação inbound e falhas parciais. Não foi feito deploy nem aplicada migration a banco algum. O fluxo permanece bloqueado para leads sem qualificação explícita.
+
+**Status da fase:** implementação inicial registrada; NÃO marcar como concluída até CI e validação do contrato no runtime passarem.
