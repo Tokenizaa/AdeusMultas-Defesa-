@@ -53,7 +53,7 @@ export async function persistProspectingResponse(
 
   try {
     // 1. Encontra lead cujo phone/whatsapp (normalizado) == remetente
-    const { data: leads } = await client.from('marketing_leads').select('id, phone, whatsapp').limit(50);
+    const { data: leads } = await client.from('marketing_leads').select('id, phone, whatsapp, opt_out_at').limit(50);
     const leadList = Array.isArray(leads) ? leads : [];
     const lead = leadList.find(
       (l: any) => normalizeBrPhone(l.phone) === inboundPhone || normalizeBrPhone(l.whatsapp) === inboundPhone
@@ -140,14 +140,34 @@ export async function persistProspectingResponse(
       statusUpdated = true;
       logger.info('messaging', 'prospecting', 'opt_out', `Lead ${lead.id} solicitou opt-out. Automações canceladas.`);
     } else {
-      // Status responded — idempotente, sem downgrade de responded/converted/exhausted
-      if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
-        await client.from('marketing_lead_campaigns').update({ status: 'responded', updated_at: now }).eq('id', lc.id);
-        // Cancela follow-ups agendados porque o lead já respondeu
+      // An opted-out lead remains suppressed even if another inbound message arrives later.
+      if (lead.opt_out_at) {
         await client.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
-        statusUpdated = true;
+        logger.info('messaging', 'prospecting', 'opt_out_preserved', `Lead ${lead.id} já estava em opt-out; supressão mantida.`);
+      } else {
+        // Status responded — idempotente, sem downgrade de responded/converted/exhausted
+        if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
+          const { error: statusError } = await client
+            .from('marketing_lead_campaigns')
+            .update({ status: 'responded', updated_at: now })
+            .eq('id', lc.id);
+          const { error: queueError } = await client
+            .from('marketing_automation_queue')
+            .delete()
+            .eq('lead_campaign_id', lc.id);
+          if (statusError || queueError) {
+            logger.warn(
+              'messaging',
+              'prospecting',
+              'response_status_error',
+              `Falha ao atualizar status/cancelar fila do lead ${lead.id}: ${statusError?.message || queueError?.message}`
+            );
+            return { matched: true, messageInserted: inserted, statusUpdated: false };
+          }
+          statusUpdated = true;
+        }
+        logger.info('messaging', 'prospecting', 'responded', `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || 'whatsapp_evolution'}). Follow-ups pendentes cancelados.`);
       }
-      logger.info('messaging', 'prospecting', 'responded', `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || 'whatsapp_evolution'}). Follow-ups pendentes cancelados.`);
     }
 
     return { matched: true, messageInserted: inserted, statusUpdated };
