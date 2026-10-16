@@ -8,7 +8,7 @@ A área `/admin/payments` concentra pagamentos PIX, afiliados, comissões e stat
 
 - Cash In: `POST https://venopagments.com/api/cashin` com `X-Client-Id` e `X-Client-Secret`.
 - Split: `splits: [{ username, percentage }]`; percentual aplicado sobre o valor bruto.
-- Webhook: a VenoPag não assina callbacks. O endpoint usa token secreto na URL HTTPS e consulta o status oficial antes de alterar o pagamento; o payload do webhook sozinho nunca confirma pagamento.
+- Webhook: valida HMAC-SHA256 sobre o corpo bruto usando `X-Veno-Signature`, `X-Veno-Client-Id` e `VENO_WEBHOOK_SECRET`; rejeita assinaturas inválidas ou com timestamp fora de 5 minutos e consulta o status oficial antes de alterar o pagamento.
 - Reversões posteriores (`contested`, `chargedback`, `refunded`) precisam continuar refletidas no sistema.
 - A VenoPag informa que não existe sandbox público; testes E2E movimentam dinheiro real.
 
