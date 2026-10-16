@@ -5,6 +5,7 @@ import { scrapeWorker } from '../services/scrape-worker';
 import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
 import { configService } from '../config/config-service';
+import { isEligibleLeadForCampaign } from '../services/marketing-automation/eligibility';
 
 const router = Router();
 
@@ -324,14 +325,9 @@ router.post('/campaigns/:id/start', async (req, res) => {
       });
     }
 
-    const eligibleLeads = (leads || []).filter((lead: any) => {
-      if (existingLeadIds.has(lead.id) || lead.opt_out_at || !lead.phone_normalized) return false;
-      if (campaign.audience === 'B2B') {
-        const city = typeof lead.city === 'string' ? lead.city.trim().toLocaleLowerCase('pt-BR') : '';
-        if (!city || !targetCities.includes(city)) return false;
-      }
-      return true;
-    });
+    const eligibleLeads = (leads || []).filter((lead: any) =>
+      isEligibleLeadForCampaign(lead, campaign, existingLeadIds)
+    );
     const leadsToEnqueue = eligibleLeads.slice(0, Math.min(requestedLimit, remainingSlots));
 
     if (leadsToEnqueue.length === 0) {
