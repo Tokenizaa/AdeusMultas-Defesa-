@@ -80,7 +80,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: FileText,
       },
       {
-        label: 'Pagamentos (PagBank)',
+        label: 'Pagamentos & Afiliados (VenoPag)',
         path: '/admin/payments',
         icon: CreditCard,
       },
