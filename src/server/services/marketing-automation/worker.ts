@@ -175,13 +175,16 @@ export class MarketingAutomationWorker {
     // Fail closed: no outbound send for opt-outs, replied leads, inactive campaigns, or terminal links.
     const TERMINAL_OR_RESPONDED = ['responded', 'converted', 'exhausted', 'paused'];
     const leadOptedOut = Boolean(lead?.opt_out_at);
+    const leadNotQualified = lead?.qualification_status !== 'qualified';
     const campaignInactive = campaign?.status !== 'active';
-    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || campaignInactive) {
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || leadNotQualified || campaignInactive) {
       const reason = leadOptedOut
         ? 'lead opt-out'
-        : campaignInactive
-          ? `campaign status=${campaign?.status || 'missing'}`
-          : `lead campaign status=${lc.status}`;
+        : leadNotQualified
+          ? `lead qualification=${lead?.qualification_status || 'missing'}`
+          : campaignInactive
+            ? `campaign status=${campaign?.status || 'missing'}`
+            : `lead campaign status=${lc.status}`;
       logger.info(
         `Skipping outbound send for lead campaign ${lc.id}: ${reason}; cancelling queued follow-ups`,
         { module: 'worker', operation: 'handleSendMessage' }
