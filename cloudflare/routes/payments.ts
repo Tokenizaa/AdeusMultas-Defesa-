@@ -43,6 +43,86 @@ async function persistOrder(env: Env, input: { caseId: string; userId?: string; 
   return data;
 }
 
+async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?: unknown) {
+  const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : '';
+  if (!/^[A-Z0-9_-]{1,120}$/.test(code)) return;
+  const supabase = createSupabaseAdminClient(env);
+  const { data: referrer, error: referrerError } = await supabase
+    .from('user_profiles')
+    .select('user_id,referral_code')
+    .ilike('referral_code', code)
+    .limit(1)
+    .maybeSingle();
+  if (referrerError) throw referrerError;
+  if (!referrer?.user_id || String(referrer.user_id) === buyerUserId) return;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('referral_relations')
+    .select('id,referrer_id')
+    .eq('referred_id', buyerUserId)
+    .eq('level', 1)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return;
+
+  const { error: insertError } = await supabase.from('referral_relations').insert({
+    referrer_id: referrer.user_id,
+    referred_id: buyerUserId,
+    level: 1,
+    status: 'active',
+  });
+  if (insertError && insertError.code !== '23505') throw insertError;
+}
+
+async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string): Promise<Array<{ userId: string; level: number; username: string; percentage: number }>> {
+  const supabase = createSupabaseAdminClient(env);
+  const chain: Array<{ userId: string; level: number }> = [];
+  const seen = new Set<string>([buyerUserId]);
+  let currentBuyerId = buyerUserId;
+
+  for (let level = 1; level <= 3; level++) {
+    const { data: relation, error } = await supabase
+      .from('referral_relations')
+      .select('referrer_id,status')
+      .eq('referred_id', currentBuyerId)
+      .eq('level', 1)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    const referrerId = String(relation?.referrer_id || '');
+    if (!referrerId || seen.has(referrerId)) break;
+    seen.add(referrerId);
+    chain.push({ userId: referrerId, level });
+    currentBuyerId = referrerId;
+  }
+
+  if (!chain.length) return [];
+  const affiliateIds = chain.map((item) => item.userId);
+  const { data: profiles, error: profileError } = await supabase
+    .from('affiliate_gateway_profiles')
+    .select('user_id,venopag_username,split_percent,is_active')
+    .in('user_id', affiliateIds)
+    .eq('is_active', true);
+  if (profileError) throw profileError;
+
+  const levelByUser = new Map(chain.map((item) => [item.userId, item.level]));
+  const splits = (profiles || []).map((profile: any) => ({
+    userId: String(profile.user_id),
+    username: String(profile.venopag_username || '').trim(),
+    percentage: Number(profile.split_percent) || 0,
+    level: levelByUser.get(String(profile.user_id)) || 1,
+  })).filter((split: any) => split.username && split.percentage > 0)
+    .sort((a: any, b: any) => a.level - b.level);
+  const totalPercent = splits.reduce((sum: number, split: any) => sum + split.percentage, 0);
+  if (totalPercent > 100) {
+    throw new HTTPException(409, { message: 'A soma dos splits de afiliados ativos ultrapassa 100%. Ajuste os percentuais antes de gerar a cobrança.' });
+  }
+  return splits;
+}
+
 routes.get('/payments/resolve-price', async (c) => {
   try {
     const serviceType = c.req.query('serviceType');
@@ -113,13 +193,17 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
       throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
     }
     let venoOrder;
+    let affiliateSplits: Array<{ userId: string; level: number; username: string; percentage: number }> = [];
     try {
+      await registerReferralFromCode(c.env, user.id, body.referralCode);
+      affiliateSplits = await resolveVenoAffiliateSplits(c.env, user.id);
       venoOrder = await createVenoCashIn(c.env, {
         amountInCents: Math.round(Number(offer.finalAmount) * 100),
         payerName: payer.name,
         payerDocument: payer.document,
         description: `DefesAi - ${offer.name}`,
         webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
+        splits: affiliateSplits.map(({ username, percentage }) => ({ username, percentage })),
       });
     } catch (error) {
       const message = error instanceof Error && error.message
@@ -151,6 +235,29 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
         detail,
       });
       throw new HTTPException(502, { message: 'O gateway gerou a cobrança, mas o sistema não conseguiu registrá-la. Não tente novamente; suporte deve reconciliar a transação.' });
+    }
+    if (affiliateSplits.length) {
+      const now = new Date().toISOString();
+      const ledgerRows = affiliateSplits.map((split) => ({
+        payment_id: record.id,
+        case_id: caseId,
+        beneficiary_id: split.userId,
+        buyer_user_id: user.id,
+        level: split.level,
+        applied_percent: split.percentage,
+        base_amount: Number(offer.finalAmount),
+        commission_amount: Number((Number(offer.finalAmount) * split.percentage / 100).toFixed(2)),
+        status: 'PENDING',
+        created_at: now,
+      }));
+      const { error: ledgerError } = await createSupabaseAdminClient(c.env)
+        .from('commission_ledger')
+        .upsert(ledgerRows, { onConflict: 'payment_id,beneficiary_id,level', ignoreDuplicates: true });
+      if (ledgerError) {
+        // A gateway charge already exists. Do not invite the customer to pay again;
+        // log the reconciliation failure for the finance module instead.
+        console.error('[payments] affiliate commission ledger reconciliation required', { paymentOrderId: record.id, detail: ledgerError.message });
+      }
     }
     return c.json({
       success: true, order: venoOrder, paymentOrder: record,
@@ -321,15 +428,28 @@ routes.post('/webhooks/venopag', async (c) => {
     if (updateError) throw updateError;
     const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: existing.paid_at || now, updated_at: now }).eq('id', existing.case_id);
     if (caseError) throw caseError;
+    const { error: commissionError } = await supabase.from('commission_ledger').update({
+      status: 'PAID', paid_at: existing.paid_at || now,
+    }).eq('payment_id', existing.id);
+    if (commissionError) throw commissionError;
     return c.json({ received: true, matched: true, isDuplicate: alreadyPaid || !transitioned, status: 'PAID' });
   }
 
   const state = reversed ? 'REFUNDED' : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
     : currentStatus === 'pending' ? 'PENDING' : 'CANCELED';
+  const statusChangedAt = new Date().toISOString();
   const { error: updateError } = await supabase.from('payment_orders').update({
-    status: state, paid_at: null, updated_at: new Date().toISOString(),
+    status: state, paid_at: null, updated_at: statusChangedAt,
   }).eq('id', existing.id);
   if (updateError) throw updateError;
+  const wasPreviouslyPaid = String(existing.status).toUpperCase() === 'PAID' || Boolean(existing.paid_at);
+  const commissionUpdate = reversed || (state === 'CANCELED' && wasPreviouslyPaid)
+    ? { status: 'REVERSED', reversed_at: statusChangedAt, reversal_reason: currentStatus }
+    : state === 'CANCELED'
+      ? { status: 'CANCELLED', reversed_at: null, reversal_reason: currentStatus }
+      : { status: state === 'PENDING' ? 'PENDING' : 'CANCELLED' };
+  const { error: commissionError } = await supabase.from('commission_ledger').update(commissionUpdate).eq('payment_id', existing.id);
+  if (commissionError) throw commissionError;
   if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
     const { error: caseError } = await supabase.from('cases').update({ is_paid: false, paid_at: null, status: 'aguardando_pagamento', updated_at: new Date().toISOString() }).eq('id', existing.case_id);
     if (caseError) throw caseError;
