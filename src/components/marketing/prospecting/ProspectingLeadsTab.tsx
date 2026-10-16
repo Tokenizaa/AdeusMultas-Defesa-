@@ -39,6 +39,7 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
   const [pageSize, setPageSize] = useState<number>(20);
   const [page, setPage] = useState<number>(0);
   const [activeDrawerLead, setActiveDrawerLead] = useState<Lead | null>(null);
+  const [qualificationOverrides, setQualificationOverrides] = useState<Record<string, NonNullable<Lead['qualification_status']>>>({});
 
   // Extract distinct cities for dropdown
   const distinctCities = useMemo(() => {
@@ -294,6 +295,7 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
                 <th className="py-3 px-3 font-bold">E-mail</th>
                 <th className="py-3 px-3 font-bold">Website</th>
                 <th className="py-3 px-3 font-bold">Fonte</th>
+                <th className="py-3 px-3 font-bold">Qualificação</th>
                 <th className="py-3 px-3 font-bold">Data Coleta</th>
                 <th className="py-3 px-4 font-bold text-right">Ação</th>
               </tr>
@@ -301,7 +303,7 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
             <tbody className="divide-y divide-slate-800/60 font-sans">
               {paginatedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500">
+                  <td colSpan={11} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users className="w-8 h-8 text-slate-600" />
                       <span className="text-sm font-semibold">Nenhum lead encontrado com os filtros aplicados.</span>
@@ -415,6 +417,19 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
                       <td className="py-3 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
                         {lead.source || 'Google Maps'}
                       </td>
+                      {/* Marketing qualification */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {(() => {
+                          const status = qualificationOverrides[lead.id] ?? lead.qualification_status ?? 'pending';
+                          const styles = status === 'qualified'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : status === 'disqualified'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                          const label = status === 'qualified' ? 'Qualificado' : status === 'disqualified' ? 'Desqualificado' : 'Pendente';
+                          return <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${styles}`}>{label}</span>;
+                        })()}
+                      </td>
 
                       {/* Date */}
                       <td className="py-3 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
@@ -476,6 +491,12 @@ export const ProspectingLeadsTab: React.FC<ProspectingLeadsTabProps> = ({
       <ProspectingLeadDrawer
         lead={activeDrawerLead}
         onClose={() => setActiveDrawerLead(null)}
+        onLeadUpdated={(updated) => {
+          setQualificationOverrides((current) => ({
+            ...current,
+            [updated.id]: updated.qualification_status ?? 'pending',
+          }));
+        }}
       />
     </div>
   );
