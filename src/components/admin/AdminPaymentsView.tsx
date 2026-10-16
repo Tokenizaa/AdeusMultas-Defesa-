@@ -9,9 +9,10 @@ type Payment = {
   reference_id: string | null; paid_at: string | null; created_at: string; is_test?: boolean;
 };
 type Affiliate = {
-  userId: string; name: string; email: string; referrals: number; commissions: number;
+  userId: string; name: string; email: string; referralCode: string; referrals: number; commissions: number;
   venopagUsername: string; splitPercent: number; active: boolean; configured: boolean;
 };
+type AvailableUser = { userId: string; name: string; email: string; referralCode: string };
 type Commission = {
   id: string; beneficiary_id: string; buyer_user_id: string; level: number; base_amount: number;
   commission_amount: number; status: string; created_at: string; paid_at: string | null;
@@ -37,6 +38,11 @@ export const AdminPaymentsView: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [summary, setSummary] = useState({ revenue: 0, paid: 0, pending: 0, total: 0, refunded: 0 });
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<AvailableUser[]>([]);
+  const [newAffiliateUserId, setNewAffiliateUserId] = useState('');
+  const [newAffiliateUsername, setNewAffiliateUsername] = useState('');
+  const [newAffiliateSplit, setNewAffiliateSplit] = useState('10');
+  const [newAffiliateActive, setNewAffiliateActive] = useState(true);
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [gateway, setGateway] = useState<{ gateway: string; configured: boolean; environment: string } | null>(null);
   const [edits, setEdits] = useState<Record<string, { venopagUsername: string; splitPercent: string; active: boolean }>>({});
@@ -67,6 +73,7 @@ export const AdminPaymentsView: React.FC = () => {
       if (affiliateResult.ok) {
         const nextAffiliates: Affiliate[] = affiliateResult.body.affiliates || [];
         setAffiliates(nextAffiliates);
+        setAvailableUsers(affiliateResult.body.availableUsers || []);
         setEdits(Object.fromEntries(nextAffiliates.map((a) => [a.userId, {
           venopagUsername: a.venopagUsername || '',
           splitPercent: String(a.splitPercent ?? 0),
@@ -125,6 +132,36 @@ export const AdminPaymentsView: React.FC = () => {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar afiliado.');
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  const createAffiliate = async () => {
+    const percent = Number(newAffiliateSplit);
+    if (!newAffiliateUserId || !newAffiliateUsername.trim() || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+      setError('Selecione um usuário, informe o username VenoPag e um percentual entre 0 e 100.');
+      return;
+    }
+    setSavingId(newAffiliateUserId);
+    setError('');
+    setNotice('');
+    try {
+      const res = await authFetch(`/api/admin/payments/affiliates/${encodeURIComponent(newAffiliateUserId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venopagUsername: newAffiliateUsername.trim(), splitPercent: percent, active: newAffiliateActive }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error?.message || body?.message || 'Não foi possível cadastrar o afiliado.');
+      setNotice(`Afiliado cadastrado. Código de indicação: ${body.referralCode || 'gerado'}.`);
+      setNewAffiliateUserId('');
+      setNewAffiliateUsername('');
+      setNewAffiliateSplit('10');
+      setNewAffiliateActive(true);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao cadastrar afiliado.');
     } finally {
       setSavingId('');
     }
@@ -205,15 +242,32 @@ export const AdminPaymentsView: React.FC = () => {
         </section>
       </>}
 
-      {tab === 'affiliates' && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 p-4"><h2 className="font-semibold">Afiliados e splits VenoPag</h2><p className="mt-1 text-sm text-slate-500">Associe o usuário do programa ao username cadastrado na VenoPag. O split vale para novas cobranças que tenham indicação ativa.</p></div>
+      {tab === 'affiliates' && <>
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="font-semibold">Cadastrar afiliado</h2>
+          <p className="mt-1 text-sm text-slate-500">Selecione um usuário existente e vincule a conta beneficiária na VenoPag. O código de indicação é criado automaticamente quando necessário.</p>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <select aria-label="Usuário afiliado" value={newAffiliateUserId} onChange={(e) => setNewAffiliateUserId(e.target.value)} className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm md:col-span-2">
+              <option value="">Selecionar usuário…</option>
+              {availableUsers.filter((user) => !affiliates.some((affiliate) => affiliate.userId === user.userId)).map((user) => <option key={user.userId} value={user.userId}>{user.name || user.email || user.userId}{user.email ? ` — ${user.email}` : ''}</option>)}
+            </select>
+            <input aria-label="Username VenoPag" value={newAffiliateUsername} onChange={(e) => setNewAffiliateUsername(e.target.value)} placeholder="Username VenoPag" className="min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            <input aria-label="Percentual de split" type="number" min="0" max="100" step="0.1" value={newAffiliateSplit} onChange={(e) => setNewAffiliateSplit(e.target.value)} className="min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={newAffiliateActive} onChange={(e) => setNewAffiliateActive(e.target.checked)} /> Ativo</label>
+              <button disabled={loading || Boolean(savingId)} onClick={() => void createAffiliate()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50">Cadastrar</button>
+            </div>
+          </div>
+        </section>
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 p-4"><h2 className="font-semibold">Afiliados e splits VenoPag</h2><p className="mt-1 text-sm text-slate-500">Os splits se aplicam somente a novas cobranças associadas a códigos de indicação ativos.</p></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[950px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 font-medium">Afiliado</th><th className="px-4 py-3 font-medium">Indicações</th><th className="px-4 py-3 font-medium">Comissões registradas</th><th className="px-4 py-3 font-medium">Username VenoPag</th><th className="px-4 py-3 font-medium">Split %</th><th className="px-4 py-3 font-medium">Ativo</th><th className="px-4 py-3"></th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">Carregando afiliados…</td></tr>
               : affiliates.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">Nenhum afiliado encontrado nas relações de indicação existentes.</td></tr>
               : affiliates.map((a) => { const edit = edits[a.userId] || { venopagUsername: '', splitPercent: '0', active: false }; return <tr key={a.userId}>
-                <td className="px-4 py-3"><div className="font-medium">{a.name || 'Usuário sem nome'}</div><div className="text-xs text-slate-500">{a.email || a.userId}</div></td>
+                <td className="px-4 py-3"><div className="font-medium">{a.name || 'Usuário sem nome'}</div><div className="text-xs text-slate-500">{a.email || a.userId}</div><div className="mt-1 font-mono text-[11px] text-emerald-700">{a.referralCode || 'Código será criado ao salvar'}</div></td>
                 <td className="px-4 py-3 tabular-nums">{a.referrals}</td><td className="px-4 py-3 tabular-nums">{money(a.commissions)}</td>
                 <td className="px-4 py-3"><input value={edit.venopagUsername} onChange={(e) => setEdits((prev) => ({ ...prev, [a.userId]: { ...edit, venopagUsername: e.target.value } }))} placeholder="username VenoPag" className="w-44 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-emerald-600" /></td>
                 <td className="px-4 py-3"><input type="number" min="0" max="100" step="0.1" value={edit.splitPercent} onChange={(e) => setEdits((prev) => ({ ...prev, [a.userId]: { ...edit, splitPercent: e.target.value } }))} className="w-20 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-emerald-600" /></td>
@@ -223,7 +277,8 @@ export const AdminPaymentsView: React.FC = () => {
           </tbody>
         </table></div>
         <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">A VenoPag valida se o username existe e se a soma dos splits cabe no saldo líquido da cobrança. Configurar um afiliado não altera pagamentos já emitidos.</p>
-      </section>}
+        </section>
+      </>}
 
       {tab === 'commissions' && <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 p-4"><h2 className="font-semibold">Livro de comissões</h2><p className="mt-1 text-sm text-slate-500">Registros existentes de comissão; esta tela não marca repasses como pagos sem confirmação financeira.</p></div>
