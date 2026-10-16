@@ -202,7 +202,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
         payerName: payer.name,
         payerDocument: payer.document,
         description: `DefesAi - ${offer.name}`,
-        webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag?token=${encodeURIComponent(c.env.VENO_WEBHOOK_SECRET!)}`,
+        webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
         splits: affiliateSplits.map(({ username, percentage }) => ({ username, percentage })),
       });
     } catch (error) {
@@ -390,11 +390,13 @@ routes.post('/webhooks/ggpix', async (c) => {
 });
 
 routes.post('/webhooks/venopag', async (c) => {
-  const valid = verifyVenoWebhook(c.env, c.req.query('token') || null);
-  if (!valid) return c.json({ error: 'Webhook não autorizado.' }, 401);
+  const rawBody = await c.req.text();
+  const valid = await verifyVenoWebhook(
+    c.env, rawBody, c.req.header('x-veno-signature') || null, c.req.header('x-veno-client-id') || null,
+  );
+  if (!valid) return c.json({ error: 'Assinatura inválida.' }, 401);
 
   let event: { type?: string; status?: string; request_number?: string; transaction_id?: string; amount?: number };
-  const rawBody = await c.req.text();
   try { event = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
   if (event.type !== 'cashin' || !event.request_number || typeof event.status !== 'string') {
     return c.json({ received: true, ignored: true });
@@ -406,8 +408,8 @@ routes.post('/webhooks/venopag', async (c) => {
   if (error) throw error;
   if (!existing) return c.json({ received: true, matched: false });
 
-  // VenoPag webhooks are not signed. The unguessable URL token gates the endpoint,
-  // and the provider's own status endpoint is authoritative for every transition.
+  // Verify every transition against the provider, not only "confirmed". This
+  // prevents forged/stale reversal callbacks from changing a paid order.
   const verified = await getVenoCashInStatus(c.env, event.request_number);
   if (!verified.ok || !verified.status || verified.request_number !== event.request_number ||
       Math.round(Number(verified.amount) * 100) !== Math.round(Number(existing.amount) * 100)) {
