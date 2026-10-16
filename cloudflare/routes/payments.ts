@@ -49,10 +49,10 @@ async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
     .from('referral_relations')
     .select('referrer_id,level,status')
     .eq('referred_id', buyerUserId)
-    .eq('status', 'active')
-    .in('level', [1, 2, 3]);
+    .eq('status', 'active');
   if (relationError) throw relationError;
-  const affiliateIds = [...new Set((relations || []).map((r: any) => String(r.referrer_id)).filter(Boolean))];
+  const eligibleRelations = (relations || []).filter((r: any) => [1, 2, 3].includes(Number(r.level)));
+  const affiliateIds = [...new Set(eligibleRelations.map((r: any) => String(r.referrer_id)).filter(Boolean))];
   if (!affiliateIds.length) return [];
   const { data: profiles, error: profileError } = await supabase
     .from('affiliate_gateway_profiles')
@@ -61,7 +61,7 @@ async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
     .eq('is_active', true);
   if (profileError) throw profileError;
   const relationLevels = new Map<string, number>();
-  for (const relation of relations || []) {
+  for (const relation of eligibleRelations) {
     const id = String((relation as any).referrer_id);
     const level = Number((relation as any).level);
     if (!relationLevels.has(id) || level < relationLevels.get(id)!) relationLevels.set(id, level);
