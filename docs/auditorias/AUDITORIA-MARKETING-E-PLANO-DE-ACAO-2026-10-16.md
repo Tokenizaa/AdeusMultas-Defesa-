@@ -332,3 +332,63 @@ A diretriz se aplica ao fluxo de criação do Marketing. A Fase 1 deve mapear se
 - A remoção de segredos e do proxy ocorre somente após busca de referências, testes e validação do runtime de produção.
 
 **Ordem atualizada:** a Fase 1 inclui a auditoria de provedores e a confirmação das capacidades NVIDIA como requisito bloqueante. A Fase 2 só começa depois que o contrato de criação e o suporte real de cada modalidade estiverem definidos.
+
+
+## 8. Inventário de provedores e contratos — execução da Fase 1 (2026-10-16)
+
+**Status desta execução:** inventário estático ampliado no repositório. Não foram removidos secrets globais nem alterado o comportamento de produção. A aplicação tem consumidores de 9Router fora do Marketing; removê-lo globalmente sem migração quebraria fluxos alheios à criação de conteúdo.
+
+### 8.1 Onde 9Router/Ninerouter aparece e decisão por escopo
+
+| Área/arquivo | Uso encontrado | Decisão para a Fase 1 |
+|---|---|---|
+| `src/server/observability/ai-provider-manager.ts` | Cadeia de inferência jurídica NVIDIA → 9Router/Gemini/RAG | Fora do escopo de criação do Marketing; não apagar sem migração separada |
+| `src/server/knowledge/embedding-service.ts` | Embeddings/RAG com fallback para 9Router/Gemini/vetorização determinística | Fora do escopo do Marketing; preservar até existir substituição e teste de compatibilidade |
+| `src/server/config/config-service.ts` | Define `NINEROUTER_KEY`, URL/modelo, `AI_ENABLE_FALLBACK` e descrições de fallback | Não remover configuração global nesta fase; parar de usá-la especificamente no Marketing |
+| `deploy/index.mjs` | Proxy `/_9router/v1/*` com `NINEROUTER_UPSTREAM` | Não remover globalmente enquanto houver consumidores; verificar tráfego e rotas antes de retirar |
+| `agents/marketing-platform/AGENT.md` e documentação de Edge Functions | Instruções antigas orientam Marketing a usar combos 9Router | Atualizar diretriz e instruções do Marketing para NVIDIA direta; identificar e migrar funções de runtime uma por uma |
+| `.env.example.example`, `CLOUDFLARE.md` e documentos de verificação | Documentam credenciais/variáveis do 9Router | Marcar como legado/fora do fluxo de criação, não afirmar que a plataforma inteira já deixou de usar |
+| `src/server/routes/monitoring.ts`, `src/server/routes/admin.ts`, `src/server/observability/alerts-service.ts` | Exposição de saúde/métricas/alertas para o provedor | Não remover métricas globais nesta fase; o dashboard de Marketing não deve sugerir uso de 9Router na criação após a migração |
+
+A busca também retornou backups e documentos arquivados. Eles devem ser rotulados como histórico, não tratados como runtime atual. O inventário de busca do GitHub não garante exaustividade de chamadas dinâmicas, nomes de secrets no painel Cloudflare ou Edge Functions fora deste repositório.
+
+### 8.2 Provedor efetivo de mídia no código atual
+
+- `src/server/services/ai-media-service.ts` importa `@google/genai` e usa `GEMINI_API_KEY`; a geração de imagem tenta modelos Gemini Image e a geração de vídeo usa Veo. Portanto, o caminho legado de Marketing não está usando NVIDIA como provedora padrão.
+- `src/server/routes/media.ts` expõe rotas de compatibilidade `/api/generate-image`, `/api/generate-video`, `/api/video-status` e `/api/video-download`, além de rotas separadas `/api/media/image`, `/api/media/video` e jobs. Esses caminhos coexistem.
+- `MediaStudioView.tsx` e `ContentEditor.tsx` chamam as rotas de compatibilidade diretamente. Os dois implementam geração e polling separadamente.
+- `ContentEditor.tsx` usa URL pública de vídeo demonstrativo quando a resposta JSON não inclui `videoUrl`, podendo apresentar sucesso sem vídeo gerado real. O `persist` atual não inclui `attachedVideoUrl`.
+- O serviço de mídia mais novo (`src/server/media/*`) possui um roteador próprio de provedores; precisa ser lido integralmente antes de torná-lo o caminho canônico. Não é seguro presumir que seu provider padrão seja NVIDIA só pelo nome da configuração.
+
+### 8.3 Capacidade NVIDIA por modalidade: estado da evidência
+
+| Modalidade | Estado encontrado | Critério para implementação |
+|---|---|---|
+| Texto/copy | NVIDIA NIM está configurada para chat em `ai-provider-manager.ts`, mas a cadeia permite fallback global | Criar um caminho de Marketing explicitamente NVIDIA-only, sem chamar o manager que faz fallback |
+| Imagem | O serviço legado usa Gemini. A base URL NVIDIA já é usada para endpoints compatíveis com chat/embeddings, mas não foi executada uma chamada real de geração de imagem nesta auditoria | Validar endpoint/modelo de imagem NVIDIA suportado pela conta e pelo endpoint configurado; sem fallback para 9Router/Gemini |
+| Vídeo | O caminho atual usa Veo/Gemini; não foi encontrada prova no repositório de um endpoint NVIDIA de geração de vídeo disponível nesta conta | Não afirmar suporte nem trocar para um modelo presumido. Manter vídeo indisponível com erro explícito até a capacidade e o endpoint NVIDIA serem comprovados |
+| Embeddings | NVIDIA está configurada como primária, com fallbacks | Não faz parte da criação editorial; preservar fora do escopo |
+
+**Limite importante:** o código e a documentação não provam que a chave NVIDIA atualmente configurada tenha acesso a modelos de imagem/vídeo. Nenhuma credencial foi lida nem chamada externa foi feita nesta auditoria. Essa confirmação exige teste controlado do endpoint NVIDIA com a configuração de ambiente autorizada, sem registrar ou expor a chave.
+
+### 8.4 Plano executável da implementação subsequente
+
+1. Isolar a criação de texto do Marketing em um serviço que chama diretamente NVIDIA NIM; erro de autenticação, limite ou indisponibilidade deve ser exibido ao usuário, sem provider alternativo.
+2. Validar geração de imagem com um modelo NVIDIA efetivamente disponível. Só habilitar botão e fluxo após resposta real de imagem e teste de persistência; remover fallback SVG e Gemini do fluxo Marketing.
+3. Não habilitar geração de vídeo até confirmar endpoint/modelo NVIDIA compatível. Remover vídeo demonstrativo do caminho de sucesso e retornar mensagem explícita de recurso indisponível se não houver suporte comprovado.
+4. Consolidar as duas telas para um contrato canônico, priorizando as rotas Cloudflare efetivamente implantadas; as rotas Express de compatibilidade não podem ser consideradas produção sem confirmação do roteamento.
+5. Adicionar testes para: NVIDIA como único provider; ausência de fallback; falha sem sucesso falso; persistência da mídia; nenhuma URL de demonstração; e nenhuma chamada de criação Marketing para `/_9router/v1`.
+6. Só retirar proxy/secrets globais quando o inventário de consumidores não relacionados ao Marketing estiver migrado e os testes confirmarem ausência de uso.
+
+### 8.5 Critério de conclusão da Fase 1
+
+- [x] Localizar referências de 9Router/Ninerouter e separar uso global de uso Marketing.
+- [x] Identificar o provedor efetivo no caminho legado de mídia.
+- [x] Registrar divergência entre rotas de compatibilidade e rotas do serviço de mídia novo.
+- [x] Definir NVIDIA-only para criação de conteúdo Marketing e proibir fallbacks silenciosos.
+- [ ] Validar modelo/endpoints NVIDIA com ambiente real autorizado.
+- [ ] Confirmar roteamento ativo no Cloudflare de produção e eventuais consumidores em Supabase Edge Functions.
+- [ ] Executar smoke test controlado sem publicar conteúdo nem enviar mensagens.
+- [ ] Com essas validações, implementar e testar o caminho canônico em fase funcional separada.
+
+**Conclusão:** o inventário de código está documentado. A fase de diagnóstico operacional ainda não está integralmente concluída porque não houve acesso de runtime às configurações/rotas produtivas nem chamada de teste ao endpoint NVIDIA. Não remover credenciais globais ou declarar vídeo NVIDIA suportado antes dessas validações.
