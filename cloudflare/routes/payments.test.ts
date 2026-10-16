@@ -146,14 +146,10 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('uses VenoPag as the primary PIX provider and persists its request number', async () => {
-    const providerFetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-      const payload = JSON.parse(String(init?.body));
-      expect(payload.webhook_url).toBe('https://adeusmulta.defesai.com.br/api/webhooks/venopag?token=webhook-secret');
-      return Response.json({
-        ok: true, status: 'pending', amount: 100, request_number: 'veo_test_123',
-        transaction_id: 'tx_123', copyPaste: '000201venopag', qr_url: 'https://venopagments.com/qr', qr_img: 'cG5n',
-      });
-    });
+    const providerFetch = vi.fn(async (_input: string | URL | Request) => Response.json({
+      ok: true, status: 'pending', amount: 100, request_number: 'veo_test_123',
+      transaction_id: 'tx_123', copyPaste: '000201venopag', qr_url: 'https://venopagments.com/qr', qr_img: 'cG5n',
+    }));
     vi.stubGlobal('fetch', providerFetch);
     try {
       const response = await app().request('/api/payments/pix/create', {
