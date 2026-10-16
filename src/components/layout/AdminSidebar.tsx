@@ -47,7 +47,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     'Visão Geral': true,
-    'Testes & Qualidade': true,
     'Operação': true,
     'Crescimento': false,
     'Inteligência': false,
