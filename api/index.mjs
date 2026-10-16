@@ -917,6 +917,201 @@ var init_google_maps_scraper = __esm({
   }
 });
 
+// src/scraper-prospecting/sources/firecrawl.ts
+var FIRECRAWL_API_BASE, FirecrawlSource;
+var init_firecrawl = __esm({
+  "src/scraper-prospecting/sources/firecrawl.ts"() {
+    init_logger();
+    FIRECRAWL_API_BASE = "https://api.firecrawl.dev/v2";
+    FirecrawlSource = class {
+      constructor(apiKey) {
+        this.blocked = false;
+        this.apiKey = apiKey;
+      }
+      async search(query, location, limit = 10) {
+        const result = {
+          source: "firecrawl",
+          query: `${query} ${location}`,
+          location,
+          totalFound: 0,
+          inserted: 0,
+          filled: 0,
+          duplicates: 0,
+          completeDuplicates: 0,
+          rejected: 0,
+          errors: [],
+          leads: []
+        };
+        if (this.blocked) {
+          result.errors.push("Firecrawl blocked previously.");
+          return result;
+        }
+        if (!this.apiKey) {
+          result.errors.push("Firecrawl API key not configured.");
+          this.blocked = true;
+          return result;
+        }
+        try {
+          const searchQuery = `${query} ${location} despachante ou advogado tr\xE2nsito`;
+          const response = await fetch(`${FIRECRAWL_API_BASE}/search`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              query: searchQuery,
+              limit: Math.min(limit, 10),
+              // Firecrawl limit per request
+              sources: ["web"]
+            })
+          });
+          if (!response.ok) {
+            if (response.status === 429) {
+              result.errors.push("Firecrawl rate limit exceeded.");
+              this.blocked = true;
+            } else if (response.status === 401 || response.status === 403) {
+              result.errors.push("Firecrawl API key invalid or missing permissions.");
+              this.blocked = true;
+            } else {
+              result.errors.push(`Firecrawl request failed with status ${response.status}`);
+            }
+            return result;
+          }
+          const payload = await response.json();
+          if (!payload.success || !payload.data) {
+            result.errors.push("Invalid response from Firecrawl.");
+            return result;
+          }
+          const webResults = payload.data.web || [];
+          result.totalFound = webResults.length;
+          logger2.info("Firecrawl results found", { count: webResults.length });
+          for (let i = 0; i < Math.min(webResults.length, limit); i++) {
+            const item = webResults[i];
+            try {
+              const lead = this.extractLead(item);
+              if (lead) {
+                result.leads.push(lead);
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Error extracting lead from Firecrawl result";
+              result.errors.push(message);
+            }
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error in Firecrawl search";
+          logger2.error("Firecrawl search failed", { error: message });
+          result.errors.push(message);
+          this.blocked = true;
+        }
+        return result;
+      }
+      extractLead(item) {
+        const { title, url: url2, description } = item;
+        if (!title || !url2) {
+          return null;
+        }
+        let name = title.trim();
+        name = name.replace(/ - .*$/, "");
+        name = name.replace(/\s*\|\s*.*$/, "");
+        if (name.length > 100) {
+          name = name.substring(0, 100);
+        }
+        const lead = {
+          name,
+          sourceUrl: url2,
+          website: this.extractWebsiteFromUrl(url2),
+          description: description?.substring(0, 1e3) || ""
+        };
+        const phoneMatch = description.match(
+          /(?:\+55\s*)?\(?\d{2}\)?[\s\-]?\d{4,5}[\s\-]?\d{4}/
+        );
+        if (phoneMatch) {
+          lead.phone = phoneMatch[0];
+        }
+        const emailMatch = description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch) {
+          lead.email = emailMatch[0];
+        }
+        const haystack = `${title} ${description}`.toLowerCase();
+        if (haystack.includes("despachante") || haystack.includes("documentalista") || haystack.includes("detran") || haystack.includes("ve\xEDculo") || haystack.includes("cnh") || haystack.includes("licenciamento")) {
+          lead.category = "despachante de tr\xE2nsito";
+        } else if (haystack.includes("advogado") || haystack.includes("direito de tr\xE2nsito") || haystack.includes("defesa de multa") || haystack.includes("suspens\xE3o cnh") || haystack.includes("cassa\xE7\xE3o cnh") || haystack.includes("tr\xE2nsito")) {
+          lead.category = "advogado direito de tr\xE2nsito";
+        }
+        if (!lead.category) {
+          const nameLower = name.toLowerCase();
+          if (nameLower.includes("despachante") || nameLower.includes("documentalista") || nameLower.includes("detran") || nameLower.includes("ve\xEDculo") || nameLower.includes("cnh") || nameLower.includes("licenciamento")) {
+            lead.category = "despachante de tr\xE2nsito";
+          } else if (nameLower.includes("advogado") || nameLower.includes("direito de tr\xE2nsito") || nameLower.includes("defesa de multa") || nameLower.includes("suspens\xE3o cnh") || nameLower.includes("cassa\xE7\xE3o cnh") || nameLower.includes("tr\xE2nsito")) {
+            lead.category = "advogado direito de tr\xE2nsito";
+          }
+        }
+        return lead;
+      }
+      extractWebsiteFromUrl(url2) {
+        try {
+          const parsed = new URL(url2);
+          return `${parsed.protocol}//${parsed.host}`;
+        } catch {
+          return null;
+        }
+      }
+    };
+  }
+});
+
+// src/scraper-prospecting/firecrawl-scraper.ts
+var FirecrawlScraper;
+var init_firecrawl_scraper = __esm({
+  "src/scraper-prospecting/firecrawl-scraper.ts"() {
+    init_firecrawl();
+    init_logger();
+    FirecrawlScraper = class {
+      constructor(apiKey, callbacks) {
+        this.blocked = false;
+        this.source = new FirecrawlSource(apiKey);
+      }
+      async search(query, location, limit, seenKeys) {
+        const result = {
+          query: `${query} ${location}`,
+          location,
+          totalFound: 0,
+          inserted: 0,
+          filled: 0,
+          duplicates: 0,
+          completeDuplicates: 0,
+          rejected: 0,
+          errors: [],
+          leads: []
+        };
+        if (this.blocked) {
+          result.errors.push("Firecrawl blocked previously.");
+          return result;
+        }
+        try {
+          const scrapeResult = await this.source.search(query, location, limit);
+          result.totalFound = scrapeResult.totalFound;
+          result.leads = scrapeResult.leads;
+          result.errors = scrapeResult.errors;
+          return result;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error in Firecrawl scraper";
+          logger2.error("Firecrawl scraper failed", { error: message });
+          result.errors.push(message);
+          this.blocked = true;
+          return result;
+        }
+      }
+      // Close method for compatibility with the scraper interface
+      // Firecrawl doesn't maintain persistent connections that need cleanup
+      async close() {
+        return;
+      }
+    };
+  }
+});
+
 // src/scraper-prospecting/persister.ts
 var persister_exports = {};
 __export(persister_exports, {
@@ -1259,7 +1454,15 @@ async function runScrapeAsJob(config, callbacks = {}, collectionRunId) {
   };
   try {
     await session.start();
-    scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    let apiKey = process.env.FIRECRAWL_API_KEY;
+    if (config.source === "firecrawl") {
+      if (!apiKey) {
+        throw new Error("FIRECRAWL_API_KEY not configured");
+      }
+      scraper = new FirecrawlScraper(apiKey, scraperCallbacks);
+    } else {
+      scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    }
     for (const q of config.queries) {
       for (const loc of locations) {
         if (cancelled || callbacks.onCheckCancel?.()) {
@@ -1297,7 +1500,15 @@ async function runScrapeAsJob(config, callbacks = {}, collectionRunId) {
               try {
                 await scraper.close();
                 await session.start();
-                scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                let apiKey2 = process.env.FIRECRAWL_API_KEY;
+                if (config.source === "firecrawl") {
+                  if (!apiKey2) {
+                    throw new Error("FIRECRAWL_API_KEY not configured");
+                  }
+                  scraper = new FirecrawlScraper(apiKey2, scraperCallbacks);
+                } else {
+                  scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                }
                 callbacks.onDriverCrash?.();
               } catch (restartErr) {
                 logger2.error("Falha ao reiniciar driver", { error: restartErr instanceof Error ? restartErr.message : restartErr });
@@ -1432,6 +1643,7 @@ var init_persister = __esm({
     init_logger();
     init_session();
     init_google_maps_scraper();
+    init_firecrawl_scraper();
     FILLABLE_COLUMNS = [
       "phone",
       "phone_normalized",
@@ -8972,7 +9184,7 @@ async function persistProspectingResponse(incoming, client = getSupabaseServerCl
   const inboundPhone = normalizeBrPhone(incoming.externalContactId);
   if (!inboundPhone) return none;
   try {
-    const { data: leads } = await client.from("marketing_leads").select("id, phone, whatsapp").limit(50);
+    const { data: leads } = await client.from("marketing_leads").select("id, phone, whatsapp, opt_out_at").limit(50);
     const leadList = Array.isArray(leads) ? leads : [];
     const lead = leadList.find(
       (l) => normalizeBrPhone(l.phone) === inboundPhone || normalizeBrPhone(l.whatsapp) === inboundPhone
@@ -9010,18 +9222,41 @@ async function persistProspectingResponse(incoming, client = getSupabaseServerCl
     const isOptOut = /^(sair|parar|stop|descadastrar|cancelar|não quero|nao quero|remover|optout|opt-out)$/i.test(textLower) || /(quero sair|me tire|pare de enviar|não me mande|nao me mande)/i.test(textLower);
     let statusUpdated = false;
     if (isOptOut) {
-      await client.from("marketing_leads").update({ status: "opt_out", updated_at: now }).eq("id", lead.id);
-      await client.from("marketing_lead_campaigns").update({ status: "opt_out", updated_at: now }).eq("id", lc.id);
-      await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+      const { error: leadUpdateError } = await client.from("marketing_leads").update({ opt_out_at: now, updated_at: now }).eq("id", lead.id);
+      const { error: linkUpdateError } = await client.from("marketing_lead_campaigns").update({ status: "paused", updated_at: now }).eq("id", lc.id);
+      const { error: queueDeleteError } = await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+      if (leadUpdateError || linkUpdateError || queueDeleteError) {
+        logger.warn(
+          "messaging",
+          "prospecting",
+          "opt_out_persistence_error",
+          `Falha ao persistir/cancelar opt-out do lead ${lead.id}: ${leadUpdateError?.message || linkUpdateError?.message || queueDeleteError?.message}`
+        );
+        return { matched: true, messageInserted: inserted, statusUpdated: false };
+      }
       statusUpdated = true;
       logger.info("messaging", "prospecting", "opt_out", `Lead ${lead.id} solicitou opt-out. Automa\xE7\xF5es canceladas.`);
     } else {
-      if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
-        await client.from("marketing_lead_campaigns").update({ status: "responded", updated_at: now }).eq("id", lc.id);
+      if (lead.opt_out_at) {
         await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
-        statusUpdated = true;
+        logger.info("messaging", "prospecting", "opt_out_preserved", `Lead ${lead.id} j\xE1 estava em opt-out; supress\xE3o mantida.`);
+      } else {
+        if (!RESPONDED_OR_BEYOND.includes(lc.status)) {
+          const { error: statusError } = await client.from("marketing_lead_campaigns").update({ status: "responded", updated_at: now }).eq("id", lc.id);
+          const { error: queueError } = await client.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
+          if (statusError || queueError) {
+            logger.warn(
+              "messaging",
+              "prospecting",
+              "response_status_error",
+              `Falha ao atualizar status/cancelar fila do lead ${lead.id}: ${statusError?.message || queueError?.message}`
+            );
+            return { matched: true, messageInserted: inserted, statusUpdated: false };
+          }
+          statusUpdated = true;
+        }
+        logger.info("messaging", "prospecting", "responded", `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || "whatsapp_evolution"}). Follow-ups pendentes cancelados.`);
       }
-      logger.info("messaging", "prospecting", "responded", `Lead ${lead.id} marcado como responded (inbound ${incoming.channel || "whatsapp_evolution"}). Follow-ups pendentes cancelados.`);
     }
     return { matched: true, messageInserted: inserted, statusUpdated };
   } catch (err) {
@@ -32440,12 +32675,18 @@ var MarketingAutomationWorker = class _MarketingAutomationWorker {
     }
     const lead = lc.lead;
     const campaign = lc.campaign;
-    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "opt_out", "paused"];
-    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === "opt_out") {
+    const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "paused"];
+    const leadOptedOut = Boolean(lead?.opt_out_at);
+    const campaignInactive = campaign?.status !== "active";
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || campaignInactive) {
+      const reason = leadOptedOut ? "lead opt-out" : campaignInactive ? `campaign status=${campaign?.status || "missing"}` : `lead campaign status=${lc.status}`;
       logger2.info(
-        `Lead campaign ${lc.id} status=${lc.status} (lead=${lead?.status}) \u2014 skipping outbound send and cancelling follow-ups`,
+        `Skipping outbound send for lead campaign ${lc.id}: ${reason}; cancelling queued follow-ups`,
         { module: "worker", operation: "handleSendMessage" }
       );
+      if (leadOptedOut && lc.status !== "paused") {
+        await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "paused", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", lc.id);
+      }
       await supabaseAdmin.from("marketing_automation_queue").delete().eq("lead_campaign_id", lc.id);
       return;
     }
@@ -33001,8 +33242,23 @@ async function generateLeadsXlsx(leads, options = {}) {
   return buffer;
 }
 
+// src/server/services/marketing-automation/eligibility.ts
+function isEligibleLeadForCampaign(lead, campaign, existingLeadIds) {
+  if (!lead.id || existingLeadIds.has(lead.id)) return false;
+  if (lead.lead_type !== campaign.lead_type || lead.audience !== campaign.audience) return false;
+  if (lead.qualification_status !== "qualified") return false;
+  if (!lead.phone_normalized?.trim() || lead.opt_out_at) return false;
+  if (campaign.audience === "B2B") {
+    const city = typeof lead.city === "string" ? lead.city.trim().toLocaleLowerCase("pt-BR") : "";
+    const targetCities = Array.isArray(campaign.target_cities) ? campaign.target_cities.filter((value) => typeof value === "string").map((value) => value.trim().toLocaleLowerCase("pt-BR")).filter(Boolean) : [];
+    if (!city || !targetCities.includes(city)) return false;
+  }
+  return true;
+}
+
 // src/server/routes/marketing-automation.ts
 var router13 = Router13();
+router13.use(authenticateToken, requireAdmin);
 router13.get("/status", async (_req, res) => {
   try {
     const status = await marketingAutomationWorker.getStatus();
@@ -33205,51 +33461,83 @@ router13.patch("/campaigns/:id", async (req, res) => {
   }
 });
 router13.post("/campaigns/:id/start", async (req, res) => {
+  let insertedLeadCampaignIds = [];
   try {
     const { id } = req.params;
-    const { limit = 20 } = req.body;
+    const requestedLimit = req.body?.limit ?? 20;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+      return res.status(400).json({ error: "limit deve ser um inteiro entre 1 e 100" });
+    }
     const { data: campaign, error: campaignError } = await supabaseAdmin.from("marketing_campaigns").select("*").eq("id", id).single();
     if (campaignError || !campaign) {
       return res.status(404).json({ error: "Campanha n\xE3o encontrada" });
     }
-    const leadQuery = supabaseAdmin.from("marketing_leads").select("*").eq("lead_type", campaign.lead_type).eq("audience", campaign.audience).not("phone_normalized", "is", null).limit(limit);
-    const { data: leads, error: leadsError } = await leadQuery;
-    if (leadsError) throw leadsError;
-    const { data: existingLinks } = await supabaseAdmin.from("marketing_lead_campaigns").select("lead_id").eq("campaign_id", id);
-    const existingLeadIds = new Set((existingLinks || []).map((l) => l.lead_id));
-    const newLeads = (leads || []).filter((l) => !existingLeadIds.has(l.id));
-    const maxContacts = campaign.max_contacts || 3;
-    const existingCount = existingLeadIds.size;
-    const remainingSlots = Math.max(0, maxContacts - existingCount);
-    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
-    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
+    if (campaign.status !== "active") {
+      return res.status(409).json({ error: "Campanha n\xE3o est\xE1 ativa; ativar antes de iniciar." });
+    }
+    const maxContacts = Number(campaign.max_contacts) || 3;
+    const { data: existingLinks, error: linksError } = await supabaseAdmin.from("marketing_lead_campaigns").select("lead_id").eq("campaign_id", id);
+    if (linksError) throw linksError;
+    const existingLeadIds = new Set((existingLinks || []).map((link) => link.lead_id));
+    const remainingSlots = Math.max(0, maxContacts - existingLeadIds.size);
+    if (remainingSlots === 0) {
       return res.json({
         success: true,
         enqueued: 0,
         campaign: campaign.name,
+        remainingSlots: 0,
         message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
       });
     }
-    const leadCampaigns = leadsToEnqueue.map((lead) => ({
+    const { data: leads, error: leadsError } = await supabaseAdmin.from("marketing_leads").select("id, lead_type, audience, qualification_status, phone_normalized, city, opt_out_at").eq("lead_type", campaign.lead_type).eq("audience", campaign.audience).eq("qualification_status", "qualified").not("phone_normalized", "is", null).is("opt_out_at", null).limit(500);
+    if (leadsError) throw leadsError;
+    const targetCities = Array.isArray(campaign.target_cities) ? campaign.target_cities.filter((city) => typeof city === "string").map((city) => city.trim().toLocaleLowerCase("pt-BR")).filter(Boolean) : [];
+    if (campaign.audience === "B2B" && targetCities.length === 0) {
+      return res.status(409).json({
+        error: "Campanha B2B sem cidades-alvo v\xE1lidas; nenhum lead foi enfileirado."
+      });
+    }
+    const eligibleLeads = (leads || []).filter(
+      (lead) => isEligibleLeadForCampaign(lead, campaign, existingLeadIds)
+    );
+    const leadsToEnqueue = eligibleLeads.slice(0, Math.min(requestedLimit, remainingSlots));
+    if (leadsToEnqueue.length === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
+        campaign: campaign.name,
+        remainingSlots,
+        message: "Nenhum lead eleg\xEDvel novo encontrado para os crit\xE9rios desta campanha."
+      });
+    }
+    const leadCampaignRows = leadsToEnqueue.map((lead) => ({
       lead_id: lead.id,
       campaign_id: id,
       status: "queued",
       current_step: 0,
       contact_count: 0
     }));
-    if (leadCampaigns.length > 0) {
-      const { error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").insert(leadCampaigns);
-      if (lcError) throw lcError;
+    const { data: insertedLinks, error: lcError } = await supabaseAdmin.from("marketing_lead_campaigns").insert(leadCampaignRows).select("id, lead_id");
+    if (lcError) throw lcError;
+    const createdLinks = insertedLinks || [];
+    insertedLeadCampaignIds = createdLinks.map((link) => link.id).filter(Boolean);
+    if (createdLinks.length !== leadsToEnqueue.length || insertedLeadCampaignIds.length !== leadsToEnqueue.length) {
+      throw new Error("N\xE3o foi poss\xEDvel recuperar todos os IDs dos v\xEDnculos criados; fila n\xE3o iniciada.");
     }
-    const queues = leadsToEnqueue.map((lead) => ({
-      lead_campaign_id: leadCampaigns.find((lc) => lc.lead_id === lead.id)?.id,
+    const queues = createdLinks.map((link) => ({
+      lead_campaign_id: link.id,
       action: "send_message",
       scheduled_at: (/* @__PURE__ */ new Date()).toISOString(),
       max_attempts: 3
-    })).filter((q) => q.lead_campaign_id);
-    if (queues.length > 0) {
-      const { error: qError } = await supabaseAdmin.from("marketing_automation_queue").insert(queues);
-      if (qError) throw qError;
+    }));
+    const { error: queueError } = await supabaseAdmin.from("marketing_automation_queue").insert(queues);
+    if (queueError) {
+      const { error: cleanupError } = await supabaseAdmin.from("marketing_lead_campaigns").delete().in("id", insertedLeadCampaignIds);
+      if (cleanupError) {
+        throw new Error(`Falha ao criar fila (${queueError.message}) e ao limpar v\xEDnculos (${cleanupError.message})`);
+      }
+      insertedLeadCampaignIds = [];
+      throw queueError;
     }
     res.json({
       success: true,
@@ -33258,6 +33546,9 @@ router13.post("/campaigns/:id/start", async (req, res) => {
       remainingSlots: remainingSlots - queues.length
     });
   } catch (err) {
+    if (insertedLeadCampaignIds.length > 0) {
+      await supabaseAdmin.from("marketing_lead_campaigns").delete().in("id", insertedLeadCampaignIds);
+    }
     res.status(500).json({ error: "Falha ao iniciar campanha", message: err.message });
   }
 });
@@ -33355,6 +33646,50 @@ router13.get("/leads", async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: "Falha ao buscar leads", message: err.message });
+  }
+});
+router13.patch("/leads/:id/qualification", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { qualification_status, qualification_notes } = req.body || {};
+    const allowedStatuses = ["pending", "qualified", "disqualified"];
+    if (!allowedStatuses.includes(qualification_status)) {
+      return res.status(400).json({
+        error: "qualification_status deve ser pending, qualified ou disqualified"
+      });
+    }
+    const notes = typeof qualification_notes === "string" ? qualification_notes.trim() : "";
+    if (qualification_status === "qualified" && notes.length < 20) {
+      return res.status(400).json({
+        error: "Para qualificar um lead, registre uma justificativa com pelo menos 20 caracteres."
+      });
+    }
+    if (qualification_status === "disqualified" && notes.length < 10) {
+      return res.status(400).json({
+        error: "Para desqualificar um lead, registre o motivo com pelo menos 10 caracteres."
+      });
+    }
+    const { data: existingLead, error: lookupError } = await supabaseAdmin.from("marketing_leads").select("id, opt_out_at").eq("id", id).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!existingLead) return res.status(404).json({ error: "Lead n\xE3o encontrado" });
+    if (existingLead.opt_out_at && qualification_status === "qualified") {
+      return res.status(409).json({ error: "Lead com opt-out n\xE3o pode ser qualificado para contato." });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const { data, error } = await supabaseAdmin.from("marketing_leads").update({
+      qualification_status,
+      qualification_notes: notes || null,
+      qualified_at: qualification_status === "qualified" ? now : null,
+      updated_at: now
+    }).eq("id", id).select("id, name, audience, lead_type, qualification_status, qualification_notes, qualified_at, opt_out_at").maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Lead n\xE3o encontrado" });
+    res.json({ success: true, lead: data });
+  } catch (err) {
+    res.status(500).json({
+      error: "Falha ao atualizar qualifica\xE7\xE3o do lead",
+      message: err.message
+    });
   }
 });
 router13.get("/leads/:id", async (req, res) => {

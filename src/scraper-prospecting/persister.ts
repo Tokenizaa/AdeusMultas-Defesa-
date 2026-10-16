@@ -6,6 +6,7 @@ import { buildSeenKeys } from './seen-filter';
 import { logger } from './logger';
 import { SeleniumSession } from './selenium/session';
 import { GoogleMapsSeleniumScraper } from './selenium/google-maps-scraper';
+import { FirecrawlScraper } from './firecrawl-scraper';
 
 export interface PersistResult {
   inserted: number;
@@ -433,7 +434,7 @@ export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCal
     ],
   });
 
-  let scraper: GoogleMapsSeleniumScraper | null = null;
+  let scraper: GoogleMapsSeleniumScraper | FirecrawlScraper | null = null;
   let cancelled = false;
 
   // Montar lista de locations a partir de cities ou states
@@ -528,7 +529,15 @@ export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCal
 
   try {
     await session.start();
-    scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    let apiKey = process.env.FIRECRAWL_API_KEY;
+    if (config.source === 'firecrawl') {
+      if (!apiKey) {
+        throw new Error('FIRECRAWL_API_KEY not configured');
+      }
+      scraper = new FirecrawlScraper(apiKey, scraperCallbacks);
+    } else {
+      scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+    }
 
     for (const q of config.queries) {
       for (const loc of locations) {
@@ -578,7 +587,15 @@ export async function runScrapeAsJob(config: SearchConfig, callbacks: ScraperCal
               try {
                 await scraper.close();
                 await session.start();
-                scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                let apiKey = process.env.FIRECRAWL_API_KEY;
+                if (config.source === 'firecrawl') {
+                  if (!apiKey) {
+                    throw new Error('FIRECRAWL_API_KEY not configured');
+                  }
+                  scraper = new FirecrawlScraper(apiKey, scraperCallbacks);
+                } else {
+                  scraper = new GoogleMapsSeleniumScraper(session, scraperCallbacks);
+                }
                 callbacks.onDriverCrash?.();
               } catch (restartErr) {
                 logger.error('Falha ao reiniciar driver', { error: restartErr instanceof Error ? restartErr.message : restartErr });

@@ -4,7 +4,7 @@
 - **Data:** 2026-10-16
 - **Escopo:** módulo de Prospecção B2B do Adeus Multas
 - **Repositório:** `Tokenizaa/AdeusMultas-Defesa-`
-- **Branch de trabalho:** `main`
+- **Branch de trabalho:** `codex/firecrawl-phase1`
 - **Dependências externas:** Firecrawl API; Supabase já utilizado pelo módulo
 
 ## 1. Contexto e evidências da auditoria
@@ -134,7 +134,7 @@ Não estabelecer metas numéricas definitivas antes de medir a linha de base atu
 
 ## 9. Regras de execução e segurança de mudanças
 
-- Trabalhar diretamente em `main`, sem criar branches ou PRs.
+- Trabalhar na branch `codex/firecrawl-phase1`, mantendo o trabalho isolado das alterações não relacionadas do agente local.
 - Antes de alterar código, reconciliar estado local, `origin/main`, alterações não commitadas e commits locais; não usar reset destrutivo, `git clean` ou force push.
 - Concluir uma fase inteira, documentar evidências e resultados, e só então avançar.
 - Manter as alterações focadas; não sobrescrever trabalho não relacionado.
@@ -170,10 +170,12 @@ Antes da implementação, confirmar os endpoints, parâmetros, autenticação, l
 
 ### Validação e limitações
 
-- **Testes adicionados, execução pendente:** esta sessão não tem um checkout local executável nem acesso para rodar `npm run test:unit`/typecheck no ambiente do projeto. Não marcar a Fase 1 como totalmente aprovada até o CI ou o agente local executar os testes e corrigir eventuais falhas.
-- **Busca real pendente:** o conector Firecrawl desta sessão informou falta de créditos para buscar a documentação ao vivo. A implementação usa o contrato documentado da API v2 Search, mas a prova com a credencial do Worker ainda precisa ser executada pela rota administrativa.
-- **Secret de produção não verificado:** a existência/configuração de `FIRECRAWL_API_KEY` no Cloudflare não pôde ser confirmada nesta sessão. A ausência da variável deve resultar em HTTP 503, sem persistência ou outreach.
-- Não houve deploy, execução de campanha, envio de mensagens nem escrita no Supabase.
+- **Testes unitários executados:** `npm run test:unit` passou com 89 arquivos aprovados, 848 testes aprovados e 7 falhas esperadas.
+- **Testes específicos do Firecrawl:** `npx vitest run cloudflare/routes/firecrawl-prospecting.test.ts` passou com 5/5 testes, incluindo validação de consulta, limite de resultados, normalização, throttling e ausência de vazamento do corpo do provedor.
+- **Typecheck geral:** a execução mais recente de `npm run lint` foi bloqueada por dois erros em `src/server/routes/media.ts` (chamada e retorno de `generateWeeklySchedule`). A implementação correspondente de NVIDIA/NiMedia está fora do escopo desta fase; os erros não foram corrigidos nesta tarefa e ainda é necessário confirmar com o agente responsável se são preexistentes ou parte de suas alterações.
+- **Busca real pendente:** ainda não foi confirmada uma chamada bem-sucedida à API Firecrawl por meio da rota administrativa no runtime publicado.
+- **Secret:** o comando `wrangler secret put FIRECRAWL_API_KEY --name adeusmulta` informou sucesso na configuração do Worker. Isso confirma o cadastro do secret, mas não comprova que a versão publicada contenha a rota de teste.
+- **Deploy, execução de campanha, envio de mensagens e escrita no Supabase:** não realizados nesta validação.
 
 ### Commits da Fase 1
 
@@ -182,6 +184,6 @@ Antes da implementação, confirmar os endpoints, parâmetros, autenticação, l
 - Binding: `bb1ba41165c1276d71a6e926450e1ce3892b449f`
 - Rota administrativa de teste: `79db6a4fd2949481af5978b7085cd09197d4dc63`
 
-**Estado:** implementação estática da prova técnica adicionada em `main`; aprovação de testes e chamada real ainda pendentes. A Fase 2 não deve começar até concluir essas verificações.
+**Estado:** adaptador e rota de prova técnica implementados; os 5 testes específicos e a suíte unitária passaram. A validação geral de TypeScript está bloqueada por erros no módulo de mídia, e a chamada real à rota publicada continua pendente. A Fase 1 permanece aberta até verificar a rota no runtime e esclarecer o bloqueio de typecheck. A Fase 2 não deve começar antes disso.
 
-- **Status de checks remotos após os commits:** o check disponível para o commit documental final reportou contexto `Vercel` em falha por limite de builds da conta (`build-rate-limit`). Esse check não confirma a execução dos testes unitários desta alteração; não foi possível obter resultado de typecheck/testes do código nesta sessão.
+- **Status dos checks remotos:** o check associado ao commit documental reportou falha por limite de builds da conta (`build-rate-limit`), sem validar o código. A suíte unitária e os testes específicos foram executados localmente, conforme registrado acima; o typecheck geral continua bloqueado pelos erros de `generateWeeklySchedule` no módulo de mídia.
