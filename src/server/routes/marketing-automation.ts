@@ -588,6 +588,33 @@ router.patch('/leads/:id/qualification', async (req, res) => {
 
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Lead não encontrado' });
+
+    // Revoking qualification must also cancel already queued campaign work.
+    if (qualification_status !== 'qualified') {
+      const { data: activeLinks, error: linksError } = await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .select('id')
+        .eq('lead_id', id)
+        .in('status', ['queued', 'sent', 'delivered']);
+      if (linksError) throw linksError;
+
+      const activeLinkIds = (activeLinks || []).map((link: any) => link.id).filter(Boolean);
+      if (activeLinkIds.length > 0) {
+        const now = new Date().toISOString();
+        const { error: pauseError } = await supabaseAdmin
+          .from('marketing_lead_campaigns')
+          .update({ status: 'paused', updated_at: now })
+          .in('id', activeLinkIds);
+        if (pauseError) throw pauseError;
+
+        const { error: queueError } = await supabaseAdmin
+          .from('marketing_automation_queue')
+          .delete()
+          .in('lead_campaign_id', activeLinkIds);
+        if (queueError) throw queueError;
+      }
+    }
+
     res.json({ success: true, lead: data });
   } catch (err) {
     res.status(500).json({
