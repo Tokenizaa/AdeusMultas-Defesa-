@@ -41,6 +41,7 @@ export interface Env {
   EVOLUTION_API_KEY?: string;
   EVOLUTION_INSTANCE_NAME?: string;
   EVOLUTION_WEBHOOK_SECRET?: string;
+  FIRECRAWL_API_KEY?: string;
   GGPIX_API_KEY?: string;
   GGPIX_ENABLED?: string;
   GGPIX_WEBHOOK_ALLOWED_IPS?: string;
