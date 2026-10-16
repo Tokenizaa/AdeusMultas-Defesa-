@@ -58,7 +58,7 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   await page.evaluate(() => { sessionStorage.clear(); localStorage.clear(); });
   await page.reload({ waitUntil: 'domcontentloaded' });
 
-  const ait = `ANON-${RUN_ID}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 45);
+  const ait = `ANON-${RUN_ID}`.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 45).toUpperCase();
   generatedAit = ait;
   const plate = `AN${String(Date.now()).slice(-5)}`.slice(0, 7);
   anonymousSaveResult = 'request not observed';
@@ -81,6 +81,7 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   await page.locator('#input-vehicle-plate').fill(plate);
   await page.locator('#input-infraction-code').selectOption('745-50');
   await page.locator('#input-location').fill('Av. Paulista, 1000 - São Paulo/SP');
+  await page.locator("#input-autuador-body").fill("DETRAN-SP");
   await page.locator('#btn-next-to-specifics').click();
 
   await expect(page.getByRole('heading', { name: /Detalhes técnicos da sua autuação/i })).toBeVisible();
