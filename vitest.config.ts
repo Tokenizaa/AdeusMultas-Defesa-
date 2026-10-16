@@ -9,6 +9,7 @@ export default defineConfig({
     include: [
       'tests/audit/**/*.test.ts',
       'src/core/**/*.test.ts',
+      'src/server/services/marketing-automation/**/*.test.ts',
       'tests/payments/**/*.test.ts',
       'tests/unit/**/*.test.ts',
       'tests/integration/**/*.test.ts',
