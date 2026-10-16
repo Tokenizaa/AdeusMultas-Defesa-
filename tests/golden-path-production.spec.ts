@@ -17,7 +17,11 @@ async function login(page: Page) {
   await page.locator('input[type="email"]').fill(required('E2E_TEST_EMAIL/USER_TEST_LOGIN', EMAIL));
   await page.locator('input[type="password"]').fill(required('E2E_TEST_PASSWORD/USER_TEST_PASSWORD', PASSWORD));
   await page.getByRole('button', { name: /Entrar no DefesAi/i }).click();
-  await expect(page).toHaveURL(/\/onboarding(?:\?|$)/, { timeout: 30_000 });
+
+  // The previous assertion was false-positive: /\/onboarding/ also matches
+  // the login URL query parameter `?redirect=/onboarding`. Require an
+  // authenticated onboarding control instead of trusting the URL alone.
+  await expect(page.getByLabel(/Número do AIT/i)).toBeVisible({ timeout: 60_000 });
 }
 
 async function supabaseRows(request: APIRequestContext, table: string, filter: string) {
