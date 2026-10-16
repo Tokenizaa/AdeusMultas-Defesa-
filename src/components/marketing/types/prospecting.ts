@@ -100,6 +100,10 @@ export interface Lead {
   address?: string;
   zip_code?: string;
   phone_normalized?: string | null;
+  qualification_status?: 'pending' | 'qualified' | 'disqualified';
+  qualification_notes?: string | null;
+  qualified_at?: string | null;
+  opt_out_at?: string | null;
   source_url?: string | null;
   rating?: number | null;
   review_count?: number | null;
