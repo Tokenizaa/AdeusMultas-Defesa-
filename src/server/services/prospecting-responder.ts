@@ -114,11 +114,29 @@ export async function persistProspectingResponse(
 
     let statusUpdated = false;
     if (isOptOut) {
-      // Opt-out é estado terminal: atualiza lead e lead_campaign
-      await client.from('marketing_leads').update({ status: 'opt_out', updated_at: now }).eq('id', lead.id);
-      await client.from('marketing_lead_campaigns').update({ status: 'opt_out', updated_at: now }).eq('id', lc.id);
-      // Cancela quaisquer automações/follow-ups agendados
-      await client.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
+      // Persist opt-out using the actual schema contract; the link CHECK allows "paused", not "opt_out".
+      const { error: leadUpdateError } = await client
+        .from('marketing_leads')
+        .update({ opt_out_at: now, updated_at: now })
+        .eq('id', lead.id);
+      const { error: linkUpdateError } = await client
+        .from('marketing_lead_campaigns')
+        .update({ status: 'paused', updated_at: now })
+        .eq('id', lc.id);
+      const { error: queueDeleteError } = await client
+        .from('marketing_automation_queue')
+        .delete()
+        .eq('lead_campaign_id', lc.id);
+
+      if (leadUpdateError || linkUpdateError || queueDeleteError) {
+        logger.warn(
+          'messaging',
+          'prospecting',
+          'opt_out_persistence_error',
+          `Falha ao persistir/cancelar opt-out do lead ${lead.id}: ${leadUpdateError?.message || linkUpdateError?.message || queueDeleteError?.message}`
+        );
+        return { matched: true, messageInserted: inserted, statusUpdated: false };
+      }
       statusUpdated = true;
       logger.info('messaging', 'prospecting', 'opt_out', `Lead ${lead.id} solicitou opt-out. Automações canceladas.`);
     } else {
