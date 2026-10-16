@@ -176,7 +176,7 @@ export const AdminPaymentsView: React.FC = () => {
           <div className="flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-orange-400" />
             <h1 className="text-lg font-bold text-white font-mono">
-              Gestão Financeira & PagBank Orders v2
+              Gestão Financeira & VenoPag PIX
             </h1>
           </div>
           <p className="text-sm text-slate-400 font-mono mt-0.5">
@@ -225,7 +225,7 @@ export const AdminPaymentsView: React.FC = () => {
             </h2>
           </div>
           <span className="text-xs text-amber-400/80 bg-amber-500/20 px-2.5 py-1 rounded-lg">
-            PagBank Sandbox / GGPIX
+            Gateways legados: PagBank / GGPIX
           </span>
         </div>
         <p className="text-xs text-slate-300">
@@ -246,7 +246,7 @@ export const AdminPaymentsView: React.FC = () => {
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
             <Zap className="w-3.5 h-3.5" />
-            <span>Simular Pagamento (PagBank Sandbox)</span>
+            <span>Simular pagamento (sandbox PagBank legado)</span>
           </button>
           <button
             type="button"
@@ -264,7 +264,7 @@ export const AdminPaymentsView: React.FC = () => {
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Disparar Webhook Sandbox</span>
+            <span>Disparar webhook de sandbox (legado)</span>
           </button>
         </div>
       </div>
