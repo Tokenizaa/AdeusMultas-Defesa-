@@ -149,3 +149,37 @@ Não estabelecer metas numéricas definitivas antes de medir a linha de base atu
 - Firecrawl — API Crawl: https://docs.firecrawl.dev/features/crawl
 
 Antes da implementação, confirmar os endpoints, parâmetros, autenticação, limites e preços vigentes diretamente na documentação oficial. Não codificar o contrato baseado apenas nesta ADR.
+
+
+## 11. Execução da Fase 1 — 2026-10-16
+
+### Implementado no repositório
+
+- Criado `cloudflare/services/firecrawl-prospecting.ts`: adaptador isolado para `POST https://api.firecrawl.dev/v2/search`, com autenticação Bearer, validação da consulta, limite rígido de até 5 resultados, timeout, erros tipados, normalização de URLs HTTP(S) e mensagens de erro que não propagam o corpo bruto do provedor.
+- Adicionado binding tipado opcional `FIRECRAWL_API_KEY` em `cloudflare/supabase.ts`. A chave deve ser configurada como secret do Cloudflare Worker; não deve ser adicionada ao `wrangler.jsonc`, ao frontend ou ao Git.
+- Criada rota administrativa de prova técnica `POST /api/marketing/prospecting/firecrawl/test` em `cloudflare/routes/marketing.ts`. Reutiliza `authenticateToken` + `requireAdmin`, executa busca somente de leitura e devolve no máximo cinco resultados. A rota informa explicitamente `persisted: false` e `outreachTriggered: false`.
+- Criados testes unitários em `cloudflare/routes/firecrawl-prospecting.test.ts` para ausência de credencial, consulta inválida, limite de resultados, normalização/filtragem de URLs, throttling e erro do provedor sem vazamento de detalhes.
+- Nenhuma migration foi criada; esta fase não altera o esquema nem grava leads.
+
+### Contratos do banco identificados no repositório
+
+- `marketing_leads` tem constraint de `lead_type` restrita a `despachante` e `advogado_transito`; os outros segmentos planejados exigirão uma decisão de modelagem na fase de ingestão, antes de tentar persistir novos tipos.
+- As migrations documentam índices únicos parciais para `phone_normalized) e outros identificadores de deduplicação. A implementação Firecrawl desta fase não grava no banco e, portanto, não interage com esses índices.
+- `collection_runs` existe em migrations e representa o histórico da coleta atual. Ainda é necessário validar o esquema vivo e sua disponibilidade no projeto Supabase; a inspeção do Git não prova o estado atual do banco.
+- O runtime publicado é um Cloudflare Worker (`wrangler.jsonc` → `cloudflare/worker.ts`), com rotas Hono e bindings via `c.env`. O coletor Selenium atual está no backend Node/Express e não pode ser presumido executável dentro do Worker. A integração do módulo de prospecção com o runtime publicado precisa ser validada antes de conectar a interface.
+
+### Validação e limitações
+
+- **Testes adicionados, execução pendente:** esta sessão não tem um checkout local executável nem acesso para rodar `npm run test:unit`/typecheck no ambiente do projeto. Não marcar a Fase 1 como totalmente aprovada até o CI ou o agente local executar os testes e corrigir eventuais falhas.
+- **Busca real pendente:** o conector Firecrawl desta sessão informou falta de créditos para buscar a documentação ao vivo. A implementação usa o contrato documentado da API v2 Search, mas a prova com a credencial do Worker ainda precisa ser executada pela rota administrativa.
+- **Secret de produção não verificado:** a existência/configuração de `FIRECRAWL_API_KEY` no Cloudflare não pôde ser confirmada nesta sessão. A ausência da variável deve resultar em HTTP 503, sem persistência ou outreach.
+- Não houve deploy, execução de campanha, envio de mensagens nem escrita no Supabase.
+
+### Commits da Fase 1
+
+- Adaptador: `856990b992431b1117ccf1b6330917a10782681e`
+- Testes: `87a3c3831f74983b4131e5ce5ec7a8bbef454201`
+- Binding: `bb1ba41165c1276d71a6e926450e1ce3892b449f`
+- Rota administrativa de teste: `79db6a4fd2949481af5978b7085cd09197d4dc63`
+
+**Estado:** implementação estática da prova técnica adicionada em `main`; aprovação de testes e chamada real ainda pendentes. A Fase 2 não deve começar até concluir essas verificações.
