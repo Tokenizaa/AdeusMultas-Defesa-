@@ -260,9 +260,13 @@ router.patch('/campaigns/:id', async (req, res) => {
 });
 
 router.post('/campaigns/:id/start', async (req, res) => {
+  let insertedLeadCampaignIds: string[] = [];
   try {
     const { id } = req.params;
-    const { limit = 20 } = req.body;
+    const requestedLimit = req.body?.limit ?? 20;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+      return res.status(400).json({ error: 'limit deve ser um inteiro entre 1 e 100' });
+    }
 
     const { data: campaign, error: campaignError } = await supabaseAdmin
       .from('marketing_campaigns')
@@ -273,81 +277,128 @@ router.post('/campaigns/:id/start', async (req, res) => {
     if (campaignError || !campaign) {
       return res.status(404).json({ error: 'Campanha não encontrada' });
     }
+    if (campaign.status !== 'active') {
+      return res.status(409).json({ error: 'Campanha não está ativa; ativar antes de iniciar.' });
+    }
 
-    // Filter leads by lead_type, audience, and phone_normalized
-    const leadQuery = supabaseAdmin
-      .from('marketing_leads')
-      .select('*')
-      .eq('lead_type', campaign.lead_type)
-      .eq('audience', campaign.audience)
-      .not('phone_normalized', 'is', null)
-      .limit(limit);
-
-    const { data: leads, error: leadsError } = await leadQuery;
-
-    if (leadsError) throw leadsError;
-
-    const { data: existingLinks } = await supabaseAdmin
+    const maxContacts = Number(campaign.max_contacts) || 3;
+    const { data: existingLinks, error: linksError } = await supabaseAdmin
       .from('marketing_lead_campaigns')
       .select('lead_id')
       .eq('campaign_id', id);
+    if (linksError) throw linksError;
 
-    const existingLeadIds = new Set((existingLinks || []).map((l: any) => l.lead_id));
-    const newLeads = (leads || []).filter((l: any) => !existingLeadIds.has(l.id));
-
-    // Respect max_contacts - limit total lead_campaigns for this campaign
-    const maxContacts = campaign.max_contacts || 3;
-    const existingCount = existingLeadIds.size;
-    const remainingSlots = Math.max(0, maxContacts - existingCount);
-    const leadsToEnqueue = newLeads.slice(0, remainingSlots);
-
-    if (leadsToEnqueue.length === 0 && remainingSlots === 0) {
-      return res.json({ 
-        success: true, 
-        enqueued: 0, 
+    const existingLeadIds = new Set((existingLinks || []).map((link: any) => link.lead_id));
+    const remainingSlots = Math.max(0, maxContacts - existingLeadIds.size);
+    if (remainingSlots === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
         campaign: campaign.name,
-        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`
+        remainingSlots: 0,
+        message: `Limite de max_contacts (${maxContacts}) atingido para esta campanha`,
       });
     }
 
-    const leadCampaigns = leadsToEnqueue.map((lead: any) => ({
+    // Candidate retrieval is deliberately bounded; eligibility is checked before linking.
+    const { data: leads, error: leadsError } = await supabaseAdmin
+      .from('marketing_leads')
+      .select('id, lead_type, audience, phone_normalized, city, opt_out_at')
+      .eq('lead_type', campaign.lead_type)
+      .eq('audience', campaign.audience)
+      .not('phone_normalized', 'is', null)
+      .is('opt_out_at', null)
+      .limit(500);
+    if (leadsError) throw leadsError;
+
+    const targetCities = Array.isArray(campaign.target_cities)
+      ? campaign.target_cities
+          .filter((city: unknown): city is string => typeof city === 'string')
+          .map((city: string) => city.trim().toLocaleLowerCase('pt-BR'))
+          .filter(Boolean)
+      : [];
+    if (campaign.audience === 'B2B' && targetCities.length === 0) {
+      return res.status(409).json({
+        error: 'Campanha B2B sem cidades-alvo válidas; nenhum lead foi enfileirado.',
+      });
+    }
+
+    const eligibleLeads = (leads || []).filter((lead: any) => {
+      if (existingLeadIds.has(lead.id) || lead.opt_out_at || !lead.phone_normalized) return false;
+      if (campaign.audience === 'B2B') {
+        const city = typeof lead.city === 'string' ? lead.city.trim().toLocaleLowerCase('pt-BR') : '';
+        if (!city || !targetCities.includes(city)) return false;
+      }
+      return true;
+    });
+    const leadsToEnqueue = eligibleLeads.slice(0, Math.min(requestedLimit, remainingSlots));
+
+    if (leadsToEnqueue.length === 0) {
+      return res.json({
+        success: true,
+        enqueued: 0,
+        campaign: campaign.name,
+        remainingSlots,
+        message: 'Nenhum lead elegível novo encontrado para os critérios desta campanha.',
+      });
+    }
+
+    // Read generated UUIDs from Postgres; never assume INSERT mutates the input objects.
+    const leadCampaignRows = leadsToEnqueue.map((lead: any) => ({
       lead_id: lead.id,
       campaign_id: id,
       status: 'queued',
       current_step: 0,
       contact_count: 0,
     }));
+    const { data: insertedLinks, error: lcError } = await supabaseAdmin
+      .from('marketing_lead_campaigns')
+      .insert(leadCampaignRows)
+      .select('id, lead_id');
+    if (lcError) throw lcError;
 
-    if (leadCampaigns.length > 0) {
-      const { error: lcError } = await supabaseAdmin
-        .from('marketing_lead_campaigns')
-        .insert(leadCampaigns);
-
-      if (lcError) throw lcError;
+    const createdLinks = insertedLinks || [];
+    insertedLeadCampaignIds = createdLinks.map((link: any) => link.id).filter(Boolean);
+    if (createdLinks.length !== leadsToEnqueue.length || insertedLeadCampaignIds.length !== leadsToEnqueue.length) {
+      throw new Error('Não foi possível recuperar todos os IDs dos vínculos criados; fila não iniciada.');
     }
 
-    const queues = leadsToEnqueue.map((lead: any) => ({
-      lead_campaign_id: (leadCampaigns.find((lc: any) => lc.lead_id === lead.id) as any)?.id,
+    const queues = createdLinks.map((link: any) => ({
+      lead_campaign_id: link.id,
       action: 'send_message',
       scheduled_at: new Date().toISOString(),
       max_attempts: 3,
-    })).filter((q: any) => q.lead_campaign_id);
-
-    if (queues.length > 0) {
-      const { error: qError } = await supabaseAdmin
-        .from('marketing_automation_queue')
-        .insert(queues);
-
-      if (qError) throw qError;
+    }));
+    const { error: queueError } = await supabaseAdmin
+      .from('marketing_automation_queue')
+      .insert(queues);
+    if (queueError) {
+      // Best-effort compensation prevents orphaned queued links when queue creation fails.
+      const { error: cleanupError } = await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .delete()
+        .in('id', insertedLeadCampaignIds);
+      if (cleanupError) {
+        throw new Error(`Falha ao criar fila (${queueError.message}) e ao limpar vínculos (${cleanupError.message})`);
+      }
+      insertedLeadCampaignIds = [];
+      throw queueError;
     }
 
-    res.json({ 
-      success: true, 
-      enqueued: queues.length, 
+    res.json({
+      success: true,
+      enqueued: queues.length,
       campaign: campaign.name,
-      remainingSlots: remainingSlots - queues.length
+      remainingSlots: remainingSlots - queues.length,
     });
   } catch (err) {
+    // Avoid leaving newly created links behind when a later step fails.
+    if (insertedLeadCampaignIds.length > 0) {
+      await supabaseAdmin
+        .from('marketing_lead_campaigns')
+        .delete()
+        .in('id', insertedLeadCampaignIds);
+    }
     res.status(500).json({ error: 'Falha ao iniciar campanha', message: (err as Error).message });
   }
 });
