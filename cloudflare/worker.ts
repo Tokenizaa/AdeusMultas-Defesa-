@@ -1,4 +1,4 @@
-// Production release: synchronize Cloudflare with main after VenoPag/admin consolidation.
+// Release trigger: [DEPLOY-PRODUCTION] publish the consolidated VenoPag/admin version to Cloudflare.
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
