@@ -43,33 +43,76 @@ async function persistOrder(env: Env, input: { caseId: string; userId?: string; 
   return data;
 }
 
+async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?: unknown) {
+  const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : '';
+  if (!code || code.length > 120) return;
+  const supabase = createSupabaseAdminClient(env);
+  const { data: referrer, error: referrerError } = await supabase
+    .from('user_profiles')
+    .select('user_id,referral_code')
+    .eq('referral_code', code)
+    .limit(1)
+    .maybeSingle();
+  if (referrerError) throw referrerError;
+  if (!referrer?.user_id || String(referrer.user_id) === buyerUserId) return;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('referral_relations')
+    .select('id,referrer_id')
+    .eq('referred_id', buyerUserId)
+    .eq('level', 1)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return;
+
+  const { error: insertError } = await supabase.from('referral_relations').insert({
+    referrer_id: referrer.user_id,
+    referred_id: buyerUserId,
+    level: 1,
+    status: 'active',
+  });
+  if (insertError && insertError.code !== '23505') throw insertError;
+}
+
 async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string) {
   const supabase = createSupabaseAdminClient(env);
-  const { data: relations, error: relationError } = await supabase
-    .from('referral_relations')
-    .select('referrer_id,level,status')
-    .eq('referred_id', buyerUserId)
-    .eq('status', 'active');
-  if (relationError) throw relationError;
-  const eligibleRelations = (relations || []).filter((r: any) => [1, 2, 3].includes(Number(r.level)));
-  const affiliateIds = [...new Set(eligibleRelations.map((r: any) => String(r.referrer_id)).filter(Boolean))];
-  if (!affiliateIds.length) return [];
+  const chain: Array<{ userId: string; level: number }> = [];
+  const seen = new Set<string>([buyerUserId]);
+  let currentBuyerId = buyerUserId;
+
+  for (let level = 1; level <= 3; level++) {
+    const { data: relation, error } = await supabase
+      .from('referral_relations')
+      .select('referrer_id,status')
+      .eq('referred_id', currentBuyerId)
+      .eq('level', 1)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    const referrerId = String(relation?.referrer_id || '');
+    if (!referrerId || seen.has(referrerId)) break;
+    seen.add(referrerId);
+    chain.push({ userId: referrerId, level });
+    currentBuyerId = referrerId;
+  }
+
+  if (!chain.length) return [];
+  const affiliateIds = chain.map((item) => item.userId);
   const { data: profiles, error: profileError } = await supabase
     .from('affiliate_gateway_profiles')
     .select('user_id,venopag_username,split_percent,is_active')
     .in('user_id', affiliateIds)
     .eq('is_active', true);
   if (profileError) throw profileError;
-  const relationLevels = new Map<string, number>();
-  for (const relation of eligibleRelations) {
-    const id = String((relation as any).referrer_id);
-    const level = Number((relation as any).level);
-    if (!relationLevels.has(id) || level < relationLevels.get(id)!) relationLevels.set(id, level);
-  }
+
+  const levelByUser = new Map(chain.map((item) => [item.userId, item.level]));
   const splits = (profiles || []).map((profile: any) => ({
     username: String(profile.venopag_username || '').trim(),
     percentage: Number(profile.split_percent) || 0,
-    level: relationLevels.get(String(profile.user_id)) || 1,
+    level: levelByUser.get(String(profile.user_id)) || 1,
   })).filter((split: any) => split.username && split.percentage > 0)
     .sort((a: any, b: any) => a.level - b.level)
     .map(({ username, percentage }: any) => ({ username, percentage }));
@@ -151,6 +194,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     }
     let venoOrder;
     try {
+      await registerReferralFromCode(c.env, user.id, body.referralCode);
       const splits = await resolveVenoAffiliateSplits(c.env, user.id);
       venoOrder = await createVenoCashIn(c.env, {
         amountInCents: Math.round(Number(offer.finalAmount) * 100),
