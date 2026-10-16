@@ -428,15 +428,27 @@ routes.post('/webhooks/venopag', async (c) => {
     if (updateError) throw updateError;
     const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: existing.paid_at || now, updated_at: now }).eq('id', existing.case_id);
     if (caseError) throw caseError;
+    const { error: commissionError } = await supabase.from('commission_ledger').update({
+      status: 'PAID', paid_at: existing.paid_at || now,
+    }).eq('payment_id', existing.id);
+    if (commissionError) throw commissionError;
     return c.json({ received: true, matched: true, isDuplicate: alreadyPaid || !transitioned, status: 'PAID' });
   }
 
   const state = reversed ? 'REFUNDED' : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
     : currentStatus === 'pending' ? 'PENDING' : 'CANCELED';
+  const statusChangedAt = new Date().toISOString();
   const { error: updateError } = await supabase.from('payment_orders').update({
-    status: state, paid_at: null, updated_at: new Date().toISOString(),
+    status: state, paid_at: null, updated_at: statusChangedAt,
   }).eq('id', existing.id);
   if (updateError) throw updateError;
+  const commissionUpdate = reversed
+    ? { status: 'REVERSED', reversed_at: statusChangedAt, reversal_reason: currentStatus }
+    : state === 'CANCELED'
+      ? { status: 'CANCELLED', reversed_at: null, reversal_reason: currentStatus }
+      : { status: state === 'PENDING' ? 'PENDING' : 'CANCELLED' };
+  const { error: commissionError } = await supabase.from('commission_ledger').update(commissionUpdate).eq('payment_id', existing.id);
+  if (commissionError) throw commissionError;
   if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
     const { error: caseError } = await supabase.from('cases').update({ is_paid: false, paid_at: null, status: 'aguardando_pagamento', updated_at: new Date().toISOString() }).eq('id', existing.case_id);
     if (caseError) throw caseError;
