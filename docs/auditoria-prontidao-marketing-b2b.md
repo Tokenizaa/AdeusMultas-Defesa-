@@ -240,6 +240,8 @@ Implementado no branch:
 - Nova migration adiciona `qualification_status` (`pending` por padrão), notas e timestamp; endpoint administrativo `PATCH /api/marketing/automation/leads/:id/qualification` registra a decisão com justificativa.
 - Adicionada função pura de elegibilidade e testes unitários para qualificação, opt-out, telefone, cidade, duplicidade, tipo e público.
 
+- As rotas de automação foram protegidas com autenticação e autorização administrativa no próprio router, pois a montagem atual é sob `/api`.
+
 **Ainda pendente:** executar testes, lint/typecheck e build; validar migrations contra o schema efetivo; revisar a UI de Marketing para permitir a qualificação; confirmar o webhook/runtime ativo; testar associação inbound e falhas parciais. Não foi feito deploy nem aplicada migration a banco algum. O fluxo permanece bloqueado para leads sem qualificação explícita.
 
 **Status da fase:** implementação inicial registrada; NÃO marcar como concluída até CI e validação do contrato no runtime passarem.
