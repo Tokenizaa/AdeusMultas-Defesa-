@@ -106,15 +106,130 @@ adminRoutes.get('/admin/ai/metrics', async (c) => {
   });
 });
 
+const E2E_PAYMENT_ORDER_IDS = new Set([
+  'fba1ea21-77fa-4b8a-b76e-18035c2c84ee',
+  'bc59cca3-d334-4135-884e-2e37fc83c23e',
+  '89035a7e-1d44-4b77-aa80-1ccba1207a2a',
+]);
+
 adminRoutes.get('/admin/payments', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ data: cases }, { data: orders }] = await Promise.all([
-    supabase.from('cases').select('id,title,client_name,is_paid,paid_at,service_type,fine_amount').order('paid_at', { ascending: false }).limit(200),
-    supabase.from('payment_orders').select('*').order('created_at', { ascending: false }).limit(200),
+  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, { data: paidAmounts, error: revenueError }] = await Promise.all([
+    supabase.from('payment_orders').select('*').order('created_at', { ascending: false }).limit(500),
+    supabase.from('payment_orders').select('id', { count: 'exact', head: true }),
+    supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PAID'),
+    supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
+    supabase.from('payment_orders').select('id', { count: 'exact', head: true }).in('status', ['REFUNDED', 'CONTESTED', 'CHARGEDBACK']),
+    supabase.from('payment_orders').select('id,amount').eq('status', 'PAID').limit(2000),
   ]);
-  const paidCases = (cases || []).filter((x: any) => x.is_paid);
-  const revenue = (orders || []).filter((o: any) => o.status === 'PAID').reduce((acc: number, o: any) => acc + (Number(o.amount) || 0), 0);
-  return c.json({ payments: paidCases, orders: orders || [], totalRevenue: revenue });
+  if (ordersError) throw new Error(ordersError.message);
+  if (revenueError) throw new Error(revenueError.message);
+  const orders = (rawOrders || []).map((order: any) => ({ ...order, is_test: E2E_PAYMENT_ORDER_IDS.has(String(order.id)) }));
+  const revenue = (paidAmounts || []).filter((order: any) => !E2E_PAYMENT_ORDER_IDS.has(String(order.id)))
+    .reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
+  const testCount = orders.filter((order: any) => order.is_test).length;
+  return c.json({
+    orders,
+    summary: {
+      revenue: Number(revenue.toFixed(2)),
+      paid: Math.max(0, (paid || 0) - (orders.filter((order: any) => order.is_test && order.status === 'PAID').length)),
+      pending: pending || 0,
+      total: Math.max(0, (total || 0) - testCount),
+      refunded: reversed || 0,
+    },
+    testOrders: testCount,
+    gateway: c.env.VENO_PRIMARY_GATEWAY || 'venopag',
+  });
+});
+
+adminRoutes.get('/admin/payments/gateway', (c) => {
+  const gateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
+  const configured = gateway === 'venopag'
+    ? Boolean(c.env.VENO_CLIENT_ID && c.env.VENO_CLIENT_SECRET && c.env.VENO_WEBHOOK_SECRET)
+    : Boolean(c.env.PAGBANK_TOKEN);
+  return c.json({ gateway, configured, environment: gateway === 'venopag' ? 'production' : (c.env.PAGBANK_ENV || 'sandbox') });
+});
+
+adminRoutes.get('/admin/payments/affiliates', async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const [{ data: relations, error: relationError }, { data: mappings, error: mappingError }] = await Promise.all([
+    supabase.from('referral_relations').select('referrer_id,referred_id,level,status').eq('status', 'active').in('level', [1, 2, 3]).limit(5000),
+    supabase.from('affiliate_gateway_profiles').select('user_id,venopag_username,split_percent,is_active').limit(1000),
+  ]);
+  if (relationError) throw new Error(relationError.message);
+  if (mappingError) throw new Error(mappingError.message);
+  const referrals = relations || [];
+  const mappingByUser = new Map((mappings || []).map((row: any) => [String(row.user_id), row]));
+  const ids = [...new Set([
+    ...referrals.map((row: any) => String(row.referrer_id)),
+    ...(mappings || []).map((row: any) => String(row.user_id)),
+  ].filter(Boolean))];
+  if (!ids.length) return c.json({ affiliates: [] });
+  const [{ data: profiles, error: profileError }, { data: ledger, error: ledgerError }] = await Promise.all([
+    supabase.from('user_profiles').select('user_id,name,email').in('user_id', ids),
+    supabase.from('commission_ledger').select('beneficiary_id,commission_amount,status').in('beneficiary_id', ids).limit(5000),
+  ]);
+  if (profileError) throw new Error(profileError.message);
+  if (ledgerError) throw new Error(ledgerError.message);
+  const profileByUser = new Map((profiles || []).map((row: any) => [String(row.user_id), row]));
+  const affiliates = ids.map((userId) => {
+    const profile: any = profileByUser.get(userId) || {};
+    const mapping: any = mappingByUser.get(userId) || {};
+    const userRelations = referrals.filter((row: any) => String(row.referrer_id) === userId);
+    const earned = (ledger || []).filter((row: any) => String(row.beneficiary_id) === userId && !['REVERSED', 'CANCELLED'].includes(String(row.status).toUpperCase()))
+      .reduce((sum: number, row: any) => sum + (Number(row.commission_amount) || 0), 0);
+    return {
+      userId, name: profile.name || '', email: profile.email || '', referrals: userRelations.length,
+      commissions: Number(earned.toFixed(2)), venopagUsername: mapping.venopag_username || '',
+      splitPercent: Number(mapping.split_percent) || 0, active: Boolean(mapping.is_active),
+      configured: Boolean(mapping.venopag_username),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  return c.json({ affiliates });
+});
+
+adminRoutes.put('/admin/payments/affiliates/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const body = await c.req.json<any>().catch(() => ({}));
+  const username = typeof body.venopagUsername === 'string' ? body.venopagUsername.trim() : '';
+  const splitPercent = Number(body.splitPercent);
+  const active = body.active === true;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'ID de afiliado inválido.' } }, 400);
+  }
+  if (!username || username.length > 120 || !Number.isFinite(splitPercent) || splitPercent < 0 || splitPercent > 100) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Username VenoPag e percentual entre 0 e 100 são obrigatórios.' } }, 400);
+  }
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: user, error: userError } = await supabase.from('user_profiles').select('user_id').eq('user_id', userId).maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user) return c.json({ error: { code: 'NOT_FOUND', message: 'Usuário afiliado não encontrado.' } }, 404);
+  const { error } = await supabase.from('affiliate_gateway_profiles').upsert({
+    user_id: userId, venopag_username: username, split_percent: splitPercent, is_active: active, updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) {
+    if (error.code === '23505') return c.json({ error: { code: 'CONFLICT', message: 'Esse username VenoPag já está associado a outro afiliado.' } }, 409);
+    throw new Error(error.message);
+  }
+  return c.json({ success: true, userId, venopagUsername: username, splitPercent, active });
+});
+
+adminRoutes.get('/admin/payments/commissions', async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: ledger, error } = await supabase.from('commission_ledger').select('*').order('created_at', { ascending: false }).limit(500);
+  if (error) throw new Error(error.message);
+  const rows = ledger || [];
+  const ids = [...new Set(rows.flatMap((row: any) => [row.beneficiary_id, row.buyer_user_id]).filter(Boolean).map(String))];
+  const { data: profiles, error: profileError } = ids.length
+    ? await supabase.from('user_profiles').select('user_id,name,email').in('user_id', ids)
+    : { data: [], error: null };
+  if (profileError) throw new Error(profileError.message);
+  const profileByUser = new Map((profiles || []).map((row: any) => [String(row.user_id), row]));
+  return c.json({ commissions: rows.map((row: any) => ({
+    ...row,
+    beneficiaryName: (profileByUser.get(String(row.beneficiary_id)) as any)?.name || (profileByUser.get(String(row.beneficiary_id)) as any)?.email || row.beneficiary_id,
+    buyerName: (profileByUser.get(String(row.buyer_user_id)) as any)?.name || (profileByUser.get(String(row.buyer_user_id)) as any)?.email || row.buyer_user_id,
+  })) });
 });
 
 adminRoutes.get('/admin/documents', async (c) => {
