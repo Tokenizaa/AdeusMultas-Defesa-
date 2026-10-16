@@ -281,7 +281,7 @@ describe('VALIDAÇÃO E2E — PROSPECTING + CAMPANHAS + WHATSAPP (5551994096322)
       };
 
       let queueDeleted = false;
-      let leadStatusUpdated = '';
+      let leadOptOutAt: unknown = null;
       let lcStatusUpdated = '';
 
       const clientMock: any = {
@@ -293,7 +293,7 @@ describe('VALIDAÇÃO E2E — PROSPECTING + CAMPANHAS + WHATSAPP (5551994096322)
               }),
               update: (fields: any) => ({
                 eq: async () => {
-                  leadStatusUpdated = fields.status;
+                  leadOptOutAt = fields.opt_out_at;
                   return { data: null, error: null };
                 },
               }),
@@ -358,8 +358,8 @@ describe('VALIDAÇÃO E2E — PROSPECTING + CAMPANHAS + WHATSAPP (5551994096322)
 
       expect(result.matched).toBe(true);
       expect(result.statusUpdated).toBe(true);
-      expect(leadStatusUpdated).toBe('opt_out');
-      expect(lcStatusUpdated).toBe('opt_out');
+      expect(leadOptOutAt).toEqual(expect.any(String));
+      expect(lcStatusUpdated).toBe('paused');
       expect(queueDeleted).toBe(true);
     });
   });
