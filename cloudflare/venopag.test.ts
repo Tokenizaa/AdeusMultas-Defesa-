@@ -45,4 +45,5 @@ describe('VenoPag Worker client', () => {
     expect(verifyVenoWebhook(env, 'wrong-token')).toBe(false);
     expect(verifyVenoWebhook(env, null)).toBe(false);
     expect(verifyVenoWebhook({ ...env, VENO_WEBHOOK_SECRET: '' }, env.VENO_WEBHOOK_SECRET)).toBe(false);
-  });});
+  });
+});
