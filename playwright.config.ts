@@ -19,7 +19,6 @@ export default defineConfig({
     '**/knowledge/**',
     '**/audit/**',
     '**/core/**',
-    '**/e2e/services/**',
     '**/e2e-infrastructure.ts',
     '**/e2e-setup.ts',
     '**/e2e-fixtures.ts',
