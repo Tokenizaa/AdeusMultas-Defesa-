@@ -45,7 +45,7 @@ async function persistOrder(env: Env, input: { caseId: string; userId?: string; 
 
 async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?: unknown) {
   const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : '';
-  if (!code || code.length > 120) return;
+  if (!/^[A-Z0-9_-]{1,120}$/.test(code)) return;
   const supabase = createSupabaseAdminClient(env);
   const { data: referrer, error: referrerError } = await supabase
     .from('user_profiles')
