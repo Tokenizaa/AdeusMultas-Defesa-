@@ -186,8 +186,8 @@ function AppContent() {
       title = 'Repositório de Petições & Minutas';
       subtitle = 'Peças jurídicas geradas pelo motor CTB e modelos de RAG';
     } else if (currentPath === '/admin/payments') {
-      title = 'Gestão Financeira (PagBank)';
-      subtitle = 'Monitoramento de liquidação PIX, conciliação e webhooks';
+      title = 'Pagamentos & Afiliados (VenoPag)';
+      subtitle = 'Conciliação PIX, afiliados, comissões e splits';
     } else if (currentPath === '/admin/ai') {
       title = 'IA Core & Gateway de Provedores';
       subtitle = 'Orquestração multi-provider (NVIDIA NIM ➔ 9Router ➔ RAG CTB)';
