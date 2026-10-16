@@ -175,3 +175,53 @@ A integração só pode ser considerada pronta quando todos os itens abaixo fore
 - [Rota de comunicação do Cloudflare Worker](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/main/cloudflare/routes/communication.ts)
 - [Serviço de mensagens](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/main/src/server/services/messaging-service.ts)
 - [Auditoria anterior B2B/WhatsApp](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/main/docs/auditoria-marketingos-b2c-b2b-whatsapp.md)
+
+
+## 9. Fase A — validação do contrato (evidência estática, 2026-10-16)
+
+Esta seção registra a primeira validação documental feita após a criação da auditoria. Foi feita leitura dos arquivos no GitHub; ainda não houve execução de testes, consulta ao banco de produção ou alteração de código.
+
+### 9.1 Contrato encontrado nas migrations
+
+- `marketing_leads` (migration `20260827000001_create_marketing_leads.sql`) define `lead_type`, `name`, telefone/WhatsApp, email, website, endereço, cidade/estado, origem, URLs e data de coleta. A migration não define um campo de qualificação comercial nem um estado de lead.
+- A migration `20260829120001_add_audience_segmentation_and_opt_out.sql` adiciona `audience` (`B2C`/`B2B`) e `opt_out_at` em `marketing_leads`. A própria migration descreve a supressão global por número como lacuna pendente. O contrato não deve depender de `lead.status = 'opt_out'` sem confirmar uma migration posterior que crie esse campo; a busca de migrations por `ADD COLUMN status` não encontrou uma definição para `marketing_leads`.
+- `marketing_campaigns` possui `status` com estados `active`, `paused`, `finished`, `draft`, `lead_type`, `target_cities`, `steps`, `max_contacts`, `min_interval_hours` e `audience`.
+- `marketing_lead_campaigns.status` aceita `queued`, `sent`, `delivered`, `read`, `responded`, `converted`, `error`, `exhausted` e `paused`; não aceita `opt_out`.
+- A tabela de fila não define unicidade para uma ação pendente por vínculo/etapa. A tabela de mensagens não define unicidade de `external_id`; portanto, a idempotência observada no responder depende hoje de consulta prévia, não de garantia atômica do banco.
+
+### 9.2 Contrato de negócio recomendado
+
+**Estado do lead (separado do estado da campanha):**
+- `new`: coletado e persistido, ainda não qualificado.
+- `qualified`: critérios de público, tipo de negócio, localização e dados mínimos verificados.
+- `ineligible`: não atende à campanha ou faltam requisitos obrigatórios; registrar motivo.
+- `suppressed`: opt-out global ou outra supressão aplicável; nenhum envio permitido.
+
+**Estado do vínculo lead-campanha:**
+- `queued`: elegível, atribuído e aguardando ação autorizada.
+- `sent` / `delivered` / `read`: progresso real da mensagem.
+- `responded`: resposta recebida; cancelar follow-ups.
+- `converted`: conversão confirmada.
+- `paused` / `exhausted` / `error`: estados de controle/terminal.
+- O opt-out deve ser uma supressão global do lead e da identidade de contato, não depender exclusivamente de um estado no vínculo. Só adicionar `opt_out` ao vínculo se houver uma decisão explícita de domínio e migration compatível.
+
+**Elegibilidade de uma campanha B2B:** campanha em estado `active`; público e `lead_type` compatíveis; cidade/UF dentro de `target_cities` (regra explícita para cidade ausente); lead qualificado; telefone normalizado válido; `opt_out_at IS NULL`; nenhuma supressão equivalente por número; vínculo ainda inexistente. A mesma política deve ser revalidada antes do envio.
+
+**Seleção entre campanhas:** não atribuir automaticamente um lead a várias campanhas incompatíveis nem escolher uma campanha arbitrariamente. Até existir uma regra explícita de prioridade/exclusividade, uma ambiguidade deve impedir o enfileiramento e ser exibida para decisão administrativa.
+
+**Limites:** `max_contacts` está sendo usado na rota de início como limite total de leads/vínculos da campanha, embora o nome sugira contatos por lead. Deve ser renomeado/migrado ou documentado como limite de audiência; cadência por lead, intervalo e máximo de tentativas são controles distintos.
+
+### 9.3 Divergências concretas confirmadas no código
+
+1. `POST /campaigns/:id/start` carrega a campanha, mas não verifica `campaign.status === 'active'`.
+2. A seleção de leads filtra `lead_type`, `audience` e `phone_normalized IS NOT NULL`, mas não aplica `target_cities`, estado de qualificação nem `opt_out_at IS NULL`.
+3. O fluxo grava vínculos e depois a fila em duas operações separadas. Se a primeira persistência funcionar e a segunda falhar, pode haver vínculo sem ação na fila; a reexecução não reconcilia automaticamente esse caso.
+4. O responder usa `marketing_leads.status = 'opt_out'` e `marketing_lead_campaigns.status = 'opt_out'`, enquanto as migrations encontradas definem `opt_out_at` no lead e não aceitam `opt_out` no vínculo. Erros das atualizações de estado não são tratados de forma consistente.
+5. O worker consulta estados de campanha/vínculo, mas a elegibilidade de envio não verifica status ativo da campanha, região, qualificação ou supressão por `opt_out_at`.
+6. A contagem/limitação de `max_contacts` na rota limita os vínculos totais; no worker, a leitura da relação campanha usada para a contagem seleciona somente `max_contacts`, e o filtro de jobs calcula contagens mas retorna `due.slice(0, 10)` sem filtrar os jobs que excederam o limite.
+
+### 9.4 Resultado da Fase A
+
+**Fase A documental: concluída parcialmente.** O contrato e as divergências foram mapeados a partir das migrations e do código no GitHub. A fase não é considerada tecnicamente fechada até confirmar o schema efetivo do Supabase, revisar testes existentes e decidir a política de qualificação/supressão e de atribuição entre campanhas. Não foram feitas alterações em código, banco, automação, webhook ou produção.
+
+**Próxima etapa segura:** Fase B em branch isolada, com testes de regressão primeiro, implementando elegibilidade compartilhada e supressão global antes de qualquer tentativa de iniciar campanha. Não iniciar worker nem enviar mensagens reais.
