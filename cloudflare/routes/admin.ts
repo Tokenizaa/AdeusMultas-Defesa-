@@ -20,22 +20,71 @@ adminRoutes.get('/admin/ai/overview', (c) => c.json({
 
 adminRoutes.get('/admin/overview', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ count: totalCases }, { count: analyzedCases }, { count: defenseReadyCases }, { count: paidCases }] = await Promise.all([
+  const [
+    { count: totalCases, error: totalCasesError },
+    { count: analyzedCases, error: analyzedCasesError },
+    { count: defenseReadyCases, error: defenseReadyCasesError },
+    { count: paidCases, error: paidCasesError },
+    { data: recentRows, error: recentCasesError },
+    { data: paidOrders, error: revenueError },
+    { count: profileCount, error: profileError },
+  ] = await Promise.all([
     supabase.from('cases').select('*', { count: 'exact', head: true }),
     supabase.from('cases').select('*', { count: 'exact', head: true }).not('analysis_json', 'is', null),
     supabase.from('cases').select('*', { count: 'exact', head: true }).or('defense_draft_json.not.is.null,status.eq.defesa_pronta'),
     supabase.from('cases').select('*', { count: 'exact', head: true }).eq('is_paid', true),
+    supabase.from('cases')
+      .select('id,title,client_name,is_paid,status,created_at,vehicle_plate,ait_number,infraction_description,autuador_body')
+      .order('created_at', { ascending: false })
+      .limit(8),
+    supabase.from('payment_orders').select('amount').eq('status', 'PAID'),
+    supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
   ]);
-  let totalRevenue = 0;
-  try {
-    const { data } = await supabase.from('payment_orders').select('amount').eq('status', 'PAID');
-    totalRevenue = (data || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0);
-  } catch { totalRevenue = 0; }
-  const { count: profileCount } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true });
+
+  const queryErrors = [
+    totalCasesError,
+    analyzedCasesError,
+    defenseReadyCasesError,
+    paidCasesError,
+    recentCasesError,
+    revenueError,
+    profileError,
+  ].filter(Boolean);
+
+  if (queryErrors.length > 0) {
+    return c.json({
+      error: {
+        code: 'ADMIN_OVERVIEW_UNAVAILABLE',
+        message: 'Não foi possível consultar todos os dados da visão geral.',
+      },
+    }, 503);
+  }
+
+  const totalRevenue = (paidOrders || []).reduce(
+    (sum: number, order: { amount: number | string | null }) => sum + (Number(order.amount) || 0),
+    0,
+  );
   const total = totalCases ?? 0;
   const paid = paidCases ?? 0;
   const analyzed = analyzedCases ?? 0;
   const ready = defenseReadyCases ?? 0;
+  const recentCases = (recentRows || []).map((row: any) => ({
+    id: row.id,
+    title: row.title || undefined,
+    clientName: row.client_name || undefined,
+    isPaid: row.is_paid === true,
+    status: row.status || undefined,
+    createdAt: row.created_at || undefined,
+    infraction: {
+      aitNumber: row.ait_number || undefined,
+      description: row.infraction_description || undefined,
+      autuadorBody: row.autuador_body || undefined,
+    },
+    vehicle: {
+      plate: row.vehicle_plate || undefined,
+    },
+  }));
+
   return c.json({
     metrics: {
       totalUsers: profileCount ?? 0,
@@ -47,6 +96,7 @@ adminRoutes.get('/admin/overview', async (c) => {
       conversionRate: total > 0 ? Number(((paid / total) * 100).toFixed(1)) : 0,
       analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
     },
+    recentCases,
     observability: {
       historicalMetrics: true,
       metricsEndpoint: '/api/admin/ai/metrics',
