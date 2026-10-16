@@ -40,16 +40,9 @@ describe('VenoPag Worker client', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('verifies raw-body HMAC, client ID, and a five-minute timestamp window', async () => {
-    const rawBody = '{"type":"cashin","amount":100.00}';
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.VENO_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const signature = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${timestamp}.${rawBody}`))), (byte) => byte.toString(16).padStart(2, '0')).join('');
-    const header = `t=${timestamp},v1=${signature}`;
-
-    expect(await verifyVenoWebhook(env, rawBody, header, env.VENO_CLIENT_ID)).toBe(true);
-    expect(await verifyVenoWebhook(env, `${rawBody} `, header, env.VENO_CLIENT_ID)).toBe(false);
-    expect(await verifyVenoWebhook(env, rawBody, header, 'another-client')).toBe(false);
-    expect(await verifyVenoWebhook(env, rawBody, `t=1,v1=${signature}`, env.VENO_CLIENT_ID)).toBe(false);
-  });
-});
+  it('validates the non-guessable URL token required for unsigned VenoPag webhooks', () => {
+    expect(verifyVenoWebhook(env, env.VENO_WEBHOOK_SECRET)).toBe(true);
+    expect(verifyVenoWebhook(env, 'wrong-token')).toBe(false);
+    expect(verifyVenoWebhook(env, null)).toBe(false);
+    expect(verifyVenoWebhook({ ...env, VENO_WEBHOOK_SECRET: '' }, env.VENO_WEBHOOK_SECRET)).toBe(false);
+  });});
