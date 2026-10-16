@@ -170,12 +170,18 @@ adminRoutes.get('/admin/payments/affiliates', async (c) => {
     ...(mappings || []).map((row: any) => String(row.user_id)),
   ].filter(Boolean))];
   if (!ids.length) return c.json({ affiliates: [] });
-  const [{ data: profiles, error: profileError }, { data: ledger, error: ledgerError }] = await Promise.all([
-    supabase.from('user_profiles').select('user_id,name,email').in('user_id', ids),
-    supabase.from('commission_ledger').select('beneficiary_id,commission_amount,status').in('beneficiary_id', ids).limit(5000),
+  const [{ data: profiles, error: profileError }, { data: ledger, error: ledgerError }, { data: availableUsers, error: usersError }] = await Promise.all([
+    ids.length
+      ? supabase.from('user_profiles').select('user_id,name,email,referral_code').in('user_id', ids)
+      : Promise.resolve({ data: [], error: null }),
+    ids.length
+      ? supabase.from('commission_ledger').select('beneficiary_id,commission_amount,status').in('beneficiary_id', ids).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from('user_profiles').select('user_id,name,email,referral_code').order('created_at', { ascending: false }).limit(500),
   ]);
   if (profileError) throw new Error(profileError.message);
   if (ledgerError) throw new Error(ledgerError.message);
+  if (usersError) throw new Error(usersError.message);
   const profileByUser = new Map((profiles || []).map((row: any) => [String(row.user_id), row]));
   const affiliates = ids.map((userId) => {
     const profile: any = profileByUser.get(userId) || {};
@@ -184,13 +190,19 @@ adminRoutes.get('/admin/payments/affiliates', async (c) => {
     const earned = (ledger || []).filter((row: any) => String(row.beneficiary_id) === userId && !['REVERSED', 'CANCELLED'].includes(String(row.status).toUpperCase()))
       .reduce((sum: number, row: any) => sum + (Number(row.commission_amount) || 0), 0);
     return {
-      userId, name: profile.name || '', email: profile.email || '', referrals: userRelations.length,
-      commissions: Number(earned.toFixed(2)), venopagUsername: mapping.venopag_username || '',
-      splitPercent: Number(mapping.split_percent) || 0, active: Boolean(mapping.is_active),
-      configured: Boolean(mapping.venopag_username),
+      userId, name: profile.name || '', email: profile.email || '', referralCode: profile.referral_code || '',
+      referrals: userRelations.length, commissions: Number(earned.toFixed(2)),
+      venopagUsername: mapping.venopag_username || '', splitPercent: Number(mapping.split_percent) || 0,
+      active: Boolean(mapping.is_active), configured: Boolean(mapping.venopag_username),
     };
   }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  return c.json({ affiliates });
+  return c.json({
+    affiliates,
+    availableUsers: (availableUsers || []).map((user: any) => ({
+      userId: String(user.user_id), name: user.name || '', email: user.email || '',
+      referralCode: user.referral_code || '',
+    })),
+  });
 });
 
 adminRoutes.put('/admin/payments/affiliates/:userId', async (c) => {
@@ -206,9 +218,16 @@ adminRoutes.put('/admin/payments/affiliates/:userId', async (c) => {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Username VenoPag e percentual entre 0 e 100 são obrigatórios.' } }, 400);
   }
   const supabase = createSupabaseAdminClient(c.env);
-  const { data: user, error: userError } = await supabase.from('user_profiles').select('user_id').eq('user_id', userId).maybeSingle();
+  const { data: user, error: userError } = await supabase.from('user_profiles').select('user_id,referral_code').eq('user_id', userId).maybeSingle();
   if (userError) throw new Error(userError.message);
   if (!user) return c.json({ error: { code: 'NOT_FOUND', message: 'Usuário afiliado não encontrado.' } }, 404);
+  const referralCode = user.referral_code || `REF_${userId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  if (!user.referral_code) {
+    const { error: referralCodeError } = await supabase.from('user_profiles').update({
+      referral_code: referralCode, updated_at: new Date().toISOString(),
+    }).eq('user_id', userId);
+    if (referralCodeError) throw new Error(referralCodeError.message);
+  }
   const { error } = await supabase.from('affiliate_gateway_profiles').upsert({
     user_id: userId, venopag_username: username, split_percent: splitPercent, is_active: active, updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' });
@@ -216,7 +235,7 @@ adminRoutes.put('/admin/payments/affiliates/:userId', async (c) => {
     if (error.code === '23505') return c.json({ error: { code: 'CONFLICT', message: 'Esse username VenoPag já está associado a outro afiliado.' } }, 409);
     throw new Error(error.message);
   }
-  return c.json({ success: true, userId, venopagUsername: username, splitPercent, active });
+  return c.json({ success: true, userId, referralCode, venopagUsername: username, splitPercent, active });
 });
 
 adminRoutes.get('/admin/payments/commissions', async (c) => {
