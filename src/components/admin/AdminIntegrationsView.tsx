@@ -137,14 +137,9 @@ export const AdminIntegrationsView: React.FC = () => {
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-            <button
-              onClick={() => handleTestIntegration('venopag')}
-              disabled={testStatus['venopag']?.testing}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{testStatus['venopag']?.testing ? 'Testando...' : 'Verificar integração VenoPag'}</span>
-            </button>
+            <span className="text-sm text-slate-400">
+              Estado: {data?.venopag?.status === 'CONFIGURED' ? 'Credenciais configuradas' : 'Credenciais não confirmadas'}
+            </span>
             <button
               onClick={() => navigate('/admin/payments')}
               className="text-orange-400 hover:underline text-sm flex items-center gap-1 cursor-pointer"
@@ -153,11 +148,6 @@ export const AdminIntegrationsView: React.FC = () => {
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
-          {testStatus['venopag']?.result && (
-            <p className="text-sm text-emerald-400 bg-slate-950 p-2 rounded-lg border border-slate-800">
-              {testStatus['venopag'].result}
-            </p>
-          )}
         </div>
 
         {/* 2. Supabase BaaS */}
