@@ -4,12 +4,51 @@ import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
 import { createMetaPublisher, type PublishContent } from '../publishers';
+import { FirecrawlProspectingError, searchFirecrawlProspects } from '../services/firecrawl-prospecting';
 
 /** CRUD editorial_content + publicação via adapters (Meta agora, abertos p/ mais). */
 // Fase 10 — Contrato runtime: publish exige binds META_ACCESS_TOKEN, META_PAGE_ID, IG_USER_ID.
 export const marketingRoutes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
 marketingRoutes.use('/marketing/*', authenticateToken, requireAdmin);
+
+
+/**
+ * Prova técnica administrativa: consulta a busca do Firecrawl sem persistência,
+ * sem scraping de contatos e sem iniciar campanhas ou mensagens.
+ */
+marketingRoutes.post('/marketing/prospecting/firecrawl/test', async (c) => {
+  const body = await c.req.json<{ query?: unknown; limit?: unknown }>().catch(() => ({}));
+  if (typeof body.query !== 'string') {
+    return c.json({ success: false, error: { code: 'INVALID_QUERY', message: 'query deve ser um texto.' } }, 400);
+  }
+
+  try {
+    const result = await searchFirecrawlProspects({
+      apiKey: c.env.FIRECRAWL_API_KEY,
+      query: body.query,
+      limit: typeof body.limit === 'number' ? body.limit : 5,
+      fetchImpl: c.env.FETCH || fetch,
+    });
+    return c.json({
+      success: true,
+      mode: 'read_only_test',
+      count: result.results.length,
+      results: result.results,
+      ...(result.creditsUsed !== undefined ? { creditsUsed: result.creditsUsed } : {}),
+      persisted: false,
+      outreachTriggered: false,
+    });
+  } catch (error) {
+    if (error instanceof FirecrawlProspectingError) {
+      return c.json({
+        success: false,
+        error: { code: error.code, message: error.message },
+      }, error.statusCode as 400 | 429 | 502 | 503 | 504);
+    }
+    return c.json({ success: false, error: { code: 'UPSTREAM_ERROR', message: 'Não foi possível executar a prova técnica.' } }, 502);
+  }
+});
 
 marketingRoutes.get('/marketing/contents', async (c) => {
   const { status, channel, limit = '100' } = c.req.query();
