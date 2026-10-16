@@ -173,7 +173,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     }
   });
 
-  it('rejects VenoPag webhooks without the secret URL token before database access', async () => {
+  it('rejects VenoPag webhooks without a valid signature before database access', async () => {
     const response = await app().request('/api/webhooks/venopag', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'cashin', status: 'confirmed', request_number: 'veo_fake' }),
@@ -181,12 +181,6 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(401);
   });
 
-  it('validates the VenoPag webhook URL token in constant time', () => {
-    const env = { VENO_WEBHOOK_SECRET: 'webhook-secret' } as any;
-    expect(verifyVenoWebhook(env, 'webhook-secret')).toBe(true);
-    expect(verifyVenoWebhook(env, 'wrong-secret')).toBe(false);
-    expect(verifyVenoWebhook(env, null)).toBe(false);
-  });
 
   it('persists PAID and treats a repeated PAID webhook as duplicate', async () => {
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
