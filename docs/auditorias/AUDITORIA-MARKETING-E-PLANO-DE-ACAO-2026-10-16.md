@@ -392,3 +392,12 @@ A busca também retornou backups e documentos arquivados. Eles devem ser rotulad
 - [ ] Com essas validações, implementar e testar o caminho canônico em fase funcional separada.
 
 **Conclusão:** o inventário de código está documentado. A fase de diagnóstico operacional ainda não está integralmente concluída porque não houve acesso de runtime às configurações/rotas produtivas nem chamada de teste ao endpoint NVIDIA. Não remover credenciais globais ou declarar vídeo NVIDIA suportado antes dessas validações.
+
+
+### 8.6 Referência oficial de catálogo NVIDIA consultada em 2026-10-16
+
+A documentação pública NVIDIA confirma que há APIs de geração de imagem, incluindo [Stable Diffusion 3 Medium](https://docs.api.nvidia.com/nim/reference/stabilityai-stable-diffusion-3-medium-infer) e modelos FLUX no [catálogo de modelos visuais](https://docs.api.nvidia.com/nim/reference/visual-models-apis). A referência do [Stable Video Diffusion](https://docs.api.nvidia.com/nim/reference/visual-models-apis) também aparece no catálogo de modelos visuais.
+
+Isso muda a conclusão de capacidade de “não há evidência pública” para **“há modelos visuais listados publicamente; ainda falta validar acesso e contrato compatível com a chave/endpoint do ambiente deste projeto”**. O código atual usa `https://integrate.api.nvidia.com/v1` para chat/embeddings, enquanto os endpoints de geração de imagem documentados usam rotas específicas como `https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-3-medium`. Não se deve reaproveitar o endpoint de chat nem presumir que a mesma chave tenha autorização para todos os modelos. A documentação pública do catálogo não comprova, sozinha, disponibilidade de geração de vídeo por texto com a conta atual nem compatibilidade com o contrato atual do editor.
+
+Próximo teste técnico necessário: validar de forma controlada autenticação, status HTTP, formato do corpo e formato da resposta para um modelo de imagem NVIDIA listado no catálogo. Para vídeo, verificar a documentação específica do modelo e o modo (por exemplo, geração de vídeo a partir de imagem) antes de habilitar a função. Não fazer fallback para 9Router ou Gemini caso falhe.
