@@ -45,6 +45,7 @@ jobs:
         run: bun install
 
       - name: Ensure Vectorize index exists
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[DEPLOY-PRODUCTION]')
         run: |
           if ! bunx wrangler vectorize list; then
             echo "Failed to list Vectorize indexes. Check CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID permissions."
