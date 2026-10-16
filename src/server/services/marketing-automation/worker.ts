@@ -172,14 +172,26 @@ export class MarketingAutomationWorker {
     const lead = lc.lead as any;
     const campaign = lc.campaign as any;
 
-    // Safety guard: Não envia para leads com opt_out, já respondidos, convertidos ou esgotados
-    const TERMINAL_OR_RESPONDED = ['responded', 'converted', 'exhausted', 'opt_out', 'paused'];
-    if (TERMINAL_OR_RESPONDED.includes(lc.status) || lead?.status === 'opt_out') {
+    // Fail closed: no outbound send for opt-outs, replied leads, inactive campaigns, or terminal links.
+    const TERMINAL_OR_RESPONDED = ['responded', 'converted', 'exhausted', 'paused'];
+    const leadOptedOut = Boolean(lead?.opt_out_at);
+    const campaignInactive = campaign?.status !== 'active';
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || campaignInactive) {
+      const reason = leadOptedOut
+        ? 'lead opt-out'
+        : campaignInactive
+          ? `campaign status=${campaign?.status || 'missing'}`
+          : `lead campaign status=${lc.status}`;
       logger.info(
-        `Lead campaign ${lc.id} status=${lc.status} (lead=${lead?.status}) — skipping outbound send and cancelling follow-ups`,
+        `Skipping outbound send for lead campaign ${lc.id}: ${reason}; cancelling queued follow-ups`,
         { module: 'worker', operation: 'handleSendMessage' }
       );
-      // Remove da fila se sobrou algo
+      if (leadOptedOut && lc.status !== 'paused') {
+        await supabaseAdmin
+          .from('marketing_lead_campaigns')
+          .update({ status: 'paused', updated_at: new Date().toISOString() })
+          .eq('id', lc.id);
+      }
       await supabaseAdmin.from('marketing_automation_queue').delete().eq('lead_campaign_id', lc.id);
       return;
     }
