@@ -97,21 +97,12 @@ export function getVenoCashInStatus(env: VenoPagEnv, requestNumber: string): Pro
   return request<VenoCashInStatus>(env, `/consult-transaction?request_number=${encodeURIComponent(requestNumber)}`);
 }
 
-function constantTimeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let i = 0; i < left.length; i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
-  return diff === 0;
-}
-
-export async function verifyVenoWebhook(env: VenoPagEnv, rawBody: string, signature: string | null, clientId: string | null): Promise<boolean> {
+/** VenoPag does not sign webhook payloads. Protect the endpoint with a non-guessable URL token,
+ * then independently confirm each event through GET /api/consult-transaction before mutating payment state. */
+export function verifyVenoWebhook(env: VenoPagEnv, token: string | null): boolean {
   const secret = env.VENO_WEBHOOK_SECRET?.trim();
-  const expectedClientId = env.VENO_CLIENT_ID?.trim();
-  if (!secret || !expectedClientId || !signature || clientId !== expectedClientId) return false;
-  const match = /^t=(\d+),v1=([a-f0-9]{64})$/i.exec(signature.trim());
-  if (!match || Math.abs(Date.now() / 1000 - Number(match[1])) > 300) return false;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${match[1]}.${rawBody}`));
-  const expected = Array.from(new Uint8Array(mac), (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return constantTimeEqual(expected, match[2].toLowerCase());
+  if (!secret || !token || token.length !== secret.length) return false;
+  let diff = 0;
+  for (let i = 0; i < secret.length; i++) diff |= secret.charCodeAt(i) ^ token.charCodeAt(i);
+  return diff === 0;
 }
