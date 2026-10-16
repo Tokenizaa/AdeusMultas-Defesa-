@@ -111,8 +111,8 @@ class HealthService {
     services.push(this.checkSupabaseAuthHealth());
     // 6. Supabase Edge Functions
     services.push(await this.checkEdgeFunctionsHealth());
-    // 7. PagBank Gateway
-    services.push(await this.checkPagBankHealth());
+    // 7. VenoPag PIX — reporta configuração, sem afirmar conectividade transacional.
+    services.push(this.checkVenoPagHealth());
     // 8. Meta Graph API (Facebook & Instagram)
     services.push(await this.checkMetaHealth());
     // 9. OCR Engine
@@ -574,86 +574,28 @@ class HealthService {
           error: error instanceof Error ? error.message : String(error),
         },
       };
-    }
+    private checkVenoPagHealth(): ServiceHealthCheck {
+    const isConfigured = Boolean(
+      configService.get('VENO_CLIENT_ID') &&
+      configService.get('VENO_CLIENT_SECRET') &&
+      configService.get('VENO_WEBHOOK_SECRET')
+    );
+    return {
+      id: 'venopag',
+      name: 'VenoPag PIX',
+      category: 'payments',
+      // Credential presence is not proof that the provider API is reachable.
+      status: 'UNKNOWN',
+      latencyMs: null,
+      lastChecked: new Date().toISOString(),
+      isConfigured,
+      message: isConfigured
+        ? 'Credenciais configuradas; conectividade transacional ainda não verificada.'
+        : 'Credenciais VenoPag ausentes ou incompletas.',
+      details: { probeType: 'configuration-only' },
+    };
   }
-  /**
-   * Check PagBank Gateway health
-   */
-  private async checkPagBankHealth(): Promise<ServiceHealthCheck> {
-    const pagBankToken = configService.get('PAGBANK_TOKEN');
-    const isConfigured = Boolean(pagBankToken && String(pagBankToken).length > 10);
-    if (!isConfigured) {
-      return {
-        id: 'pagbank',
-        name: 'PagBank / PagSeguro Orders v2',
-        category: 'payments',
-        status: 'HEALTHY', // Sandbox mode is operational
-        latencyMs: null,
-        lastChecked: new Date().toISOString(),
-        isConfigured: false,
-        message: 'PagBank operando em modo sandbox',
-        details: {
-          environment: configService.get('PAGBANK_ENV'),
-        },
-      };
-    }
-    const startTime = Date.now();
-    try {
-      // Check PagBank API status - using a lightweight endpoint
-      // Note: Actual PagBank API endpoints would need to be consulted
-      // For now, we'll check if we can reach their domain
-      const response = await fetchWithTimeout('https://api.pagbank.com/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${pagBankToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      const latency = Date.now() - startTime;
-      if (response.ok) {
-        return {
-          id: 'pagbank',
-          name: 'PagBank / PagSeguro Orders v2',
-          category: 'payments',
-          status: 'HEALTHY',
-          latencyMs: latency,
-          lastChecked: new Date().toISOString(),
-          isConfigured: true,
-          message: 'PagBank conectado e operacional',
-          details: {
-            environment: configService.get('PAGBANK_ENV'),
-          },
-        };
-      } else {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        return {
-          id: 'pagbank',
-          name: 'PagBank / PagSeguro Orders v2',
-          category: 'payments',
-          status: 'DOWN',
-          latencyMs: Date.now() - startTime,
-          lastChecked: new Date().toISOString(),
-          isConfigured: true,
-          message: `PagBank retornou erro ${response.status}: ${errorText.substring(0, 100)}`,
-          details: {
-            environment: configService.get('PAGBANK_ENV'),
-            statusCode: response.status,
-          },
-        };
-      }
-    } catch (error: unknown) {
-      return {
-        id: 'pagbank',
-        name: 'PagBank / PagSeguro Orders v2',
-        category: 'payments',
-        status: 'DOWN',
-        latencyMs: Date.now() - startTime,
-        lastChecked: new Date().toISOString(),
-        isConfigured: true,
-        message: `Falha na conexão com PagBank: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          environment: configService.get('PAGBANK_ENV'),
-          error: error instanceof Error ? error.message : String(error),
+essage : String(error),
         },
       };
     }

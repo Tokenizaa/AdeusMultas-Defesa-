@@ -42,7 +42,7 @@ O menu inclui IA, marketing, prospecção, conhecimento, afiliados, comercial, E
 
 ### P1 — Nomenclatura e textos operacionais estão parcialmente desatualizados
 
-Há títulos que ainda mencionam PagBank enquanto o gateway primário atual é VenoPag. Também existem estados e rótulos misturados entre português e inglês.
+Há títulos que ainda mencionam PagBank enquanto o gateway PIX principal no Worker é VenoPag. Também existem estados e rótulos misturados entre português e inglês.
 
 **Ação:** centralizar labels, gateway ativo, estados e mensagens de erro em contratos compartilhados; remover textos específicos de provedores antigos onde não forem aplicáveis.
 
@@ -96,7 +96,7 @@ Alterações aplicadas em `src/components/user/UserDashboardView.tsx`:
 ### Fase 3 — UX e acessibilidade
 
 1. Padronizar cabeçalhos, breadcrumbs, status badges e ações primárias.
-2. Corrigir textos PagBank/VenoPag e português/inglês.
+2. Padronizar a marca VenoPag para PIX e identificar PagBank/GGPIX apenas onde ainda forem usados em fluxos legados ou sandbox.
 3. Testar viewport 375px, 768px e desktop.
 4. Executar teclado, foco, contraste e leitores de tela nos fluxos críticos.
 

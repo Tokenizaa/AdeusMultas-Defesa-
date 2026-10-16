@@ -116,7 +116,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
     },
     integrationsHealth: {
       supabase: healthReport.services.find(s => s.id === 'supabase_db')?.status || 'UNKNOWN',
-      pagbank: healthReport.services.find(s => s.id === 'pagbank')?.status || 'UNKNOWN',
+      venopag: healthReport.services.find(s => s.id === 'venopag')?.status || 'UNKNOWN',
       meta: healthReport.services.find(s => s.id === 'meta')?.status || 'UNKNOWN',
       ocr: healthReport.services.find(s => s.id === 'ocr')?.status || 'UNKNOWN',
     },
@@ -237,12 +237,11 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
       apiVersion: 'v20.0',
       status: metaStatus.isConnected ? 'HEALTHY' : 'CONFIGURED_SANDBOX',
     },
-    pagbank: {
-      name: 'PagBank (PagSeguro) Orders v2',
-      apiVersion: 'v2.0',
-      webhookUrl: 'https://app.www.defesai.shop/api/webhooks/pagbank',
+    venopag: {
+      name: 'VenoPag PIX',
+      webhookUrl: 'https://adeusmulta.defesai.com.br/api/webhooks/venopag',
       idempotencyEnabled: true,
-      status: 'HEALTHY',
+      status: process.env.VENO_CLIENT_ID && process.env.VENO_CLIENT_SECRET && process.env.VENO_WEBHOOK_SECRET ? 'CONFIGURED' : 'NOT_CONFIGURED',
     },
     supabase: {
       name: 'Supabase BaaS (Postgres & Auth)',

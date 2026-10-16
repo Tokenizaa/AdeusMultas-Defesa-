@@ -26,9 +26,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     if (segments.length > 1) {
       const section = segments[1];
       const sectionLabels: Record<string, string> = {
-        cases: 'Casos & Autuações',
+        cases: 'Casos e Documentos',
         users: 'Usuários',
-        documents: 'Documentos & Petições',
+        documents: 'Casos e Documentos',
         payments: 'Pagamentos',
         marketing: 'Marketing OS',
         ai: 'IA & Providers',

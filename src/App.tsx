@@ -36,7 +36,7 @@ import { PWAInstallBanner } from './components/pwa/PWAInstallBanner';
 
 // Admin Pages
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
-import { AdminCasesListView } from './components/admin/AdminCasesListView';
+import { AdminCasesAndDocumentsView } from './components/admin/AdminCasesAndDocumentsView';
 import { AdminCaseDetailView } from './components/admin/AdminCaseDetailView';
 import { AdminUsersListView } from './components/admin/AdminUsersListView';
 import { AdminUserDetailView } from './components/admin/AdminUserDetailView';
@@ -177,8 +177,8 @@ function AppContent() {
     let subtitle = 'Monitoramento operacional de autuações, teses e conformidade';
 
     if (currentPath === '/admin/cases' || currentPath.startsWith('/admin/cases/')) {
-      title = 'Casos & Autuações';
-      subtitle = 'Tabela operacional de autuações, pagamentos e minutas';
+      title = 'Casos e Documentos';
+      subtitle = 'Acompanhamento de casos, atuações e documentos vinculados';
     } else if (currentPath === '/admin/users' || currentPath.startsWith('/admin/users/')) {
       title = 'Usuários & Permissões';
       subtitle = 'Gestão de contas de condutores e administradores';
@@ -268,7 +268,7 @@ function AppContent() {
           <AdminDashboardView onSelectCase={handleSelectCaseFromList} />
         )}
         {currentPath === '/admin/cases' && (
-          <AdminCasesListView
+          <AdminCasesAndDocumentsView
             cases={cases}
             onSelectCase={handleSelectCaseFromList}
             onRefreshCases={loadCases}

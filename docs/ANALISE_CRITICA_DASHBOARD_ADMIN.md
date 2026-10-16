@@ -138,11 +138,11 @@ Em `src/components/admin/AdminDashboardView.tsx`:
 
 - “Aguardando Pagamento” é calculado como `totalCases - paidCases`, que inclui qualquer caso não pago, não necessariamente casos cujo estado canônico é aguardando pagamento.
 - O dashboard usa `/api/health/test` e apresenta sondagens de serviços. O estado de uma sondagem não deve ser apresentado como disponibilidade histórica.
-- A UI identifica IA como NVIDIA/9Router e pagamento como PagBank, enquanto outras partes do projeto documentam outro runtime e outros gateways.
+- A UI ainda possui referências legadas a provedores. O gateway PIX principal no Worker é VenoPag; PagBank permanece em fluxos legados/cartão e ferramentas sandbox. A rotina Express de saúde indica apenas se as credenciais VenoPag estão configuradas, não confirma conectividade transacional.
 
 Em `src/server/routes/admin.ts`, `GET /api/admin/integrations/overview`:
 
-- Respostas como `pagbank.status = 'HEALTHY'`, status de banco/Storage e OCR, além de precisão de parser `98.2`, são valores constantes. Não podem ser exibidos como observações reais sem uma verificação executada e evidência correspondente.
+- Respostas como status de banco/Storage e OCR, além de precisão de parser `98.2`, são valores constantes. O status de VenoPag é `UNKNOWN` na rotina Express até existir um probe transacional real. Não podem ser exibidos como observações reais sem uma verificação executada e evidência correspondente.
 
 Em `src/server/routes/analytics.ts`:
 
