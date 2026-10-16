@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   Phone,
@@ -16,18 +16,59 @@ import {
   Code,
 } from 'lucide-react';
 import type { Lead } from '../types/prospecting';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 
 interface ProspectingLeadDrawerProps {
   lead: Lead | null;
   onClose: () => void;
+  onLeadUpdated?: (lead: Pick<Lead, 'id' | 'qualification_status' | 'qualification_notes' | 'qualified_at' | 'opt_out_at'>) => void;
 }
 
 export const ProspectingLeadDrawer: React.FC<ProspectingLeadDrawerProps> = ({
   lead,
   onClose,
+  onLeadUpdated,
 }) => {
+  const authFetch = useAuthFetch();
   const [copied, setCopied] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
+  const [qualificationStatus, setQualificationStatus] = useState<NonNullable<Lead['qualification_status']>>('pending');
+  const [qualificationNotes, setQualificationNotes] = useState('');
+  const [qualificationSaving, setQualificationSaving] = useState(false);
+  const [qualificationMessage, setQualificationMessage] = useState('');
+
+  useEffect(() => {
+    setQualificationStatus(lead?.qualification_status ?? 'pending');
+    setQualificationNotes(lead?.qualification_notes ?? '');
+    setQualificationMessage('');
+  }, [lead?.id, lead?.qualification_status, lead?.qualification_notes]);
+
+  const handleQualificationUpdate = async () => {
+    if (!lead) return;
+    setQualificationSaving(true);
+    setQualificationMessage('');
+    try {
+      const response = await authFetch(`/api/marketing/automation/leads/${lead.id}/qualification`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qualification_status: qualificationStatus,
+          qualification_notes: qualificationNotes,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível salvar a qualificação.');
+      const updated = result.lead as Pick<Lead, 'id' | 'qualification_status' | 'qualification_notes' | 'qualified_at' | 'opt_out_at'>;
+      setQualificationStatus(updated.qualification_status ?? 'pending');
+      setQualificationNotes(updated.qualification_notes ?? '');
+      setQualificationMessage('Qualificação salva.');
+      onLeadUpdated?.(updated);
+    } catch (error) {
+      setQualificationMessage(error instanceof Error ? error.message : 'Falha ao salvar a qualificação.');
+    } finally {
+      setQualificationSaving(false);
+    }
+  };
 
   if (!lead) return null;
 
@@ -163,6 +204,54 @@ export const ProspectingLeadDrawer: React.FC<ProspectingLeadDrawerProps> = ({
               <DetailRow label="Tipo de Segmento" value={lead.lead_type} badge />
               <DetailRow label="Categoria Mapeada" value={lead.category} />
               <DetailRow label="ID do Registro" value={lead.id} isCode />
+            </div>
+          </div>
+
+          {/* Qualificação de Marketing */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              Qualificação de Marketing
+            </h3>
+            <div className="bg-slate-950/60 rounded-xl border border-slate-800 p-3.5 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="lead-qualification-status" className="text-xs text-slate-300">Decisão</label>
+                <select
+                  id="lead-qualification-status"
+                  value={qualificationStatus}
+                  onChange={(event) => setQualificationStatus(event.target.value as NonNullable<Lead['qualification_status']>)}
+                  disabled={qualificationSaving || Boolean(lead.opt_out_at)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white"
+                >
+                  <option value="pending">Pendente</option>
+                  <option value="qualified">Qualificado</option>
+                  <option value="disqualified">Desqualificado</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="lead-qualification-notes" className="text-xs text-slate-300">Justificativa / motivo</label>
+                <textarea
+                  id="lead-qualification-notes"
+                  value={qualificationNotes}
+                  onChange={(event) => setQualificationNotes(event.target.value)}
+                  disabled={qualificationSaving}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Registre a evidência usada para a decisão..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500"
+                />
+                <p className="text-[11px] text-slate-500">Qualificar exige 20 caracteres; desqualificar exige 10.</p>
+              </div>
+              {lead.opt_out_at && <p className="text-xs text-amber-300">Este contato pediu para não receber mensagens. A qualificação está bloqueada.</p>}
+              {qualificationMessage && <p role="status" className={`text-xs ${qualificationMessage === 'Qualificação salva.' ? 'text-emerald-400' : 'text-red-400'}`}>{qualificationMessage}</p>}
+              <button
+                type="button"
+                onClick={handleQualificationUpdate}
+                disabled={qualificationSaving || Boolean(lead.opt_out_at)}
+                className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 text-white rounded-lg text-xs font-bold"
+              >
+                {qualificationSaving ? 'Salvando...' : 'Salvar qualificação'}
+              </button>
             </div>
           </div>
 
