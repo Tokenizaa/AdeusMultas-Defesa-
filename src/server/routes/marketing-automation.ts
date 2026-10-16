@@ -303,9 +303,10 @@ router.post('/campaigns/:id/start', async (req, res) => {
     // Candidate retrieval is deliberately bounded; eligibility is checked before linking.
     const { data: leads, error: leadsError } = await supabaseAdmin
       .from('marketing_leads')
-      .select('id, lead_type, audience, phone_normalized, city, opt_out_at')
+      .select('id, lead_type, audience, qualification_status, phone_normalized, city, opt_out_at')
       .eq('lead_type', campaign.lead_type)
       .eq('audience', campaign.audience)
+      .eq('qualification_status', 'qualified')
       .not('phone_normalized', 'is', null)
       .is('opt_out_at', null)
       .limit(500);
