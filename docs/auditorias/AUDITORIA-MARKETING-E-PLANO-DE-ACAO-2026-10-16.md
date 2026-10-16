@@ -296,3 +296,39 @@ As fases devem ser executadas uma por vez, de ponta a ponta. Cada fase termina c
 ---
 
 **Conclusão:** a recomendação é corrigir primeiro os contratos e a confiabilidade operacional, depois unificar a criação de mídia, tornar a publicação idempotente, corrigir métricas e só então reorganizar e remover legado. Isso reduz a complexidade sem transformar a simplificação visual em uma reescrita arriscada.
+
+
+## 9. Diretriz complementar — NVIDIA padrão e remoção do 9Router na criação
+
+**Decisão para a Fase 1:** no módulo de Marketing, NVIDIA deve ser o provedor padrão para criação de conteúdo por IA. Nenhuma criação de texto, imagem ou vídeo deve ser roteada por Ninerouter/9Router nem cair silenciosamente nesse gateway como fallback.
+
+A diretriz se aplica ao fluxo de criação do Marketing. A Fase 1 deve mapear separadamente outros usos de IA do produto (por exemplo, embeddings, RAG e análise de documentos), para não remover dependências fora do escopo por engano. Uma remoção global de 9Router exige inventário transversal e plano de migração próprios.
+
+### Evidências no repositório
+
+- `src/server/observability/ai-provider-manager.ts` descreve e implementa NVIDIA → 9Router → Gemini/RAG.
+- `src/server/knowledge/embedding-service.ts` descreve NVIDIA → 9Router → Gemini/vetorização determinística.
+- `src/server/services/ai-media-service.ts` usa `@google/genai` e depende de `GEMINI_API_KEY` para geração de imagem/vídeo; a geração de mídia não está centralizada em NVIDIA.
+- `deploy/index.mjs` contém o proxy `/_9router/v1/*` para `NINEROUTER_UPSTREAM`.
+- `CLOUDFLARE.md`, `.env.example.example`, `src/server/config/config-service.ts`, documentação e observabilidade ainda citam credenciais e estados de 9Router.
+- `src/server/services/ai-media-service.ts` e auditorias anteriores registram fallbacks simulados de imagem/vídeo em certas condições.
+
+### Requisitos obrigatórios da Fase 1
+
+1. Inventariar cada referência a `NINEROUTER`, `9router`, `/_9router` e variantes, classificando-a como criação de Marketing, outro domínio de IA, legado, documentação, monitoramento ou segredo de deploy.
+2. Confirmar quais modelos e endpoints NVIDIA estão disponíveis e autenticados para texto, imagem e vídeo. Não presumir que a API de chat também gera mídia.
+3. Definir NVIDIA como provedor explícito e padrão no contrato de criação do Marketing; remover seleção automática de 9Router nessa jornada.
+4. Se NVIDIA não suportar uma modalidade necessária no ambiente contratado, retornar indisponibilidade clara. Não substituir silenciosamente por 9Router, Gemini, SVG, vídeo de amostra ou outro provedor.
+5. Identificar quais segredos `NINEROUTER_*` podem ser desativados depois da migração. Não apagar segredos de produção antes de comprovar que nenhum outro serviço os consome.
+6. Atualizar configurações, estados, métricas, testes, documentação e instruções dos agentes para refletir o provedor real, sem métricas simuladas.
+7. Criar testes que falhem se o fluxo de criação do Marketing chamar 9Router ou declarar sucesso sem mídia real e válida.
+
+### Critérios de aceite específicos
+
+- NVIDIA é a única rota de provedor para criação de Marketing.
+- Não existe fallback silencioso para 9Router nem mocks apresentados como resultados reais.
+- Texto, imagem e vídeo têm suporte NVIDIA verificado individualmente; qualquer modalidade sem suporte fica explicitamente bloqueada e documentada.
+- Usos de 9Router fora da criação de Marketing foram inventariados antes de remover variáveis globais ou proxies.
+- A remoção de segredos e do proxy ocorre somente após busca de referências, testes e validação do runtime de produção.
+
+**Ordem atualizada:** a Fase 1 inclui a auditoria de provedores e a confirmação das capacidades NVIDIA como requisito bloqueante. A Fase 2 só começa depois que o contrato de criação e o suporte real de cada modalidade estiverem definidos.
