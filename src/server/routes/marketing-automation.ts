@@ -6,8 +6,12 @@ import { generateLeadsXlsx } from '../../scraper-prospecting/export/xlsx';
 import { whatsappService } from '../services/whatsapp-service';
 import { configService } from '../config/config-service';
 import { isEligibleLeadForCampaign } from '../services/marketing-automation/eligibility';
+import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
+
+// This router exposes lead data, campaign control and qualification decisions; admin-only.
+router.use(authenticateToken, requireAdmin);
 
 router.get('/status', async (_req, res) => {
   try {
