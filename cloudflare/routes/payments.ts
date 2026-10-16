@@ -442,7 +442,8 @@ routes.post('/webhooks/venopag', async (c) => {
     status: state, paid_at: null, updated_at: statusChangedAt,
   }).eq('id', existing.id);
   if (updateError) throw updateError;
-  const commissionUpdate = reversed
+  const wasPreviouslyPaid = String(existing.status).toUpperCase() === 'PAID' || Boolean(existing.paid_at);
+  const commissionUpdate = reversed || (state === 'CANCELED' && wasPreviouslyPaid)
     ? { status: 'REVERSED', reversed_at: statusChangedAt, reversal_reason: currentStatus }
     : state === 'CANCELED'
       ? { status: 'CANCELLED', reversed_at: null, reversal_reason: currentStatus }
