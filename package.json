@@ -18,7 +18,8 @@
     "test:unit": "vitest run",
     "governance:check": "node scripts/governance-check.cjs",
     "dev:legacy": "tsx src/server/dev-bootstrap.ts",
-    "test:e2e:shared": "playwright test --project=chromium-production --workers=1 tests/e2e/services"
+    "test:e2e:shared": "playwright test --project=chromium-production --workers=1 tests/e2e/services",
+    "test:e2e:managed-local": "node scripts/e2e-server-manager.mjs -- npm run test:e2e:shared"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
