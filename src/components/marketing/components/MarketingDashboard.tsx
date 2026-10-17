@@ -2,19 +2,15 @@ import React from 'react';
 import { Bot, CheckCircle2 } from 'lucide-react';
 import { MarketingAgentState } from '../../../types';
 import { ExceptionAlert } from './ExceptionAlert';
-import { MarketingOverallMetrics, PublisherQueueItem } from '../hooks/use-marketing-service';
+import { MarketingOverallMetrics } from '../hooks/use-marketing-service';
 
 export const MarketingDashboard: React.FC<{
   agents: MarketingAgentState[];
   metrics: MarketingOverallMetrics | null;
   cycleCount: number;
   lastCycleAt: string | null;
-  publisherQueue: PublisherQueueItem[];
-  scheduledPosts: number;
-  metaConnected: boolean;
-  onVerifyChannel: () => void;
   onOpenStudio?: () => void;
-}> = ({ agents, metrics, cycleCount, lastCycleAt, publisherQueue, scheduledPosts, metaConnected, onVerifyChannel, onOpenStudio }) => {
+}> = ({ agents, metrics, cycleCount, lastCycleAt, onOpenStudio }) => {
   const activeAgents = agents.filter((a) => a.status === 'running').length;
   const inAlert = agents.filter((a) => a.status === 'alert').length;
 
@@ -67,14 +63,7 @@ return (
       </div>
 
       {/* Exceções — só aparecem quando existem (4.8) */}
-      <ExceptionAlert
-        agents={agents}
-        publisherQueue={publisherQueue}
-        metrics={metrics}
-        scheduledPosts={scheduledPosts}
-        metaConnected={metaConnected}
-        onRetry={onVerifyChannel}
-      />
+      <ExceptionAlert agents={agents} metrics={metrics} />
 
       {/* KPIs resumidos */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -98,14 +87,13 @@ return (
           <span className="text-slate-400 text-sm font-medium block">Publicados</span>
           <span className="text-xl font-black font-mono mt-1 block">
             {metrics?.publishedPosts ?? '—'}
-            <span className="text-sm text-slate-400"> / {metrics?.scheduledPosts ?? 0} agendados</span>
           </span>
         </div>
       </div>
 
       <p className="text-sm text-slate-400 font-mono flex items-center gap-1">
         <Bot className="w-3 h-3" />
-        Organismo autônomo — nenhuma intervenção manual necessária. Exceções reais aparecem acima.
+        Prepare e revise conteúdos aqui; o agendamento das publicações Meta acontece no Planner da Meta.
       </p>
     </div>
   );
