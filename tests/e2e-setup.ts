@@ -27,8 +27,8 @@ async function main() {
     console.log(`Test Run ID: ${TEST_RUN_ID}`);
     console.log(`Evidence Dir: ${EVIDENCE_DIR}`);
     console.log(`Users Created: ${(await testManager.getTestUsers()).length}`);
-    console.log(`Cases Created: ${testCases.length}`);
-    console.log(`Fixtures Generated: ${testCases.length} sets`);
+    console.log(`Scenarios Prepared: ${testCases.length}`);
+    console.log(`Fixture sets generated: ${testCases.length}`);
     console.log(`\nNext step: Run Playwright E2E tests`);
     console.log(`npx playwright test tests/e2e-runner.spec.ts\n`);
     
