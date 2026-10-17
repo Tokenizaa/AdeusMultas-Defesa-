@@ -167,7 +167,9 @@ export class E2ETestManager {
     if (fs.existsSync(initialStatePath)) {
       const state = JSON.parse(fs.readFileSync(initialStatePath, 'utf8'));
       if (state.testRunId === TEST_RUN_ID && Array.isArray(state.users) && Array.isArray(state.cases)) {
-        this.testUsers = state.users;
+        // Historical state files contain one user entry per scenario.
+        // Normalize them to the five shared Auth identities in memory.
+        this.testUsers = [...new Map((state.users as TestUser[]).map((user) => [user.email, user])).values()];
         this.testCases = state.cases;
         const existing = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
         for (const user of this.testUsers) {
@@ -256,20 +258,9 @@ export class E2ETestManager {
       });
     }
 
-    let scenarioIndex = 0;
-    for (const [serviceType, configs] of Object.entries(COMMERCIAL_SERVICES)) {
-      for (const config of configs) {
-        const identity = identities[scenarioIndex % identities.length];
-        this.testUsers.push({
-          ...identity,
-          id: identity.id,
-          serviceType,
-          scenario: config.scenario,
-          testRunId: TEST_RUN_ID,
-        });
-        scenarioIndex += 1;
-      }
-    }
+    // Keep exactly five Auth identities. Scenario data is generated separately
+    // and references these shared identities; never duplicate accounts per test.
+    this.testUsers = identities;
   }
 
   private generatePhone(uf: string): string {
@@ -355,56 +346,53 @@ export class E2ETestManager {
   }
 
   private async createProfilesAndCases(): Promise<void> {
+    // Upsert the five shared profiles once. Do not seed one database case per
+    // scenario: each scenario creates its own real case through the public flow.
     for (const user of this.testUsers) {
-      // Create profile
       const { error: profileError } = await this.supabase
         .from('user_profiles')
         .upsert({
           user_id: user.id,
           name: user.name,
           email: user.email,
-          phone: user.phone.replace(/\D/g, ''),
+          phone: user.phone.replace(/\\D/g, ''),
           cpf: user.cpf,
           cnh: user.cnh,
           city_state: user.addressCityState,
-          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
-      
+        }, { onConflict: 'user_id' });
+
       if (profileError) {
-        console.error(`[${TEST_RUN_ID}] Profile error for ${user.email}:`, profileError.message);
-      }
-
-      // Create case
-      const caseConfig = COMMERCIAL_SERVICES[user.serviceType].find(c => c.scenario === user.scenario);
-      if (!caseConfig) continue;
-
-      const caseId = randomUUID();
-      const testCase: TestCase = {
-        id: caseId,
-        userId: user.id,
-        serviceType: user.serviceType,
-        scenario: user.scenario,
-        procedureType: this.getProcedureType(user.serviceType, caseConfig),
-        infraction: this.buildInfraction(caseConfig, user),
-        vehicle: this.buildVehicle(user),
-        applicant: this.buildApplicant(user),
-        testRunId: TEST_RUN_ID,
-        status: 'created',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Map to database schema
-      const caseRow = this.mapCaseToRow(testCase);
-      const { error: caseError } = await this.supabase.from('cases').insert(caseRow);
-      
-      if (caseError) {
-        console.error(`[${TEST_RUN_ID}] Case error for ${user.email}:`, caseError.message);
-      } else {
-        this.testCases.push(testCase);
+        throw new Error(`Profile setup failed for shared E2E identity ${user.email}: ${profileError.message}`);
       }
     }
+
+    // Build 70 in-memory scenario fixtures while keeping only five persisted
+    // identities. These fixture IDs are correlation IDs, not pre-seeded cases.
+    let scenarioIndex = 0;
+    for (const [serviceType, configs] of Object.entries(COMMERCIAL_SERVICES)) {
+      for (const config of configs) {
+        const identity = this.testUsers[scenarioIndex % this.testUsers.length];
+        const testCase: TestCase = {
+          id: randomUUID(),
+          userId: identity.id,
+          serviceType,
+          scenario: config.scenario,
+          procedureType: this.getProcedureType(serviceType, config),
+          infraction: this.buildInfraction(config, identity),
+          vehicle: this.buildVehicle(identity),
+          applicant: this.buildApplicant(identity),
+          testRunId: TEST_RUN_ID,
+          status: 'created',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.testCases.push(testCase);
+        scenarioIndex += 1;
+      }
+    }
+
+    console.log(`[${TEST_RUN_ID}] Prepared ${this.testCases.length} in-memory scenarios using ${this.testUsers.length} shared identities; no scenario cases were pre-seeded.`);
   }
 
   private getProcedureType(serviceType: string, config: ServiceConfig): string {
