@@ -15,7 +15,6 @@ import { paymentsRoutes } from './routes/payments'
 import { notificationsRoutes } from './routes/notifications'
 import { auditRoutes } from './routes/audit'
 import { settingsRoutes } from './routes/settings'
-import { scheduledTick } from './cron'
 import { adminRoutes } from './routes/admin'
 import { marketingRoutes } from './routes/marketing'
 import { communicationRoutes } from './routes/communication'
@@ -93,11 +92,5 @@ app.get('*', async (c) => {
   return assetResponse
 })
 
-export default {
-  fetch: app.fetch,
-  scheduled: async (event: any, env: Env, _ctx: any) => {
-    const result = await scheduledTick(env)
-    console.log('[cron] tick:', JSON.stringify(result))
-  },
-}
+export default { fetch: app.fetch }
 export { app };
