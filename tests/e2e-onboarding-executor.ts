@@ -142,7 +142,7 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
     // without creating a real VenoPag charge. The production endpoint is
     // covered separately by route-contract tests and explicit operator
     // confirmation is required before any live PIX request.
-    if (process.env.E2E_MOCK_PAYMENT === '1') {
+    if (process.env.E2E_ALLOW_REAL_PAYMENT !== 'true') {
       await page.route('**/api/payments/pix/create', async (route) => {
         await route.fulfill({
           status: 200,
@@ -437,7 +437,7 @@ async function fillTechnicalDetails(page: Page, infraction: any) {
     await page.waitForSelector('#select-vermelho-motivo', { state: 'visible', timeout: 5000 });
     await selectNativeOption(page, 'select-vermelho-motivo', 'amarelo_rapido');
     await selectNativeOption(page, 'select-photo-proof', 'nao');
-  } else if (code === '666-10') {
+  } else if (code === '666-10' || code === '545-21') {
     // Estacionamento
     await page.waitForSelector('#select-estacionamento', { state: 'visible', timeout: 5000 });
     await selectNativeOption(page, 'select-estacionamento', 'sinalizacao_irregular');
