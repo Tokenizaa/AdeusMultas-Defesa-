@@ -13,11 +13,8 @@ import {
   FolderLock,
   TrendingUp,
   MessageSquare,
-  Target,
   Sparkles,
-  CalendarClock,
   Radio,
-  Zap,
   BarChart3,
   Settings,
   Share2,
@@ -86,11 +83,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
             icon: MessageSquare,
           },
           {
-            label: 'Kanban Editorial',
-            path: '/admin/marketing?view=planning',
-            icon: Target,
-          },
-          {
             label: 'Biblioteca de Conteúdos',
             path: '/admin/marketing?view=contents',
             icon: FileText,
@@ -99,16 +91,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
             label: 'Estúdio Criativo IA',
             path: '/admin/marketing?view=studio',
             icon: Sparkles,
-          },
-          {
-            label: 'Agendamento & Fila',
-            path: '/admin/marketing?view=schedule',
-            icon: CalendarClock,
-          },
-          {
-            label: 'Automações de Postagem',
-            path: '/admin/marketing?view=automations',
-            icon: Zap,
           },
           {
             label: 'Canais Conectados',
