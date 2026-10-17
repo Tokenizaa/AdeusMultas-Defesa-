@@ -60,7 +60,6 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
   const [hashtags, setHashtags] = useState(content?.hashtags ? (Array.isArray(content.hashtags) ? content.hashtags.join(' ') : String(content.hashtags)) : '#AdeusMulta #CTB');
   const [channel, setChannel] = useState(content?.channel ?? 'instagram');
   const [format, setFormat] = useState(content?.format ?? 'carrossel');
-  const [scheduledDate, setScheduledDate] = useState(content?.scheduledDate ?? new Date(Date.now() + 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 16));
   const [panelTab, setPanelTab] = useState<PanelTab>('assets');
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [previewNetwork, setPreviewNetwork] = useState<Network>('instagram');
@@ -194,7 +193,6 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
           copyText: textToSave,
           channel,
           format,
-          scheduledDate,
           hashtags: hashtags.split(' ').filter(Boolean),
           imageUrl: attachedImageUrl,
           mediaUrl: attachedImageUrl,
@@ -238,8 +236,8 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
       return;
     }
 
-    const mediaLine = attachedImageUrl ? `\\n\\nMídia: ${attachedImageUrl}` : '';
-    const plannerCopy = `${title}\\n\\n${liveText}\\n\\n${hashtags}${mediaLine}`;
+    const mediaLine = attachedImageUrl ? `\n\nMídia: ${attachedImageUrl}` : '';
+    const plannerCopy = `${title}\n\n${liveText}\n\n${hashtags}${mediaLine}`;
     try {
       await navigator.clipboard.writeText(plannerCopy);
       setNotice({
@@ -472,15 +470,6 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 uppercase block text-xs font-mono mb-1">Agendamento</label>
-                <input
-                  type="datetime-local"
-                  value={scheduledDate.replace(' ', 'T').slice(0, 16)}
-                  onChange={(e) => setScheduledDate(e.target.value.replace('T', ' '))}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
             </div>
 
             <div>
@@ -708,7 +697,6 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
                 {[
                   ['Formato', FORMAT_LABELS[content.format] ?? content.format],
                   ['Status', content.status],
-                  ['Agendado', content.scheduledDate],
                   ['Qualidade', `${content.qualityReviewScore}/10`],
                   ['Alcance est.', content.estimatedReach.toLocaleString('pt-BR')],
                   ['Autor', content.authorAgent],
