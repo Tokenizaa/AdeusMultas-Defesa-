@@ -175,7 +175,7 @@ export class E2EValidator {
         }
 
         // Check UF from cityState
-        const expectedUF = extractUF(testCase.applicant.addressCityState);
+        const expectedUF = extractUFFromCompetentBody(testCase.infraction.autuadorBody);
         const analysisUF = extractUFFromCompetentBody(analysis.competentBody);
         if (analysisUF === expectedUF) {
           ufCorrect = true;
@@ -345,56 +345,76 @@ export class E2EValidator {
     let clean = true;
 
     try {
-      // Fetch all cases from this test run
-      const { data: allCases } = await this.supabase
+      // Do not rely on a test_run_id column that is not part of the production schema.
+      // Scope the check to synthetic E2E identities and fail closed on query errors.
+      const { data: profiles, error: profilesError } = await this.supabase
+        .from('user_profiles')
+        .select('user_id')
+        .like('email', 'e2e+%@test.local');
+
+      if (profilesError) {
+        throw new Error(`Could not identify synthetic E2E users: ${profilesError.message}`);
+      }
+
+      const syntheticUserIds = [...new Set((profiles || []).map((profile: any) => profile.user_id).filter(Boolean))];
+      if (syntheticUserIds.length === 0) {
+        throw new Error('No synthetic E2E users found; contamination check cannot be trusted');
+      }
+
+      const { data: allCases, error: casesError } = await this.supabase
         .from('cases')
-        .select('id, defense_draft_json, applicant_json, infraction_json')
-        .eq('test_run_id', testCase.testRunId) // Note: need to add test_run_id column or use metadata
+        .select('id, user_id, defense_draft_json, applicant_json, infraction_json, ait_number')
+        .in('user_id', syntheticUserIds)
         .neq('id', caseData.id);
 
-      if (allCases && allCases.length > 0) {
-        const currentDraft = caseData.defense_draft_json 
-          ? (typeof caseData.defense_draft_json === 'string' ? JSON.parse(caseData.defense_draft_json) : caseData.defense_draft_json)
+      if (casesError) {
+        throw new Error(`Could not load synthetic E2E cases: ${casesError.message}`);
+      }
+
+      const currentDraft = caseData.defense_draft_json
+        ? (typeof caseData.defense_draft_json === 'string' ? JSON.parse(caseData.defense_draft_json) : caseData.defense_draft_json)
+        : null;
+      const currentDraftText = currentDraft?.fullDraftText;
+
+      if (!currentDraftText) {
+        throw new Error('Current case has no fullDraftText; contamination check cannot be trusted');
+      }
+
+      for (const otherCase of allCases || []) {
+        const otherApplicant = otherCase.applicant_json
+          ? (typeof otherCase.applicant_json === 'string' ? JSON.parse(otherCase.applicant_json) : otherCase.applicant_json)
           : null;
+        if (!otherApplicant) continue;
 
-        if (currentDraft?.fullDraftText) {
-          for (const otherCase of allCases) {
-            const otherDraft = otherCase.defense_draft_json
-              ? (typeof otherCase.defense_draft_json === 'string' ? JSON.parse(otherCase.defense_draft_json) : otherCase.defense_draft_json)
-              : null;
+        const otherName = otherApplicant.applicantName;
+        const otherCpf = otherApplicant.applicantCpf;
+        const otherCityState = otherApplicant.addressCityState;
+        const otherAit = otherCase.ait_number;
 
-            if (otherDraft?.fullDraftText) {
-              // Check if current draft contains data from other case
-              const otherApplicant = otherCase.applicant_json
-                ? (typeof otherCase.applicant_json === 'string' ? JSON.parse(otherCase.applicant_json) : otherCase.applicant_json)
-                : null;
-
-              if (otherApplicant) {
-                const otherName = otherApplicant.applicantName;
-                const otherCpf = otherApplicant.applicantCpf;
-                const otherCityState = otherApplicant.addressCityState;
-
-                if (currentDraft.fullDraftText.includes(otherName) && otherName !== testCase.applicant.applicantName) {
-                  clean = false;
-                  errors.push(`Contamination: Current draft contains other case's name: ${otherName}`);
-                  otherCasesData.push(`Other case ${otherCase.id}: name=${otherName}`);
-                }
-                if (currentDraft.fullDraftText.includes(otherCpf) && otherCpf !== testCase.applicant.applicantCpf) {
-                  clean = false;
-                  errors.push(`Contamination: Current draft contains other case's CPF: ${otherCpf}`);
-                  otherCasesData.push(`Other case ${otherCase.id}: cpf=${otherCpf}`);
-                }
-                if (currentDraft.fullDraftText.includes(otherCityState) && otherCityState !== testCase.applicant.addressCityState) {
-                  clean = false;
-                  errors.push(`Contamination: Current draft contains other case's cityState: ${otherCityState}`);
-                  otherCasesData.push(`Other case ${otherCase.id}: cityState=${otherCityState}`);
-                }
-              }
-            }
-          }
+        // Shared accounts legitimately repeat identity/address across services.
+        if (otherName && otherName !== testCase.applicant.applicantName && currentDraftText.includes(otherName)) {
+          clean = false;
+          errors.push(`Contamination: Current draft contains another synthetic user's name (case ${otherCase.id})`);
+          otherCasesData.push(`Other case ${otherCase.id}: applicant name`);
+        }
+        if (otherCpf && otherCpf !== testCase.applicant.applicantCpf && currentDraftText.includes(otherCpf)) {
+          clean = false;
+          errors.push(`Contamination: Current draft contains another synthetic user's CPF (case ${otherCase.id})`);
+          otherCasesData.push(`Other case ${otherCase.id}: applicant CPF`);
+        }
+        if (otherCityState && otherCityState !== testCase.applicant.addressCityState && currentDraftText.includes(otherCityState)) {
+          clean = false;
+          errors.push(`Contamination: Current draft contains another synthetic user's city/state (case ${otherCase.id})`);
+          otherCasesData.push(`Other case ${otherCase.id}: city/state`);
+        }
+        if (otherAit && otherAit !== testCase.infraction?.aitNumber && currentDraftText.includes(otherAit)) {
+          clean = false;
+          errors.push(`Contamination: Current draft contains another case's AIT (case ${otherCase.id})`);
+          otherCasesData.push(`Other case ${otherCase.id}: AIT`);
         }
       }
     } catch (e: any) {
+      clean = false;
       errors.push(`Contamination check error: ${e.message}`);
     }
 
