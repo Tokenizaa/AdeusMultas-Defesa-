@@ -1,12 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const productionBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+const configuredBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+const allowLocalServer = process.env.E2E_USE_LOCAL_SERVER === 'true';
+const productionBaseUrl = configuredBaseUrl || (allowLocalServer ? 'http://127.0.0.1:3000' : '');
+
 if (!productionBaseUrl) {
-  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. A suíte E2E deve executar contra uma implantação Cloudflare/produção, nunca contra localhost.');
+  throw new Error('PLAYWRIGHT_BASE_URL é obrigatório. Para produção use HTTPS; para desenvolvimento local, use scripts/e2e-server-manager.mjs com E2E_USE_LOCAL_SERVER=true.');
 }
 
-if (!/^https:\/\//i.test(productionBaseUrl)) {
-  throw new Error(`PLAYWRIGHT_BASE_URL inválido: ${productionBaseUrl}. Use uma URL HTTPS de produção.`);
+const isExplicitLocalUrl = allowLocalServer && /^http:\/\/(localhost|127\.0\.0\.1)(:\\d+)?(?:\/|$)/i.test(productionBaseUrl);
+if (!/^https:\/\//i.test(productionBaseUrl) && !isExplicitLocalUrl) {
+  throw new Error(`PLAYWRIGHT_BASE_URL inválido: ${productionBaseUrl}. Use HTTPS, ou habilite explicitamente E2E_USE_LOCAL_SERVER=true para localhost.`);
 }
 
 export default defineConfig({
