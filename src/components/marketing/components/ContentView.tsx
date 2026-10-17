@@ -1,69 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import {
-  PenLine, MessageSquareWarning, CalendarClock, TrendingUp, Plus,
-  Search, LayoutGrid, List, Eye, ImageIcon, CalendarDays,
-  Instagram, Facebook, Globe, Mail, Linkedin, Video, FileText, Layers,
+  Plus, Search, LayoutGrid, List, ImageIcon,
+  Instagram, Facebook, Globe, Mail, Linkedin, Video, FileText,
 } from 'lucide-react';
 import { EditorialContentItem } from '../../../types';
 
 type ContentStatus = EditorialContentItem['status'];
 type ViewMode = 'list' | 'cards';
-
-const COLUMNS: {
-  id: ContentStatus;
-  label: string;
-  sublabel: string;
-  icon: React.ElementType;
-  headerClass: string;
-  badgeClass: string;
-  dropClass: string;
-}[] = [
-  {
-    id: 'rascunho',
-    label: 'Rascunho / Em produção',
-    sublabel: 'Geração e redação inicial',
-    icon: PenLine,
-    headerClass: 'bg-blue-50/80 border-blue-200 text-blue-900',
-    badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
-    dropClass: 'border-blue-300 bg-blue-50/30',
-  },
-  {
-    id: 'aprovado_qualidade',
-    label: 'Revisão / Aprovação',
-    sublabel: 'Pronto para revisão humana',
-    icon: MessageSquareWarning,
-    headerClass: 'bg-amber-50/80 border-amber-200 text-amber-900',
-    badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
-    dropClass: 'border-amber-300 bg-amber-50/30',
-  },
-  {
-    id: 'reprovado_qualidade',
-    label: 'Reprovado',
-    sublabel: 'Bloqueado pelo gate de qualidade',
-    icon: MessageSquareWarning,
-    headerClass: 'bg-red-50/80 border-red-200 text-red-900',
-    badgeClass: 'bg-red-100 text-red-800 border-red-300',
-    dropClass: 'border-red-300 bg-red-50/30',
-  },
-  {
-    id: 'agendado',
-    label: 'Agendado',
-    sublabel: 'Programado no calendário',
-    icon: CalendarClock,
-    headerClass: 'bg-emerald-50/80 border-emerald-200 text-emerald-900',
-    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    dropClass: 'border-emerald-300 bg-emerald-50/30',
-  },
-  {
-    id: 'publicado',
-    label: 'Publicado',
-    sublabel: 'Distribuído nos canais',
-    icon: TrendingUp,
-    headerClass: 'bg-indigo-50/80 border-indigo-200 text-indigo-900',
-    badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-    dropClass: 'border-indigo-300 bg-indigo-50/30',
-  },
-];
 
 const CHANNEL_ICONS: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   instagram: { icon: Instagram, label: 'Instagram', color: 'bg-pink-50 text-pink-700 border-pink-200' },
@@ -96,7 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
   rascunho: 'Rascunho',
   aprovado_qualidade: 'Aprovado',
   reprovado_qualidade: 'Reprovado',
-  agendado: 'Agendado',
+  agendado: 'Verificar na Meta',
   publicado: 'Publicado',
 };
 
@@ -104,7 +47,7 @@ const STATUS_PILL: Record<string, string> = {
   rascunho: 'bg-slate-100 text-slate-700',
   aprovado_qualidade: 'bg-amber-50 text-amber-700 border border-amber-200',
   reprovado_qualidade: 'bg-red-50 text-red-700 border border-red-200',
-  agendado: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  agendado: 'bg-amber-50 text-amber-700 border border-amber-200',
   publicado: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
 };
 
@@ -133,7 +76,6 @@ export const ContentView: React.FC<{
       rascunho: contents.filter((c) => c.status === 'rascunho').length,
       aprovado_qualidade: contents.filter((c) => c.status === 'aprovado_qualidade').length,
       reprovado_qualidade: contents.filter((c) => c.status === 'reprovado_qualidade').length,
-      agendado: contents.filter((c) => c.status === 'agendado').length,
       publicado: contents.filter((c) => c.status === 'publicado').length,
     }),
     [contents],
@@ -149,7 +91,7 @@ export const ContentView: React.FC<{
         if (q && !c.title.toLowerCase().includes(q) && !(c.legalTheme || '').toLowerCase().includes(q)) return false;
         return true;
       })
-      .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || ''));
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [contents, filter, channel, format, query]);
 
   const renderList = () => (
@@ -160,7 +102,6 @@ export const ContentView: React.FC<{
           { id: 'rascunho', label: `Rascunho (${counts.rascunho})` },
           { id: 'aprovado_qualidade', label: `Aprovados (${counts.aprovado_qualidade})` },
           { id: 'reprovado_qualidade', label: `Reprovados (${counts.reprovado_qualidade})` },
-          { id: 'agendado', label: `Agendados (${counts.agendado})` },
           { id: 'publicado', label: `Publicados (${counts.publicado})` },
         ].map((t) => (
           <button
@@ -205,7 +146,6 @@ export const ContentView: React.FC<{
                 <th className="px-3 py-2.5">Título</th>
                 <th className="px-3 py-2.5">Canal / Formato</th>
                 <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5">Agendado</th>
                 <th className="px-3 py-2.5">Qualidade</th>
               </tr>
             </thead>
@@ -220,7 +160,6 @@ export const ContentView: React.FC<{
                   <td className="px-3 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${STATUS_PILL[item.status]}`}>{STATUS_LABEL[item.status]}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-500 font-mono">{item.scheduledDate}</td>
                   <td className="px-3 py-2.5 font-mono text-emerald-700">{item.qualityReviewScore}/10</td>
                 </tr>
               ))}
@@ -253,7 +192,7 @@ export const ContentView: React.FC<{
                 )}
                 <p className="text-slate-500 text-sm line-clamp-2">Tese: {item.legalTheme}</p>
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-sm text-slate-400 font-mono">
-                  <span>{item.scheduledDate}</span>
+                  <span>Conteúdo</span>
                   <span className="text-emerald-700 font-semibold">{item.qualityReviewScore}/10</span>
                 </div>
               </div>
@@ -268,7 +207,7 @@ export const ContentView: React.FC<{
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-50 text-[#155BCB] rounded-lg"><Layers className="w-5 h-5" /></div>
+          <div className="p-2 bg-blue-50 text-[#155BCB] rounded-lg"><FileText className="w-5 h-5" /></div>
           <div>
             <h3 className="text-sm font-bold text-slate-900">Conteúdo</h3>
             <p className="text-xs text-slate-500">Conteúdos preparados e materiais reutilizáveis</p>
