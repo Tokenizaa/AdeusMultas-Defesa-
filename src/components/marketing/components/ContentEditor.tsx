@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, Save, Sparkles, Bot, Info, ImageIcon, History as HistoryIcon, PenLine, Wand2,
   RefreshCw, TrendingUp, Megaphone, Music, Film, Search, AlertCircle, CheckCircle2,
-  Instagram, Globe, Clapperboard, Eye, Video, Loader2, Download, Upload, Play,
+  Instagram, Globe, Clapperboard, Eye, Video, Loader2, Download, Upload, Play, ExternalLink,
 } from 'lucide-react';
 import { EditorialContentItem, BrandIdentityConfig } from '../../../types';
 import { MarketingOverallMetrics } from '../hooks/use-marketing-service';
@@ -39,7 +39,6 @@ interface ContentEditorProps {
   onChannel?: (id: string, channel: string) => Promise<void>;
   onFetchVersions: (id: string) => Promise<ContentVersion[]>;
   contents?: EditorialContentItem[];
-  onPublishToMeta?: (destination: 'facebook' | 'instagram' | 'both', contentId: string) => Promise<void>;
 }
 
 type Network = 'instagram' | 'tiktok' | 'blog' | 'facebook' | 'linkedin';
@@ -54,7 +53,7 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 export const ContentEditor: React.FC<ContentEditorProps> = ({
-  content, brand, onClose, onSave, onStatus, onChannel, onFetchVersions, contents, onPublishToMeta
+  content, brand, onClose, onSave, onStatus, onChannel, onFetchVersions, contents
 }) => {
   const [title, setTitle] = useState(content?.title ?? '');
   const [text, setText] = useState(content?.copyText ?? '');
@@ -66,7 +65,6 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [previewNetwork, setPreviewNetwork] = useState<Network>('instagram');
   const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [liveText, setLiveText] = useState(text);
@@ -184,7 +182,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
 
   if (!content) return null;
 
-  const persist = async (nextText?: string, versionNote?: { agent?: string; author?: string; changes?: string }) => {
+  const persist = async (nextText?: string, versionNote?: { agent?: string; author?: string; changes?: string }): Promise<boolean> => {
     setSaving(true);
     setNotice(null);
     const textToSave = nextText !== undefined ? nextText : liveText;
@@ -211,27 +209,48 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
       const vs = await onFetchVersions(content.id);
       setVersions(vs);
       setNotice({ kind: 'ok', msg: versionNote?.changes ? `${versionNote.changes} — salvo.` : 'Salvo com sucesso.' });
+      return true;
     } catch {
       setNotice({ kind: 'err', msg: 'Falha ao salvar alterações.' });
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePublishMeta = async () => {
-    if (!onPublishToMeta) {
-      onStatus(content.id, 'publicado');
-      setNotice({ kind: 'ok', msg: 'Conteúdo marcado como publicado.' });
+  const handleOpenMetaPlanner = async () => {
+    if (!validation.valid) {
+      setNotice({ kind: 'err', msg: `Falha na validação: ${validation.errors.join(' ')}` });
       return;
     }
-    setPublishing(true);
+
+    // Abrir o Planner durante o gesto do usuário evita bloqueio do popup.
+    const plannerWindow = window.open('https://business.facebook.com/latest/planner', '_blank');
+    if (plannerWindow) plannerWindow.opener = null;
+
+    const saved = await persist(undefined, {
+      agent: 'humano',
+      author: 'Equipe',
+      changes: 'Preparado para agendamento no Planner da Meta',
+    });
+    if (!saved) {
+      setNotice({ kind: 'err', msg: 'Não foi possível confirmar o salvamento. Confira o conteúdo antes de agendar na Meta.' });
+      return;
+    }
+
+    const mediaLine = attachedImageUrl ? `\\n\\nMídia: ${attachedImageUrl}` : '';
+    const plannerCopy = `${title}\\n\\n${liveText}\\n\\n${hashtags}${mediaLine}`;
     try {
-      await onPublishToMeta('both', content.id);
-      setNotice({ kind: 'ok', msg: 'Publicado no Facebook & Instagram!' });
-    } catch (e: any) {
-      setNotice({ kind: 'err', msg: `Erro ao publicar: ${e?.message || 'Tente novamente'}` });
-    } finally {
-      setPublishing(false);
+      await navigator.clipboard.writeText(plannerCopy);
+      setNotice({
+        kind: 'ok',
+        msg: 'Conteúdo salvo e texto copiado. No Planner da Meta, crie a publicação, adicione a mídia e confirme o agendamento. O conteúdo ainda não foi agendado.',
+      });
+    } catch {
+      setNotice({
+        kind: 'err',
+        msg: 'Conteúdo salvo e Planner aberto. A cópia automática falhou; copie o texto manualmente e confirme o agendamento na Meta.',
+      });
     }
   };
 
@@ -379,16 +398,14 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({
           >
             <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar'}
           </button>
-          {content.status !== 'publicado' && (
-            <button
-              onClick={handlePublishMeta}
-              disabled={publishing}
-              className="px-3 py-2 bg-[#155BCB] hover:bg-[#1149a4] text-white rounded-lg text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
-              <span>{publishing ? 'Publicando...' : 'Publicar'}</span>
-            </button>
-          )}
+          <button
+            onClick={handleOpenMetaPlanner}
+            disabled={saving}
+            className="px-3 py-2 bg-[#155BCB] hover:bg-[#1149a4] text-white rounded-lg text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+            <span>{saving ? 'Salvando...' : 'Salvar e abrir Planner da Meta'}</span>
+          </button>
           <button
             onClick={() => { onStatus(content.id, 'aprovado_qualidade'); setNotice({ kind: 'ok', msg: 'Conteúdo aprovado pela qualidade.' }); }}
             className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold cursor-pointer"
