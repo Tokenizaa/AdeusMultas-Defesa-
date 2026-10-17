@@ -7,7 +7,7 @@ import {
 import { EditorialContentItem } from '../../../types';
 
 type ContentStatus = EditorialContentItem['status'];
-type ViewMode = 'list' | 'cards' | 'kanban';
+type ViewMode = 'list' | 'cards';
 
 const COLUMNS: {
   id: ContentStatus;
@@ -111,25 +111,21 @@ const STATUS_PILL: Record<string, string> = {
 export const ContentView: React.FC<{
   contents: EditorialContentItem[];
   loading: boolean;
-  onMove: (id: string, status: ContentStatus) => void;
   onSelectContent?: (item: EditorialContentItem) => void;
   onCreateNew?: () => void;
   defaultViewMode?: ViewMode;
 }> = ({
   contents,
   loading,
-  onMove,
   onSelectContent,
   onCreateNew,
-  defaultViewMode = 'kanban',
+  defaultViewMode = 'list',
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode);
   const [filter, setFilter] = useState<string>('all');
   const [channel, setChannel] = useState('all');
   const [format, setFormat] = useState('all');
   const [query, setQuery] = useState('');
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overColumn, setOverColumn] = useState<ContentStatus | null>(null);
 
   const counts = useMemo(
     () => ({
@@ -155,120 +151,6 @@ export const ContentView: React.FC<{
       })
       .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || ''));
   }, [contents, filter, channel, format, query]);
-
-  const handleDrop = (target: ContentStatus) => {
-    setOverColumn(null);
-    if (!dragId) return;
-    const item = contents.find((c) => c.id === dragId);
-    if (item && item.status !== target) onMove(dragId, target);
-    setDragId(null);
-  };
-
-  const renderKanban = () => (
-    <div className="flex gap-4 overflow-x-auto pb-6 min-h-[60vh] scrollbar-thin">
-      {COLUMNS.map((col) => {
-        const items = filtered
-          .filter((c) => c.status === col.id)
-          .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
-        const Icon = col.icon;
-        const isOver = overColumn === col.id;
-
-        return (
-          <div
-            key={col.id}
-            className="flex-1 min-w-[280px] max-w-[340px] flex flex-col rounded-xl bg-slate-50/60 border border-slate-200 overflow-hidden shadow-xs"
-          >
-            <div className={`flex items-center justify-between px-3.5 py-3 border-b ${col.headerClass}`}>
-              <div className="flex items-center gap-2">
-                <Icon className="w-4 h-4 shrink-0" />
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider">{col.label}</h4>
-                  <p className="text-[10px] opacity-75">{col.sublabel}</p>
-                </div>
-              </div>
-              <span className={`px-2 py-0.5 text-xs font-bold rounded-full border ${col.badgeClass}`}>
-                {items.length}
-              </span>
-            </div>
-
-            <div
-              onDragOver={(e) => { e.preventDefault(); setOverColumn(col.id); }}
-              onDragLeave={() => setOverColumn((c) => (c === col.id ? null : c))}
-              onDrop={(e) => { e.preventDefault(); handleDrop(col.id); }}
-              className={`flex-1 p-3 space-y-3 min-h-[260px] transition-all overflow-y-auto ${
-                isOver ? col.dropClass : 'bg-transparent'
-              }`}
-            >
-              {items.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-slate-200 rounded-xl text-xs text-slate-400 p-4 text-center">
-                  <p className="font-medium">Nenhum conteúdo nesta etapa</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Arraste um card para cá ou crie uma nova publicação</p>
-                </div>
-              ) : (
-                items.map((item) => {
-                  const channelInfo = CHANNEL_ICONS[item.channel?.toLowerCase()] || {
-                    icon: Globe, label: item.channel || 'Canal', color: 'bg-slate-100 text-slate-700 border-slate-200',
-                  };
-                  const ChannelIcon = channelInfo.icon;
-                  const hasImage = Boolean(item.imageUrl || item.mediaUrl);
-
-                  return (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={(e) => { e.stopPropagation(); setDragId(item.id); }}
-                      onDragEnd={() => setDragId(null)}
-                      onClick={() => onSelectContent && onSelectContent(item)}
-                      className={`group relative p-3.5 bg-white border border-slate-200 rounded-xl hover:border-[#155BCB] hover:shadow-md transition-all cursor-pointer text-xs space-y-2.5 ${
-                        dragId === item.id ? 'opacity-40 scale-95 border-dashed border-blue-400' : ''
-                      }`}
-                    >
-                      {hasImage && (
-                        <div className="relative w-full h-28 rounded-lg overflow-hidden bg-slate-100 border border-slate-100">
-                          <img src={item.imageUrl || item.mediaUrl || ''} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" referrerPolicy="no-referrer" />
-                          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] text-white font-mono flex items-center gap-1">
-                            <ImageIcon className="w-3 h-3" /><span>{item.format}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-1 text-[11px]">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold border ${channelInfo.color}`}>
-                            <ChannelIcon className="w-3 h-3" />{channelInfo.label}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase">{item.format}</span>
-                        </div>
-                        <h5 className="font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-[#155BCB] transition-colors">{item.title}</h5>
-                        {item.legalTheme && (
-                          <p className="text-slate-500 text-[11px] line-clamp-1 italic">{item.legalTheme}</p>
-                        )}
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                        <div className="flex items-center gap-1.5">
-                          {item.authorAgent && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">{item.authorAgent}</span>}
-                          {item.qualityReviewScore && <span className="text-emerald-700 font-bold text-[10px]">★ {item.qualityReviewScore}</span>}
-                        </div>
-                        <div className="flex items-center gap-1 text-slate-500 font-medium">
-                          <CalendarDays className="w-3 h-3 text-slate-400" />
-                          <span className="text-[10px]">{item.scheduledDate ? item.scheduledDate.split(' ')[0] : 'Hoje'}</span>
-                        </div>
-                      </div>
-
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-[#155BCB] text-white p-1 rounded-md shadow-xs pointer-events-none">
-                        <Eye className="w-3 h-3" />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 
   const renderList = () => (
     <div className="space-y-3">
@@ -307,7 +189,6 @@ export const ContentView: React.FC<{
         <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
           <button onClick={() => setViewMode('list')} className={`p-2 ${viewMode === 'list' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:text-slate-600'}`} title="Lista"><List className="w-3.5 h-3.5" /></button>
           <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:text-slate-600'}`} title="Cards"><LayoutGrid className="w-3.5 h-3.5" /></button>
-          <button onClick={() => setViewMode('kanban')} className={`p-2 ${viewMode === 'kanban' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`} title="Kanban"><Layers className="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
@@ -390,12 +271,11 @@ export const ContentView: React.FC<{
           <div className="p-2 bg-blue-50 text-[#155BCB] rounded-lg"><Layers className="w-5 h-5" /></div>
           <div>
             <h3 className="text-sm font-bold text-slate-900">Conteúdo</h3>
-            <p className="text-xs text-slate-500">Kanban editorial e biblioteca de conteúdos</p>
+            <p className="text-xs text-slate-500">Conteúdos preparados e materiais reutilizáveis</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-            <button onClick={() => setViewMode('kanban')} className={`p-2 ${viewMode === 'kanban' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`} title="Kanban"><Layers className="w-3.5 h-3.5" /></button>
             <button onClick={() => setViewMode('list')} className={`p-2 ${viewMode === 'list' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:text-slate-600'}`} title="Lista"><List className="w-3.5 h-3.5" /></button>
             <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:text-slate-600'}`} title="Cards"><LayoutGrid className="w-3.5 h-3.5" /></button>
           </div>
@@ -407,7 +287,7 @@ export const ContentView: React.FC<{
         </div>
       </div>
 
-      {loading ? <p className="text-sm text-slate-500 font-mono">Carregando conteúdos...</p> : viewMode === 'kanban' ? renderKanban() : renderList()}
+      {loading ? <p className="text-sm text-slate-500 font-mono">Carregando conteúdos...</p> : renderList()}
     </div>
   );
 };
