@@ -83,8 +83,26 @@ export class E2EValidator {
       .eq('id', caseId)
       .single();
 
+    if ((error || !caseData) && testCase.userId && testCase.infraction?.aitNumber) {
+      // Scenario fixtures may be virtual and intentionally not pre-seeded as
+      // rows. Resolve the real case created by the public onboarding flow.
+      const resolved = await this.supabase
+        .from('cases')
+        .select('*')
+        .eq('user_id', testCase.userId)
+        .eq('ait_number', testCase.infraction.aitNumber)
+        .eq('service_type', testCase.procedureType)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!resolved.error && resolved.data) {
+        caseData = resolved.data;
+        error = null;
+      }
+    }
+
     if (error || !caseData) {
-      return this.failResult(caseId, [`Case not found in database: ${error?.message}`]);
+      return this.failResult(caseId, [`Case not found in database by id or user/AIT/service: ${error?.message || 'no matching persisted case'}`]);
     }
 
     // Anonymous onboarding creates a server-side case after the fixture case
@@ -102,11 +120,8 @@ export class E2EValidator {
         .limit(50);
       const expectedAit = testCase.infraction?.aitNumber;
       const matching = (latest.data || []).find((candidate: any) => {
-        const infraction = typeof candidate.infraction_json === 'string'
-          ? JSON.parse(candidate.infraction_json)
-          : candidate.infraction_json;
         const analysis = typeof candidate.analysis_json === 'string' ? JSON.parse(candidate.analysis_json) : candidate.analysis_json;
-        return infraction?.aitNumber === expectedAit &&
+        return candidate.ait_number === expectedAit &&
           candidate.service_type === testCase.procedureType &&
           analysis?.recommendedProcedure === testCase.procedureType &&
           candidate.analysis_json;
@@ -363,7 +378,7 @@ export class E2EValidator {
 
       const { data: allCases, error: casesError } = await this.supabase
         .from('cases')
-        .select('id, user_id, defense_draft_json, applicant_json, infraction_json, ait_number')
+        .select('id, user_id, defense_draft_json, applicant_json, ait_number')
         .in('user_id', syntheticUserIds)
         .neq('id', caseData.id);
 
