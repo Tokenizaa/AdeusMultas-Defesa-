@@ -2,7 +2,7 @@
    Token: lido de token.tmp (JWT Supabase real do usuário fariasnetto01@gmail.com). NÃO imprime segredos. */
 import { readFileSync } from 'node:fs';
 
-const BASE = 'http://localhost:3100';
+const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 const TOKEN = readFileSync('token.tmp', 'utf8').trim();
 const AUTH = { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
 
