@@ -127,12 +127,20 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
       if (message.type() === 'error') errors.push(`console: ${message.text()}`);
     });
     page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-    page.on('response', (response) => {
-      if (response.url().includes('/api/')) {
-        const status = response.status();
-        if (status >= 400) errors.push(`api:${status} ${response.request().method()} ${response.url()}`);
+    page.on('response', async (response) => {
+      const url = response.url();
+      const status = response.status();
+      if (url.includes('/api/') && status >= 400) {
+        errors.push(`api:${status} ${response.request().method()} ${url}`);
       }
-      if (response.request().method() === 'POST' && /\/api\/cases(?:\/anonymous)?$/.test(new URL(response.url()).pathname)) {
+      if (status === 429) {
+        // Preserve evidence needed to identify the rate limiter without
+        // disabling production protections or logging request credentials.
+        const responseBody = (await response.text().catch(() => '')).slice(0, 800);
+        const retryAfter = response.headers()['retry-after'] || 'not-provided';
+        errors.push(`HTTP_429 method=${response.request().method()} url=${url} retry-after=${retryAfter} body=${responseBody || '(empty)'}`);
+      }
+      if (response.request().method() === 'POST' && /\/api\/cases(?:\/anonymous)?$/.test(new URL(url).pathname)) {
         void response.json().then((payload) => {
           if (payload?.id) result.persistedCaseId = payload.id;
         }).catch(() => undefined);
