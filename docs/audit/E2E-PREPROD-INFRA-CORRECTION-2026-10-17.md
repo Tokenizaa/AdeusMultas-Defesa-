@@ -9,6 +9,7 @@
 Consulta somente leitura ao projeto Supabase `llmxnpgjpxcvyrqjkfwb`:
 
 - 70 registros de preparação foram criados em torno de 05:01 UTC em 2026-10-17, com títulos por serviço/cenário e status `draft`.
+- A consulta posterior confirmou **cinco usuários Auth e cinco perfis E2E distintos**, com os cinco e-mails compartilhados documentados. Portanto, o problema comprovado no banco foi a criação de 70 casos-semente; a lista de 70 entradas de usuário existia no código, mas não resultou em 70 identidades Auth distintas.
 - Entre 05:49 e 06:14 UTC foram registrados 21 casos adicionais de `defesa_previa` com análise e minuta.
 - Às 06:15 UTC foi registrado mais um caso de `defesa_previa`.
 - O identificador `E2E-PREPROD-CERT-20261017B` não foi encontrado nas tabelas `e2e_test_runs` e `e2e_test_results`.
