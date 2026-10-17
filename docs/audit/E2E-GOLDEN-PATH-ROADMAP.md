@@ -14,6 +14,7 @@ Uma fase por vez. Cada fase produz evidência, atualiza este documento, faz comm
 - **Fase 2:** 🟡 executada parcialmente; bloqueadores estruturais corrigidos, Golden Path ainda bloqueado.
 - **Fase 3:** 🟢 concluída; ambiente de produção reconciliado com o Supabase canônico e referências ao projeto obsoleto removidas do código ativo.
 - **Fase 4:** 🔴 execução real iniciada, primeiro bloqueador do harness identificado e corrigido; Golden Path de negócio ainda não comprovado.
+- **Correção E2E pré-produção (17/10/2026):** alterações de infraestrutura publicadas nesta branch; validação de execução ainda pendente. Evidências e bloqueios registrados em `docs/audit/E2E-PREPROD-INFRA-CORRECTION-2026-10-17.md`.
 
 ## FASE 1 — RESULTADO
 
