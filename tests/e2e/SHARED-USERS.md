@@ -18,7 +18,7 @@ Cada arquivo de serviço executa seus dez cenários em sequência, registra evid
 
 ## Contas compartilhadas
 
-A infraestrutura reutiliza cinco contas sintéticas já existentes no Auth:
+A infraestrutura mantém exatamente cinco contas sintéticas compartilhadas no Auth:
 
 - `e2e+defesa_previa+01@test.local`
 - `e2e+defesa_previa+02@test.local`
@@ -46,8 +46,8 @@ Execute:
 npm run test:e2e:shared
 ```
 
-A suíte usa um worker para evitar que os arquivos de estado/evidência da mesma execução sejam inicializados em paralelo.
+A suíte usa um worker para evitar que os arquivos de estado/evidência da mesma execução sejam inicializados em paralelo. Para execução local, use `npm run test:e2e:managed-local`; o gerenciador reutiliza Vite/Wrangler saudáveis, inicia somente quando ambos estão ausentes e nunca encerra processos por padrão.
 
 ## Persistência e segurança
 
-A infraestrutura recusa iniciar sem `SUPABASE_URL` explícita e `E2E_ALLOW_PERSISTENT_WRITES=true`. A suíte cria casos de teste persistentes e arquivos de evidência em `tests/e2e-results/<E2E_TEST_RUN_ID>/`. Cada execução nova deve usar um `E2E_TEST_RUN_ID` novo. Não limpe automaticamente casos, perfis, usuários, resultados de auditoria ou registros financeiros. A suíte não efetua pagamentos reais por padrão. O executor só permite a rota real de PIX quando `E2E_ALLOW_REAL_PAYMENT=true`; não use essa variável na matriz compartilhada.
+A infraestrutura recusa iniciar sem `SUPABASE_URL` explícita e `E2E_ALLOW_PERSISTENT_WRITES=true`. Ela mantém cinco identidades e prepara os 70 cenários em memória; cada cenário cria seu caso real ao percorrer a interface pública. Não semeie 70 linhas em `cases` como preparação. Quando existe `initial-state.json` para o mesmo `E2E_TEST_RUN_ID`, a suíte reutiliza estado e casos já registrados e normaliza as identidades para cinco em memória. Evidências ficam em `tests/e2e-results/<E2E_TEST_RUN_ID>/`. Não limpe automaticamente casos, perfis, usuários, resultados de auditoria ou registros financeiros. A suíte não efetua pagamentos reais por padrão. O executor só permite a rota real de PIX quando `E2E_ALLOW_REAL_PAYMENT=true`; não use essa variável na matriz compartilhada.
