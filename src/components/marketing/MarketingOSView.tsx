@@ -15,7 +15,6 @@ import { MarketingSettings } from './components/MarketingSettings';
 import { MediaStudioView } from './components/MediaStudioView';
 import { ProspectingAutomationView } from './components/ProspectingAutomationView';
 import { ContentView } from './components/ContentView';
-import { PublicationDashboard } from './components/PublicationDashboard';
 import { EditorialContentItem } from '../../types';
 import { useRouter } from '../../core/router/RouterContext';
 
@@ -23,7 +22,6 @@ export type ViewKey =
   | 'dashboard'
   | 'inbox'
   | 'contents'
-  | 'publication'
   | 'studio'
   | 'channels'
   | 'results'
@@ -52,14 +50,13 @@ const NAV_SECTIONS: NavSection[] = [
   {
     group: 'Criação & Editorial',
     items: [
-      { key: 'contents', label: 'Conteúdo', description: 'Kanban editorial e biblioteca de conteúdos', icon: FileText },
+      { key: 'contents', label: 'Conteúdo', description: 'Conteúdos preparados e reutilizáveis', icon: FileText },
       { key: 'studio', label: 'Estúdio Criativo IA', description: 'Gemini 3 Pro Image & Animação Veo 3.1', icon: Sparkles, badge: 'IA' },
     ],
   },
   {
     group: 'Distribuição & Automação',
     items: [
-      { key: 'publication', label: 'Publicação', description: 'Agenda, fila e automações', icon: Radio },
       { key: 'channels', label: 'Canais Conectados', description: 'Meta Graph API & WhatsApp Evolution', icon: Radio },
     ],
   },
@@ -85,8 +82,9 @@ export const MarketingOSView: React.FC = () => {
     const view = (params.view || queryParams.view) as ViewKey || 'dashboard';
     const legacyMap: Record<string, ViewKey> = {
       planning: 'contents',
-      schedule: 'publication',
-      automations: 'publication',
+      schedule: 'contents',
+      automations: 'contents',
+      publication: 'contents',
     };
     const resolved = legacyMap[view] || view;
     setActiveView(resolved);
@@ -103,22 +101,17 @@ export const MarketingOSView: React.FC = () => {
     cycleCount,
     lastCycleAt,
     metrics,
-    publisherQueue,
-    publisherJobs,
     isLoadingContents,
     isLoadingMeta,
     updateContentStatus,
     refreshMarketingData,
     showMetaConnectModal,
     setShowMetaConnectModal,
-    publishToMeta,
     connectMeta,
     disconnectMeta,
   } = useMarketingService();
 
-  const scheduledPosts = metrics?.scheduledPosts ?? 0;
   const [editingContent, setEditingContent] = useState<{ item: EditorialContentItem | null; open: boolean }>({ item: null, open: false });
-  const metaConnected = metaState?.isConnected ?? false;
 
   const handleCreateNewContent = async () => {
     const newCard = await createManualContent({
@@ -194,10 +187,6 @@ export const MarketingOSView: React.FC = () => {
               metrics={metrics}
               cycleCount={cycleCount}
               lastCycleAt={lastCycleAt}
-              publisherQueue={publisherQueue}
-              scheduledPosts={scheduledPosts}
-              metaConnected={metaConnected}
-              onVerifyChannel={() => setShowMetaConnectModal(true)}
               onOpenStudio={() => {
                 navigate(`/admin/marketing?view=studio`);
               }}
@@ -210,7 +199,6 @@ export const MarketingOSView: React.FC = () => {
             <ContentView
               contents={contents}
               loading={isLoadingContents}
-              onMove={updateContentStatus}
               onSelectContent={(item) => setEditingContent({ item, open: true })}
               onCreateNew={handleCreateNewContent}
             />
@@ -220,17 +208,6 @@ export const MarketingOSView: React.FC = () => {
             <MediaStudioView onContentCreated={() => refreshMarketingData()} />
           )}
 
-          {activeView === 'publication' && (
-            <PublicationDashboard
-              contents={contents}
-              publisherQueue={publisherQueue}
-              publisherJobs={publisherJobs}
-              cycleCount={cycleCount}
-              lastCycleAt={lastCycleAt}
-              metaState={metaState}
-              metrics={metrics}
-            />
-          )}
 
           {activeView === 'channels' && (
             <ChannelsView
@@ -269,7 +246,6 @@ export const MarketingOSView: React.FC = () => {
           onChannel={(id, ch) => updateContentFields(id, { channel: ch })}
           onFetchVersions={fetchContentVersions}
           contents={contents}
-          onPublishToMeta={publishToMeta}
         />
       )}
     </>
