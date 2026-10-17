@@ -29975,7 +29975,7 @@ function resolveActiveGatewayIdFromEnv() {
   if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
   if (envValue === "pagbank") return "pagbank";
   if (envValue === "test") return "test";
-  return "pagbank";
+  return "ggpixapi";
 }
 var GatewayManager = class {
   constructor() {

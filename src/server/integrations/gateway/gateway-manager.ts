@@ -31,7 +31,7 @@ function resolveActiveGatewayIdFromEnv(): GatewayId {
   if (envValue === 'ggpixapi' || envValue === 'ggpix') return 'ggpixapi';
   if (envValue === 'pagbank') return 'pagbank';
   if (envValue === 'test') return 'test';
-  return 'pagbank';
+  return 'ggpixapi';
 }
 
 export interface GatewayInfo { id: GatewayId; displayName: string; status: GatewayStatus; isActive: boolean; supportsCreditCard: boolean; notConfiguredReason?: string; }

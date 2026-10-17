@@ -1,60 +1,77 @@
-# Deploy — Adeus Multa no Cloudflare
+# Deploy — Adeus Multas no Cloudflare
 
-## Estado atual (agosto/2026)
+## Estado atual (produção)
 
-- **Worker de produção:** `tokenizaa-defesa-f-cil`
-- **URL:** https://tokenizaa-defesa-f-cil.olfnetto.workers.dev
-- **Domínio customizado:** https://multa.emprestamais.shop
-- **Build:** Vite + esbuild gerado em `dist/` via `npm run build`
+- **Worker de produção:** `cloudflare-worker` (wrangler `name`: `adeusmulta`)
+- **Entrada do worker:** `cloudflare/worker.ts`
+- **URL:** https://adeusmulta.defesai.com.br
+- **Build:** `bun run build` (gera `dist/`)
+- **Config de deploy:** `wrangler.jsonc` (source of truth)
+- **Gateway de pagamento:** VenoPag (`VENO_PRIMARY_GATEWAY=venopag`, `PAYMENT_MODE=production`, `PAGBANK_ENV=production`)
+- **Banco:** Supabase conectado
 
-## Rotas no domínio `emprestamais.shop`
+## Configuração (`wrangler.jsonc`)
 
-| Pattern                                            | Worker                   |
-| -------------------------------------------------- | ------------------------ |
-| `multa.emprestamais.shop/*`                        | `tokenizaa-defesa-f-cil` |
-| `multa.emprestamais.shop/api/webhooks/pagbank`     | `tokenizaa-defesa-f-cil` |
-| `www.multa.emprestamais.shop/api/webhooks/pagbank` | `tokenizaa-defesa-f-cil` |
+```jsonc
+{
+  "name": "adeusmulta",
+  "main": "cloudflare/worker.ts",
+  "workers_dev": false,
+  "compatibility_date": "2026-09-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "API_ORIGIN_PRIMARY": "https://adeusmulta.defesai.com.br",
+    "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
+    "PAGBANK_ENV": "production",
+    "PAYMENT_MODE": "production",
+    "VENO_PRIMARY_GATEWAY": "venopag"
+  },
+  "build": { "command": "bun run build" },
+  "ai": { "binding": "AI" },
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "adeusmulta-knowledge" }],
+  "ratelimits": [{ "name": "ANONYMOUS_CASE_LIMITER", "namespace_id": "2026101301", "simple": { "limit": 10, "period": 60 } }],
+  "triggers": { "crons": ["*/5 * * * *"] }
+}
+```
+
+> `wrangler.jsonc` **não declara `routes` nem `zone_name`**; as rotas da zona são gerenciadas separadamente no Cloudflare. Não confundir com `wrangler.json` (desatualizado, veja abaixo).
 
 ## Deploy (procedimento)
 
+O deploy é condicional e só ocorre em **push para `main`** quando a mensagem do commit contém `[DEPLOY-PRODUCTION]` (workflow `.github/workflows/cloudflare-deploy.yml`). Outros pushes/PRs apenas rodam testes.
+
 ```bash
-# 1. Build (gera dist/client e dist/server.cjs)
-npm run build
+# 1. Build (gera dist/)
+bun run build
 
-# 2. Deploy
-wrangler deploy
-
-# 3. Verificar rotas da zona (o token do .env não tem permissão de rotas; usar OAuth)
-#    Listar:  GET  /zones/{ZONE}/workers/routes
-#    Criar:   POST /zones/{ZONE}/workers/routes {"pattern": "multa.emprestamais.shop/*", "script": "tokenizaa-defesa-f-cil"}
+# 2. Deploy (apenas main com marcador [DEPLOY-PRODUCTION])
+wrangler deploy --config wrangler.jsonc
 ```
 
-> **Atenção:** o `CLOUDFLARE_API_TOKEN` do `.env` tem permissão de workers
-> (`workers_scripts:write`) mas **não** de rotas da zona. Se o deploy precisar
-> atualizar rotas, usar o OAuth do wrangler (`wrangler whoami`) ou o dashboard.
-
-## Secrets / env
-
-Não commitar segredos no repositório. Configurados no worker `tokenizaa-defesa-f-cil`:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `PAGBANK_EMAIL`
-- `PAGBANK_ENVIRONMENT`
-- `PAGBANK_TOKEN`
-- `PAGBANK_WEBHOOK_SECRET`
-- `GEMINI_API_KEY`
-- `NVIDIA_API_KEY`
-- `NINEROUTER_KEY`
-- `NINEROUTER_UPSTREAM`
-
-Use `wrangler secret put <NOME> --name tokenizaa-defesa-f-cil` ou o painel do Cloudflare.
+> Os segredos (`SUPABASE_SERVICE_ROLE_KEY`, chaves PagBank/Gemini/NVIDIA etc.) são configurados no worker via painel Cloudflare / `wrangler secret put`. Não commitar segredos no repositório.
 
 ## Verificação pós-deploy
 
 ```bash
-# Marca correta (Adeus Multa) e HTTP 200
-curl -s https://multa.emprestamais.shop/ | grep -o "<title>[^<]*</title>"
-# Webhook PagBank ativo (401 sem assinatura válida = HMAC ativo)
-curl -s -o /dev/null -w "%{http_code}\n" -X POST https://multa.emprestamais.shop/api/webhooks/pagbank
+# SPA
+curl -s https://adeusmulta.defesai.com.br/ | grep -o "<title>[^<]*</title>"
+
+# Health (deve retornar gateway venopag, environment production, database connected)
+curl -s https://adeusmulta.defesai.com.br/api/health
+
+# Service Worker
+curl -s -o /dev/null -w "%{http_code}\n" https://adeusmulta.defesai.com.br/sw.js
 ```
+
+## Arquivos relacionados
+
+- `wrangler.jsonc` — source of truth do deploy (produção).
+- `wrangler.json` — desatualizado (declara `routes`/`zone_name` antigas, sem `vars`/`build`/bindings do VenoPag). Não usado no deploy atual.
+- `.wranglerignore` — não deve ignorar `dist/` (é o diretório de assets do worker).
+- `scripts/dev-cloudflare.mjs` — script de desenvolvimento local do worker Cloudflare.

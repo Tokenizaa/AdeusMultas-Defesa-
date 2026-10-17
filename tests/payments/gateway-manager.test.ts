@@ -95,7 +95,7 @@ describe('GatewayManager — Active Gateway Resolution', () => {
     expect(active.id).toBe('ggpixapi');
   });
 
-  it('should default to pagbank when PAYMENT_MODE=sandbox', () => {
+  it('should default to ggpixapi when PAYMENT_MODE=sandbox', () => {
     vi.stubEnv('PAYMENT_MODE', 'sandbox');
     vi.stubEnv('PAYMENT_ACTIVE_GATEWAY', '');
 
@@ -104,7 +104,7 @@ describe('GatewayManager — Active Gateway Resolution', () => {
     manager.registerGateway(createMockAdapter('ggpixapi'));
 
     const active = manager.getActiveGateway();
-    expect(active.id).toBe('pagbank');
+    expect(active.id).toBe('ggpixapi');
   });
 
   it('should respect explicit PAYMENT_ACTIVE_GATEWAY=ggpixapi in sandbox', () => {
