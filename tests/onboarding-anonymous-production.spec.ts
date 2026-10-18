@@ -29,31 +29,35 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
 test.describe.configure({ retries: 0 });
 
 test.afterEach(async ({ request }) => {
-  if (!createdCaseId) {
-    cleanupReport = { status: 'NO_WRITE_CONFIRMED', runId: RUN_ID };
+  const byAit = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(AIT)}`);
+  if (byAit.length === 0) {
+    cleanupReport = { status: 'NO_RESIDUE_VERIFIED', runId: RUN_ID, ait: AIT };
     console.log(`[E2E cleanup] ${JSON.stringify(cleanupReport)}`);
+    createdCaseId = undefined;
     return;
   }
-
-  const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
-  const identity = await supabaseRows(
-    request,
-    'cases',
-    `id=eq.${encodeURIComponent(createdCaseId)}&ait_number=eq.${encodeURIComponent(AIT)}`,
-  );
-  if (identity.length !== 1
-    || identity[0].id !== createdCaseId
-    || identity[0].ait_number !== AIT
-    || identity[0].user_id != null
-    || identity[0].is_anonymous !== true
-    || identity[0].is_paid === true) {
-    cleanupReport = { status: 'REFUSED_IDENTITY_OR_STATE_MISMATCH', runId: RUN_ID, caseId: createdCaseId, rows: identity };
+  if (byAit.length !== 1) {
+    cleanupReport = { status: 'REFUSED_MULTIPLE_MATCHES', runId: RUN_ID, ait: AIT, matches: byAit.length };
     console.error(`[E2E cleanup] ${JSON.stringify(cleanupReport)}`);
-    throw new Error(`Cleanup refused: case ${createdCaseId} no longer matches this run's anonymous, unpaid fixture.`);
+    throw new Error(`Cleanup refused: expected at most one run-owned AIT ${AIT}, found ${byAit.length} rows.`);
+  }
+
+  const row = byAit[0];
+  const canonicalId = typeof row.id === 'string' ? row.id : '';
+  const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
+  if (!canonicalId
+    || (createdCaseId && row.id !== createdCaseId)
+    || row.ait_number !== AIT
+    || row.user_id != null
+    || row.is_anonymous !== true
+    || row.is_paid === true) {
+    cleanupReport = { status: 'REFUSED_IDENTITY_OR_STATE_MISMATCH', runId: RUN_ID, caseId: row.id, expectedCaseId: createdCaseId, ait: AIT, row };
+    console.error(`[E2E cleanup] ${JSON.stringify(cleanupReport)}`);
+    throw new Error(`Cleanup refused: AIT ${AIT} no longer matches this run's anonymous, unpaid case identity.`);
   }
 
   const response = await request.delete(
-    `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?id=eq.${encodeURIComponent(createdCaseId)}&ait_number=eq.${encodeURIComponent(AIT)}&is_anonymous=eq.true&user_id=is.null&is_paid=eq.false`,
+    `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?id=eq.${encodeURIComponent(canonicalId)}&ait_number=eq.${encodeURIComponent(AIT)}&is_anonymous=eq.true&user_id=is.null&is_paid=eq.false`,
     { headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
@@ -65,9 +69,9 @@ test.afterEach(async ({ request }) => {
   const deleted = await response.json() as Record<string, unknown>[];
   expect(deleted.length, 'cleanup must delete exactly the case created by this run').toBe(1);
 
-  const remaining = await supabaseRows(request, 'cases', `id=eq.${encodeURIComponent(createdCaseId)}`);
+  const remaining = await supabaseRows(request, 'cases', `id=eq.${encodeURIComponent(canonicalId)}`);
   expect(remaining, 'deleted case must be absent after cleanup').toHaveLength(0);
-  cleanupReport = { status: 'DELETED_AND_VERIFIED', runId: RUN_ID, caseId: createdCaseId, deletedRows: deleted.length, remainingRows: 0 };
+  cleanupReport = { status: 'DELETED_AND_VERIFIED', runId: RUN_ID, caseId: canonicalId, deletedRows: deleted.length, remainingRows: 0 };
   console.log(`[E2E cleanup] ${JSON.stringify(cleanupReport)}`);
   createdCaseId = undefined;
 });
