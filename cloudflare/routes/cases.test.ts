@@ -10,7 +10,7 @@ vi.mock('../supabase', () => ({
 }));
 
 vi.mock('../middleware', () => ({
-  authenticateToken: async (_c: unknown, next: () => Promise<void>) => next(),
+  authenticateToken: async (c: any, next: () => Promise<void>) => { c.set('user', { id: '00000000-0000-4000-8000-000000000001', email: 'test@example.com', role: 'citizen' }); await next(); },
   requireAdmin: async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 
@@ -51,6 +51,7 @@ describe('anonymous case intake', () => {
       eq: vi.fn(() => query),
       is: vi.fn(() => query),
       maybeSingle: vi.fn(async () => ({ data: insertedRow, error: null })),
+      update: vi.fn((row: unknown) => { insertedRow = { ...insertedRow, ...(row as object) }; return query; }),
       single: vi.fn(async () => ({ data: insertedRow, error: null })),
     };
     mockFrom.mockReset().mockReturnValue(query);
@@ -192,5 +193,71 @@ describe('anonymous case recovery', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('retry-after')).toBe('60');
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('anonymous case claim', () => {
+  let row: any;
+  let query: any;
+
+  beforeEach(() => {
+    row = {
+      id: '00000000-0000-4000-8000-000000000098',
+      is_anonymous: true,
+      user_id: null,
+      claim_token: 'c'.repeat(64),
+      client_name: 'Condutor',
+      service_type: 'defesa_previa',
+      vehicle_plate: 'ABC1D23',
+      ait_number: 'E2E-CLAIM-001',
+      infraction_code: '745-5',
+      location: 'Rua de teste, 10',
+      is_paid: false,
+    };
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: row, error: null })),
+      update: vi.fn((changes: unknown) => { row = { ...row, ...(changes as object) }; return query; }),
+      single: vi.fn(async () => ({ data: row, error: null })),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
+  });
+
+  it('claims an anonymous case only with the server-issued token', async () => {
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000098/claim',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-user' },
+        body: JSON.stringify({ claimToken: 'c'.repeat(64) }),
+      },
+      {} as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(row.user_id).toBe('00000000-0000-4000-8000-000000000001');
+    expect(row.is_anonymous).toBe(false);
+    expect(query.update).toHaveBeenCalledTimes(1);
+    expect(query.is).toHaveBeenCalledWith('user_id', null);
+    expect(query.eq).toHaveBeenCalledWith('claim_token', 'c'.repeat(64));
+  });
+
+  it('rejects an invalid claim token without modifying ownership', async () => {
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000098/claim',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-user' },
+        body: JSON.stringify({ claimToken: 'wrong-token' }),
+      },
+      {} as any,
+    );
+
+    expect(response.status).toBe(403);
+    expect(row.user_id).toBeNull();
+    expect(query.update).not.toHaveBeenCalled();
   });
 });
