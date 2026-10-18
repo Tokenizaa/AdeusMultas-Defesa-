@@ -1,0 +1,91 @@
+import { test, expect } from '@playwright/test';
+
+const enabled = process.env.RUN_MANUAL_REBUILD_E2E === '1';
+
+test.describe('onboarding manual greenfield — preview isolado', () => {
+  test.skip(!enabled, 'Execute explicitamente contra o preview HTTPS do PR com RUN_MANUAL_REBUILD_E2E=1.');
+
+  test('valida os campos no navegador e não envia formulário incompleto', async ({ page }) => {
+    const intakeRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/cases/anonymous')) intakeRequests.push(request.url());
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    await page.getByRole('button', { name: 'Registrar dados' }).click();
+
+    await expect(page.getByText('Informe o número do auto de infração.')).toBeVisible();
+    await expect(page.getByText('Informe o código da infração.')).toBeVisible();
+    await expect(page.getByText('Informe o local da infração com pelo menos 5 caracteres.')).toBeVisible();
+    await expect(page.getByText('Informe uma placa válida com 7 ou 8 caracteres.')).toBeVisible();
+    expect(intakeRequests).toHaveLength(0);
+  });
+
+  test('registra dados manualmente, preserva token de recuperação e não chama OCR', async ({ page }) => {
+    let submittedPayload: Record<string, any> | undefined;
+    const forbiddenRequests: string[] = [];
+
+    await page.route('**/api/cases/anonymous', async (route) => {
+      submittedPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'e2e-manual-case-001',
+          claimToken: 'a'.repeat(64),
+          status: 'analisado',
+          isAnonymous: true,
+        }),
+      });
+    });
+    page.on('request', (request) => {
+      if (/\/api\/(ocr|documents\/extract)|ocr\/upload|ocr\/analyze/i.test(request.url())) {
+        forbiddenRequests.push(request.url());
+      }
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-001');
+    await page.getByLabel('Código da infração').fill('745-5');
+    await page.getByLabel('Local da infração').fill('Av. Paulista, 1000 - São Paulo/SP');
+    await page.getByLabel('Placa do veículo').fill('ABC1D23');
+    await page.getByLabel('Órgão autuador').fill('Órgão de teste');
+    await page.getByRole('button', { name: 'Registrar dados' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Seu caso foi registrado' })).toBeVisible();
+    await expect(page.getByText('e2e-manual-case-001')).toBeVisible();
+    expect(submittedPayload).toMatchObject({
+      infraction: {
+        aitNumber: 'E2E-MANUAL-001',
+        infractionCode: '745-5',
+        autuadorBody: 'Órgão de teste',
+        location: 'Av. Paulista, 1000 - São Paulo/SP',
+      },
+      vehicle: { plate: 'ABC1D23' },
+      serviceType: 'defesa_previa',
+    });
+    expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_case_id'))).toBe('e2e-manual-case-001');
+    expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_claim_token'))).toBe('a'.repeat(64));
+    expect(forbiddenRequests).toEqual([]);
+  });
+
+  test('mostra erro de API sem declarar caso criado', async ({ page }) => {
+    await page.route('**/api/cases/anonymous', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Criação anônima temporariamente indisponível.' }),
+      });
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-503');
+    await page.getByLabel('Código da infração').fill('745-5');
+    await page.getByLabel('Local da infração').fill('Rua de teste, 10 - São Paulo/SP');
+    await page.getByLabel('Placa do veículo').fill('ABC1D23');
+    await page.getByRole('button', { name: 'Registrar dados' }).click();
+
+    await expect(page.getByRole('alert')).toContainText('Criação anônima temporariamente indisponível.');
+    await expect(page.getByRole('heading', { name: 'Seu caso foi registrado' })).toHaveCount(0);
+  });
+});
