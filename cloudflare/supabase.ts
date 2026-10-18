@@ -36,6 +36,8 @@ export interface Env {
   VENO_PRIMARY_GATEWAY?: 'venopag' | 'pagbank';
   APP_URL?: string;
   PAYMENT_MODE?: 'sandbox' | 'production';
+  /** Explicit hard stop for payment creation in non-production preview Workers. */
+  E2E_SAFE_PREVIEW?: 'true' | 'false';
   VITE_SUPABASE_ANON_KEY?: string;
   EVOLUTION_API_URL?: string;
   EVOLUTION_API_KEY?: string;
