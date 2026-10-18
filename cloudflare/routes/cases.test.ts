@@ -122,6 +122,9 @@ describe('anonymous case intake', () => {
 
 
 describe('anonymous case recovery', () => {
+  let insertedRow: any;
+  let query: any;
+
   beforeEach(() => {
     insertedRow = {
       id: '00000000-0000-4000-8000-000000000099',
@@ -130,6 +133,13 @@ describe('anonymous case recovery', () => {
       claim_token: 'a'.repeat(64),
       ait_number: 'E2E-RECOVERY-001',
     };
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: insertedRow, error: null })),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
   });
 
   it('recovers a case only with the matching server-issued token and never returns the token', async () => {
