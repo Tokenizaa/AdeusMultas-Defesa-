@@ -131,7 +131,7 @@ test.describe('onboarding manual greenfield — preview isolado', () => {
     await expect(page.getByRole('heading', { name: 'Seu caso foi recuperado' })).toBeVisible();
     await expect(page.getByText('E2E-RECOVERED-001')).toBeVisible();
     await expect(page.getByText('ABC1D23')).toBeVisible();
-    await expect(page.getByText('Recurso à JARI')).toBeVisible();
+    await expect(page.getByText('Recurso à JARI').first()).toBeVisible();
     expect(recoveryPayload).toEqual({ claimToken: 'b'.repeat(64) });
   });
 
