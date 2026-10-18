@@ -528,7 +528,7 @@ export class E2ETestManager {
   }
 
   async cleanupOwnedFixtures(
-    additionalCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean }> = [],
+    additionalCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean | 'either' }> = [],
   ): Promise<{ runId: string; cases: any[]; users: any[]; completed: boolean }> {
     const cleanupCases = [
       ...this.testCases.map((testCase) => ({
@@ -559,11 +559,18 @@ export class E2ETestManager {
       }
 
       const row = lookup.data;
+      const isAnonymousOwned = row.user_id == null && row.is_anonymous === true;
+      const isClaimedOwned = Boolean(owned.userId)
+        && row.user_id === owned.userId
+        && row.is_anonymous !== true;
+      const ownershipMatches = owned.anonymous === 'either'
+        ? isAnonymousOwned || isClaimedOwned
+        : owned.anonymous
+          ? isAnonymousOwned
+          : isClaimedOwned;
       const identityMatches = row.id === owned.id
         && row.ait_number === owned.aitNumber
-        && (owned.anonymous
-          ? row.user_id == null && row.is_anonymous === true
-          : row.user_id === owned.userId && row.is_anonymous !== true);
+        && ownershipMatches;
       if (!identityMatches) {
         caseResults.push({
           id: owned.id,
@@ -575,7 +582,7 @@ export class E2ETestManager {
       }
 
       let deletion = this.supabase.from('cases').delete().eq('id', owned.id).eq('ait_number', owned.aitNumber);
-      deletion = owned.anonymous ? deletion.is('user_id', null) : deletion.eq('user_id', owned.userId!);
+      deletion = isAnonymousOwned ? deletion.is('user_id', null) : deletion.eq('user_id', owned.userId!);
       const { data: deleted, error: deleteError } = await deletion.select('id');
       if (deleteError) {
         caseResults.push({ id: owned.id, status: 'CLEANUP_PENDING', reason: deleteError.message });
