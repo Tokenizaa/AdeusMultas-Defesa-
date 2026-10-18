@@ -241,13 +241,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                       onUpdateInfraction({
                         ...infractionData,
                         ctbArticle: 'Art. 165-A do CTB',
-                        infractionCode: '516-91',
+                        infractionCode: '757-90',
                         refusedTest: true,
                         notes: 'recusa_bafometro',
                       });
                     }}
                     className={`p-3.5 text-left border rounded-xl text-xs transition-all cursor-pointer ${
-                      infractionData.infractionCode === '516-91' || infractionData.notes?.includes('recusa')
+                      infractionData.infractionCode === '757-90' || infractionData.notes?.includes('recusa')
                         ? 'border-[#155BCB] bg-blue-50/60 font-bold text-slate-900 ring-1 ring-[#155BCB]'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                     }`}
@@ -264,13 +264,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                       onUpdateInfraction({
                         ...infractionData,
                         ctbArticle: 'Art. 165 do CTB',
-                        infractionCode: '516-92',
+                        infractionCode: '516-91',
                         refusedTest: false,
                         notes: 'teste_positivo',
                       });
                     }}
                     className={`p-3.5 text-left border rounded-xl text-xs transition-all cursor-pointer ${
-                      infractionData.infractionCode === '516-92' || infractionData.notes?.includes('positivo')
+                      infractionData.infractionCode === '516-91' || infractionData.notes?.includes('positivo')
                         ? 'border-[#155BCB] bg-blue-50/60 font-bold text-slate-900 ring-1 ring-[#155BCB]'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                     }`}
