@@ -171,25 +171,29 @@ export const EXPERT_RULES: RuleModel[] = [
     validUntil: null,
     version: 2,
     jurisdiction: 'federal',
-    requiredData: ['hasPsychomotorTerm'],
+    requiredData: ['hasPsychomotorTerm', 'refusedTest'],
     relatedArguments: ['ARG-025'],
     families: ['alcoolemia'],
     affectedProcedures: ['suspensao_cnh', 'recurso_jari'],
-    evidenceRequired: ['Cópia integral do processo administrativo comprovando a ausência do Anexo II da Res. 432/2013'],
+    evidenceRequired: ['Cópia integral do processo administrativo e do termo de constatação, quando a recusa for acompanhada por dois ou mais sinais psicomotores'],
     priority: 88,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
-      const isRefusal165A = code === '757-90';
-      // FAIL CLOSED: convicção somente se o dado comprovar ausência do termo.
-      if (isRefusal165A && ctx.hasPsychomotorTerm === false) {
+      // The absence of a psychomotor-sign term is not, by itself, a defect
+      // for code 757-90 (Art. 165-A) when there are no or only one sign.
+      // This rule is limited to a refusal classified under Art. 165 (516-91/
+      // 516-92), where the two-or-more-signs path requires the term.
+      const refusalClassifiedUnderArt165 =
+        (code === '516-91' || code === '516-92') && ctx.refusedTest === true;
+      if (refusalClassifiedUnderArt165 && ctx.hasPsychomotorTerm === false) {
         return {
           ruleId: 'RULE_LEI_SECA_TERMO_432',
-          title: 'Ausência ou Defeito no Termo de Constatação de Sinais (Res. 432/13)',
-          description: 'A autuação por recusa exige o preenchimento simultâneo do Termo do Anexo II com conjunto notório de sinais clínicos observados.',
-          severity: 'alta',
+          title: 'Revisar enquadramento de recusa com sinais psicomotores (Res. 432/13)',
+          description: 'A recusa foi classificada no art. 165. Confirme no processo se havia dois ou mais sinais psicomotores e se o termo do Anexo II foi preenchido; sem essa evidência, não concluir nulidade automaticamente.',
+          severity: 'media',
           legalArgumentId: 'ARG-025',
-          impact: 'Anulação do AIT e cancelamento do processo de suspensão da CNH por 12 meses (R$ 2.934,70).',
-          statutoryBasis: 'Artigo 277 do CTB c/c Resolução CONTRAN nº 432/2013, Art. 5º e Anexo II',
+          impact: 'Possível inconsistência de enquadramento ou de documentação, sujeita à conferência do AIT e do processo administrativo.',
+          statutoryBasis: 'Arts. 165 e 165-A do CTB c/c Resolução CONTRAN nº 432/2013 e Manual Brasileiro de Fiscalização de Trânsito',
         };
       }
       return null;
