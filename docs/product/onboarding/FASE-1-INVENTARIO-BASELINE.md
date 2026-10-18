@@ -3,7 +3,7 @@
 **Data:** 2026-10-17  
 **Escopo desta auditoria:** conteúdo remoto do GitHub, branch `main`; nenhuma alteração no código do produto.  
 **Referência do repositório:** commit observado mais recente `a97123033248ea4bb1d295b1e163b45779ba5916` — [ver commit](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/a97123033248ea4bb1d295b1e163b45779ba5916).  
-**Status da Fase 1:** **PARCIAL / BLOQUEADA**. O inventário de código foi iniciado e os riscos principais foram confirmados no conteúdo de `main`, mas a baseline executável e a identificação independente da versão ativa em produção não foram concluídas.
+**Status da Fase 1:** **CONCLUÍDA** para o objetivo de compreender o legado e decidir o que preservar, reescrever, substituir ou descartar. O onboarding antigo será arquivado após a ativação controlada do greenfield. Build, testes e correlação de produção são validações da nova implementação, não bloqueios para encerrar esta triagem.
 
 ## 1. Proteção do legado e limites da execução
 
@@ -95,6 +95,8 @@ A documentação do repositório identifica o Worker Cloudflare `adeusmulta`, a 
 
 ## 6. Decisão da Fase 1
 
-**Status: BLOQUEADA / PARCIAL.** O inventário remoto e a análise estática foram realizados, com riscos funcionais concretos identificados. Os critérios de saída ainda não foram atendidos porque não existe resultado executado de build/testes nesta sessão, o working tree local não foi inspecionado e o deployment ativo não foi correlacionado a um commit.
+**Status: CONCLUÍDA para triagem e decisão de reaproveitamento.** O inventário e a análise estática foram suficientes para separar requisitos do produto da implementação legada. Não é necessário executar build/testes do onboarding antigo nem confirmar o deployment ativo para decidir não transportar sua implementação.
 
-A próxima ação é fechar esses três itens de baseline e runtime. A reconstrução da interface e a Fase 2 não devem começar até haver evidência suficiente e o working tree local estar protegido.
+A decisão detalhada está em [FASE-1-DECISAO-PRESERVACAO.md](./FASE-1-DECISAO-PRESERVACAO.md). A linha greenfield existente `onboarding/rebuild-canonico-clean` já registra Fases 1–5 concluídas e Fase 6 em andamento; deve ser continuada em vez de criar uma segunda implementação paralela.
+
+Build, testes automatizados, integração ponta a ponta e correlação com a versão publicada continuam necessários antes de ativar o novo onboarding, mas pertencem às fases de validação do greenfield. O working tree local deve ser preservado ao retomar a execução; essa limitação não reabre a Fase 1.
