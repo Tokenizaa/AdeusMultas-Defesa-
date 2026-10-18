@@ -27,6 +27,8 @@ type RecoveredCaseData = {
 };
 
 type CreatedCase = { id: string; claimToken?: string; status?: string; recovered?: boolean; caseData?: RecoveredCaseData };
+type Qualification = { name: string; cpf: string; email: string; phone: string; cnh: string; rg: string; cnhCategory: string; addressStreet: string; addressNumber: string; addressComplement: string; cityState: string };
+const EMPTY_QUALIFICATION: Qualification = { name: '', cpf: '', email: '', phone: '', cnh: '', rg: '', cnhCategory: '', addressStreet: '', addressNumber: '', addressComplement: '', cityState: '' };
 
 function TextField({
   id,
@@ -85,6 +87,16 @@ export function ManualIntakePage() {
   const [recoveryError, setRecoveryError] = useState('');
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimError, setClaimError] = useState('');
+  const [stage, setStage] = useState<'recorded' | 'qualification' | 'review' | 'payment' | 'paid' | 'document'>('recorded');
+  const [qualification, setQualification] = useState<Qualification>(EMPTY_QUALIFICATION);
+  const [qualificationError, setQualificationError] = useState('');
+  const [qualificationBusy, setQualificationBusy] = useState(false);
+  const [pixBusy, setPixBusy] = useState(false);
+  const [pixError, setPixError] = useState('');
+  const [pix, setPix] = useState<{ txId: string; amount: number; copyPaste: string; qrCodeUrl?: string; gateway?: string }>();
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentCheckBusy, setPaymentCheckBusy] = useState(false);
+  const [documentMessage, setDocumentMessage] = useState('');
   const { isAuthenticated } = useAuth();
   const { navigate } = useRouter();
 
@@ -160,11 +172,89 @@ export function ManualIntakePage() {
       } catch {
         // A vinculação já foi confirmada pelo servidor; storage é apenas auxiliar.
       }
-      navigate('/cases');
+      setStage('qualification');
     } catch (cause) {
       setClaimError(cause instanceof Error ? cause.message : 'Não foi possível vincular o caso à conta.');
     } finally {
       setClaimBusy(false);
+    }
+  }
+
+  async function saveQualification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!createdCase?.id) return;
+    setQualificationBusy(true);
+    setQualificationError('');
+    try {
+      const response = await authFetch(`/api/cases/${encodeURIComponent(createdCase.id)}/qualification`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(qualification),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível salvar a qualificação.');
+      setStage('review');
+    } catch (cause) {
+      setQualificationError(cause instanceof Error ? cause.message : 'Não foi possível salvar a qualificação.');
+    } finally { setQualificationBusy(false); }
+  }
+
+  async function createPix() {
+    if (!createdCase?.id) return;
+    setPixBusy(true); setPixError('');
+    try {
+      const response = await authFetch('/api/payments/pix/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId: createdCase.id, serviceType: form.serviceType, customerCpf: qualification.cpf, customerName: qualification.name, customerEmail: qualification.email, customerPhone: qualification.phone }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'O provedor não confirmou a criação do PIX.');
+      if (body.simulated === true) throw new Error('O provedor retornou pagamento simulado. Esta jornada não aceita simulação.');
+      const txId = body.txId || body.order?.request_number || body.paymentOrder?.gateway_transaction_id;
+      const amount = Number(body.amount ?? body.paymentOrder?.amount);
+      const copyPaste = body.pixCopyPasteString || body.order?.copyPaste || body.paymentOrder?.qr_code_text;
+      if (!txId || !Number.isFinite(amount) || amount <= 0 || typeof copyPaste !== 'string' || !copyPaste) throw new Error('A API não devolveu os dados completos de uma cobrança PIX real.');
+      setPix({ txId: String(txId), amount, copyPaste, qrCodeUrl: body.qrCodeDataUrl || body.qrCodeUrl || body.paymentOrder?.qr_code_url, gateway: body.gateway });
+      setStage('payment');
+      setPaymentStatus(String(body.status || 'PENDING'));
+    } catch (cause) {
+      setPixError(cause instanceof Error ? cause.message : 'Não foi possível iniciar o PIX.');
+    } finally { setPixBusy(false); }
+  }
+
+  async function checkPaymentStatus() {
+    if (!pix?.txId) return;
+    setPaymentCheckBusy(true); setPixError('');
+    try {
+      const response = await authFetch(`/api/payments/pix/status/${encodeURIComponent(pix.txId)}`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível consultar o status do pagamento.');
+      const status = String(body.status || '').toUpperCase();
+      setPaymentStatus(status || 'PENDING');
+      if (status !== 'PAID' && status !== 'APPROVED' && status !== 'COMPLETED' && status !== 'SUCCESS') {
+        setPixError('O provedor ainda não confirmou o pagamento. Não gere a minuta nem faça outro pagamento; consulte novamente depois.');
+        return;
+      }
+      setStage('paid');
+    } catch (cause) {
+      setPixError(cause instanceof Error ? cause.message : 'Não foi possível consultar o pagamento.');
+    } finally { setPaymentCheckBusy(false); }
+  }
+
+  async function generateDocument() {
+    if (!createdCase?.id) return;
+    setDocumentMessage('');
+    try {
+      const response = await authFetch(`/api/cases/${encodeURIComponent(createdCase.id)}/generate-defense`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicantData: { name: qualification.name, cpf: qualification.cpf, cnh: qualification.cnh, rg: qualification.rg, category: qualification.cnhCategory, address: `${qualification.addressStreet}, ${qualification.addressNumber}${qualification.addressComplement ? ' - ' + qualification.addressComplement : ''}`, cityState: qualification.cityState } }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'A geração foi bloqueada pelo servidor.');
+      if (!body?.defenseDraft) throw new Error('O servidor não devolveu uma minuta validada.');
+      setDocumentMessage('Minuta gerada e validada pelo servidor. Acesse Meus Casos para consultar o documento e o checklist.');
+      setStage('document');
+    } catch (cause) {
+      setDocumentMessage(cause instanceof Error ? cause.message : 'Não foi possível gerar a minuta.');
     }
   }
 
@@ -248,8 +338,8 @@ export function ManualIntakePage() {
               </button>
             ) : (
               <div className="mt-4 flex flex-wrap gap-3">
-                <button type="button" onClick={() => navigate('/login')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">Entrar para vincular</button>
-                <button type="button" onClick={() => navigate('/cadastro')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Criar conta</button>
+                <button type="button" onClick={() => navigate('/login?redirect=%2Fnovo-caso-rebuild')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">Entrar para vincular</button>
+                <button type="button" onClick={() => navigate('/cadastro?redirect=%2Fnovo-caso-rebuild')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Criar conta</button>
               </div>
             )}
           </section>
