@@ -77,3 +77,31 @@ A página nova já conecta intake, recuperação, claim, qualificação, revisã
 - A suíte Playwright adicionada cobre o comportamento do preview com API simulada; ela não prova a integração real com Supabase, o fluxo de pagamento ou a geração final.
 
 **Estado honesto (2026-10-18):** intake manual, recuperação protegida, claim, qualificação, revisão, criação de PIX e solicitação de geração condicionada ao pagamento estão conectados na branch. Ainda é obrigatório observar o CI do commit final, validar o webhook/status em sandbox e executar E2E autenticado real. O PR deve continuar em draft e a rota pública atual deve permanecer intacta.
+
+## Execução sequencial dos sete serviços
+
+O executor de produção agora percorre `/novo-caso-rebuild`, confere a validação dos campos, observa o POST, valida o ID canônico e o token de recuperação, confirma a análise e para na barreira de autenticação/pagamento. Não chama o gateway e não tenta marcar pagamento como aprovado. O reconciliador confere as colunas reais do Supabase, ausência de ordens financeiras e remove somente fixtures anônimas não pagas da execução.
+
+Comandos independentes para executar manualmente, **um por vez**, após o smoke de produção e a análise do serviço anterior:
+
+```bash
+# Defina antes SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e PLAYWRIGHT_BASE_URL.
+export PLAYWRIGHT_BASE_URL=https://adeusmulta.defesai.com.br
+export SUPABASE_URL=https://llmxnpgjpxcvyrqjkfwb.supabase.co
+export E2E_ALLOW_PERSISTENT_WRITES=true
+export E2E_TEST_RUN_ID="cert-$(date -u +%Y%m%dT%H%M%SZ)-defesa-previa"
+export E2E_SERVICE=defesa_previa
+npx playwright test --config=playwright.e2e-certification.config.ts --workers=1 --retries=0
+npx playwright test --project=chromium-production --workers=1 --retries=0 tests/e2e/services/defesa_previa.spec.ts
+```
+
+Para cada serviço seguinte, altere **somente** `E2E_SERVICE` e o sufixo do `E2E_TEST_RUN_ID`, e só execute depois de concluir a análise do serviço anterior:
+
+- `recurso_jari`
+- `recurso_cetran`
+- `suspensao`
+- `cassacao`
+- `indicacao_condutor`
+- `conversao_advertencia`
+
+O executor de produção não gera documento porque isso exige autenticação e confirmação financeira autoritativa. A cadeia de documento é certificada separadamente pelos testes determinísticos por serviço, sem contornar `cases.is_paid). A prova real de VenoPag/webhook permanece fora desta bateria: não há sandbox público documentado e nenhuma cobrança real foi autorizada.
