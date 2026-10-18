@@ -48,6 +48,9 @@ describe('anonymous case intake', () => {
     query = {
       insert: vi.fn((row: unknown) => { insertedRow = row; return query; }),
       select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: insertedRow, error: null })),
       single: vi.fn(async () => ({ data: insertedRow, error: null })),
     };
     mockFrom.mockReset().mockReturnValue(query);
@@ -114,5 +117,70 @@ describe('anonymous case intake', () => {
     expect(response.status).toBe(503);
     expect(mockFrom).not.toHaveBeenCalled();
     expect(mockAnalyze).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('anonymous case recovery', () => {
+  beforeEach(() => {
+    insertedRow = {
+      id: '00000000-0000-4000-8000-000000000099',
+      is_anonymous: true,
+      user_id: null,
+      claim_token: 'a'.repeat(64),
+      ait_number: 'E2E-RECOVERY-001',
+    };
+  });
+
+  it('recovers a case only with the matching server-issued token and never returns the token', async () => {
+    const response = await casesRoutes.request(
+      '/cases/anonymous/00000000-0000-4000-8000-000000000099/recover',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.20' },
+        body: JSON.stringify({ claimToken: 'a'.repeat(64) }),
+      },
+      { ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const result = await response.json() as any;
+    expect(result.case.id).toBe(insertedRow.id);
+    expect(result.case.claimToken).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(insertedRow.claim_token);
+    expect(query.eq).toHaveBeenCalledWith('id', insertedRow.id);
+    expect(query.eq).toHaveBeenCalledWith('is_anonymous', true);
+    expect(query.is).toHaveBeenCalledWith('user_id', null);
+  });
+
+  it('returns the same not-found response for an invalid token', async () => {
+    const response = await casesRoutes.request(
+      '/cases/anonymous/00000000-0000-4000-8000-000000000099/recover',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+        body: JSON.stringify({ claimToken: 'b'.repeat(64) }),
+      },
+      { ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } } as any,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ message: 'Caso não encontrado ou token inválido.' });
+  });
+
+  it('fails closed when recovery rate limit is reached', async () => {
+    const response = await casesRoutes.request(
+      '/cases/anonymous/00000000-0000-4000-8000-000000000099/recover',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.22' },
+        body: JSON.stringify({ claimToken: 'a'.repeat(64) }),
+      },
+      { ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: false }) } } as any,
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
