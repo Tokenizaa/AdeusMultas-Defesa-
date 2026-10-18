@@ -413,7 +413,7 @@ casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
     serviceType: domain.serviceType,
     infraction: domain.infraction,
     vehicle: domain.vehicle,
-    applicant: domain.applicant,
+    applicant: domain.applicant ? { ...domain.applicant, email: domain.clientEmail, phone: domain.clientPhone } : null,
     paymentStatus: pendingOrder?.status || null,
     payment: pendingOrder ? { txId: pendingOrder.gateway_transaction_id, amount: pendingOrder.amount, copyPaste: pendingOrder.qr_code_text, qrCodeUrl: pendingOrder.qr_code_url } : null,
   });
