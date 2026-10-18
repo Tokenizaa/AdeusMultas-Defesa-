@@ -309,6 +309,77 @@ export function ManualIntakePage() {
     }
   }
 
+  if (createdCase && stage !== 'recorded') {
+    const field = (key: keyof Qualification, label: string, required = true, type = 'text') => (
+      <label className="grid gap-1.5 text-sm font-semibold text-slate-800" key={key}>
+        {label}{required ? ' *' : ''}
+        <input type={type} required={required} value={qualification[key]} onChange={(event) => setQualification((current) => ({ ...current, [key]: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 px-3 text-base font-normal" />
+      </label>
+    );
+    return (
+      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950 sm:px-6">
+        <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Adeus Multa · Continuação segura</p>
+          {stage === 'qualification' && <>
+            <h1 className="mt-2 text-2xl font-bold">Qualifique o requerente</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados exatamente como aparecem nos documentos. Eles serão usados na identificação do requerente, não como prova de fatos da infração.</p>
+            <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={saveQualification}>
+              {field('name', 'Nome completo')}
+              {field('cpf', 'CPF')}
+              {field('email', 'E-mail', true, 'email')}
+              {field('phone', 'Telefone')}
+              {field('cnh', 'Número da CNH')}
+              {field('cnhCategory', 'Categoria da CNH')}
+              {field('rg', 'RG', false)}
+              {field('addressStreet', 'Rua/avenida')}
+              {field('addressNumber', 'Número')}
+              {field('addressComplement', 'Complemento', false)}
+              <div className="sm:col-span-2">{field('cityState', 'Município/UF')}</div>
+              {qualificationError && <p role="alert" className="sm:col-span-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">{qualificationError}</p>}
+              <div className="sm:col-span-2"><button disabled={qualificationBusy} className="min-h-11 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-60">{qualificationBusy ? 'Salvando…' : 'Salvar e revisar'}</button></div>
+            </form>
+          </>}
+          {stage === 'review' && <>
+            <h1 className="mt-2 text-2xl font-bold">Revise antes de contratar</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Confira os dados informados. O preço e a cobrança serão resolvidos pelo servidor; a minuta só poderá ser solicitada depois da confirmação autoritativa do pagamento.</p>
+            <dl className="mt-5 grid gap-3 rounded-lg border border-slate-200 p-4 text-sm sm:grid-cols-2">
+              <div><dt className="text-slate-500">Auto de infração</dt><dd className="font-semibold">{form.aitNumber}</dd></div>
+              <div><dt className="text-slate-500">Código</dt><dd className="font-semibold">{form.infractionCode}</dd></div>
+              <div><dt className="text-slate-500">Placa</dt><dd className="font-semibold">{form.plate}</dd></div>
+              <div><dt className="text-slate-500">Serviço</dt><dd className="font-semibold">{form.serviceType === 'recurso_jari' ? 'Recurso à JARI' : 'Defesa prévia'}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-slate-500">Requerente</dt><dd className="font-semibold">{qualification.name} · CPF terminado em {qualification.cpf.replace(/\D/g, '').slice(-2)}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-slate-500">Endereço</dt><dd className="font-semibold">{qualification.addressStreet}, {qualification.addressNumber} {qualification.addressComplement} · {qualification.cityState}</dd></div>
+            </dl>
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">O registro dos dados não representa parecer jurídico nem garante resultado. Confirme que os dados correspondem aos documentos oficiais.</p>
+            {pixError && <p role="alert" className="mt-4 text-sm text-red-700">{pixError}</p>}
+            <div className="mt-5 flex flex-wrap gap-3"><button onClick={() => setStage('qualification')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Corrigir dados</button><button disabled={pixBusy} onClick={() => void createPix()} className="min-h-11 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-60">{pixBusy ? 'Consultando oferta…' : 'Consultar preço e gerar PIX'}</button></div>
+          </>}
+          {stage === 'payment' && <>
+            <h1 className="mt-2 text-2xl font-bold">Pagamento via PIX</h1>
+            <p className="mt-2 text-sm text-slate-600">Valor informado pelo servidor: <strong>{pix?.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+            {pix?.qrCodeUrl && <div className="my-5 flex justify-center"><img src={pix.qrCodeUrl} alt="QR Code PIX" className="max-h-64 max-w-64 object-contain" /></div>}
+            <label className="mt-4 grid gap-2 text-sm font-semibold">PIX copia e cola<textarea readOnly value={pix?.copyPaste || ''} rows={4} className="rounded-lg border border-slate-300 p-3 font-mono text-xs font-normal" /></label>
+            <button onClick={() => { if (pix?.copyPaste) void navigator.clipboard.writeText(pix.copyPaste); }} className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Copiar código PIX</button>
+            <p className="mt-4 text-sm text-slate-600">Status consultado: <strong>{paymentStatus}</strong>. A página não considera um PIX pago até o endpoint autenticado retornar um estado aprovado.</p>
+            {pixError && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{pixError}</p>}
+            <button disabled={paymentCheckBusy} onClick={() => void checkPaymentStatus()} className="mt-4 min-h-11 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-60">{paymentCheckBusy ? 'Consultando…' : 'Verificar pagamento'}</button>
+          </>}
+          {stage === 'paid' && <>
+            <h1 className="mt-2 text-2xl font-bold">Pagamento confirmado pelo servidor</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">O endpoint autenticado confirmou o status da ordem. Agora o servidor tentará gerar a minuta usando a análise e as regras de qualidade canônicas.</p>
+            {documentMessage && <p role="alert" className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{documentMessage}</p>}
+            <button onClick={() => void generateDocument()} className="mt-5 min-h-11 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white">Solicitar geração validada</button>
+          </>}
+          {stage === 'document' && <>
+            <h1 className="mt-2 text-2xl font-bold">Resultado da geração</h1>
+            <p role="status" className="mt-4 rounded-lg border border-slate-200 p-4 text-sm leading-6">{documentMessage}</p>
+            <button onClick={() => navigate('/cases')} className="mt-5 min-h-11 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white">Ir para Meus Casos</button>
+          </>}
+        </section>
+      </main>
+    );
+  }
+
   if (createdCase) {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950 sm:px-6">
