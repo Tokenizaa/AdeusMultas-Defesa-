@@ -135,6 +135,12 @@ Estas fontes são pontos de partida para a pesquisa, não uma lista completa nem
 - NIST SP 800-218 — Secure Software Development Framework (SSDF): https://csrc.nist.gov/pubs/sp/800/218/final
 - NIST SSDF — página de publicações, para acompanhar revisões e versões em rascunho: https://csrc.nist.gov/projects/ssdf/publications
 
+## Dependência obrigatória: auditoria da Base de Conhecimento e RAG
+
+Antes de aprovar requisitos e arquitetura, considerar a [auditoria da Base de Conhecimento, acervo jurídico e RAG](./AUDITORIA-BASE-CONHECIMENTO-RAG-ONBOARDING.md). A auditoria consultou o banco canônico em 2026-10-17 e encontrou 39 fontes, 66 documentos/versões, 58 chunks/embeddings, zero relações normativas e todos os 66 documentos com vigência e situação jurídica desconhecidas. O acervo físico ainda precisa ser comparado aos registros e o runtime RAG precisa ser avaliado ponta a ponta.
+
+A base existente é um ativo a investigar, não um ativo validado. A experiência do onboarding deve ser desenhada em conjunto com a estratégia de curadoria jurídica e recuperação: coletar e confirmar fatos mínimos, fazer perguntas condicionais derivadas de requisitos jurídicos revisados, e só usar fontes elegíveis para fundamentar conclusões.
+
 ## Próxima execução
 
 1. Levantar as jornadas reais e os tipos de processo que o produto pretende atender, sem importar as regras atuais como corretas.
