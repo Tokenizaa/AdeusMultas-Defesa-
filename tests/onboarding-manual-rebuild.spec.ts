@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const enabled = process.env.RUN_MANUAL_REBUILD_E2E === '1';
 
 test.describe('onboarding manual greenfield — fluxo novo', () => {
-  test.skip(!enabled, 'Execute explicitamente contra o preview HTTPS do PR com RUN_MANUAL_REBUILD_E2E=1.');
+  test.skip(!enabled, 'Execute com playwright.manual-onboarding.config.ts e RUN_MANUAL_REBUILD_E2E=1; as APIs são mockadas.');
 
   test('valida os campos no navegador e não envia formulário incompleto', async ({ page }) => {
     const intakeRequests: string[] = [];
