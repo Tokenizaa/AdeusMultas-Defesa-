@@ -24,7 +24,7 @@ Este documento registra apenas itens cuja existência e estado foram verificados
 | [#26](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/26) | Links duplicados de Testes & Qualidade | Aberta; 1 commit exclusivo; 1 arquivo | Divergente, 42 commits atrás | Mudança pequena, mas o arquivo da branch difere da `main`; comparar semanticamente antes de fechar. |
 | [#25](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/25) | Estados do dashboard do condutor | Aberta; 8 commits exclusivos; 3 arquivos | Divergente, 51 commits atrás | Revisar contra a implementação atual antes de fechar ou portar. |
 | [#24](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/24) | Remover Redis do bootstrap local | Aberta; 3 commits exclusivos; 70 arquivos | Divergente, 77 commits atrás | **Preservar.** Contém artefatos de recuperação, documentos legais baixados, backups e alterações de código além do título da PR. Não excluir branch nem conteúdo por inferência. |
-| [#14](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/14) | Execução do Golden Path em produção | Aberta; 4 commits exclusivos; 2 arquivos | Divergente, 426 commits atrás | Provavelmente precisa de atualização/revalidação de ambiente e harness; inspecionar antes de fechar. |
+| [#14](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/14) | Execução do Golden Path em produção | **Fechada sem merge** após inspeção | Divergente, 426 commits atrás; branch usava `www.defesai.shop` | Substituída pela `main`, que aponta para `adeusmulta.defesai.com.br` e tem verificação de autenticação mais robusta. Branch preservada; não apagar automaticamente. |
 | [#10](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/10) | Invariantes do domínio de pagamentos | Aberta; 2 commits exclusivos; 2 arquivos | Divergente, 438 commits atrás | Preservar até reconciliar com código e dados atuais de pagamentos. |
 | [#11](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/11) | Seleção determinística de gateway | Aberta; 5 commits exclusivos; 4 arquivos | Divergente, 438 commits atrás | Preservar até reconciliar com código e configuração atuais de gateways. |
 | [#12](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/12) | PaymentOrder/PaymentAttempt e migrações | Aberta; 21 commits exclusivos; 13 arquivos | Divergente, 438 commits atrás | **Não excluir nem fechar sem auditoria.** Contém migrações SQL e implementação financeira potencialmente relevante. |
@@ -46,10 +46,9 @@ A consulta inicial retornou mais de 79 branches e paginação adicional, incluin
 
 ## Próxima ordem de trabalho
 
-1. Manter encerrada a PR #37; não reabrir o plano antigo.
+1. Manter encerradas as PRs #37 e #14; não reabrir o plano antigo nem o harness de produção obsoleto.
 2. Tratar PRs de código com migrações/dados (especialmente #12 e #24) como conteúdo a preservar até auditoria de paridade.
 3. Reconciliar PRs pequenas e recentes (#26, #28, #25) com a `main` atual; portar somente mudanças ainda necessárias diretamente na `main`.
 4. Migrar ou arquivar a documentação ainda vigente da PR #32 antes de fechá-la.
 5. Reavaliar a PR #29 com a regra de cinco usuários e a matriz E2E real; não adotar os 70 usuários originais.
-6. Revisar a PR #14 quanto ao ambiente e ao harness atual.
 7. Fazer a exclusão remota de branches somente por ferramenta autorizada e depois de comprovar preservação do conteúdo exclusivo.
