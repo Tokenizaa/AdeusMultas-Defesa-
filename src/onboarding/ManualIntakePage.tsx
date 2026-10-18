@@ -392,7 +392,7 @@ export function ManualIntakePage() {
               <div><dt className="text-slate-500">Auto de infração</dt><dd className="font-semibold">{form.aitNumber}</dd></div>
               <div><dt className="text-slate-500">Código</dt><dd className="font-semibold">{form.infractionCode}</dd></div>
               <div><dt className="text-slate-500">Placa</dt><dd className="font-semibold">{form.plate}</dd></div>
-              <div><dt className="text-slate-500">Serviço</dt><dd className="font-semibold">{form.serviceType === 'recurso_jari' ? 'Recurso à JARI' : 'Defesa prévia'}</dd></div>
+              <div><dt className="text-slate-500">Serviço</dt><dd className="font-semibold">{MANUAL_SERVICE_OPTIONS.find((option) => option.value === form.serviceType)?.label || 'Defesa prévia'}</dd></div>
               <div className="sm:col-span-2"><dt className="text-slate-500">Requerente</dt><dd className="font-semibold">{qualification.name} · CPF terminado em {qualification.cpf.replace(/\D/g, '').slice(-2)}</dd></div>
               <div className="sm:col-span-2"><dt className="text-slate-500">Endereço</dt><dd className="font-semibold">{qualification.addressStreet}, {qualification.addressNumber} {qualification.addressComplement} · {qualification.cityState}</dd></div>
             </dl>
