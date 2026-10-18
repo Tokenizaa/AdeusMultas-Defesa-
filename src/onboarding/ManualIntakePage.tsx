@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { authFetch } from '../lib/authFetch';
 import {
   normalizeManualIntake,
@@ -18,7 +18,13 @@ const EMPTY_FORM: ManualIntakeInput = {
   serviceType: 'defesa_previa',
 };
 
-type CreatedCase = { id: string; claimToken?: string; status?: string };
+type RecoveredCaseData = {
+  infraction?: { aitNumber?: string; infractionCode?: string; location?: string };
+  vehicle?: { plate?: string };
+  serviceType?: string;
+};
+
+type CreatedCase = { id: string; claimToken?: string; status?: string; recovered?: boolean; caseData?: RecoveredCaseData };
 
 function TextField({
   id,
@@ -73,6 +79,57 @@ export function ManualIntakePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [createdCase, setCreatedCase] = useState<CreatedCase>();
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function recoverCase() {
+      let caseId = '';
+      let claimToken = '';
+      try {
+        caseId = sessionStorage.getItem('defesai_manual_onboarding_case_id') || '';
+        claimToken = sessionStorage.getItem('defesai_manual_onboarding_claim_token') || '';
+      } catch {
+        return;
+      }
+      if (!caseId || !claimToken) return;
+
+      setRecovering(true);
+      try {
+        const response = await authFetch(`/api/cases/anonymous/${encodeURIComponent(caseId)}/recover`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ claimToken }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body?.case || body.case.id !== caseId) {
+          throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível recuperar este caso nesta sessão.');
+        }
+        if (!cancelled) {
+          setCreatedCase({
+            id: caseId,
+            claimToken,
+            status: typeof body.case.status === 'string' ? body.case.status : undefined,
+            recovered: true,
+            caseData: {
+              infraction: body.case.infraction,
+              vehicle: body.case.vehicle,
+              serviceType: body.case.serviceType,
+            },
+          });
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setRecoveryError(cause instanceof Error ? cause.message : 'Não foi possível recuperar este caso nesta sessão.');
+        }
+      } finally {
+        if (!cancelled) setRecovering(false);
+      }
+    }
+    void recoverCase();
+    return () => { cancelled = true; };
+  }, []);
 
   function update<K extends keyof ManualIntakeInput>(key: K, value: ManualIntakeInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -129,13 +186,22 @@ export function ManualIntakePage() {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950 sm:px-6">
         <section className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-          <p className="text-sm font-semibold text-emerald-800">Dados salvos</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">Seu caso foi registrado</h1>
+          <p className="text-sm font-semibold text-emerald-800">{createdCase.recovered ? 'Recuperação concluída' : 'Dados salvos'}</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight">{createdCase.recovered ? 'Seu caso foi recuperado' : 'Seu caso foi registrado'}</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">Identificador do caso: <span className="font-mono">{createdCase.id}</span></p>
+          {createdCase.recovered && createdCase.caseData && (
+            <dl className="mt-5 grid gap-3 rounded-lg border border-slate-200 p-4 text-sm sm:grid-cols-2">
+              <div><dt className="text-slate-500">Auto de infração</dt><dd className="font-semibold">{createdCase.caseData.infraction?.aitNumber || 'Não informado'}</dd></div>
+              <div><dt className="text-slate-500">Código</dt><dd className="font-semibold">{createdCase.caseData.infraction?.infractionCode || 'Não informado'}</dd></div>
+              <div><dt className="text-slate-500">Placa</dt><dd className="font-semibold">{createdCase.caseData.vehicle?.plate || 'Não informado'}</dd></div>
+              <div><dt className="text-slate-500">Etapa selecionada</dt><dd className="font-semibold">{createdCase.caseData.serviceType === 'recurso_jari' ? 'Recurso à JARI' : 'Defesa prévia'}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-slate-500">Local</dt><dd className="font-semibold">{createdCase.caseData.infraction?.location || 'Não informado'}</dd></div>
+            </dl>
+          )}
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             Esta etapa confirma apenas o registro dos dados. A análise jurídica e a geração do documento não são declaradas concluídas nesta versão de validação.
           </div>
-          <button type="button" onClick={() => { setCreatedCase(undefined); setForm(EMPTY_FORM); }} className="mt-6 min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Iniciar outro caso</button>
+          <button type="button" onClick={() => { setCreatedCase(undefined); setForm(EMPTY_FORM); setRecoveryError(''); try { sessionStorage.removeItem('defesai_manual_onboarding_case_id'); sessionStorage.removeItem('defesai_manual_onboarding_claim_token'); } catch { /* storage may be disabled */ } }} className="mt-6 min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Iniciar outro caso</button>
         </section>
       </main>
     );
@@ -144,6 +210,8 @@ export function ManualIntakePage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-3xl">
+        {recovering && <p role="status" className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">Recuperando o caso salvo nesta sessão…</p>}
+        {recoveryError && <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Não foi possível recuperar o caso salvo automaticamente. {recoveryError}</p>}
         <header className="mb-7">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Adeus Multa · Novo fluxo</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Informe os dados da autuação</h1>
