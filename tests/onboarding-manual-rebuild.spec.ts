@@ -69,6 +69,42 @@ test.describe('onboarding manual greenfield — preview isolado', () => {
     expect(forbiddenRequests).toEqual([]);
   });
 
+
+  test('recupera o registro depois de recarregar a página usando ID e token da sessão', async ({ page }) => {
+    await page.addInitScript(() => {
+      sessionStorage.setItem('defesai_manual_onboarding_case_id', 'e2e-manual-recovered-001');
+      sessionStorage.setItem('defesai_manual_onboarding_claim_token', 'b'.repeat(64));
+    });
+    let recoveryPayload: Record<string, unknown> | undefined;
+    await page.route('**/api/cases/anonymous/*/recover', async (route) => {
+      recoveryPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          case: {
+            id: 'e2e-manual-recovered-001',
+            status: 'analisado',
+            serviceType: 'recurso_jari',
+            vehicle: { plate: 'ABC1D23' },
+            infraction: {
+              aitNumber: 'E2E-RECOVERED-001',
+              infractionCode: '745-5',
+              location: 'Rua de teste, 10 - São Paulo/SP',
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    await expect(page.getByRole('heading', { name: 'Seu caso foi recuperado' })).toBeVisible();
+    await expect(page.getByText('E2E-RECOVERED-001')).toBeVisible();
+    await expect(page.getByText('ABC1D23')).toBeVisible();
+    await expect(page.getByText('Recurso à JARI')).toBeVisible();
+    expect(recoveryPayload).toEqual({ claimToken: 'b'.repeat(64) });
+  });
+
   test('mostra erro de API sem declarar caso criado', async ({ page }) => {
     await page.route('**/api/cases/anonymous', async (route) => {
       await route.fulfill({
