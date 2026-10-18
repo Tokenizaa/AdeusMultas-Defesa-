@@ -23,7 +23,7 @@ jobs:
     env:
       PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
       SUPABASE_URL: https://llmxnpgjpxcvyrqjkfwb.supabase.co
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE }}
       E2E_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
       E2E_TEST_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
       SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
