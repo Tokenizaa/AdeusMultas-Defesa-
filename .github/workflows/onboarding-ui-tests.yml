@@ -1,0 +1,51 @@
+name: Manual Onboarding UI Contract Tests
+
+on:
+  push:
+    branches:
+      - onboarding/manual-intake-greenfield
+    paths:
+      - 'src/onboarding/**'
+      - 'src/App.tsx'
+      - 'tests/onboarding-manual-rebuild.spec.ts'
+      - 'playwright.manual-onboarding.config.ts'
+      - '.github/workflows/onboarding-ui-tests.yml'
+  pull_request:
+    paths:
+      - 'src/onboarding/**'
+      - 'src/App.tsx'
+      - 'tests/onboarding-manual-rebuild.spec.ts'
+      - 'playwright.manual-onboarding.config.ts'
+      - '.github/workflows/onboarding-ui-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  manual-onboarding-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Test the branch UI with mocked APIs (no database writes or payments)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4179
+          RUN_MANUAL_REBUILD_E2E: '1'
+          CI: 'true'
+        run: npx playwright test --config=playwright.manual-onboarding.config.ts --project=chromium
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-onboarding-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/manual-onboarding/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
