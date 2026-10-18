@@ -54,6 +54,9 @@ jobs:
       - name: Run new manual onboarding smoke and reconcile Supabase
         run: npx playwright test --project=chromium-production --workers=1 --retries=0 tests/onboarding-anonymous-production.spec.ts
 
+      - name: Run first service battery — defesa_previa (deterministic, no DB writes)
+        run: npx playwright test --config=playwright.config.ts --project=chromium-production --workers=1 --retries=0 tests/e2e/services/defesa_previa.spec.ts
+
       - name: Upload smoke and cleanup evidence
         if: always()
         uses: actions/upload-artifact@v4
