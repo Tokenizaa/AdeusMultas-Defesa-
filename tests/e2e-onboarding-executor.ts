@@ -234,13 +234,44 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
     await fillTechnicalDetails(page, { ...testCase.infraction, serviceType: testCase.serviceType });
     timestamps.step5_end = new Date().toISOString();
 
-    // Step 6: Run Analysis
+    // Step 6: Run Analysis. Observe the write response before waiting for UI
+    // transition so API failures and UI/backend divergence are distinguished.
     timestamps.analysis_start = new Date().toISOString();
-    await page.waitForSelector('#btn-run-analysis', { state: 'visible', timeout: 10000 });
-    await page.locator('#btn-run-analysis').evaluate((element) => (element as HTMLButtonElement).click());
-    
-    // Wait for analysis to complete (step 6 -> step 7)
-    await waitForStep(page, 7, 45_000);
+    await page.waitForSelector('#btn-run-analysis', { state: 'visible', timeout: 10_000 });
+    const analysisRequestStarted = Date.now();
+    const anonymousSavePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST'
+        && new URL(response.url()).pathname.endsWith('/api/cases/anonymous'),
+      { timeout: 45_000 },
+    );
+    await page.locator('#btn-run-analysis').click();
+    let anonymousResponse;
+    try {
+      anonymousResponse = await anonymousSavePromise;
+    } catch (error) {
+      throw new Error(`ANALYSIS_API_TIMEOUT after ${Date.now() - analysisRequestStarted}ms: POST /api/cases/anonymous did not return; stopping without retry to avoid duplicate writes. ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const anonymousBodyText = await anonymousResponse.text().catch(() => '');
+    let anonymousPayload: any = {};
+    try { anonymousPayload = JSON.parse(anonymousBodyText); } catch { /* preserve bounded response evidence below */ }
+    if (!anonymousResponse.ok()) {
+      throw new Error(`ANALYSIS_API_FAILED after ${Date.now() - analysisRequestStarted}ms: HTTP ${anonymousResponse.status()} ${anonymousBodyText.slice(0, 500)}`);
+    }
+    const canonicalCaseId = anonymousPayload?.id ?? anonymousPayload?.case?.id ?? anonymousPayload?.data?.id;
+    if (typeof canonicalCaseId !== 'string' || !canonicalCaseId) {
+      throw new Error(`ANALYSIS_API_INVALID_RESPONSE: HTTP ${anonymousResponse.status()} returned no canonical case ID; response=${anonymousBodyText.slice(0, 500)}`);
+    }
+    result.persistedCaseId = canonicalCaseId;
+    timestamps.analysis_api_completed = new Date().toISOString();
+    result.timestamps!.analysis_api_duration_ms = String(Date.now() - analysisRequestStarted);
+
+    // API succeeded; if this checkpoint fails, report UI/backend divergence
+    // explicitly and never submit the analysis request a second time.
+    try {
+      await waitForStep(page, 7, 45_000);
+    } catch (error) {
+      throw new Error(`ANALYSIS_UI_DIVERGENCE: API returned HTTP ${anonymousResponse.status()} and case ${canonicalCaseId} was persisted, but UI did not reach step 7 within 45000ms. ${error instanceof Error ? error.message : String(error)}`);
+    }
     timestamps.analysis_end = new Date().toISOString();
 
     // Verify analysis results
