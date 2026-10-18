@@ -261,3 +261,76 @@ describe('anonymous case claim', () => {
     expect(query.update).not.toHaveBeenCalled();
   });
 });
+
+
+describe('applicant qualification', () => {
+  let row: any;
+  let query: any;
+
+  beforeEach(() => {
+    row = {
+      id: '00000000-0000-4000-8000-000000000097',
+      user_id: '00000000-0000-4000-8000-000000000001',
+      is_anonymous: false,
+      client_name: 'Condutor',
+      client_email: 'test@example.com',
+      client_phone: null,
+      client_cpf: null,
+    };
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: row, error: null })),
+      update: vi.fn((changes: unknown) => { row = { ...row, ...(changes as object) }; return query; }),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
+  });
+
+  it('persists validated qualification fields without accepting client ownership', async () => {
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000097/qualification',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-user' },
+        body: JSON.stringify({
+          name: 'Pessoa de Teste',
+          cpf: '123.456.789-09',
+          email: 'pessoa@example.com',
+          phone: '11999999999',
+          cnh: '12345678900',
+          rg: '1234567',
+          cnhCategory: 'B',
+          addressStreet: 'Rua de Teste',
+          addressNumber: '10',
+          addressComplement: 'Apto 2',
+          cityState: 'São Paulo/SP',
+          userId: 'attacker-controlled-id',
+        }),
+      },
+      {} as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(row.user_id).toBe('00000000-0000-4000-8000-000000000001');
+    expect(row.client_cpf).toBe('12345678909');
+    expect(JSON.parse(row.applicant_json).applicantName).toBe('Pessoa de Teste');
+    expect(JSON.parse(row.applicant_json).addressCityState).toBe('São Paulo/SP');
+    const result = await response.json() as any;
+    expect(result.applicant.applicantCpf).not.toContain('12345678909');
+  });
+
+  it('rejects incomplete qualification without writing personal data', async () => {
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000097/qualification',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-user' },
+        body: JSON.stringify({ name: 'Pessoa de Teste', cpf: '123' }),
+      },
+      {} as any,
+    );
+
+    expect(response.status).toBe(400);
+    expect(query.update).not.toHaveBeenCalled();
+  });
+});
