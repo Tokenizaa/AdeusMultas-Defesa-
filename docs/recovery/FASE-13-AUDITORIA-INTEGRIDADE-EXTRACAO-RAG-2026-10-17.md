@@ -157,7 +157,7 @@ O código de `cloudflare/routes/cases.ts` chama `analyzeInfractionCompat()`, que
 | Proveniência como prova jurídica suficiente | NÃO DEMONSTRADA |
 | Sincronização Supabase embeddings ↔ Cloudflare Vectorize | NÃO DEMONSTRADA |
 | Golden test de recuperação com casos positivos/negativos | INSUFICIENTE nesta execução |
-| Teste HTTP real do Worker em produção | NÃO EXECUTADO nesta execução; a ferramenta de navegação disponível recusou a chamada por falta de créditos |
+| Teste HTTP real do Worker em produção | NÃO EXECUTADO nesta execução: Firecrawl recusou por falta de créditos e a ferramenta web não conseguiu acessar a URL |
 
 ## 6. Decisão e próximos passos obrigatórios
 
