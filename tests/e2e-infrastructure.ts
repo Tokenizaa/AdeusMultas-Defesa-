@@ -520,6 +520,147 @@ export class E2ETestManager {
     return this.testCases;
   }
 
+  async cleanupOwnedFixtures(
+    additionalCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean }> = [],
+  ): Promise<{ runId: string; cases: any[]; users: any[]; completed: boolean }> {
+    const cleanupCases = [
+      ...this.testCases.map((testCase) => ({
+        id: testCase.id,
+        aitNumber: String(testCase.infraction.aitNumber),
+        userId: testCase.userId,
+        anonymous: false,
+        source: 'seed',
+      })),
+      ...additionalCases.map((item) => ({ ...item, source: 'onboarding' })),
+    ];
+    const uniqueCases = [...new Map(cleanupCases.map((item) => [item.id, item])).values()];
+    const caseResults: any[] = [];
+
+    for (const owned of uniqueCases) {
+      const lookup = await this.supabase
+        .from('cases')
+        .select('id,ait_number,user_id,is_anonymous')
+        .eq('id', owned.id)
+        .maybeSingle();
+      if (lookup.error) {
+        caseResults.push({ id: owned.id, status: 'CLEANUP_PENDING', reason: lookup.error.message });
+        continue;
+      }
+      if (!lookup.data) {
+        caseResults.push({ id: owned.id, status: 'ALREADY_ABSENT_VERIFIED' });
+        continue;
+      }
+
+      const row = lookup.data;
+      const identityMatches = row.id === owned.id
+        && row.ait_number === owned.aitNumber
+        && (owned.anonymous
+          ? row.user_id == null && row.is_anonymous === true
+          : row.user_id === owned.userId && row.is_anonymous !== true);
+      if (!identityMatches) {
+        caseResults.push({
+          id: owned.id,
+          status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH',
+          expected: { aitNumber: owned.aitNumber, userId: owned.userId ?? null, anonymous: owned.anonymous },
+          actual: { aitNumber: row.ait_number, userId: row.user_id, anonymous: row.is_anonymous },
+        });
+        continue;
+      }
+
+      let deletion = this.supabase.from('cases').delete().eq('id', owned.id).eq('ait_number', owned.aitNumber);
+      deletion = owned.anonymous ? deletion.is('user_id', null) : deletion.eq('user_id', owned.userId!);
+      const { data: deleted, error: deleteError } = await deletion.select('id');
+      if (deleteError) {
+        caseResults.push({ id: owned.id, status: 'CLEANUP_PENDING', reason: deleteError.message });
+        continue;
+      }
+      const verification = await this.supabase.from('cases').select('id').eq('id', owned.id).maybeSingle();
+      if (verification.error || verification.data) {
+        caseResults.push({
+          id: owned.id,
+          status: 'CLEANUP_PENDING',
+          reason: verification.error?.message || 'case still exists after delete',
+          deletedRows: deleted?.length ?? 0,
+        });
+      } else {
+        caseResults.push({ id: owned.id, status: 'DELETED_AND_VERIFIED', deletedRows: deleted?.length ?? 0 });
+      }
+    }
+
+    const userResults: any[] = [];
+    for (const user of this.testUsers) {
+      const remainingCases = await this.supabase.from('cases').select('id').eq('user_id', user.id).limit(1);
+      if (remainingCases.error || (remainingCases.data?.length ?? 0) > 0) {
+        userResults.push({
+          id: user.id,
+          email: user.email,
+          status: 'CLEANUP_PENDING',
+          reason: remainingCases.error?.message || 'case remains for synthetic user',
+        });
+        continue;
+      }
+
+      const authLookup = await this.supabase.auth.admin.getUserById(user.id);
+      if (authLookup.error || !authLookup.data.user) {
+        userResults.push({ id: user.id, email: user.email, status: 'ALREADY_ABSENT_VERIFIED' });
+        continue;
+      }
+      const authUser = authLookup.data.user;
+      if (authUser.email !== user.email || authUser.user_metadata?.test_run_id !== TEST_RUN_ID) {
+        userResults.push({
+          id: user.id,
+          email: user.email,
+          status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH',
+          actualEmail: authUser.email,
+          actualRunId: authUser.user_metadata?.test_run_id,
+        });
+        continue;
+      }
+
+      const profileLookup = await this.supabase.from('user_profiles').select('user_id,email').eq('user_id', user.id).maybeSingle();
+      if (profileLookup.error) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: profileLookup.error.message });
+        continue;
+      }
+      if (profileLookup.data && profileLookup.data.email !== user.email) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH', actualProfileEmail: profileLookup.data.email });
+        continue;
+      }
+      if (profileLookup.data) {
+        const profileDelete = await this.supabase.from('user_profiles').delete().eq('user_id', user.id).eq('email', user.email).select('user_id');
+        if (profileDelete.error) {
+          userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: profileDelete.error.message });
+          continue;
+        }
+      }
+
+      const authDelete = await this.supabase.auth.admin.deleteUser(user.id);
+      if (authDelete.error) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: authDelete.error.message });
+        continue;
+      }
+      const verifyUser = await this.supabase.auth.admin.getUserById(user.id);
+      userResults.push({
+        id: user.id,
+        email: user.email,
+        status: verifyUser.data.user ? 'CLEANUP_PENDING' : 'DELETED_AND_VERIFIED',
+        reason: verifyUser.data.user ? 'Auth user still exists after delete' : undefined,
+      });
+    }
+
+    const report = {
+      runId: TEST_RUN_ID,
+      timestamp: new Date().toISOString(),
+      cases: caseResults,
+      users: userResults,
+      completed: [...caseResults, ...userResults].every((item) =>
+        item.status === 'DELETED_AND_VERIFIED' || item.status === 'ALREADY_ABSENT_VERIFIED'
+      ),
+    };
+    await this.saveEvidence('cleanup-report.json', report);
+    return report;
+  }
+
   async getEvidenceDir(): Promise<string> {
     return this.evidenceDir;
   }
