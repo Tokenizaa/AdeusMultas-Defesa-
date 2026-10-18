@@ -146,6 +146,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('hard-blocks PIX creation in the safe preview before contacting any gateway', async () => {
+    h.insertChain.mockClear();
     const providerFetch = vi.fn();
     vi.stubGlobal('fetch', providerFetch);
     try {
