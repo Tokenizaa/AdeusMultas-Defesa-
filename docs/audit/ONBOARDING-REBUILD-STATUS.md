@@ -19,7 +19,8 @@ O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa 
 - [x] Tratamento de respostas HTTP não exitosas e validação do ID retornado antes de confirmar o registro.
 - [x] Armazenamento de ID e token de recuperação na sessão; os dados do caso continuam no servidor.
 - [x] Testes unitários existentes de normalização/validação.
-- [x] Nova suíte Playwright isolada para validação de formulário, payload manual, recuperação de sessão, falha da API e ausência de chamadas OCR: `tests/onboarding-manual-rebuild.spec.ts`.
+- [x] Testes do endpoint para token válido/inválido e rate limit em `cloudflare/routes/cases.test.ts`.
+- [x] Nova suíte Playwright isolada para validação de formulário, payload manual, recuperação após reload, falha da API e ausência de chamadas OCR: `tests/onboarding-manual-rebuild.spec.ts`.
 - [x] Instruções para executar a suíte somente contra o preview HTTPS da branch.
 
 ## Como preparar e executar os testes de preview
@@ -41,7 +42,7 @@ RUN_MANUAL_REBUILD_E2E=1 PLAYWRIGHT_BASE_URL=https://<URL-DO-PREVIEW> npx playwr
 
 A página atual comprova apenas a criação do registro. Ela ainda não oferece a jornada completa de produção. Os itens abaixo permanecem pendentes e devem ser implementados e testados antes de trocar a rota pública:
 
-- [ ] Recuperação server-side do caso anônimo após reload e em outro contexto, com autorização baseada no token e sem expor dados por ID previsível.
+- [ ] Validar recuperação server-side em ambiente de integração real e testar o limite de tentativas; a recuperação por ID + token foi implementada, mas ainda depende de CI e E2E real.
 - [ ] Continuidade segura após cadastro/login e claim do caso, usando o contrato canônico `POST /api/cases/:id/claim`.
 - [ ] Etapa de qualificação do condutor e revisão explícita dos dados antes da contratação.
 - [ ] Diagnóstico jurídico apresentado apenas com resultados efetivamente retornados pelo motor canônico; sem inventar artigos, teses, documentos ou probabilidade de êxito.
@@ -61,4 +62,4 @@ A página atual comprova apenas a criação do registro. Ela ainda não oferece 
 - Não chamar o endpoint autenticado de claim sem sessão válida e token emitido pelo servidor.
 - A suíte Playwright adicionada cobre o comportamento do preview com API simulada; ela não prova a integração real com Supabase, o fluxo de pagamento ou a geração final.
 
-**Estado honesto:** a primeira etapa de intake manual está implementada e há testes de preview preparados. A jornada completa ainda não está concluída; o PR deve continuar em draft e a rota pública atual deve permanecer intacta.
+**Estado honesto:** intake manual e recuperação anônima protegida foram implementados; testes de unidade/preview foram adicionados, mas ainda precisam passar no CI e na integração. A jornada completa ainda não está concluída; o PR deve continuar em draft e a rota pública atual deve permanecer intacta.
