@@ -93,6 +93,42 @@ describe('anonymous case intake', () => {
     expect(insertedRow.vehicle_brand_model).toBe('Não informado');
   });
 
+  it.each([
+    'defesa_previa',
+    'recurso_jari',
+    'recurso_cetran',
+    'suspensao',
+    'cassacao',
+    'indicacao_condutor',
+    'conversao_advertencia',
+  ])('preserves supported service type %s in the created case', async (serviceType) => {
+    const response = await casesRoutes.request('/cases/anonymous', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.13' },
+      body: JSON.stringify({ ...intake, serviceType }),
+    }, {
+      ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+
+    expect(response.status).toBe(201);
+    expect(insertedRow.service_type).toBe(serviceType);
+    expect(insertedRow.is_paid).toBe(false);
+  });
+
+  it('rejects an unknown service type before analysis or persistence', async () => {
+    const response = await casesRoutes.request('/cases/anonymous', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.14' },
+      body: JSON.stringify({ ...intake, serviceType: 'invented_service' }),
+    }, {
+      ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+
+    expect(response.status).toBe(400);
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockAnalyze).not.toHaveBeenCalled();
+  });
+
   it('rejects new cases after the Cloudflare rate limit is reached', async () => {
     const response = await casesRoutes.request('/cases/anonymous', {
       method: 'POST',
