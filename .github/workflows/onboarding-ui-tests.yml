@@ -1,15 +1,6 @@
 name: Manual Onboarding UI Contract Tests
 
 on:
-  push:
-    branches:
-      - onboarding/manual-intake-greenfield
-    paths:
-      - 'src/onboarding/**'
-      - 'src/App.tsx'
-      - 'tests/onboarding-manual-rebuild.spec.ts'
-      - 'playwright.manual-onboarding.config.ts'
-      - '.github/workflows/onboarding-ui-tests.yml'
   pull_request:
     paths:
       - 'src/onboarding/**'
