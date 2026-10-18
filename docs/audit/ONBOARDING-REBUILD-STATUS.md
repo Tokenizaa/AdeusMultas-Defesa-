@@ -2,34 +2,63 @@
 
 **Atualizado:** 2026-10-18  
 **Branch de implementação:** `onboarding/manual-intake-greenfield`  
-**Produção:** não alterada.
+**PR:** [#38](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/38) — permanece em draft  
+**Produção:** não alterada; nenhuma migração ou deploy executado.
 
 ## Decisão vigente
 
 O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa cada fato com instruções sobre onde encontrá-lo; campos ausentes não são inferidos. A decisão está registrada em `docs/product/onboarding/DECISAO-ONBOARDING-MANUAL-SEM-OCR-2026-10-18.md`.
 
-## Estado do trabalho
+## Implementado nesta branch
 
-- [x] Revisar o estado real de `main`: a rota pública `/novo-caso` ainda usa `src/components/onboarding/OnboardingWizard.tsx`.
-- [x] Confirmar que a antiga implementação `src/onboarding-v2/` foi removida anteriormente e não pode ser tratada como fluxo ativo.
-- [x] Registrar a decisão canônica de coleta manual sem OCR.
-- [x] Criar validação de entrada manual e testes unitários.
-- [x] Criar primeira página greenfield de intake manual, sem upload ou chamada de OCR.
-- [x] Disponibilizar a página somente na rota de preview `/novo-caso-rebuild` nesta branch.
-- [ ] Validar lint, typecheck, testes e build em CI.
-- [ ] Testar o POST real `/api/cases/anonymous` em ambiente de teste e verificar recuperação segura do caso.
-- [ ] Completar a jornada greenfield: fatos condicionais, diagnóstico elegível, qualificação, revisão, pagamento confirmado e geração real.
-- [ ] Cobrir falhas, claim anônimo, autorização negativa e recuperação após reload com E2E.
-- [ ] Substituir `/novo-caso` somente após aprovação dos testes e revisão técnica/jurídica.
+- [x] Revisão do estado de `main`: `/novo-caso` continua usando o wizard existente.
+- [x] Decisão canônica de coleta manual sem OCR.
+- [x] Validação e normalização dos campos manuais.
+- [x] Página greenfield isolada em `/novo-caso-rebuild`, sem upload nem chamada de OCR.
+- [x] Criação anônima integrada ao contrato `POST /api/cases/anonymous`.
+- [x] Tratamento de respostas HTTP não exitosas e validação do ID retornado antes de confirmar o registro.
+- [x] Armazenamento de ID e token de recuperação na sessão; os dados do caso continuam no servidor.
+- [x] Testes unitários existentes de normalização/validação.
+- [x] Nova suíte Playwright isolada para validação de formulário, payload manual, recuperação de sessão, falha da API e ausência de chamadas OCR: `tests/onboarding-manual-rebuild.spec.ts`.
+- [x] Instruções para executar a suíte somente contra o preview HTTPS da branch.
 
-## Escopo entregue nesta fase
+## Como preparar e executar os testes de preview
 
-A nova página envia dados inseridos pelo usuário para `POST /api/cases/anonymous`, apresenta erro quando a API falha e só confirma registro quando recebe um identificador válido. Guarda apenas o identificador do caso e o claim token na sessão para facilitar recuperação; os dados do caso permanecem sob responsabilidade do backend.
+A suíte usa respostas HTTP simuladas para validar o comportamento de interface e **não cria registros no Supabase**. Ela não substitui os testes de integração do endpoint real.
 
-A página **não exibe conclusões da análise jurídica**, não declara pagamento ou documento como concluídos e avisa que esta versão apenas confirma o registro dos dados. Isso é deliberado: a auditoria da base jurídica/RAG identificou problemas que precisam ser resolvidos antes de apresentar conclusões jurídicas como confiáveis.
+1. Aguarde uma implantação de preview HTTPS correspondente à branch do PR.
+2. Configure `PLAYWRIGHT_BASE_URL` com a URL HTTPS desse preview.
+3. Execute a suíte isolada:
 
-## Limites de validação
+```bash
+RUN_MANUAL_REBUILD_E2E=1 PLAYWRIGHT_BASE_URL=https://<URL-DO-PREVIEW> npx playwright test tests/onboarding-manual-rebuild.spec.ts --project=chromium-production
+```
 
-Os arquivos foram alterados via GitHub nesta branch. Não foi executado ambiente local nesta sessão; portanto, lint, typecheck, build, E2E e integração real não são declarados aprovados até que o CI e testes de ambiente os comprovem.
+4. Para a suíte normal, mantenha `RUN_MANUAL_REBUILD_E2E` ausente; os testes específicos do preview ficam ignorados por padrão.
+5. Registre o resultado do CI para lint/typecheck, testes unitários e build. Não marque a suíte como aprovada antes de observar o resultado real.
 
-Não houve deploy, migração ou alteração no banco Supabase.
+## Jornada completa — ainda bloqueada para ativação
+
+A página atual comprova apenas a criação do registro. Ela ainda não oferece a jornada completa de produção. Os itens abaixo permanecem pendentes e devem ser implementados e testados antes de trocar a rota pública:
+
+- [ ] Recuperação server-side do caso anônimo após reload e em outro contexto, com autorização baseada no token e sem expor dados por ID previsível.
+- [ ] Continuidade segura após cadastro/login e claim do caso, usando o contrato canônico `POST /api/cases/:id/claim`.
+- [ ] Etapa de qualificação do condutor e revisão explícita dos dados antes da contratação.
+- [ ] Diagnóstico jurídico apresentado apenas com resultados efetivamente retornados pelo motor canônico; sem inventar artigos, teses, documentos ou probabilidade de êxito.
+- [ ] Integração com o fluxo existente de pagamento: preço resolvido no servidor, PIX real, status confirmado por fonte autoritativa e nenhuma liberação com pagamento pendente.
+- [ ] Geração da minuta somente após as condições de negócio e dados obrigatórios serem satisfeitos, preservando o hash de integridade e as teses autorizadas.
+- [ ] Checklist/documento final derivado dos dados e da análise persistidos no servidor.
+- [ ] E2E de ponta a ponta em ambiente de teste: criação, falha/retentativa, reload, claim válido/inválido, revisão, pagamento pendente/aprovado/recusado, geração e leitura do documento.
+- [ ] Reconciliação de registros criados nos testes e limpeza restrita aos IDs/identificadores exclusivos da execução.
+- [ ] Revisão técnica e jurídica do fluxo final.
+- [ ] Substituir `/novo-caso` somente após todas as verificações anteriores passarem.
+
+## Restrições de segurança e validação
+
+- Não realizar deploy de produção, migração ou alteração de dados reais durante a preparação.
+- Não executar cobrança real em E2E. Usar sandbox ou mocks explicitamente identificados; simulação nunca pode ser apresentada como pagamento real.
+- Não declarar análise, pagamento ou minuta concluídos com base apenas na resposta de criação do caso.
+- Não chamar o endpoint autenticado de claim sem sessão válida e token emitido pelo servidor.
+- A suíte Playwright adicionada cobre o comportamento do preview com API simulada; ela não prova a integração real com Supabase, o fluxo de pagamento ou a geração final.
+
+**Estado honesto:** a primeira etapa de intake manual está implementada e há testes de preview preparados. A jornada completa ainda não está concluída; o PR deve continuar em draft e a rota pública atual deve permanecer intacta.
