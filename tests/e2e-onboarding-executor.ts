@@ -109,293 +109,105 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
     procedureType: testCase.procedureType,
     uf: extractUF(testCase.applicant.addressCityState),
     autuador: testCase.infraction.autuadorBody,
-    onboarding: 'PASS',
+    onboarding: 'FAIL',
     analysis: 'FAIL',
-    document: 'FAIL',
+    document: 'SKIP',
     pdf: 'SKIP',
     contamination: 'SKIP',
     errors: [],
     timestamps: {},
   };
-
   const timestamps = result.timestamps!;
   const errors = result.errors!;
 
-  try {
-    page.setDefaultTimeout(12_000);
-    page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(`console: ${message.text()}`);
-    });
-    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-    page.on('response', (response) => {
-      if (response.url().includes('/api/')) {
-        const status = response.status();
-        if (status >= 400) errors.push(`api:${status} ${response.request().method()} ${response.url()}`);
-      }
-      if (response.request().method() === 'POST' && /\/api\/cases(?:\/anonymous)?$/.test(new URL(response.url()).pathname)) {
-        void response.json().then((payload) => {
-          if (payload?.id) result.persistedCaseId = payload.id;
-        }).catch(() => undefined);
-      }
-    });
-    // Safe matrix mode: exercise the real public UI through the QR checkpoint
-    // without creating a real VenoPag charge. The production endpoint is
-    // covered separately by route-contract tests and explicit operator
-    // confirmation is required before any live PIX request.
-    if (process.env.E2E_ALLOW_REAL_PAYMENT !== 'true') {
-      await page.route('**/api/payments/pix/create', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: true,
-            simulated: true,
-            gateway: 'e2e-mock',
-            amount: 44.95,
-            status: 'aguardando_pagamento',
-            txId: `e2e-mock-${testCase.id}`,
-            pixCopyPasteString: '000201E2E-MOCK-PIX',
-            qrCodeDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
-          }),
-        });
-      });
-    }
-    // Login via localStorage (dev auth fallback)
-    await forceLocalAuth(page, {
-      id: testCase.userId,
-      name: testCase.applicant.applicantName,
-      email: testCase.email,
-      cpf: testCase.applicant.applicantCpf,
-      phone: testCase.applicant.applicantPhone,
-      role: 'user',
-    });
+  page.setDefaultTimeout(12_000);
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 
-    // Navigate to onboarding
-    timestamps.navigation = new Date().toISOString();
-    await page.goto(`${BASE_URL}/novo-caso`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-    await waitForStep(page, 1, 15_000);
-    const cookieAccept = page.getByRole('button', { name: /Aceitar e Continuar/i });
-    if (await cookieAccept.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await cookieAccept.click();
-    }
+  timestamps.navigation = new Date().toISOString();
+  await page.goto(`${BASE_URL}/novo-caso-rebuild`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Informe os dados da autuação' })).toBeVisible({ timeout: 10_000 });
 
-    // Step 1: Service Selection
-    timestamps.step1_start = new Date().toISOString();
-    const serviceSelector = getServiceSelector(testCase.serviceType);
-    await page.click(serviceSelector);
-    const skipsStage = testCase.serviceType === 'conversao_advertencia' || testCase.serviceType === 'indicacao_condutor';
-    if (!skipsStage) await waitForStep(page, 2);
-    timestamps.step1_end = new Date().toISOString();
+  // This harness certifies the actual new manual intake and stops at the
+  // authentication/payment boundary. It never creates a PIX or tries to
+  // bypass the authoritative paid-state gate.
+  const intakeFields = [
+    { label: /Número do auto de infração/, value: String(testCase.infraction.aitNumber).slice(0, 80) },
+    { label: 'Código da infração', value: String(testCase.infraction.infractionCode).slice(0, 20) },
+    { label: 'Local da infração', value: String(testCase.infraction.location || 'Local sintético de teste').slice(0, 240) },
+    { label: 'Placa do veículo', value: String(testCase.vehicle.plate).replace(/\s+/g, '').toUpperCase().slice(0, 8) },
+  ];
+  timestamps.validation_start = new Date().toISOString();
+  await page.getByRole('button', { name: 'Registrar dados' }).click();
+  await expect(page.getByText('Informe o número do auto de infração.')).toBeVisible();
+  await expect(page.getByText('Informe o código da infração.')).toBeVisible();
+  await expect(page.getByText('Informe o local da infração com pelo menos 5 caracteres.')).toBeVisible();
+  await expect(page.getByText('Informe uma placa válida com 7 ou 8 caracteres.')).toBeVisible();
+  timestamps.validation_end = new Date().toISOString();
 
-    // Step 2: Stage Selection (may be skipped for some services)
-    timestamps.step2_start = new Date().toISOString();
-    if (!skipsStage) {
-      const stageSelector = getStageSelector(testCase.procedureType);
-      await page.click(stageSelector);
-      await waitForStep(page, 3);
-    } else {
-      // These services infer both stage and category from step 1.
-      await waitForStep(page, 4);
-    }
-    timestamps.step2_end = new Date().toISOString();
-
-    // Step 3: Category Selection
-    timestamps.step3_start = new Date().toISOString();
-    if (testCase.serviceType !== 'conversao_advertencia' && testCase.serviceType !== 'indicacao_condutor') {
-      const categorySelector = getCategorySelector(testCase.infraction.infractionCode);
-      await page.click(categorySelector);
-      // A seleção do card já dispara onNext e avança automaticamente.
-      await waitForStep(page, 4);
-    }
-    timestamps.step3_end = new Date().toISOString();
-
-    // Step 4: Identification Form
-    timestamps.step4_start = new Date().toISOString();
-    await fillInput(page, 'input-lead-name', testCase.applicant.applicantName);
-    await fillInput(page, 'input-lead-phone', testCase.applicant.applicantPhone);
-    await fillInput(page, 'input-ait-number', testCase.infraction.aitNumber);
-    await fillInput(page, 'input-vehicle-plate', testCase.vehicle.plate);
-    await selectNativeOption(page, 'input-infraction-code', testCase.infraction.infractionCode);
-    // Órgão é combobox/datalist, não um <select> nativo.
-    await fillInput(page, 'input-autuador-body', testCase.infraction.autuadorBody);
-    await fillInput(page, 'input-datetime', testCase.infraction.dateTime.split('T')[0]);
-    await fillInput(page, 'input-location', testCase.infraction.location);
-    await fillInput(page, 'input-notification-expedition-date', normalizeDateInput(testCase.infraction.notificationExpeditionDate));
-    await fillInput(page, 'input-defense-deadline', normalizeDateInput(testCase.infraction.defenseDeadline));
-    
-    // Check if next button is enabled and click
-    await page.waitForSelector('#btn-next-to-specifics', { state: 'visible' });
-    await page.click('#btn-next-to-specifics');
-    await waitForStep(page, 5);
-    timestamps.step4_end = new Date().toISOString();
-
-    // Step 5: Technical Details (varies by infraction type)
-    timestamps.step5_start = new Date().toISOString();
-    await fillTechnicalDetails(page, { ...testCase.infraction, serviceType: testCase.serviceType });
-    timestamps.step5_end = new Date().toISOString();
-
-    // Step 6: Run Analysis. Observe the write response before waiting for UI
-    // transition so API failures and UI/backend divergence are distinguished.
-    timestamps.analysis_start = new Date().toISOString();
-    await page.waitForSelector('#btn-run-analysis', { state: 'visible', timeout: 10_000 });
-    const analysisRequestStarted = Date.now();
-    const anonymousSavePromise = page.waitForResponse(
-      (response) => response.request().method() === 'POST'
-        && new URL(response.url()).pathname.endsWith('/api/cases/anonymous'),
-      { timeout: 45_000 },
-    );
-    await page.locator('#btn-run-analysis').click();
-    let anonymousResponse;
-    try {
-      anonymousResponse = await anonymousSavePromise;
-    } catch (error) {
-      throw new Error(`ANALYSIS_API_TIMEOUT after ${Date.now() - analysisRequestStarted}ms: POST /api/cases/anonymous did not return; stopping without retry to avoid duplicate writes. ${error instanceof Error ? error.message : String(error)}`);
-    }
-    const anonymousBodyText = await anonymousResponse.text().catch(() => '');
-    let anonymousPayload: any = {};
-    try { anonymousPayload = JSON.parse(anonymousBodyText); } catch { /* preserve bounded response evidence below */ }
-    if (!anonymousResponse.ok()) {
-      throw new Error(`ANALYSIS_API_FAILED after ${Date.now() - analysisRequestStarted}ms: HTTP ${anonymousResponse.status()} ${anonymousBodyText.slice(0, 500)}`);
-    }
-    const canonicalCaseId = anonymousPayload?.id ?? anonymousPayload?.case?.id ?? anonymousPayload?.data?.id;
-    if (typeof canonicalCaseId !== 'string' || !canonicalCaseId) {
-      throw new Error(`ANALYSIS_API_INVALID_RESPONSE: HTTP ${anonymousResponse.status()} returned no canonical case ID; response=${anonymousBodyText.slice(0, 500)}`);
-    }
-    result.persistedCaseId = canonicalCaseId;
-    timestamps.analysis_api_completed = new Date().toISOString();
-    result.timestamps!.analysis_api_duration_ms = String(Date.now() - analysisRequestStarted);
-
-    // API succeeded; if this checkpoint fails, report UI/backend divergence
-    // explicitly and never submit the analysis request a second time.
-    try {
-      await waitForStep(page, 7, 45_000);
-    } catch (error) {
-      throw new Error(`ANALYSIS_UI_DIVERGENCE: API returned HTTP ${anonymousResponse.status()} and case ${canonicalCaseId} was persisted, but UI did not reach step 7 within 45000ms. ${error instanceof Error ? error.message : String(error)}`);
-    }
-    timestamps.analysis_end = new Date().toISOString();
-
-    // Verify analysis results
-    await expect(page.locator('text=Probabilidade de Êxito')).toBeVisible({ timeout: 10000 });
-    result.analysis = 'PASS';
-
-    // Step 7 -> Step 8: Proceed to document generation
-    timestamps.document_start = new Date().toISOString();
-    await page.click('#btn-proceed-to-document-generation');
-    
-    // Wait for step 8 (qualification step) - may have auth gate
-    try {
-      await waitForStep(page, 8, 30000);
-    } catch {
-      // Check for auth gate
-      const authGate = page.locator('h2:has-text("Acesso à Sua Defesa Jurídica")');
-      if (await authGate.isVisible({ timeout: 5000 })) {
-        // Production validates Supabase authentication; the localStorage
-        // fallback is intentionally not treated as a real session. Reuse the
-        // synthetic account created for this case and complete the real login.
-        await page.locator('button[role="tab"]').filter({ hasText: 'Já Tenho Conta' }).click({ force: true });
-        const authEmail = page.locator('input[type="email"]');
-        const authPassword = page.locator('input[type="password"]');
-        await authEmail.last().fill(testCase.email);
-        await authPassword.last().fill(testCase.password);
-        await page.locator('button[type="submit"]').last().click({ force: true });
-        await waitForStep(page, 8, 10000);
-      }
-    }
-
-    // Step 8: Fill qualification data
-    await fillInput(page, 'input-applicant-name', testCase.applicant.applicantName);
-    await fillInput(page, 'input-applicant-cpf', testCase.applicant.applicantCpf);
-    await fillInput(page, 'input-applicant-rg', testCase.applicant.applicantRg || '123456789');
-    await fillInput(page, 'input-applicant-cnh', testCase.applicant.applicantCnh);
-    await selectNativeOption(page, 'input-cnh-category', testCase.applicant.cnhCategory || 'B');
-    await fillInput(page, 'input-applicant-email', testCase.applicant.applicantEmail);
-    await fillInput(page, 'input-applicant-phone', testCase.applicant.applicantPhone);
-    await fillInput(page, 'input-address-street', testCase.applicant.addressStreet);
-    await fillInput(page, 'input-address-number', testCase.applicant.addressNumber);
-    await fillInput(page, 'input-address-neighborhood', testCase.applicant.addressNeighborhood);
-    await fillInput(page, 'input-address-zipcode', testCase.applicant.addressZipCode);
-    await fillInput(page, 'input-address-citystate', testCase.applicant.addressCityState);
-    if (testCase.procedureType === 'suspensao_cnh') {
-      await fillInput(page, 'input-psdd-number', `PSDD-${testCase.infraction.aitNumber}`);
-      await fillInput(page, 'input-suspension-months', '12');
-    } else if (testCase.procedureType === 'cassacao_cnh') {
-      await fillInput(page, 'input-pcdd-number', `PCDD-${testCase.infraction.aitNumber}`);
-    }
-
-    await page.click('#btn-next-to-review');
-    await waitForStep(page, 9);
-    
-    // Step 9: Review
-    await page.click('#btn-proceed-to-checkout');
-    await waitForStep(page, 10);
-    
-    // Step 10: Checkout - verify document generated
-    await expect(page.locator('text=Liberação da Petição')).toBeVisible({ timeout: 10000 });
-    const generated = await page.evaluate(async ({ aitNumber, applicant }) => {
-      const tokenKey = Object.keys(localStorage).find((key) => key.includes('-auth-token'));
-      const tokenPayload = tokenKey ? JSON.parse(localStorage.getItem(tokenKey) || '{}') : {};
-      const accessToken = tokenPayload.access_token;
-      if (!accessToken) return { ok: false, status: 401, message: 'Sessão Supabase ausente no navegador' };
-      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` };
-      const list = await fetch('/api/cases', { headers });
-      const cases = await list.json();
-      const target = Array.isArray(cases)
-        ? cases.find((item: any) => item.infraction?.aitNumber === aitNumber || item.title?.includes(aitNumber))
-        : null;
-      if (!target?.id) return { ok: false, status: 404, message: 'Caso persistido não localizado após autenticação' };
-      const response = await fetch(`/api/cases/${encodeURIComponent(target.id)}/generate-defense`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ applicantData: applicant }),
-      });
-      const rawBody = await response.text();
-      let body: any = {};
-      try { body = JSON.parse(rawBody); } catch { body = { raw: rawBody.slice(0, 1000) }; }
-      return { ok: response.ok && Boolean(body.defenseDraft), status: response.status, caseId: target.id, body };
-    }, {
-      aitNumber: testCase.infraction.aitNumber,
-      applicant: {
-        name: testCase.applicant.applicantName,
-        cpf: testCase.applicant.applicantCpf,
-        rg: testCase.applicant.applicantRg || '123456789',
-        cnh: testCase.applicant.applicantCnh,
-        category: testCase.applicant.cnhCategory || 'B',
-        address: `${testCase.applicant.addressStreet}, ${testCase.applicant.addressNumber}`,
-        cityState: testCase.applicant.addressCityState,
-        processNumbers: testCase.procedureType === 'suspensao_cnh'
-          ? { psddNumber: `PSDD-${testCase.infraction.aitNumber}`, suspensionMonths: 12 }
-          : testCase.procedureType === 'cassacao_cnh'
-            ? { pcddNumber: `PCDD-${testCase.infraction.aitNumber}` }
-            : undefined,
-      },
-    });
-    if (!generated.ok) {
-      errors.push(`document-generation:${generated.status} ${JSON.stringify(generated.body || generated.message)}`);
-      result.document = 'FAIL';
-    }
-    await page.waitForTimeout(250);
-    result.document = generated.ok ? 'PASS' : 'FAIL';
-    timestamps.document_end = new Date().toISOString();
-
-    if (process.env.E2E_STOP_AT_QR === '1' && generated.ok) {
-      await expect(page.locator('img[alt*="QR Code PIX"]')).toBeVisible({ timeout: 30_000 });
-      console.log(`[${testCase.testRunId}] Real PIX QR Code ready; waiting for operator payment.`);
-      await new Promise<void>(() => undefined);
-    }
-
-    return result;
-  } catch (error: any) {
-    try {
-      const safeId = testCase.id.replace(/[^a-zA-Z0-9-]/g, '');
-      await page.screenshot({ path: `tests/e2e-results/${testCase.testRunId}/case-${safeId}-failure.png`, fullPage: true });
-      errors.push(`body:${(await page.locator('body').innerText()).slice(-2000)}`);
-    } catch {
-      // Preserve the original failure if diagnostic capture is unavailable.
-    }
-    errors.push(`Onboarding failed: ${error.message}`);
-    result.onboarding = 'FAIL';
-    return result;
+  for (const field of intakeFields) {
+    await page.getByLabel(field.label).fill(field.value);
   }
+  const autuador = page.getByLabel('Órgão autuador');
+  if (testCase.infraction.autuadorBody) await autuador.fill(String(testCase.infraction.autuadorBody).slice(0, 120));
+  if (testCase.infraction.dateTime) {
+    await page.getByLabel('Data e hora da infração').fill(String(testCase.infraction.dateTime).slice(0, 16));
+  }
+  if (testCase.vehicle.model) {
+    await page.getByLabel('Marca e modelo').fill(String(testCase.vehicle.model).slice(0, 120));
+  }
+  await page.locator('#serviceType').selectOption(testCase.procedureType);
+
+  const responseStartedAt = Date.now();
+  const responsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST'
+      && new URL(response.url()).pathname.endsWith('/api/cases/anonymous'),
+    { timeout: 45_000 },
+  );
+  timestamps.submit_start = new Date().toISOString();
+  await page.getByRole('button', { name: 'Registrar dados' }).click();
+
+  let response;
+  try {
+    response = await responsePromise;
+  } catch (error) {
+    throw new Error(`INTAKE_API_TIMEOUT after ${Date.now() - responseStartedAt}ms: POST /api/cases/anonymous did not return. No retry was attempted to avoid duplicate writes. ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const responseText = await response.text().catch(() => '');
+  if (!response.ok()) {
+    throw new Error(`INTAKE_API_FAILED after ${Date.now() - responseStartedAt}ms: HTTP ${response.status()} ${responseText.slice(0, 500)}`);
+  }
+  let payload: any;
+  try { payload = JSON.parse(responseText); } catch {
+    throw new Error(`INTAKE_API_INVALID_JSON: HTTP ${response.status()} body=${responseText.slice(0, 500)}`);
+  }
+  if (typeof payload?.id !== 'string' || !payload.id) {
+    throw new Error(`INTAKE_API_INVALID_RESPONSE: missing canonical case ID. body=${responseText.slice(0, 500)}`);
+  }
+  result.persistedCaseId = payload.id;
+  result.timestamps!.intake_api_duration_ms = String(Date.now() - responseStartedAt);
+  timestamps.submit_end = new Date().toISOString();
+
+  await expect(page.getByRole('heading', { name: 'Seu caso foi registrado' })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText(payload.id)).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_case_id'))).toBe(payload.id);
+  expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_claim_token'))).toMatch(/^[a-f0-9]{64}$/);
+  await expect(page.getByRole('heading', { name: 'Próxima etapa: vincular à sua conta' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Entrar para vincular' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Criar conta' })).toBeVisible();
+
+  const analysis = payload.analysis;
+  if (!analysis || analysis.recommendedProcedure !== testCase.procedureType) {
+    throw new Error(`ANALYSIS_PROCEDURE_MISMATCH: expected ${testCase.procedureType}, got ${analysis?.recommendedProcedure ?? 'missing'}`);
+  }
+  result.analysisData = analysis;
+  result.onboarding = 'PASS';
+  result.analysis = 'PASS';
+  result.document = 'SKIP';
+  timestamps.completed = new Date().toISOString();
+  return result;
 }
 
 function getServiceSelector(serviceType: string): string {
