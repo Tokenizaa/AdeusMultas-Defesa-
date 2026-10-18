@@ -101,8 +101,8 @@ test('novo onboarding manual em produção → persistência reconciliada → pa
   await expect(page.getByText('Informe uma placa válida com 7 ou 8 caracteres.')).toBeVisible();
 
   const serviceOptions = [
-    'defesa_previa', 'recurso_jari', 'recurso_cetran', 'suspensao',
-    'cassacao', 'indicacao_condutor', 'conversao_advertencia',
+    'defesa_previa', 'recurso_jari', 'recurso_cetran', 'suspensao_cnh',
+    'cassacao_cnh', 'indicacao_condutor', 'conversao_advertencia',
   ];
   const actualOptions = await page.locator('#serviceType option').evaluateAll((options) =>
     options.map((option) => (option as HTMLOptionElement).value),
