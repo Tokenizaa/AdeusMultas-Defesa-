@@ -25,9 +25,9 @@ export const EVIDENCE_DIR = path.join(TESTS_DIR, 'e2e-results', TEST_RUN_ID);
 export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
   'defesa_previa': [
     { scenario: '01', name: 'Defesa Prévia - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
-    { scenario: '02', name: 'Defesa Prévia - Lei Seca', infractionCode: '516-91', uf: 'RJ', autuador: 'DETRAN-RJ' },
+    { scenario: '02', name: 'Defesa Prévia - Recusa ao etilômetro (art. 165-A)', infractionCode: '757-90', uf: 'RJ', autuador: 'DETRAN-RJ' },
     { scenario: '03', name: 'Defesa Prévia - Celular', infractionCode: '736-62', uf: 'MG', autuador: 'DETRAN-MG' },
-    { scenario: '04', name: 'Defesa Prévia - Sinal Vermelho', infractionCode: '746-30', uf: 'RS', autuador: 'DETRAN-RS' },
+    { scenario: '04', name: 'Defesa Prévia - Sinal Vermelho', infractionCode: '605-01', uf: 'RS', autuador: 'DETRAN-RS' },
   ],
   'recurso_jari': [
     { scenario: '01', name: 'Recurso JARI - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
@@ -39,7 +39,7 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
     { scenario: '01', name: 'Recurso CETRAN - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Recurso CETRAN - Lei Seca', infractionCode: '516-91', uf: 'GO', autuador: 'DETRAN-GO' },
     { scenario: '03', name: 'Recurso CETRAN - Celular', infractionCode: '736-62', uf: 'AM', autuador: 'DETRAN-AM' },
-    { scenario: '04', name: 'Recurso CETRAN - Sinal Vermelho', infractionCode: '746-30', uf: 'DF', autuador: 'DETRAN-DF' },
+    { scenario: '04', name: 'Recurso CETRAN - Sinal Vermelho', infractionCode: '605-01', uf: 'DF', autuador: 'DETRAN-DF' },
   ],
   'suspensao': [
     { scenario: '01', name: 'Suspensão - Pontuação', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
@@ -56,14 +56,14 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
   'indicacao_condutor': [
     { scenario: '01', name: 'Indicação - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Indicação - Lei Seca', infractionCode: '516-91', uf: 'RJ', autuador: 'DETRAN-RJ' },
-    { scenario: '03', name: 'Indicação - Sinal Vermelho', infractionCode: '746-30', uf: 'MG', autuador: 'DETRAN-MG' },
+    { scenario: '03', name: 'Indicação - Sinal Vermelho', infractionCode: '605-01', uf: 'MG', autuador: 'DETRAN-MG' },
     { scenario: '04', name: 'Indicação - Estacionamento', infractionCode: '545-21', uf: 'ES', autuador: 'DETRAN-ES' },
   ],
   'conversao_advertencia': [
     { scenario: '01', name: 'Conversão - Velocidade Leve', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Conversão - Celular', infractionCode: '736-62', uf: 'RJ', autuador: 'DETRAN-RJ' },
     { scenario: '03', name: 'Conversão - Estacionamento', infractionCode: '545-21', uf: 'BA', autuador: 'DETRAN-BA' },
-    { scenario: '04', name: 'Conversão - Sinal Vermelho Leve', infractionCode: '735-80', uf: 'CE', autuador: 'DETRAN-CE' },
+    { scenario: '04', name: 'Conversão - Direção com uma mão (média)', infractionCode: '735-80', uf: 'CE', autuador: 'DETRAN-CE' },
   ],
 };
 
@@ -398,14 +398,21 @@ export class E2ETestManager {
   private buildInfraction(config: ServiceConfig, user: TestUser): any {
     const infractionData: Record<string, any> = {
       '745-50': { description: 'Transitar em velocidade superior à máxima permitida em até 20%', ctbArticle: 'Art. 218, I do CTB', severity: 'media', points: 4, fineAmount: 130.16, speedLimit: 60, measuredSpeed: 73, consideredSpeed: 64 },
-      '516-91': { description: 'Recusa ao teste do etilômetro / alcoolemia', ctbArticle: 'Art. 165-A do CTB', severity: 'gravissima', points: 7, fineAmount: 2934.70 },
-      '736-62': { description: 'Segurar ou manusear telefone celular ao volante', ctbArticle: 'Art. 252, IV do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
-      '746-30': { description: 'Avançar sinal vermelho', ctbArticle: 'Art. 208 do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
+      '516-91': { description: 'Dirigir sob a influência de álcool', ctbArticle: 'Art. 165 do CTB', severity: 'gravissima', points: 0, fineAmount: 2934.70 },
+      '757-90': { description: 'Recusar teste ou procedimento para certificar influência de álcool ou substância psicoativa', ctbArticle: 'Art. 165-A do CTB', severity: 'gravissima', points: 0, fineAmount: 2934.70 },
+      '605-01': { description: 'Avançar o sinal vermelho do semáforo', ctbArticle: 'Art. 208 do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
+
+      '736-62': { description: 'Dirigir utilizando telefone celular sem segurá-lo ou manuseá-lo', ctbArticle: 'Art. 252, VI do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
+
+      '746-30': { description: 'Transitar em velocidade superior à máxima permitida em mais de 20% até 50%', ctbArticle: 'Art. 218, II do CTB', severity: 'grave', points: 5, fineAmount: 195.23, speedLimit: 60, measuredSpeed: 95, consideredSpeed: 88 },
+
       '747-10': { description: 'Transitar em velocidade superior à máxima permitida em mais de 50%', ctbArticle: 'Art. 218, III do CTB', severity: 'gravissima', points: 7, fineAmount: 880.41, speedLimit: 60, measuredSpeed: 95, consideredSpeed: 88 },
       '516-92': { description: 'Condutor com capacidade psicomotora alterada por álcool', ctbArticle: 'Art. 165 do CTB', severity: 'gravissima', points: 7, fineAmount: 2934.70 },
       '666-10': { description: 'Estacionar em desacordo com a sinalização', ctbArticle: 'Art. 181 do CTB', severity: 'leve', points: 3, fineAmount: 88.38 },
-      '545-21': { description: 'Estacionar em desacordo com a sinalização', ctbArticle: 'Art. 181 do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
-      '735-80': { description: 'Transitar em velocidade superior à máxima permitida em até 20% (leve)', ctbArticle: 'Art. 218, I do CTB', severity: 'leve', points: 3, fineAmount: 88.38, speedLimit: 60, measuredSpeed: 71, consideredSpeed: 64 },
+      '545-21': { description: 'Estacionar no passeio', ctbArticle: 'Art. 181, VIII do CTB', severity: 'grave', points: 5, fineAmount: 195.23 },
+
+      '735-80': { description: 'Dirigir o veículo com apenas uma das mãos, fora das exceções legais', ctbArticle: 'Art. 252, V do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
+
     };
 
     const base = infractionData[config.infractionCode] || infractionData['745-50'];
