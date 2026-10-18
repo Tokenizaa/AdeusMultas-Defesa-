@@ -80,6 +80,7 @@ function TextField({
 
 export function ManualIntakePage() {
   const [form, setForm] = useState<ManualIntakeInput>(EMPTY_FORM);
+  const [formStep, setFormStep] = useState<1 | 2 | 3>(1);
   const [errors, setErrors] = useState<ManualIntakeErrors>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -472,37 +473,66 @@ export function ManualIntakePage() {
         {recovering && <p role="status" className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">Recuperando o caso salvo nesta sessão…</p>}
         {recoveryError && <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Não foi possível recuperar o caso salvo automaticamente. {recoveryError}</p>}
         <header className="mb-7">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Adeus Multa · Novo fluxo</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Informe os dados da autuação</h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Preencha os campos manualmente. Você encontra essas informações na notificação de autuação ou no documento enviado pelo órgão. Não envie arquivos nesta etapa.</p>
-          <p className="mt-2 text-sm text-slate-500">* Campos obrigatórios. Não invente dados: se uma informação não estiver disponível, consulte o documento ou o órgão responsável antes de continuar.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Adeus Multa · Novo caso</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Vamos resolver sua multa</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Responda por etapas. Tenha a notificação em mãos; você não precisa enviar arquivos.</p>
         </header>
 
-        <form onSubmit={submit} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-8">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <TextField id="aitNumber" label="Número do auto de infração (AIT)" hint="Copie o número completo, preservando letras e zeros." value={form.aitNumber} onChange={(v) => update('aitNumber', v)} error={errors.aitNumber} required maxLength={80} placeholder="Ex.: A123456789" />
-            <TextField id="infractionCode" label="Código da infração" hint="Informe o código que aparece na notificação." value={form.infractionCode} onChange={(v) => update('infractionCode', v)} error={errors.infractionCode} required maxLength={20} placeholder="Ex.: 745-5" />
-            <TextField id="autuadorBody" label="Órgão autuador" hint="Ex.: DETRAN, prefeitura ou órgão rodoviário. Se não souber, deixe em branco." value={form.autuadorBody} onChange={(v) => update('autuadorBody', v)} error={errors.autuadorBody} maxLength={120} placeholder="Nome indicado na notificação" />
-            <TextField id="dateTime" label="Data e hora da infração" hint="Use a data e o horário indicados no documento." value={form.dateTime} onChange={(v) => update('dateTime', v)} error={errors.dateTime} type="datetime-local" maxLength={40} />
-            <div className="sm:col-span-2">
-              <TextField id="location" label="Local da infração" hint="Informe rua/rodovia, número ou km, município e UF, conforme constar na notificação." value={form.location} onChange={(v) => update('location', v)} error={errors.location} required maxLength={240} placeholder="Ex.: Av. Brasil, km 12, Porto Alegre/RS" />
-            </div>
-            <TextField id="plate" label="Placa do veículo" hint="Digite a placa sem adivinhar caracteres ilegíveis." value={form.plate} onChange={(v) => update('plate', v.toUpperCase())} error={errors.plate} required maxLength={8} placeholder="ABC1D23" />
-            <TextField id="brandModel" label="Marca e modelo" hint="Opcional nesta etapa. Consulte o documento do veículo se precisar confirmar." value={form.brandModel} onChange={(v) => update('brandModel', v)} error={errors.brandModel} maxLength={120} placeholder="Ex.: Fiat Argo" />
-            <div className="sm:col-span-2 grid gap-2">
-              <label htmlFor="serviceType" className="text-sm font-semibold text-slate-800">Etapa do processo</label>
-              <p className="text-xs leading-5 text-slate-500">Escolha conforme o documento recebido. Se ainda não recebeu penalidade, normalmente está na fase de defesa da autuação; confira a notificação antes de selecionar.</p>
-              <select id="serviceType" name="serviceType" value={form.serviceType} onChange={(event) => update('serviceType', event.target.value as ManualIntakeInput['serviceType'])} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-base">
-                {MANUAL_SERVICE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
+        <div className="mb-5" aria-label={`Etapa ${formStep} de 3`}>
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-semibold text-slate-800">{formStep === 1 ? 'Escolha o que precisa fazer' : formStep === 2 ? 'Dados da notificação' : 'Veículo e local'}</span>
+            <span className="text-slate-500">{formStep} de 3</span>
           </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${(formStep / 3) * 100}%` }} /></div>
+        </div>
+
+        <form onSubmit={submit} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-8">
+          {formStep === 1 && <>
+            <h2 className="text-xl font-bold">Qual é a sua situação?</h2>
+            <p className="mt-2 mb-5 text-sm leading-6 text-slate-600">Selecione a opção que corresponde à notificação ou decisão que você recebeu.</p>
+            <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Escolha do serviço">
+              {MANUAL_SERVICE_OPTIONS.map((option) => (
+                <button key={option.value} type="button" aria-pressed={form.serviceType === option.value} onClick={() => update('serviceType', option.value)} className={`min-h-20 rounded-xl border p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 ${form.serviceType === option.value ? 'border-emerald-700 bg-emerald-50 ring-1 ring-emerald-700' : 'border-slate-200 hover:border-slate-400'}`}>
+                  <span className="block text-sm font-semibold text-slate-950">{option.label.split(' — ')[0]}</span>
+                  {option.label.includes(' — ') && <span className="mt-1 block text-xs leading-5 text-slate-600">{option.label.split(' — ')[1]}</span>}
+                  <span className={`mt-2 inline-block text-xs font-semibold ${form.serviceType === option.value ? 'text-emerald-800' : 'text-slate-500'}`}>{form.serviceType === option.value ? 'Selecionado' : 'Selecionar'}</span>
+                </button>
+              ))}
+            </div>
+          </>}
+          {formStep === 2 && <>
+            <h2 className="text-xl font-bold">Dados da notificação</h2>
+            <p className="mt-2 mb-5 text-sm leading-6 text-slate-600">Copie os dados como aparecem no documento. Se não souber uma informação opcional, pode continuar sem ela.</p>
+            <div className="grid gap-5">
+              <TextField id="aitNumber" label="Número do auto de infração (AIT)" hint="Preserve letras e zeros." value={form.aitNumber} onChange={(v) => update('aitNumber', v)} error={errors.aitNumber} required maxLength={80} placeholder="Ex.: A123456789" />
+              <TextField id="infractionCode" label="Código da infração" hint="O código impresso na notificação." value={form.infractionCode} onChange={(v) => update('infractionCode', v)} error={errors.infractionCode} required maxLength={20} placeholder="Ex.: 745-5" />
+              <TextField id="autuadorBody" label="Órgão autuador (se souber)" hint="Ex.: DETRAN, prefeitura ou órgão rodoviário." value={form.autuadorBody} onChange={(v) => update('autuadorBody', v)} error={errors.autuadorBody} maxLength={120} placeholder="Nome indicado na notificação" required={false} />
+              <TextField id="dateTime" label="Data e hora da infração (se constar)" hint="Use a data e o horário indicados no documento." value={form.dateTime} onChange={(v) => update('dateTime', v)} error={errors.dateTime} type="datetime-local" maxLength={40} />
+            </div>
+          </>}
+          {formStep === 3 && <>
+            <h2 className="text-xl font-bold">Onde e com qual veículo?</h2>
+            <p className="mt-2 mb-5 text-sm leading-6 text-slate-600">Informe o local descrito na notificação e a placa do veículo.</p>
+            <div className="grid gap-5">
+              <TextField id="location" label="Local da infração" hint="Rua/rodovia, número ou km, município e UF, conforme o documento." value={form.location} onChange={(v) => update('location', v)} error={errors.location} required maxLength={240} placeholder="Ex.: Av. Brasil, km 12, Porto Alegre/RS" />
+              <TextField id="plate" label="Placa do veículo" hint="Digite a placa sem adivinhar caracteres ilegíveis." value={form.plate} onChange={(v) => update('plate', v.toUpperCase())} error={errors.plate} required maxLength={8} placeholder="ABC1D23" />
+              <TextField id="brandModel" label="Marca e modelo (opcional)" hint="Pode deixar em branco se não tiver essa informação." value={form.brandModel} onChange={(v) => update('brandModel', v)} error={errors.brandModel} maxLength={120} placeholder="Ex.: Fiat Argo" />
+            </div>
+          </>}
 
           {error && <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-          <div className="mt-7 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-md text-xs leading-5 text-slate-500">Seus dados são enviados ao servidor para registrar o caso. Nenhum OCR ou extração automática de documentos é executado.</p>
-            <button type="submit" disabled={busy} className="min-h-12 rounded-lg bg-slate-950 px-6 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{busy ? 'Salvando dados…' : 'Registrar dados'}</button>
+          <div className="mt-7 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-2">
+              {formStep > 1 && <button type="button" onClick={() => setFormStep((current) => (current - 1) as 1 | 2 | 3)} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-800">Voltar</button>}
+              {formStep === 1 && <p className="self-center text-xs leading-5 text-slate-500">Você pode revisar sua escolha antes de continuar.</p>}
+            </div>
+            {formStep < 3 ? (
+              <button type="button" onClick={() => setFormStep((current) => (current + 1) as 1 | 2 | 3)} className="min-h-12 rounded-lg bg-slate-950 px-6 text-sm font-semibold text-white">Continuar</button>
+            ) : (
+              <button type="submit" disabled={busy} className="min-h-12 rounded-lg bg-slate-950 px-6 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{busy ? 'Salvando dados…' : 'Registrar caso'}</button>
+            )}
           </div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">Os dados são enviados ao servidor para registrar o caso. O preenchimento é manual; nenhuma extração automática de documentos é executada.</p>
         </form>
       </div>
     </main>
