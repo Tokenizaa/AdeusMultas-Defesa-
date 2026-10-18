@@ -70,6 +70,36 @@ test.describe('onboarding manual greenfield — preview isolado', () => {
   });
 
 
+  test('oferece login ou cadastro antes de vincular o caso anônimo', async ({ page }) => {
+    await page.route('**/api/cases/anonymous', async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'e2e-manual-claim-001',
+          claimToken: 'c'.repeat(64),
+          status: 'analisado',
+          isAnonymous: true,
+        }),
+      });
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-CLAIM');
+    await page.getByLabel('Código da infração').fill('745-5');
+    await page.getByLabel('Local da infração').fill('Rua de teste, 10 - São Paulo/SP');
+    await page.getByLabel('Placa do veículo').fill('ABC1D23');
+    await page.getByRole('button', { name: 'Registrar dados' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Próxima etapa: vincular à sua conta' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Entrar para vincular' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Criar conta' })).toBeVisible();
+    await page.getByRole('button', { name: 'Entrar para vincular' }).click();
+    await expect(page).toHaveURL(/login/);
+    expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_case_id'))).toBe('e2e-manual-claim-001');
+    expect(await page.evaluate(() => sessionStorage.getItem('defesai_manual_onboarding_claim_token'))).toBe('c'.repeat(64));
+  });
+
   test('recupera o registro depois de recarregar a página usando ID e token da sessão', async ({ page }) => {
     await page.addInitScript(() => {
       sessionStorage.setItem('defesai_manual_onboarding_case_id', 'e2e-manual-recovered-001');
