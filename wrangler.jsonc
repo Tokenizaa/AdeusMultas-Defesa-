@@ -42,7 +42,7 @@
         "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
         "PAYMENT_MODE": "production",
         "VENO_PRIMARY_GATEWAY": "venopag",
-        "APP_URL": "https://adeusmulta-onboarding-pr38-preview.workers.dev"
+        "E2E_SAFE_PREVIEW": "true"
       }
     }
   },
