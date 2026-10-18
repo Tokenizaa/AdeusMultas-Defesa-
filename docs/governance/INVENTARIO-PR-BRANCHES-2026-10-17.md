@@ -2,7 +2,7 @@
 
 Data do snapshot: 2026-10-17 (horário UTC dos metadados do GitHub pode aparecer no dia seguinte ao horário local).
 
-Este documento registra apenas itens cuja existência e estado foram verificados pela integração GitHub nesta revisão. Não representa autorização para apagar trabalho exclusivo. A busca disponível não retornou uma listagem completa confiável de PRs; portanto, os itens abaixo são o conjunto confirmado, não uma declaração de que não existam outros PRs abertos.
+A listagem recente do GitHub retornou os PRs do repositório e, após o fechamento das PRs #37 e #14 nesta revisão, confirmou 9 PRs ainda abertas: #32, #29, #28, #26, #25, #24, #12, #11 e #10. O estado de cada uma foi verificado; isso não representa autorização para apagar trabalho exclusivo.
 
 ## Decisão de onboarding
 
@@ -14,7 +14,7 @@ Este documento registra apenas itens cuja existência e estado foram verificados
   - `docs/product/onboarding/REVISAO-INDEPENDENTE-REQUISITOS-E-ARQUITETURA.md`
 - A diretriz vigente está em `docs/product/DECISOES-ARQUITETURA-PRODUTO.md`.
 
-## PRs abertas verificadas e classificação
+## PRs abertas verificadas e classificação (9 restantes)
 
 | PR | Tema | Estado nesta revisão | Diferença em relação à main | Tratamento |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ Este documento registra apenas itens cuja existência e estado foram verificados
 | [#12](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/12) | PaymentOrder/PaymentAttempt e migrações | Aberta; 21 commits exclusivos; 13 arquivos | Divergente, 438 commits atrás | **Não excluir nem fechar sem auditoria.** Contém migrações SQL e implementação financeira potencialmente relevante. |
 | [#31](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/31) | Módulo financeiro VenoPag | Fechada | — | Já fechada; não presumir merge ou implantação só pelo estado fechado. |
 
-## Inventário de branches
+## PRs encerradas nesta revisão\n\n- [#37 — docs: formalizar reconstrução do onboarding](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/37): fechada sem merge; substituída pelas decisões canônicas na `main`.\n- [#14 — test(audit): execute Phase 4 Golden Path with corrected harness](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/14): fechada sem merge após confirmar que o branch usava o domínio antigo `www.defesai.shop`; a `main` já usa `adeusmulta.defesai.com.br` e contém verificação de autenticação mais robusta.\n\n## Inventário de branches
 
 A consulta inicial retornou 79 branches remotas; a consulta seguinte não retornou itens adicionais. A lista inclui numerosas variantes temporárias de `phase0`, `phase1-payment-invariants`, onboarding, integração, testes e recuperação. Isso confirma que existe risco real de ambiguidade. Não foi feita exclusão em massa.
 
