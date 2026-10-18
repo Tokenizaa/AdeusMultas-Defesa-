@@ -20,7 +20,7 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4179 --strictPort',
+    command: 'npx vite --host 127.0.0.1 --port 4179 --strictPort',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
