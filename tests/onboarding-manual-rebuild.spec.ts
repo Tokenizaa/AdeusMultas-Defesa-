@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const enabled = process.env.RUN_MANUAL_REBUILD_E2E === '1';
 
-test.describe('onboarding manual greenfield — preview isolado', () => {
+test.describe('onboarding manual greenfield — fluxo novo', () => {
   test.skip(!enabled, 'Execute explicitamente contra o preview HTTPS do PR com RUN_MANUAL_REBUILD_E2E=1.');
 
   test('valida os campos no navegador e não envia formulário incompleto', async ({ page }) => {
@@ -69,6 +69,56 @@ test.describe('onboarding manual greenfield — preview isolado', () => {
     expect(forbiddenRequests).toEqual([]);
   });
 
+
+  test('oferece e preserva os sete serviços no payload sem criar mais de um caso por envio', async ({ page }) => {
+    const services = [
+      'defesa_previa',
+      'recurso_jari',
+      'recurso_cetran',
+      'suspensao',
+      'cassacao',
+      'indicacao_condutor',
+      'conversao_advertencia',
+    ];
+    let createCount = 0;
+    let lastService = '';
+    await page.route('**/api/cases/anonymous', async (route) => {
+      createCount += 1;
+      lastService = route.request().postDataJSON().serviceType;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: `e2e-manual-service-${createCount}`,
+          claimToken: String(createCount).padStart(64, 'a').slice(-64),
+          status: 'analisado',
+          isAnonymous: true,
+        }),
+      });
+    });
+
+    await page.goto('/novo-caso-rebuild');
+    const actualOptions = await page.locator('#serviceType option').evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value),
+    );
+    expect(actualOptions).toEqual(services);
+
+    for (const [index, service] of services.entries()) {
+      if (index > 0) {
+        await page.getByRole('button', { name: 'Iniciar outro caso' }).click();
+      }
+      await page.getByLabel(/Número do auto de infração/).fill(`E2E-SERVICE-${index + 1}`);
+      await page.getByLabel('Código da infração').fill('745-5');
+      await page.getByLabel('Local da infração').fill('Rua de teste, 10 - São Paulo/SP');
+      await page.getByLabel('Placa do veículo').fill('ABC1D23');
+      await page.locator('#serviceType').selectOption(service);
+      await page.getByRole('button', { name: 'Registrar dados' }).click();
+      await expect(page.getByRole('heading', { name: 'Seu caso foi registrado' })).toBeVisible();
+      expect(lastService).toBe(service);
+      expect(createCount).toBe(index + 1);
+    }
+    expect(createCount).toBe(services.length);
+  });
 
   test('oferece login ou cadastro antes de vincular o caso anônimo', async ({ page }) => {
     await page.route('**/api/cases/anonymous', async (route) => {
