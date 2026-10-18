@@ -18,6 +18,7 @@ O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa 
 - [x] Criação anônima integrada ao contrato `POST /api/cases/anonymous`.
 - [x] Tratamento de respostas HTTP não exitosas e validação do ID retornado antes de confirmar o registro.
 - [x] Armazenamento de ID e token de recuperação na sessão; os dados do caso continuam no servidor.
+- [x] Handoff de login/cadastro e botão de claim autenticado pela rota canônica `POST /api/cases/:id/claim`; após sucesso confirmado pelo servidor, a sessão auxiliar é limpa e a pessoa segue para `/cases`.
 - [x] Testes unitários existentes de normalização/validação.
 - [x] Testes do endpoint para token válido/inválido e rate limit em `cloudflare/routes/cases.test.ts`.
 - [x] Nova suíte Playwright isolada para validação de formulário, payload manual, recuperação após reload, falha da API e ausência de chamadas OCR: `tests/onboarding-manual-rebuild.spec.ts`.
@@ -43,7 +44,7 @@ RUN_MANUAL_REBUILD_E2E=1 PLAYWRIGHT_BASE_URL=https://<URL-DO-PREVIEW> npx playwr
 A página atual comprova apenas a criação do registro. Ela ainda não oferece a jornada completa de produção. Os itens abaixo permanecem pendentes e devem ser implementados e testados antes de trocar a rota pública:
 
 - [ ] Validar recuperação server-side em ambiente de integração real e testar o limite de tentativas; a recuperação por ID + token foi implementada, mas ainda depende de CI e E2E real.
-- [ ] Continuidade segura após cadastro/login e claim do caso, usando o contrato canônico `POST /api/cases/:id/claim`.
+- [ ] Validar em E2E real a continuidade após cadastro/login e claim; a chamada ao contrato canônico está conectada na UI, mas ainda precisa de teste autenticado contra preview e validação de concorrência.
 - [ ] Etapa de qualificação do condutor e revisão explícita dos dados antes da contratação.
 - [ ] Diagnóstico jurídico apresentado apenas com resultados efetivamente retornados pelo motor canônico; sem inventar artigos, teses, documentos ou probabilidade de êxito.
 - [ ] Integração com o fluxo existente de pagamento: preço resolvido no servidor, PIX real, status confirmado por fonte autoritativa e nenhuma liberação com pagamento pendente.
