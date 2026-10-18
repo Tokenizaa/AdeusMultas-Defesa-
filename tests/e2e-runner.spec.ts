@@ -56,7 +56,8 @@ test.describe(`E2E Production Certification — ${selectedService}`, () => {
       await generateFinalReport();
       const seededCases = await testManager.getTestCases();
       const additionalCases = allResults.flatMap((result) => {
-        const seed = seededCases.find((candidate) => candidate.id === result.caseId);
+        const seedCaseId = result.execution?.caseId ?? result.caseId;
+        const seed = seededCases.find((candidate) => candidate.id === seedCaseId);
         const persistedId = result.execution?.persistedCaseId;
         if (!seed || typeof persistedId !== 'string' || persistedId === seed.id) return [];
         return [{
