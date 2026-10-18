@@ -75,8 +75,8 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       'defesa_previa',
       'recurso_jari',
       'recurso_cetran',
-      'suspensao',
-      'cassacao',
+      'suspensao_cnh',
+      'cassacao_cnh',
       'indicacao_condutor',
       'conversao_advertencia',
     ];
