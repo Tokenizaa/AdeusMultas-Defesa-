@@ -38,7 +38,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4179
           RUN_MANUAL_REBUILD_E2E: '1'
           CI: 'true'
-        run: npx playwright test --config=playwright.manual-onboarding.config.ts --project=chromium
+        run: npx playwright test --config=playwright.manual-onboarding.config.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
