@@ -33,7 +33,7 @@ export interface ExecutionResult {
   autuador: string;
   onboarding: 'PASS' | 'FAIL';
   analysis: 'PASS' | 'FAIL';
-  document: 'PASS' | 'FAIL';
+  document: 'PASS' | 'FAIL' | 'SKIP';
   pdf: 'PASS' | 'FAIL' | 'SKIP';
   contamination: 'PASS' | 'FAIL' | 'SKIP';
   errors: string[];
