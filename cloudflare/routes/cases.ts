@@ -408,7 +408,7 @@ casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
   const body = await c.req.json<any>().catch(() => ({}));
   const applicant = {
     applicantName: typeof body.name === 'string' ? body.name.trim() : '',
-    applicantCpf: typeof body.cpf === 'string' ? body.cpf.replace(/\\D/g, '') : '',
+    applicantCpf: typeof body.cpf === 'string' ? body.cpf.replace(/\D/g, '') : '',
     applicantCnh: typeof body.cnh === 'string' ? body.cnh.trim() : '',
     applicantRg: typeof body.rg === 'string' ? body.rg.trim() : '',
     addressStreet: typeof body.addressStreet === 'string' ? body.addressStreet.trim() : '',
