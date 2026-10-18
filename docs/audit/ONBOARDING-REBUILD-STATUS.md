@@ -46,6 +46,7 @@ A página atual comprova apenas a criação do registro. Ela ainda não oferece 
 - [ ] Validar recuperação server-side em ambiente de integração real e testar o limite de tentativas; a recuperação por ID + token foi implementada, mas ainda depende de CI e E2E real.
 - [ ] Validar em E2E real a continuidade após cadastro/login e claim; a chamada ao contrato canônico está conectada na UI, mas ainda precisa de teste autenticado contra preview e validação de concorrência.
 - [x] Formulário de qualificação do requerente com validação server-side e persistência restrita de dados pessoais; endpoint dedicado exige caso vinculado ao usuário autenticado.
+- [x] Retomada autenticada da jornada após reload, sem armazenar CPF/CNH/endereço no sessionStorage; estado e dados são reconsultados pelo endpoint proprietário.
 - [x] Tela de revisão explícita dos dados de autuação e requerente antes de iniciar o checkout.
 - [ ] Diagnóstico jurídico apresentado apenas com resultados efetivamente retornados pelo motor canônico; sem inventar artigos, teses, documentos ou probabilidade de êxito.
 - [x] Integração inicial ao fluxo de preço/PIX existente: cobrança iniciada sob ação explícita do usuário, preço e valor vêm da resposta do servidor, dados PIX incompletos/simulados são recusados e a consulta autenticada só considera `PAID` como confirmação.
