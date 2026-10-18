@@ -32,7 +32,7 @@ Este documento registra apenas itens cuja existência e estado foram verificados
 
 ## Inventário de branches
 
-A consulta inicial retornou mais de 79 branches e paginação adicional, incluindo numerosas variantes temporárias de `phase0`, `phase1-payment-invariants`, onboarding, integração, testes e recuperação. Isso confirma que existe risco real de ambiguidade. Não foi feita exclusão em massa.
+A consulta inicial retornou 79 branches remotas; a consulta seguinte não retornou itens adicionais. A lista inclui numerosas variantes temporárias de `phase0`, `phase1-payment-invariants`, onboarding, integração, testes e recuperação. Isso confirma que existe risco real de ambiguidade. Não foi feita exclusão em massa.
 
 ### Regras de limpeza
 1. A `main` é a referência canônica para decisões e trabalho novo deste esforço.
