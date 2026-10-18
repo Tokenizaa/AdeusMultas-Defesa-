@@ -7,6 +7,7 @@ import {
   validateManualIntake,
   type ManualIntakeErrors,
   type ManualIntakeInput,
+  MANUAL_SERVICE_OPTIONS,
 } from './manual-intake-validation';
 
 const EMPTY_FORM: ManualIntakeInput = {
@@ -163,7 +164,7 @@ export function ManualIntakePage() {
             location: typeof recoveredInfraction.location === 'string' ? recoveredInfraction.location : current.location,
             plate: typeof recoveredVehicle.plate === 'string' ? recoveredVehicle.plate : current.plate,
             brandModel: typeof recoveredVehicle.brandModel === 'string' ? recoveredVehicle.brandModel : current.brandModel,
-            serviceType: caseRecord.serviceType === 'recurso_jari' ? 'recurso_jari' : 'defesa_previa',
+            serviceType: MANUAL_SERVICE_OPTIONS.some((option) => option.value === caseRecord.serviceType) ? caseRecord.serviceType as ManualIntakeInput['serviceType'] : 'defesa_previa',
           }));
           setCreatedCase({
             id: caseId,
@@ -437,7 +438,7 @@ export function ManualIntakePage() {
               <div><dt className="text-slate-500">Auto de infração</dt><dd className="font-semibold">{createdCase.caseData.infraction?.aitNumber || 'Não informado'}</dd></div>
               <div><dt className="text-slate-500">Código</dt><dd className="font-semibold">{createdCase.caseData.infraction?.infractionCode || 'Não informado'}</dd></div>
               <div><dt className="text-slate-500">Placa</dt><dd className="font-semibold">{createdCase.caseData.vehicle?.plate || 'Não informado'}</dd></div>
-              <div><dt className="text-slate-500">Etapa selecionada</dt><dd className="font-semibold">{createdCase.caseData.serviceType === 'recurso_jari' ? 'Recurso à JARI' : 'Defesa prévia'}</dd></div>
+              <div><dt className="text-slate-500">Etapa selecionada</dt><dd className="font-semibold">{MANUAL_SERVICE_OPTIONS.find((option) => option.value === createdCase.caseData.serviceType)?.label || 'Defesa prévia'}</dd></div>
               <div className="sm:col-span-2"><dt className="text-slate-500">Local</dt><dd className="font-semibold">{createdCase.caseData.infraction?.location || 'Não informado'}</dd></div>
             </dl>
           )}
@@ -492,8 +493,7 @@ export function ManualIntakePage() {
               <label htmlFor="serviceType" className="text-sm font-semibold text-slate-800">Etapa do processo</label>
               <p className="text-xs leading-5 text-slate-500">Escolha conforme o documento recebido. Se ainda não recebeu penalidade, normalmente está na fase de defesa da autuação; confira a notificação antes de selecionar.</p>
               <select id="serviceType" name="serviceType" value={form.serviceType} onChange={(event) => update('serviceType', event.target.value as ManualIntakeInput['serviceType'])} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-base">
-                <option value="defesa_previa">Defesa prévia — notificação de autuação</option>
-                <option value="recurso_jari">Recurso à JARI — notificação de penalidade</option>
+                {MANUAL_SERVICE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
           </div>
