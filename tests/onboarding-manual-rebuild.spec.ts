@@ -2,6 +2,30 @@ import { test, expect } from '@playwright/test';
 
 const enabled = process.env.RUN_MANUAL_REBUILD_E2E === '1';
 
+test.describe('rotas públicas canônicas do onboarding', () => {
+  test('a rota pública canônica abre o formulário manual', async ({ page }) => {
+    await page.goto('/novo-caso');
+    await expect(page).toHaveURL(/\/novo-caso$/);
+    await expect(page.getByRole('heading', { name: 'Informe os dados da autuação' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Registrar dados' })).toBeVisible();
+  });
+
+  test('a rota antiga é normalizada para a URL canônica', async ({ page }) => {
+    await page.goto('/novo-caso-rebuild');
+    await expect(page).toHaveURL(/\/novo-caso$/);
+    await expect(page.getByRole('heading', { name: 'Informe os dados da autuação' })).toBeVisible();
+  });
+
+  test('uma rota pública inexistente exibe 404 e permite voltar ao início', async ({ page }) => {
+    await page.goto('/rota-inexistente-certificacao');
+    await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+    await expect(page.getByText('Pagina nao encontrada')).toBeVisible();
+    await page.getByRole('button', { name: 'Voltar ao inicio' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: /Descubra se o seu auto de infração/ })).toBeVisible();
+  });
+});
+
 test.describe('onboarding manual greenfield — fluxo novo', () => {
   test.skip(!enabled, 'Execute com playwright.manual-onboarding.config.ts e RUN_MANUAL_REBUILD_E2E=1; as APIs são mockadas.');
 
@@ -11,7 +35,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       if (request.url().includes('/api/cases/anonymous')) intakeRequests.push(request.url());
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     await page.getByRole('button', { name: 'Registrar dados' }).click();
 
     await expect(page.getByText('Informe o número do auto de infração.')).toBeVisible();
@@ -44,7 +68,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       }
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-001');
     await page.getByLabel('Código da infração').fill('745-5');
     await page.getByLabel('Local da infração').fill('Av. Paulista, 1000 - São Paulo/SP');
@@ -97,7 +121,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       });
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     const actualOptions = await page.locator('#serviceType option').evaluateAll((options) =>
       options.map((option) => (option as HTMLOptionElement).value),
     );
@@ -134,7 +158,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       });
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-CLAIM');
     await page.getByLabel('Código da infração').fill('745-5');
     await page.getByLabel('Local da infração').fill('Rua de teste, 10 - São Paulo/SP');
@@ -177,7 +201,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       });
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     await expect(page.getByRole('heading', { name: 'Seu caso foi recuperado' })).toBeVisible();
     await expect(page.getByText('E2E-RECOVERED-001')).toBeVisible();
     await expect(page.getByText('ABC1D23')).toBeVisible();
@@ -194,7 +218,7 @@ test.describe('onboarding manual greenfield — fluxo novo', () => {
       });
     });
 
-    await page.goto('/novo-caso-rebuild');
+    await page.goto('/novo-caso');
     await page.getByLabel(/Número do auto de infração/).fill('E2E-MANUAL-503');
     await page.getByLabel('Código da infração').fill('745-5');
     await page.getByLabel('Local da infração').fill('Rua de teste, 10 - São Paulo/SP');
