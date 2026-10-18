@@ -101,7 +101,7 @@ export const LandingPageView: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-[#071D41]">Informe os Dados da Infração</h3>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Digite o número do auto (AIT), código do enquadramento ou envie a foto da notificação para auxílio de preenchimento.
+              Informe o número do auto (AIT), o código do enquadramento e os dados que constam na notificação. O preenchimento é manual; não é necessário enviar foto.
             </p>
           </div>
 
