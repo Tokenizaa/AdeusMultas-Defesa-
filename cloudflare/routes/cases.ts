@@ -99,8 +99,8 @@ casesRoutes.post('/cases/anonymous', async (c) => {
     'defesa_previa',
     'recurso_jari',
     'recurso_cetran',
-    'suspensao',
-    'cassacao',
+    'suspensao_cnh',
+    'cassacao_cnh',
     'indicacao_condutor',
     'conversao_advertencia',
   ]);
