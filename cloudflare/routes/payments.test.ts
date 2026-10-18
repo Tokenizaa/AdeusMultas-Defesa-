@@ -165,6 +165,16 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       expect(await response.text()).toContain('Cobranças estão desativadas no preview de testes');
       expect(providerFetch).not.toHaveBeenCalled();
       expect(h.insertChain).not.toHaveBeenCalled();
+
+      const cardResponse = await app().request('/api/payments/credit-card/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'preview-card-case', cardToken: 'token-only-for-test' }),
+      }, { E2E_SAFE_PREVIEW: 'true', VENO_PRIMARY_GATEWAY: 'venopag' } as any);
+      expect(cardResponse.status).toBe(503);
+      expect(await cardResponse.text()).toContain('Cobranças estão desativadas no preview de testes');
+      expect(providerFetch).not.toHaveBeenCalled();
+      expect(h.insertChain).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }
