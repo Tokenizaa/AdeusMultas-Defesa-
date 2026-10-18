@@ -188,3 +188,10 @@ Antes de mudar a interface, realizar uma auditoria de conteúdo e fluxo com quat
 - `supabase/migrations/20260925150000_fase_12_3_add_match_knowledge_chunks_rpc.sql`
 
 **Limite desta auditoria:** contagens e metadados foram conferidos no banco em 2026-10-17. A inspeção integral dos arquivos físicos, extração completa dos documentos, revisão jurídica individual e testes end-to-end do runtime não foram executados nesta etapa; por isso, este relatório não declara a base validada.
+---
+
+## Auditoria de seguimento — 2026-10-17
+
+A auditoria de integridade documental, extração e recuperação foi registrada em [FASE-13-AUDITORIA-INTEGRIDADE-EXTRACAO-RAG-2026-10-17.md](../../recovery/FASE-13-AUDITORIA-INTEGRIDADE-EXTRACAO-RAG-2026-10-17.md).
+
+Conclusões atualizadas: 66/66 IDs e hashes de metadados conferem entre manifesto e banco, mas somente 54/66 caminhos físicos esperados estão versionados na main; há evidências de texto corrompido, conteúdo de erro indexado, chunks excessivos, 13 documentos sem chunks e ausência de filtros de jurisdição/vigência no caminho lexical da análise. O RAG não deve ser considerado juridicamente pronto.
