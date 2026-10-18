@@ -396,6 +396,42 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   return c.json(rowToDomain(data));
 });
 
+// POST /api/cases/:id/qualification — persiste somente os dados de qualificação explicitamente fornecidos.
+casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error: readError } = await supabase.from('cases').select('id,user_id,is_anonymous,applicant_json,client_name,client_email,client_phone,client_cpf').eq('id', c.req.param('id')).maybeSingle();
+  if (readError) throw new HTTPException(500, { message: 'Não foi possível consultar o caso.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
+  const user = c.get('user');
+  if (!canAccessCase(user, row) || row.is_anonymous === true) throw new HTTPException(403, { message: 'Vincule o caso à sua conta antes de informar os dados do requerente.' });
+
+  const body = await c.req.json<any>().catch(() => ({}));
+  const applicant = {
+    applicantName: typeof body.name === 'string' ? body.name.trim() : '',
+    applicantCpf: typeof body.cpf === 'string' ? body.cpf.replace(/\\D/g, '') : '',
+    applicantCnh: typeof body.cnh === 'string' ? body.cnh.trim() : '',
+    applicantRg: typeof body.rg === 'string' ? body.rg.trim() : '',
+    addressStreet: typeof body.addressStreet === 'string' ? body.addressStreet.trim() : '',
+    addressNumber: typeof body.addressNumber === 'string' ? body.addressNumber.trim() : '',
+    addressComplement: typeof body.addressComplement === 'string' ? body.addressComplement.trim() : '',
+    addressCityState: typeof body.cityState === 'string' ? body.cityState.trim() : '',
+    cnhCategory: typeof body.cnhCategory === 'string' ? body.cnhCategory.trim().toUpperCase() : '',
+  };
+  if (applicant.applicantName.length < 3 || applicant.applicantCpf.length !== 11 || !applicant.applicantCnh || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressCityState || !/^[A-E]{1,2}$/.test(applicant.cnhCategory)) {
+    throw new HTTPException(400, { message: 'Confira nome, CPF, CNH, endereço, município/UF e categoria da CNH.' });
+  }
+  const { error: updateError } = await supabase.from('cases').update({
+    client_name: applicant.applicantName,
+    client_email: typeof body.email === 'string' ? body.email.trim().toLowerCase() : row.client_email,
+    client_phone: typeof body.phone === 'string' ? body.phone.trim() : row.client_phone,
+    client_cpf: applicant.applicantCpf,
+    applicant_json: JSON.stringify(applicant),
+    updated_at: new Date().toISOString(),
+  }).eq('id', row.id).eq('user_id', user.id);
+  if (updateError) throw new HTTPException(500, { message: 'Não foi possível salvar a qualificação.' });
+  return c.json({ success: true, applicant: { ...applicant, applicantCpf: '***.***.***-' + applicant.applicantCpf.slice(-2) } });
+});
+
 // POST /api/cases/:id/generate-defense — gera minuta determinística via RAG + DocumentAssemblyEngine
 casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
