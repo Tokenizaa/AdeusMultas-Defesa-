@@ -428,9 +428,10 @@ function getCategorySelector(infractionCode: string): string {
     '747-10': '#category-card-excesso_velocidade',
     '516-91': '#category-card-lei_seca',
     '516-92': '#category-card-lei_seca',
+    '757-90': '#category-card-lei_seca',
     '736-62': '#category-card-celular',
-    '746-30': '#category-card-vermelho',
-    '735-80': '#category-card-excesso_velocidade',
+    '746-30': '#category-card-excesso_velocidade',
+    '605-01': '#category-card-vermelho',
     '545-21': '#category-card-estacionamento',
   };
   return mapping[infractionCode] || '#category-card-excesso_velocidade';
@@ -449,21 +450,27 @@ async function fillTechnicalDetails(page: Page, infraction: any) {
     await selectNativeOption(page, 'select-indication-deadline', 'sim');
     return;
   }
-  if (code === '745-50' || code === '747-10' || code === '735-80') {
+  if (code === '745-50' || code === '746-30' || code === '747-10') {
     // Speed infraction
     await fillInput(page, 'input-speed-limit', String(infraction.speedLimit || 60));
     await fillInput(page, 'input-measured-speed', String(infraction.measuredSpeed || 73));
     // considered speed is auto-calculated
-  } else if (code === '516-91' || code === '516-92') {
-    // Lei Seca
+  } else if (code === '757-90') {
+    // Art. 165-A: recusa sem sinais ou com apenas um sinal.
     await page.waitForSelector('#select-termo-sinais', { state: 'visible', timeout: 5000 });
     await selectNativeOption(page, 'select-termo-sinais', 'sem_sinais');
     await selectNativeOption(page, 'select-reteste', 'nao_oferecido');
+  } else if (code === '516-91' || code === '516-92') {
+    // Arts. 165 / 165: require a documented positive finding; the current
+    // harness lacks a structured result field, so this remains an oracle gap.
+    await page.waitForSelector('#select-termo-sinais', { state: 'visible', timeout: 5000 });
+    await selectNativeOption(page, 'select-termo-sinais', 'entregue');
+    await selectNativeOption(page, 'select-reteste', 'oferecido');
   } else if (code === '736-62') {
     // Celular
     await page.waitForSelector('#select-celular-circunstancia', { state: 'visible', timeout: 5000 });
     await selectNativeOption(page, 'select-celular-circunstancia', 'viva_voz');
-  } else if (code === '746-30') {
+  } else if (code === '605-01') {
     // Sinal vermelho
     await page.waitForSelector('#select-vermelho-motivo', { state: 'visible', timeout: 5000 });
     await selectNativeOption(page, 'select-vermelho-motivo', 'amarelo_rapido');
