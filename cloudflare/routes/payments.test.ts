@@ -145,6 +145,30 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(h.insertChain).toHaveBeenCalled();
   });
 
+  it('hard-blocks PIX creation in the safe preview before contacting any gateway', async () => {
+    const providerFetch = vi.fn();
+    vi.stubGlobal('fetch', providerFetch);
+    try {
+      const response = await app().request('/api/payments/pix/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'preview-case', customerName: 'Preview', customerCpf: '12345678909' }),
+      }, {
+        E2E_SAFE_PREVIEW: 'true',
+        VENO_PRIMARY_GATEWAY: 'venopag',
+        VENO_CLIENT_ID: 'must-not-be-used',
+        VENO_CLIENT_SECRET: 'must-not-be-used',
+        VENO_WEBHOOK_SECRET: 'must-not-be-used',
+      } as any);
+      expect(response.status).toBe(503);
+      expect(await response.text()).toContain('Cobranças estão desativadas no preview de testes');
+      expect(providerFetch).not.toHaveBeenCalled();
+      expect(h.insertChain).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('uses VenoPag as the primary PIX provider and persists its request number', async () => {
     const providerFetch = vi.fn(async (_input: string | URL | Request) => Response.json({
       ok: true, status: 'pending', amount: 100, request_number: 'veo_test_123',
