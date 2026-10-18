@@ -3,7 +3,7 @@
 **Atualizado:** 2026-10-18  
 **Branch de implementação:** `onboarding/manual-intake-greenfield`  
 **PR:** [#38](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/38) — permanece em draft  
-**Produção:** não alterada. O preview de PR usa Worker separado; a criação de cobrança é bloqueada por `E2E_SAFE_PREVIEW=true`.
+**Produção:** não alterada. Não há ambiente ou URL de pré-produção configurado. O smoke de produção usa exclusivamente `https://adeusmulta.defesai.com.br` e para antes de gravar se `/novo-caso-rebuild` não estiver publicado.
 
 ## Decisão vigente
 
