@@ -67,22 +67,8 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
   ],
 };
 
-// A matriz nacional deve exercer cada serviço com volume suficiente para
-// revelar regressões de estado, mapeamento e geração documental. Os quatro
-// cenários-base acima preservam cobertura jurídica distinta; as variações
-// adicionais repetem o contrato com identificadores e usuários isolados,
-// sem criar cobranças reais.
-for (const configs of Object.values(COMMERCIAL_SERVICES)) {
-  const seed = configs.slice();
-  for (let index = seed.length + 1; index <= 10; index += 1) {
-    const base = seed[(index - seed.length - 1) % seed.length];
-    configs.push({
-      ...base,
-      scenario: String(index).padStart(2, '0'),
-      name: `${base.name} — variação ${index}`,
-    });
-  }
-}
+// Each listed scenario is an explicit test oracle. Do not clone cases as
+// artificial variations; repeated positions are not additional coverage.
 
 export interface ServiceConfig {
   scenario: string;
