@@ -3,7 +3,7 @@
 **Atualizado:** 2026-10-18  
 **Branch de implementação:** `onboarding/manual-intake-greenfield`  
 **PR:** [#38](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/38) — permanece em draft  
-**Produção:** não alterada; nenhuma migração ou deploy executado.
+**Produção:** não alterada. O preview de PR usa Worker separado; a criação de cobrança é bloqueada por `E2E_SAFE_PREVIEW=true`.
 
 ## Decisão vigente
 
@@ -22,26 +22,35 @@ O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa 
 - [x] Testes unitários existentes de normalização/validação.
 - [x] Testes do endpoint para token válido/inválido e rate limit em `cloudflare/routes/cases.test.ts`.
 - [x] Nova suíte Playwright isolada para validação de formulário, payload manual, recuperação após reload, falha da API e ausência de chamadas OCR: `tests/onboarding-manual-rebuild.spec.ts`.
+- [x] Ambiente Cloudflare `preview` separado (`adeusmulta-onboarding-pr38-preview`) para a bateria de navegador do PR.
+- [x] Proteção backend `E2E_SAFE_PREVIEW=true`: bloqueia PIX e cartão antes de consultar preço, gravar ordem ou contactar gateway.
+- [x] Workflow `Cloudflare Deploy` passa a publicar o Worker de preview apenas em PR do mesmo repositório e executar a suíte Playwright manual; upload de relatório como artifact.
+- [x] Teste unitário prova que o preview não contata gateway nem persiste ordem, mesmo com `VENO_PRIMARY_GATEWAY=venopag` e credenciais fornecidas ao binding.
 - [x] Instruções para executar a suíte somente contra o preview HTTPS da branch.
 
-## Como preparar e executar os testes de preview
+## Bateria de testes e ambiente VenoPag
 
-A suíte usa respostas HTTP simuladas para validar o comportamento de interface e **não cria registros no Supabase**. Ela não substitui os testes de integração do endpoint real.
+O workflow `.github/workflows/cloudflare-deploy.yml` faz o seguinte em PR da mesma organização:
+1. Executa os testes unitários de rotas de Worker, incluindo o contrato VenoPag e a verificação HMAC.
+2. Publica a branch em um Worker Cloudflare separado: `adeusmulta-onboarding-pr38-preview`.
+3. Executa `tests/onboarding-manual-rebuild.spec.ts` com Playwright contra o preview HTTPS.
+4. Guarda `playwright-report/` e `test-results/` como artifact do workflow.
 
-1. Aguarde uma implantação de preview HTTPS correspondente à branch do PR.
-2. Configure `PLAYWRIGHT_BASE_URL` com a URL HTTPS desse preview.
-3. Execute a suíte isolada:
+A configuração de produção permanece com `VENO_PRIMARY_GATEWAY=venopag` e `PAYMENT_MODE=production`. O preview também declara VenoPag como gateway primário para preservar a configuração, mas define `E2E_SAFE_PREVIEW=true`. Esse bloqueio server-side impede criação de PIX/cartão, mesmo que credenciais sejam acidentalmente vinculadas ao Worker. O preview não recebe os secrets de VenoPag nem de service role do Supabase.
+
+**Limite financeiro:** a documentação do projeto registra que a VenoPag não tem sandbox público. A suíte de preview e os testes de contrato não movimentam dinheiro. O Golden Path que gera uma cobrança real deve ser executado separadamente, com autorização explícita para uma transação real e reconciliação posterior; não o execute como parte automática de PR.
+
+Para execução manual contra o preview já implantado:
 
 ```bash
-RUN_MANUAL_REBUILD_E2E=1 PLAYWRIGHT_BASE_URL=https://<URL-DO-PREVIEW> npx playwright test tests/onboarding-manual-rebuild.spec.ts --project=chromium-production
+RUN_MANUAL_REBUILD_E2E=1 PLAYWRIGHT_BASE_URL=https://<URL-DO-PREVIEW> npx playwright test tests/onboarding-manual-rebuild.spec.ts --project=chromium-production --workers=1 --retries=0
 ```
 
-4. Para a suíte normal, mantenha `RUN_MANUAL_REBUILD_E2E` ausente; os testes específicos do preview ficam ignorados por padrão.
-5. Registre o resultado do CI para lint/typecheck, testes unitários e build. Não marque a suíte como aprovada antes de observar o resultado real.
+Não execute a suíte de produção Golden Path para validar somente a interface: ela cria PIX real. A bateria de preview usa mocks apenas nas chamadas do navegador para testar validação, intake, recuperação, handoff e erros; os contratos backend e VenoPag são cobertos pelos testes unitários sem chamadas ao provedor.
 
 ## Jornada completa — ainda bloqueada para ativação
 
-A página atual comprova apenas a criação do registro. Ela ainda não oferece a jornada completa de produção. Os itens abaixo permanecem pendentes e devem ser implementados e testados antes de trocar a rota pública:
+A página nova já conecta intake, recuperação, claim, qualificação, revisão, início de PIX e solicitação de geração após confirmação. O fluxo ainda não foi comprovado ponta a ponta contra uma integração autenticada e a VenoPag real; os gates abaixo permanecem pendentes antes de trocar a rota pública:
 
 - [ ] Validar recuperação server-side em ambiente de integração real e testar o limite de tentativas; a recuperação por ID + token foi implementada, mas ainda depende de CI e E2E real.
 - [ ] Validar em E2E real a continuidade após cadastro/login e claim; a chamada ao contrato canônico está conectada na UI, mas ainda precisa de teste autenticado contra preview e validação de concorrência.
