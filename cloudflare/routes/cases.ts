@@ -437,6 +437,7 @@ casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => 
   const supabase = createSupabaseAdminClient(c.env);
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
+  if (row.is_paid !== true) throw new HTTPException(402, { message: 'Pagamento ainda não foi confirmado pelo servidor. A minuta não pode ser gerada.' });
 
   const user = c.get('user');
   if (!canAccessCase(user, row)) {
