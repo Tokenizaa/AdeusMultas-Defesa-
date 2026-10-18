@@ -125,6 +125,19 @@ export function ManualIntakePage() {
           throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível recuperar este caso nesta sessão.');
         }
         if (!cancelled) {
+          const recoveredInfraction = body.case.infraction || {};
+          const recoveredVehicle = body.case.vehicle || {};
+          setForm((current) => ({
+            ...current,
+            aitNumber: typeof recoveredInfraction.aitNumber === 'string' ? recoveredInfraction.aitNumber : current.aitNumber,
+            infractionCode: typeof recoveredInfraction.infractionCode === 'string' ? recoveredInfraction.infractionCode : current.infractionCode,
+            autuadorBody: typeof recoveredInfraction.autuadorBody === 'string' ? recoveredInfraction.autuadorBody : current.autuadorBody,
+            dateTime: typeof recoveredInfraction.dateTime === 'string' ? recoveredInfraction.dateTime.slice(0, 16) : current.dateTime,
+            location: typeof recoveredInfraction.location === 'string' ? recoveredInfraction.location : current.location,
+            plate: typeof recoveredVehicle.plate === 'string' ? recoveredVehicle.plate : current.plate,
+            brandModel: typeof recoveredVehicle.brandModel === 'string' ? recoveredVehicle.brandModel : current.brandModel,
+            serviceType: body.case.serviceType === 'recurso_jari' ? 'recurso_jari' : 'defesa_previa',
+          }));
           setCreatedCase({
             id: caseId,
             claimToken,
@@ -230,7 +243,7 @@ export function ManualIntakePage() {
       if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível consultar o status do pagamento.');
       const status = String(body.status || '').toUpperCase();
       setPaymentStatus(status || 'PENDING');
-      if (status !== 'PAID' && status !== 'APPROVED' && status !== 'COMPLETED' && status !== 'SUCCESS') {
+      if (status !== 'PAID') {
         setPixError('O provedor ainda não confirmou o pagamento. Não gere a minuta nem faça outro pagamento; consulte novamente depois.');
         return;
       }
