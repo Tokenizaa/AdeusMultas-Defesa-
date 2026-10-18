@@ -24,6 +24,7 @@ import { UserServicesView } from './components/user/UserServicesView';
 
 // Existing Product Modules & Functional Views
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { ManualIntakePage } from './onboarding/ManualIntakePage';
 import { CheckoutView } from './components/checkout/CheckoutView';
 import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
@@ -384,7 +385,7 @@ function AppContent() {
   // =========================================================================
   // 3. ÁREA PÚBLICA (Rotas /, /login, /cadastro, /novo-caso)
   // =========================================================================
-  const knownPublicRoutes = ['/', '/login', '/cadastro', '/novo-caso'];
+  const knownPublicRoutes = ['/', '/login', '/cadastro', '/novo-caso', '/novo-caso-rebuild'];
   const matchedPublicRoute = knownPublicRoutes.includes(currentPath);
 
   return (
@@ -394,6 +395,8 @@ function AppContent() {
       {currentPath === '/login' && <LoginPageView />}
 
       {currentPath === '/cadastro' && <RegisterPageView />}
+
+      {currentPath === '/novo-caso-rebuild' && <ManualIntakePage />}
 
       {currentPath === '/novo-caso' && (
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
