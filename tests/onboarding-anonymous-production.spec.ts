@@ -5,7 +5,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RUN_ID = process.env.E2E_RUN_ID || `anonymous-${Date.now()}`;
 let generatedAit: string | undefined;
+let generatedCaseId: string | undefined;
 let anonymousSaveResult = 'request not observed';
+let saveResponseObserved = false;
 
 function required(name: string, value: string | undefined): string {
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
@@ -25,11 +27,23 @@ async function supabaseRows(request: APIRequestContext, table: string, filter: s
   return response.json() as Promise<Record<string, unknown>[]>;
 }
 
+test.describe.configure({ retries: 0 });
+
 test.afterEach(async ({ request }) => {
   if (!generatedAit) return;
+  if (!generatedCaseId) {
+    if (saveResponseObserved) {
+      throw new Error(`E2E cleanup pending: save response was observed but no canonical case ID was captured; AIT=${generatedAit}. Refusing broad deletion.`);
+    }
+    return;
+  }
   const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
+  const identityCheck = await supabaseRows(request, 'cases', `id=eq.${encodeURIComponent(generatedCaseId)}&ait_number=eq.${encodeURIComponent(generatedAit)}`);
+  if (identityCheck.length !== 1 || identityCheck[0].id !== generatedCaseId || identityCheck[0].ait_number !== generatedAit) {
+    throw new Error(`E2E cleanup refused: canonical case identity mismatch for id=${generatedCaseId}, AIT=${generatedAit}.`);
+  }
   const response = await request.delete(
-    `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?ait_number=eq.${encodeURIComponent(generatedAit)}`,
+    `${required('SUPABASE_URL', SUPABASE_URL)}/rest/v1/cases?id=eq.${encodeURIComponent(generatedCaseId)}&ait_number=eq.${encodeURIComponent(generatedAit)}`,
     {
       headers: {
         apikey: key,
@@ -45,6 +59,8 @@ test.afterEach(async ({ request }) => {
     expect(deletedRows.length, 'E2E cleanup must remove the exact generated case').toBe(1);
   }
   generatedAit = undefined;
+  generatedCaseId = undefined;
+  saveResponseObserved = false;
   anonymousSaveResult = 'request not observed';
 });
 
@@ -64,7 +80,18 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   anonymousSaveResult = 'request not observed';
   page.on('response', async (response) => {
     if (!response.url().includes('/api/cases/anonymous')) return;
-    anonymousSaveResult = `HTTP ${response.status()} ${((await response.text().catch(() => ''))).slice(0, 300)}`;
+    saveResponseObserved = true;
+    const bodyText = await response.text().catch(() => '');
+    anonymousSaveResult = `HTTP ${response.status()} ${bodyText.slice(0, 300)}`;
+    if (response.ok()) {
+      try {
+        const body = JSON.parse(bodyText);
+        const id = body?.id ?? body?.case?.id ?? body?.data?.id;
+        if (typeof id === 'string' && id.length > 0) generatedCaseId = id;
+      } catch {
+        // Keep the response evidence; cleanup must not guess a record by AIT.
+      }
+    }
   });
 
   await expect(page.getByRole('heading', { name: /Qual situação você quer resolver/i })).toBeVisible();
@@ -97,8 +124,11 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
 
   // Server reconciliation: case exists, remains unclaimed, and no payment order exists.
   const cases = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(ait)}`);
-  expect(cases.length, `anonymous case must exist in Supabase (${anonymousSaveResult})`).toBeGreaterThan(0);
+  expect(anonymousSaveResult, 'anonymous save HTTP response must be observed').not.toBe('request not observed');
+  expect(anonymousSaveResult, 'anonymous save must succeed before UI advances').toMatch(/^HTTP 20[01]/);
+  expect(cases.length, `exactly one anonymous case must exist in Supabase (${anonymousSaveResult})`).toBe(1);
   const caseId = String(cases[0].id);
+  expect(generatedCaseId, 'save response must return the canonical persisted case ID').toBe(caseId);
   expect(cases[0].user_id, 'case must remain unclaimed before authentication').toBeFalsy();
 
   // The recovery token and case identifier must survive auth/reload before claim.
