@@ -1,53 +1,58 @@
 # Status e evidências — reconstrução do onboarding
 
-**Data da atualização:** 2026-10-17  
-**Branch documental:** `docs/onboarding-rebuild-plan`  
-**PR:** [#37 — formalizar reconstrução do onboarding](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/37)  
-**Status geral:** Fase 1 executada parcialmente; bloqueada para encerramento até completar baseline local e confirmar versão de produção.
+**Atualizado:** 2026-10-17  
+**PR documental:** [#37 — formalizar reconstrução do onboarding](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/37)
 
-## Estado atual
+## Estado decidido
 
-| Item | Estado | Evidência / observação |
-|---|---|---|
-| Decisão de reconstruir a experiência | Registrada | `DECISAO-RECONSTRUCAO.md` |
-| Plano por fases e critérios de saída | Registrado | `PLANO-DE-EXECUCAO.md` |
-| Inventário remoto do onboarding | Realizado | `FASE-1-INVENTARIO-BASELINE.md` com arquivos, responsabilidades e referências de linha. |
-| Achados de código | Confirmados estaticamente | Contrato OCR incompatível; progresso local com mensagens que alegam calibração; pontuação fixa sem calibração demonstrada; valores fictícios iniciais de contato a revisar; reidratação de sessão não comprovada. |
-| Baseline executável (build/lint/unit/governance) | Pendente | Os comandos foram identificados, mas não executados porque esta sessão não dispõe do checkout local do WSL. Nenhum resultado foi presumido. |
-| Working tree local, arquivos não rastreados e stashes | Pendente | A auditoria foi remota via GitHub e não tocou no checkout local. Não executar reset/clean nem substituir worktrees/stashes. |
-| Versão efetivamente publicada no Cloudflare | Bloqueada | O repositório documenta Worker `adeusmulta` e `wrangler.jsonc`, mas não houve confirmação independente do deployment/version ID ativo. Não assumir que produção equivale ao commit de `main`. |
-| Testes E2E com escrita em produção | Bloqueados | Tentativas anteriores foram inconclusivas na reconciliação. Primeiro comprovar isolamento, identificação exata e limpeza. |
-| Cobranças reais | Não executadas | Permanecem proibidas durante desenvolvimento e validação. |
-| Alteração de código de produto, banco ou deploy nesta fase | Não executada | A entrega alterou apenas documentação na branch documental. |
-| Fase 2 | Não iniciada | Não avançar até fechar os critérios de saída da Fase 1. |
+- [x] Fase 1 — compreender e classificar o legado: **CONCLUÍDA**.
+- [x] Decisão do que preservar, reutilizar, reescrever, substituir e descartar documentada.
+- [x] Legado identificado como referência congelada, sem plano de corrigi-lo antes do rebuild.
+- [x] Linha greenfield existente identificada: `onboarding/rebuild-canonico-clean`.
+- [x] Documentação de execução ajustada para continuar a implementação greenfield existente, sem criar uma segunda UI paralela.
+- [ ] Fase 6 da linha greenfield — concluir integrações reais.
+- [ ] Fase 7 — validar fluxo completo, contratos e documentos.
+- [ ] Fase 8 — ativação controlada e arquivamento final do legado.
 
-## Achados prévios revalidados no código atual de `main`
+## Decisão de reaproveitamento
 
-A auditoria remota consultou o commit observado `a97123033248ea4bb1d295b1e163b45779ba5916` e arquivos de `main`. Os resultados confirmam estaticamente:
+Consulte [FASE-1-DECISAO-PRESERVACAO.md](./FASE-1-DECISAO-PRESERVACAO.md) para a matriz completa.
 
-1. `src/components/onboarding/steps/InfractionIdentificationStep.tsx:87–101` envia nome de arquivo em `rawText`, não os bytes da imagem; espera `success/extractedData`.
-2. `cloudflare/routes/ocr.ts:71–87, 97–130` espera arquivo multipart ou `image` base64 e retorna `rawText/fields`; o contrato observado não corresponde ao esperado pelo componente. Falta confirmar se algum proxy legado atende o endpoint em produção.
-3. `src/components/onboarding/steps/AnalysisProcessingStep.tsx:49–80` executa o motor determinístico local e avança por timers; a implementação inspecionada não comprova pesquisa remota ou calibração estatística antes das mensagens apresentadas.
-4. `src/core/rules/rule-engine.ts:909–930` define pontuação fixa conforme argumentos detectados e limita o resultado a 25–99. Não foi encontrada evidência de calibração estatística neste cálculo.
-5. `src/components/onboarding/steps/InfractionIdentificationStep.tsx:66–67, 79–85` usa valores iniciais de exemplo para nome/telefone e os considera na validação do formulário; confirmar sincronização com o payload e remover defaults fictícios do caminho real.
-6. `src/components/onboarding/OnboardingWizard.tsx:33–81` limita o armazenamento de browser a metadados, o que deve ser preservado; a recuperação do caso completo após recarga ainda precisa de teste específico.
-7. O endpoint de geração em `cloudflare/routes/cases.ts` chama `runCanonicalQualityGate` e bloqueia reprovação. Esse gate estrutural não equivale a certificação jurídica nem garante deferimento.
+**Preservar como requisitos de produto:** fluxo guiado e mobile-first; botões e escolhas claros; perguntas condicionais; possibilidade de voltar e revisar; confirmação dos dados extraídos; qualificação antes da geração; distinção explícita entre análise, pagamento e documento pronto.
 
-Os achados estão detalhados em `FASE-1-INVENTARIO-BASELINE.md`. Eles são conclusões de inspeção estática de código, não comprovação de comportamento da versão publicada.
+**Reutilizar por fronteira canônica, não copiando a UI:** modelo de caso, `CaseDomain`, `CanonicalMapper`, motor determinístico/regra jurídica no backend, serviço OCR existente e Quality Gate após revisão de contratos.
 
-## Critérios restantes para encerrar a Fase 1
+**Reescrever:** composição e estado da jornada, coleta condicional, contratos do frontend, retomada, tratamento de erro, confirmação OCR, qualificação e orquestração de pagamento/geração.
 
-- [ ] Registrar estado real do checkout WSL, HEAD, arquivos não rastreados e stashes sem apagar nem sobrescrever trabalho existente.
-- [ ] Executar e registrar build, lint/typecheck, testes unitários e governança na cópia correta do repositório.
-- [ ] Confirmar deployment/version ID ativo do Worker e associá-lo ao commit de origem.
-- [ ] Identificar qual runtime atende `/api/ocr/analyze`; reproduzir o contrato com arquivo sintético, sem criar caso nem cobrar.
-- [ ] Manter E2E de escrita em produção bloqueado até comprovar isolamento, reconciliação exata e limpeza idempotente.
+**Descartar do novo onboarding:** wizard, steps, hooks, stores e services específicos do legado; timers que simulam progresso; pontuação fixa apresentada como probabilidade; sucesso presumido/fallback silencioso; defaults fictícios como dados reais; duplicação de estado e contratos de compatibilidade sem dependência comprovada.
+
+## Linha greenfield existente
+
+A branch `onboarding/rebuild-canonico-clean` tem documentação que marca Fases 1–5 concluídas e Fase 6 em andamento. A Fase 6 registra draft anônimo com claim token real, adapter HTTP próprio, upload de imagem e integração OCR por `ocrService`/`CanonicalMapper`. Também registra pendências: PDF, claim autenticado definitivo, qualificação persistida, pagamento, geração e testes automatizados do fluxo.
+
+Referências:
+- [Status do rebuild greenfield](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/onboarding/rebuild-canonico-clean/docs/audit/ONBOARDING-REBUILD-STATUS.md)
+- [Fase 2 — definir o que fica](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/onboarding/rebuild-canonico-clean/docs/audit/ONBOARDING-REBUILD-F2-DEFINICAO.md)
+- [Fase 3 — contrato](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/onboarding/rebuild-canonico-clean/docs/audit/ONBOARDING-REBUILD-F3-CONTRATO.md)
+- [Fase 4 — arquitetura](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/onboarding/rebuild-canonico-clean/docs/audit/ONBOARDING-REBUILD-F4-ARQUITETURA.md)
+- [Fase 6 — integrações](https://github.com/Tokenizaa/AdeusMultas-Defesa-/blob/onboarding/rebuild-canonico-clean/docs/audit/ONBOARDING-REBUILD-F6-INTEGRACAO.md)
+
+Essa linha é a candidata de continuação, mas suas próprias notas deixam claro que Fase 6 ainda não está validada e que pagamentos/geração estão incompletos. Não declarar o novo onboarding pronto para produção.
+
+## Achados do legado que devem ser evitados
+
+A inspeção estática de `main` encontrou incompatibilidade entre o payload OCR da UI e o contrato do Worker, progresso de análise baseado em timers e valores fixos em `overallSuccessRate` sem calibração demonstrada. Há também valores de contato iniciais de exemplo e recuperação de sessão cuja reidratação não está comprovada.
+
+Esses achados servem para orientar o novo desenho; não justificam corrigir o legado nem impedem o encerramento da Fase 1. Build, testes, correlação com produção e E2E são verificações da nova implementação antes da ativação.
+
+## Segurança e limites
+
+- Nesta atualização foram alterados somente documentos na branch `docs/onboarding-rebuild-plan`.
+- Nenhum código de produto, banco, migração, deploy ou cobrança foi alterado/executado.
+- A branch legada permanece preservada; não foi apagada nem modificada.
+- Não houve inspeção do checkout WSL nesta sessão. Ao retomar execução local, preservar alterações, arquivos não rastreados e stashes; isso não reabre a triagem do legado.
+- Arquivamento final do legado deve ocorrer somente depois da ativação controlada e confirmação de rollback, sem apagar a branch de referência prematuramente.
 
 ## Próxima ação
 
-Fechar os itens restantes da **Fase 1 — Baseline e proteção do legado**. Não iniciar a reconstrução da interface nem a Fase 2 enquanto o working tree local e a versão publicada não estiverem protegidos/identificados e a baseline executável não tiver resultados reproduzíveis.
-
-## Histórico
-
-- 2026-10-17: criada a decisão, o plano e o status inicial em branch documental separada.
-- 2026-10-17: executada auditoria estática do código remoto de `main`; criado `FASE-1-INVENTARIO-BASELINE.md`. Nenhum código de produto, dado de produção, migração ou deploy foi alterado. A Fase 1 permanece parcial devido a limites de acesso ao checkout local e à ausência de confirmação independente do deployment ativo.
+Continuar a Fase 6 da linha `onboarding/rebuild-canonico-clean`: concluir contratos e integrações pendentes, em especial qualificação, claim autenticado, PDF, pagamento e geração documental. Depois validar o fluxo completo na implementação nova. Não reconstruir outra UI em paralelo e não portar código específico do wizard antigo.
