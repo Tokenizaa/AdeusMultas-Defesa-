@@ -360,7 +360,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   const val = e.target.value;
                   onUpdateInfraction({
                     ...infractionData,
-                    ctbArticle: 'Art. 252, Parágrafo Único do CTB',
+                    ctbArticle: 'Art. 252, VI do CTB',
                     infractionCode: '736-62',
                     cellphoneCircumstance: val || undefined,
                     hasAgentDetailedObservations: val === 'sem_abordagem' ? false : undefined,
@@ -373,6 +373,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <option value="veiculo_parado_semaforo">Veículo imobilizado no semáforo / congestionamento</option>
                 <option value="sem_abordagem">Agente não parou o veículo (sem abordagem presencial)</option>
                 <option value="viva_voz">Uso de sistema viva-voz / Bluetooth integrado</option>
+                <option value="fone_conectado">Fones conectados ao celular ou aparelho sonoro durante a condução</option>
               </select>
             </div>
           </div>
