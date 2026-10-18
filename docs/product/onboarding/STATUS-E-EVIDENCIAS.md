@@ -2,8 +2,8 @@
 
 **Data da atualização:** 2026-10-17  
 **Branch documental:** `docs/onboarding-rebuild-plan`  
-**Base:** `main` no momento da criação da branch  
-**Status:** documentação inicial criada; Fase 1 ainda não executada
+**PR:** [#37 — formalizar reconstrução do onboarding](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/37)  
+**Status geral:** Fase 1 executada parcialmente; bloqueada para encerramento até completar baseline local e confirmar versão de produção.
 
 ## Estado atual
 
@@ -11,43 +11,43 @@
 |---|---|---|
 | Decisão de reconstruir a experiência | Registrada | `DECISAO-RECONSTRUCAO.md` |
 | Plano por fases e critérios de saída | Registrado | `PLANO-DE-EXECUCAO.md` |
-| Baseline técnico completo | Pendente | Ainda não executado nesta branch documental |
-| Inventário do onboarding atualmente no repositório | Pendente | Requer inspeção de código e referências de linha |
-| Identificação do código efetivamente publicado | Pendente | Não presumir que o commit do repositório corresponde à produção |
-| Matriz de preservação/reconstrução | Pendente | Depende do inventário |
-| Especificação de fluxo e contratos | Pendente | Depende do inventário e diagnóstico |
-| Implementação nova | Não iniciada | Fora do escopo desta entrega |
-| Alteração de produção, migração ou deploy | Não executada | Não autorizada por este plano |
-| Testes com escrita em produção | Bloqueados | Smoke anterior não foi conclusivo; primeiro corrigir e provar reconciliação/isolation |
-| Cobranças reais | Não executadas | Permanecem proibidas durante a validação |
+| Inventário remoto do onboarding | Realizado | `FASE-1-INVENTARIO-BASELINE.md` com arquivos, responsabilidades e referências de linha. |
+| Achados de código | Confirmados estaticamente | Contrato OCR incompatível; progresso local com mensagens que alegam calibração; pontuação fixa sem calibração demonstrada; valores fictícios iniciais de contato a revisar; reidratação de sessão não comprovada. |
+| Baseline executável (build/lint/unit/governance) | Pendente | Os comandos foram identificados, mas não executados porque esta sessão não dispõe do checkout local do WSL. Nenhum resultado foi presumido. |
+| Working tree local, arquivos não rastreados e stashes | Pendente | A auditoria foi remota via GitHub e não tocou no checkout local. Não executar reset/clean nem substituir worktrees/stashes. |
+| Versão efetivamente publicada no Cloudflare | Bloqueada | O repositório documenta Worker `adeusmulta` e `wrangler.jsonc`, mas não houve confirmação independente do deployment/version ID ativo. Não assumir que produção equivale ao commit de `main`. |
+| Testes E2E com escrita em produção | Bloqueados | Tentativas anteriores foram inconclusivas na reconciliação. Primeiro comprovar isolamento, identificação exata e limpeza. |
+| Cobranças reais | Não executadas | Permanecem proibidas durante desenvolvimento e validação. |
+| Alteração de código de produto, banco ou deploy nesta fase | Não executada | A entrega alterou apenas documentação na branch documental. |
+| Fase 2 | Não iniciada | Não avançar até fechar os critérios de saída da Fase 1. |
 
-## Achados prévios que precisam ser revalidados na Fase 1
+## Achados prévios revalidados no código atual de `main`
 
-Os itens abaixo vieram de uma auditoria anterior de um snapshot do repositório identificado como `0c9e30111e183ac869af90286dda9603992701ab`. Não presumir que esse snapshot seja igual ao código atual de `main` ou ao código publicado em produção. Confirmar cada item no baseline atual antes de alterar qualquer coisa.
+A auditoria remota consultou o commit observado `a97123033248ea4bb1d295b1e163b45779ba5916` e arquivos de `main`. Os resultados confirmam estaticamente:
 
-1. A pontuação de êxito parecia ser calculada por regras fixas, sem evidência de calibração estatística; verificar cálculo, nomenclatura e apresentação na interface.
-2. A interface parecia executar uma análise local antes de receber confirmação da criação remota do caso; verificar os estados de falha e o que é mostrado ao usuário.
-3. A integração de OCR aparentava divergência entre formato enviado e formato esperado, além de diferenças no contrato de resposta; reproduzir em ambiente seguro.
-4. Havia risco de campos visíveis com valores iniciais divergirem do payload enviado; comparar estado, payload e dados persistidos.
-5. Alguns fundamentos pareciam depender de dados ausentes ou de semântica ambígua; confirmar se informação desconhecida é diferenciada de fato negativo.
-6. A recuperação de sessão parecia guardar identificadores sem reidratar o caso completo; verificar fluxo real de retomada.
-7. A pesquisa de fontes e a geração documental precisavam de evidências de completude, proveniência e bloqueio quando faltam dados ou fundamentos.
-8. O fluxo de testes de onboarding anônimo na URL real de produção terminou inconclusivo em reconciliação de dados em tentativas anteriores. Os registros sintéticos daquela execução foram individualmente verificados e removidos segundo os relatórios prévios; o teste não foi aprovado e não houve pagamento real. Reconfirmar o estado antes de novas tentativas de escrita.
+1. `src/components/onboarding/steps/InfractionIdentificationStep.tsx:87–101` envia nome de arquivo em `rawText`, não os bytes da imagem; espera `success/extractedData`.
+2. `cloudflare/routes/ocr.ts:71–87, 97–130` espera arquivo multipart ou `image` base64 e retorna `rawText/fields`; o contrato observado não corresponde ao esperado pelo componente. Falta confirmar se algum proxy legado atende o endpoint em produção.
+3. `src/components/onboarding/steps/AnalysisProcessingStep.tsx:49–80` executa o motor determinístico local e avança por timers; a implementação inspecionada não comprova pesquisa remota ou calibração estatística antes das mensagens apresentadas.
+4. `src/core/rules/rule-engine.ts:909–930` define pontuação fixa conforme argumentos detectados e limita o resultado a 25–99. Não foi encontrada evidência de calibração estatística neste cálculo.
+5. `src/components/onboarding/steps/InfractionIdentificationStep.tsx:66–67, 79–85` usa valores iniciais de exemplo para nome/telefone e os considera na validação do formulário; confirmar sincronização com o payload e remover defaults fictícios do caminho real.
+6. `src/components/onboarding/OnboardingWizard.tsx:33–81` limita o armazenamento de browser a metadados, o que deve ser preservado; a recuperação do caso completo após recarga ainda precisa de teste específico.
+7. O endpoint de geração em `cloudflare/routes/cases.ts` chama `runCanonicalQualityGate` e bloqueia reprovação. Esse gate estrutural não equivale a certificação jurídica nem garante deferimento.
 
-## Condições para iniciar implementação
+Os achados estão detalhados em `FASE-1-INVENTARIO-BASELINE.md`. Eles são conclusões de inspeção estática de código, não comprovação de comportamento da versão publicada.
 
-- [ ] Fase 1 concluída com baseline e working tree protegidos.
-- [ ] Commit publicado em produção identificado ou diferença registrada como bloqueio.
-- [ ] Inventário técnico com caminhos e referências de linha.
-- [ ] Matriz de preservação e reconstrução aprovada.
-- [ ] Fluxo e contratos especificados.
-- [ ] Plano de teste seguro definido, incluindo reconciliação de dados sintéticos.
-- [ ] Nenhum teste de escrita em produção até demonstrar isolamento e limpeza por identificador exato.
+## Critérios restantes para encerrar a Fase 1
+
+- [ ] Registrar estado real do checkout WSL, HEAD, arquivos não rastreados e stashes sem apagar nem sobrescrever trabalho existente.
+- [ ] Executar e registrar build, lint/typecheck, testes unitários e governança na cópia correta do repositório.
+- [ ] Confirmar deployment/version ID ativo do Worker e associá-lo ao commit de origem.
+- [ ] Identificar qual runtime atende `/api/ocr/analyze`; reproduzir o contrato com arquivo sintético, sem criar caso nem cobrar.
+- [ ] Manter E2E de escrita em produção bloqueado até comprovar isolamento, reconciliação exata e limpeza idempotente.
 
 ## Próxima ação
 
-Executar a **Fase 1 — Baseline e proteção do legado** conforme `PLANO-DE-EXECUCAO.md`. Não iniciar a reconstrução da interface até que o inventário mostre o que deve ser preservado e o que realmente precisa ser corrigido.
+Fechar os itens restantes da **Fase 1 — Baseline e proteção do legado**. Não iniciar a reconstrução da interface nem a Fase 2 enquanto o working tree local e a versão publicada não estiverem protegidos/identificados e a baseline executável não tiver resultados reproduzíveis.
 
-## Histórico desta documentação
+## Histórico
 
-- 2026-10-17: criada a decisão formal, o plano por fases e este registro de status em branch documental separada. Nenhum código de produto, dado de produção, migração ou deploy foi alterado nesta entrega.
+- 2026-10-17: criada a decisão, o plano e o status inicial em branch documental separada.
+- 2026-10-17: executada auditoria estática do código remoto de `main`; criado `FASE-1-INVENTARIO-BASELINE.md`. Nenhum código de produto, dado de produção, migração ou deploy foi alterado. A Fase 1 permanece parcial devido a limites de acesso ao checkout local e à ausência de confirmação independente do deployment ativo.
