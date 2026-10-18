@@ -34,6 +34,18 @@
     "PAYMENT_MODE": "production",
     "VENO_PRIMARY_GATEWAY": "venopag"
   },
+  "env": {
+    "preview": {
+      "name": "adeusmulta-onboarding-pr38-preview",
+      "workers_dev": true,
+      "vars": {
+        "SUPABASE_URL": "https://llmxnpgjpxcvyrqjkfwb.supabase.co",
+        "PAYMENT_MODE": "production",
+        "VENO_PRIMARY_GATEWAY": "venopag",
+        "APP_URL": "https://adeusmulta-onboarding-pr38-preview.workers.dev"
+      }
+    }
+  },
   "build": {
     "command": "bun run build"
   }
