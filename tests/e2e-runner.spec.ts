@@ -7,7 +7,7 @@ import { test, expect, Page, Browser, BrowserContext } from '@playwright/test';
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
-import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID, EVIDENCE_DIR } from './e2e-infrastructure';
+import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID, EVIDENCE_DIR, COMMERCIAL_SERVICES } from './e2e-infrastructure';
 import { executeOnboardingFlow, TestCaseData } from './e2e-onboarding-executor';
 import { E2EValidator, ValidationResult } from './e2e-validator';
 import { generateAllFixtures } from './e2e-fixtures';
@@ -19,60 +19,62 @@ let browser: Browser;
 let context: BrowserContext;
 const allResults: (ValidationResult & { execution: any })[] = [];
 
-// Test cases for dynamic suite registration (top-level await; Playwright loads
-// spec files with top-level await as ESM).
-const initializedTestManager = await getE2ETestManager();
-const testCasesForSuite = await initializedTestManager.getTestCases();
+// Require an explicit service selector. Playwright discovery must register
+// tests from static configuration only; it must never create Supabase fixtures.
+const selectedService = process.env.E2E_SERVICE;
+if (!selectedService || !Object.prototype.hasOwnProperty.call(COMMERCIAL_SERVICES, selectedService)) {
+  throw new Error(`E2E_SERVICE is required and must be one of: ${Object.keys(COMMERCIAL_SERVICES).join(', ')}`);
+}
+const scenarioDefinitions = COMMERCIAL_SERVICES[selectedService];
 
-test.describe.configure({ retries: 0 });
+test.describe.configure({ retries: 0, mode: 'serial' });
 
-test.describe('E2E National Test Suite', () => {
+test.describe(`E2E Production Certification — ${selectedService}`, () => {
   test.beforeAll(async () => {
-    console.log(`\n========== E2E TEST RUN: ${TEST_RUN_ID} ==========\n`);
-    
-    // Initialize test manager
-    // Reuse the manager initialized during test registration. Reinitializing
-    // here creates a second remote fixture setup and can race the first one.
-    testManager = initializedTestManager;
+    console.log(`\\n========== E2E TEST RUN: ${TEST_RUN_ID}; SERVICE: ${selectedService} ==========`);
+
+    // Persistent fixtures are created only when the test starts, never during
+    // --list discovery. E2ETestManager limits writes to E2E_SERVICE.
+    testManager = await getE2ETestManager();
     validator = new E2EValidator();
-    
-    // Launch browser
     browser = await chromium.launch({ headless: process.env.E2E_HEADED !== '1' });
     context = await browser.newContext();
-    
-    // Generate document fixtures for all test cases
+
     const testCases = await testManager.getTestCases();
-    for (const tc of testCases) {
-      generateAllFixtures(tc);
+    const actualServices = [...new Set(testCases.map((tc) => tc.serviceType))];
+    if (actualServices.length !== 1 || actualServices[0] !== selectedService) {
+      throw new Error(`Fixture isolation failure: requested ${selectedService}; created ${actualServices.join(', ') || 'no cases'}`);
     }
-    
-    console.log(`[${TEST_RUN_ID}] Test infrastructure ready. ${testCases.length} cases to test.\n`);
+    for (const tc of testCases) generateAllFixtures(tc);
+    console.log(`[${TEST_RUN_ID}] Fixtures ready: ${testCases.length} scenarios for ${selectedService}`);
   });
 
   test.afterAll(async () => {
-    await context.close();
-    await browser.close();
-    
-    // Generate final report
-    await generateFinalReport();
-    
-    console.log(`\n========== E2E TEST RUN COMPLETE: ${TEST_RUN_ID} ==========\n`);
+    if (context) await context.close();
+    if (browser) await browser.close();
+    if (testManager) {
+      await generateFinalReport();
+      console.log(`========== E2E TEST RUN COMPLETE: ${TEST_RUN_ID} ==========`);
+    }
   });
 
-  // Run tests for each test case - ALL test cases, not just first 5
-  const testCases = testCasesForSuite;
-  for (const testCase of testCases) {
-    test(`${testCase.serviceType} - ${testCase.scenario} (${testCase.procedureType})`, async () => {
-      // In the real-payment mode the operator must have unlimited time to
-      // scan and pay the QR code. Playwright's project timeout would close
-      // the browser after three minutes otherwise.
-      if (process.env.E2E_STOP_AT_QR === '1') test.setTimeout(0);
+  for (const definition of scenarioDefinitions) {
+    test(`${definition.scenario} — ${definition.name}`, async () => {
+      test.setTimeout(process.env.E2E_STOP_AT_QR === '1' ? 0 : 4 * 60_000);
+      const testCases = await testManager.getTestCases();
+      const testCase = testCases.find((tc) =>
+        tc.serviceType === selectedService && tc.scenario === definition.scenario
+      );
+      expect(testCase, `fixture missing for ${selectedService}/${definition.scenario}`).toBeTruthy();
+      if (!testCase) throw new Error(`Fixture missing for ${selectedService}/${definition.scenario}`);
+
+      const user = (await testManager.getTestUsers()).find((candidate) => candidate.id === testCase.userId);
+      expect(user, `isolated user missing for case ${testCase.id}`).toBeTruthy();
+      if (!user) throw new Error(`Isolated user missing for case ${testCase.id}`);
+
       const page = await context.newPage();
       await context.clearCookies();
-      
       try {
-        // Convert to TestCaseData format
-        const user = (await testManager.getTestUsers()).find(u => u.id === testCase.userId)!;
         const testCaseData: TestCaseData = {
           id: testCase.id,
           userId: testCase.userId,
@@ -87,42 +89,25 @@ test.describe('E2E National Test Suite', () => {
           testRunId: TEST_RUN_ID,
         };
 
-        // Execute onboarding flow
-        console.log(`[${TEST_RUN_ID}] Running onboarding for ${testCase.serviceType}-${testCase.scenario}...`);
         const executionResult = await executeOnboardingFlow(page, testCaseData);
-
-        // Validate results against database
-        console.log(`[${TEST_RUN_ID}] Validating results for ${testCase.serviceType}-${testCase.scenario}...`);
         const validationCase = executionResult.persistedCaseId
           ? { ...testCase, id: executionResult.persistedCaseId }
           : testCase;
         const validationResult = await validator.validateCase(validationCase);
-
-        // Combine results
-        const combinedResult = {
-          ...validationResult,
-          execution: executionResult,
-        };
+        const combinedResult = { ...validationResult, execution: executionResult };
         allResults.push(combinedResult);
-
-        // Save intermediate evidence
         await testManager.saveEvidence(`case-${testCase.id}-result.json`, combinedResult);
-
-        // Assert overall pass
-        expect(combinedResult.overall).toBe('PASS');
-        
-        console.log(`[${TEST_RUN_ID}] Case ${testCase.id}: ${combinedResult.overall}`);
-        
+        expect(combinedResult.overall, JSON.stringify(combinedResult, null, 2)).toBe('PASS');
       } catch (error: any) {
-        console.error(`[${TEST_RUN_ID}] Test failed for ${testCase.id}:`, error.message);
+        const message = error instanceof Error ? error.message : String(error);
         allResults.push({
           caseId: testCase.id,
           overall: 'FAIL',
-          analysis: { exists: false, procedureTypeCorrect: false, competentBodyCorrect: false, ufCorrect: false, tesesIdentified: [], score: 0, errors: [error.message] },
-          document: { exists: false, templateCorrect: false, dataPreserved: false, fieldsValid: [], errors: [error.message] },
-          protocol: { exists: false, portalUrlCorrect: false, physicalAddressCorrect: false, competentBodyCorrect: false, errors: [error.message] },
-          contamination: { clean: false, otherCasesData: [], errors: [error.message] },
-          execution: { errors: [error.message] },
+          analysis: { exists: false, procedureTypeCorrect: false, competentBodyCorrect: false, ufCorrect: false, tesesIdentified: [], score: 0, errors: [message] },
+          document: { exists: false, templateCorrect: false, dataPreserved: false, fieldsValid: [], errors: [message] },
+          protocol: { exists: false, portalUrlCorrect: false, physicalAddressCorrect: false, competentBodyCorrect: false, errors: [message] },
+          contamination: { clean: false, otherCasesData: [], errors: [message] },
+          execution: { errors: [message] },
         });
         throw error;
       } finally {
@@ -130,50 +115,6 @@ test.describe('E2E National Test Suite', () => {
       }
     });
   }
-
-  // Cross-contamination test
-  test('Cross-contamination check: SP -> RJ -> MG -> RS -> PR', async () => {
-    const testCases = (await testManager.getTestCases())
-      .filter(tc => ['SP', 'RJ', 'MG', 'RS', 'PR'].includes(extractUF(tc.applicant.addressCityState)))
-      .slice(0, 5);
-
-    const pages = await Promise.all(testCases.map(() => context.newPage()));
-    
-    try {
-      // Execute all 5 cases in sequence
-      for (let i = 0; i < testCases.length; i++) {
-        const testCase = testCases[i];
-        const user = (await testManager.getTestUsers()).find(u => u.id === testCase.userId)!;
-        
-        const testCaseData: TestCaseData = {
-          id: testCase.id,
-          userId: testCase.userId,
-          email: user.email,
-          password: user.password,
-          serviceType: testCase.serviceType,
-          scenario: testCase.scenario,
-          procedureType: testCase.procedureType,
-          infraction: testCase.infraction,
-          vehicle: testCase.vehicle,
-          applicant: testCase.applicant,
-          testRunId: TEST_RUN_ID,
-        };
-
-        await executeOnboardingFlow(pages[i], testCaseData);
-      }
-
-      // Validate contamination
-      for (const testCase of testCases) {
-        const validation = await validator.validateCase(testCase);
-        expect(validation.contamination.clean).toBe(true);
-      }
-      
-      console.log(`[${TEST_RUN_ID}] Cross-contamination check: PASS`);
-      
-    } finally {
-      await Promise.all(pages.map(p => p.close()));
-    }
-  });
 });
 
 async function generateFinalReport(): Promise<void> {
