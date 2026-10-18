@@ -151,7 +151,7 @@ routes.get('/payments/gateway/status', (c) => {
 });
 
 routes.post('/payments/pix/create', authenticateToken, async (c) => {
-  if (c.env.E2E_SAFE_PREVIEW === 'true') throw new HTTPException(503, { message: 'Cobranças estão desativadas no preview de testes. Nenhuma transação foi enviada à VenoPag.' });
+  if (c.env?.E2E_SAFE_PREVIEW === 'true') throw new HTTPException(503, { message: 'Cobranças estão desativadas no preview de testes. Nenhuma transação foi enviada à VenoPag.' });
   const user = c.get('user')!;
   const body = await c.req.json<any>().catch(() => ({}));
   if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
