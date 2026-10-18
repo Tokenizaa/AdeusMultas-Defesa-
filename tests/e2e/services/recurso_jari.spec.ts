@@ -19,30 +19,28 @@ const applicant = {
   cityState: 'Belo Horizonte/MG',
 };
 
-// Lei Seca (Art. 165-A) com termo de sinais ausente → vício ARG-025
+// Teste positivo de alcoolemia (Art. 165) com termo presente: não presumir vício de recusa
 const infraction = {
   aitNumber: 'AIT-JARI-002',
   dateTime: '2026-03-05',
   location: 'Av. Contorno, 1000',
   autuadorBody: 'DETRAN-MG',
-  infractionCode: '757-90',
-  ctbArticle: 'Art. 165-A do CTB',
+  infractionCode: '516-91',
+  ctbArticle: 'Art. 165 do CTB',
   severity: 'gravissima',
   points: 0,
   fineAmount: 2934.70,
-  hasPsychomotorTerm: false,
+  hasPsychomotorTerm: true,
+  refusedTest: false,
 };
 
 test.describe('E2E Determinístico — Recurso JARI', () => {
-  test('pipeline completo para Lei Seca (termo ausente)', async () => {
+  test('pipeline completo para alcoolemia com teste positivo', async () => {
     registerRefinementProvider({});
 
     const analysis = ExpertRuleEngine.evaluate('case-jari-002', infraction);
-    // Vício ARG-025 (termo de constatação de sinais)
-    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(true);
-    const flaw = analysis.detectedFlaws?.find((f) => f.argumentId === 'ARG-025');
-    expect(flaw).toBeDefined();
-    expect(flaw!.ruleId).toBe('RULE_LEI_SECA_TERMO_432');
+    // A regra de termo só se aplica a recusa classificada sob Art. 165.
+    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(false);
     expect(validateAnalysis(analysis).valid).toBe(true);
 
     const draft = DocumentAssemblyEngine.assemble({
