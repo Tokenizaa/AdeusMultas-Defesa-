@@ -6,6 +6,7 @@ on:
       - onboarding/manual-intake-greenfield
     paths:
       - 'tests/onboarding-anonymous-production.spec.ts'
+      - '.github/workflows/e2e-certification-production.yml'
   workflow_dispatch:
 
 permissions:
