@@ -63,8 +63,8 @@ test.describe(`E2E Production Certification — ${selectedService}`, () => {
         return [{
           id: persistedId,
           aitNumber: String(seed.infraction.aitNumber),
-          userId: null,
-          anonymous: true,
+          userId: seed.userId,
+          anonymous: 'either',
         }];
       });
       const cleanup = await testManager.cleanupOwnedFixtures(additionalCases);
