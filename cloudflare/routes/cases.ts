@@ -396,6 +396,28 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   return c.json(rowToDomain(data));
 });
 
+// GET /api/cases/:id/onboarding-state — retoma a jornada somente para o proprietário autenticado.
+casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
+  if (error) throw new HTTPException(500, { message: 'Não foi possível recuperar a jornada.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
+  const user = c.get('user');
+  if (!canAccessCase(user, row) || row.is_anonymous === true) throw new HTTPException(403, { message: 'Caso não vinculado a esta conta.' });
+  const domain = rowToDomain(row);
+  const { data: pendingOrder } = await supabase.from('payment_orders').select('status,amount,gateway_transaction_id').eq('case_id', row.id).eq('user_id', user.id).eq('payment_method', 'pix').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return c.json({
+    id: domain.id,
+    status: domain.status,
+    isPaid: row.is_paid === true,
+    serviceType: domain.serviceType,
+    infraction: domain.infraction,
+    vehicle: domain.vehicle,
+    applicant: domain.applicant,
+    paymentStatus: pendingOrder?.status || null,
+  });
+});
+
 // POST /api/cases/:id/qualification — persiste somente os dados de qualificação explicitamente fornecidos.
 casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
