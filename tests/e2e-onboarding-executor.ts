@@ -152,8 +152,9 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
   }
   const autuador = page.getByLabel('Órgão autuador');
   if (testCase.infraction.autuadorBody) await autuador.fill(String(testCase.infraction.autuadorBody).slice(0, 120));
-  if (testCase.infraction.dateTime) {
-    await page.getByLabel('Data e hora da infração').fill(String(testCase.infraction.dateTime).slice(0, 16));
+  if (typeof testCase.infraction.dateTime === 'string'
+    && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/.test(testCase.infraction.dateTime)) {
+    await page.getByLabel('Data e hora da infração').fill(testCase.infraction.dateTime.slice(0, 16));
   }
   if (testCase.vehicle.model) {
     await page.getByLabel('Marca e modelo').fill(String(testCase.vehicle.model).slice(0, 120));
