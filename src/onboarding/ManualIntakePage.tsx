@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { authFetch } from '../lib/authFetch';
+import { useAuth } from '../core/auth/AuthContext';
+import { useRouter } from '../core/router/RouterContext';
 import {
   normalizeManualIntake,
   validateManualIntake,
@@ -81,6 +83,10 @@ export function ManualIntakePage() {
   const [createdCase, setCreatedCase] = useState<CreatedCase>();
   const [recovering, setRecovering] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimError, setClaimError] = useState('');
+  const { isAuthenticated } = useAuth();
+  const { navigate } = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -130,6 +136,37 @@ export function ManualIntakePage() {
     void recoverCase();
     return () => { cancelled = true; };
   }, []);
+
+  async function claimCurrentCase() {
+    if (!createdCase?.id || !createdCase.claimToken) {
+      setClaimError('O token seguro de vinculação não está disponível nesta sessão. Recupere o caso antes de continuar.');
+      return;
+    }
+    setClaimBusy(true);
+    setClaimError('');
+    try {
+      const response = await authFetch(`/api/cases/${encodeURIComponent(createdCase.id)}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimToken: createdCase.claimToken }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof body?.message === 'string' ? body.message : `Não foi possível vincular o caso (HTTP ${response.status}).`);
+      }
+      try {
+        sessionStorage.removeItem('defesai_manual_onboarding_case_id');
+        sessionStorage.removeItem('defesai_manual_onboarding_claim_token');
+      } catch {
+        // A vinculação já foi confirmada pelo servidor; storage é apenas auxiliar.
+      }
+      navigate('/cases');
+    } catch (cause) {
+      setClaimError(cause instanceof Error ? cause.message : 'Não foi possível vincular o caso à conta.');
+    } finally {
+      setClaimBusy(false);
+    }
+  }
 
   function update<K extends keyof ManualIntakeInput>(key: K, value: ManualIntakeInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -201,7 +238,22 @@ export function ManualIntakePage() {
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             Esta etapa confirma apenas o registro dos dados. A análise jurídica e a geração do documento não são declaradas concluídas nesta versão de validação.
           </div>
-          <button type="button" onClick={() => { setCreatedCase(undefined); setForm(EMPTY_FORM); setRecoveryError(''); try { sessionStorage.removeItem('defesai_manual_onboarding_case_id'); sessionStorage.removeItem('defesai_manual_onboarding_claim_token'); } catch { /* storage may be disabled */ } }} className="mt-6 min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Iniciar outro caso</button>
+          {claimError && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{claimError}</p>}
+          <section className="mt-6 rounded-xl border border-slate-200 p-4">
+            <h2 className="font-semibold">Próxima etapa: vincular à sua conta</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Para continuar com qualificação, revisão e contratação, vincule este caso a uma conta. Isso não confirma pagamento nem gera uma defesa.</p>
+            {isAuthenticated ? (
+              <button type="button" disabled={claimBusy} onClick={() => void claimCurrentCase()} className="mt-4 min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60">
+                {claimBusy ? 'Vinculando…' : 'Vincular caso à minha conta'}
+              </button>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button type="button" onClick={() => navigate('/login')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">Entrar para vincular</button>
+                <button type="button" onClick={() => navigate('/cadastro')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Criar conta</button>
+              </div>
+            )}
+          </section>
+          <button type="button" onClick={() => { setCreatedCase(undefined); setForm(EMPTY_FORM); setRecoveryError(''); setClaimError(''); try { sessionStorage.removeItem('defesai_manual_onboarding_case_id'); sessionStorage.removeItem('defesai_manual_onboarding_claim_token'); } catch { /* storage may be disabled */ } }} className="mt-6 min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Iniciar outro caso</button>
         </section>
       </main>
     );
