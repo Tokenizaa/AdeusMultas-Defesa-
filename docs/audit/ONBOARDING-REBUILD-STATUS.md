@@ -105,3 +105,13 @@ Para cada serviço seguinte, altere **somente** `E2E_SERVICE` e o sufixo do `E2E
 - `conversao_advertencia`
 
 O executor de produção não gera documento porque isso exige autenticação e confirmação financeira autoritativa. A cadeia de documento é certificada separadamente pelos testes determinísticos por serviço, sem contornar `cases.is_paid). A prova real de VenoPag/webhook permanece fora desta bateria: não há sandbox público documentado e nenhuma cobrança real foi autorizada.
+
+## Evidência real de produção — 2026-10-18
+
+- Execução: [E2E Production Certification — Manual Onboarding #39147193975](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/39147193975).
+- A configuração de reconciliação Supabase foi carregada corretamente usando o secret alias já utilizado pelo workflow Golden Path.
+- O smoke abriu exclusivamente `https://adeusmulta.defesai.com.br/novo-caso-rebuild` e falhou no checkpoint de UI: a produção não apresenta o título **“Informe os dados da autuação”** desse novo onboarding.
+- A falha ocorreu antes do preenchimento e antes de qualquer POST de criação. O relatório de cleanup registrou `NO_RESIDUE_VERIFIED` para a AIT sintética `E2E-MANUAL-cert-39147193975-1`.
+- Resultado do smoke: **BLOQUEADO — nova rota não publicada em produção**. Não houve cobrança, migração, deploy ou alteração em `main`.
+- Por dependência sequencial, as etapas `defesa_previa` e a suíte determinística de documento foram ignoradas nessa execução. Não foram iniciadas baterias de serviço.
+- O workflow voltou a ser exclusivamente manual após a execução pontual; não executará smoke financeiro/de produção em cada push.
