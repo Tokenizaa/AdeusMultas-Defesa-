@@ -1,6 +1,11 @@
 name: E2E Production Certification — Manual Onboarding
 
 on:
+  push:
+    branches:
+      - onboarding/manual-intake-greenfield
+    paths:
+      - 'tests/onboarding-anonymous-production.spec.ts'
   workflow_dispatch:
 
 permissions:
