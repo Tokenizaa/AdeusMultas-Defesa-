@@ -45,10 +45,13 @@ A página atual comprova apenas a criação do registro. Ela ainda não oferece 
 
 - [ ] Validar recuperação server-side em ambiente de integração real e testar o limite de tentativas; a recuperação por ID + token foi implementada, mas ainda depende de CI e E2E real.
 - [ ] Validar em E2E real a continuidade após cadastro/login e claim; a chamada ao contrato canônico está conectada na UI, mas ainda precisa de teste autenticado contra preview e validação de concorrência.
-- [ ] Etapa de qualificação do condutor e revisão explícita dos dados antes da contratação.
+- [x] Formulário de qualificação do requerente com validação server-side e persistência restrita de dados pessoais; endpoint dedicado exige caso vinculado ao usuário autenticado.
+- [x] Tela de revisão explícita dos dados de autuação e requerente antes de iniciar o checkout.
 - [ ] Diagnóstico jurídico apresentado apenas com resultados efetivamente retornados pelo motor canônico; sem inventar artigos, teses, documentos ou probabilidade de êxito.
-- [ ] Integração com o fluxo existente de pagamento: preço resolvido no servidor, PIX real, status confirmado por fonte autoritativa e nenhuma liberação com pagamento pendente.
-- [ ] Geração da minuta somente após as condições de negócio e dados obrigatórios serem satisfeitos, preservando o hash de integridade e as teses autorizadas.
+- [x] Integração inicial ao fluxo de preço/PIX existente: cobrança iniciada sob ação explícita do usuário, preço e valor vêm da resposta do servidor, dados PIX incompletos/simulados são recusados e a consulta autenticada só considera `PAID` como confirmação.
+- [ ] Validar em sandbox a criação da ordem e o ciclo real de webhook/status, incluindo pendente, pago, cancelado e estornado.
+- [x] UI só solicita geração após o endpoint de status retornar `PAID`; o backend também bloqueia a rota de geração quando `cases.is_paid` não está confirmado.
+- [ ] Validar que o webhook autoritativo atualiza `cases.is_paid` e a ordem de pagamento no mesmo fluxo de integração de sandbox.
 - [ ] Checklist/documento final derivado dos dados e da análise persistidos no servidor.
 - [ ] E2E de ponta a ponta em ambiente de teste: criação, falha/retentativa, reload, claim válido/inválido, revisão, pagamento pendente/aprovado/recusado, geração e leitura do documento.
 - [ ] Reconciliação de registros criados nos testes e limpeza restrita aos IDs/identificadores exclusivos da execução.
@@ -63,4 +66,4 @@ A página atual comprova apenas a criação do registro. Ela ainda não oferece 
 - Não chamar o endpoint autenticado de claim sem sessão válida e token emitido pelo servidor.
 - A suíte Playwright adicionada cobre o comportamento do preview com API simulada; ela não prova a integração real com Supabase, o fluxo de pagamento ou a geração final.
 
-**Estado honesto:** intake manual e recuperação anônima protegida foram implementados; testes de unidade/preview foram adicionados, mas ainda precisam passar no CI e na integração. A jornada completa ainda não está concluída; o PR deve continuar em draft e a rota pública atual deve permanecer intacta.
+**Estado honesto (2026-10-18):** intake manual, recuperação protegida, claim, qualificação, revisão, criação de PIX e solicitação de geração condicionada ao pagamento estão conectados na branch. Ainda é obrigatório observar o CI do commit final, validar o webhook/status em sandbox e executar E2E autenticado real. O PR deve continuar em draft e a rota pública atual deve permanecer intacta.
