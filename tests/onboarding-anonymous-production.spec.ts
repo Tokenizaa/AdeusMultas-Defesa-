@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
-// One-shot production certification trigger; no write occurs until the new route is visible.
+// One-shot production certification trigger; service-role secret uses the repository's existing alias; no write before route visibility.
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://adeusmulta.defesai.com.br';
 const SUPABASE_URL = process.env.SUPABASE_URL;
