@@ -30,10 +30,10 @@ const infraction: InfractionData = {
   location: 'Rod. Anhanguera, km 20',
   autuadorBody: 'DER-SP',
   infractionCode: '745-50',
-  ctbArticle: 'Art. 218, I do CTB',
-  severity: 'media',
-  points: 4,
-  fineAmount: 130.16,
+  ctbArticle: 'Art. 218, II do CTB',
+  severity: 'grave',
+  points: 5,
+  fineAmount: 195.23,
 };
 
 test.describe('E2E Determinístico — Defesa Prévia', () => {
