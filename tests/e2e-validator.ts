@@ -173,6 +173,14 @@ export class E2EValidator {
     if (row.is_paid !== false) errors.push('New intake must remain unpaid before explicit purchase.');
     if (!analysisData) errors.push('The API persisted no analysis_json.');
     else if (analysisData.recommendedProcedure !== expectedProcedure) errors.push(`Analysis procedure mismatch: expected ${expectedProcedure}, got ${analysisData.recommendedProcedure}`);
+    if (analysisData && analysisData.competentBody !== testCase.infraction.autuadorBody) {
+      errors.push(`Analysis competent body mismatch: expected ${testCase.infraction.autuadorBody}, got ${analysisData.competentBody}`);
+    }
+    const expectedUF = extractUFFromCompetentBody(String(testCase.infraction.autuadorBody || ''));
+    const analysisUF = extractUFFromCompetentBody(String(analysisData?.competentBody || ''));
+    if (analysisData && analysisUF !== expectedUF) {
+      errors.push(`Analysis jurisdiction mismatch: expected ${expectedUF}, got ${analysisUF}`);
+    }
 
     const { data: orders, error: ordersError } = await this.supabase
       .from('payment_orders')
@@ -185,7 +193,7 @@ export class E2EValidator {
       exists: Boolean(analysisData),
       procedureTypeCorrect: Boolean(analysisData && analysisData.recommendedProcedure === expectedProcedure),
       competentBodyCorrect: row.autuador_body === testCase.infraction.autuadorBody,
-      ufCorrect: true,
+      ufCorrect: !analysisData || extractUFFromCompetentBody(String(analysisData.competentBody || '')) === extractUFFromCompetentBody(String(testCase.infraction.autuadorBody || '')),
       tesesIdentified: Array.isArray(analysisData?.recommendedArguments) ? analysisData.recommendedArguments.map((argument: any) => argument.title).filter(Boolean) : [],
       score: Number(analysisData?.overallSuccessRate || 0),
       errors: errors.filter((message) => message.includes('analysis') || message.includes('Analysis') || message.includes('procedure')),
