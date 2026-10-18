@@ -94,7 +94,7 @@ export function buildCoherentTestInfraction(
 
     case 'lei_seca': {
       const isRecusa = Math.random() > 0.5;
-      const code = isRecusa ? '516-91' : '516-92';
+      const code = isRecusa ? '757-90' : '516-91';
       extras = isRecusa
         ? { notes: 'recusa_bafometro | termo_sem_sinais | reteste_nao_oferecido' }
         : { notes: 'teste_positivo | termo_entregue | reteste_oferecido' };
