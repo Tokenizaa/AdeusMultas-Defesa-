@@ -241,13 +241,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                       onUpdateInfraction({
                         ...infractionData,
                         ctbArticle: 'Art. 165-A do CTB',
-                        infractionCode: '516-91',
+                        infractionCode: '757-90',
                         refusedTest: true,
                         notes: 'recusa_bafometro',
                       });
                     }}
                     className={`p-3.5 text-left border rounded-xl text-xs transition-all cursor-pointer ${
-                      infractionData.infractionCode === '516-91' || infractionData.notes?.includes('recusa')
+                      infractionData.infractionCode === '757-90' || infractionData.notes?.includes('recusa')
                         ? 'border-[#155BCB] bg-blue-50/60 font-bold text-slate-900 ring-1 ring-[#155BCB]'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                     }`}
@@ -264,13 +264,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                       onUpdateInfraction({
                         ...infractionData,
                         ctbArticle: 'Art. 165 do CTB',
-                        infractionCode: '516-92',
+                        infractionCode: '516-91',
                         refusedTest: false,
                         notes: 'teste_positivo',
                       });
                     }}
                     className={`p-3.5 text-left border rounded-xl text-xs transition-all cursor-pointer ${
-                      infractionData.infractionCode === '516-92' || infractionData.notes?.includes('positivo')
+                      infractionData.infractionCode === '516-91' || infractionData.notes?.includes('positivo')
                         ? 'border-[#155BCB] bg-blue-50/60 font-bold text-slate-900 ring-1 ring-[#155BCB]'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                     }`}
@@ -360,7 +360,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   const val = e.target.value;
                   onUpdateInfraction({
                     ...infractionData,
-                    ctbArticle: 'Art. 252, Parágrafo Único do CTB',
+                    ctbArticle: 'Art. 252, VI do CTB',
                     infractionCode: '736-62',
                     cellphoneCircumstance: val || undefined,
                     hasAgentDetailedObservations: val === 'sem_abordagem' ? false : undefined,
@@ -373,6 +373,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <option value="veiculo_parado_semaforo">Veículo imobilizado no semáforo / congestionamento</option>
                 <option value="sem_abordagem">Agente não parou o veículo (sem abordagem presencial)</option>
                 <option value="viva_voz">Uso de sistema viva-voz / Bluetooth integrado</option>
+                <option value="fone_conectado">Fones conectados ao celular ou aparelho sonoro durante a condução</option>
               </select>
             </div>
           </div>

@@ -1,0 +1,79 @@
+name: E2E Production Certification — Manual Onboarding
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-production-certification
+  cancel-in-progress: false
+
+jobs:
+  production-smoke:
+    name: Verify new manual onboarding on real production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
+      SUPABASE_URL: https://llmxnpgjpxcvyrqjkfwb.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE }}
+      E2E_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_TEST_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
+      SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      E2E_ALLOW_REAL_PAYMENT: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify exact production target and required reconciliation secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PLAYWRIGHT_BASE_URL" = "https://adeusmulta.defesai.com.br"
+          test "$SUPABASE_URL" = "https://llmxnpgjpxcvyrqjkfwb.supabase.co"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || {
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY is missing; refusing production write test."
+            exit 1
+          }
+          echo "Production-only run. No preview URL, deploy, migration, or real-payment mode."
+
+      - name: Discovery — production smoke only
+        run: npx playwright test --list --project=chromium-production tests/onboarding-anonymous-production.spec.ts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run new manual onboarding smoke and reconcile Supabase
+        run: npx playwright test --project=chromium-production --workers=1 --retries=0 tests/onboarding-anonymous-production.spec.ts
+
+      - name: Run first production service — defesa_previa (isolated cases; stop before payment)
+        env:
+          E2E_SERVICE: defesa_previa
+          E2E_ALLOW_PERSISTENT_WRITES: 'true'
+        run: npx playwright test --config=playwright.e2e-certification.config.ts --workers=1 --retries=0
+
+      - name: Run first service battery — defesa_previa (deterministic, no DB writes)
+        run: npx playwright test --config=playwright.config.ts --project=chromium-production --workers=1 --retries=0 tests/e2e/services/defesa_previa.spec.ts
+
+      - name: Upload production smoke and first-service evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-manual-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+            tests/e2e-results/
+            playwright-report/e2e-certification/
+          if-no-files-found: warn
+          retention-days: 30

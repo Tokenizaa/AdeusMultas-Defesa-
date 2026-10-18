@@ -23,7 +23,7 @@ import { UserSettingsView } from './components/user/UserSettingsView';
 import { UserServicesView } from './components/user/UserServicesView';
 
 // Existing Product Modules & Functional Views
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { ManualIntakePage } from './onboarding/ManualIntakePage';
 import { CheckoutView } from './components/checkout/CheckoutView';
 import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
@@ -395,14 +395,7 @@ function AppContent() {
 
       {currentPath === '/cadastro' && <RegisterPageView />}
 
-      {currentPath === '/novo-caso' && (
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
-          <OnboardingWizard
-            onOpenKnowledge={() => navigate('/admin/knowledge')}
-            isAdmin={isAdmin}
-          />
-        </div>
-      )}
+      {currentPath === '/novo-caso' && <ManualIntakePage />}
 
       {/* 404 fallback */}
       {!matchedPublicRoute && (

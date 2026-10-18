@@ -110,7 +110,7 @@ describe('ExpertRuleEngine validation', () => {
   });
 
   it('should detect Lei Seca termo vício ONLY when data confirms absence (ARG-025)', () => {
-    const leiSeca = { ...validInfraction, infractionCode: '516-91', hasPsychomotorTerm: false };
+    const leiSeca = { ...validInfraction, infractionCode: '516-91', refusedTest: true, hasPsychomotorTerm: false };
     const result = ExpertRuleEngine.evaluate('case_125', leiSeca);
     const ids = result.detectedInconsistencies.map(i => i.legalArgumentId);
     expect(ids).toContain('ARG-025');

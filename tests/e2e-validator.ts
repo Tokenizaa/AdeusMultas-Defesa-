@@ -14,6 +14,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export interface ValidationResult {
   caseId: string;
+  phase?: string;
+  documentStage?: 'NOT_RUN_AUTH_PAYMENT_GATE';
   analysis: AnalysisValidation;
   document: DocumentValidation;
   protocol: ProtocolValidation;
@@ -136,6 +138,81 @@ export class E2EValidator {
       protocol,
       contamination,
       overall,
+    };
+  }
+
+  /**
+   * Validate only the real new onboarding stage before authentication/payment.
+   * A missing document is expected here: no test may bypass the paid-state gate.
+   */
+  async validateAnonymousIntakeCase(testCase: any, persistedCaseId: string): Promise<ValidationResult> {
+    const errors: string[] = [];
+    const { data: row, error: readError } = await this.supabase
+      .from('cases')
+      .select('*')
+      .eq('id', persistedCaseId)
+      .maybeSingle();
+
+    if (readError || !row) {
+      return this.failResult(persistedCaseId, [`Persisted intake case not found: ${readError?.message || 'no row returned'}`]);
+    }
+
+    const analysisData = typeof row.analysis_json === 'string' ? JSON.parse(row.analysis_json) : row.analysis_json;
+    const expectedAit = String(testCase.infraction.aitNumber);
+    const expectedCode = String(testCase.infraction.infractionCode);
+    const expectedProcedure = String(testCase.procedureType);
+
+    if (row.id !== persistedCaseId) errors.push('Canonical case ID differs from the API response.');
+    if (row.ait_number !== expectedAit) errors.push(`AIT mismatch: expected ${expectedAit}; row=${row.ait_number}`);
+    if (row.infraction_code !== expectedCode) errors.push(`Infraction code mismatch: expected ${expectedCode}, got ${row.infraction_code}`);
+    if (row.location !== testCase.infraction.location) errors.push('Infraction location differs from the submitted fixture.');
+    if (row.vehicle_plate !== testCase.vehicle.plate) errors.push(`Vehicle plate mismatch: expected ${testCase.vehicle.plate}, got ${row.vehicle_plate}`);
+    if (row.autuador_body !== testCase.infraction.autuadorBody) errors.push(`Autuador mismatch: expected ${testCase.infraction.autuadorBody}, got ${row.autuador_body}`);
+    if (row.service_type !== expectedProcedure) errors.push(`Persisted service mismatch: expected ${expectedProcedure}, got ${row.service_type}`);
+    if (row.user_id != null || row.is_anonymous !== true) errors.push('New intake must remain anonymous until an authenticated claim succeeds.');
+    if (row.is_paid !== false) errors.push('New intake must remain unpaid before explicit purchase.');
+    if (!analysisData) errors.push('The API persisted no analysis_json.');
+    else if (analysisData.recommendedProcedure !== expectedProcedure) errors.push(`Analysis procedure mismatch: expected ${expectedProcedure}, got ${analysisData.recommendedProcedure}`);
+    if (analysisData && analysisData.competentBody !== testCase.infraction.autuadorBody) {
+      errors.push(`Analysis competent body mismatch: expected ${testCase.infraction.autuadorBody}, got ${analysisData.competentBody}`);
+    }
+    const expectedUF = extractUFFromCompetentBody(String(testCase.infraction.autuadorBody || ''));
+    const analysisUF = extractUFFromCompetentBody(String(analysisData?.competentBody || ''));
+    if (analysisData && analysisUF !== expectedUF) {
+      errors.push(`Analysis jurisdiction mismatch: expected ${expectedUF}, got ${analysisUF}`);
+    }
+
+    const { data: orders, error: ordersError } = await this.supabase
+      .from('payment_orders')
+      .select('id')
+      .eq('case_id', persistedCaseId);
+    if (ordersError) errors.push(`Could not verify absence of payment orders: ${ordersError.message}`);
+    else if ((orders ?? []).length !== 0) errors.push(`Unexpected payment order(s) exist before authentication: ${orders?.length}`);
+
+    const analysis = {
+      exists: Boolean(analysisData),
+      procedureTypeCorrect: Boolean(analysisData && analysisData.recommendedProcedure === expectedProcedure),
+      competentBodyCorrect: row.autuador_body === testCase.infraction.autuadorBody,
+      ufCorrect: !analysisData || extractUFFromCompetentBody(String(analysisData.competentBody || '')) === extractUFFromCompetentBody(String(testCase.infraction.autuadorBody || '')),
+      tesesIdentified: Array.isArray(analysisData?.recommendedArguments) ? analysisData.recommendedArguments.map((argument: any) => argument.title).filter(Boolean) : [],
+      score: Number(analysisData?.overallSuccessRate || 0),
+      errors: errors.filter((message) => message.includes('analysis') || message.includes('Analysis') || message.includes('procedure')),
+    };
+    const contamination = {
+      clean: !ordersError && (orders ?? []).length === 0,
+      otherCasesData: [] as string[],
+      errors: ordersError ? [ordersError.message] : ((orders ?? []).length ? ['Payment order created before auth/payment gate.'] : []),
+    };
+
+    return {
+      caseId: persistedCaseId,
+      phase: 'anonymous-intake-before-auth-payment',
+      documentStage: 'NOT_RUN_AUTH_PAYMENT_GATE',
+      analysis,
+      document: { exists: false, templateCorrect: false, dataPreserved: false, fieldsValid: [], errors: [] },
+      protocol: { exists: false, portalUrlCorrect: false, physicalAddressCorrect: false, competentBodyCorrect: false, errors: [] },
+      contamination,
+      overall: errors.length === 0 ? 'PASS' : 'FAIL',
     };
   }
 

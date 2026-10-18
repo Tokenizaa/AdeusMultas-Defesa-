@@ -19,26 +19,29 @@ const applicant = {
   cityState: 'Recife/PE',
 };
 
-// Lei Seca mandatória autossuspensiva
+// Excesso de velocidade superior a 50% (art. 218, III): suspensão específica
 const infraction = {
   aitNumber: 'AIT-SUSP-007',
   dateTime: '2026-08-09',
   location: 'Av. Agamenon, 300',
   autuadorBody: 'DETRAN-PE',
-  infractionCode: '516-91',
-  ctbArticle: 'Art. 165-A do CTB',
+  infractionCode: '747-10',
+  ctbArticle: 'Art. 218, III do CTB',
   severity: 'gravissima',
   points: 7,
-  fineAmount: 2934.70,
-  hasPsychomotorTerm: false,
+  fineAmount: 880.41,
+  speedLimit: 60,
+  measuredSpeed: 95,
+  consideredSpeed: 88,
+  hasPsychomotorTerm: undefined,
 };
 
 test.describe('E2E Determinístico — Suspensão da CNH', () => {
-  test('pipeline completo para PSDD (Lei Seca)', async () => {
+  test('pipeline completo para PSDD por excesso superior a 50%', async () => {
     registerRefinementProvider({});
 
     const analysis = ExpertRuleEngine.evaluate('case-susp-007', infraction);
-    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(true);
+    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(false);
     expect(validateAnalysis(analysis).valid).toBe(true);
 
     const draft = DocumentAssemblyEngine.assemble({

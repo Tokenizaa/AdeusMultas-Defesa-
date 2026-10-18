@@ -19,16 +19,16 @@ const applicant = {
   cityState: 'Porto Alegre/RS',
 };
 
-// Lei Seca sem termo de constatação de sinais → vício ARG-025
+// Recusa sem sinais ou com apenas um sinal (757-90): ausência de termo, isoladamente, não é vício
 const infraction = {
   aitNumber: 'AIT-LEISECA-004',
   dateTime: '2026-06-11',
   location: 'Av. Ipiranga, 500',
   autuadorBody: 'DETRAN-RS',
-  infractionCode: '516-91',
+  infractionCode: '757-90',
   ctbArticle: 'Art. 165-A do CTB',
   severity: 'gravissima',
-  points: 7,
+  points: 0,
   fineAmount: 2934.70,
   hasPsychomotorTerm: false,
   refusedTest: true,
@@ -39,10 +39,9 @@ test.describe('E2E Determinístico — Lei Seca', () => {
     registerRefinementProvider({});
 
     const analysis = ExpertRuleEngine.evaluate('case-leiseca-004', infraction);
-    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(true);
+    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(false);
     const flaw = analysis.detectedFlaws?.find((f) => f.argumentId === 'ARG-025');
-    expect(flaw).toBeDefined();
-    expect(flaw!.ruleId).toBe('RULE_LEI_SECA_TERMO_432');
+    expect(flaw).toBeUndefined();
     expect(validateAnalysis(analysis).valid).toBe(true);
 
     const draft = DocumentAssemblyEngine.assemble({
@@ -62,6 +61,19 @@ test.describe('E2E Determinístico — Lei Seca', () => {
     const result = await runControlledPipeline({ analysis, draft });
     expect(result.aiUses).toBe('deterministic');
     expect(result.draft.fullDraftText).toContain('AIT-LEISECA-004');
+  });
+
+  test('recusa com dois ou mais sinais classificada no art. 165 e sem termo exige revisão', async () => {
+    const misclassifiedRefusal = {
+      ...infraction,
+      infractionCode: '516-91',
+      ctbArticle: 'Art. 165 do CTB',
+      refusedTest: true,
+      hasPsychomotorTerm: false,
+    };
+    const analysis = ExpertRuleEngine.evaluate('case-leiseca-misclassified', misclassifiedRefusal);
+    expect(analysis.detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-025')).toBe(true);
+    expect(analysis.detectedFlaws?.some((f) => f.ruleId === 'RULE_LEI_SECA_TERMO_432')).toBe(true);
   });
 
   test('negativo: dados obrigatórios ausentes → DATA_GAP, sem vício presumido', async () => {

@@ -25,9 +25,9 @@ export const EVIDENCE_DIR = path.join(TESTS_DIR, 'e2e-results', TEST_RUN_ID);
 export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
   'defesa_previa': [
     { scenario: '01', name: 'Defesa Prévia - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
-    { scenario: '02', name: 'Defesa Prévia - Lei Seca', infractionCode: '516-91', uf: 'RJ', autuador: 'DETRAN-RJ' },
+    { scenario: '02', name: 'Defesa Prévia - Recusa ao etilômetro (art. 165-A)', infractionCode: '757-90', uf: 'RJ', autuador: 'DETRAN-RJ' },
     { scenario: '03', name: 'Defesa Prévia - Celular', infractionCode: '736-62', uf: 'MG', autuador: 'DETRAN-MG' },
-    { scenario: '04', name: 'Defesa Prévia - Sinal Vermelho', infractionCode: '746-30', uf: 'RS', autuador: 'DETRAN-RS' },
+    { scenario: '04', name: 'Defesa Prévia - Sinal Vermelho', infractionCode: '605-01', uf: 'RS', autuador: 'DETRAN-RS' },
   ],
   'recurso_jari': [
     { scenario: '01', name: 'Recurso JARI - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
@@ -39,7 +39,7 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
     { scenario: '01', name: 'Recurso CETRAN - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Recurso CETRAN - Lei Seca', infractionCode: '516-91', uf: 'GO', autuador: 'DETRAN-GO' },
     { scenario: '03', name: 'Recurso CETRAN - Celular', infractionCode: '736-62', uf: 'AM', autuador: 'DETRAN-AM' },
-    { scenario: '04', name: 'Recurso CETRAN - Sinal Vermelho', infractionCode: '746-30', uf: 'DF', autuador: 'DETRAN-DF' },
+    { scenario: '04', name: 'Recurso CETRAN - Sinal Vermelho', infractionCode: '605-01', uf: 'DF', autuador: 'DETRAN-DF' },
   ],
   'suspensao': [
     { scenario: '01', name: 'Suspensão - Pontuação', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
@@ -56,33 +56,19 @@ export const COMMERCIAL_SERVICES: Record<string, ServiceConfig[]> = {
   'indicacao_condutor': [
     { scenario: '01', name: 'Indicação - Velocidade', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Indicação - Lei Seca', infractionCode: '516-91', uf: 'RJ', autuador: 'DETRAN-RJ' },
-    { scenario: '03', name: 'Indicação - Sinal Vermelho', infractionCode: '746-30', uf: 'MG', autuador: 'DETRAN-MG' },
+    { scenario: '03', name: 'Indicação - Sinal Vermelho', infractionCode: '605-01', uf: 'MG', autuador: 'DETRAN-MG' },
     { scenario: '04', name: 'Indicação - Estacionamento', infractionCode: '545-21', uf: 'ES', autuador: 'DETRAN-ES' },
   ],
   'conversao_advertencia': [
     { scenario: '01', name: 'Conversão - Velocidade Leve', infractionCode: '745-50', uf: 'SP', autuador: 'DETRAN-SP' },
     { scenario: '02', name: 'Conversão - Celular', infractionCode: '736-62', uf: 'RJ', autuador: 'DETRAN-RJ' },
     { scenario: '03', name: 'Conversão - Estacionamento', infractionCode: '545-21', uf: 'BA', autuador: 'DETRAN-BA' },
-    { scenario: '04', name: 'Conversão - Sinal Vermelho Leve', infractionCode: '735-80', uf: 'CE', autuador: 'DETRAN-CE' },
+    { scenario: '04', name: 'Conversão - Direção com uma mão (média)', infractionCode: '735-80', uf: 'CE', autuador: 'DETRAN-CE' },
   ],
 };
 
-// A matriz nacional deve exercer cada serviço com volume suficiente para
-// revelar regressões de estado, mapeamento e geração documental. Os quatro
-// cenários-base acima preservam cobertura jurídica distinta; as variações
-// adicionais repetem o contrato com identificadores e usuários isolados,
-// sem criar cobranças reais.
-for (const configs of Object.values(COMMERCIAL_SERVICES)) {
-  const seed = configs.slice();
-  for (let index = seed.length + 1; index <= 10; index += 1) {
-    const base = seed[(index - seed.length - 1) % seed.length];
-    configs.push({
-      ...base,
-      scenario: String(index).padStart(2, '0'),
-      name: `${base.name} — variação ${index}`,
-    });
-  }
-}
+// Each listed scenario is an explicit test oracle. Do not clone cases as
+// artificial variations; repeated positions are not additional coverage.
 
 export interface ServiceConfig {
   scenario: string;
@@ -166,7 +152,7 @@ export class E2ETestManager {
     const initialStatePath = path.join(this.evidenceDir, 'initial-state.json');
     if (fs.existsSync(initialStatePath)) {
       const state = JSON.parse(fs.readFileSync(initialStatePath, 'utf8'));
-      if (state.testRunId === TEST_RUN_ID && Array.isArray(state.users) && Array.isArray(state.cases)) {
+      if (state.testRunId === TEST_RUN_ID && state.selectedService === (process.env.E2E_SERVICE || 'all') && Array.isArray(state.users) && Array.isArray(state.cases)) {
         this.testUsers = state.users;
         this.testCases = state.cases;
         const existing = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -207,6 +193,7 @@ export class E2ETestManager {
     // Save initial state
     await this.saveEvidence('initial-state.json', {
       testRunId: TEST_RUN_ID,
+      selectedService: process.env.E2E_SERVICE || 'all',
       users: this.testUsers,
       cases: this.testCases,
       timestamp: new Date().toISOString(),
@@ -224,50 +211,38 @@ export class E2ETestManager {
       'CE': { city: 'Fortaleza', state: 'CE' },
     };
 
-    // Reutiliza cinco contas sintéticas já existentes. Os cenários continuam
-    // separados por serviço e por caso; apenas a identidade do cidadão é compartilhada.
-    const sharedEmails = [
-      'e2e+defesa_previa+01@test.local',
-      'e2e+defesa_previa+02@test.local',
-      'e2e+defesa_previa+03@test.local',
-      'e2e+defesa_previa+04@test.local',
-      'e2e+recurso_jari+01@test.local',
-    ];
-    const identities: TestUser[] = [];
-    for (let index = 0; index < sharedEmails.length; index += 1) {
-      const uf = 'SP';
-      identities.push({
-        id: randomUUID(),
-        email: sharedEmails[index],
-        password: 'Test@123456',
-        name: `Usuário E2E Compartilhado ${String(index + 1).padStart(2, '0')}`,
-        phone: this.generatePhone(uf),
-        cpf: this.generateCPF(),
-        cnh: this.generateCNH(),
-        cnhCategory: 'B',
-        addressStreet: `Rua de Teste Compartilhada ${index + 1}`,
-        addressNumber: String(index + 1).padStart(3, '0'),
-        addressNeighborhood: 'Centro',
-        addressZipCode: this.generateCEP(uf),
-        addressCityState: 'São Paulo/SP',
-        serviceType: '',
-        scenario: '',
-        testRunId: TEST_RUN_ID,
-      });
+    const requestedService = process.env.E2E_SERVICE;
+    if (requestedService && !Object.prototype.hasOwnProperty.call(COMMERCIAL_SERVICES, requestedService)) {
+      throw new Error(`Invalid E2E_SERVICE="${requestedService}". Allowed: ${Object.keys(COMMERCIAL_SERVICES).join(', ')}`);
     }
+    const selectedServices = Object.entries(COMMERCIAL_SERVICES)
+      .filter(([serviceType]) => !requestedService || serviceType === requestedService);
 
-    let scenarioIndex = 0;
-    for (const [serviceType, configs] of Object.entries(COMMERCIAL_SERVICES)) {
+    // Every scenario gets a unique identity for this run. Never reuse a test
+    // account across services or scenarios; a rerun uses a new run suffix.
+    const runSuffix = TEST_RUN_ID.replace(/[^A-Za-z0-9-]/g, '-').slice(-18);
+    for (const [serviceType, configs] of selectedServices) {
       for (const config of configs) {
-        const identity = identities[scenarioIndex % identities.length];
+        const uf = config.uf;
+        const identitySuffix = `${serviceType}-${config.scenario}-${runSuffix}`;
         this.testUsers.push({
-          ...identity,
-          id: identity.id,
+          id: randomUUID(),
+          email: `e2e-${identitySuffix}@test.local`,
+          password: 'Test@123456',
+          name: `Usuário E2E ${serviceType} ${config.scenario} ${runSuffix}`.slice(0, 100),
+          phone: this.generatePhone(uf),
+          cpf: this.generateCPF(),
+          cnh: this.generateCNH(),
+          cnhCategory: 'B',
+          addressStreet: `Rua de Teste E2E ${config.scenario}`.slice(0, 120),
+          addressNumber: config.scenario,
+          addressNeighborhood: 'Centro',
+          addressZipCode: this.generateCEP(uf),
+          addressCityState: `${ufData[uf]?.city || 'São Paulo'}/${ufData[uf]?.state || uf}`,
           serviceType,
           scenario: config.scenario,
           testRunId: TEST_RUN_ID,
         });
-        scenarioIndex += 1;
       }
     }
   }
@@ -423,19 +398,26 @@ export class E2ETestManager {
   private buildInfraction(config: ServiceConfig, user: TestUser): any {
     const infractionData: Record<string, any> = {
       '745-50': { description: 'Transitar em velocidade superior à máxima permitida em até 20%', ctbArticle: 'Art. 218, I do CTB', severity: 'media', points: 4, fineAmount: 130.16, speedLimit: 60, measuredSpeed: 73, consideredSpeed: 64 },
-      '516-91': { description: 'Recusa ao teste do etilômetro / alcoolemia', ctbArticle: 'Art. 165-A do CTB', severity: 'gravissima', points: 7, fineAmount: 2934.70 },
-      '736-62': { description: 'Segurar ou manusear telefone celular ao volante', ctbArticle: 'Art. 252, IV do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
-      '746-30': { description: 'Avançar sinal vermelho', ctbArticle: 'Art. 208 do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
+      '516-91': { description: 'Dirigir sob a influência de álcool', ctbArticle: 'Art. 165 do CTB', severity: 'gravissima', points: 0, fineAmount: 2934.70 },
+      '757-90': { description: 'Recusar teste ou procedimento para certificar influência de álcool ou substância psicoativa', ctbArticle: 'Art. 165-A do CTB', severity: 'gravissima', points: 0, fineAmount: 2934.70 },
+      '605-01': { description: 'Avançar o sinal vermelho do semáforo', ctbArticle: 'Art. 208 do CTB', severity: 'gravissima', points: 7, fineAmount: 293.47 },
+
+      '736-62': { description: 'Dirigir utilizando telefone celular sem segurá-lo ou manuseá-lo', ctbArticle: 'Art. 252, VI do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
+
+      '746-30': { description: 'Transitar em velocidade superior à máxima permitida em mais de 20% até 50%', ctbArticle: 'Art. 218, II do CTB', severity: 'grave', points: 5, fineAmount: 195.23, speedLimit: 60, measuredSpeed: 95, consideredSpeed: 88 },
+
       '747-10': { description: 'Transitar em velocidade superior à máxima permitida em mais de 50%', ctbArticle: 'Art. 218, III do CTB', severity: 'gravissima', points: 7, fineAmount: 880.41, speedLimit: 60, measuredSpeed: 95, consideredSpeed: 88 },
       '516-92': { description: 'Condutor com capacidade psicomotora alterada por álcool', ctbArticle: 'Art. 165 do CTB', severity: 'gravissima', points: 7, fineAmount: 2934.70 },
       '666-10': { description: 'Estacionar em desacordo com a sinalização', ctbArticle: 'Art. 181 do CTB', severity: 'leve', points: 3, fineAmount: 88.38 },
-      '545-21': { description: 'Estacionar em desacordo com a sinalização', ctbArticle: 'Art. 181 do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
-      '735-80': { description: 'Transitar em velocidade superior à máxima permitida em até 20% (leve)', ctbArticle: 'Art. 218, I do CTB', severity: 'leve', points: 3, fineAmount: 88.38, speedLimit: 60, measuredSpeed: 71, consideredSpeed: 64 },
+      '545-21': { description: 'Estacionar no passeio', ctbArticle: 'Art. 181, VIII do CTB', severity: 'grave', points: 5, fineAmount: 195.23 },
+
+      '735-80': { description: 'Dirigir o veículo com apenas uma das mãos, fora das exceções legais', ctbArticle: 'Art. 252, V do CTB', severity: 'media', points: 4, fineAmount: 130.16 },
+
     };
 
     const base = infractionData[config.infractionCode] || infractionData['745-50'];
     return {
-      aitNumber: `AIT-${config.uf}-${config.scenario}-${Date.now().toString().slice(-6)}`,
+      aitNumber: `E2E-${TEST_RUN_ID.replace(/[^A-Za-z0-9]/g, '').slice(-16)}-${user.serviceType}-${config.scenario}-${randomUUID().slice(0, 8)}`.slice(0, 80),
       infractionCode: config.infractionCode,
       ...base,
       autuadorBody: config.autuador,
@@ -447,9 +429,8 @@ export class E2ETestManager {
   }
 
   private buildVehicle(user: TestUser): any {
-    const plates = ['ABC1D23', 'DEF2E34', 'GHI3F45', 'JKL4G56', 'MNO5H67', 'PQR6I78', 'STU7J89', 'VWX8K90'];
     return {
-      plate: plates[Math.floor(Math.random() * plates.length)],
+      plate: `E2E${randomUUID().replace(/-/g, '').slice(0, 4).toUpperCase()}`,
       brandModel: 'Honda Civic 2022',
       renavam: '85674321098',
       year: '2022',
@@ -544,6 +525,189 @@ export class E2ETestManager {
 
   async getTestCases(): Promise<TestCase[]> {
     return this.testCases;
+  }
+
+  async cleanupOwnedFixtures(
+    additionalCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean | 'either' }> = [],
+  ): Promise<{ runId: string; cases: any[]; users: any[]; completed: boolean }> {
+    const discoveredAnonymousCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean | 'either'; source: string }> = [];
+    const discoveryErrors: any[] = [];
+    // Discover a case created by the current run even if the UI assertion
+    // failed after the server committed and before the executor returned its ID.
+    // The AIT is unique to this run; only anonymous, unclaimed rows are eligible.
+    for (const testCase of this.testCases) {
+      const aitNumber = String(testCase.infraction.aitNumber);
+      const lookup = await this.supabase
+        .from('cases')
+        .select('id,ait_number,user_id,is_anonymous,is_paid')
+        .eq('ait_number', aitNumber)
+        .eq('is_anonymous', true)
+        .is('user_id', null);
+      if (lookup.error) {
+        discoveryErrors.push({ id: testCase.id, status: 'CLEANUP_PENDING', reason: `run-owned AIT discovery failed: ${lookup.error.message}` });
+        continue;
+      }
+      if ((lookup.data?.length ?? 0) > 1) {
+        discoveryErrors.push({ id: testCase.id, status: 'CLEANUP_REFUSED_MULTIPLE_MATCHES', aitNumber, matches: lookup.data?.length });
+        continue;
+      }
+      const row = lookup.data?.[0];
+      if (row && row.ait_number === aitNumber && row.is_anonymous === true && row.user_id == null) {
+        discoveredAnonymousCases.push({
+          id: row.id,
+          aitNumber,
+          userId: testCase.userId,
+          anonymous: true,
+          source: 'discovered-by-run-unique-ait',
+        });
+      }
+    }
+
+    const cleanupCases = [
+      ...this.testCases.map((testCase) => ({
+        id: testCase.id,
+        aitNumber: String(testCase.infraction.aitNumber),
+        userId: testCase.userId,
+        anonymous: false,
+        source: 'seed',
+      })),
+      ...discoveredAnonymousCases,
+      ...additionalCases.map((item) => ({ ...item, source: 'onboarding' })),
+    ];
+    const uniqueCases = [...new Map(cleanupCases.map((item) => [item.id, item])).values()];
+    const caseResults: any[] = [...discoveryErrors];
+
+    for (const owned of uniqueCases) {
+      const lookup = await this.supabase
+        .from('cases')
+        .select('id,ait_number,user_id,is_anonymous,is_paid')
+        .eq('id', owned.id)
+        .maybeSingle();
+      if (lookup.error) {
+        caseResults.push({ id: owned.id, status: 'CLEANUP_PENDING', reason: lookup.error.message });
+        continue;
+      }
+      if (!lookup.data) {
+        caseResults.push({ id: owned.id, status: 'ALREADY_ABSENT_VERIFIED' });
+        continue;
+      }
+
+      const row = lookup.data;
+      const isAnonymousOwned = row.user_id == null && row.is_anonymous === true;
+      const isClaimedOwned = Boolean(owned.userId)
+        && row.user_id === owned.userId
+        && row.is_anonymous !== true;
+      const ownershipMatches = owned.anonymous === 'either'
+        ? isAnonymousOwned || isClaimedOwned
+        : owned.anonymous
+          ? isAnonymousOwned
+          : isClaimedOwned;
+      const identityMatches = row.id === owned.id
+        && row.ait_number === owned.aitNumber
+        && row.is_paid === false
+        && ownershipMatches;
+      if (!identityMatches) {
+        caseResults.push({
+          id: owned.id,
+          status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH',
+          expected: { aitNumber: owned.aitNumber, userId: owned.userId ?? null, anonymous: owned.anonymous },
+          actual: { aitNumber: row.ait_number, userId: row.user_id, anonymous: row.is_anonymous, isPaid: row.is_paid },
+        });
+        continue;
+      }
+
+      let deletion = this.supabase.from('cases').delete().eq('id', owned.id).eq('ait_number', owned.aitNumber);
+      deletion = isAnonymousOwned ? deletion.is('user_id', null) : deletion.eq('user_id', owned.userId!);
+      const { data: deleted, error: deleteError } = await deletion.select('id');
+      if (deleteError) {
+        caseResults.push({ id: owned.id, status: 'CLEANUP_PENDING', reason: deleteError.message });
+        continue;
+      }
+      const verification = await this.supabase.from('cases').select('id').eq('id', owned.id).maybeSingle();
+      if (verification.error || verification.data) {
+        caseResults.push({
+          id: owned.id,
+          status: 'CLEANUP_PENDING',
+          reason: verification.error?.message || 'case still exists after delete',
+          deletedRows: deleted?.length ?? 0,
+        });
+      } else {
+        caseResults.push({ id: owned.id, status: 'DELETED_AND_VERIFIED', deletedRows: deleted?.length ?? 0 });
+      }
+    }
+
+    const userResults: any[] = [];
+    for (const user of this.testUsers) {
+      const remainingCases = await this.supabase.from('cases').select('id').eq('user_id', user.id).limit(1);
+      if (remainingCases.error || (remainingCases.data?.length ?? 0) > 0) {
+        userResults.push({
+          id: user.id,
+          email: user.email,
+          status: 'CLEANUP_PENDING',
+          reason: remainingCases.error?.message || 'case remains for synthetic user',
+        });
+        continue;
+      }
+
+      const authLookup = await this.supabase.auth.admin.getUserById(user.id);
+      if (authLookup.error || !authLookup.data.user) {
+        userResults.push({ id: user.id, email: user.email, status: 'ALREADY_ABSENT_VERIFIED' });
+        continue;
+      }
+      const authUser = authLookup.data.user;
+      if (authUser.email !== user.email || authUser.user_metadata?.test_run_id !== TEST_RUN_ID) {
+        userResults.push({
+          id: user.id,
+          email: user.email,
+          status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH',
+          actualEmail: authUser.email,
+          actualRunId: authUser.user_metadata?.test_run_id,
+        });
+        continue;
+      }
+
+      const profileLookup = await this.supabase.from('user_profiles').select('user_id,email').eq('user_id', user.id).maybeSingle();
+      if (profileLookup.error) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: profileLookup.error.message });
+        continue;
+      }
+      if (profileLookup.data && profileLookup.data.email !== user.email) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH', actualProfileEmail: profileLookup.data.email });
+        continue;
+      }
+      if (profileLookup.data) {
+        const profileDelete = await this.supabase.from('user_profiles').delete().eq('user_id', user.id).eq('email', user.email).select('user_id');
+        if (profileDelete.error) {
+          userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: profileDelete.error.message });
+          continue;
+        }
+      }
+
+      const authDelete = await this.supabase.auth.admin.deleteUser(user.id);
+      if (authDelete.error) {
+        userResults.push({ id: user.id, email: user.email, status: 'CLEANUP_PENDING', reason: authDelete.error.message });
+        continue;
+      }
+      const verifyUser = await this.supabase.auth.admin.getUserById(user.id);
+      userResults.push({
+        id: user.id,
+        email: user.email,
+        status: verifyUser.data.user ? 'CLEANUP_PENDING' : 'DELETED_AND_VERIFIED',
+        reason: verifyUser.data.user ? 'Auth user still exists after delete' : undefined,
+      });
+    }
+
+    const report = {
+      runId: TEST_RUN_ID,
+      timestamp: new Date().toISOString(),
+      cases: caseResults,
+      users: userResults,
+      completed: [...caseResults, ...userResults].every((item) =>
+        item.status === 'DELETED_AND_VERIFIED' || item.status === 'ALREADY_ABSENT_VERIFIED'
+      ),
+    };
+    await this.saveEvidence('cleanup-report.json', report);
+    return report;
   }
 
   async getEvidenceDir(): Promise<string> {

@@ -350,21 +350,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       setInfractionData((prev) => ({
         ...prev,
         ctbArticle: prev.ctbArticle || 'Art. 165-A do CTB',
-        infractionCode: prev.infractionCode || '516-91',
-        description: prev.description || 'Recusa ao teste do etilômetro / alcoolemia',
+        infractionCode: prev.infractionCode || '757-90',
+        description: prev.description || 'Recusa ao teste do etilômetro (art. 165-A)',
         severity: 'gravissima',
         fineAmount: 2934.70,
-        points: 7,
+        points: 0,
       }));
     } else if (selected === 'celular') {
       setInfractionData((prev) => ({
         ...prev,
         ctbArticle: prev.ctbArticle || 'Art. 252, Parágrafo Único do CTB',
         infractionCode: prev.infractionCode || '736-62',
-        description: prev.description || 'Segurar ou manusear telefone celular ao volante',
-        severity: 'gravissima',
-        fineAmount: 293.47,
-        points: 7,
+        description: prev.description || 'Dirigir utilizando telefone celular sem segurá-lo ou manuseá-lo',
+        severity: 'media',
+        fineAmount: 130.16,
+        points: 4,
       }));
     } else if (selected === 'vermelho') {
       setInfractionData((prev) => ({

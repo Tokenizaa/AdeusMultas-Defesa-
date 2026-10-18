@@ -125,11 +125,11 @@ const INFRACTION_DEFS: Record<string, InfractionDef> = {
     fineAmount: 130.16,
   },
   lei_seca: {
-    code: '516-91',
+    code: '757-90',
     article: 'Art. 165-A',
-    description: 'Recusa ao teste do etilômetro / alcoolemia',
+    description: 'Recusa ao teste do etilômetro (art. 165-A)',
     severity: 'gravissima',
-    points: 7,
+    points: 0,
     fineAmount: 2934.70,
   },
   celular: {

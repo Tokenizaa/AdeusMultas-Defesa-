@@ -64,6 +64,7 @@ const FAMILY_BY_CATALOG_CODE: Record<string, InfractionFamily> = {
   '745-70': 'excesso_velocidade',
   '746-30': 'excesso_velocidade',
   '747-10': 'excesso_velocidade',
+  '757-90': 'alcoolemia',
   '516-91': 'alcoolemia',
   '516-92': 'alcoolemia',
   '605-01': 'semaforo',

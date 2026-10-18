@@ -94,13 +94,27 @@ casesRoutes.post('/cases/anonymous', async (c) => {
     inmetroAferitionDate: boundedString(infractionInput.inmetroAferitionDate, 40) || undefined,
     formalFlawsDetected: [],
   };
+  const requestedServiceType = body?.serviceType;
+  const allowedServiceTypes = new Set([
+    'defesa_previa',
+    'recurso_jari',
+    'recurso_cetran',
+    'suspensao_cnh',
+    'cassacao_cnh',
+    'indicacao_condutor',
+    'conversao_advertencia',
+  ]);
+  if (requestedServiceType !== undefined && !allowedServiceTypes.has(requestedServiceType)) {
+    throw new HTTPException(400, { message: 'Selecione um dos serviços disponíveis.' });
+  }
+
   const caseId = crypto.randomUUID();
   const domainData: any = {
     id: caseId,
     title: `Diagnóstico Auto ${aitNumber}`,
     clientName: boundedString(body?.userNome, 160) || 'Condutor',
     clientPhone: boundedString(body?.userPhone, 40) || '',
-    serviceType: boundedString(body?.serviceType, 60) || 'defesa_previa',
+    serviceType: requestedServiceType || 'defesa_previa',
     userId: null,
     isAnonymous: true,
     claimToken,
@@ -135,6 +149,46 @@ casesRoutes.post('/cases/anonymous', async (c) => {
   const { data, error } = await supabase.from('cases').insert(row).select().single();
   if (error || !data) throw new HTTPException(503, { message: 'Não foi possível salvar o diagnóstico.' });
   return c.json({ ...rowToDomain(data), claimToken }, 201);
+});
+
+// Recuperação anônima autenticada por token bearer de alta entropia.
+ // Não usar ID isolado como autorização; respostas inválidas são indistinguíveis.
+casesRoutes.post('/cases/anonymous/:id/recover', async (c) => {
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Recuperação temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: `recover:${ipAddress}` });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de recuperação atingido.' });
+  }
+
+  const body = await c.req.json<any>().catch(() => null);
+  const providedToken = body?.claimToken;
+  if (typeof providedToken !== 'string' || !/^[a-f0-9]{64}$/i.test(providedToken)) {
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', c.req.param('id'))
+    .eq('is_anonymous', true)
+    .is('user_id', null)
+    .maybeSingle();
+
+  if (error) throw new HTTPException(503, { message: 'Não foi possível recuperar o caso.' });
+  if (!row || !claimTokensMatch(providedToken, row.claim_token)) {
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  const recovered = rowToDomain(row);
+  // O segredo nunca é devolvido pelo endpoint de recuperação.
+  delete (recovered as any).claimToken;
+  return c.json({ case: recovered });
 });
 
 // GET /api/cases — lista casos (admin: todos/filtro; cidadão: próprios)
@@ -356,11 +410,71 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
   return c.json(rowToDomain(data));
 });
 
+// GET /api/cases/:id/onboarding-state — retoma a jornada somente para o proprietário autenticado.
+casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
+  if (error) throw new HTTPException(500, { message: 'Não foi possível recuperar a jornada.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
+  const user = c.get('user');
+  if (!canAccessCase(user, row) || row.is_anonymous === true) throw new HTTPException(403, { message: 'Caso não vinculado a esta conta.' });
+  const domain = rowToDomain(row);
+  const { data: pendingOrder } = await supabase.from('payment_orders').select('status,amount,gateway_transaction_id,qr_code_text,qr_code_url').eq('case_id', row.id).eq('user_id', user.id).eq('payment_method', 'pix').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return c.json({
+    id: domain.id,
+    status: domain.status,
+    isPaid: row.is_paid === true,
+    serviceType: domain.serviceType,
+    infraction: domain.infraction,
+    vehicle: domain.vehicle,
+    applicant: domain.applicant ? { ...domain.applicant, email: domain.clientEmail, phone: domain.clientPhone } : null,
+    paymentStatus: pendingOrder?.status || null,
+    payment: pendingOrder ? { txId: pendingOrder.gateway_transaction_id, amount: pendingOrder.amount, copyPaste: pendingOrder.qr_code_text, qrCodeUrl: pendingOrder.qr_code_url } : null,
+  });
+});
+
+// POST /api/cases/:id/qualification — persiste somente os dados de qualificação explicitamente fornecidos.
+casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error: readError } = await supabase.from('cases').select('id,user_id,is_anonymous,applicant_json,client_name,client_email,client_phone,client_cpf').eq('id', c.req.param('id')).maybeSingle();
+  if (readError) throw new HTTPException(500, { message: 'Não foi possível consultar o caso.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
+  const user = c.get('user');
+  if (!canAccessCase(user, row) || row.is_anonymous === true) throw new HTTPException(403, { message: 'Vincule o caso à sua conta antes de informar os dados do requerente.' });
+
+  const body = await c.req.json<any>().catch(() => ({}));
+  const applicant = {
+    applicantName: typeof body.name === 'string' ? body.name.trim() : '',
+    applicantCpf: typeof body.cpf === 'string' ? body.cpf.replace(/\D/g, '') : '',
+    applicantCnh: typeof body.cnh === 'string' ? body.cnh.trim() : '',
+    applicantRg: typeof body.rg === 'string' ? body.rg.trim() : '',
+    addressStreet: typeof body.addressStreet === 'string' ? body.addressStreet.trim() : '',
+    addressNumber: typeof body.addressNumber === 'string' ? body.addressNumber.trim() : '',
+    addressComplement: typeof body.addressComplement === 'string' ? body.addressComplement.trim() : '',
+    addressCityState: typeof body.cityState === 'string' ? body.cityState.trim() : '',
+    cnhCategory: typeof body.cnhCategory === 'string' ? body.cnhCategory.trim().toUpperCase() : '',
+  };
+  if (applicant.applicantName.length < 3 || applicant.applicantCpf.length !== 11 || !applicant.applicantCnh || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressCityState || !/^[A-E]{1,2}$/.test(applicant.cnhCategory)) {
+    throw new HTTPException(400, { message: 'Confira nome, CPF, CNH, endereço, município/UF e categoria da CNH.' });
+  }
+  const { error: updateError } = await supabase.from('cases').update({
+    client_name: applicant.applicantName,
+    client_email: typeof body.email === 'string' ? body.email.trim().toLowerCase() : row.client_email,
+    client_phone: typeof body.phone === 'string' ? body.phone.trim() : row.client_phone,
+    client_cpf: applicant.applicantCpf,
+    applicant_json: JSON.stringify(applicant),
+    updated_at: new Date().toISOString(),
+  }).eq('id', row.id).eq('user_id', user.id);
+  if (updateError) throw new HTTPException(500, { message: 'Não foi possível salvar a qualificação.' });
+  return c.json({ success: true, applicant: { ...applicant, applicantCpf: '***.***.***-' + applicant.applicantCpf.slice(-2) } });
+});
+
 // POST /api/cases/:id/generate-defense — gera minuta determinística via RAG + DocumentAssemblyEngine
 casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
+  if (row.is_paid !== true) throw new HTTPException(402, { message: 'Pagamento ainda não foi confirmado pelo servidor. A minuta não pode ser gerada.' });
 
   const user = c.get('user');
   if (!canAccessCase(user, row)) {
