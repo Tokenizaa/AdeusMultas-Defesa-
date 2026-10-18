@@ -19,7 +19,9 @@ jobs:
       PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
       SUPABASE_URL: https://llmxnpgjpxcvyrqjkfwb.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      E2E_RUN_ID: manual-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_TEST_RUN_ID: cert-${{ github.run_id }}-${{ github.run_attempt }}
+      SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       E2E_ALLOW_REAL_PAYMENT: 'false'
     steps:
       - uses: actions/checkout@v4
@@ -54,10 +56,16 @@ jobs:
       - name: Run new manual onboarding smoke and reconcile Supabase
         run: npx playwright test --project=chromium-production --workers=1 --retries=0 tests/onboarding-anonymous-production.spec.ts
 
+      - name: Run first production service — defesa_previa (isolated cases; stop before payment)
+        env:
+          E2E_SERVICE: defesa_previa
+          E2E_ALLOW_PERSISTENT_WRITES: 'true'
+        run: npx playwright test --config=playwright.e2e-certification.config.ts --workers=1 --retries=0
+
       - name: Run first service battery — defesa_previa (deterministic, no DB writes)
         run: npx playwright test --config=playwright.config.ts --project=chromium-production --workers=1 --retries=0 tests/e2e/services/defesa_previa.spec.ts
 
-      - name: Upload smoke and cleanup evidence
+      - name: Upload production smoke and first-service evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -66,5 +74,6 @@ jobs:
             playwright-report/
             test-results/
             tests/e2e-results/
+            playwright-report/e2e-certification/
           if-no-files-found: warn
           retention-days: 30
