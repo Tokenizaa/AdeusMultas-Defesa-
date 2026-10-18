@@ -3,7 +3,7 @@
 **Atualizado:** 2026-10-18  
 **Branch de implementação:** `onboarding/manual-intake-greenfield`  
 **PR:** [#38](https://github.com/Tokenizaa/AdeusMultas-Defesa-/pull/38) — permanece em draft  
-**Produção:** não alterada. Não há ambiente ou URL de pré-produção configurado. O smoke de produção usa exclusivamente `https://adeusmulta.defesai.com.br` e para antes de gravar se `/novo-caso-rebuild` não estiver publicado.
+**Produção:** não alterada. Não há ambiente ou URL de pré-produção configurado. O smoke de produção usa exclusivamente `https://adeusmulta.defesai.com.br/novo-caso` e para antes de gravar se a tela canônica não estiver publicada.
 
 ## Decisão vigente
 
@@ -11,10 +11,11 @@ O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa 
 
 ## Implementado nesta branch
 
-- [x] Revisão do estado de `main`: `/novo-caso` continua usando o wizard existente.
+- [x] Revisão do estado de `main`: a branch de trabalho integra o novo onboarding manual à rota pública canônica `/novo-caso`; `main` e produção permanecem inalteradas até publicação autorizada.
 - [x] Decisão canônica de coleta manual sem OCR.
 - [x] Validação e normalização dos campos manuais.
-- [x] Página greenfield isolada em `/novo-caso-rebuild`, sem upload nem chamada de OCR.
+- [x] Página greenfield integrada à rota canônica `/novo-caso`, sem upload nem chamada de OCR.
+- [x] `/novo-caso-rebuild` mantida somente como alias de compatibilidade, normalizada para `/novo-caso` e sem ser usada na navegação pública.
 - [x] Criação anônima integrada ao contrato `POST /api/cases/anonymous`.
 - [x] Tratamento de respostas HTTP não exitosas e validação do ID retornado antes de confirmar o registro.
 - [x] Armazenamento de ID e token de recuperação na sessão; os dados do caso continuam no servidor.
@@ -80,7 +81,7 @@ A página nova já conecta intake, recuperação, claim, qualificação, revisã
 
 ## Execução sequencial dos sete serviços
 
-O executor de produção agora percorre `/novo-caso-rebuild`, confere a validação dos campos, observa o POST, valida o ID canônico e o token de recuperação, confirma a análise e para na barreira de autenticação/pagamento. Não chama o gateway e não tenta marcar pagamento como aprovado. O reconciliador confere as colunas reais do Supabase, ausência de ordens financeiras e remove somente fixtures anônimas não pagas da execução.
+O executor de produção deve percorrer a rota canônica `/novo-caso`, conferir a validação dos campos, observar o POST, validar o ID canônico e o token de recuperação, confirmar a resposta do intake e parar na barreira de autenticação/pagamento. Não chama o gateway e não tenta marcar pagamento como aprovado. O reconciliador confere as colunas reais do Supabase, ausência de ordens financeiras e remove somente fixtures anônimas não pagas da execução.
 
 Comandos independentes para executar manualmente, **um por vez**, após o smoke de produção e a análise do serviço anterior:
 
@@ -115,3 +116,14 @@ O executor de produção não gera documento porque isso exige autenticação e 
 - Resultado do smoke: **BLOQUEADO — nova rota não publicada em produção**. Não houve cobrança, migração, deploy ou alteração em `main`.
 - Por dependência sequencial, as etapas `defesa_previa` e a suíte determinística de documento foram ignoradas nessa execução. Não foram iniciadas baterias de serviço.
 - O workflow voltou a ser exclusivamente manual após a execução pontual; não executará smoke financeiro/de produção em cada push.
+
+
+## Atualização de roteamento — 2026-10-18
+
+A rota pública canônica nesta branch é **`/novo-caso`**. O novo formulário manual foi integrado diretamente a ela; os links de entrada existentes já apontam para esse caminho. A rota técnica `/novo-caso-rebuild` deixou de ser o destino principal e é normalizada pelo roteador para `/novo-caso`, incluindo atualização da URL no navegador. `/onboarding` também permanece como alias histórico.
+
+A suíte Playwright agora cobre a rota canônica, a normalização do alias legado, a renderização do formulário e o 404 de uma rota inexistente com retorno à página inicial. A landing page não promete envio de foto/OCR neste fluxo.
+
+**Limite de publicação:** estas mudanças são feitas apenas nesta branch do PR. A produção e `main` não foram alteradas; até um deploy autorizado da branch aprovada, o site publicado pode continuar exibindo a versão anterior. Não executar novamente o smoke de produção para a rota nova antes de a publicação ser autorizada e confirmada.
+
+**Validação da alteração de roteamento:** pendente do CI do commit que contém esta atualização. Testes anteriores do onboarding local (8/8, com APIs mockadas) não substituem esse resultado nem certificam integração, análise jurídica ou pagamento real.
