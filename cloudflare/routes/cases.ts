@@ -405,7 +405,7 @@ casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
   const user = c.get('user');
   if (!canAccessCase(user, row) || row.is_anonymous === true) throw new HTTPException(403, { message: 'Caso não vinculado a esta conta.' });
   const domain = rowToDomain(row);
-  const { data: pendingOrder } = await supabase.from('payment_orders').select('status,amount,gateway_transaction_id').eq('case_id', row.id).eq('user_id', user.id).eq('payment_method', 'pix').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const { data: pendingOrder } = await supabase.from('payment_orders').select('status,amount,gateway_transaction_id,qr_code_text,qr_code_url').eq('case_id', row.id).eq('user_id', user.id).eq('payment_method', 'pix').order('created_at', { ascending: false }).limit(1).maybeSingle();
   return c.json({
     id: domain.id,
     status: domain.status,
@@ -415,6 +415,7 @@ casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
     vehicle: domain.vehicle,
     applicant: domain.applicant,
     paymentStatus: pendingOrder?.status || null,
+    payment: pendingOrder ? { txId: pendingOrder.gateway_transaction_id, amount: pendingOrder.amount, copyPaste: pendingOrder.qr_code_text, qrCodeUrl: pendingOrder.qr_code_url } : null,
   });
 });
 
