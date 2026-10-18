@@ -95,7 +95,7 @@ export function generateTestScenarios(): TestScenario[] {
           case 'lei_seca':
             infractionData = {
               ...infractionData,
-              infractionCode: '516-91', // recusa
+              infractionCode: '757-90', // recusa
               ctbArticle: 'Art. 165-A do CTB',
               description: 'Recusa ao teste do bafômetro',
               // No speed fields
