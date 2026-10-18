@@ -137,6 +137,46 @@ casesRoutes.post('/cases/anonymous', async (c) => {
   return c.json({ ...rowToDomain(data), claimToken }, 201);
 });
 
+// Recuperação anônima autenticada por token bearer de alta entropia.
+ // Não usar ID isolado como autorização; respostas inválidas são indistinguíveis.
+casesRoutes.post('/cases/anonymous/:id/recover', async (c) => {
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Recuperação temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: `recover:${ipAddress}` });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de recuperação atingido.' });
+  }
+
+  const body = await c.req.json<any>().catch(() => null);
+  const providedToken = body?.claimToken;
+  if (typeof providedToken !== 'string' || !/^[a-f0-9]{64}$/i.test(providedToken)) {
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', c.req.param('id'))
+    .eq('is_anonymous', true)
+    .is('user_id', null)
+    .maybeSingle();
+
+  if (error) throw new HTTPException(503, { message: 'Não foi possível recuperar o caso.' });
+  if (!row || !claimTokensMatch(providedToken, row.claim_token)) {
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  const recovered = rowToDomain(row);
+  // O segredo nunca é devolvido pelo endpoint de recuperação.
+  delete (recovered as any).claimToken;
+  return c.json({ case: recovered });
+});
+
 // GET /api/cases — lista casos (admin: todos/filtro; cidadão: próprios)
 casesRoutes.get('/cases', authenticateToken, async (c) => {
   const user = c.get('user');
