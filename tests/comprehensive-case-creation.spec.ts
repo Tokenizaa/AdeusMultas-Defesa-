@@ -22,10 +22,10 @@ const TEST_SCENARIOS = [
     situation: 'multa_transito',
     stage: 'primeira_notificacao',
     category: 'lei_seca',
-    expectedInfractionCode: '516-91',
-    expectedDescription: 'Recusa ao teste do etilômetro / alcoolemia',
+    expectedInfractionCode: '757-90',
+    expectedDescription: 'Recusa ao teste do etilômetro (art. 165-A)',
     expectedSeverity: 'gravissima',
-    expectedPoints: 7,
+    expectedPoints: 0,
     expectedFine: 2934.70,
   },
   {
@@ -34,10 +34,10 @@ const TEST_SCENARIOS = [
     stage: 'primeira_notificacao',
     category: 'celular',
     expectedInfractionCode: '736-62',
-    expectedDescription: 'Segurar ou manusear telefone celular ao volante',
-    expectedSeverity: 'gravissima',
-    expectedPoints: 7,
-    expectedFine: 293.47,
+    expectedDescription: 'Dirigir utilizando telefone celular sem segurá-lo ou manuseá-lo',
+    expectedSeverity: 'media',
+    expectedPoints: 4,
+    expectedFine: 130.16,
   }
 ];
 const ADMIN_USER = {
@@ -243,7 +243,7 @@ test.describe('Comprehensive Case Creation - Testing Multiple Infraction Types',
     await fillInput(page, 'input-lead-phone', ADMIN_USER.phone);
     await fillInput(page, 'input-ait-number', 'TEST123');
     await fillInput(page, 'input-vehicle-plate', 'ABC1234');
-    await selectNativeOption(page, 'input-infraction-code', '516-91');
+    await selectNativeOption(page, 'input-infraction-code', '757-90');
     await selectNativeOption(page, 'input-autuador-body', 'DETRAN-SP');
     await fillInput(page, 'input-datetime', '2024-01-15');
     
