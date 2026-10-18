@@ -469,7 +469,7 @@ async function fillTechnicalDetails(page: Page, infraction: any) {
   } else if (code === '736-62') {
     // Celular
     await page.waitForSelector('#select-celular-circunstancia', { state: 'visible', timeout: 5000 });
-    await selectNativeOption(page, 'select-celular-circunstancia', 'viva_voz');
+    await selectNativeOption(page, 'select-celular-circunstancia', 'fone_conectado');
   } else if (code === '605-01') {
     // Sinal vermelho
     await page.waitForSelector('#select-vermelho-motivo', { state: 'visible', timeout: 5000 });
