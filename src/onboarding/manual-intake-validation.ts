@@ -6,8 +6,20 @@ export interface ManualIntakeInput {
   location: string;
   plate: string;
   brandModel: string;
-  serviceType: 'defesa_previa' | 'recurso_jari';
+  serviceType: 'defesa_previa' | 'recurso_jari' | 'recurso_cetran' | 'suspensao' | 'cassacao' | 'indicacao_condutor' | 'conversao_advertencia';
 }
+
+export const MANUAL_SERVICE_OPTIONS = [
+  { value: 'defesa_previa', label: 'Defesa prévia — notificação de autuação' },
+  { value: 'recurso_jari', label: 'Recurso à JARI — notificação de penalidade' },
+  { value: 'recurso_cetran', label: 'Recurso ao CETRAN — decisão da JARI' },
+  { value: 'suspensao', label: 'Defesa em processo de suspensão da CNH' },
+  { value: 'cassacao', label: 'Defesa em processo de cassação da CNH' },
+  { value: 'indicacao_condutor', label: 'Indicação do condutor responsável' },
+  { value: 'conversao_advertencia', label: 'Conversão de multa em advertência' },
+] as const;
+
+export type ManualServiceType = typeof MANUAL_SERVICE_OPTIONS[number]['value'];
 
 export type ManualIntakeField = keyof ManualIntakeInput;
 export type ManualIntakeErrors = Partial<Record<ManualIntakeField, string>>;
