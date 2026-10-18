@@ -157,18 +157,17 @@ export class E2EValidator {
       return this.failResult(persistedCaseId, [`Persisted intake case not found: ${readError?.message || 'no row returned'}`]);
     }
 
-    const infraction = typeof row.infraction_json === 'string' ? JSON.parse(row.infraction_json) : row.infraction_json;
-    const vehicle = typeof row.vehicle_json === 'string' ? JSON.parse(row.vehicle_json) : row.vehicle_json;
     const analysisData = typeof row.analysis_json === 'string' ? JSON.parse(row.analysis_json) : row.analysis_json;
     const expectedAit = String(testCase.infraction.aitNumber);
     const expectedCode = String(testCase.infraction.infractionCode);
     const expectedProcedure = String(testCase.procedureType);
 
     if (row.id !== persistedCaseId) errors.push('Canonical case ID differs from the API response.');
-    if (row.ait_number !== expectedAit || infraction?.aitNumber !== expectedAit) errors.push(`AIT mismatch: expected ${expectedAit}; row=${row.ait_number}; payload=${infraction?.aitNumber}`);
-    if (infraction?.infractionCode !== expectedCode) errors.push(`Infraction code mismatch: expected ${expectedCode}, got ${infraction?.infractionCode}`);
-    if (infraction?.location !== testCase.infraction.location) errors.push('Infraction location differs from the submitted fixture.');
-    if (vehicle?.plate !== testCase.vehicle.plate) errors.push(`Vehicle plate mismatch: expected ${testCase.vehicle.plate}, got ${vehicle?.plate}`);
+    if (row.ait_number !== expectedAit) errors.push(`AIT mismatch: expected ${expectedAit}; row=${row.ait_number}`);
+    if (row.infraction_code !== expectedCode) errors.push(`Infraction code mismatch: expected ${expectedCode}, got ${row.infraction_code}`);
+    if (row.location !== testCase.infraction.location) errors.push('Infraction location differs from the submitted fixture.');
+    if (row.vehicle_plate !== testCase.vehicle.plate) errors.push(`Vehicle plate mismatch: expected ${testCase.vehicle.plate}, got ${row.vehicle_plate}`);
+    if (row.autuador_body !== testCase.infraction.autuadorBody) errors.push(`Autuador mismatch: expected ${testCase.infraction.autuadorBody}, got ${row.autuador_body}`);
     if (row.service_type !== expectedProcedure) errors.push(`Persisted service mismatch: expected ${expectedProcedure}, got ${row.service_type}`);
     if (row.user_id != null || row.is_anonymous !== true) errors.push('New intake must remain anonymous until an authenticated claim succeeds.');
     if (row.is_paid !== false) errors.push('New intake must remain unpaid before explicit purchase.');
@@ -185,7 +184,7 @@ export class E2EValidator {
     const analysis = {
       exists: Boolean(analysisData),
       procedureTypeCorrect: Boolean(analysisData && analysisData.recommendedProcedure === expectedProcedure),
-      competentBodyCorrect: infraction?.autuadorBody === testCase.infraction.autuadorBody,
+      competentBodyCorrect: row.autuador_body === testCase.infraction.autuadorBody,
       ufCorrect: true,
       tesesIdentified: Array.isArray(analysisData?.recommendedArguments) ? analysisData.recommendedArguments.map((argument: any) => argument.title).filter(Boolean) : [],
       score: Number(analysisData?.overallSuccessRate || 0),
