@@ -530,6 +530,39 @@ export class E2ETestManager {
   async cleanupOwnedFixtures(
     additionalCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean | 'either' }> = [],
   ): Promise<{ runId: string; cases: any[]; users: any[]; completed: boolean }> {
+    const discoveredAnonymousCases: Array<{ id: string; aitNumber: string; userId?: string | null; anonymous: boolean | 'either'; source: string }> = [];
+    const discoveryErrors: any[] = [];
+    // Discover a case created by the current run even if the UI assertion
+    // failed after the server committed and before the executor returned its ID.
+    // The AIT is unique to this run; only anonymous, unclaimed rows are eligible.
+    for (const testCase of this.testCases) {
+      const aitNumber = String(testCase.infraction.aitNumber);
+      const lookup = await this.supabase
+        .from('cases')
+        .select('id,ait_number,user_id,is_anonymous,is_paid')
+        .eq('ait_number', aitNumber)
+        .eq('is_anonymous', true)
+        .is('user_id', null);
+      if (lookup.error) {
+        discoveryErrors.push({ id: testCase.id, status: 'CLEANUP_PENDING', reason: `run-owned AIT discovery failed: ${lookup.error.message}` });
+        continue;
+      }
+      if ((lookup.data?.length ?? 0) > 1) {
+        discoveryErrors.push({ id: testCase.id, status: 'CLEANUP_REFUSED_MULTIPLE_MATCHES', aitNumber, matches: lookup.data?.length });
+        continue;
+      }
+      const row = lookup.data?.[0];
+      if (row && row.ait_number === aitNumber && row.is_anonymous === true && row.user_id == null) {
+        discoveredAnonymousCases.push({
+          id: row.id,
+          aitNumber,
+          userId: testCase.userId,
+          anonymous: true,
+          source: 'discovered-by-run-unique-ait',
+        });
+      }
+    }
+
     const cleanupCases = [
       ...this.testCases.map((testCase) => ({
         id: testCase.id,
@@ -538,15 +571,16 @@ export class E2ETestManager {
         anonymous: false,
         source: 'seed',
       })),
+      ...discoveredAnonymousCases,
       ...additionalCases.map((item) => ({ ...item, source: 'onboarding' })),
     ];
     const uniqueCases = [...new Map(cleanupCases.map((item) => [item.id, item])).values()];
-    const caseResults: any[] = [];
+    const caseResults: any[] = [...discoveryErrors];
 
     for (const owned of uniqueCases) {
       const lookup = await this.supabase
         .from('cases')
-        .select('id,ait_number,user_id,is_anonymous')
+        .select('id,ait_number,user_id,is_anonymous,is_paid')
         .eq('id', owned.id)
         .maybeSingle();
       if (lookup.error) {
@@ -570,13 +604,14 @@ export class E2ETestManager {
           : isClaimedOwned;
       const identityMatches = row.id === owned.id
         && row.ait_number === owned.aitNumber
+        && row.is_paid === false
         && ownershipMatches;
       if (!identityMatches) {
         caseResults.push({
           id: owned.id,
           status: 'CLEANUP_REFUSED_IDENTITY_MISMATCH',
           expected: { aitNumber: owned.aitNumber, userId: owned.userId ?? null, anonymous: owned.anonymous },
-          actual: { aitNumber: row.ait_number, userId: row.user_id, anonymous: row.is_anonymous },
+          actual: { aitNumber: row.ait_number, userId: row.user_id, anonymous: row.is_anonymous, isPaid: row.is_paid },
         });
         continue;
       }
