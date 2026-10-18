@@ -97,8 +97,8 @@ describe('anonymous case intake', () => {
     'defesa_previa',
     'recurso_jari',
     'recurso_cetran',
-    'suspensao',
-    'cassacao',
+    'suspensao_cnh',
+    'cassacao_cnh',
     'indicacao_condutor',
     'conversao_advertencia',
   ])('preserves supported service type %s in the created case', async (serviceType) => {
