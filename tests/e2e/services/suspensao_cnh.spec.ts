@@ -25,10 +25,10 @@ const infraction = {
   dateTime: '2026-08-09',
   location: 'Av. Agamenon, 300',
   autuadorBody: 'DETRAN-PE',
-  infractionCode: '516-91',
+  infractionCode: '757-90',
   ctbArticle: 'Art. 165-A do CTB',
   severity: 'gravissima',
-  points: 7,
+  points: 0,
   fineAmount: 2934.70,
   hasPsychomotorTerm: false,
 };
