@@ -2,7 +2,7 @@
 
 **Projeto:** AdeusMultas  
 **Decisão relacionada:** [DECISAO-RECONSTRUCAO.md](./DECISAO-RECONSTRUCAO.md)  
-**Status geral:** planejado; execução técnica ainda não iniciada neste plano  
+**Status geral:** reconstrução greenfield já iniciada em `onboarding/rebuild-canonico-clean`; Fase 1 de triagem do legado concluída  
 **Data:** 2026-10-17
 
 ## Objetivo
@@ -21,26 +21,22 @@ O plano é organizado em fases completas. Não avançar automaticamente para a f
 - Se for necessário testar no navegador da produção, usar `https://adeusmulta.defesai.com.br` conforme orientação do produto; não presumir que existe uma pré-produção equivalente. Testes com escrita em produção permanecem bloqueados até haver isolamento e reconciliação confiáveis, usam somente dados sintéticos e não podem disparar cobranças.
 - Todo resultado deve ser classificado como aprovado, bloqueado ou inconclusivo com evidência reproduzível.
 
-## Fase 1 — Baseline e proteção do legado
+## Fase 1 — Compreensão e triagem do legado
 
-### Trabalho
-1. Registrar branch, commit, estado do working tree e arquivos não rastreados.
-2. Localizar as especificações e relatórios de onboarding existentes em todos os caminhos relevantes.
-3. Mapear o ponto de entrada, wizard/etapas, componentes, estado, regras, APIs, OCR, persistência, recuperação, análise e geração documental.
-4. Identificar qual código está no repositório atual e qual versão está realmente publicada em produção; não presumir equivalência entre os dois.
-5. Documentar comandos e testes existentes, resultados atuais e bloqueios conhecidos.
-6. Definir como o legado será mantido disponível para comparação e rollback.
+**Status: CONCLUÍDA.** Esta fase existe para entender o legado e decidir o que será preservado como requisito, reaproveitado como serviço, reescrito ou descartado. Não exige corrigir o onboarding antigo nem executar seus testes antes de iniciar o greenfield.
 
-### Entregáveis
-- Inventário técnico com caminhos e referências de linha.
-- Baseline reproduzível de build, lint e testes aplicáveis.
-- Registro da versão/commit publicado, ou declaração explícita de que não foi possível verificá-lo.
-- Lista de riscos e trabalho local que deve ser preservado.
+### Entregáveis concluídos
+- Inventário estático do fluxo, componentes, regras, OCR, persistência, análise e geração documental.
+- Matriz explícita do que preservar, reutilizar, reescrever, substituir ou descartar em `FASE-1-DECISAO-PRESERVACAO.md`.
+- Registro de problemas do legado para impedir que sejam transportados ao novo fluxo.
+- Identificação da linha greenfield existente `onboarding/rebuild-canonico-clean`, com Fases 1–5 documentadas como concluídas e Fase 6 iniciada.
 
-### Critérios de saída
-- Nenhum trabalho preexistente perdido.
-- Implementação atual identificada com evidência.
-- Diferenças entre repositório e produção conhecidas ou documentadas como bloqueio.
+### Fora do critério de saída desta fase
+- Build, lint, testes unitários ou E2E do legado.
+- Confirmação do deployment de produção.
+- Correção de defeitos no onboarding que será arquivado.
+
+Essas validações devem incidir sobre a nova implementação antes da ativação. O checkout local deve ser preservado quando o trabalho for retomado, sem reset/clean ou sobrescrita de alterações preexistentes.
 
 ## Fase 2 — Matriz de preservação e diagnóstico
 
@@ -201,4 +197,4 @@ Criar uma bateria de casos sintéticos para cada serviço, com resultado esperad
 
 ## Próxima ação autorizada
 
-Começar somente a Fase 1: baseline e proteção do legado. Não iniciar implementação de interface, não executar migrações, não fazer deploy e não executar testes que escrevam em produção enquanto os controles de isolamento e reconciliação não estiverem comprovados.
+Continuar a linha greenfield existente `onboarding/rebuild-canonico-clean` na Fase 6 — integrações reais. Não iniciar uma segunda UI paralela e não transportar componentes do onboarding legado. Fechar os contratos pendentes de qualificação, claim autenticado, PDF, pagamento e geração documental; em seguida executar testes automatizados e ponta a ponta na nova implementação. Não realizar deploy, migração ou cobrança real sem autorização explícita.
