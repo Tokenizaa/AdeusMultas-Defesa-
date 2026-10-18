@@ -32,10 +32,15 @@ test.describe.configure({ retries: 0 });
 test.afterEach(async ({ request }) => {
   if (!generatedAit) return;
   if (!generatedCaseId) {
-    if (saveResponseObserved) {
-      throw new Error(`E2E cleanup pending: save response was observed but no canonical case ID was captured; AIT=${generatedAit}. Refusing broad deletion.`);
+    const possibleResidue = await supabaseRows(request, 'cases', `ait_number=eq.${encodeURIComponent(generatedAit)}`);
+    if (possibleResidue.length === 0) {
+      console.log(`[E2E cleanup] verified no case residue for run AIT=${generatedAit}`);
+      generatedAit = undefined;
+      saveResponseObserved = false;
+      anonymousSaveResult = 'request not observed';
+      return;
     }
-    return;
+    throw new Error(`E2E cleanup pending: ${possibleResidue.length} row(s) exist for AIT=${generatedAit}, but no canonical case ID was captured. Refusing broad deletion; manual reconciliation required.`);
   }
   const key = required('SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
   const identityCheck = await supabaseRows(request, 'cases', `id=eq.${encodeURIComponent(generatedCaseId)}&ait_number=eq.${encodeURIComponent(generatedAit)}`);
@@ -113,9 +118,21 @@ test('anonymous onboarding → authentication gate → safe stop before payment'
   await expect(page.getByRole('heading', { name: /Detalhes técnicos da sua autuação/i })).toBeVisible();
   await page.locator('#input-speed-limit').fill('60');
   await page.locator('#input-measured-speed').fill('68');
+  const analysisStartedAt = Date.now();
+  const analysisResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().includes('/api/cases/anonymous'),
+    { timeout: 45_000 },
+  );
   await page.locator('#btn-run-analysis').click();
-  await expect(page.getByRole('heading', { name: /Analisando sua autuação/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Gerar Minha Defesa/i })).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByRole('heading', { name: /Analisando sua autuação/i })).toBeVisible({ timeout: 8_000 });
+  const analysisResponse = await analysisResponsePromise;
+  anonymousSaveResult = `HTTP ${analysisResponse.status()} ${(await analysisResponse.text().catch(() => '')).slice(0, 300)}`;
+  expect(analysisResponse.ok(), `anonymous analysis/save failed after ${Date.now() - analysisStartedAt}ms: ${anonymousSaveResult}`).toBeTruthy();
+  const analysisPayload = await analysisResponse.json().catch(() => null) as Record<string, any> | null;
+  const responseCaseId = analysisPayload?.id ?? analysisPayload?.case?.id ?? analysisPayload?.data?.id;
+  expect(typeof responseCaseId, `analysis response must include persisted case ID: ${anonymousSaveResult}`).toBe('string');
+  generatedCaseId = responseCaseId;
+  await expect(page.getByRole('button', { name: /Gerar Minha Defesa/i })).toBeVisible({ timeout: 45_000 });
   await page.locator('#btn-proceed-to-document-generation').click();
 
   // Critical assertion: anonymous visitor must register before document/payment flow.
