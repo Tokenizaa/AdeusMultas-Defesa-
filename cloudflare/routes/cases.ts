@@ -94,13 +94,27 @@ casesRoutes.post('/cases/anonymous', async (c) => {
     inmetroAferitionDate: boundedString(infractionInput.inmetroAferitionDate, 40) || undefined,
     formalFlawsDetected: [],
   };
+  const requestedServiceType = body?.serviceType;
+  const allowedServiceTypes = new Set([
+    'defesa_previa',
+    'recurso_jari',
+    'recurso_cetran',
+    'suspensao',
+    'cassacao',
+    'indicacao_condutor',
+    'conversao_advertencia',
+  ]);
+  if (requestedServiceType !== undefined && !allowedServiceTypes.has(requestedServiceType)) {
+    throw new HTTPException(400, { message: 'Selecione um dos serviços disponíveis.' });
+  }
+
   const caseId = crypto.randomUUID();
   const domainData: any = {
     id: caseId,
     title: `Diagnóstico Auto ${aitNumber}`,
     clientName: boundedString(body?.userNome, 160) || 'Condutor',
     clientPhone: boundedString(body?.userPhone, 40) || '',
-    serviceType: boundedString(body?.serviceType, 60) || 'defesa_previa',
+    serviceType: requestedServiceType || 'defesa_previa',
     userId: null,
     isAnonymous: true,
     claimToken,
