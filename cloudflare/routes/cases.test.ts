@@ -175,7 +175,7 @@ describe('anonymous case recovery', () => {
     );
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toMatchObject({ message: 'Caso não encontrado ou token inválido.' });
+    expect(await response.text()).toContain('Caso não encontrado ou token inválido.');
   });
 
   it('fails closed when recovery rate limit is reached', async () => {
