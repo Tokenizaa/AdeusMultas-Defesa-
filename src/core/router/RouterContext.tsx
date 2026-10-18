@@ -6,7 +6,7 @@ export interface RouteMatch { path: string; pattern: string; params: Record<stri
 interface RouterContextType { currentPath: string; params: Record<string, string>; queryParams: Record<string, string>; navigate: (to: string, options?: { replace?: boolean }) => void; activeArea: 'public' | 'user' | 'admin'; }
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
 function parsePath(pathname: string): { path: string; search: string } { const [path, search = ''] = pathname.split('?'); return { path: path || '/', search }; }
-function canonicalizePath(path: string): string { return path === '/onboarding' ? '/novo-caso' : path; }
+function canonicalizePath(path: string): string { return path === '/onboarding' || path === '/novo-caso-rebuild' ? '/novo-caso' : path; }
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
   const [currentPath, setCurrentPath] = useState<string>(() => canonicalizePath(window.location.pathname || '/'));
@@ -18,6 +18,7 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentPath(canonicalPath); setQueryParams(parseQueryParams(search));
   }, []);
   useEffect(() => { const handlePopState = () => { setCurrentPath(canonicalizePath(window.location.pathname || '/')); setQueryParams(parseQueryParams(window.location.search)); }; window.addEventListener('popstate', handlePopState); return () => window.removeEventListener('popstate', handlePopState); }, []);
+  useEffect(() => { const pathname = window.location.pathname || '/'; const canonicalPath = canonicalizePath(pathname); if (canonicalPath !== pathname) window.history.replaceState(null, '', `${canonicalPath}${window.location.search}${window.location.hash}`); }, []);
   useEffect(() => { if (queryParams.ref?.trim()) { try { window.sessionStorage.setItem('defesai_affiliate_ref', queryParams.ref.trim().slice(0, 120)); } catch { /* session storage may be disabled */ } } }, [queryParams.ref]);
   useEffect(() => {
     const segments = currentPath.split('/').filter(Boolean); const newParams: Record<string, string> = {};
