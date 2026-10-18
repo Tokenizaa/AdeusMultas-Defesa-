@@ -166,7 +166,7 @@ export class E2ETestManager {
     const initialStatePath = path.join(this.evidenceDir, 'initial-state.json');
     if (fs.existsSync(initialStatePath)) {
       const state = JSON.parse(fs.readFileSync(initialStatePath, 'utf8'));
-      if (state.testRunId === TEST_RUN_ID && Array.isArray(state.users) && Array.isArray(state.cases)) {
+      if (state.testRunId === TEST_RUN_ID && state.selectedService === (process.env.E2E_SERVICE || 'all') && Array.isArray(state.users) && Array.isArray(state.cases)) {
         this.testUsers = state.users;
         this.testCases = state.cases;
         const existing = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -207,6 +207,7 @@ export class E2ETestManager {
     // Save initial state
     await this.saveEvidence('initial-state.json', {
       testRunId: TEST_RUN_ID,
+      selectedService: process.env.E2E_SERVICE || 'all',
       users: this.testUsers,
       cases: this.testCases,
       timestamp: new Date().toISOString(),
@@ -224,50 +225,38 @@ export class E2ETestManager {
       'CE': { city: 'Fortaleza', state: 'CE' },
     };
 
-    // Reutiliza cinco contas sintéticas já existentes. Os cenários continuam
-    // separados por serviço e por caso; apenas a identidade do cidadão é compartilhada.
-    const sharedEmails = [
-      'e2e+defesa_previa+01@test.local',
-      'e2e+defesa_previa+02@test.local',
-      'e2e+defesa_previa+03@test.local',
-      'e2e+defesa_previa+04@test.local',
-      'e2e+recurso_jari+01@test.local',
-    ];
-    const identities: TestUser[] = [];
-    for (let index = 0; index < sharedEmails.length; index += 1) {
-      const uf = 'SP';
-      identities.push({
-        id: randomUUID(),
-        email: sharedEmails[index],
-        password: 'Test@123456',
-        name: `Usuário E2E Compartilhado ${String(index + 1).padStart(2, '0')}`,
-        phone: this.generatePhone(uf),
-        cpf: this.generateCPF(),
-        cnh: this.generateCNH(),
-        cnhCategory: 'B',
-        addressStreet: `Rua de Teste Compartilhada ${index + 1}`,
-        addressNumber: String(index + 1).padStart(3, '0'),
-        addressNeighborhood: 'Centro',
-        addressZipCode: this.generateCEP(uf),
-        addressCityState: 'São Paulo/SP',
-        serviceType: '',
-        scenario: '',
-        testRunId: TEST_RUN_ID,
-      });
+    const requestedService = process.env.E2E_SERVICE;
+    if (requestedService && !Object.prototype.hasOwnProperty.call(COMMERCIAL_SERVICES, requestedService)) {
+      throw new Error(`Invalid E2E_SERVICE="${requestedService}". Allowed: ${Object.keys(COMMERCIAL_SERVICES).join(', ')}`);
     }
+    const selectedServices = Object.entries(COMMERCIAL_SERVICES)
+      .filter(([serviceType]) => !requestedService || serviceType === requestedService);
 
-    let scenarioIndex = 0;
-    for (const [serviceType, configs] of Object.entries(COMMERCIAL_SERVICES)) {
+    // Every scenario gets a unique identity for this run. Never reuse a test
+    // account across services or scenarios; a rerun uses a new run suffix.
+    const runSuffix = TEST_RUN_ID.replace(/[^A-Za-z0-9-]/g, '-').slice(-18);
+    for (const [serviceType, configs] of selectedServices) {
       for (const config of configs) {
-        const identity = identities[scenarioIndex % identities.length];
+        const uf = config.uf;
+        const identitySuffix = `${serviceType}-${config.scenario}-${runSuffix}`;
         this.testUsers.push({
-          ...identity,
-          id: identity.id,
+          id: randomUUID(),
+          email: `e2e-${identitySuffix}@test.local`,
+          password: 'Test@123456',
+          name: `Usuário E2E ${serviceType} ${config.scenario} ${runSuffix}`.slice(0, 100),
+          phone: this.generatePhone(uf),
+          cpf: this.generateCPF(),
+          cnh: this.generateCNH(),
+          cnhCategory: 'B',
+          addressStreet: `Rua de Teste E2E ${config.scenario}`.slice(0, 120),
+          addressNumber: config.scenario,
+          addressNeighborhood: 'Centro',
+          addressZipCode: this.generateCEP(uf),
+          addressCityState: `${ufData[uf]?.city || 'São Paulo'}/${ufData[uf]?.state || uf}`,
           serviceType,
           scenario: config.scenario,
           testRunId: TEST_RUN_ID,
         });
-        scenarioIndex += 1;
       }
     }
   }
@@ -435,7 +424,7 @@ export class E2ETestManager {
 
     const base = infractionData[config.infractionCode] || infractionData['745-50'];
     return {
-      aitNumber: `AIT-${config.uf}-${config.scenario}-${Date.now().toString().slice(-6)}`,
+      aitNumber: `E2E-${TEST_RUN_ID.replace(/[^A-Za-z0-9]/g, '').slice(-16)}-${user.serviceType}-${config.scenario}-${randomUUID().slice(0, 8)}`.slice(0, 80),
       infractionCode: config.infractionCode,
       ...base,
       autuadorBody: config.autuador,
@@ -447,9 +436,8 @@ export class E2ETestManager {
   }
 
   private buildVehicle(user: TestUser): any {
-    const plates = ['ABC1D23', 'DEF2E34', 'GHI3F45', 'JKL4G56', 'MNO5H67', 'PQR6I78', 'STU7J89', 'VWX8K90'];
     return {
-      plate: plates[Math.floor(Math.random() * plates.length)],
+      plate: `E2E${randomUUID().replace(/-/g, '').slice(0, 4).toUpperCase()}`,
       brandModel: 'Honda Civic 2022',
       renavam: '85674321098',
       year: '2022',
