@@ -108,10 +108,10 @@ test.describe(`E2E Production Certification — ${selectedService}`, () => {
         };
 
         const executionResult = await executeOnboardingFlow(page, testCaseData);
-        const validationCase = executionResult.persistedCaseId
-          ? { ...testCase, id: executionResult.persistedCaseId }
-          : testCase;
-        const validationResult = await validator.validateCase(validationCase);
+        if (typeof executionResult.persistedCaseId !== 'string' || !executionResult.persistedCaseId) {
+          throw new Error('ONBOARDING_API_INVALID_RESPONSE: no persisted case ID was captured.');
+        }
+        const validationResult = await validator.validateAnonymousIntakeCase(testCase, executionResult.persistedCaseId);
         const combinedResult = { ...validationResult, execution: executionResult };
         allResults.push(combinedResult);
         await testManager.saveEvidence(`case-${testCase.id}-result.json`, combinedResult);
