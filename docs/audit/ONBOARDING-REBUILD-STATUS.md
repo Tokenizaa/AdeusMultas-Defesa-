@@ -1,49 +1,35 @@
-# ONBOARDING — REBUILD STATUS
+# Onboarding — estado do rebuild greenfield
 
-## Estado atual
+**Atualizado:** 2026-10-18  
+**Branch de implementação:** `onboarding/manual-intake-greenfield`  
+**Produção:** não alterada.
 
-- [x] Estratégia de rebuild greenfield definida
-- [x] Legado congelado
-- [x] Regra de zero reutilização integral definida
-- [x] Plano reduzido a 8 fases
-- [x] Fase 1 — congelamento
-- [x] Fase 2 — definir o que fica
-- [x] Fase 3 — novo contrato
-- [x] Fase 4 — nova arquitetura
-- [x] Fase 5 — reescrita inicial da UI
-- [ ] Fase 6 — integrações reais (em execução)
-- [ ] Fase 7 — validação completa
-- [ ] Fase 8 — ativação e remoção do legado
+## Decisão vigente
 
-## F6 — integração real em execução
+O onboarding novo coleta dados manualmente e **não usa OCR**. A pessoa informa cada fato com instruções sobre onde encontrá-lo; campos ausentes não são inferidos. A decisão está registrada em `docs/product/onboarding/DECISAO-ONBOARDING-MANUAL-SEM-OCR-2026-10-18.md`.
 
-Entregue neste bloco:
+## Estado do trabalho
 
-- API greenfield isolada em `/api/onboarding-v2/*`.
-- Criação de rascunho anônimo com `claimToken` real.
-- Autorização por usuário autenticado ou claim token.
-- Upload real de imagem pelo onboarding novo.
-- OCR real conectado ao `ocrService`.
-- Dados extraídos persistidos no caso canônico através do `CanonicalMapper`.
-- Metadados do OCR persistidos em `ocrAuxiliaryData`.
-- Falhas de OCR bloqueiam o avanço e não são convertidas em sucesso.
-- Adapter HTTP mantém a fronteira aplicação → API; a UI não faz chamadas HTTP de negócio diretamente.
+- [x] Revisar o estado real de `main`: a rota pública `/novo-caso` ainda usa `src/components/onboarding/OnboardingWizard.tsx`.
+- [x] Confirmar que a antiga implementação `src/onboarding-v2/` foi removida anteriormente e não pode ser tratada como fluxo ativo.
+- [x] Registrar a decisão canônica de coleta manual sem OCR.
+- [x] Criar validação de entrada manual e testes unitários.
+- [x] Criar primeira página greenfield de intake manual, sem upload ou chamada de OCR.
+- [x] Disponibilizar a página somente na rota de preview `/novo-caso-rebuild` nesta branch.
+- [ ] Validar lint, typecheck, testes e build em CI.
+- [ ] Testar o POST real `/api/cases/anonymous` em ambiente de teste e verificar recuperação segura do caso.
+- [ ] Completar a jornada greenfield: fatos condicionais, diagnóstico elegível, qualificação, revisão, pagamento confirmado e geração real.
+- [ ] Cobrir falhas, claim anônimo, autorização negativa e recuperação após reload com E2E.
+- [ ] Substituir `/novo-caso` somente após aprovação dos testes e revisão técnica/jurídica.
 
-Documento detalhado: `docs/audit/ONBOARDING-REBUILD-F6-INTEGRACAO.md`.
+## Escopo entregue nesta fase
 
-## Pendências F6
+A nova página envia dados inseridos pelo usuário para `POST /api/cases/anonymous`, apresenta erro quando a API falha e só confirma registro quando recebe um identificador válido. Guarda apenas o identificador do caso e o claim token na sessão para facilitar recuperação; os dados do caso permanecem sob responsabilidade do backend.
 
-- PDF real com pipeline compatível de extração/OCR.
-- Claim autenticado definitivo após login.
-- Qualificação persistida no contrato novo.
-- Pagamento real.
-- Geração real do documento.
-- Testes automatizados do fluxo anônimo + claim + OCR.
+A página **não exibe conclusões da análise jurídica**, não declara pagamento ou documento como concluídos e avisa que esta versão apenas confirma o registro dos dados. Isso é deliberado: a auditoria da base jurídica/RAG identificou problemas que precisam ser resolvidos antes de apresentar conclusões jurídicas como confiáveis.
 
-## Regra arquitetural
+## Limites de validação
 
-O legado continua congelado e fora da implementação do novo onboarding. Nenhum componente, hook ou serviço do onboarding antigo é dependência do `onboarding-v2`.
+Os arquivos foram alterados via GitHub nesta branch. Não foi executado ambiente local nesta sessão; portanto, lint, typecheck, build, E2E e integração real não são declarados aprovados até que o CI e testes de ambiente os comprovem.
 
-## Validação
-
-Os commits deste bloco ainda não possuem execução CI registrada. Não considerar F6 validada até build, testes e fluxo E2E serem executados.
+Não houve deploy, migração ou alteração no banco Supabase.
