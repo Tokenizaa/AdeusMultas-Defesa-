@@ -54,6 +54,23 @@ test.describe(`E2E Production Certification — ${selectedService}`, () => {
     if (browser) await browser.close();
     if (testManager) {
       await generateFinalReport();
+      const seededCases = await testManager.getTestCases();
+      const additionalCases = allResults.flatMap((result) => {
+        const seed = seededCases.find((candidate) => candidate.id === result.caseId);
+        const persistedId = result.execution?.persistedCaseId;
+        if (!seed || typeof persistedId !== 'string' || persistedId === seed.id) return [];
+        return [{
+          id: persistedId,
+          aitNumber: String(seed.infraction.aitNumber),
+          userId: null,
+          anonymous: true,
+        }];
+      });
+      const cleanup = await testManager.cleanupOwnedFixtures(additionalCases);
+      console.log(`[${TEST_RUN_ID}] Cleanup: ${cleanup.completed ? 'COMPLETE' : 'RESIDUE PENDING'}; evidence=cleanup-report.json`);
+      if (!cleanup.completed) {
+        throw new Error(`E2E cleanup incomplete for run ${TEST_RUN_ID}; inspect ${EVIDENCE_DIR}/cleanup-report.json before retrying.`);
+      }
       console.log(`========== E2E TEST RUN COMPLETE: ${TEST_RUN_ID} ==========`);
     }
   });
