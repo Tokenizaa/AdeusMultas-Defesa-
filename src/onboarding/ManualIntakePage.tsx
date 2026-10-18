@@ -105,28 +105,55 @@ export function ManualIntakePage() {
     async function recoverCase() {
       let caseId = '';
       let claimToken = '';
+      let savedStage = '';
       try {
         caseId = sessionStorage.getItem('defesai_manual_onboarding_case_id') || '';
         claimToken = sessionStorage.getItem('defesai_manual_onboarding_claim_token') || '';
-      } catch {
-        return;
-      }
-      if (!caseId || !claimToken) return;
+        savedStage = sessionStorage.getItem('defesai_manual_onboarding_stage') || '';
+      } catch { return; }
+      if (!caseId) return;
 
       setRecovering(true);
       try {
-        const response = await authFetch(`/api/cases/anonymous/${encodeURIComponent(caseId)}/recover`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ claimToken }),
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok || !body?.case || body.case.id !== caseId) {
-          throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível recuperar este caso nesta sessão.');
+        let caseRecord: any;
+        if (claimToken) {
+          const response = await authFetch(`/api/cases/anonymous/${encodeURIComponent(caseId)}/recover`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claimToken }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body?.case || body.case.id !== caseId) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível recuperar este caso nesta sessão.');
+          caseRecord = body.case;
+        } else if (isAuthenticated) {
+          const response = await authFetch(`/api/cases/${encodeURIComponent(caseId)}/onboarding-state`);
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || body.id !== caseId) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível retomar a jornada desta conta.');
+          caseRecord = body;
+          if (body.applicant) {
+            setQualification({
+              name: body.applicant.applicantName || '',
+              cpf: body.applicant.applicantCpf || '',
+              email: body.applicant.email || '',
+              phone: body.applicant.phone || '',
+              cnh: body.applicant.applicantCnh || '',
+              rg: body.applicant.applicantRg || '',
+              cnhCategory: body.applicant.cnhCategory || '',
+              addressStreet: body.applicant.addressStreet || '',
+              addressNumber: body.applicant.addressNumber || '',
+              addressComplement: body.applicant.addressComplement || '',
+              cityState: body.applicant.addressCityState || '',
+            });
+          }
+          if (body.payment?.txId && body.payment?.copyPaste && Number(body.payment.amount) > 0) {
+            setPix({ txId: body.payment.txId, amount: Number(body.payment.amount), copyPaste: body.payment.copyPaste, qrCodeUrl: body.payment.qrCodeUrl });
+            setPaymentStatus(body.paymentStatus || 'PENDING');
+          }
+          if (body.isPaid === true) savedStage = 'paid';
+        } else {
+          return;
         }
         if (!cancelled) {
-          const recoveredInfraction = body.case.infraction || {};
-          const recoveredVehicle = body.case.vehicle || {};
+          const recoveredInfraction = caseRecord.infraction || {};
+          const recoveredVehicle = caseRecord.vehicle || {};
           setForm((current) => ({
             ...current,
             aitNumber: typeof recoveredInfraction.aitNumber === 'string' ? recoveredInfraction.aitNumber : current.aitNumber,
@@ -136,31 +163,32 @@ export function ManualIntakePage() {
             location: typeof recoveredInfraction.location === 'string' ? recoveredInfraction.location : current.location,
             plate: typeof recoveredVehicle.plate === 'string' ? recoveredVehicle.plate : current.plate,
             brandModel: typeof recoveredVehicle.brandModel === 'string' ? recoveredVehicle.brandModel : current.brandModel,
-            serviceType: body.case.serviceType === 'recurso_jari' ? 'recurso_jari' : 'defesa_previa',
+            serviceType: caseRecord.serviceType === 'recurso_jari' ? 'recurso_jari' : 'defesa_previa',
           }));
           setCreatedCase({
             id: caseId,
-            claimToken,
-            status: typeof body.case.status === 'string' ? body.case.status : undefined,
+            claimToken: claimToken || undefined,
+            status: typeof caseRecord.status === 'string' ? caseRecord.status : undefined,
             recovered: true,
-            caseData: {
-              infraction: body.case.infraction,
-              vehicle: body.case.vehicle,
-              serviceType: body.case.serviceType,
-            },
+            caseData: { infraction: caseRecord.infraction, vehicle: caseRecord.vehicle, serviceType: caseRecord.serviceType },
           });
+          if (savedStage === 'qualification' || savedStage === 'review' || savedStage === 'payment' || savedStage === 'paid' || savedStage === 'document') {
+            setStage(savedStage as 'qualification' | 'review' | 'payment' | 'paid' | 'document');
+          } else if (!claimToken) {
+            setStage('qualification');
+          }
+          if (caseRecord.isPaid === true) setStage('paid');
+          else if (savedStage === 'payment' && caseRecord.payment?.txId) setStage('payment');
         }
       } catch (cause) {
-        if (!cancelled) {
-          setRecoveryError(cause instanceof Error ? cause.message : 'Não foi possível recuperar este caso nesta sessão.');
-        }
+        if (!cancelled) setRecoveryError(cause instanceof Error ? cause.message : 'Não foi possível recuperar este caso nesta sessão.');
       } finally {
         if (!cancelled) setRecovering(false);
       }
     }
     void recoverCase();
     return () => { cancelled = true; };
-  }, []);
+  }, [isAuthenticated]);
 
   async function claimCurrentCase() {
     if (!createdCase?.id || !createdCase.claimToken) {
@@ -180,7 +208,7 @@ export function ManualIntakePage() {
         throw new Error(typeof body?.message === 'string' ? body.message : `Não foi possível vincular o caso (HTTP ${response.status}).`);
       }
       try {
-        sessionStorage.removeItem('defesai_manual_onboarding_case_id');
+        sessionStorage.setItem('defesai_manual_onboarding_stage', 'qualification');
         sessionStorage.removeItem('defesai_manual_onboarding_claim_token');
       } catch {
         // A vinculação já foi confirmada pelo servidor; storage é apenas auxiliar.
@@ -206,6 +234,7 @@ export function ManualIntakePage() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof body?.message === 'string' ? body.message : 'Não foi possível salvar a qualificação.');
       setStage('review');
+      try { sessionStorage.setItem('defesai_manual_onboarding_stage', 'review'); } catch { /* optional session marker */ }
     } catch (cause) {
       setQualificationError(cause instanceof Error ? cause.message : 'Não foi possível salvar a qualificação.');
     } finally { setQualificationBusy(false); }
@@ -228,6 +257,7 @@ export function ManualIntakePage() {
       if (!txId || !Number.isFinite(amount) || amount <= 0 || typeof copyPaste !== 'string' || !copyPaste) throw new Error('A API não devolveu os dados completos de uma cobrança PIX real.');
       setPix({ txId: String(txId), amount, copyPaste, qrCodeUrl: body.qrCodeDataUrl || body.qrCodeUrl || body.paymentOrder?.qr_code_url, gateway: body.gateway });
       setStage('payment');
+      try { sessionStorage.setItem('defesai_manual_onboarding_stage', 'payment'); sessionStorage.setItem('defesai_manual_onboarding_txid', String(txId)); } catch { /* optional session marker */ }
       setPaymentStatus(String(body.status || 'PENDING'));
     } catch (cause) {
       setPixError(cause instanceof Error ? cause.message : 'Não foi possível iniciar o PIX.');
@@ -248,6 +278,7 @@ export function ManualIntakePage() {
         return;
       }
       setStage('paid');
+      try { sessionStorage.setItem('defesai_manual_onboarding_stage', 'paid'); } catch { /* optional session marker */ }
     } catch (cause) {
       setPixError(cause instanceof Error ? cause.message : 'Não foi possível consultar o pagamento.');
     } finally { setPaymentCheckBusy(false); }
@@ -266,6 +297,7 @@ export function ManualIntakePage() {
       if (!body?.defenseDraft) throw new Error('O servidor não devolveu uma minuta validada.');
       setDocumentMessage('Minuta gerada e validada pelo servidor. Acesse Meus Casos para consultar o documento e o checklist.');
       setStage('document');
+      try { sessionStorage.setItem('defesai_manual_onboarding_stage', 'document'); } catch { /* optional session marker */ }
     } catch (cause) {
       setDocumentMessage(cause instanceof Error ? cause.message : 'Não foi possível gerar a minuta.');
     }
