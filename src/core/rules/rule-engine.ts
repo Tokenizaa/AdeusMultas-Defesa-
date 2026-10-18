@@ -179,9 +179,9 @@ export const EXPERT_RULES: RuleModel[] = [
     priority: 88,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
-      const isLeiSeca = code === '516-91' || code === '516-92' || code.includes('516');
+      const isRefusal165A = code === '757-90';
       // FAIL CLOSED: convicção somente se o dado comprovar ausência do termo.
-      if (isLeiSeca && ctx.hasPsychomotorTerm === false) {
+      if (isRefusal165A && ctx.hasPsychomotorTerm === false) {
         return {
           ruleId: 'RULE_LEI_SECA_TERMO_432',
           title: 'Ausência ou Defeito no Termo de Constatação de Sinais (Res. 432/13)',
