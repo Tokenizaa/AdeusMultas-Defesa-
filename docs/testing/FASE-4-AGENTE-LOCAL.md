@@ -24,6 +24,18 @@ Antes de qualquer escrita ou jornada de navegador:
 
 **Se qualquer item falhar ou não puder ser provado, marque a Fase 4 como BLOCKED, registre o motivo e pare. Não inicie a bateria dos sete serviços.** Não contorne o gate de pagamento. A ausência de sandbox de gateway não autoriza uma cobrança real.
 
+## Serviços canônicos confirmados no código
+
+Os identificadores abaixo devem corresponder exatamente a `src/core/onboarding/rules-matrix.ts`. Não substitua os nomes de serviço por rótulos de interface:
+
+1. `defesa_previa` — Notificação de Autuação (Art. 281 CTB)
+2. `recurso_jari` — Recurso JARI, 1ª instância
+3. `recurso_cetran` — Recurso CONTRAN/CETRAN, 2ª instância
+4. `suspensao_cnh` — Suspensão da CNH / Lei Seca
+5. `cassacao_cnh` — Cassação da CNH (PCDD)
+6. `indicacao_condutor` — Indicação de Real Condutor (Art. 257, § 7º)
+7. `conversao_advertencia` — Conversão em Advertência (Art. 267 CTB)
+
 ## Bateria serial após aprovação do piloto
 
 Execute um serviço por vez, com `workers=1` e `retries=0`, usando somente os contratos e a UI atuais:
@@ -31,8 +43,8 @@ Execute um serviço por vez, com `workers=1` e `retries=0`, usando somente os co
 1. `defesa_previa`
 2. `recurso_jari`
 3. `recurso_cetran`
-4. `suspensao`
-5. `cassacao`
+4. `suspensao_cnh`
+5. `cassacao_cnh`
 6. `indicacao_condutor`
 7. `conversao_advertencia`
 
