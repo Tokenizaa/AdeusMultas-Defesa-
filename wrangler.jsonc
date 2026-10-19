@@ -1,9 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/wrangler.json",
   "name": "adeusmulta",
-  "main": "cloudflare/worker.js",
-  "compatibility_date": "2026-09-13",
-  "compatibility_flags": ["nodejs_compat"],
+  "main": "cloudflare/dist/worker.js",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": false,
   "ai": {
     "binding": "AI"
@@ -18,14 +20,19 @@
     {
       "name": "ANONYMOUS_CASE_LIMITER",
       "namespace_id": "2026101301",
-      "simple": { "limit": 10, "period": 60 }
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
     }
   ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "vars": {
     "API_ORIGIN_PRIMARY": "https://adeusmulta.defesai.com.br",
@@ -36,6 +43,5 @@
   },
   "build": {
     "command": "npx esbuild cloudflare/worker.js --bundle --platform=node --format=esm --outfile=cloudflare/dist/worker.js --alias:qrcode=./cloudflare/stubs/qrcode.js --target=node18"
-  },
-  "main": "cloudflare/dist/worker.js"
+  }
 }
