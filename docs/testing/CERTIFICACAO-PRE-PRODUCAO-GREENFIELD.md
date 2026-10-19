@@ -158,3 +158,12 @@ A Fase 4 está especificada em [FASE-4-AGENTE-LOCAL.md](./FASE-4-AGENTE-LOCAL.md
 ### Atualização do diagnóstico do typecheck
 
 O log de CI identificou a causa concreta do primeiro typecheck: dois arquivos remanescentes do executor legado importavam `src/server/services/e2e-test-runner-service.ts`, já removido. Na branch foram removidos também `src/server/routes/e2e-tests.ts` e `src/server/db/e2e-test-repository.ts`. A remoção foi feita na branch do PR; aguardar o CI do HEAD atual para confirmar se o typecheck e o build passam. Até esse resultado, a correção está aplicada, mas não validada.
+
+
+### Atualização de validação do CI — 2026-10-19
+
+- **PASS:** execução CI/CD para HEAD `def7fef52c11f87d3010bd83e1f10d65ef5d25f7` concluída com sucesso: suíte unitária/auditoria, typecheck e build passaram. [Execução CI/CD](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/39309548074).
+- **PASS:** workflow Cloudflare concluiu as verificações de contrato; o passo `Build and deploy to Cloudflare` ficou **skipped** por sua condição explícita de push para `main` com marcador `[DEPLOY-PRODUCTION]`. Nenhum deploy ocorreu nessa execução do PR. [Execução Cloudflare](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/39309547783).
+- **NOT_RUN:** o piloto e as baterias de navegador continuam não executados; CI verde não comprova a geração, persistência e recuperação real de documentos.
+- **PASS:** identificadores canônicos dos serviços confirmados no relatório da Fase 4: `defesa_previa`, `recurso_jari`, `recurso_cetran`, `suspensao_cnh`, `cassacao_cnh`, `indicacao_condutor`, `conversao_advertencia`.
+- **BLOCKED:** continuam ausentes, nesta execução, a URL HTTPS isolada confirmada, as sete identidades/credenciais protegidas e a configuração segura de pagamento para o piloto. PR #40 permanece aberto em draft.
