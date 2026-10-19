@@ -91,7 +91,7 @@ async function registerUser(page: Page, user: CertificationUser) {
   await expect(page).toHaveURL(/dashboard|cases/, { timeout: 20_000 });
 }
 
-async function loginUser(page: Page, user: CertificationUser) {
+async function loginUser(page: Page, user: CertificationUser): Promise<any[]> {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Acesse sua Conta' })).toBeVisible();
   await page.getByPlaceholder('seu.email@exemplo.com').fill(user.email);
@@ -104,7 +104,10 @@ async function loginUser(page: Page, user: CertificationUser) {
   );
   await page.getByRole('button', { name: 'Entrar no DefesAi' }).click();
   await expect(page).toHaveURL(/dashboard|cases/, { timeout: 30_000 });
-  await casesResponse;
+  const response = await casesResponse;
+  const history = await response.json();
+  expect(Array.isArray(history), 'GET /api/cases must return the authenticated account history.').toBe(true);
+  return history;
 }
 
 async function chooseJourney(page: Page, journey: ServiceJourney) {
@@ -139,13 +142,12 @@ async function chooseJourney(page: Page, journey: ServiceJourney) {
   await page.locator('#input-location').fill('Rodovia de teste, km 20, São Paulo/SP');
   await page.locator('#btn-next-to-specifics').click();
   await expect(page.getByRole('heading', { name: 'Detalhes técnicos da sua autuação' })).toBeVisible();
-  await page.locator('#btn-run-analysis').click();
-
   const createResponsePromise = page.waitForResponse((response) =>
     response.url().endsWith('/api/cases') &&
     response.request().method() === 'POST',
     { timeout: 60_000 },
   );
+  await page.locator('#btn-run-analysis').click();
   // The analysis processing screen performs the canonical persistence request.
   const createResponse = await createResponsePromise;
   expect(createResponse.ok(), `Case creation failed: HTTP ${createResponse.status()}`).toBe(true);
@@ -157,13 +159,14 @@ async function chooseJourney(page: Page, journey: ServiceJourney) {
   expect(created.analysis).toBeTruthy();
 
   // Server-truth check after reload: case and analysis must survive a new UI state.
-  await page.reload();
-  const listResponse = await page.waitForResponse((response) =>
+  const listResponsePromise = page.waitForResponse((response) =>
     response.url().includes('/api/cases') &&
     response.request().method() === 'GET' &&
     response.status() === 200,
     { timeout: 30_000 },
   );
+  await page.reload();
+  const listResponse = await listResponsePromise;
   const cases = await listResponse.json();
   expect(Array.isArray(cases)).toBe(true);
   const persisted = cases.find((item: any) => item.id === created.id);
@@ -203,14 +206,7 @@ if (registrationMode) {
         const secondContext = await page.context().browser()!.newContext();
         try {
           const secondPage = await secondContext.newPage();
-          await loginUser(secondPage, user);
-          const historyResponse = await secondPage.waitForResponse((response) =>
-            response.url().includes('/api/cases') &&
-            response.request().method() === 'GET' &&
-            response.status() === 200,
-            { timeout: 30_000 },
-          );
-          const history = await historyResponse.json();
+          const history = await loginUser(secondPage, user);
           for (const item of createdCases) {
             const recovered = history.find((entry: any) => entry.id === item.caseId);
             expect(recovered, `Missing prior case ${item.caseId} after a fresh login.`).toBeTruthy();
