@@ -125,3 +125,31 @@ A certificação só pode ser declarada concluída quando:
 - relatório e artifacts permitirem reproduzir e auditar a execução.
 
 **Estado inicial:** não certificado. A criação desta especificação não constitui execução nem aprovação dos testes.
+
+
+## Registro de execução — fases 1 a 3 (2026-10-19)
+
+### Fase 1 — pré-flight e isolamento
+
+- **PASS:** branch de trabalho `rebuild/preproduction-certification-greenfield`; PR #40 permanece direcionado a `main`, sem merge.
+- **PASS:** o workflow `.github/workflows/cloudflare-deploy.yml` foi inspecionado. O job de PR executa os testes de contrato; o passo `Build and deploy to Cloudflare` exige simultaneamente evento `push`, branch `main` e mensagem contendo `[DEPLOY-PRODUCTION]`. Na execução do PR #40, o workflow terminou com sucesso e não publicou deploy.
+- **PASS:** o job `production-golden-path` foi ignorado, conforme sua condição de execução manual específica.
+- **PASS:** os testes unitários/auditoria passaram na execução inicial do CI.
+- **BLOCKED:** o typecheck falhou; o build subsequente foi ignorado. A certificação não pode avançar para bateria completa até a falha ser diagnosticada e corrigida sem enfraquecer as verificações.
+
+### Fase 2 — contratos de identidade, persistência e bloqueio financeiro
+
+- **PASS:** a suíte greenfield verifica a exigência de sete identidades persistentes U1–U7 e a recuperação de histórico após novo contexto de navegador.
+- **PASS:** foi acrescentado `cloudflare/routes/cases-payment-gate.test.ts`, que verifica que um caso não pago recebe HTTP 402 antes de executar análise, montar documento ou persistir alterações. O resultado deste novo teste deve ser confirmado no CI do commit que o introduziu.
+- **BLOCKED:** não há URL HTTPS de pré-produção isolada confirmada nem credenciais protegidas de sete contas fornecidas no contexto desta execução. Nenhuma conta foi criada e nenhuma escrita de caso foi iniciada.
+
+### Fase 3 — piloto ponta a ponta com documento
+
+- **BLOCKED:** o piloto real de navegador não foi executado porque faltam o alvo isolado confirmado, as sete identidades protegidas e o mecanismo de pagamento de pré-produção seguro.
+- **BLOCKED:** o endpoint canônico `POST /api/cases/:id/generate-defense` exige `cases.is_paid = true`, valida os dados do requerente e aplica o Quality Gate antes de persistir a minuta. Não foi contornado esse gate nem criada uma confirmação de pagamento artificial.
+- **NOT_RUN:** geração real, Quality Gate em documento gerado no ambiente, persistência de documento e recuperação após novo login.
+- Nenhum deploy, migração, pagamento real ou alteração em produção foi executado nesta sequência.
+
+### Próxima delegação
+
+A Fase 4 está especificada em [FASE-4-AGENTE-LOCAL.md](./FASE-4-AGENTE-LOCAL.md). O agente local deve primeiro resolver o typecheck e comprovar o pré-flight/piloto; se algum pré-requisito continuar ausente, deve encerrar como BLOCKED sem iniciar a bateria dos sete serviços. A Fase 4 não está autorizada a usar produção, executar deploy/migrações ou pagamentos reais.
