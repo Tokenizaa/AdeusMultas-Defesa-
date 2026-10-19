@@ -9,16 +9,13 @@
     "build": "node scripts/generate-brand-assets.mjs && vite build && node scripts/build-api.mjs",
     "start": "node api/index.mjs",
     "preview": "vite preview",
-    "test": "playwright test --project=chromium-production",
-    "test:e2e": "playwright test --project=chromium-production",
-    "test:e2e:service": "playwright test --project=chromium-production -g",
-    "test:e2e:failed": "playwright test --project=chromium-production --retries 0",
+    "test": "vitest run",
+    "test:e2e": "npm run test:certification",
     "clean": "rm -rf dist server.js api/index.mjs",
     "lint": "tsc --noEmit",
     "test:unit": "vitest run",
     "governance:check": "node scripts/governance-check.cjs",
     "dev:legacy": "tsx src/server/dev-bootstrap.ts",
-    "test:e2e:shared": "playwright test --project=chromium-production --workers=1 tests/e2e/services",
     "test:certification": "playwright test --config=playwright.certification.config.ts"
   },
   "dependencies": {
