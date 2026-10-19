@@ -71,7 +71,7 @@ export async function executeOnboardingFlow(page: Page, testCase: TestCaseData):
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 
   timestamps.navigation = new Date().toISOString();
-  await page.goto(`${BASE_URL}/novo-caso-rebuild`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+  await page.goto(`${BASE_URL}/novo-caso`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Informe os dados da autuação' })).toBeVisible({ timeout: 10_000 });
 
   // This harness certifies the actual new manual intake and stops at the

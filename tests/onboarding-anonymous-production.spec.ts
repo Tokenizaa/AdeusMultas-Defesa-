@@ -82,14 +82,14 @@ test('novo onboarding manual em produção → persistência reconciliada → pa
   expect(baseUrl).toBe('https://adeusmulta.defesai.com.br');
 
   await context.clearCookies();
-  await page.goto('/novo-caso-rebuild', { waitUntil: 'domcontentloaded' });
+  await page.goto('/novo-caso', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => { sessionStorage.clear(); localStorage.clear(); });
 
   // This checkpoint fails before any write if the new onboarding has not yet
   // reached production. Do not fall back to the legacy /novo-caso wizard.
   await expect(
     page.getByRole('heading', { name: 'Informe os dados da autuação' }),
-    'Production does not serve the new manual onboarding at /novo-caso-rebuild; no case was created.',
+    'Production does not serve the new manual onboarding at /novo-caso; no case was created.',
   ).toBeVisible({ timeout: 10_000 });
 
   const requiredFields = [

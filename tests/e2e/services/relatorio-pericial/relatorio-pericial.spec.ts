@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../e2e-infrastructure';
-import { executeOnboardingFlow, TestCaseData } from '../../e2e-onboarding-executor';
-import { E2EValidator, ValidationResult } from '../../e2e-validator';
+import { E2ETestManager, TestUser, TestCase, getE2ETestManager, TEST_RUN_ID } from '../../../e2e-infrastructure';
+import { executeOnboardingFlow, TestCaseData } from '../../../e2e-onboarding-executor';
+import { E2EValidator, ValidationResult } from '../../../e2e-validator';
 
 test.describe('Suíte E2E: Relatório Técnico Pericial de Engenharia e Radar', () => {
   let testManager: E2ETestManager;
