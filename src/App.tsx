@@ -25,7 +25,6 @@ import { UserServicesView } from './components/user/UserServicesView';
 // Existing Product Modules & Functional Views
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { CheckoutView } from './components/checkout/CheckoutView';
-import { ManualIntakePage } from './onboarding/ManualIntakePage';
 import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
 import { KnowledgeHub } from './components/knowledge/KnowledgeHub';
@@ -396,12 +395,7 @@ function AppContent() {
 
       {currentPath === '/cadastro' && <RegisterPageView />}
 
-      {currentPath === '/novo-caso' && (
-        <OnboardingWizard
-          onOpenKnowledge={() => navigate('/admin/knowledge')}
-          isAdmin={isAdmin}
-        />
-      )}
+      {currentPath === '/novo-caso' && <OnboardingWizard isAdmin={isAdmin} />}
 
       {/* 404 fallback */}
       {!matchedPublicRoute && (
