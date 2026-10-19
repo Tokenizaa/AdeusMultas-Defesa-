@@ -3,7 +3,7 @@
 **Repositório:** `Tokenizaa/AdeusMultas-Defesa-`  
 **Branch:** `rebuild/preproduction-certification-greenfield`  
 **PR:** #40 — manter em draft; não fazer merge.  
-**Commit de partida desta delegação:** `39d44dfb5c532bd4982ce0db68fa530ad4baa108`
+**Ponto de partida:** o HEAD mais recente da branch `rebuild/preproduction-certification-greenfield` no momento em que o agente iniciar; sincronize antes de alterar arquivos.
 
 ## Objetivo
 
