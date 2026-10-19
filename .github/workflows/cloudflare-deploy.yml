@@ -11,6 +11,7 @@ on:
       - 'package.json'
       - 'bun.lockb'
       - 'vitest.config.*'
+      - 'src/**'
       - 'scripts/**'
       - '.github/workflows/cloudflare-deploy.yml'
   pull_request:
@@ -21,6 +22,7 @@ on:
       - 'package.json'
       - 'bun.lockb'
       - 'vitest.config.*'
+      - 'src/**'
       - 'scripts/**'
       - '.github/workflows/cloudflare-deploy.yml'
 

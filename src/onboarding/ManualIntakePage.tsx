@@ -456,8 +456,8 @@ export function ManualIntakePage() {
               </button>
             ) : (
               <div className="mt-4 flex flex-wrap gap-3">
-                <button type="button" onClick={() => navigate('/login?redirect=%2Fnovo-caso-rebuild')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">Entrar para vincular</button>
-                <button type="button" onClick={() => navigate('/cadastro?redirect=%2Fnovo-caso-rebuild')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Criar conta</button>
+                <button type="button" onClick={() => navigate('/login?redirect=%2Fnovo-caso')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">Entrar para vincular</button>
+                <button type="button" onClick={() => navigate('/cadastro?redirect=%2Fnovo-caso')} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">Criar conta</button>
               </div>
             )}
           </section>
