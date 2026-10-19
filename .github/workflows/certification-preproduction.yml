@@ -21,14 +21,14 @@ concurrency:
 
 jobs:
   certification:
-    name: Greenfield certification (${{ inputs.operation ${{)
+    name: Greenfield certification (${{ inputs.operation }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      E2E_CERTIFICATION_BASE_URL: ${{ secrets.PREPRODUCTION_BASE_URL ${{
-      E2E_CERTIFICATION_USERS: ${{ secrets.E2E_CERTIFICATION_USERS ${{
+      E2E_CERTIFICATION_BASE_URL: ${{ secrets.PREPRODUCTION_BASE_URL }}
+      E2E_CERTIFICATION_USERS: ${{ secrets.E2E_CERTIFICATION_USERS }}
       E2E_CERTIFICATION_PAYMENT_MODE: disabled
-      E2E_CERTIFICATION_REGISTER_USERS: ${{ inputs.operation == 'register' && 'true' || 'false' ${{
+      E2E_CERTIFICATION_REGISTER_USERS: ${{ inputs.operation == 'register' && 'true' || 'false' }}
       CI: 'true'
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
           echo "Target is HTTPS pre-production. Payment mode is disabled."
 
       - name: Run current canonical legal pipeline matrix
-        if: inputs.operation == 'journeys'
+        if: github.event.inputs.operation == 'journeys'
         run: npx vitest run tests/certification/legal-pipeline-matrix.test.ts
 
       - name: Install Chromium
@@ -72,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: greenfield-certification-${{ github.run_id ${{-${{ github.run_attempt ${{
+          name: greenfield-certification-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             playwright-report/certification/
             test-results/certification/
