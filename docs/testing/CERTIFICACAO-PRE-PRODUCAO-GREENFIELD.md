@@ -153,3 +153,8 @@ A certificação só pode ser declarada concluída quando:
 ### Próxima delegação
 
 A Fase 4 está especificada em [FASE-4-AGENTE-LOCAL.md](./FASE-4-AGENTE-LOCAL.md). O agente local deve primeiro resolver o typecheck e comprovar o pré-flight/piloto; se algum pré-requisito continuar ausente, deve encerrar como BLOCKED sem iniciar a bateria dos sete serviços. A Fase 4 não está autorizada a usar produção, executar deploy/migrações ou pagamentos reais.
+
+
+### Atualização do diagnóstico do typecheck
+
+O log de CI identificou a causa concreta do primeiro typecheck: dois arquivos remanescentes do executor legado importavam `src/server/services/e2e-test-runner-service.ts`, já removido. Na branch foram removidos também `src/server/routes/e2e-tests.ts` e `src/server/db/e2e-test-repository.ts`. A remoção foi feita na branch do PR; aguardar o CI do HEAD atual para confirmar se o typecheck e o build passam. Até esse resultado, a correção está aplicada, mas não validada.
