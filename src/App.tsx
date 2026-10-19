@@ -23,7 +23,7 @@ import { UserSettingsView } from './components/user/UserSettingsView';
 import { UserServicesView } from './components/user/UserServicesView';
 
 // Existing Product Modules & Functional Views
-import { ManualIntakePage } from './onboarding/ManualIntakePage';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { CheckoutView } from './components/checkout/CheckoutView';
 import { CaseDetailView } from './components/cases/CaseDetailView';
 import { CasesListView } from './components/cases/CasesListView';
@@ -395,7 +395,7 @@ function AppContent() {
 
       {currentPath === '/cadastro' && <RegisterPageView />}
 
-      {currentPath === '/novo-caso' && <ManualIntakePage />}
+      {currentPath === '/novo-caso' && <OnboardingWizard isAdmin={isAdmin} />}
 
       {/* 404 fallback */}
       {!matchedPublicRoute && (
