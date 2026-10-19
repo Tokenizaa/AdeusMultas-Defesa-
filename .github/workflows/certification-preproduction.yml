@@ -1,0 +1,80 @@
+name: Greenfield Pre-production Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Use register only for the first creation of the seven persistent test accounts'
+        type: choice
+        required: true
+        default: journeys
+        options:
+          - register
+          - journeys
+
+permissions:
+  contents: read
+
+concurrency:
+  group: greenfield-preproduction-certification
+  cancel-in-progress: false
+
+jobs:
+  certification:
+    name: Greenfield certification (${{ inputs.operation ${{)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      E2E_CERTIFICATION_BASE_URL: ${{ secrets.PREPRODUCTION_BASE_URL ${{
+      E2E_CERTIFICATION_USERS: ${{ secrets.E2E_CERTIFICATION_USERS ${{
+      E2E_CERTIFICATION_PAYMENT_MODE: disabled
+      E2E_CERTIFICATION_REGISTER_USERS: ${{ inputs.operation == 'register' && 'true' || 'false' ${{
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Fail closed on missing or production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$E2E_CERTIFICATION_BASE_URL" || {
+            echo "::error::PREPRODUCTION_BASE_URL secret is missing."
+            exit 1
+          }
+          test -n "$E2E_CERTIFICATION_USERS" || {
+            echo "::error::E2E_CERTIFICATION_USERS secret is missing."
+            exit 1
+          }
+          node -e "const u=new URL(process.env.E2E_CERTIFICATION_BASE_URL); if(u.protocol!=='https:' || /adeusmulta\\.defesai\\.com\\.br|defesai\\.shop/i.test(u.hostname)) process.exit(1)"
+          test "$E2E_CERTIFICATION_PAYMENT_MODE" = disabled
+          echo "Target is HTTPS pre-production. Payment mode is disabled."
+
+      - name: Run current canonical legal pipeline matrix
+        if: inputs.operation == 'journeys'
+        run: npx vitest run tests/certification/legal-pipeline-matrix.test.ts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run greenfield UI certification
+        run: npm run test:certification
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: greenfield-certification-${{ github.run_id ${{-${{ github.run_attempt ${{
+          path: |
+            playwright-report/certification/
+            test-results/certification/
+          if-no-files-found: warn
+          retention-days: 30
