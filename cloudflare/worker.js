@@ -3,9 +3,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { createSupabaseAdminClient } from './supabase'
-import type { Env } from './supabase'
 import { authenticateToken, requireAdmin, logRequest } from './middleware'
-import type { AuthenticatedUser } from './middleware'
 import { apiBoundary } from '../src/shared/api/boundary'
 
 import { authRoutes } from './routes/auth'
@@ -24,7 +22,7 @@ import { aiRoutes } from './routes/ai'
 import { commercialRoutes } from './routes/commercial'
 import { documentsRoutes } from './routes/documents'
 
-const app = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>()
+const app = new Hono()
 app.use('*', secureHeaders())
 app.use('*', cors())
 app.use('*', logRequest)
@@ -80,7 +78,7 @@ app.route('/api', commercialRoutes)
 app.route('/api', documentsRoutes)
 
 app.get('/api/admin/test', authenticateToken, requireAdmin, (c) => {
-  const user = c.get('user') as AuthenticatedUser
+  const user = c.get('user')
   return c.json({ message: 'Admin test successful', user: { id: user.id, email: user.email, role: user.role } })
 })
 

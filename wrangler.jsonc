@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/wrangler.json",
   "name": "adeusmulta",
-  "main": "cloudflare/worker.ts",
+  "main": "cloudflare/worker.js",
   "compatibility_date": "2026-09-13",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
@@ -35,6 +35,7 @@
     "VENO_PRIMARY_GATEWAY": "venopag"
   },
   "build": {
-    "command": "bun run build"
-  }
+    "command": "npx esbuild cloudflare/worker.js --bundle --platform=node --format=esm --outfile=cloudflare/dist/worker.js --alias:qrcode=./cloudflare/stubs/qrcode.js --target=node18"
+  },
+  "main": "cloudflare/dist/worker.js"
 }
