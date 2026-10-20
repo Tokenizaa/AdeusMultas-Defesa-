@@ -6,7 +6,7 @@ export interface RouteMatch { path: string; pattern: string; params: Record<stri
 interface RouterContextType { currentPath: string; params: Record<string, string>; queryParams: Record<string, string>; navigate: (to: string, options?: { replace?: boolean }) => void; activeArea: 'public' | 'user' | 'admin'; }
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
 function parsePath(pathname: string): { path: string; search: string } { const [path, search = ''] = pathname.split('?'); return { path: path || '/', search }; }
-function canonicalizePath(path: string): string { return path === '/onboarding' || path === '/novo-caso-rebuild' ? '/novo-caso' : path; }
+function canonicalizePath(path: string): string { return path === '/onboarding' ? '/novo-caso' : path; }
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
   const [currentPath, setCurrentPath] = useState<string>(() => canonicalizePath(window.location.pathname || '/'));
