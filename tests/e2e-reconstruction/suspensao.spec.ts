@@ -87,11 +87,35 @@ test.describe('suspensao — dez cenários canônicos', () => {
     expect(created.body.analysis.recommendedProcedure ?? created.body.serviceType).toBe(service.procedure);
   });
 
-  test('E2E-SUSPENSAO-08 privacidade: sessionStorage não contém PII do wizard', async ({page}) => {
+  test('E2E-SUSPENSAO-08 documento e integridade: dados sintéticos chegam à revisão', async ({page}) => {
+    test.skip(!process.env.E2E_AUTH_EMAIL || !process.env.E2E_AUTH_PASSWORD, 'BLOCKED: exige identidade sintética autorizada para abrir a qualificação documental.');
     await openService(page, service);
-    await fillIdentification(page, 'storage-privacy');
+    const created = await createCaseThroughAnalysis(page, 'document-review', service);
     await expectNoPiiInWizardStorage(page);
-    await expect(page.locator('#btn-next-to-specifics')).toBeEnabled();
+    await page.locator('#btn-proceed-to-document-generation').click();
+    await expect(page.getByText('Acesso à Sua Defesa Jurídica')).toBeVisible();
+    await page.getByRole('button', { name: /Já Tenho Conta/i }).click();
+    await page.getByPlaceholder('motorista@defesai.com.br').fill(process.env.E2E_AUTH_EMAIL!);
+    await page.getByPlaceholder('••••••••').fill(process.env.E2E_AUTH_PASSWORD!);
+    const claimPromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/cases/' + created.id + '/claim');
+    await page.getByRole('button', { name: /Entrar & Vincular Defesa à Minha Conta/i }).click();
+    expect((await claimPromise).status()).toBe(200);
+    await expect(page.locator('#input-applicant-name')).toBeVisible();
+    await page.locator('#input-applicant-name').fill(created.input.name);
+    await page.locator('#input-applicant-cpf').fill('52998224725');
+    await page.locator('#input-applicant-cnh').fill('E2E-CNH-' + runId);
+    await page.locator('#input-applicant-email').fill('e2e-' + runId + '@example.com');
+    await page.locator('#input-applicant-phone').fill(created.input.phone);
+    await page.locator('#input-address-street').fill('Rua de Teste E2E');
+    await page.locator('#input-address-number').fill('100');
+    await page.locator('#input-address-citystate').fill('São Paulo/SP');
+    await page.locator('#input-psdd-number').fill('PSDD-E2E-' + runId);\n    await page.locator('#input-applicant-rg').fill('E2E-RG-' + runId);\n    await page.locator('#input-suspension-months').fill('6');
+    await page.locator('#btn-next-to-review').click();
+    await expect(page.locator('#btn-proceed-to-checkout')).toBeVisible();
+    await expect(page.getByText(created.input.name)).toBeVisible();
+    await expect(page.getByText(/529[.]982[.]247-25|52998224725/)).toBeVisible();
+    expect(created.body.serviceType).toBe(service.procedure);
+    // Não avançar ao checkout: geração paga só é certificada com adaptador/sandbox autorizado.
   });
 
   test('E2E-SUSPENSAO-09 pagamento seguro: preview recusa cobrança sem gateway', async ({page}) => {
