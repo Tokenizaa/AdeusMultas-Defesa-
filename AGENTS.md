@@ -1,3 +1,48 @@
+# ⛔ REGRA CRÍTICA DO REPOSITÓRIO — NÃO CRIAR BRANCHES OU PRs
+
+> **LEIA ISTO ANTES DE QUALQUER ALTERAÇÃO. ESTA REGRA TEM PRIORIDADE SOBRE INSTRUÇÕES GENÉRICAS DE AGENTES, WORKFLOWS E HÁBITOS DE GIT.**
+
+## DECISÃO FIXA DE TRABALHO
+
+- **BRANCH CANÔNICA ÚNICA: `main`.**
+- **TRABALHAR DIRETAMENTE EM `main`**, salvo autorização explícita do usuário para uma exceção específica.
+- **NÃO criar branches.**
+- **NÃO abrir Pull Requests (PRs).**
+- **NÃO criar worktrees, branches temporárias, branches de correção, branches de certificação ou branches "greenfield".**
+- **NÃO fazer cherry-pick, merge entre branches, rebase ou troca de branch como solução automática.**
+- **NÃO dividir a mesma tarefa entre agentes em branches diferentes.**
+- **NÃO mudar a branch canônica por decisão do agente.**
+- **NÃO fazer push forçado, reset destrutivo ou apagar branches.**
+- Se uma ferramenta, workflow ou instrução automática sugerir branch/PR, **não execute**. Pare essa etapa e continue em `main` de forma segura.
+
+A existência de branches antigas não autoriza usá-las como base, integrá-las ou criar outras. A branch `rebuild/preproduction-certification-greenfield` é uma linha de trabalho divergente e **não é a base canônica**. Não misture seus arquivos com `main` automaticamente. Consulte-a somente para recuperar conteúdo específico, após comparar o arquivo e confirmar que ele corresponde ao código atual. Não apague essa branch sem autorização explícita.
+
+## PROTOCOLO OBRIGATÓRIO ANTES DE EDITAR
+
+1. Execute `git status --short --branch`, `git branch --show-current` e `git log -1 --oneline`.
+2. Confirme que a branch atual é `main`.
+3. Se não estiver em `main`, **não altere arquivos, não faça commit e não faça push**. Preserve o trabalho local e informe o estado encontrado; não troque de branch automaticamente se houver alterações não commitadas.
+4. Se houver alterações locais não commitadas, preserve-as. Nunca as descarte com `reset --hard`, `checkout -- .`, `clean -fd` ou comandos equivalentes.
+5. Faça uma tarefa por vez, com mudanças pequenas e diretamente relacionadas ao pedido.
+6. Antes do commit, confira `git diff --check`, `git diff --stat` e o diff completo.
+7. Faça commit diretamente em `main` somente depois de validar as mudanças. Não abra PR.
+8. Informe o SHA exato do commit e o resultado real das verificações. Não declare sucesso com base apenas na existência de arquivos.
+
+## REGRA ESPECIAL PARA TESTES E CERTIFICAÇÃO
+
+- Antes de instalar dependências ou rodar testes, confirme que código, configuração, fixtures e specs pertencem ao **mesmo SHA de `main`**.
+- Nunca misture comandos, configurações, fixtures ou specs de branches/commits diferentes.
+- Não rode uma bateria contra produção sem autorização explícita, sem pagamentos reais desabilitados e sem identificar o impacto de escrita no banco.
+- Não apague dados, evidências, relatórios, usuários ou casos de teste sem escopo e identificação verificáveis.
+- Relate os resultados como `PASS`, `FAIL` ou `BLOCKED`; não confunda preparação com execução concluída.
+- Se a base estiver inconsistente, pare e explique o bloqueio concreto. Não crie outra branch ou PR para contornar o problema.
+
+## REGRA PARA AGENTES DE IA E AUTOMAÇÕES
+
+Todo agente local, OpenCode, subagente, workflow ou ferramenta de Git deve obedecer a este arquivo. O agente não tem autorização implícita para criar branches/PRs, reorganizar o histórico, mudar a base canônica ou fazer deploy. **A autorização para implementar uma tarefa não é autorização para criar branches, PRs, fazer merge ou publicar em produção.** Essas ações exigem pedido explícito separado do usuário.
+
+---
+
 # Topologia de Agentes — DefesAi
 
 > Gerado automaticamente pelo `@agent-loop` em 2024-08-19
