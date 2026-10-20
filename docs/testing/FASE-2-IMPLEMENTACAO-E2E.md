@@ -11,6 +11,7 @@
 - Helpers que percorrem a UI de `/novo-caso`, selecionam dados sintéticos, usam o catálogo real de infrações e criam casos somente pela jornada do wizard.
 - Guarda de escrita: os cenários que criam casos exigem `E2E_ALLOW_PERSISTENT_WRITES=true`.
 - Recuperação de caso por token válido e rejeição de token inválido; o token não é usado como evidência nem registrado em relatórios.
+- Handoff de autenticação e revisão documental usam `E2E_AUTH_EMAIL` e `E2E_AUTH_PASSWORD` de uma identidade sintética autorizada; sem eles, os cenários ficam `BLOCKED` antes de criar casos.
 - Cenário de pagamento bloqueado por padrão. Só tenta verificar o bloqueio de preview se `E2E_SAFE_PREVIEW=true` e `E2E_AUTH_TOKEN` estiverem explicitamente configurados; espera HTTP 503 e não aceita confirmação de cobrança.
 - Comandos `test:e2e` e `test:e2e:list`; a suíte Vitest existente permanece preservada.
 
