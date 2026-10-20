@@ -3,6 +3,7 @@ import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPii
 const service: CanonicalService = {
   "id": "cassacao",
   "situationId": "cassacao_cnh",
+  "stageId": "primeira_notificacao",
   "categoryId": "excesso_velocidade",
   "procedure": "cassacao_cnh"
 };
