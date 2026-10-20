@@ -1,132 +1,248 @@
-# Fase 1 — Mapa técnico para reconstrução da suíte E2E
+# Fase 1 — Mapa técnico e matriz preliminar dos 70 casos E2E
 
-**Status:** auditoria documental inicial concluída; matriz de serviços e fluxos ainda contém bloqueios que precisam ser resolvidos antes da implementação dos testes.  
-**Repositório:** `Tokenizaa/AdeusMultas-Defesa-`  
-**Branch de referência:** `main`  
-**Escopo:** leitura remota do código e da documentação canônica. Nenhum teste foi criado/executado; nenhum código de produto, configuração, banco ou ambiente foi alterado.
+**Status da fase:** concluída como análise e especificação; bloqueios técnicos identificados e documentados. Não significa que os bloqueios do produto estejam corrigidos nem que a suíte esteja pronta para executar.  
+**Repositório:** `Tokenizaa/AdeusMultas-Defesa-` · **branch:** `main`  
+**Escopo executado:** leitura de código e documentação versionados em `main), definição dos contratos conhecidos, matriz dos 70 identificadores e critérios de entrada para a Fase 2.  
+**Não realizado:** criação/execução de testes E2E, build, typecheck, alteração de código de produto, acesso/escrita no banco, alteração de ambiente ou pagamento.
 
-## 1. Decisão de arquitetura dos testes
+## 1. Resultado da Fase 1
 
-- A especificação operacional é `docs/testing/E2E-CERTIFICACAO-CANONICA.md`.
-- São sete serviços canônicos, dez casos por serviço e 70 casos no total.
-- Os casos serão separados por arquivo de serviço, com identificadores estáveis definidos antes da implementação.
-- As cinco identidades serão compartilhadas entre jornadas, não fixadas em categorias de teste. Uma identidade pode concluir um serviço e iniciar outro; cada processo persistido deve ter seu próprio caso e estado.
-- A execução funcional posterior ocorrerá sequencialmente: dez casos de um serviço, análise e fechamento desse serviço, depois o próximo.
-- Testes unitários, integração, auditoria e segurança que não sejam E2E devem ser preservados.
+A análise confirmou que a suíte deve ser construída em sete arquivos independentes, com dez identificadores fixos por serviço, e executada depois em lotes de dez casos por serviço. Os cinco usuários são identidades sintéticas reutilizáveis em jornadas cruzadas, não categorias exclusivas de teste.
 
-## 2. Fontes de código examinadas
+A matriz abaixo é a **especificação de intenção dos casos**. Passos de interface, seletores, valores de entrada, chamadas e oráculos finais só podem ser implementados depois que cada comportamento estiver confirmado nos contratos ativos. Onde a implementação ou o ambiente não oferece condição segura para validar um resultado, o caso permanece bloqueado; não se deve inventar uma rota, mockar silenciosamente a integração ou contornar proteções.
 
-| Área | Fonte observada | O que comprova |
+## 2. Fontes canônicas examinadas
+
+| Área | Arquivo(s) de referência em `main` | Papel na análise |
 |---|---|---|
-| Tipos de domínio | `src/types/index.ts` | União `ProcedureType`, estados de caso, pagamento e documento |
-| Seleção de serviço | `src/core/onboarding/rules-matrix.ts` | Cinco situações de onboarding e mapeamentos iniciais |
-| Interface de seleção | `src/components/onboarding/steps/ServiceStep.tsx` | IDs dos controles e opções exibidas ao usuário |
-| Orquestração do onboarding | `src/components/onboarding/OnboardingWizard.tsx` | Estado das etapas, serviço derivado, identidade, caso/token recuperável |
-| Intake anônimo | `cloudflare/routes/cases.ts` | Contrato de criação anônima, validação mínima, token de claim e persistência |
-| Pagamentos | `cloudflare/routes/payments.ts` | Criação de PIX, associação com caso/usuário, idempotência e proteção de preview |
-| Checkout visual | `src/components/onboarding/generation/DocumentCheckoutStep.tsx` | Etapa de checkout integrada ao wizard; precisa ser mapeada com o contrato backend |
-| Catálogo comercial | `src/types/commercial.ts` | Tipos comerciais aceitos, com aliases adicionais |
-| Regras de segurança do repositório | `AGENTS.md` | `main` canônica, proibição de branch/PR sem autorização, proteção de produção e dados |
-| Especificação E2E | `docs/testing/E2E-CERTIFICACAO-CANONICA.md` | Matriz 7×10, isolamento, evidências e sequência de certificação |
+| Governança | `AGENTS.md` | `main` única; não criar branches/PRs; proteger produção, credenciais e dados |
+| Especificação E2E | `docs/testing/E2E-CERTIFICACAO-CANONICA.md` | 7 serviços × 10 casos, isolamento, evidências e estados PASS/FAIL/BLOCKED |
+| Tipos de domínio | `src/types/index.ts` | `ProcedureType`, `CaseStatus`, status de análise, pagamento e documento |
+| Tipos comerciais | `src/types/commercial.ts` | `CommercialServiceType` e catálogo de serviços pagos |
+| Matriz de onboarding | `src/core/onboarding/rules-matrix.ts` | Situações, fases processuais, procedimentos e campos exigidos |
+| Interface/estado | `src/components/onboarding/OnboardingWizard.tsx` | Etapas ativas do wizard, persistência de metadados e derivação do procedimento |
+| Autenticação no onboarding | `src/components/onboarding/AccountVerificationGate.tsx`, `src/core/auth/AuthContext.tsx` | Cadastro/login e transição para usuário autenticado |
+| Interface de checkout | `src/components/onboarding/generation/DocumentCheckoutStep.tsx` | Integração visual de checkout e estado do caso |
+| Intake e claim no Worker | `cloudflare/routes/cases.ts` | Criação anônima, token de recuperação/claim, autorização e persistência |
+| Pagamentos no Worker | `cloudflare/routes/payments.ts`, `cloudflare/venopag.ts` | Oferta, criação de ordem, gateway, status e bloqueio de preview |
+| App e navegação | `src/App.tsx` | Montagem das telas e rotas do produto |
+| Testes não E2E | `cloudflare/routes/cases.test.ts`, `cloudflare/routes/payments.test.ts`, demais suítes Vitest | Contratos e regressões a preservar; não substituem E2E de navegador |
+| Decisão de onboarding | `docs/product/onboarding/DECISAO-ONBOARDING-MANUAL-SEM-OCR-2026-10-18.md`, `docs/audit/ONBOARDING-REBUILD-STATUS.md` | Decisão manual sem OCR e registro de que o rebuild está em linha de trabalho separada |
 
-Esta auditoria é baseada na leitura remota de arquivos de `main`; não equivale a execução local, typecheck, build, validação de banco ou inspeção do bundle implantado.
+A leitura foi feita por arquivos versionados no GitHub. Não houve checkout local, execução do app, inspeção de deployment ou consulta direta ao banco; portanto, esta fase não declara validação dinâmica.
 
-## 3. Bloqueio P0 — divergência entre os sete serviços e os tipos reais
+## 3. Contratos confirmados e bloqueios
 
-A matriz canônica usa:
+### 3.1 Os nomes de serviço não são intercambiáveis
 
-- `defesa_previa`
-- `recurso_jari`
-- `recurso_cetran`
-- `suspensao`
-- `cassacao`
-- `indicacao_condutor`
-- `conversao_advertencia`
+A matriz canônica dos testes define `suspensao` e `cassacao`, mas os tipos de domínio usam `suspensao_cnh`, `cassacao_cnh`, `processo_suspensao` e `processo_cassacao`. O catálogo comercial contém tanto aliases curtos quanto nomes especializados. A seleção de situação e fase em `rules-matrix.ts` determina o procedimento; não se pode passar automaticamente o prefixo do teste como `serviceType` de API ou como `ProcedureType`.
 
-O tipo `ProcedureType` em `src/types/index.ts` usa, entre outros:
+| Serviço de certificação | Situação / seleção UI observada | Procedimento(s) a confirmar no contrato ativo | Estado |
+|---|---|---|---|
+| Defesa prévia | `multa_transito` + `primeira_notificacao` | `defesa_previa` | Mapeamento semântico identificado; verificar fluxo ativo ponta a ponta |
+| Recurso JARI | `multa_transito` + `notificacao_penalidade` ou fase compatível | `recurso_jari` | Confirmar combinação de fase e procedimento |
+| Recurso CETRAN | `multa_transito` + `recurso_jari_negado` | `recurso_cetran` | Confirmar combinação de fase e procedimento |
+| Suspensão | `suspensao_cnh` | `suspensao_cnh` ou `processo_suspensao` conforme contrato | Não escolher alias sem comprovar normalização e preço |
+| Cassação | `cassacao_cnh` | `cassacao_cnh` ou `processo_cassacao` conforme contrato | Não escolher alias sem comprovar normalização e preço |
+| Indicação de condutor | `indicacao_condutor` | `indicacao_condutor` | Verificar fluxo, dados exigidos e catálogo comercial |
+| Conversão em advertência | `conversao_advertencia` | `conversao_advertencia` | Verificar fluxo, elegibilidade e catálogo comercial |
 
-- `defesa_previa`, `recurso_jari`, `recurso_cetran`
-- `suspensao_cnh`, `cassacao_cnh`
-- `processo_suspensao`, `processo_cassacao`
-- `indicacao_condutor`, `conversao_advertencia`
+**Bloqueio P0:** antes de codificar os specs, cada serviço precisa ter um único mapeamento documentado entre identificador de certificação, escolha de interface, fase processual, `ProcedureType`, `serviceType` persistido e oferta comercial. Se o código contiver mais de uma representação válida, o teste deve seguir o fluxo real e verificar a normalização; não deve corrigir contratos por conta própria.
 
-Os valores canônicos `suspensao` e `cassacao` não aparecem nessa união. Já o endpoint `POST /api/cases/anonymous` aceita explicitamente `suspensao_cnh` e `cassacao_cnh`, não os aliases curtos `suspensao` e `cassacao`. Portanto, não se deve usar diretamente o prefixo do teste como `serviceType` de API sem definir e comprovar um mapeamento.
+### 3.2 Onboarding manual sem OCR não pode ser presumido em main
 
-Há também uma distinção de produto que precisa ser mantida: a interface apresenta a situação “Multa de Trânsito”, que inicialmente mapeia para `recurso_jari`, mas a etapa processual pode resultar em `defesa_previa`, `recurso_jari` ou `recurso_cetran`. O cenário deve validar a combinação situação + fase processual + procedimento resultante, não apenas o rótulo visual.
+A decisão de produto vigente pede coleta manual sem OCR. Porém, o documento `docs/audit/ONBOARDING-REBUILD-STATUS.md` descreve essa implementação na branch `onboarding/manual-intake-greenfield` e afirma que `main) não havia sido atualizada por aquele trabalho. A implementação presente em `main` inclui o wizard `OnboardingWizard.tsx` e etapas antigas de análise/identificação.
 
-**Ação exigida antes de implementar:** documentar um mapeamento explícito entre cada serviço de certificação, o valor enviado pela interface, o `ProcedureType`, o `serviceType` persistido e o identificador comercial. A auditoria não deve alterar esses contratos por conta própria.
+**Bloqueio P0:** antes da Fase 2, verificar e decidir qual implementação é a base autorizada dos testes. Por governança, não importar automaticamente código de outra branch nem presumir que o rebuild esteja integrado. Os testes devem refletir o fluxo efetivamente presente e autorizado em `main).
 
-## 4. Bloqueio P0 — onboarding canônico precisa ser confirmado no código de main
+### 3.3 Criação anônima, claim e recorrência
 
-A decisão de produto `docs/product/onboarding/DECISAO-ONBOARDING-MANUAL-SEM-OCR-2026-10-18.md` determina coleta manual sem OCR. Entretanto, o `src/components/onboarding/OnboardingWizard.tsx` observado em `main` ainda importa etapas históricas de identificação e processamento, incluindo `InfractionIdentificationStep` e `AnalysisProcessingStep`. A documentação de status também registra que o fluxo greenfield manual existiu em outra linha de trabalho, não devendo ser presumido como integrado à `main`.
+O Worker possui `POST /api/cases/anonymous`, que valida campos, exige infraestrutura de rate limit/IP, gera token imprevisível de claim e persiste o caso anônimo. Há fluxo de claim autenticado por `POST /api/cases/:id/claim`; o identificador do caso sozinho não é prova suficiente de autorização. O wizard mantém metadados de recuperação em session storage, sem intenção de armazenar dados pessoais ali.
 
-Antes dos testes, é necessário confirmar no código ativo de `main`:
-1. qual página/rota pública é realmente montada para iniciar um caso;
-2. se a jornada ativa é a de preenchimento manual sem OCR;
-3. como o identificador do caso e o token de claim são preservados;
-4. como o login/cadastro retoma o mesmo caso;
-5. se um usuário autenticado consegue iniciar outro serviço sem alterar processos anteriores.
+**Implicações de teste:**
+- criar casos pela interface nos cenários que validam intake;
+- nunca semear diretamente no banco para fingir que a interface foi percorrida;
+- testar recuperação e claim com token válido/inválido conforme o contrato;
+- verificar que o claim associa o mesmo caso à identidade autenticada;
+- para cliente recorrente, criar um novo caso separado para cada novo serviço e comprovar que o caso anterior permanece intacto;
+- verificar autorização e isolamento entre as cinco identidades, sem registrar tokens/cookies nas evidências.
 
-Nenhum teste deve assumir que uma implementação documentada em branch ou PR esteja presente em `main`.
+### 3.4 Pagamentos
 
-## 5. Contratos observados para caso anônimo e recuperação
+`cloudflare/routes/payments.ts` bloqueia criação de cobrança quando `E2E_SAFE_PREVIEW=true`; o código de pagamento usa oferta comercial e gateways configurados, incluindo VenoPag. A documentação de onboarding diz que não há sandbox público da VenoPag e que o preview não deve receber credenciais de produção.
 
-O endpoint `POST /api/cases/anonymous`:
-- exige cabeçalho de IP e binding de rate limiter; sem eles retorna indisponibilidade;
-- valida AIT, código de infração, localidade e placa;
-- gera um token de claim de 32 bytes no servidor;
-- cria o caso sem usuário, marcado como anônimo e não pago;
-- usa `defesa_previa` como valor padrão quando `serviceType` não é enviado;
-- limita `serviceType` a uma lista explícita de sete valores internos;
-- mantém órgão autuador ausente como “Não informado”, não como um órgão inventado.
+**Bloqueio P0:** os casos de pagamento não podem disparar cobranças reais. Antes de validar o resultado positivo, é necessário identificar um adaptador de teste já suportado ou aprovar um ambiente isolado que simule o contrato sem chamar o gateway real. O bloqueio de preview não deve ser removido para “fazer o teste passar”. Enquanto isso não existir, o caso de confirmação de pagamento é `BLOCKED`, não `PASS`.
 
-O endpoint de recuperação anônima exige ID mais token válido; o ID isolado não autoriza acesso. O endpoint de claim autenticado existe em `POST /api/cases/:id/claim`, mas seus pré-requisitos e seu resultado precisam ser incorporados ao mapa completo antes de escrever o cenário de handoff.
+### 3.5 Geração de documento
 
-Consequência para a suíte: verificar o caso criado pelo fluxo da interface, persistência e associação de identidade; não inserir casos diretamente no banco para preparar um cenário que deveria testar o intake.
+O wizard contém etapas de dados complementares, revisão e checkout; a aplicação também tem código de análise, montagem e quality gate de documentos. Os testes precisam validar documento derivado dos dados persistidos do próprio caso, procedimento correto, identidade e integridade, e não apenas presença de texto ou botão de download. A análise estática não basta para afirmar que todos os sete serviços produzem documento válido no fluxo integrado.
 
-## 6. Contrato de pagamento e limite de segurança
+## 4. Jornadas das cinco identidades
 
-O código em `cloudflare/routes/payments.ts`:
-- expõe consulta de preço/oferta e status do gateway;
-- cria PIX em `POST /api/payments/pix/create`, com autenticação e `caseId` obrigatório;
-- por padrão usa VenoPag quando `VENO_PRIMARY_GATEWAY` não define outro gateway;
-- registra a ordem ligada a caso e usuário;
-- reutiliza uma ordem PIX pendente compatível para o mesmo caso/usuário, protegendo contra duplicação;
-- bloqueia a criação de cobrança quando `E2E_SAFE_PREVIEW=true`, retornando 503 antes de contatar o gateway.
+Os nomes U1–U5 são aliases de dados sintéticos, não contas reais. As identidades serão preparadas apenas no ambiente de teste autorizado, com credenciais fora do repositório.
 
-A documentação do projeto informa que a VenoPag não oferece sandbox público. Portanto, **não existe autorização para executar o cenário de pagamento bem-sucedido contra produção durante esta fase**. Para testar sucesso financeiro sem movimentar dinheiro, antes da certificação será necessário identificar no código um adaptador de teste suportado ou preparar um ambiente isolado autorizado que reproduza os contratos de pagamento sem chamar o provedor real. A proteção do preview não deve ser contornada.
+| Identidade | Jornada transversal planejada | O que valida |
+|---|---|---|
+| U1 | Visitante → primeiro caso de Defesa Prévia → cadastro/claim quando o fluxo exigir → concluir etapas seguras → iniciar outro serviço com a mesma conta | Primeiro acesso e cliente recorrente |
+| U2 | Conta já cadastrada → novo Recurso JARI → consultar o caso anterior → iniciar CETRAN apenas com pré-condições legais/sintéticas adequadas | Reuso da conta e isolamento de processos |
+| U3 | Visitante → iniciar caso → interromper → recuperar/claim após autenticação → abrir outro serviço | Continuidade e recuperação |
+| U4 | Conta existente → serviços especializados de suspensão/cassação com casos separados → alternar entre histórico e caso atual | Mapeamento de serviço, dados e isolamento |
+| U5 | Conta existente → indicação de condutor/conversão em advertência → cenários negativos e repetição controlada | Validação de campos, elegibilidade e idempotência |
 
-## 7. Configuração e estado atual dos testes E2E
+A distribuição exata de U1–U5 pelos casos individuais será indicada na matriz abaixo e pode ser ajustada se as pré-condições reais do código exigirem. Não se deve inventar dependências entre casos: por exemplo, um recurso CETRAN só depende de indeferimento anterior quando o cenário explicitamente testa essa jornada.
 
-- `package.json` declara `test` e `test:unit` como `vitest run`; não declara um script `test:e2e`.
-- As buscas no código de `main` não localizaram a configuração Playwright ou os antigos specs E2E referenciados por documentos históricos. Os arquivos `playwright.config.ts`, `tests/e2e/services/*` e alguns artefatos de onboarding documentados não foram encontrados nos caminhos consultados na `main`.
-- Isso é compatível com a decisão de remover a suíte E2E antiga, mas ainda falta inventariar a árvore completa do checkout para afirmar a lista definitiva de arquivos existentes.
-- Testes de contrato/unitários como `cloudflare/routes/cases.test.ts` e `cloudflare/routes/payments.test.ts` são Vitest e não devem ser confundidos com a nova suíte E2E.
-- Não foi executado `npm test`, Playwright, build, typecheck ou qualquer teste de navegador nesta fase.
+## 5. Matriz dos 70 casos — objetivos a implementar
 
-## 8. Modelo de identidade e isolamento
+Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os passos, seletores, dados e verificações concretas são parte da implementação da Fase 2 e só podem ser preenchidos depois de resolver os bloqueios acima.
 
-Os cinco usuários de teste serão identidades sintéticas reutilizáveis em jornadas cruzadas. A distribuição final deve ser definida depois de mapear as pré-condições de cada caso. Regras:
-- cada cenário persistente recebe um caso próprio e um identificador único de execução;
-- o mesmo usuário pode concluir um serviço e iniciar outro;
-- o histórico anterior deve continuar acessível e inalterado;
-- cada caso mantém serviço, dados, documento, pagamento e estado próprios;
-- cenários de visitante não devem iniciar autenticados artificialmente;
-- não realizar limpeza destrutiva automática;
-- evidências não podem conter credenciais, tokens de claim, cookies ou dados pessoais reais.
+### Serviço 1 — Defesa prévia (`E2E-DP-001` a `E2E-DP-010`)
 
-## 9. Pendências para encerrar a Fase 1
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-DP-001 | U1, visitante | Iniciar o fluxo de Defesa Prévia pela interface pública e confirmar que o caso criado corresponde à seleção feita |
+| E2E-DP-002 | U1, mesmo caso | Validar obrigatoriedade e formato dos campos requeridos, sem persistir dados inválidos como caso válido |
+| E2E-DP-003 | U2, conta existente | Validar dados inconsistentes ou combinação de campos inválida e observar a rejeição esperada |
+| E2E-DP-004 | U1, continuidade | Confirmar que os dados manuais são mantidos no caso e não dependem de OCR |
+| E2E-DP-005 | U1, cadastro/claim | Autenticar a identidade e confirmar que o mesmo caso anônimo é associado, sem criar caso duplicado |
+| E2E-DP-006 | U3, recuperação | Interromper e recuperar o caso, verificando ID, dados e estado persistidos |
+| E2E-DP-007 | U1, análise | Verificar que análise e procedimento são derivados dos dados e da fase processual corretos |
+| E2E-DP-008 | U1, documento | Verificar vínculo, integridade e conteúdo do documento produzido para o caso |
+| E2E-DP-009 | U1, checkout | Verificar oferta e estado de pagamento sem chamar gateway financeiro real; sucesso fica bloqueado até existir adaptador autorizado |
+| E2E-DP-010 | U1, novo serviço/repetição | Repetir uma ação de forma controlada e iniciar um segundo serviço, confirmando ausência de duplicidade e preservação do caso anterior |
 
-1. Fechar o inventário dos arquivos realmente presentes em `main`, especialmente roteamento público, autenticação, claim, geração documental e testes não E2E.
-2. Confrontar o fluxo de onboarding ativo com a decisão de coleta manual sem OCR.
-3. Resolver documentalmente o mapeamento dos sete serviços para os tipos reais da aplicação e do catálogo comercial.
-4. Mapear o ciclo de vida de um caso: intake → análise → claim/cadastro → qualificação → ordem de pagamento → confirmação → documento.
-5. Definir como será testado o sucesso de pagamento sem transação real; se não houver mecanismo seguro existente, registrar esse cenário como bloqueado até que haja solução autorizada.
-6. Produzir a matriz final dos 70 casos com pré-condições, entrada, ações de interface, oráculo de negócio, verificações de persistência, dependências e evidências.
-7. Revisar a matriz com base no código antes de criar qualquer spec.
+### Serviço 2 — Recurso JARI (`E2E-JARI-001` a `E2E-JARI-010`)
 
-## 10. Critério para iniciar a Fase 2
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-JARI-001 | U2, conta existente | Iniciar Recurso JARI pela interface e confirmar o procedimento persistido |
+| E2E-JARI-002 | U2, mesmo caso | Validar campos obrigatórios específicos do procedimento |
+| E2E-JARI-003 | U2, mesmo caso | Rejeitar dados malformados ou inconsistentes sem produzir um caso falsamente válido |
+| E2E-JARI-004 | U3, visitante | Executar intake manual anônimo e confirmar dados vinculados ao caso correto |
+| E2E-JARI-005 | U3, claim | Recuperar/associar o caso à conta e manter a identidade e os dados originais |
+| E2E-JARI-006 | U2, histórico | Recuperar o caso após navegação/reentrada e verificar estado persistido |
+| E2E-JARI-007 | U2, análise | Confirmar seleção da fase processual JARI e análise aplicável, sem rebaixar para Defesa Prévia |
+| E2E-JARI-008 | U2, documento | Verificar que a peça/documento corresponde a JARI e ao caso, com integridade verificável |
+| E2E-JARI-009 | U2, checkout | Validar oferta/ordem e estado financeiro sem transação real; confirmação positiva bloqueada até mecanismo autorizado |
+| E2E-JARI-010 | U2, recorrência | Iniciar outro serviço na mesma conta e confirmar que o JARI anterior permanece independente |
 
-A Fase 2 só começa quando os itens acima estiverem resolvidos ou tiverem um bloqueio explícito aprovado. Não criar os dez testes de Defesa Prévia com base em suposições enquanto o fluxo ativo e o mapeamento de serviço estiverem ambíguos.
+### Serviço 3 — Recurso CETRAN (`E2E-CETRAN-001` a `E2E-CETRAN-010`)
 
-**Resultado desta entrega:** mapa técnico inicial documentado; testes E2E não criados; nenhuma execução ou certificação declarada.
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-CETRAN-001 | U2, conta existente | Iniciar Recurso CETRAN e confirmar procedimento/estágio corretos |
+| E2E-CETRAN-002 | U2, mesmo caso | Validar campos obrigatórios e dados da fase de segunda instância |
+| E2E-CETRAN-003 | U2, mesmo caso | Rejeitar combinação inválida de fase ou dados processuais |
+| E2E-CETRAN-004 | U3, visitante | Criar caso pela interface sem autenticação inicial, se permitido pelo fluxo ativo |
+| E2E-CETRAN-005 | U3, claim | Associar o caso à conta sem alterar o procedimento ou duplicar o caso |
+| E2E-CETRAN-006 | U2, recuperação | Reabrir o caso e conferir dados e estado persistidos |
+| E2E-CETRAN-007 | U2, análise | Verificar que CETRAN não é confundido com JARI e que a pré-condição de fase é respeitada |
+| E2E-CETRAN-008 | U2, documento | Verificar documento, procedimento e integridade vinculados ao caso |
+| E2E-CETRAN-009 | U2, checkout | Verificar oferta e estado de pagamento sem chamada financeira real; sucesso bloqueado até adaptador autorizado |
+| E2E-CETRAN-010 | U2, recorrência | Iniciar serviço diferente com a mesma conta e preservar o processo CETRAN |
+
+### Serviço 4 — Suspensão (`E2E-SUSP-001` a `E2E-SUSP-010`)
+
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-SUSP-001 | U4, conta existente | Selecionar suspensão e confirmar mapeamento entre UI, procedimento, caso e oferta |
+| E2E-SUSP-002 | U4, mesmo caso | Validar campos obrigatórios específicos do processo de suspensão |
+| E2E-SUSP-003 | U4, mesmo caso | Rejeitar dados inválidos/inconsistentes e combinações de procedimento não suportadas |
+| E2E-SUSP-004 | U1, visitante | Confirmar que o fluxo anônimo/manual suporta esse serviço conforme o código ativo |
+| E2E-SUSP-005 | U4, claim | Confirmar vínculo de identidade sem alterar serviço, dados ou estado |
+| E2E-SUSP-006 | U4, recuperação | Reabrir caso e confirmar que os dados específicos de suspensão foram preservados |
+| E2E-SUSP-007 | U4, análise | Verificar regras/análise e procedimento específico sem fallback indevido para Defesa Prévia |
+| E2E-SUSP-008 | U4, documento | Verificar documento de suspensão, vínculo com o caso e controles de integridade |
+| E2E-SUSP-009 | U4, checkout | Verificar oferta/ordem em ambiente seguro; pagamento confirmado bloqueado até mecanismo autorizado |
+| E2E-SUSP-010 | U4, recorrência | Iniciar cassação ou outro serviço como caso separado e comprovar que a suspensão anterior não muda |
+
+### Serviço 5 — Cassação (`E2E-CASS-001` a `E2E-CASS-010`)
+
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-CASS-001 | U4, conta existente | Selecionar cassação e confirmar o mapeamento canônico até o caso persistido |
+| E2E-CASS-002 | U4, mesmo caso | Validar campos obrigatórios do procedimento |
+| E2E-CASS-003 | U4, mesmo caso | Rejeitar dados inconsistentes e seleção incorreta de procedimento |
+| E2E-CASS-004 | U3, visitante | Confirmar intake manual/anônimo quando permitido pelo fluxo ativo |
+| E2E-CASS-005 | U4, claim | Associar o caso à conta e preservar os dados e o procedimento |
+| E2E-CASS-006 | U4, recuperação | Recuperar o caso e verificar estado e dados persistidos |
+| E2E-CASS-007 | U4, análise | Verificar tratamento de cassação sem fallback para suspensão, JARI ou Defesa Prévia |
+| E2E-CASS-008 | U4, documento | Verificar que o documento pertence ao procedimento de cassação e ao caso correto |
+| E2E-CASS-009 | U4, checkout | Verificar oferta e ordem sem transação real; sucesso bloqueado até mecanismo autorizado |
+| E2E-CASS-010 | U4, recorrência | Iniciar outro serviço e verificar isolamento do caso de cassação |
+
+### Serviço 6 — Indicação de condutor (`E2E-IND-001` a `E2E-IND-010`)
+
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-IND-001 | U5, conta existente | Iniciar indicação de condutor e confirmar o procedimento persistido |
+| E2E-IND-002 | U5, mesmo caso | Validar os campos e informações obrigatórios do condutor/indicação |
+| E2E-IND-003 | U5, mesmo caso | Rejeitar campos inválidos ou combinações inconsistentes sem aceitar dados incompletos |
+| E2E-IND-004 | U3, visitante | Validar intake anônimo/manual conforme suporte real do fluxo |
+| E2E-IND-005 | U5, claim | Confirmar vínculo do caso com a conta e preservação dos dados da indicação |
+| E2E-IND-006 | U5, recuperação | Reabrir e conferir o estado persistido do processo |
+| E2E-IND-007 | U5, análise | Verificar regras específicas da indicação, sem classificar como recurso de multa por engano |
+| E2E-IND-008 | U5, documento | Verificar documento/resultado e vínculo com os dados corretos do caso |
+| E2E-IND-009 | U5, checkout | Validar oferta e pagamento em modo seguro; sucesso bloqueado até adaptador autorizado |
+| E2E-IND-010 | U5, recorrência | Contratar outro serviço com a mesma conta e confirmar isolamento e histórico |
+
+### Serviço 7 — Conversão em advertência (`E2E-ADV-001` a `E2E-ADV-010`)
+
+| ID | Identidade/jornada | Objetivo |
+|---|---|---|
+| E2E-ADV-001 | U5, conta existente | Iniciar conversão em advertência e confirmar serviço/procedimento |
+| E2E-ADV-002 | U5, mesmo caso | Validar os dados necessários à análise de elegibilidade |
+| E2E-ADV-003 | U5, mesmo caso | Rejeitar dados inválidos e tratar inelegibilidade conforme regra explícita do produto |
+| E2E-ADV-004 | U1, visitante | Validar intake anônimo/manual se suportado pela rota ativa |
+| E2E-ADV-005 | U5, claim | Confirmar que o caso correto é associado à conta |
+| E2E-ADV-006 | U5, recuperação | Confirmar persistência e recuperação dos dados de elegibilidade |
+| E2E-ADV-007 | U5, análise | Verificar que a decisão respeita critérios de conversão, sem prometer deferimento automático |
+| E2E-ADV-008 | U5, documento | Verificar documento/resultado coerente com elegibilidade e caso |
+| E2E-ADV-009 | U5, checkout | Verificar oferta e estado de pagamento em ambiente seguro; sucesso bloqueado até adaptador autorizado |
+| E2E-ADV-010 | U5, recorrência | Iniciar outro serviço e verificar que os casos e seus estados permanecem separados |
+
+## 6. Requisitos comuns de implementação (para Fase 2)
+
+Todo caso, em todos os arquivos, deverá declarar:
+1. ID estável e título que descreve o comportamento.
+2. Identidade de teste e estado inicial (visitante ou autenticado).
+3. Pré-condições e dependências explícitas.
+4. Dados sintéticos válidos para o serviço e identificador único de execução.
+5. Passos de interface baseados nos seletores reais.
+6. Oráculo de negócio observável.
+7. Verificação de persistência usando o contrato autorizado; não apenas texto na tela.
+8. Verificação de que o caso, serviço, usuário e documento correspondem.
+9. Evidências sem credenciais, tokens, cookies ou dados pessoais reais.
+10. Resultado `PASS`, `FAIL`, `BLOCKED` ou `NOT_RUN`, com tentativa e causa preservadas.
+
+Os testes negativos não devem criar registros válidos acidentalmente. Os casos que validam criação/recuperação devem percorrer a UI. Cada processo de negócio persistido é separado, mesmo que a identidade seja reutilizada. A execução será sequencial por serviço; a suíte não deve misturar a certificação dos sete serviços numa única rodada.
+
+## 7. Condições de segurança e ambiente
+
+- Não executar testes de escrita contra produção sem autorização explícita e plano de impacto.
+- Não chamar gateway real; não contornar `E2E_SAFE_PREVIEW`.
+- Não armazenar segredos em arquivos de teste, commits, screenshots ou relatórios.
+- Não apagar dados ou evidências automaticamente sem identificação e política de limpeza aprovadas.
+- Não inserir registros diretamente no banco para contornar etapas da interface que o caso se propõe a validar.
+- Preservar testes Vitest/unitários, integração, auditoria e segurança que não sejam parte da antiga suíte E2E.
+- Não criar branch, PR, merge ou worktree; trabalhar diretamente em `main`.
+- Um bloqueio de infraestrutura não pode ser convertido em aprovação por mock não declarado.
+
+## 8. Critério de entrada da Fase 2
+
+A matriz de 70 IDs está definida, mas a implementação deve começar somente depois de resolver ou formalizar como bloqueios aprovados:
+1. qual onboarding está autorizado e ativo em `main` (manual sem OCR versus wizard atual);
+2. o mapeamento final dos sete serviços para UI, procedimento, caso e catálogo comercial;
+3. a rota e o oráculo autorizados para verificar análise e documento persistidos;
+4. o ambiente de teste e as identidades sintéticas, sem depender de usuários reais;
+5. o mecanismo seguro de teste de pagamento positivo sem transação real;
+6. os seletores e o comportamento real de cada tela.
+
+Se qualquer contrato não puder ser comprovado no código, registrar `BLOCKED` e resolver a análise antes de codificar o caso. Não improvisar endpoint, estado ou comportamento.
+
+## 9. Fechamento da Fase 1
+
+**Fase 1 concluída como levantamento documental e especificação:** fontes principais examinadas, discrepâncias registradas, sete grupos de dez identificadores definidos e jornadas transversais planejadas.
+
+**Pendências que não são ocultadas:** os bloqueios listados na seção 8 impedem a aprovação técnica da implementação até serem resolvidos. A conclusão da Fase 1 não certifica o produto nem autoriza execução funcional.
+
+**Entrega seguinte:** Fase 2 — implementar somente os dez casos de Defesa Prévia em arquivo próprio, depois de validar os contratos acima. Não implementar os demais seis arquivos nesta fase.
