@@ -42,7 +42,7 @@ Cada serviço implementa os dez objetivos abaixo com entradas, expectativas e va
 | 01 | Caminho válido do serviço | Usuário conclui o fluxo principal e o serviço selecionado permanece correto. |
 | 02 | Validação de campos obrigatórios | Entrada incompleta é rejeitada; não há criação indevida de caso. |
 | 03 | Validação de dados inválidos ou inconsistentes | A aplicação impede ou sinaliza a entrada inválida conforme o contrato real. |
-| 04 | Intake manual e caso anônimo | Dados válidos são aceitos sem exigir OCR ou autenticação prévia quando o fluxo canônico não a exige. |
+| 04 | Preenchimento e criação do caso | O wizard canônico aceita os dados válidos e cria o caso conforme as regras atuais de autenticação e análise. |
 | 05 | Recuperação/claim e handoff de autenticação | O mesmo caso e token autorizado são mantidos; não ocorre troca de identidade ou de caso. |
 | 06 | Persistência e recuperação | O caso persistido pode ser recuperado após navegação/reload e corresponde aos dados enviados. |
 | 07 | Análise e procedimento | Resultado, serviço e procedimento seguem as regras atuais e determinísticas aplicáveis ao cenário. |
@@ -57,7 +57,7 @@ A matriz acima define os dez objetivos por serviço, não autoriza presumir que 
 Quando aplicável ao cenário e ao fluxo canônico atual:
 
 1. Abrir a aplicação em contexto de navegador limpo.
-2. Percorrer a interface pública e o onboarding manual.
+2. Percorrer a interface pública e o wizard de onboarding atualmente implantado.
 3. Selecionar um dos sete serviços canônicos.
 4. Informar dados sintéticos únicos de condutor, veículo e autuação.
 5. Submeter os dados pela interface e capturar o identificador real do caso.
