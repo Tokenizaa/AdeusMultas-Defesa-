@@ -51,7 +51,7 @@ A matriz canônica dos testes define `suspensao` e `cassacao`, mas os tipos de d
 
 ### 3.2 Fluxo de onboarding sob teste
 
-O fluxo canônico é o wizard existente `src/components/onboarding/OnboardingWizard.tsx`, montado em `src/App.tsx` na rota pública `/novo-caso`. A implementação alternativa `ManualIntakePage` e os documentos que a descreviam como novo fluxo não são fonte de verdade e devem ser removidos. Os testes E2E devem reproduzir o wizard atualmente implantado, sem criar uma jornada paralela nem assumir que a interface alternativa existe.
+O fluxo canônico é o wizard existente `src/components/onboarding/OnboardingWizard.tsx`, montado em `src/App.tsx` na rota pública `/novo-caso`. Os testes E2E devem reproduzir o wizard atualmente implantado, sem criar uma jornada paralela nem assumir que a interface alternativa existe.
 
 **Critério:** usar os controles, etapas, validações e transições reais do wizard canônico. Qualquer divergência entre código e deployment precisa ser registrada como bloqueio de validação, não resolvida assumindo a existência de outro onboarding.
 
