@@ -53,8 +53,15 @@ test.describe('indicacao_condutor — dez cenários canônicos', () => {
     });
     await page.reload();
     await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible();
+    const recoveredResponse = await page.request.post(new URL('/api/cases/anonymous/' + encodeURIComponent(created.id) + '/recover', baseURL).toString(), {
+      data: { claimToken: created.body.claimToken }, headers: { 'content-type': 'application/json' },
+    });
+    expect(recoveredResponse.status()).toBe(200);
+    const recovered = await recoveredResponse.json();
+    expect(recovered.case.id).toBe(created.id);
+    expect(recovered.case.serviceType).toBe(service.procedure);
+    expect(recovered.case.claimToken).toBeUndefined();
     expect(duplicateCreates).toHaveLength(0);
-    expect(created.id).toBeTruthy();
   });
 
   test('E2E-INDICACAO_CONDUTOR-07 análise: resultado contém procedimento esperado', async ({page}) => {
