@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import { expect, type Page } from '@playwright/test';
 export type CanonicalService = { id: string; situationId: string; stageId?: string; categoryId: string; procedure: string };
-export const baseURL = process.env.PLAYWRIGHT_BASE_URL;
+const configuredBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+if (!configuredBaseURL) throw new Error('PLAYWRIGHT_BASE_URL ausente; localhost não é fallback.');
+export const baseURL: string = configuredBaseURL;
 export const runId = (process.env.E2E_TEST_RUN_ID || 'e2e') + '-' + new Date().toISOString().replace(/[^0-9TZ]/g, '');
-if (!baseURL) throw new Error('PLAYWRIGHT_BASE_URL ausente; localhost não é fallback.');
 if (!/^https?:\/\//i.test(baseURL)) throw new Error('PLAYWRIGHT_BASE_URL deve ser HTTP(S).');
 export function synthetic(label: string) {
   const suffix = (runId + '-' + label + '-' + Date.now().toString(36)).replace(/[^a-z0-9-]/gi, '').slice(-24);
