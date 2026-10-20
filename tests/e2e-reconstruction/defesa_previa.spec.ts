@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, baseURL, type CanonicalService } from './support';
+import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, baseURL, runId, type CanonicalService } from './support';
 const service: CanonicalService = {
   "id": "defesa_previa",
   "situationId": "multa_transito",
