@@ -14,7 +14,9 @@
     "lint": "tsc --noEmit",
     "test:unit": "vitest run",
     "governance:check": "node scripts/governance-check.cjs",
-    "dev:legacy": "tsx src/server/dev-bootstrap.ts"
+    "dev:legacy": "tsx src/server/dev-bootstrap.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
