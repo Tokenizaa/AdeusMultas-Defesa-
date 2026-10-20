@@ -32,10 +32,10 @@ const services: Service[] = [
   { key: 'defesa_previa', situationId: 'multa_transito', label: 'Defesa prévia', stageId: 'primeira_notificacao', categoryId: 'excesso_velocidade' },
   { key: 'recurso_jari', situationId: 'multa_transito', label: 'Recurso à JARI', stageId: 'notificacao_penalidade', categoryId: 'excesso_velocidade' },
   { key: 'recurso_cetran', situationId: 'multa_transito', label: 'Recurso ao CETRAN', stageId: 'recurso_jari_negado', categoryId: 'excesso_velocidade' },
-  { key: 'suspensao', situationId: 'suspensao_cnh', label: 'Suspensão da CNH' },
-  { key: 'cassacao', situationId: 'cassacao_cnh', label: 'Cassação da CNH' },
-  { key: 'indicacao_condutor', situationId: 'indicacao_condutor', label: 'Indicação de condutor' },
-  { key: 'conversao_advertencia', situationId: 'conversao_advertencia', label: 'Conversão em advertência' },
+  { key: 'suspensao', situationId: 'suspensao_cnh', label: 'Suspensão da CNH', stageId: 'primeira_notificacao', categoryId: 'excesso_velocidade' },
+  { key: 'cassacao', situationId: 'cassacao_cnh', label: 'Cassação da CNH', stageId: 'primeira_notificacao', categoryId: 'excesso_velocidade' },
+  { key: 'indicacao_condutor', situationId: 'indicacao_condutor', label: 'Indicação de condutor', categoryId: 'indicacao_condutor' },
+  { key: 'conversao_advertencia', situationId: 'conversao_advertencia', label: 'Conversão em advertência', categoryId: 'conversao_advertencia' },
 ];
 
 async function openService(page: Page, service: Service) {
@@ -48,7 +48,6 @@ async function openService(page: Page, service: Service) {
     await page.locator('#stage-option-' + service.stageId).click();
     await expect(page.locator('#category-card-' + service.categoryId)).toBeVisible();
     await page.locator('#category-card-' + service.categoryId).click();
-    await page.locator('#btn-next-to-identification').click();
   }
 
   await expect(page.locator('#input-lead-name')).toBeVisible();
@@ -149,7 +148,11 @@ const scenarioDefinitions = [
     title: 'retorna da identificação à seleção de categoria sem criar caso',
     run: async (page: Page) => {
       await page.getByRole('button', { name: /Voltar à fase/i }).click();
-      await expect(page.locator('#category-card-excesso_velocidade')).toBeVisible();
+      if (service.stageId) {
+        await expect(page.locator('#category-card-' + service.categoryId)).toBeVisible();
+      } else {
+        await expect(page.locator('#service-option-' + service.situationId)).toBeVisible();
+      }
       await expect(page).toHaveURL(/novo-caso/);
     },
   },
@@ -160,7 +163,13 @@ const scenarioDefinitions = [
       await fillValidIdentification(page);
       await page.locator('#btn-next-to-specifics').click();
       await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
-      await expect(page.locator('#input-speed-limit')).toBeVisible();
+      if (service.categoryId === 'excesso_velocidade') {
+        await expect(page.locator('#input-speed-limit')).toBeVisible();
+      } else if (service.categoryId === 'indicacao_condutor') {
+        await expect(page.locator('#input-real-driver-name')).toBeVisible();
+      } else {
+        await expect(page.getByText(/Advertência|Art\. 267/i).first()).toBeVisible();
+      }
     },
   },
   {
