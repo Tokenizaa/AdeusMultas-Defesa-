@@ -174,7 +174,7 @@ const scenarioDefinitions = [
   },
   {
     slug: 'browser-error-observation',
-    title: 'conclui a navegação inicial sem erro JavaScript não tratado',
+    title: 'não gera erro JavaScript ao observar a etapa de identificação',
     run: async (page: Page) => {
       const pageErrors: string[] = [];
       page.on('pageerror', (error) => pageErrors.push(error.message));
