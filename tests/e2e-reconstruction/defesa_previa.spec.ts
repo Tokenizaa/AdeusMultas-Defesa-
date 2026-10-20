@@ -37,12 +37,27 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
 
   test('E2E-DEFESA_PREVIA-05 segurança de recuperação: token de claim inválido é recusado', async ({page}) => {
     await openService(page, service);
+    test.skip(!process.env.E2E_AUTH_EMAIL || !process.env.E2E_AUTH_PASSWORD, 'BLOCKED: credenciais de uma identidade sintética autorizada são necessárias para testar o handoff de autenticação.');
     const created = await createCaseThroughAnalysis(page, 'claim-security', service);
-    const response = await page.request.post(new URL('/api/cases/anonymous/' + encodeURIComponent(created.id) + '/recover', baseURL).toString(), {
+    const invalid = await page.request.post(new URL('/api/cases/anonymous/' + encodeURIComponent(created.id) + '/recover', baseURL).toString(), {
       data: { claimToken: 'invalid-e2e-claim-token' }, headers: { 'content-type': 'application/json' },
     });
-    expect([403, 404]).toContain(response.status());
-    expect(await response.text()).not.toContain(String(created.body.claimToken || 'never-match'));
+    expect([403, 404]).toContain(invalid.status());
+    expect(await invalid.text()).not.toContain(String(created.body.claimToken || 'never-match'));
+    await page.locator('#btn-proceed-to-document-generation').click();
+    await expect(page.getByText('Acesso à Sua Defesa Jurídica')).toBeVisible();
+    await page.getByRole('button', { name: /Já Tenho Conta/i }).click();
+    await page.getByPlaceholder('motorista@defesai.com.br').fill(process.env.E2E_AUTH_EMAIL!);
+    await page.getByPlaceholder('••••••••').fill(process.env.E2E_AUTH_PASSWORD!);
+    const claimPromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/cases/' + created.id + '/claim');
+    await page.getByRole('button', { name: /Entrar & Vincular Defesa à Minha Conta/i }).click();
+    const claim = await claimPromise;
+    expect(claim.status()).toBe(200);
+    const claimed = await claim.json();
+    expect(claimed.id).toBe(created.id);
+    expect(claimed.isAnonymous).toBe(false);
+    expect(claimed.userId).toBeTruthy();
+    expect(claimed.serviceType).toBe(service.procedure);
   });
 
   test('E2E-DEFESA_PREVIA-06 persistência: reload não cria um segundo caso', async ({page}) => {
