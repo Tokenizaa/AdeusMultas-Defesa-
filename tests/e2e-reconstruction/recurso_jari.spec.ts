@@ -48,10 +48,13 @@ test.describe('recurso_jari — dez cenários canônicos', () => {
   test('E2E-RECURSO_JARI-06 persistência: reload não cria um segundo caso', async ({page}) => {
     await openService(page, service);
     const created = await createCaseThroughAnalysis(page, 'reload-persistence', service);
-    const before = await page.evaluate(() => sessionStorage.getItem('defesai_wizard_state'));
+    const duplicateCreates: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/cases/anonymous') duplicateCreates.push(request.url());
+    });
     await page.reload();
-    await expect(page.locator('#service-option-' + service.situationId)).toBeVisible();
-    expect(await page.evaluate(() => sessionStorage.getItem('defesai_wizard_state'))).toBe(before);
+    await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible();
+    expect(duplicateCreates).toHaveLength(0);
     expect(created.id).toBeTruthy();
   });
 
