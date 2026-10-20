@@ -35,6 +35,7 @@ A existência de branches antigas não autoriza usá-las como base, integrá-las
 - Não rode uma bateria contra produção sem autorização explícita, sem pagamentos reais desabilitados e sem identificar o impacto de escrita no banco.
 - Não apague dados, evidências, relatórios, usuários ou casos de teste sem escopo e identificação verificáveis.
 - Relate os resultados como `PASS`, `FAIL` ou `BLOCKED`; não confunda preparação com execução concluída.
+- Para a nova certificação E2E de 70 cenários, a única especificação operacional é `docs/testing/E2E-CERTIFICACAO-CANONICA.md`; documentos históricos não substituem essa especificação.
 - Se a base estiver inconsistente, pare e explique o bloqueio concreto. Não crie outra branch ou PR para contornar o problema.
 
 ## REGRA PARA AGENTES DE IA E AUTOMAÇÕES
