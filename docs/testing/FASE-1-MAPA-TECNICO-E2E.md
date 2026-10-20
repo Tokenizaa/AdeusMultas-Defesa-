@@ -2,7 +2,7 @@
 
 **Status da fase:** concluída como análise e especificação; bloqueios técnicos identificados e documentados. Não significa que os bloqueios do produto estejam corrigidos nem que a suíte esteja pronta para executar.  
 **Repositório:** `Tokenizaa/AdeusMultas-Defesa-` · **branch:** `main`  
-**Escopo executado:** leitura de código e documentação versionados em `main), definição dos contratos conhecidos, matriz dos 70 identificadores e critérios de entrada para a Fase 2.  
+**Escopo executado:** leitura de código e documentação versionados em `main`, definição dos contratos conhecidos, matriz dos 70 identificadores e critérios de entrada para a Fase 2.  
 **Não realizado:** criação/execução de testes E2E, build, typecheck, alteração de código de produto, acesso/escrita no banco, alteração de ambiente ou pagamento.
 
 ## 1. Resultado da Fase 1
@@ -27,7 +27,7 @@ A matriz abaixo é a **especificação de intenção dos casos**. Passos de inte
 | Pagamentos no Worker | `cloudflare/routes/payments.ts`, `cloudflare/venopag.ts` | Oferta, criação de ordem, gateway, status e bloqueio de preview |
 | App e navegação | `src/App.tsx` | Montagem das telas e rotas do produto |
 | Testes não E2E | `cloudflare/routes/cases.test.ts`, `cloudflare/routes/payments.test.ts`, demais suítes Vitest | Contratos e regressões a preservar; não substituem E2E de navegador |
-| Decisão de onboarding | `docs/product/onboarding/DECISAO-ONBOARDING-MANUAL-SEM-OCR-2026-10-18.md`, `docs/audit/ONBOARDING-REBUILD-STATUS.md` | Decisão manual sem OCR e registro de que o rebuild está em linha de trabalho separada |
+| Fluxo canônico | `src/App.tsx`, `src/components/onboarding/OnboardingWizard.tsx`, `src/core/router/RouterContext.tsx` | O único fluxo de onboarding considerado é o wizard existente na rota `/novo-caso`, correspondente ao produto implantado |
 
 A leitura foi feita por arquivos versionados no GitHub. Não houve checkout local, execução do app, inspeção de deployment ou consulta direta ao banco; portanto, esta fase não declara validação dinâmica.
 
@@ -49,11 +49,11 @@ A matriz canônica dos testes define `suspensao` e `cassacao`, mas os tipos de d
 
 **Bloqueio P0:** antes de codificar os specs, cada serviço precisa ter um único mapeamento documentado entre identificador de certificação, escolha de interface, fase processual, `ProcedureType`, `serviceType` persistido e oferta comercial. Se o código contiver mais de uma representação válida, o teste deve seguir o fluxo real e verificar a normalização; não deve corrigir contratos por conta própria.
 
-### 3.2 Onboarding manual sem OCR não pode ser presumido em main
+### 3.2 Fluxo de onboarding sob teste
 
-A decisão de produto vigente pede coleta manual sem OCR. Porém, o documento `docs/audit/ONBOARDING-REBUILD-STATUS.md` descreve essa implementação na branch `onboarding/manual-intake-greenfield` e afirma que `main) não havia sido atualizada por aquele trabalho. A implementação presente em `main` inclui o wizard `OnboardingWizard.tsx` e etapas antigas de análise/identificação.
+O fluxo canônico é o wizard existente `src/components/onboarding/OnboardingWizard.tsx`, montado em `src/App.tsx` na rota pública `/novo-caso`. A implementação alternativa `ManualIntakePage` e os documentos que a descreviam como novo fluxo não são fonte de verdade e devem ser removidos. Os testes E2E devem reproduzir o wizard atualmente implantado, sem criar uma jornada paralela nem assumir que a interface alternativa existe.
 
-**Bloqueio P0:** antes da Fase 2, verificar e decidir qual implementação é a base autorizada dos testes. Por governança, não importar automaticamente código de outra branch nem presumir que o rebuild esteja integrado. Os testes devem refletir o fluxo efetivamente presente e autorizado em `main).
+**Critério:** usar os controles, etapas, validações e transições reais do wizard canônico. Qualquer divergência entre código e deployment precisa ser registrada como bloqueio de validação, não resolvida assumindo a existência de outro onboarding.
 
 ### 3.3 Criação anônima, claim e recorrência
 
@@ -102,7 +102,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-DP-001 | U1, visitante | Iniciar o fluxo de Defesa Prévia pela interface pública e confirmar que o caso criado corresponde à seleção feita |
 | E2E-DP-002 | U1, mesmo caso | Validar obrigatoriedade e formato dos campos requeridos, sem persistir dados inválidos como caso válido |
 | E2E-DP-003 | U2, conta existente | Validar dados inconsistentes ou combinação de campos inválida e observar a rejeição esperada |
-| E2E-DP-004 | U1, continuidade | Confirmar que os dados manuais são mantidos no caso e não dependem de OCR |
+| E2E-DP-004 | U1, continuidade | Confirmar que os dados informados nas etapas reais do wizard são mantidos no caso e analisados pelo fluxo existente |
 | E2E-DP-005 | U1, cadastro/claim | Autenticar a identidade e confirmar que o mesmo caso anônimo é associado, sem criar caso duplicado |
 | E2E-DP-006 | U3, recuperação | Interromper e recuperar o caso, verificando ID, dados e estado persistidos |
 | E2E-DP-007 | U1, análise | Verificar que análise e procedimento são derivados dos dados e da fase processual corretos |
@@ -117,7 +117,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-JARI-001 | U2, conta existente | Iniciar Recurso JARI pela interface e confirmar o procedimento persistido |
 | E2E-JARI-002 | U2, mesmo caso | Validar campos obrigatórios específicos do procedimento |
 | E2E-JARI-003 | U2, mesmo caso | Rejeitar dados malformados ou inconsistentes sem produzir um caso falsamente válido |
-| E2E-JARI-004 | U3, visitante | Executar intake manual anônimo e confirmar dados vinculados ao caso correto |
+| E2E-JARI-004 | U3, visitante | Executar a criação anônima pelo wizard vigente e confirmar os dados vinculados ao caso correto |
 | E2E-JARI-005 | U3, claim | Recuperar/associar o caso à conta e manter a identidade e os dados originais |
 | E2E-JARI-006 | U2, histórico | Recuperar o caso após navegação/reentrada e verificar estado persistido |
 | E2E-JARI-007 | U2, análise | Confirmar seleção da fase processual JARI e análise aplicável, sem rebaixar para Defesa Prévia |
@@ -147,7 +147,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-SUSP-001 | U4, conta existente | Selecionar suspensão e confirmar mapeamento entre UI, procedimento, caso e oferta |
 | E2E-SUSP-002 | U4, mesmo caso | Validar campos obrigatórios específicos do processo de suspensão |
 | E2E-SUSP-003 | U4, mesmo caso | Rejeitar dados inválidos/inconsistentes e combinações de procedimento não suportadas |
-| E2E-SUSP-004 | U1, visitante | Confirmar que o fluxo anônimo/manual suporta esse serviço conforme o código ativo |
+| E2E-SUSP-004 | U1, visitante | Confirmar o suporte do wizard vigente a esse serviço conforme o código ativo |
 | E2E-SUSP-005 | U4, claim | Confirmar vínculo de identidade sem alterar serviço, dados ou estado |
 | E2E-SUSP-006 | U4, recuperação | Reabrir caso e confirmar que os dados específicos de suspensão foram preservados |
 | E2E-SUSP-007 | U4, análise | Verificar regras/análise e procedimento específico sem fallback indevido para Defesa Prévia |
@@ -162,7 +162,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-CASS-001 | U4, conta existente | Selecionar cassação e confirmar o mapeamento canônico até o caso persistido |
 | E2E-CASS-002 | U4, mesmo caso | Validar campos obrigatórios do procedimento |
 | E2E-CASS-003 | U4, mesmo caso | Rejeitar dados inconsistentes e seleção incorreta de procedimento |
-| E2E-CASS-004 | U3, visitante | Confirmar intake manual/anônimo quando permitido pelo fluxo ativo |
+| E2E-CASS-004 | U3, visitante | Confirmar criação anônima pelo wizard vigente quando permitida pelo fluxo ativo |
 | E2E-CASS-005 | U4, claim | Associar o caso à conta e preservar os dados e o procedimento |
 | E2E-CASS-006 | U4, recuperação | Recuperar o caso e verificar estado e dados persistidos |
 | E2E-CASS-007 | U4, análise | Verificar tratamento de cassação sem fallback para suspensão, JARI ou Defesa Prévia |
@@ -177,7 +177,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-IND-001 | U5, conta existente | Iniciar indicação de condutor e confirmar o procedimento persistido |
 | E2E-IND-002 | U5, mesmo caso | Validar os campos e informações obrigatórios do condutor/indicação |
 | E2E-IND-003 | U5, mesmo caso | Rejeitar campos inválidos ou combinações inconsistentes sem aceitar dados incompletos |
-| E2E-IND-004 | U3, visitante | Validar intake anônimo/manual conforme suporte real do fluxo |
+| E2E-IND-004 | U3, visitante | Validar criação anônima e os campos do wizard conforme o suporte real do fluxo |
 | E2E-IND-005 | U5, claim | Confirmar vínculo do caso com a conta e preservação dos dados da indicação |
 | E2E-IND-006 | U5, recuperação | Reabrir e conferir o estado persistido do processo |
 | E2E-IND-007 | U5, análise | Verificar regras específicas da indicação, sem classificar como recurso de multa por engano |
@@ -192,7 +192,7 @@ Os identificadores são fixos. Os objetivos descrevem cobertura pretendida; os p
 | E2E-ADV-001 | U5, conta existente | Iniciar conversão em advertência e confirmar serviço/procedimento |
 | E2E-ADV-002 | U5, mesmo caso | Validar os dados necessários à análise de elegibilidade |
 | E2E-ADV-003 | U5, mesmo caso | Rejeitar dados inválidos e tratar inelegibilidade conforme regra explícita do produto |
-| E2E-ADV-004 | U1, visitante | Validar intake anônimo/manual se suportado pela rota ativa |
+| E2E-ADV-004 | U1, visitante | Validar criação anônima pelo wizard vigente se suportada pela rota ativa |
 | E2E-ADV-005 | U5, claim | Confirmar que o caso correto é associado à conta |
 | E2E-ADV-006 | U5, recuperação | Confirmar persistência e recuperação dos dados de elegibilidade |
 | E2E-ADV-007 | U5, análise | Verificar que a decisão respeita critérios de conversão, sem prometer deferimento automático |
@@ -230,7 +230,7 @@ Os testes negativos não devem criar registros válidos acidentalmente. Os casos
 ## 8. Critério de entrada da Fase 2
 
 A matriz de 70 IDs está definida, mas a implementação deve começar somente depois de resolver ou formalizar como bloqueios aprovados:
-1. qual onboarding está autorizado e ativo em `main` (manual sem OCR versus wizard atual);
+1. os controles e as transições do wizard existente na rota `/novo-caso` correspondem à versão implantada;
 2. o mapeamento final dos sete serviços para UI, procedimento, caso e catálogo comercial;
 3. a rota e o oráculo autorizados para verificar análise e documento persistidos;
 4. o ambiente de teste e as identidades sintéticas, sem depender de usuários reais;
