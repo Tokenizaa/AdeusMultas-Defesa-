@@ -73,13 +73,14 @@ test.describe('conversao_advertencia — dez cenários canônicos', () => {
 
   test('E2E-CONVERSAO_ADVERTENCIA-09 pagamento seguro: preview recusa cobrança sem gateway', async ({page}) => {
     await openService(page, service);
+    test.skip(process.env.E2E_SAFE_PREVIEW !== 'true' || !process.env.E2E_AUTH_TOKEN, 'BLOCKED: exige E2E_SAFE_PREVIEW=true e token de identidade sintética autorizado; nenhuma chamada de pagamento será feita sem essas garantias.');
     const created = await createCaseThroughAnalysis(page, 'payment-safe', service);
-    const response = await page.request.post(new URL('/api/payments/create-order', baseURL).toString(), {
-      data: { caseId: created.id, serviceType: service.procedure }, headers: { 'content-type': 'application/json' },
+    const response = await page.request.post(new URL('/api/payments/pix/create', baseURL).toString(), {
+      data: { caseId: created.id, serviceType: service.procedure },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.E2E_AUTH_TOKEN },
     });
-    test.skip(response.status() !== 503, 'BLOCKED: o ambiente não confirmou E2E_SAFE_PREVIEW (HTTP 503); nenhuma cobrança deve ser iniciada.');
     expect(response.status()).toBe(503);
-    expect(await response.text()).toMatch(/desativadas|bloqueadas|preview/i);
+    expect(await response.text()).toMatch(/Cobranças estão desativadas|Nenhuma transação foi enviada/i);
   });
 
   test('E2E-CONVERSAO_ADVERTENCIA-10 repetição: preencher e voltar não cria caso', async ({page}) => {
