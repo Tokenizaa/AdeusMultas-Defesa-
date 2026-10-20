@@ -60,7 +60,7 @@ Cada regra candidata deve ter:
 Comparar alternativas arquiteturais a partir dos requisitos e riscos, não da estrutura existente. Avaliar pelo menos:
 
 - Modelo de domínio e ciclo de vida do caso, com transições explícitas e invariantes.
-- Separação entre coleta manual de dados, confirmação humana, análise determinística, geração documental, pagamento e protocolo; o novo onboarding não implementa nem chama OCR.
+- Separação entre captura de dados, OCR, confirmação humana, análise determinística, geração documental, pagamento e protocolo, conforme o fluxo canônico em produção.
 - Esquema de dados e migrações, integridade referencial, idempotência, concorrência, recuperação e auditoria.
 - Segurança de autenticação/autorização, isolamento entre usuários, tokens de reivindicação, upload e armazenamento de documentos, segredos, rate limits e proteção contra abuso.
 - Privacidade e ciclo de vida dos dados pessoais e documentos.
