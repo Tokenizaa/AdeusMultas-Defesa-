@@ -8,7 +8,7 @@ if (!runId) throw new Error('E2E_TEST_RUN_ID ausente; gere um identificador novo
 if (!/^https?:\/\//i.test(baseURL)) throw new Error('PLAYWRIGHT_BASE_URL deve ser HTTP(S).');
 export function synthetic(label: string) {
   const suffix = (runId + '-' + label + '-' + Date.now().toString(36)).replace(/[^a-z0-9-]/gi, '').slice(-24);
-  return { name: 'E2E ' + suffix, phone: '11987654321', plate: 'BRA2E19', authority: 'DETRAN-SP', location: 'Av. Paulista, 1000 - São Paulo/SP (' + suffix + ')' };
+  return { name: 'E2E ' + suffix, phone: '11987654321', plate: 'BRA2E19', authority: 'DETRAN-SP', location: 'Av. Paulista, 1000 - São Paulo/SP (' + suffix + ')', aitNumber: 'AIT-' + suffix.toUpperCase() };
 }
 export async function openService(page: Page, service: CanonicalService) {
   await page.goto(new URL('/novo-caso', baseURL).toString());
@@ -25,6 +25,7 @@ export async function openService(page: Page, service: CanonicalService) {
 export async function fillIdentification(page: Page, label: string, overrides: Partial<ReturnType<typeof synthetic>> = {}) {
   const data = { ...synthetic(label), ...overrides };
   await page.locator('#input-lead-name').fill(data.name);
+  await page.locator('#input-ait-number').fill(data.aitNumber);
   await page.locator('#input-lead-phone').fill(data.phone);
   await page.locator('#input-vehicle-plate').fill(data.plate);
   await page.locator('#input-autuador-body').fill(data.authority);
@@ -36,7 +37,8 @@ export async function fillIdentification(page: Page, label: string, overrides: P
   return data;
 }
 export async function createCaseThroughAnalysis(page: Page, label: string, service: CanonicalService) {
-  await fillIdentification(page, label);
+  if (process.env.E2E_ALLOW_PERSISTENT_WRITES !== 'true') throw new Error('BLOCKED: E2E_ALLOW_PERSISTENT_WRITES=true é obrigatório antes de criar casos persistentes.');
+  const input = await fillIdentification(page, label);
   await expect(page.locator('#btn-next-to-specifics')).toBeEnabled();
   await page.locator('#btn-next-to-specifics').click();
   await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
@@ -48,8 +50,10 @@ export async function createCaseThroughAnalysis(page: Page, label: string, servi
   const body = await response.json();
   expect(body.id).toBeTruthy();
   expect(body.serviceType).toBe(service.procedure);
+  expect(body.claimToken).toBeTruthy();
+  expect(body.claimToken).not.toBe(body.id);
   await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible({ timeout: 30_000 });
-  return { id: String(body.id), body };
+  return { id: String(body.id), body, input };
 }
 export async function expectNoPiiInWizardStorage(page: Page) {
   const state = await page.evaluate(() => sessionStorage.getItem('defesai_wizard_state'));
