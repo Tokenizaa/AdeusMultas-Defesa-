@@ -48,12 +48,12 @@ END $$;
 -- Create policy for users to read their own profile
 DROP POLICY IF EXISTS "Users can read own profile" ON user_profiles;
 CREATE POLICY "Users can read own profile" ON user_profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT USING (auth.uid() = user_id);
 
 -- Create policy for users to update their own profile
 DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
 CREATE POLICY "Users can update own profile" ON user_profiles
-  FOR UPDATE USING (auth.uid() = id);
+  FOR UPDATE USING (auth.uid() = user_id);
 
 -- Create policy for inserting profiles (service role only)
 DROP POLICY IF EXISTS "Service role can insert profiles" ON user_profiles;
@@ -65,7 +65,7 @@ DROP FUNCTION IF EXISTS public.handle_new_user();
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, name, phone, created_at, updated_at)
+  INSERT INTO public.user_profiles (user_id, name, phone, created_at, updated_at)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', ''),
@@ -87,7 +87,7 @@ BEGIN
     name = COALESCE(NEW.raw_user_meta_data->>'name', name),
     phone = COALESCE(NEW.raw_user_meta_data->>'phone', phone),
     updated_at = NOW()
-  WHERE id = NEW.id;
+  WHERE user_id = NEW.id;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

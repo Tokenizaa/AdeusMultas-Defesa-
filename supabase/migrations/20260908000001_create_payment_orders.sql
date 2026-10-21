@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS public.payment_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    case_id TEXT NOT NULL UNIQUE,
+    case_id UUID NOT NULL UNIQUE REFERENCES public.cases(id),
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     gateway TEXT NOT NULL,
     amount NUMERIC(12,2) NOT NULL,

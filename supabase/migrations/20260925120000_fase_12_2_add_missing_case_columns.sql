@@ -1,6 +1,11 @@
 -- FASE 12.2: Adiciona colunas faltantes em public.cases para Case canônico
 -- commercial_offer_id, notification_delivery_date, 15 flags de evidência/infração
--- Migration aditiva, sem DROP/DELETE, IF NOT EXISTS em constraints
+-- Migration aditiva, sem DROP/DELETE, IF NOT EXISTS em constraints.
+-- Colunas sensíveis (CPF, CNH do condutor real) armazenadas em versões
+-- criptografadas (_enc, bytea via pgcrypto). Chave de cifragem gerenciada
+-- FORA do banco; colunas em texto plano mantidas por retrocompatibilidade e
+-- DEVEM ser mascaradas na camada de aplicação.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- 1. commercial_offer_id (FK para commercial_offers)
 ALTER TABLE public.cases
@@ -52,6 +57,12 @@ ADD COLUMN IF NOT EXISTS real_driver_cpf text;
 
 ALTER TABLE public.cases
 ADD COLUMN IF NOT EXISTS real_driver_cnh text;
+
+-- Colunas criptografadas (pgcrypto, chave gerenciada fora do banco)
+ALTER TABLE public.cases
+ADD COLUMN IF NOT EXISTS real_driver_cpf_enc bytea;
+ALTER TABLE public.cases
+ADD COLUMN IF NOT EXISTS real_driver_cnh_enc bytea;
 
 ALTER TABLE public.cases
 ADD COLUMN IF NOT EXISTS indication_within_deadline boolean;

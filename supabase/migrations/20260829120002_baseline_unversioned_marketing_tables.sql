@@ -15,6 +15,11 @@
 --     4 valores no DB real (rascunho/aprovado_qualidade/agendado/publicado) — workers que
 --     escrevem 'em_revisao'/'reprovado_qualidade' quebrariam hoje; conflito de contrato
 --     registrado na auditoria (§9) — decisão de convergência = @supervisor.
+-- Tokens de acesso Meta armazenados em repouso como bytea (criptografados com
+-- pgcrypto / envelope encryption). A chave de cifragem é gerenciada FORA do
+-- banco (aplicação); descriptografar somente no momento de uso, nunca em texto
+-- plano em consultas ou logs.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ============================================================
 -- 1. editorial_content (conteúdo editorial B2C social)
@@ -135,7 +140,7 @@ CREATE TABLE IF NOT EXISTS public.meta_accounts (
   pages                 jsonb NOT NULL DEFAULT '[]'::jsonb,
   selected_page_id      text,
   selected_instagram_id text,
-  access_token          text,
+  access_token          bytea,   -- criptografado em repouso (pgcrypto/envelope)
   token_expires_at      timestamptz,
   connected_at          timestamptz,
   created_at            timestamptz NOT NULL DEFAULT now(),
@@ -150,7 +155,7 @@ CREATE TABLE IF NOT EXISTS public.meta_tokens (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   page_id      text NOT NULL UNIQUE,
   page_name    text,
-  access_token text NOT NULL,
+  access_token bytea NOT NULL,   -- criptografado em repouso (pgcrypto/envelope)
   token_type   text DEFAULT 'page',
   expires_at   timestamptz,
   created_at   timestamptz DEFAULT now(),

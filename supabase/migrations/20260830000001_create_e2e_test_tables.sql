@@ -51,8 +51,8 @@ ALTER TABLE public.e2e_test_results ENABLE ROW LEVEL SECURITY;
 -- Policies para admin e service_role
 CREATE POLICY "Admins can view e2e_test_runs" ON public.e2e_test_runs
     FOR ALL
-    USING (auth.jwt() ->> 'role' = 'admin' OR auth.jwt() ->> 'email' = 'admin@defesai.com.br');
+    USING (auth.jwt() ->> 'role' = 'admin');
 
 CREATE POLICY "Admins can view e2e_test_results" ON public.e2e_test_results
     FOR ALL
-    USING (auth.jwt() ->> 'role' = 'admin' OR auth.jwt() ->> 'email' = 'admin@defesai.com.br');
+    USING (auth.jwt() ->> 'role' = 'admin');

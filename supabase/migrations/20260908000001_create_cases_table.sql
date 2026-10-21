@@ -1,4 +1,11 @@
 -- Ensure public.cases table exists (was never committed as a CREATE migration).
+-- Dados sensíveis (CPF, placa, AIT, telefone) são armazenados em colunas
+-- criptografadas (_enc, bytea via pgcrypto). A chave de cifragem é gerenciada
+-- FORA do banco (aplicação/envelope encryption); as colunas em texto plano são
+-- mantidas apenas por retrocompatibilidade e DEVEM ser mascaradas na camada de
+-- aplicação — nunca expostas em texto plano a clientes não privilegiados.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS public.cases (
     id                          uuid PRIMARY KEY,
     app_ref                     text UNIQUE,
@@ -46,7 +53,12 @@ CREATE TABLE IF NOT EXISTS public.cases (
     is_paid                     boolean NOT NULL DEFAULT false,
     paid_at                     timestamptz,
     created_at                  timestamptz NOT NULL DEFAULT now(),
-    updated_at                  timestamptz NOT NULL DEFAULT now()
+    updated_at                  timestamptz NOT NULL DEFAULT now(),
+    -- Colunas criptografadas (pgcrypto, chave gerenciada fora do banco)
+    client_cpf_enc              bytea,
+    vehicle_plate_enc           bytea,
+    ait_number_enc              bytea,
+    client_phone_enc            bytea
 );
 CREATE INDEX IF NOT EXISTS idx_cases_claim_token ON public.cases(claim_token) WHERE claim_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_cases_user_id ON public.cases(user_id) WHERE user_id IS NOT NULL;
