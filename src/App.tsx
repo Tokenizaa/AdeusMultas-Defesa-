@@ -346,24 +346,12 @@ function AppContent() {
           />
         )}
 
-        {currentPath === '/checkout' && activeCase && isAdmin && (
+        {currentPath === '/checkout' && activeCase && isAuthenticated && (
           <CheckoutView
             currentCase={activeCase}
             onPaymentSuccess={handlePaymentSuccess}
             onBackToOnboarding={() => navigate('/novo-caso')}
           />
-        )}
-        {(currentPath === '/checkout' && activeCase && !isAdmin) && (
-          <div className="max-w-lg mx-auto py-20 px-4 text-center space-y-4">
-            <h1 className="text-xl font-bold text-slate-900">Checkout indisponível</h1>
-            <p className="text-sm text-slate-600">Complete o processo no wizard de onboarding.</p>
-            <button
-              onClick={() => navigate('/cases')}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm"
-            >
-              Ver meus casos
-            </button>
-          </div>
         )}
 
         {currentPath === '/perfil' && <UserSettingsView />}

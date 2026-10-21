@@ -53,29 +53,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const { navigate } = useRouter();
   const isAdmin = isAdminProp || isAdminAuth;
 
-  // ── Admin-only guard ──────────────────────────────────────────────────
-  if (!isAdmin) {
-    return (
-      <div className="max-w-lg mx-auto py-20 px-4 text-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto">
-          <ShieldAlert className="w-7 h-7 text-amber-600" />
-        </div>
-        <h1 className="text-xl font-bold text-slate-900">Ferramenta de Teste Administrativo</h1>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          Esta página de checkout é destinada exclusivamente a administradores para simulação de pagamentos.
-          Acesse o painel administrativo para usar esta ferramenta.
-        </p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao Painel
-        </button>
-      </div>
-    );
-  }
-
   // ── Already-paid guard ────────────────────────────────────────────────
   if (currentCase.isPaid || currentCase.status === 'defesa_pronta' || currentCase.status === 'finalizado') {
     return (
