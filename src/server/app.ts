@@ -121,7 +121,7 @@ export function createApp() {
   app.use('/api', whatsappRoutes);
   app.use('/api', ocrRoutes);
   app.use('/api/payments', paymentsRoutes);
-  app.use('/api/media', mediaRoutes);
+  app.use('/api', mediaRoutes);
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/documenso', documensoRoutes);
 
