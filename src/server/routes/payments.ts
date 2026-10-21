@@ -1128,7 +1128,11 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
   }
 });
 
-// VenoPag Webhook — HMAC-SHA256 signature verification + idempotency
+// VenoPag Webhook — HMAC-SHA256 signature verification + durável idempotency
+// Fluxo idêntico a PagBank/GGPIXAPI: verificar assinatura → aceitar evento (durável,
+// dedup) → processar efeitos colaterais (idempotentes via alreadyPaid) → marcar como
+// processado. Nunca reprocessa um evento já concluído, evitando dupla cobrança,
+// geração duplicada de defesa e comissão duplicada.
 router.post('/webhooks/venopag', async (req: Request, res: Response) => {
   try {
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
@@ -1146,97 +1150,132 @@ router.post('/webhooks/venopag', async (req: Request, res: Response) => {
     // Extrair dados do evento normalizado (VenoPag usa request_number como referenceId)
     const event = webhookResult as any; // type assertion para acessar campos VenoPag
 
+    // Id do evento ESTÁVEL entre entregas duplicadas (request_number + status),
+    // gerado pelo adapter sem Date.now() para permitir dedup durável.
+    const webhookEventId = event.gatewayEventId || `venopag_${event.gatewayTransactionId || 'unknown'}_${event.status || 'unknown'}`;
+
     // Extrair caseId do referenceId (formato: "defesai_case_{caseId}")
     const rawReference = event.referenceId || event.gatewayTransactionId || null;
     const caseId = typeof rawReference === 'string' ? rawReference.replace('defesai_case_', '') : null;
 
-    if (caseId && event.status === 'PAID') {
+    // 3. Idempotência durável: aceitar evento se novo (sobrevive a restarts).
+    // acceptEvent retorna isNew=false quando o evento já foi aceito anteriormente
+    // (entrega duplicada por timeout/rede). Não retornamos antecipadamente aqui:
+    // se houver crash entre accept e complete, o evento fica 'received' e precisa
+    // ser reaplicado — a guarda alreadyPaid abaixo evita efeitos colaterais duplicados.
+    const accepted = await webhookRepository.acceptEvent(webhookEventId, 'venopag', payload);
+    if (!accepted.isNew) {
+      logger.info('payments', 'venopag', 'webhook', 'Webhook duplicado — aceitação durável ignorou', {
+        webhookEventId,
+        caseId,
+      });
+    }
+
+    // 4. Processar efeitos colaterais (apenas se PAID e caso não já quitado — idempotente)
+    // Idempotência de negócio: se o caso já está isPaid=true com a mesma transação,
+    // pular (não gera nova defesa nem comissão).
+    if (event.status === 'PAID' && caseId) {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
-        const paymentAmount = Number((event.amountInCents || 0) / 100);
+        const alreadyPaid = domain.isPaid === true &&
+          domain.payment?.transactionId === (event.gatewayTransactionId || undefined);
 
-        domain.isPaid = true;
-        domain.paidAt = event.paidAt || new Date().toISOString();
-        domain.status = 'defesa_pronta';
-        domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || 'recurso_jari';
+        if (!alreadyPaid) {
+          const paymentAmount = Number((event.amountInCents || 0) / 100);
 
-        domain.payment = {
-          status: 'approved',
-          amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-          paidAt: event.paidAt || new Date().toISOString(),
-          transactionId: event.gatewayTransactionId || `ord_${domain.id}`,
-          paymentMethod: 'pix',
-        };
-        if (event.commercialOfferId) {
-          domain.commercialOfferId = event.commercialOfferId as string;
-        }
-        if (event.serviceType && !domain.serviceType) {
-          domain.serviceType = event.serviceType as any;
-        }
+          domain.isPaid = true;
+          domain.paidAt = event.paidAt || new Date().toISOString();
+          domain.status = 'defesa_pronta';
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || 'recurso_jari';
 
-        // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
-        try {
-          const defense = generateDefenseDraftForDomain(domain);
-          defense.generationCount = 1;
-          (defense as any).integrityHash = computeDefenseIntegrityHash(
-            defense as any,
-            (domain as any).analysis as any
-          );
-          domain.defenseDraft = defense;
-          domain.documentGenerationStatus = 'ready';
+          domain.payment = {
+            status: 'approved',
+            amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+            paidAt: event.paidAt || new Date().toISOString(),
+            transactionId: event.gatewayTransactionId || `ord_${domain.id}`,
+            paymentMethod: 'pix',
+          };
+          if (event.commercialOfferId) {
+            domain.commercialOfferId = event.commercialOfferId as string;
+          }
+          if (event.serviceType && !domain.serviceType) {
+            domain.serviceType = event.serviceType as any;
+          }
+
+          // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
+          try {
+            const defense = generateDefenseDraftForDomain(domain);
+            defense.generationCount = 1;
+            (defense as any).integrityHash = computeDefenseIntegrityHash(
+              defense as any,
+              (domain as any).analysis as any
+            );
+            domain.defenseDraft = defense;
+            domain.documentGenerationStatus = 'ready';
+
+            domain.timeline.push({
+              id: `tl_def_auto_${Date.now()}`,
+              title: 'Defesa Gerada Automaticamente',
+              description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+              timestamp: new Date().toISOString(),
+              type: 'defense',
+            });
+          } catch (defenseError: any) {
+            logger.error('payments', 'venopag', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
+              error: defenseError?.message,
+              caseId: domain.id,
+            });
+          }
 
           domain.timeline.push({
-            id: `tl_def_auto_${Date.now()}`,
-            title: 'Defesa Gerada Automaticamente',
-            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+            id: `tl_webhook_${Date.now()}`,
+            title: 'Pagamento Confirmado via Webhook VenoPag',
+            description: `Transação ${event.gatewayTransactionId} aprovada pela instituição financeira.`,
             timestamp: new Date().toISOString(),
-            type: 'defense',
+            type: 'payment',
           });
-        } catch (defenseError: any) {
-          logger.error('payments', 'venopag', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
-            error: defenseError?.message,
+
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
+
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
             caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || 'Condutor DefesAi',
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount,
+          });
+
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            actor: domain.clientName || 'Cliente',
+            role: 'citizen',
+            action: 'PAYMENT_CONFIRMED',
+            targetResource: domain.id,
+            ipHash: '3a88c42b109e',
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX VenoPag confirmado.`,
+            gdprCompliant: true,
           });
         }
-
-        domain.timeline.push({
-          id: `tl_webhook_${Date.now()}`,
-          title: 'Pagamento Confirmado via Webhook VenoPag',
-          description: `Transação ${event.gatewayTransactionId} aprovada pela instituição financeira.`,
-          timestamp: new Date().toISOString(),
-          type: 'payment',
-        });
-
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-
-        commercialService.processPaymentConfirmationEvent({
-          paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
-          caseId: domain.id,
-          buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-          buyerUserName: domain.clientName || 'Condutor DefesAi',
-          grossAmount: domain.payment.amount,
-          discountAmount: 0,
-          effectivelyPaid: domain.payment.amount,
-        });
-
-        auditLogs.unshift({
-          id: `audit_pay_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actor: domain.clientName || 'Cliente',
-          role: 'citizen',
-          action: 'PAYMENT_CONFIRMED',
-          targetResource: domain.id,
-          ipHash: '3a88c42b109e',
-          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX VenoPag confirmado.`,
-          gdprCompliant: true,
-        });
       }
     }
 
-    res.status(200).json({ received: true, signatureValid });
+    // 5. Marcar evento como processado (durável)
+    try {
+      await webhookRepository.completeEvent(webhookEventId);
+    } catch (completeErr: any) {
+      logger.warn('payments', 'venopag', 'webhook', 'Falha ao marcar evento como processado — será retryado pelo worker', {
+        webhookEventId,
+        error: completeErr?.message,
+      });
+    }
+
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId, signatureValid });
   } catch (error: any) {
     logger.error('payments', 'venopag', 'webhook', 'Webhook processing error', { error: error.message });
     res.status(400).json({ error: error.message });
