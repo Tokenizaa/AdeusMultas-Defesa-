@@ -285,7 +285,11 @@ router.get(webhookRoutePaths, (req, res) => {
 
 router.post(webhookRoutePaths, async (req, res) => {
   const signature = req.headers['x-hub-signature-256'] as string;
-  const rawPayload = JSON.stringify(req.body);
+  // C-06 (Crítico): HMAC do webhook Meta deve ser verificado sobre o corpo bruto
+  // recebido (req.rawBody, capturado pelo express.json verify em app.ts), NUNCA
+  // sobre JSON.stringify(req.body), que re-serializa o JSON e altera ordem de
+  // chaves/espaços, invalidando a assinatura X-Hub-Signature-256 da Meta.
+  const rawPayload = (req as any).rawBody;
   const payload = req.body || {};
 
   try {
