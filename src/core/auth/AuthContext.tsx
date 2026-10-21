@@ -216,19 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: error?.message || 'Não foi possível cadastrar.' };
       }
 
-      const { error: profileError } = await supabase.from('user_profiles').insert({
-        user_id: data.user.id,
-        name: cleanName,
-        email: cleanEmail,
-        phone: cleanPhone,
-        role: 'citizen',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      if (profileError) {
-        console.error('Supabase user_profiles insert failed:', profileError);
-      }
+      // user_profiles é criado automaticamente pelo trigger handle_new_user() em auth.users
+      // Não fazer insert manual para evitar conflito de PK e erro de RLS
 
       if (data.session) {
         const authUser: AuthUser = {
