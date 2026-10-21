@@ -917,21 +917,49 @@ var init_google_maps_scraper = __esm({
   }
 });
 
-// src/scraper-prospecting/sources/firecrawl.ts
-var FIRECRAWL_API_BASE, FirecrawlSource;
-var init_firecrawl = __esm({
-  "src/scraper-prospecting/sources/firecrawl.ts"() {
-    init_logger();
-    FIRECRAWL_API_BASE = "https://api.firecrawl.dev/v2";
-    FirecrawlSource = class {
-      constructor(apiKey) {
-        this.blocked = false;
-        this.apiKey = apiKey;
+// src/scraper-prospecting/firecrawl-scraper.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizeResults(payload) {
+  if (!isRecord(payload) || payload.success === false) {
+    throw new Error("Resposta inv\xE1lida do Firecrawl.");
+  }
+  const data = isRecord(payload.data) ? payload.data : payload;
+  const candidates = Array.isArray(payload.data) ? payload.data : Array.isArray(data.web) ? data.web : Array.isArray(data.results) ? data.results : Array.isArray(data.organic) ? data.organic : null;
+  if (!candidates) throw new Error("O Firecrawl n\xE3o retornou uma lista de resultados.");
+  return candidates.flatMap((item) => {
+    if (!isRecord(item) || typeof item.url !== "string") return [];
+    let url2;
+    try {
+      url2 = new URL(item.url);
+    } catch {
+      return [];
+    }
+    if (url2.protocol !== "https:" && url2.protocol !== "http:") return [];
+    return [{
+      title: typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 300) : url2.hostname,
+      url: url2.toString(),
+      description: typeof item.description === "string" ? item.description.slice(0, 1200) : typeof item.snippet === "string" ? item.snippet.slice(0, 1200) : ""
+    }];
+  });
+}
+var FirecrawlScraper;
+var init_firecrawl_scraper = __esm({
+  "src/scraper-prospecting/firecrawl-scraper.ts"() {
+    init_seen_filter();
+    FirecrawlScraper = class {
+      constructor(apiKey, callbacks = {}) {
+        if (!apiKey?.trim()) throw new Error("FIRECRAWL_API_KEY not configured");
+        this.apiKey = apiKey.trim();
+        this.callbacks = callbacks;
       }
-      async search(query, location, limit = 10) {
+      setCallbacks(callbacks) {
+        this.callbacks = { ...this.callbacks, ...callbacks };
+      }
+      async search(query, location, requiredNew, seenKeys) {
         const result = {
-          source: "firecrawl",
-          query: `${query} ${location}`,
+          query: `${query} ${location}`.trim(),
           location,
           totalFound: 0,
           inserted: 0,
@@ -942,171 +970,70 @@ var init_firecrawl = __esm({
           errors: [],
           leads: []
         };
-        if (this.blocked) {
-          result.errors.push("Firecrawl blocked previously.");
+        const cleanQuery = `${query} ${location}`.trim();
+        if (cleanQuery.length < 3) {
+          result.errors.push("Consulta Firecrawl inv\xE1lida: informe segmento e localiza\xE7\xE3o.");
           return result;
         }
-        if (!this.apiKey) {
-          result.errors.push("Firecrawl API key not configured.");
-          this.blocked = true;
-          return result;
-        }
+        if (this.callbacks.onCheckCancel?.()) return result;
+        const limit = Math.max(1, Math.min(20, Math.floor(requiredNew || 10)));
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15e3);
         try {
-          const searchQuery = `${query} ${location} despachante ou advogado tr\xE2nsito`;
-          const response = await fetch(`${FIRECRAWL_API_BASE}/search`, {
+          const response = await fetch("https://api.firecrawl.dev/v2/search", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${this.apiKey}`,
               "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-              query: searchQuery,
-              limit: Math.min(limit, 10),
-              // Firecrawl limit per request
-              sources: ["web"]
-            })
+            body: JSON.stringify({ query: cleanQuery, limit, sources: ["web"] }),
+            signal: controller.signal
           });
+          if (response.status === 429) throw new Error("Limite de uso do Firecrawl atingido.");
           if (!response.ok) {
-            if (response.status === 429) {
-              result.errors.push("Firecrawl rate limit exceeded.");
-              this.blocked = true;
-            } else if (response.status === 401 || response.status === 403) {
-              result.errors.push("Firecrawl API key invalid or missing permissions.");
-              this.blocked = true;
-            } else {
-              result.errors.push(`Firecrawl request failed with status ${response.status}`);
-            }
-            return result;
+            throw new Error(response.status === 401 || response.status === 403 ? "Credenciais Firecrawl inv\xE1lidas ou sem permiss\xE3o." : `Consulta Firecrawl falhou (HTTP ${response.status}).`);
           }
           const payload = await response.json();
-          if (!payload.success || !payload.data) {
-            result.errors.push("Invalid response from Firecrawl.");
-            return result;
-          }
-          const webResults = payload.data.web || [];
-          result.totalFound = webResults.length;
-          logger2.info("Firecrawl results found", { count: webResults.length });
-          for (let i = 0; i < Math.min(webResults.length, limit); i++) {
-            const item = webResults[i];
-            try {
-              const lead = this.extractLead(item);
-              if (lead) {
-                result.leads.push(lead);
-              }
-            } catch (err) {
-              const message = err instanceof Error ? err.message : "Error extracting lead from Firecrawl result";
-              result.errors.push(message);
+          const discovered = normalizeResults(payload);
+          result.totalFound = discovered.length;
+          for (const item of discovered) {
+            if (this.callbacks.onCheckCancel?.()) break;
+            const url2 = new URL(item.url);
+            const lead = {
+              name: item.title,
+              category: query,
+              website: url2.origin,
+              sourceUrl: item.url,
+              description: item.description || void 0,
+              searchTerm: query,
+              searchLocation: location,
+              scrapedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              rawData: { discoverySource: "firecrawl", resultUrl: item.url }
+            };
+            if (isSeen(seenKeys, lead.sourceUrl, lead.phone, lead.website, lead.email)) {
+              result.duplicates += 1;
+              continue;
             }
+            result.leads.push(lead);
+            seenKeys.add(`url:${lead.sourceUrl}`);
+            this.callbacks.onCardExtracted?.(lead, result.leads.length, discovered.length);
+            this.callbacks.onProgress?.({
+              phase: "discovery",
+              discovered: discovered.length,
+              processed: result.leads.length + result.duplicates,
+              persisted: 0,
+              duplicates: result.duplicates,
+              errors: result.errors.length
+            });
           }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Unknown error in Firecrawl search";
-          logger2.error("Firecrawl search failed", { error: message });
-          result.errors.push(message);
-          this.blocked = true;
+        } catch (error) {
+          result.errors.push(error instanceof Error ? error.message : "Falha desconhecida na consulta Firecrawl.");
+        } finally {
+          clearTimeout(timeout);
         }
         return result;
       }
-      extractLead(item) {
-        const { title, url: url2, description } = item;
-        if (!title || !url2) {
-          return null;
-        }
-        let name = title.trim();
-        name = name.replace(/ - .*$/, "");
-        name = name.replace(/\s*\|\s*.*$/, "");
-        if (name.length > 100) {
-          name = name.substring(0, 100);
-        }
-        const lead = {
-          name,
-          sourceUrl: url2,
-          website: this.extractWebsiteFromUrl(url2),
-          description: description?.substring(0, 1e3) || ""
-        };
-        const phoneMatch = description.match(
-          /(?:\+55\s*)?\(?\d{2}\)?[\s\-]?\d{4,5}[\s\-]?\d{4}/
-        );
-        if (phoneMatch) {
-          lead.phone = phoneMatch[0];
-        }
-        const emailMatch = description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-        if (emailMatch) {
-          lead.email = emailMatch[0];
-        }
-        const haystack = `${title} ${description}`.toLowerCase();
-        if (haystack.includes("despachante") || haystack.includes("documentalista") || haystack.includes("detran") || haystack.includes("ve\xEDculo") || haystack.includes("cnh") || haystack.includes("licenciamento")) {
-          lead.category = "despachante de tr\xE2nsito";
-        } else if (haystack.includes("advogado") || haystack.includes("direito de tr\xE2nsito") || haystack.includes("defesa de multa") || haystack.includes("suspens\xE3o cnh") || haystack.includes("cassa\xE7\xE3o cnh") || haystack.includes("tr\xE2nsito")) {
-          lead.category = "advogado direito de tr\xE2nsito";
-        }
-        if (!lead.category) {
-          const nameLower = name.toLowerCase();
-          if (nameLower.includes("despachante") || nameLower.includes("documentalista") || nameLower.includes("detran") || nameLower.includes("ve\xEDculo") || nameLower.includes("cnh") || nameLower.includes("licenciamento")) {
-            lead.category = "despachante de tr\xE2nsito";
-          } else if (nameLower.includes("advogado") || nameLower.includes("direito de tr\xE2nsito") || nameLower.includes("defesa de multa") || nameLower.includes("suspens\xE3o cnh") || nameLower.includes("cassa\xE7\xE3o cnh") || nameLower.includes("tr\xE2nsito")) {
-            lead.category = "advogado direito de tr\xE2nsito";
-          }
-        }
-        return lead;
-      }
-      extractWebsiteFromUrl(url2) {
-        try {
-          const parsed = new URL(url2);
-          return `${parsed.protocol}//${parsed.host}`;
-        } catch {
-          return null;
-        }
-      }
-    };
-  }
-});
-
-// src/scraper-prospecting/firecrawl-scraper.ts
-var FirecrawlScraper;
-var init_firecrawl_scraper = __esm({
-  "src/scraper-prospecting/firecrawl-scraper.ts"() {
-    init_firecrawl();
-    init_logger();
-    FirecrawlScraper = class {
-      constructor(apiKey, callbacks) {
-        this.blocked = false;
-        this.source = new FirecrawlSource(apiKey);
-      }
-      async search(query, location, limit, seenKeys) {
-        const result = {
-          query: `${query} ${location}`,
-          location,
-          totalFound: 0,
-          inserted: 0,
-          filled: 0,
-          duplicates: 0,
-          completeDuplicates: 0,
-          rejected: 0,
-          errors: [],
-          leads: []
-        };
-        if (this.blocked) {
-          result.errors.push("Firecrawl blocked previously.");
-          return result;
-        }
-        try {
-          const scrapeResult = await this.source.search(query, location, limit);
-          result.totalFound = scrapeResult.totalFound;
-          result.leads = scrapeResult.leads;
-          result.errors = scrapeResult.errors;
-          return result;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Unknown error in Firecrawl scraper";
-          logger2.error("Firecrawl scraper failed", { error: message });
-          result.errors.push(message);
-          this.blocked = true;
-          return result;
-        }
-      }
-      // Close method for compatibility with the scraper interface
-      // Firecrawl doesn't maintain persistent connections that need cleanup
       async close() {
-        return;
       }
     };
   }
@@ -17996,11 +17923,25 @@ var INFRACTION_CATALOG = [
     version: 1
   },
   {
-    code: "516-91",
+    code: "757-90",
     article: "Art. 165-A do CTB",
-    description: "Recusar-se a ser submetido a teste, exame cl\xEDnico ou per\xEDcia de alcoolemia (Lei Seca)",
+    description: "Recusar-se a teste, exame cl\xEDnico, per\xEDcia ou procedimento para certificar influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa",
     severity: "gravissima",
-    points: 7,
+    points: 0,
+    fineAmount: 2934.7,
+    typicalFlaws: ["Aus\xEAncia ou inconsist\xEAncia do registro da recusa", "Aus\xEAncia de identifica\xE7\xE3o do equipamento ou procedimento ofertado", "Inconsist\xEAncia entre circunst\xE2ncias descritas e enquadramento aplicado"],
+    recommendedArgumentCodes: ["ARG-025", "ARG-026", "ARG-027", "ARG-028", "ARG-048", "ARG-050"],
+    validFrom: "2016-11-01",
+    validUntil: null,
+    sourceId: "CANONICAL_CTB",
+    version: 1
+  },
+  {
+    code: "516-91",
+    article: "Art. 165 do CTB",
+    description: "Dirigir sob a influ\xEAncia de \xE1lcool",
+    severity: "gravissima",
+    points: 0,
     fineAmount: 2934.7,
     typicalFlaws: ["Aus\xEAncia do Termo de Constata\xE7\xE3o de Sinais de Embriaguez (Anexo II Res. CONTRAN 432)", "Aparelho etil\xF4metro com certifica\xE7\xE3o INMETRO expirada", "Falta de descri\xE7\xE3o detalhada dos sinais psicomotores", "Direito constitucional de n\xE3o autoincrimina\xE7\xE3o (Nemo Tenetur Se Detegere)"],
     recommendedArgumentCodes: ["ARG-025", "ARG-026", "ARG-027", "ARG-028", "ARG-029", "ARG-030", "ARG-048", "ARG-050"],
@@ -18012,9 +17953,9 @@ var INFRACTION_CATALOG = [
   {
     code: "516-92",
     article: "Art. 165 do CTB",
-    description: "Dirigir sob a influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa",
+    description: "Dirigir sob a influ\xEAncia de subst\xE2ncia psicoativa que determine depend\xEAncia",
     severity: "gravissima",
-    points: 7,
+    points: 0,
     fineAmount: 2934.7,
     typicalFlaws: ["Margem de toler\xE2ncia do baf\xF4metro desconsiderada (abaixo de 0,04 mg/L)", "Falta de assinatura do agente de tr\xE2nsito competente", "Aus\xEAncia de contraprova pericial"],
     recommendedArgumentCodes: ["ARG-025", "ARG-026", "ARG-027", "ARG-028", "ARG-029", "ARG-048", "ARG-050"],
@@ -18025,11 +17966,11 @@ var INFRACTION_CATALOG = [
   },
   {
     code: "736-62",
-    article: "Art. 252, Par\xE1grafo \xDAnico do CTB",
-    description: "Dirigir ve\xEDculo segurando ou manuseando telefone celular",
-    severity: "gravissima",
-    points: 7,
-    fineAmount: 293.47,
+    article: "Art. 252, VI do CTB",
+    description: "Dirigir utilizando telefone celular sem segur\xE1-lo ou manuse\xE1-lo",
+    severity: "media",
+    points: 4,
+    fineAmount: 130.16,
     typicalFlaws: ["Aus\xEAncia de abordagem e falta de detalhamento no campo de observa\xE7\xF5es do AIT", "Inviabilidade de constata\xE7\xE3o visual sem equipamento eletr\xF4nico homologado", "Confus\xE3o com suporte veicular GPS"],
     recommendedArgumentCodes: ["ARG-015", "ARG-016", "ARG-017", "ARG-018", "ARG-019", "ARG-048"],
     validFrom: "2016-11-01",
@@ -18039,8 +17980,8 @@ var INFRACTION_CATALOG = [
   },
   {
     code: "735-80",
-    article: "Art. 252, VI do CTB",
-    description: "Dirigir ve\xEDculo utilizando-se de fones nos ouvidos conectados a aparelho sonoro ou celular",
+    article: "Art. 252, V do CTB",
+    description: "Dirigir o ve\xEDculo com apenas uma das m\xE3os, fora das exce\xE7\xF5es legais",
     severity: "media",
     points: 4,
     fineAmount: 130.16,
@@ -23384,6 +23325,7 @@ var FAMILY_BY_CATALOG_CODE = {
   "745-70": "excesso_velocidade",
   "746-30": "excesso_velocidade",
   "747-10": "excesso_velocidade",
+  "757-90": "alcoolemia",
   "516-91": "alcoolemia",
   "516-92": "alcoolemia",
   "605-01": "semaforo",
@@ -23696,24 +23638,24 @@ var EXPERT_RULES = [
     validUntil: null,
     version: 2,
     jurisdiction: "federal",
-    requiredData: ["hasPsychomotorTerm"],
+    requiredData: ["hasPsychomotorTerm", "refusedTest"],
     relatedArguments: ["ARG-025"],
     families: ["alcoolemia"],
     affectedProcedures: ["suspensao_cnh", "recurso_jari"],
-    evidenceRequired: ["C\xF3pia integral do processo administrativo comprovando a aus\xEAncia do Anexo II da Res. 432/2013"],
+    evidenceRequired: ["C\xF3pia integral do processo administrativo e do termo de constata\xE7\xE3o, quando a recusa for acompanhada por dois ou mais sinais psicomotores"],
     priority: 88,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || "";
-      const isLeiSeca = code === "516-91" || code === "516-92" || code.includes("516");
-      if (isLeiSeca && ctx.hasPsychomotorTerm === false) {
+      const refusalClassifiedUnderArt165 = (code === "516-91" || code === "516-92") && ctx.refusedTest === true;
+      if (refusalClassifiedUnderArt165 && ctx.hasPsychomotorTerm === false) {
         return {
           ruleId: "RULE_LEI_SECA_TERMO_432",
-          title: "Aus\xEAncia ou Defeito no Termo de Constata\xE7\xE3o de Sinais (Res. 432/13)",
-          description: "A autua\xE7\xE3o por recusa exige o preenchimento simult\xE2neo do Termo do Anexo II com conjunto not\xF3rio de sinais cl\xEDnicos observados.",
-          severity: "alta",
+          title: "Revisar enquadramento de recusa com sinais psicomotores (Res. 432/13)",
+          description: "A recusa foi classificada no art. 165. Confirme no processo se havia dois ou mais sinais psicomotores e se o termo do Anexo II foi preenchido; sem essa evid\xEAncia, n\xE3o concluir nulidade automaticamente.",
+          severity: "media",
           legalArgumentId: "ARG-025",
-          impact: "Anula\xE7\xE3o do AIT e cancelamento do processo de suspens\xE3o da CNH por 12 meses (R$ 2.934,70).",
-          statutoryBasis: "Artigo 277 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013, Art. 5\xBA e Anexo II"
+          impact: "Poss\xEDvel inconsist\xEAncia de enquadramento ou de documenta\xE7\xE3o, sujeita \xE0 confer\xEAncia do AIT e do processo administrativo.",
+          statutoryBasis: "Arts. 165 e 165-A do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 432/2013 e Manual Brasileiro de Fiscaliza\xE7\xE3o de Tr\xE2nsito"
         };
       }
       return null;
@@ -28079,16 +28021,17 @@ var INFRACAO_CODES = {
   "745-50": { description: "Velocidade acima da permitida em at\xE9 20%", article: "Art. 218, I", severity: "leve", points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 20 } },
   "745-51": { description: "Velocidade acima da permitida de 21% a 50%", article: "Art. 218, II", severity: "m\xE9dia", points: 5, isSpeedRelated: true, typicalSpeedRange: { min: 21, max: 50 } },
   "745-52": { description: "Velocidade acima da permitida acima de 50%", article: "Art. 218, III", severity: "grav\xEDssima", points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
-  "516-91": { description: "Conduzir ve\xEDculo sob influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa", article: "Art. 165", severity: "grav\xEDssima", points: 7, isSpeedRelated: false },
-  "736-62": { description: "Utilizar equipamento de telefonia celular durante a dire\xE7\xE3o", article: "Art. 252, Par\xE1grafo \xDAnico", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
-  "605-01": { description: "N\xE3o respeitar a sinaliza\xE7\xE3o semaf\xF3rica", article: "Art. 208", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
+  "516-91": { description: "Dirigir sob influ\xEAncia de \xE1lcool", article: "Art. 165", severity: "grav\xEDssima", points: 0, isSpeedRelated: false },
+  "757-90": { description: "Recusar teste ou procedimento para certificar influ\xEAncia de \xE1lcool ou subst\xE2ncia psicoativa", article: "Art. 165-A", severity: "grav\xEDssima", points: 0, isSpeedRelated: false },
+  "736-62": { description: "Dirigir utilizando telefone celular sem segur\xE1-lo ou manuse\xE1-lo", article: "Art. 252, VI", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
+  "605-01": { description: "Avan\xE7ar o sinal vermelho do sem\xE1foro ou de parada obrigat\xF3ria", article: "Art. 208", severity: "grav\xEDssima", points: 7, isSpeedRelated: false },
   "746-10": { description: "Ultrapassar faixa dupla cont\xEDnua", article: "Art. 199", severity: "m\xE9dia", points: 4, isSpeedRelated: false },
   "746-30": { description: "Avan\xE7ar o sinal vermelho do sem\xE1foro", article: "Art. 208", severity: "m\xE9dia", points: 5, isSpeedRelated: false },
   "752-20": { description: "Estacionar em local proibido", article: "Art. 181, IX", severity: "leve", points: 0, isSpeedRelated: false },
   "753-30": { description: "Utilizar cal\xE7ada para estacionamento", article: "Art. 181, XI", severity: "m\xE9dia", points: 2, isSpeedRelated: false },
   "761-80": { description: "Deixar de usar cinto de seguran\xE7a", article: "Art. 196", severity: "leve", points: 0, isSpeedRelated: false },
   "593-70": { description: "Transitar em velocidade incompat\xEDvel com a seguran\xE7a", article: "Art. 198", severity: "m\xE9dia", points: 4, isSpeedRelated: true, typicalSpeedRange: { min: 1, max: 100 } },
-  "516-92": { description: "Conduzir ve\xEDculo com concentra\xE7\xE3o de \xE1lcool por decilitro de sangue igual ou superior a 0,06 gram", article: "Art. 165 do CTB", severity: "grav\xEDssima", points: 7, isSpeedRelated: false },
+  "516-92": { description: "Dirigir sob influ\xEAncia de subst\xE2ncia psicoativa que determine depend\xEAncia", article: "Art. 165 do CTB", severity: "grav\xEDssima", points: 0, isSpeedRelated: false },
   "747-10": { description: "Velocidade acima da permitida em mais de 50% (factor multiplicador)", article: "Art. 218, III", severity: "grav\xEDssima", points: 7, isSpeedRelated: true, typicalSpeedRange: { min: 51, max: 100 } },
   "748-90": { description: "Fugir da blitz policial", article: "Art. 311", severity: "grav\xEDssima", points: 7, isSpeedRelated: false }
 };
@@ -32677,9 +32620,10 @@ var MarketingAutomationWorker = class _MarketingAutomationWorker {
     const campaign = lc.campaign;
     const TERMINAL_OR_RESPONDED = ["responded", "converted", "exhausted", "paused"];
     const leadOptedOut = Boolean(lead?.opt_out_at);
+    const leadNotQualified = lead?.qualification_status !== "qualified";
     const campaignInactive = campaign?.status !== "active";
-    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || campaignInactive) {
-      const reason = leadOptedOut ? "lead opt-out" : campaignInactive ? `campaign status=${campaign?.status || "missing"}` : `lead campaign status=${lc.status}`;
+    if (TERMINAL_OR_RESPONDED.includes(lc.status) || leadOptedOut || leadNotQualified || campaignInactive) {
+      const reason = leadOptedOut ? "lead opt-out" : leadNotQualified ? `lead qualification=${lead?.qualification_status || "missing"}` : campaignInactive ? `campaign status=${campaign?.status || "missing"}` : `lead campaign status=${lc.status}`;
       logger2.info(
         `Skipping outbound send for lead campaign ${lc.id}: ${reason}; cancelling queued follow-ups`,
         { module: "worker", operation: "handleSendMessage" }
@@ -33684,6 +33628,18 @@ router13.patch("/leads/:id/qualification", async (req, res) => {
     }).eq("id", id).select("id, name, audience, lead_type, qualification_status, qualification_notes, qualified_at, opt_out_at").maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Lead n\xE3o encontrado" });
+    if (qualification_status !== "qualified") {
+      const { data: activeLinks, error: linksError } = await supabaseAdmin.from("marketing_lead_campaigns").select("id").eq("lead_id", id).in("status", ["queued", "sent", "delivered"]);
+      if (linksError) throw linksError;
+      const activeLinkIds = (activeLinks || []).map((link) => link.id).filter(Boolean);
+      if (activeLinkIds.length > 0) {
+        const now2 = (/* @__PURE__ */ new Date()).toISOString();
+        const { error: pauseError } = await supabaseAdmin.from("marketing_lead_campaigns").update({ status: "paused", updated_at: now2 }).in("id", activeLinkIds);
+        if (pauseError) throw pauseError;
+        const { error: queueError } = await supabaseAdmin.from("marketing_automation_queue").delete().in("lead_campaign_id", activeLinkIds);
+        if (queueError) throw queueError;
+      }
+    }
     res.json({ success: true, lead: data });
   } catch (err) {
     res.status(500).json({
