@@ -125,10 +125,11 @@ export async function authenticateToken(
     }
 
     // 2. Bypasses de desenvolvimento/teste — NUNCA executados em produção.
-    //    Preservados apenas para os fluxos locais/E2E existentes.
-    //    REMOVIDO EM FASE 6: fallback de dev que criava usuário mock em produção.
-    //    Em produção, somente token Supabase válido preenche req.user.
-    if (!isProduction) {
+    //    Exigem opt-in dedicado via ENABLE_DEV_AUTH_BYPASS=true (never set in production).
+    //    NODE_ENV sozinho não é suficiente: o bypass precisa de opt-in explícito e separado.
+    const devBypassEnabled = process.env.ENABLE_DEV_AUTH_BYPASS === 'true';
+
+    if (!isProduction && devBypassEnabled) {
       // 2a. Fallback local quando Supabase não está configurado (dev).
       if (!supabase) {
         req.user = {
