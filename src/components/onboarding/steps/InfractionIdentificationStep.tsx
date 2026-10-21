@@ -63,8 +63,8 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
     const [isReadingFile, setIsReadingFile] = useState(false);
     const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
 
-    const [currentLeadName, setCurrentLeadName] = useState<string>(leadName || 'Carlos Eduardo Silveira');
-    const [currentLeadPhone, setCurrentLeadPhone] = useState<string>(leadPhone || '(11) 98765-4321');
+    const [currentLeadName, setCurrentLeadName] = useState<string>(leadName || '');
+    const [currentLeadPhone, setCurrentLeadPhone] = useState<string>(leadPhone || '');
 
     const handleNameChange = (val: string) => {
         setCurrentLeadName(val);
