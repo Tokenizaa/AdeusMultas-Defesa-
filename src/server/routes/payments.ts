@@ -994,7 +994,17 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
     const allowedIps = allowedIpsRaw.split(',').map(s => s.trim()).filter(Boolean);
     const clientIp = req.ip || req.headers['x-forwarded-for'] as string || req.connection?.remoteAddress || '';
     const clientIpStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
-    const ipOk = allowedIps.length === 0 || allowedIps.includes(clientIpStr);
+    // Fail-closed: allowlist vazia rejeita todos os IPs. Sem allowlist
+    // configurada explicitamente, nenhum webhook GGPIX e aceito — em qualquer
+    // ambiente, e especialmente em producao.
+    if (allowedIps.length === 0) {
+      logger.warn('payments', 'ggpix', 'webhook', 'Allowlist GGPIX vazia — webhook rejeitado (fail-closed)', {
+        clientIp: clientIpStr,
+      });
+      return res.status(401).json({ error: 'Allowlist GGPIX nao configurada', received: false });
+    }
+
+    const ipOk = allowedIps.includes(clientIpStr);
 
     if (!ipOk) {
       logger.warn('payments', 'ggpix', 'webhook', 'IP não permitido no allowlist GGPIXAPI', {
