@@ -910,7 +910,8 @@ export class ExpertRuleEngine {
       procedure = 'suspensao_cnh';
     }
 
-    // 4. Calculate deterministic success probability score
+    // 4. Calculate dynamic success probability score
+    // Base score from detected arguments (highest priority argument wins)
     let baseScore = 35; // Baseline when no formal or substantive nullities are detected
 
     if (detectedInconsistencies.some((i) => i.legalArgumentId === 'ARG-048')) {
@@ -931,7 +932,43 @@ export class ExpertRuleEngine {
       baseScore = Math.min(90, 50 + detectedInconsistencies.length * 15);
     }
 
-    const overallSuccessRate = Math.min(99, Math.max(25, baseScore));
+    // 4b. Dynamic adjustment based on data completeness and evidence quality
+    // Count total relevant fields for this infraction family
+    const totalRelevantFields = this.countRelevantFields(classification.family, context);
+    const filledRelevantFields = this.countFilledRelevantFields(classification.family, context);
+    const completenessRatio = totalRelevantFields > 0 ? filledRelevantFields / totalRelevantFields : 0.5;
+    
+    // Evidence quality bonus: for each detected inconsistency, check if evidence is strong
+    let evidenceQualityBonus = 0;
+    for (const inc of detectedInconsistencies) {
+      const arg = ARGUMENTS_CATALOG.find(a => a.id === inc.legalArgumentId);
+      if (arg) {
+        // Strong evidence: has concrete data (dates, measurements, etc.)
+        const hasStrongEvidence = this.hasStrongEvidenceForArgument(inc.legalArgumentId, context);
+        if (hasStrongEvidence) evidenceQualityBonus += 3;
+      }
+    }
+    
+    // Data gaps penalty (already tracked in integrityScore)
+    const gapsPenalty = dataGaps.length * 2;
+    
+    // Completeness bonus (0 to +10 based on how complete the data is)
+    const completenessBonus = Math.round(completenessRatio * 10);
+    
+    // Calculate final score with dynamic adjustments
+    let adjustedScore = baseScore + completenessBonus + evidenceQualityBonus - gapsPenalty;
+    
+    // Clamp to valid range with floor based on whether we have ANY arguments
+    const minScore = detectedInconsistencies.length > 0 ? 30 : 15;
+    const overallSuccessRate = Math.min(99, Math.max(minScore, adjustedScore));
+    
+    // Store completeness info for frontend messaging
+    const dataCompleteness = {
+      totalFields: totalRelevantFields,
+      filledFields: filledRelevantFields,
+      ratio: Math.round(completenessRatio * 100),
+      missingCriticalFields: this.getMissingCriticalFields(classification.family, context),
+    };
 
     // 5. Prazo: somente o prazo real da notificação. Nenhum prazo inventado
     //    (Fase 2: não usar prazo de outro estado/órgão ou regra como fallback).
@@ -979,6 +1016,153 @@ export class ExpertRuleEngine {
         notes: classification.notes,
       },
       createdAt: new Date().toISOString(),
+      dataCompleteness,
     };
+  }
+
+  /**
+   * Count total relevant fields for an infraction family
+   */
+  private static countRelevantFields(family: string, context: any): number {
+    const fieldMap: Record<string, string[]> = {
+      velocidade: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'speedLimit', 'measuredSpeed', 'consideredSpeed', 'inmetroAferitionDate',
+        'radarEquipmentId', 'hasR19SignageProof', 'notificationExpeditionDate',
+        'defenseDeadline', 'location'
+      ],
+      alcoolemia: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPsychomotorTerm', 'hasAgentDetailedObservations', 'hasPhotoProof',
+        'hasVideoProof', 'refusedTest', 'offeredRetest', 'bafometerResult',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      semaforo: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPhotoProof', 'hasVideoProof', 'yellowPhaseCrossing',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      celular: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'cellphoneCircumstance', 'hasPhotoProof', 'hasVideoProof',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      estacionamento: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPhotoProof', 'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      generico: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+    };
+    return fieldMap[family]?.length || fieldMap.generico.length;
+  }
+
+  /**
+   * Count filled relevant fields for an infraction family
+   */
+  private static countFilledRelevantFields(family: string, context: any): number {
+    const fieldMap: Record<string, string[]> = {
+      velocidade: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'speedLimit', 'measuredSpeed', 'consideredSpeed', 'inmetroAferitionDate',
+        'radarEquipmentId', 'hasR19SignageProof', 'notificationExpeditionDate',
+        'defenseDeadline', 'location'
+      ],
+      alcoolemia: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPsychomotorTerm', 'hasAgentDetailedObservations', 'hasPhotoProof',
+        'hasVideoProof', 'refusedTest', 'offeredRetest', 'bafometerResult',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      semaforo: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPhotoProof', 'hasVideoProof', 'yellowPhaseCrossing',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      celular: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'cellphoneCircumstance', 'hasPhotoProof', 'hasVideoProof',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      estacionamento: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'hasPhotoProof', 'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+      generico: [
+        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
+        'notificationExpeditionDate', 'defenseDeadline', 'location'
+      ],
+    };
+    const fields = fieldMap[family] || fieldMap.generico;
+    return fields.filter(f => {
+      const v = context[f];
+      return v !== undefined && v !== null && v !== '';
+    }).length;
+  }
+
+  /**
+   * Check if there's strong evidence for a specific argument
+   */
+  private static hasStrongEvidenceForArgument(argumentId: string, context: any): boolean {
+    const evidenceMap: Record<string, string[]> = {
+      'ARG-001': ['inmetroAferitionDate', 'radarEquipmentId'], // Radar calibration
+      'ARG-005': ['measuredSpeed', 'consideredSpeed', 'speedLimit', 'inmetroAferitionDate'], // INMETRO tolerance
+      'ARG-002': ['hasR19SignageProof'], // R-19 signage
+      'ARG-048': ['notificationExpeditionDate', 'notificationDeliveryDate'], // Decadence/dual notification
+      'ARG-051': ['infractionCode', 'hasPreviousInfractionsLast12Months'], // Conversion to warning
+      'ARG-025': ['hasPsychomotorTerm', 'hasAgentDetailedObservations', 'bafometerResult'], // Lei Seca
+      'ARG-015': ['hasAgentDetailedObservations'], // Manual citation
+    };
+    const requiredFields = evidenceMap[argumentId] || [];
+    return requiredFields.every(f => {
+      const v = context[f];
+      return v !== undefined && v !== null && v !== '';
+    });
+  }
+
+  /**
+   * Get missing critical fields that would improve probability
+   */
+  private static getMissingCriticalFields(family: string, context: any): string[] {
+    const criticalMap: Record<string, {field: string, label: string}[]> = {
+      velocidade: [
+        {field: 'inmetroAferitionDate', label: 'Data de aferição do INMETRO'},
+        {field: 'radarEquipmentId', label: 'Identificação do radar'},
+        {field: 'hasR19SignageProof', label: 'Comprovação de sinalização R-19'},
+        {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+        {field: 'hasPhotoProof', label: 'Foto da notificação/radar'},
+      ],
+      alcoolemia: [
+        {field: 'hasPsychomotorTerm', label: 'Termo de constatação de sinais de embriaguez'},
+        {field: 'bafometerResult', label: 'Resultado do bafômetro'},
+        {field: 'hasVideoProof', label: 'Vídeo da abordagem'},
+        {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+      ],
+      semaforo: [
+        {field: 'hasPhotoProof', label: 'Foto do semáforo'},
+        {field: 'hasVideoProof', label: 'Vídeo da infração'},
+        {field: 'yellowPhaseCrossing', label: 'Fase amarela no cruzamento'},
+        {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+      ],
+      celular: [
+        {field: 'hasPhotoProof', label: 'Foto do celular ao volante'},
+        {field: 'cellphoneCircumstance', label: 'Circunstância do uso do celular'},
+        {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+      ],
+      generico: [
+        {field: 'hasPhotoProof', label: 'Foto da notificação'},
+        {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+        {field: 'notificationExpeditionDate', label: 'Data de expedição da notificação'},
+      ],
+    };
+    const fields = criticalMap[family] || criticalMap.generico;
+    return fields
+      .filter(f => {
+        const v = context[f.field];
+        return v === undefined || v === null || v === '';
+      })
+      .map(f => f.label);
   }
 }

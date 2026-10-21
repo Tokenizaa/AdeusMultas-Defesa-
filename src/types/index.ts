@@ -244,6 +244,15 @@ export interface CaseAnalysis {
    * Timestamp do fim da avaliação determinística.
    */
   engineFinishedAt?: string;
+  /**
+   * Completude dos dados para ajuste dinâmico da probabilidade.
+   */
+  dataCompleteness?: {
+    totalFields: number;
+    filledFields: number;
+    ratio: number; // 0-100
+    missingCriticalFields: string[];
+  };
 }
 
 /**

@@ -24301,7 +24301,28 @@ ${p.text}`).join("\n\n"),
     } else if (detectedInconsistencies.length > 0) {
       baseScore = Math.min(90, 50 + detectedInconsistencies.length * 15);
     }
-    const overallSuccessRate = Math.min(99, Math.max(25, baseScore));
+    const totalRelevantFields = this.countRelevantFields(classification.family, context);
+    const filledRelevantFields = this.countFilledRelevantFields(classification.family, context);
+    const completenessRatio = totalRelevantFields > 0 ? filledRelevantFields / totalRelevantFields : 0.5;
+    let evidenceQualityBonus = 0;
+    for (const inc of detectedInconsistencies) {
+      const arg = ARGUMENTS_CATALOG.find((a) => a.id === inc.legalArgumentId);
+      if (arg) {
+        const hasStrongEvidence = this.hasStrongEvidenceForArgument(inc.legalArgumentId, context);
+        if (hasStrongEvidence) evidenceQualityBonus += 3;
+      }
+    }
+    const gapsPenalty = dataGaps.length * 2;
+    const completenessBonus = Math.round(completenessRatio * 10);
+    let adjustedScore = baseScore + completenessBonus + evidenceQualityBonus - gapsPenalty;
+    const minScore = detectedInconsistencies.length > 0 ? 30 : 15;
+    const overallSuccessRate = Math.min(99, Math.max(minScore, adjustedScore));
+    const dataCompleteness = {
+      totalFields: totalRelevantFields,
+      filledFields: filledRelevantFields,
+      ratio: Math.round(completenessRatio * 100),
+      missingCriticalFields: this.getMissingCriticalFields(classification.family, context)
+    };
     const gapSummary = dataGaps.length > 0 ? ` N\xE3o foi poss\xEDvel avaliar ${dataGaps.length} hip\xF3tese(s) por insufici\xEAncia de dados (${dataGaps.map((g) => g.missingData.join("+")).join("; ")}).` : "";
     const selectedArguments = Array.from(new Set(recommendedArgs.map((a) => a.id)));
     const blockedRulePenalty = dataGaps.filter((g) => g.ruleId === "RULE_DECADENCIA_30_DIAS" || g.ruleId === "RULE_LEI_SECA_TERMO_432").length * 12;
@@ -24333,8 +24354,256 @@ ${p.text}`).join("\n\n"),
         eligibleArgumentIds: classification.eligibleArgumentIds,
         notes: classification.notes
       },
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      dataCompleteness
     };
+  }
+  /**
+   * Count total relevant fields for an infraction family
+   */
+  static countRelevantFields(family, context) {
+    const fieldMap = {
+      velocidade: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "speedLimit",
+        "measuredSpeed",
+        "consideredSpeed",
+        "inmetroAferitionDate",
+        "radarEquipmentId",
+        "hasR19SignageProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      alcoolemia: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPsychomotorTerm",
+        "hasAgentDetailedObservations",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "refusedTest",
+        "offeredRetest",
+        "bafometerResult",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      semaforo: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "yellowPhaseCrossing",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      celular: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "cellphoneCircumstance",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      estacionamento: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPhotoProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      generico: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ]
+    };
+    return fieldMap[family]?.length || fieldMap.generico.length;
+  }
+  /**
+   * Count filled relevant fields for an infraction family
+   */
+  static countFilledRelevantFields(family, context) {
+    const fieldMap = {
+      velocidade: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "speedLimit",
+        "measuredSpeed",
+        "consideredSpeed",
+        "inmetroAferitionDate",
+        "radarEquipmentId",
+        "hasR19SignageProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      alcoolemia: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPsychomotorTerm",
+        "hasAgentDetailedObservations",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "refusedTest",
+        "offeredRetest",
+        "bafometerResult",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      semaforo: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "yellowPhaseCrossing",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      celular: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "cellphoneCircumstance",
+        "hasPhotoProof",
+        "hasVideoProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      estacionamento: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "hasPhotoProof",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ],
+      generico: [
+        "aitNumber",
+        "plate",
+        "autuadorBody",
+        "infractionCode",
+        "dateTime",
+        "notificationExpeditionDate",
+        "defenseDeadline",
+        "location"
+      ]
+    };
+    const fields = fieldMap[family] || fieldMap.generico;
+    return fields.filter((f) => {
+      const v = context[f];
+      return v !== void 0 && v !== null && v !== "";
+    }).length;
+  }
+  /**
+   * Check if there's strong evidence for a specific argument
+   */
+  static hasStrongEvidenceForArgument(argumentId, context) {
+    const evidenceMap = {
+      "ARG-001": ["inmetroAferitionDate", "radarEquipmentId"],
+      // Radar calibration
+      "ARG-005": ["measuredSpeed", "consideredSpeed", "speedLimit", "inmetroAferitionDate"],
+      // INMETRO tolerance
+      "ARG-002": ["hasR19SignageProof"],
+      // R-19 signage
+      "ARG-048": ["notificationExpeditionDate", "notificationDeliveryDate"],
+      // Decadence/dual notification
+      "ARG-051": ["infractionCode", "hasPreviousInfractionsLast12Months"],
+      // Conversion to warning
+      "ARG-025": ["hasPsychomotorTerm", "hasAgentDetailedObservations", "bafometerResult"],
+      // Lei Seca
+      "ARG-015": ["hasAgentDetailedObservations"]
+      // Manual citation
+    };
+    const requiredFields = evidenceMap[argumentId] || [];
+    return requiredFields.every((f) => {
+      const v = context[f];
+      return v !== void 0 && v !== null && v !== "";
+    });
+  }
+  /**
+   * Get missing critical fields that would improve probability
+   */
+  static getMissingCriticalFields(family, context) {
+    const criticalMap = {
+      velocidade: [
+        { field: "inmetroAferitionDate", label: "Data de aferi\xE7\xE3o do INMETRO" },
+        { field: "radarEquipmentId", label: "Identifica\xE7\xE3o do radar" },
+        { field: "hasR19SignageProof", label: "Comprova\xE7\xE3o de sinaliza\xE7\xE3o R-19" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" },
+        { field: "hasPhotoProof", label: "Foto da notifica\xE7\xE3o/radar" }
+      ],
+      alcoolemia: [
+        { field: "hasPsychomotorTerm", label: "Termo de constata\xE7\xE3o de sinais de embriaguez" },
+        { field: "bafometerResult", label: "Resultado do baf\xF4metro" },
+        { field: "hasVideoProof", label: "V\xEDdeo da abordagem" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" }
+      ],
+      semaforo: [
+        { field: "hasPhotoProof", label: "Foto do sem\xE1foro" },
+        { field: "hasVideoProof", label: "V\xEDdeo da infra\xE7\xE3o" },
+        { field: "yellowPhaseCrossing", label: "Fase amarela no cruzamento" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" }
+      ],
+      celular: [
+        { field: "hasPhotoProof", label: "Foto do celular ao volante" },
+        { field: "cellphoneCircumstance", label: "Circunst\xE2ncia do uso do celular" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" }
+      ],
+      generico: [
+        { field: "hasPhotoProof", label: "Foto da notifica\xE7\xE3o" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" },
+        { field: "notificationExpeditionDate", label: "Data de expedi\xE7\xE3o da notifica\xE7\xE3o" }
+      ]
+    };
+    const fields = criticalMap[family] || criticalMap.generico;
+    return fields.filter((f) => {
+      const v = context[f.field];
+      return v === void 0 || v === null || v === "";
+    }).map((f) => f.label);
   }
 };
 

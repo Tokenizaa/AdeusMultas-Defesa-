@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -166,12 +166,44 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
 }) => {
   const successRate = analysis?.overallSuccessRate ?? 0;
   const isHighProbability = successRate >= 80;
+  const dataCompleteness = analysis?.dataCompleteness;
+  
+  // Animated counter state
+  const [displayedRate, setDisplayedRate] = useState(0);
+  const [animationComplete, setAnimationComplete] = useState(false);
+  
+  // Animate from 0 to successRate on mount
+  useEffect(() => {
+    let startTime: number;
+    const duration = 1200; // 1.2 seconds
+    
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      // Easing: ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayedRate(Math.round(eased * successRate));
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setDisplayedRate(successRate);
+        setAnimationComplete(true);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }, [successRate]);
+  
+  // Determina se deve mostrar mensagem de melhoria
+  const showImprovementMessage = !animationComplete || (successRate < 75 && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0);
+  const isLowProbability = successRate < 60;
+  const isMediumProbability = successRate >= 60 && successRate < 80;
   
   // Calcula pontos de defesa personalizados (top 3 por relevância)
   const defensePoints = analysis?.recommendedArguments
     ?.map(arg => formatLegalPointGovBr(arg, { infraction: infractionData, vehicle: vehicleData }))
     ?.sort((a, b) => {
-      // Ordena por: confiança (Muito Alto > Alto > Médio > Baixo) 
       const confidenceOrder: Record<string, number> = {
         'Muito Alto': 4,
         'Alto': 3,
@@ -180,8 +212,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       };
       return (confidenceOrder[b.confidenceLevel] || 0) - (confidenceOrder[a.confidenceLevel] || 0);
     })
-    .slice(0, 3) // Mostra apenas os top 3 argumentos mais relevantes
-    ?? [];
+    .slice(0, 3) ?? [];
 
   return (
     <div className="space-y-6">
@@ -208,11 +239,64 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             Probabilidade de Êxito
           </span>
           <div className="text-4xl sm:text-5xl font-extrabold text-emerald-700 font-mono">
-            {successRate}%
+            {displayedRate}%
           </div>
           <span className="text-lg text-emerald-800 font-medium">
-            {defensePoints.length > 0 ? (isHighProbability ? 'Alto potencial de anulação' : 'Potencial identificado — análise detalhada disponível') : 'Nenhuma tese autorizada com os dados informados'}
+            {defensePoints.length > 0 ? (isHighProbability ? 'Alto potencial de anulação' : isMediumProbability ? 'Potencial identificado — análise detalhada disponível' : 'Potencial moderado — recomenda-se reforçar dados') : 'Nenhuma tese autorizada com os dados informados'}
           </span>
+          
+          {/* Data completeness indicator */}
+          {dataCompleteness && (
+            <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
+              <div className="flex items-center justify-center gap-4 text-sm text-emerald-700">
+                <span className="font-mono">{dataCompleteness.filledFields}/{dataCompleteness.totalFields} campos preenchidos</span>
+                <span className="px-2 py-1 bg-emerald-100 rounded-full font-mono">{dataCompleteness.ratio}% completo</span>
+              </div>
+              <div className="w-full max-w-xs mx-auto h-2 bg-emerald-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
+                  style={{ width: `${dataCompleteness.ratio}%` }}
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Improvement message when probability is low */}
+          {showImprovementMessage && isLowProbability && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0 && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2 animate-pulse">
+              <div className="flex items-center gap-2 text-amber-800">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <span className="font-medium">Probabilidade pode melhorar com mais dados</span>
+              </div>
+              <p className="text-sm text-amber-700 pl-7">
+                Adicionar as informações abaixo pode aumentar sua probabilidade de êxito:
+              </p>
+              <ul className="text-sm text-amber-700 pl-7 space-y-1">
+                {dataCompleteness.missingCriticalFields.slice(0, 4).map((field, idx) => (
+                  <li key={idx} className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-1.5" />
+                    {field}
+                  </li>
+                ))}
+                {dataCompleteness.missingCriticalFields.length > 4 && (
+                  <li className="text-amber-600">+{dataCompleteness.missingCriticalFields.length - 4} outros campos relevantes</li>
+                )}
+              </ul>
+              <p className="text-xs text-amber-600 pl-7 italic">
+                A probabilidade é recalculada automaticamente ao preencher mais dados no formulário.
+              </p>
+            </div>
+          )}
+          
+          {/* Success message when high probability */}
+          {animationComplete && isHighProbability && (
+            <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="flex items-center justify-center gap-2 text-emerald-800">
+                <Sparkles className="w-4 h-4" />
+                <span className="font-medium">Excelente! Seus dados fornecem base sólida para a defesa.</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
