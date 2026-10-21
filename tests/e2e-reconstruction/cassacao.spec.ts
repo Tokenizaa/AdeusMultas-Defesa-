@@ -109,7 +109,8 @@ test.describe('cassacao — dez cenários canônicos', () => {
     await page.locator('#input-address-street').fill('Rua de Teste E2E');
     await page.locator('#input-address-number').fill('100');
     await page.locator('#input-address-citystate').fill('São Paulo/SP');
-    await page.locator('#input-pcdd-number').fill('PCDD-E2E-' + runId);\n    await page.locator('#input-applicant-rg').fill('E2E-RG-' + runId);
+    await page.locator('#input-pcdd-number').fill('PCDD-E2E-' + runId);
+    await page.locator('#input-applicant-rg').fill('E2E-RG-' + runId);
     await page.locator('#btn-next-to-review').click();
     await expect(page.locator('#btn-proceed-to-checkout')).toBeVisible();
     await expect(page.getByText(created.input.name)).toBeVisible();
