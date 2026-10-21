@@ -26,8 +26,7 @@ export type {
   GatewayPayerInput,
 } from './types';
 
-export { pagbankAdapter, PagBankAdapter } from './pagbank-adapter';
-export { ggpixAdapter, GGPIXAdapter } from './ggpix-adapter';
+export { venopagAdapter, VenoPagAdapter } from './venopag-adapter';
 
 export {
   processGatewayWebhook,

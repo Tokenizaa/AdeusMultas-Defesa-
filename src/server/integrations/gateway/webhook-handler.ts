@@ -25,34 +25,27 @@ import { logger } from '../../observability/logger';
 /**
  * Detecta qual gateway enviou o webhook pelo path da requisição.
  *
- * Mapeamento:
- *   /api/webhooks/pagbank → PagBank
- *   /api/webhooks/ggpix   → GGPIXAPI
- *   /api/payments/webhooks/pagbank → PagBank (alias legado)
+ * Mapeamento (apenas VenoPag suportado):
+ *   /api/webhooks/venopag → VenoPag
  */
 export function detectGatewayFromPath(path: string): GatewayId | null {
   const normalized = path.toLowerCase();
-  if (normalized.includes('pagbank')) return 'pagbank';
-  if (normalized.includes('ggpix')) return 'ggpixapi';
+  if (normalized.includes('venopag')) return 'venopag';
   return null;
 }
 
 /**
  * Tenta detectar o gateway pelo conteúdo do payload.
  * Usado como fallback quando o path não é informativo.
+ * Apenas VenoPag tem request_number + status.
  */
 export function detectGatewayFromPayload(body: unknown): GatewayId | null {
   if (!body || typeof body !== 'object') return null;
   const obj = body as Record<string, unknown>;
 
-  // PagBank: tem 'charges' array e 'reference_id'
-  if (Array.isArray(obj.charges) || ('reference_id' in obj && 'created_at' in obj)) {
-    return 'pagbank';
-  }
-
-  // GGPIXAPI: tem 'transactionId' e 'type' (PIX_IN, etc.)
-  if ('transactionId' in obj && 'type' in obj && 'status' in obj) {
-    return 'ggpixapi';
+  // VenoPag: tem 'request_number' e 'status'
+  if ('request_number' in obj && 'status' in obj) {
+    return 'venopag';
   }
 
   return null;

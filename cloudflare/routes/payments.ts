@@ -6,7 +6,6 @@ import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
 import { commercialRoutes } from './commercial';
-import { GGPIXAdapter } from '../../src/server/integrations/gateway/ggpix-adapter';
 import type { NormalizedWebhookEvent } from '../../src/server/integrations/gateway/types';
 import { createVenoCashIn, getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
 
@@ -349,46 +348,8 @@ routes.post('/webhooks/ggpix', async (c) => {
   let body: unknown;
   try { body = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
 
-  // Never log Worker bindings: c.env contains production credentials.
-  const headersObj = Object.fromEntries(c.req.raw.headers.entries());
-
-  // Use the adapter with the current Env binding
-  const envRecord = c.env as unknown as Record<string, string>;
-  const ggpixAdapterInstance = new GGPIXAdapter(envRecord);
-  let normalized: NormalizedWebhookEvent;
-  try {
-    normalized = ggpixAdapterInstance.processWebhook(rawBody, headersObj, body);
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes('Webhook GGPIXAPI rejeitado')) {
-      return c.json({ error: err.message }, 401);
-    }
-    return c.json({ error: 'Webhook inválido.' }, 400);
-  }
-
-  const { referenceId, status, gatewayTransactionId } = normalized;
-  if (!referenceId) return c.json({ received: true, status, isDuplicate: false });
-
-  const supabase = createSupabaseAdminClient(c.env);
-  const { data: existing, error } = await supabase.from('payment_orders').select('*').eq('reference_id', referenceId).maybeSingle();
-  if (error) throw error;
-  if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
-
-  const now = new Date().toISOString();
-  if (status === 'PAID') {
-    if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
-    const { data: transitioned, error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, gateway_transaction_id: gatewayTransactionId, updated_at: now }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
-    if (paymentError) throw paymentError;
-    if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
-    const match = referenceId.match(/^defesai_case_(.+)$/);
-    if (match?.[1]) {
-      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, updated_at: now }).eq('id', match[1]);
-      if (caseError) throw caseError;
-    }
-    return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
-  }
-  const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: now }).eq('id', existing.id);
-  if (statusError) throw statusError;
-  return c.json({ received: true, status, isDuplicate: false, matched: true });
+  // GGPIX webhook is not supported since migration to VenoPag only.
+  return c.json({ error: 'Gateway GGPIX descontinuado. Use VenoPag.' }, 400);
 });
 
 routes.post('/webhooks/venopag', async (c) => {

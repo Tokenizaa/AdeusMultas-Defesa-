@@ -120,7 +120,7 @@ export class PagBankIntegrationService {
    * Validação oficial de assinatura de webhook do PagBank
    * Cabeçalho: X-Hub-Signature-256 ou X-PagBank-Signature
    */
-  private verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
+  public verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
     const secret = this.getWebhookSecret();
     if (!secret) {
       if (this.isProductionMode()) {

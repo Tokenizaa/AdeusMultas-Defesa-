@@ -265,6 +265,55 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
 });
 
 // ─────────────────────────────────────────────
+// PRICING MANAGEMENT
+// ─────────────────────────────────────────────
+router.get('/admin/pricing', requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+    const { data, error } = await supabase
+      .from('service_pricings')
+      .select('id, service_type, service_name, standard_price, promotional_price, is_active, valid_from, valid_until');
+    if (error) throw error;
+    res.json({ pricing: data || [] });
+  } catch (err: any) {
+    logger.error('admin', 'pricing', 'get', `Erro ao listar precificação: ${err.message}`);
+    res.status(500).json({ error: 'Erro ao carregar precificação.' });
+  }
+});
+
+router.patch('/admin/pricing/:serviceType', requireAdmin, async (req, res) => {
+  try {
+    const { standardPrice, promotionalPrice, reason } = req.body as {
+      standardPrice: number;
+      promotionalPrice?: number;
+      reason?: string;
+    };
+    if (standardPrice === undefined || standardPrice === null) {
+      return res.status(400).json({ error: 'standardPrice é obrigatório.' });
+    }
+    if (standardPrice < 0) {
+      return res.status(400).json({ error: 'standardPrice deve ser maior que zero.' });
+    }
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+    const { error } = await supabase
+      .from('service_pricings')
+      .update({ standard_price: standardPrice, promotional_price: promotionalPrice || null })
+      .eq('service_type', req.params.serviceType);
+    if (error) throw error;
+    res.json({ success: true, serviceType: req.params.serviceType, standardPrice, promotionalPrice });
+  } catch (err: any) {
+    logger.error('admin', 'pricing', 'update', `Erro ao atualizar precificação: ${err.message}`);
+    res.status(500).json({ error: 'Erro ao atualizar precificação.' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // USERS (user_profiles + sync auth.users via SECURITY DEFINER function)
 // ─────────────────────────────────────────────
 router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {

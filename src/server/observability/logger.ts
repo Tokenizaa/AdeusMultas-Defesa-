@@ -24,6 +24,7 @@ export type LogService =
   | 'marketing'
   | 'messaging'
   | 'system'
+  | 'admin'
   | 'auth'
   | 'communication'
   | 'commercial'

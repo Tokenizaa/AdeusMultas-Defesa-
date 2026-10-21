@@ -1909,6 +1909,42 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          id: string
+          event_id: string
+          provider: string
+          payload: Json
+          status: string
+          attempts: number
+          processed_at: string | null
+          processing_error: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          provider: string
+          payload: Json
+          status?: string
+          attempts?: number
+          processed_at?: string | null
+          processing_error?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          provider?: string
+          payload?: Json
+          status?: string
+          attempts?: number
+          processed_at?: string | null
+          processing_error?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1921,6 +1957,15 @@ export type Database = {
       admin_update_user_role_by_email: {
         Args: { new_role: string; target_user_email: string }
         Returns: Json
+      }
+      claim_webhook_event: {
+        Args: { p_max_attempts: number }
+        Returns: {
+          event_id: string
+          provider: string
+          payload: Json
+          attempts: number
+        }[]
       }
       current_user_id: { Args: never; Returns: string }
       emit_event: {

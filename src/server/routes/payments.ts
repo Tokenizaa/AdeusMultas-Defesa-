@@ -1,11 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { pagBankIntegration } from '../integrations/pagbank';
-import { gatewayManager, processGatewayWebhook } from '../integrations/gateway';
+import { gatewayManager, processGatewayWebhook, venopagAdapter } from '../integrations/gateway';
 import type { GatewayId } from '../integrations/gateway';
+import type { PagBankWebhookPayload } from '../integrations/pagbank';
 import { commercialService } from '../commercial/commercial-service';
 import { databaseRows, auditLogs } from '../stores';
 import { caseRepository } from '../db/case-repository';
+import { webhookRepository } from '../db/webhook-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseServerClient } from '../db/supabase-server';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
@@ -262,8 +264,8 @@ router.use('/webhooks/pagbank', (req: Request, _res: Response, next: NextFunctio
   });
 });
 
-// Raw body middleware for GGPIXAPI webhooks (no HMAC, but needs raw for logging)
-router.use('/webhooks/ggpix', (req: Request, _res: Response, next: NextFunction) => {
+// Raw body middleware for VenoPag webhooks (HMAC signature verification)
+router.use('/webhooks/venopag', (req: Request, _res: Response, next: NextFunction) => {
   if ((req as any).rawBody !== undefined) return next();
   let rawBody = '';
   req.setEncoding('utf8');
@@ -275,8 +277,8 @@ router.use('/webhooks/ggpix', (req: Request, _res: Response, next: NextFunction)
 });
 
 // Official Gateway-Agnostic PIX Creation (resolves price from commercial catalog)
-// MANTÉM alias /api/pagbank/orders para compatibilidade reversa.
-router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
+// Agora usa apenas o gateway ativo (VenoPag).
+router.post('/pix/create', prodAuth, async (req, res) => {
   try {
     const {
       caseId,
@@ -314,9 +316,6 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
     const gateway = gatewayManager.getActiveGateway();
 
     // Autorização canônica: caso do usuário autenticado ou claim token válido.
-    // Em PAYMENT_MODE=production o prodAuth já exige JWT real do Supabase;
-    // aqui garantimos que o caseId pertence à sessão (ou ao claim) — nunca
-    // ao userId enviado no body.
     if (!assertCanPayCase(req, res, caseId)) return;
 
     const orderResult = await gateway.createPix({
@@ -329,12 +328,12 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
-      webhookUrl: `${process.env.APP_URL || 'https://www.defesai.shop'}/api/webhooks/${gateway.id === 'ggpixapi' ? 'ggpix' : 'pagbank'}`,
+      webhookUrl: `${process.env.APP_URL || 'https://www.defesai.shop'}/api/webhooks/venopag`,
     });
 
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
 
-    logger.info('payments', 'gateway', 'create_pix_order', 'PIX order created', {
+    logger.info('payments', 'gateway', 'create_pix_order', 'VenoPag PIX order created', {
       serviceType: offerResult.offer.serviceType,
       pricingId: offerResult.offer.commercialId,
       baseAmount: offerResult.offer.baseAmount,
@@ -362,7 +361,7 @@ router.post(['/pagbank/orders', '/pix/create'], prodAuth, async (req, res) => {
       gateway: gateway.id,
     });
   } catch (error: any) {
-    logger.error('payments', 'pix_create', 'create_pix_order', 'Error creating PIX order', { error: error.message });
+    logger.error('payments', 'venopag', 'create_pix_order', 'Error creating PIX order', { error: error.message });
     res.status(500).json({ error: error.message || 'Erro ao gerar pedido PIX' });
   }
 });
@@ -465,10 +464,10 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     // Autorização canônica do caso (sessão ou claim token).
     if (!assertCanPayCase(req, res, caseId)) return;
 
-    if (gateway.id !== 'pagbank') {
+    if (gateway.id !== 'venopag') {
       return res.status(400).json({
         error: 'Gateway ativo não suporta pagamento com cartão de crédito.',
-        message: `O gateway '${gateway.displayName}' só aceita PIX. Altere o gateway para PagBank nas configurações de pagamento.`,
+        message: 'O gateway VenoPag só aceita PIX. Apenas PIX está disponível.',
         gateway: gateway.id,
         supportedMethods: ['pix'],
       });
@@ -554,142 +553,149 @@ router.get('/pagbank/orders/:id', (req, res) => {
   res.json(order);
 });
 
-// PagBank Official Webhook with HMAC-SHA256 Signature Verification & Idempotency
+// PagBank Official Webhook with HMAC-SHA256 Signature Verification & Durable Idempotency
+// Fluxo: verificar assinatura → aceitar evento (durável, dedup) → retornar 2xx →
+// processar efeitos colaterais (idempotentes) → marcar como processado.
 router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
   try {
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
-    const payload = req.body;
+    const payload = req.body as PagBankWebhookPayload;
     const signature = req.headers['x-hub-signature-256'] as string || 
                      req.headers['x-pagbank-signature'] as string ||
                      req.headers['x-authenticity-token'] as string;
 
-    const webhookResult = pagBankIntegration.processWebhook(rawBody, signature, payload) as {
-      signatureValid: boolean;
-      status: string;
-      orderId?: string;
-      amountInCents?: number;
-      transactionType?: string;
-      gatewayTransactionId?: string;
-      commercialOfferId?: string;
-      serviceType?: string;
-      paidAt?: string;
-    };
-
-    if (!webhookResult.signatureValid) {
+    // 1. Verificar assinatura HMAC-SHA256 (bloqueador)
+    const signatureValid = pagBankIntegration.verifyWebhookSignature(rawBody, signature);
+    if (!signatureValid) {
       logger.error('payments', 'pagbank', 'webhook', 'Invalid signature - rejecting webhook', {
-        eventId: payload.id,
+        eventId: payload?.id,
       });
       return res.status(401).json({ error: 'Assinatura inválida', received: false });
     }
 
-    // PagBank envia reference_id (snake_case) no corpo; o adapter normaliza para
-    // referenceId. Fallbacks cobrem ambos + compat reversa — sem isso o caseId
-    // saía null e o pagamento confirmado NUNCA vinculava ao caso.
-    const rawReference =
-      (webhookResult as any).referenceId ||
-      typeof payload.reference_id === 'string' ? payload.reference_id :
-      (typeof payload.referenceId === 'string' ? payload.referenceId : null);
-
-    const caseId = typeof rawReference === 'string'
-      ? rawReference.replace('defesai_case_', '')
+    // 2. Extrair dados do evento (sem efeitos colaterais aqui)
+    const webhookEventId = payload.id || `wh_${Date.now()}`;
+    const firstCharge = payload.charges?.[0];
+    const isPaid = firstCharge?.status === 'PAID';
+    const referenceId = payload.reference_id || firstCharge?.reference_id || '';
+    const caseId = typeof referenceId === 'string'
+      ? referenceId.replace('defesai_case_', '')
       : null;
 
-    if (caseId && webhookResult.status === 'PAID') {
+    // 3. Idempotência durável: aceitar evento se novo (sobrevive a restarts)
+    const accepted = await webhookRepository.acceptEvent(webhookEventId, 'pagbank', payload);
+    if (!accepted.isNew) {
+      // Entrega duplicada: evento já foi aceito anteriormente.
+      // Se já foi processado, retornar 2xx sem efeitos colaterais.
+      // Se ainda não foi processado (crash entre accept e complete),
+      // o side effect abaixo é idempotente e será aplicado com segurança.
+      logger.info('payments', 'pagbank', 'webhook', 'Webhook duplicado — aceitação durável ignorou', {
+        webhookEventId,
+        caseId,
+      });
+    }
+
+    // 4. Processar efeitos colaterais (apenas se o pagamento for PAID e o caso não estiver já quitado)
+    // Idempotência de negócio: se o caso já está isPaid=true com a mesma transação, pular.
+    if (isPaid && caseId) {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
-        const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
+        const alreadyPaid = domain.isPaid === true &&
+          domain.payment?.transactionId === (firstCharge?.reference_id || payload.id || undefined);
 
-        domain.isPaid = true;
-        domain.paidAt = new Date().toISOString();
-        domain.status = 'defesa_pronta';
-        domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || 'recurso_jari';
+        if (!alreadyPaid) {
+          const paymentAmount = Number((firstCharge?.amount?.value || 0) / 100);
 
-        const paymentMethod = (domain.payment?.paymentMethod ||
-          (webhookResult.transactionType === 'CREDIT_CARD' ? 'credit_card' : 'pix'));
+          domain.isPaid = true;
+          domain.paidAt = firstCharge?.paid_at || new Date().toISOString();
+          domain.status = 'defesa_pronta';
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || 'recurso_jari';
 
-        domain.payment = {
-          status: 'approved',
-          amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-          paidAt: new Date().toISOString(),
-          transactionId: webhookResult.orderId || webhookResult.gatewayTransactionId,
-          paymentMethod,
-        };
-        if (webhookResult.commercialOfferId) {
-          domain.commercialOfferId = webhookResult.commercialOfferId;
-        }
-        if (webhookResult.serviceType && !domain.serviceType) {
-          domain.serviceType = webhookResult.serviceType as any;
-        }
+          const paymentMethod = (domain.payment?.paymentMethod ||
+            (firstCharge?.payment_method?.type === 'CREDIT_CARD' ? 'credit_card' : 'pix'));
 
-        // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
-        // O caso chega a `defesa_pronta` já com a peça jurídica montada.
-        // Envolvida em try/catch para NUNCA quebrar o webhook caso a geração
-        // falhe — o pagamento permanece confirmado (isPaid=true).
-        try {
-          const defense = generateDefenseDraftForDomain(domain);
-          defense.generationCount = 1;
-          // Integridade (hash canônico) — sem ele o GET /cases rejeita a peça
-          // (DEFENSE_INTEGRITY_FAILED). Mesmo cálculo do fluxo do wizard.
-          (defense as any).integrityHash = computeDefenseIntegrityHash(
-            defense as any,
-            (domain as any).analysis as any
-          );
-          domain.defenseDraft = defense;
-          domain.documentGenerationStatus = 'ready';
+          domain.payment = {
+            status: 'approved',
+            amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+            paidAt: new Date().toISOString(),
+            transactionId: firstCharge?.reference_id || payload.id || `ord_${domain.id}`,
+            paymentMethod,
+          };
+
+          // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
+          try {
+            const defense = generateDefenseDraftForDomain(domain);
+            defense.generationCount = 1;
+            (defense as any).integrityHash = computeDefenseIntegrityHash(
+              defense as any,
+              (domain as any).analysis as any
+            );
+            domain.defenseDraft = defense;
+            domain.documentGenerationStatus = 'ready';
+
+            domain.timeline.push({
+              id: `tl_def_auto_${Date.now()}`,
+              title: 'Defesa Gerada Automaticamente',
+              description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+              timestamp: new Date().toISOString(),
+              type: 'defense',
+            });
+          } catch (defenseError: any) {
+            logger.error('payments', 'pagbank', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
+              error: defenseError?.message,
+              caseId: domain.id,
+            });
+          }
 
           domain.timeline.push({
-            id: `tl_def_auto_${Date.now()}`,
-            title: 'Defesa Gerada Automaticamente',
-            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+            id: `tl_webhook_${Date.now()}`,
+            title: 'Pagamento Confirmado via Webhook PagBank',
+            description: `Transação ${firstCharge?.reference_id || payload.id} aprovada pela instituição financeira.`,
             timestamp: new Date().toISOString(),
-            type: 'defense',
+            type: 'payment',
           });
-        } catch (defenseError: any) {
-          // Não-bloqueante: mantém o caso pago mesmo se a geração falhar.
-          logger.error('payments', 'pagbank', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
-            error: defenseError?.message,
+
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
+
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: firstCharge?.reference_id || payload.id || `ord_${domain.id}`,
             caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || 'Condutor DefesAi',
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount,
+          });
+
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            actor: domain.clientName || 'Cliente',
+            role: 'citizen',
+            action: 'PAYMENT_CONFIRMED',
+            targetResource: domain.id,
+            ipHash: '3a88c42b109e',
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
+            gdprCompliant: true,
           });
         }
-
-        domain.timeline.push({
-          id: `tl_webhook_${Date.now()}`,
-          title: 'Pagamento Confirmado via Webhook PagBank',
-          description: `Transação ${webhookResult.orderId || webhookResult.gatewayTransactionId} aprovada pela instituição financeira.`,
-          timestamp: new Date().toISOString(),
-          type: 'payment',
-        });
-
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-
-        commercialService.processPaymentConfirmationEvent({
-          paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
-          caseId: domain.id,
-          buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-          buyerUserName: domain.clientName || 'Condutor DefesAi',
-          grossAmount: domain.payment.amount,
-          discountAmount: 0,
-          effectivelyPaid: domain.payment.amount,
-        });
-
-        auditLogs.unshift({
-          id: `audit_pay_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          actor: domain.clientName || 'Cliente',
-          role: 'citizen',
-          action: 'PAYMENT_CONFIRMED',
-          targetResource: domain.id,
-          ipHash: '3a88c42b109e',
-          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
-          gdprCompliant: true,
-        });
       }
     }
 
-    res.status(200).json({ received: true, ...webhookResult });
+    // 5. Marcar evento como processado (durável)
+    try {
+      await webhookRepository.completeEvent(webhookEventId);
+    } catch (completeErr: any) {
+      logger.warn('payments', 'pagbank', 'webhook', 'Falha ao marcar evento como processado — será retryado pelo worker', {
+        webhookEventId,
+        error: completeErr?.message,
+      });
+    }
+
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId });
   } catch (error: any) {
     logger.error('payments', 'pagbank', 'webhook', 'Webhook processing error', { error: error.message });
     res.status(400).json({ error: error.message });
@@ -933,7 +939,7 @@ router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
     });
   }
   try {
-    const { gateway = 'pagbank', eventType = 'PAID', caseId, amount = 89.90 } = req.body;
+    const { gateway = 'venopag', eventType = 'PAID', caseId, amount = 89.90 } = req.body;
     if (!caseId) {
       return res.status(400).json({ error: 'caseId é obrigatório' });
     }
@@ -942,39 +948,20 @@ router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
     let path: string;
     let headers: Record<string, string> = {};
 
-    if (gateway === 'pagbank') {
-      path = '/webhooks/pagbank';
+    if (gateway === 'venopag') {
+      path = '/webhooks/venopag';
       payload = {
-        id: `evt_sim_${Date.now()}`,
-        reference_id: `defesai_case_${caseId}`,
-        created_at: new Date().toISOString(),
-        charges: [
-          {
-            id: `ch_sim_${Date.now()}`,
-            reference_id: `defesai_case_${caseId}`,
-            status: eventType === 'PAID' ? 'PAID' : 'CANCELED',
-            created_at: new Date().toISOString(),
-            paid_at: eventType === 'PAID' ? new Date().toISOString() : undefined,
-            amount: { value: Math.round(amount * 100), currency: 'BRL' },
-            payment_method: { type: 'PIX' },
-          },
-        ],
-      };
-      // In dev/sandbox mode or direct call
-      headers['x-hub-signature-256'] = 'sha256=sandbox_dev_signature';
-    } else {
-      path = '/webhooks/ggpix';
-      payload = {
-        transactionId: `ggpix_tx_sim_${Date.now()}`,
-        externalId: `defesai_case_${caseId}`,
+        request_number: `defesai_case_${caseId}`,
         status: eventType === 'PAID' ? 'COMPLETE' : 'CANCELED',
         type: 'PIX_IN',
         amount,
-        netAmount: amount * 0.98,
-        gatewayFee: amount * 0.02,
-        paidAt: eventType === 'PAID' ? new Date().toISOString() : undefined,
+        client_id: 'test_client',
+        created_at: new Date().toISOString(),
       };
-      headers['x-forwarded-for'] = '127.0.0.1';
+      headers['x-veno-client-id'] = 'test_client';
+      headers['x-veno-signature'] = 't=0,v1=sandbox_dev_hmac';
+    } else {
+      return res.status(400).json({ error: `Gateway '${gateway}' não suportado em sandbox. Use 'venopag'.` });
     }
 
     const rawBody = JSON.stringify(payload);
@@ -992,26 +979,176 @@ router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
 });
 
 // ============================================================================
-// GGPIXAPI Webhook — gateway-agnostic via processGatewayWebhook()
+// GGPIXAPI Webhook — verificação de IP allowlist + idempotência durável
 // ============================================================================
+// GGPIXAPI não usa HMAC nos webhooks; a segurança é feita por allowlist de IP
+// (env GGPIX_WEBHOOK_ALLOWED_IPS). Todo evento é duravelmente aceito antes de
+// aplicar efeitos colaterais, e entregas duplicadas são dedup por event_id.
 router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
   try {
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
-    const payload = req.body;
+    const payload = req.body as any;
 
-    const result = processGatewayWebhook('/webhooks/ggpix', rawBody, req.headers as Record<string, string | undefined>, payload);
+    // 1. Verificação de IP allowlist (segurança do GGPIXAPI)
+    const allowedIpsRaw = process.env.GGPIX_WEBHOOK_ALLOWED_IPS || '';
+    const allowedIps = allowedIpsRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const clientIp = req.ip || req.headers['x-forwarded-for'] as string || req.connection?.remoteAddress || '';
+    const clientIpStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
+    const ipOk = allowedIps.length === 0 || allowedIps.includes(clientIpStr);
 
-    if (!result) {
-      logger.warn('payments', 'ggpix', 'webhook', 'GGPIXAPI webhook not recognized', {
-        hasTransactionId: !!payload?.transactionId,
+    if (!ipOk) {
+      logger.warn('payments', 'ggpix', 'webhook', 'IP não permitido no allowlist GGPIXAPI', {
+        clientIp: clientIpStr,
+        allowedIps,
       });
-      return res.status(400).json({ error: 'Webhook não reconhecido' });
+      return res.status(401).json({ error: 'IP não autorizado', received: false });
     }
 
-    const { event } = result;
+    // 2. Extrair dados do evento (sem efeitos colaterais)
+    const gatewayEventId = payload?.gatewayEventId || payload?.event_id || `ggpix_${payload?.referenceId || 'evt'}_${payload?.status || 'status'}`;
+    const referenceId = payload?.referenceId || null;
+    const caseId = typeof referenceId === 'string' ? referenceId.replace('defesai_case_', '') : null;
+    const status = payload?.status || 'PENDING';
+    const isPaid = status === 'PAID';
 
-    // Normalizar: extrair caseId do referenceId (formato: "defesai_case_{caseId}")
-    const caseId = event.referenceId?.replace('defesai_case_', '') || null;
+    // 3. Idempotência durável: aceitar evento se novo
+    const accepted = await webhookRepository.acceptEvent(gatewayEventId, 'ggpixapi', payload);
+    if (!accepted.isNew) {
+      logger.info('payments', 'ggpix', 'webhook', 'Webhook duplicado — aceitação durável ignorou', {
+        gatewayEventId,
+        caseId,
+      });
+    }
+
+    // 4. Processar efeitos colaterais (apenas se PAID e caso não já quitado — idempotente)
+    if (isPaid && caseId) {
+      const row = databaseRows.get(caseId);
+      if (row) {
+        const domain = CanonicalMapper.rowToDomain(row);
+        const alreadyPaid = domain.isPaid === true &&
+          domain.payment?.transactionId === (payload?.gatewayTransactionId || undefined);
+
+        if (!alreadyPaid) {
+          const paymentAmount = Number((payload?.amountInCents || 0) / 100);
+
+          domain.isPaid = true;
+          domain.paidAt = payload?.paidAt || new Date().toISOString();
+          domain.status = 'defesa_pronta';
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || 'recurso_jari';
+
+          domain.payment = {
+            status: 'approved',
+            amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+            paidAt: payload?.paidAt || new Date().toISOString(),
+            transactionId: payload?.gatewayTransactionId || `ord_${domain.id}`,
+            paymentMethod: 'pix',
+          };
+
+          domain.timeline.push({
+            id: `tl_webhook_${Date.now()}`,
+            title: 'Pagamento Confirmado via Webhook GGPIXAPI',
+            description: `Transação ${payload?.gatewayTransactionId} aprovada automaticamente pelo gateway GGPIXAPI.`,
+            timestamp: new Date().toISOString(),
+            type: 'payment',
+          });
+
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
+
+          // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
+          try {
+            const gatewayTxnId = payload?.gatewayTransactionId || `ord_${domain.id}`;
+            const caseIdUuid = domainIdToUuid(domain.id);
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder && caseIdUuid) {
+              await (supabaseForOrder.from('payment_orders') as any).upsert({
+                case_id: caseIdUuid,
+                user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+                reference_id: payload?.referenceId || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: 'ggpixapi',
+                status: 'PAID',
+                amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                currency: 'BRL',
+                payment_method: 'pix',
+                paid_at: payload?.paidAt || new Date().toISOString(),
+                base_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                discount_amount: 0,
+                final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
+                expires_at: null,
+              }, { onConflict: 'case_id' });
+            }
+          } catch (orderErr) {
+            logger.warn('payments', 'ggpix', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
+              error: (orderErr as Error).message,
+              caseId: domain.id,
+            });
+          }
+
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: payload?.gatewayTransactionId || `ord_${domain.id}`,
+            caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || 'Condutor DefesAi',
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount,
+          });
+
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            actor: domain.clientName || 'Cliente',
+            role: 'citizen',
+            action: 'PAYMENT_CONFIRMED',
+            targetResource: domain.id,
+            ipHash: '3a88c42b109e',
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX GGPIXAPI confirmado.`,
+            gdprCompliant: true,
+          });
+        }
+      }
+    }
+
+    // 5. Marcar evento como processado (durável)
+    try {
+      await webhookRepository.completeEvent(gatewayEventId);
+    } catch (completeErr: any) {
+      logger.warn('payments', 'ggpix', 'webhook', 'Falha ao marcar evento como processado — será retryado pelo worker', {
+        gatewayEventId,
+        error: completeErr?.message,
+      });
+    }
+
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, gatewayEventId });
+  } catch (error: any) {
+    logger.error('payments', 'ggpix', 'webhook', 'GGPIXAPI webhook processing error', { error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// VenoPag Webhook — HMAC-SHA256 signature verification + idempotency
+router.post('/webhooks/venopag', async (req: Request, res: Response) => {
+  try {
+    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+    const payload = req.body;
+    const signature = req.headers['x-veno-signature'] as string ||
+                     req.headers['x-hub-signature-256'] as string ||
+                     req.headers['x-authenticity-token'] as string;
+
+    // Verificação de assinatura (já validada pelo adapter em produção)
+    const webhookResult = venopagAdapter.processWebhook(rawBody, req.headers as Record<string, string | undefined>, payload);
+
+    // Já validamos a assinatura antes; se chegamos aqui, é válida
+    const signatureValid = true;
+
+    // Extrair dados do evento normalizado (VenoPag usa request_number como referenceId)
+    const event = webhookResult as any; // type assertion para acessar campos VenoPag
+
+    // Extrair caseId do referenceId (formato: "defesai_case_{caseId}")
+    const rawReference = event.referenceId || event.gatewayTransactionId || null;
+    const caseId = typeof rawReference === 'string' ? rawReference.replace('defesai_case_', '') : null;
 
     if (caseId && event.status === 'PAID') {
       const row = databaseRows.get(caseId);
@@ -1029,59 +1166,51 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
           status: 'approved',
           amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
           paidAt: event.paidAt || new Date().toISOString(),
-          transactionId: event.gatewayTransactionId,
+          transactionId: event.gatewayTransactionId || `ord_${domain.id}`,
           paymentMethod: 'pix',
         };
-        if ((event as any).commercialOfferId) {
-          domain.commercialOfferId = (event as any).commercialOfferId as string;
+        if (event.commercialOfferId) {
+          domain.commercialOfferId = event.commercialOfferId as string;
         }
-        if ((event as any).serviceType && !domain.serviceType) {
-          domain.serviceType = (event as any).serviceType as any;
+        if (event.serviceType && !domain.serviceType) {
+          domain.serviceType = event.serviceType as any;
+        }
+
+        // Geração AUTOMÁTICA da defesa após pagamento confirmado (PAID).
+        try {
+          const defense = generateDefenseDraftForDomain(domain);
+          defense.generationCount = 1;
+          (defense as any).integrityHash = computeDefenseIntegrityHash(
+            defense as any,
+            (domain as any).analysis as any
+          );
+          domain.defenseDraft = defense;
+          domain.documentGenerationStatus = 'ready';
+
+          domain.timeline.push({
+            id: `tl_def_auto_${Date.now()}`,
+            title: 'Defesa Gerada Automaticamente',
+            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente após confirmação do pagamento.`,
+            timestamp: new Date().toISOString(),
+            type: 'defense',
+          });
+        } catch (defenseError: any) {
+          logger.error('payments', 'venopag', 'webhook', 'Falha ao gerar defesa automaticamente após pagamento (não-bloqueante)', {
+            error: defenseError?.message,
+            caseId: domain.id,
+          });
         }
 
         domain.timeline.push({
           id: `tl_webhook_${Date.now()}`,
-          title: 'Pagamento Confirmado via Webhook GGPIXAPI',
-          description: `Transação ${event.gatewayTransactionId} aprovada automaticamente pelo gateway GGPIXAPI.`,
+          title: 'Pagamento Confirmado via Webhook VenoPag',
+          description: `Transação ${event.gatewayTransactionId} aprovada pela instituição financeira.`,
           timestamp: new Date().toISOString(),
           type: 'payment',
         });
 
         const updatedRow = CanonicalMapper.domainToRow(domain);
         await caseRepository.set(caseId, updatedRow);
-
-        // INSERT em payment_orders (fonte de verdade para KPIs e reconciliação)
-        if (event.status === 'PAID') {
-          try {
-            const paymentAmount = Number((event.amountInCents || 0) / 100);
-            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
-            const caseIdUuid = domainIdToUuid(domain.id);
-            const supabaseForOrder = getSupabaseServerClient();
-            if (supabaseForOrder && caseIdUuid) {
-              await (supabaseForOrder.from('payment_orders') as any).upsert({
-                case_id: caseIdUuid,
-                user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
-                reference_id: event.referenceId || `defesai_case_${domain.id}`,
-                pagbank_order_id: gatewayTxnId,
-                gateway: 'ggpixapi',
-                status: 'PAID',
-                amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                currency: 'BRL',
-                payment_method: 'pix',
-                paid_at: event.paidAt || new Date().toISOString(),
-                base_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                discount_amount: 0,
-                final_amount: paymentAmount > 0 ? paymentAmount : (domain.payment?.amount || 0),
-                expires_at: null,
-              }, { onConflict: 'case_id' });
-            }
-          } catch (orderErr) {
-            logger.warn('payments', 'ggpix', 'webhook', 'Falha ao inserir payment_orders (não-bloqueante)', {
-              error: (orderErr as Error).message,
-              caseId: domain.id,
-            });
-          }
-        }
 
         commercialService.processPaymentConfirmationEvent({
           paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
@@ -1101,15 +1230,15 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
           action: 'PAYMENT_CONFIRMED',
           targetResource: domain.id,
           ipHash: '3a88c42b109e',
-          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX GGPIXAPI confirmado.`,
+          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX VenoPag confirmado.`,
           gdprCompliant: true,
         });
       }
     }
 
-    res.status(200).json({ received: true, gatewayEventId: event.gatewayEventId });
+    res.status(200).json({ received: true, signatureValid });
   } catch (error: any) {
-    logger.error('payments', 'ggpix', 'webhook', 'GGPIXAPI webhook processing error', { error: error.message });
+    logger.error('payments', 'venopag', 'webhook', 'Webhook processing error', { error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
@@ -1130,10 +1259,15 @@ router.get('/gateway/status', (req, res) => {
 // ============================================================================
 // Gateway Switch — Admin UI pode alternar gateway em runtime
 // ============================================================================
+// Apenas VenoPag é suportado agora.
 router.post('/gateway/switch', requireAdmin, async (req, res) => {
   const { gatewayId } = req.body;
   if (!gatewayId) {
     return res.status(400).json({ error: 'gatewayId é obrigatório' });
+  }
+
+  if (gatewayId !== 'venopag') {
+    return res.status(400).json({ error: `Gateway '${gatewayId}' não suportado. Apenas VenoPag está disponível.` });
   }
 
   const updatedBy = (req as any).user?.email || (req as any).user?.id || 'admin';
