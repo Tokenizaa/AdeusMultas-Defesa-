@@ -328,12 +328,13 @@ export class VenoPagAdapter implements PaymentGateway {
     const webhookSecret = this.config.webhookSecret;
     const expectedClientId = this.config.clientId;
 
-    // Em produção, assinatura é obrigatória
-    if (isProductionMode()) {
-      const isValid = verifyVenoSignature(rawBody, signature, clientId, webhookSecret, expectedClientId);
-      if (!isValid) {
-        throw new Error('Webhook VenoPag rejeitado: assinatura HMAC inválida ou client_id não confere');
-      }
+    // Assinatura HMAC-SHA256 e client_id sao obrigatórios em TODOS os ambientes,
+    // nao apenas em producao. Nunca aceitar webhooks sem verificacao, mesmo em
+    // desenvolvimento/sandbox. Usar VENO_WEBHOOK_SECRET dedicado por ambiente
+    // se necessario, mas nunca desabilitar a verificacao completamente.
+    const isValid = verifyVenoSignature(rawBody, signature, clientId, webhookSecret, expectedClientId);
+    if (!isValid) {
+      throw new Error('Webhook VenoPag rejeitado: assinatura HMAC inválida ou client_id não confere');
     }
 
     const payload = (body && typeof body === 'object' ? body : {}) as Partial<VenoWebhookPayload>;
