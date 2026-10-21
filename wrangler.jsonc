@@ -45,3 +45,4 @@
     "command": "npx esbuild cloudflare/worker.js --bundle --platform=node --format=esm --outfile=cloudflare/dist/worker.js --alias:qrcode=./cloudflare/stubs/qrcode.js --target=node18"
   }
 }
+
