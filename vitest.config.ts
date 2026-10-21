@@ -3,9 +3,9 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    // Gate jurídico determinístico: suíte de auditoria + testes do núcleo legal.
-    // Suítes pré-existentes (invariants/settings/workers/media) exigem ambiente
-    // próprio (Supabase/DB) e ficam fora deste gate (ver docs/audit P3-1).
+    // Gate jurídico determinístico: testes do núcleo legal, marketing-automation
+    // e contratos Cloudflare. Suítes que exigem ambiente próprio (Supabase/DB)
+    // ficam fora deste gate.
     include: [
       'src/core/**/*.test.ts',
       'src/server/services/marketing-automation/**/*.test.ts',
