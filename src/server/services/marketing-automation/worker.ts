@@ -12,6 +12,10 @@ import {
 
 const POLL_INTERVAL_MS = 10_000;
 
+// Base do backoff exponencial aplicada ao mover um job para a DLQ.
+// next_retry_at = now() + base * 2^(attempts-1) → 1m, 2m, 4m, 8m, ...
+const DLQ_BACKOFF_BASE_MS = 60_000;
+
 export class MarketingAutomationWorker {
   private static instance: MarketingAutomationWorker | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -145,15 +149,42 @@ export class MarketingAutomationWorker {
         .eq('id', action.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.warn(`Action error: ${message}`, { actionId: action.id, error: message });
+      const attempts = (action.attempts || 0) + 1;
+      const maxAttempts = action.max_attempts ?? 3;
 
-      await supabaseAdmin
-        .from('marketing_automation_queue')
-        .update({
-          attempts: (action.attempts || 0) + 1,
+      if (attempts >= maxAttempts) {
+        // Esgotou as tentativas: move para a DLQ com backoff exponencial,
+        // timestamp de falha e motivo, então remove da fila ativa.
+        const backoffMs = DLQ_BACKOFF_BASE_MS * Math.pow(2, attempts - 1);
+        await supabaseAdmin.from('marketing_automation_dlq').insert({
+          queue_job_id: action.id,
+          lead_campaign_id: action.lead_campaign_id,
+          action: action.action,
+          scheduled_at: action.scheduled_at,
+          attempts,
+          max_attempts: maxAttempts,
           last_error: message,
-        })
-        .eq('id', action.id);
+          failure_reason: message,
+          failed_at: new Date().toISOString(),
+          next_retry_at: new Date(Date.now() + backoffMs).toISOString(),
+        });
+        await supabaseAdmin.from('marketing_automation_queue').delete().eq('id', action.id);
+        logger.error(`Job movido para DLQ (max_attempts=${maxAttempts} atingido)`, {
+          actionId: action.id,
+          leadCampaignId: action.lead_campaign_id,
+          attempts,
+          error: message,
+          nextRetryAt: new Date(Date.now() + backoffMs).toISOString(),
+        });
+      } else {
+        await supabaseAdmin
+          .from('marketing_automation_queue')
+          .update({
+            attempts,
+            last_error: message,
+          })
+          .eq('id', action.id);
+      }
     }
   }
 
