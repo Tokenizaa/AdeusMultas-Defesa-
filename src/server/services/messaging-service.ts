@@ -1245,6 +1245,28 @@ export class MessagingService {
     }
     void this.persistContact(contact);
 
+    // Emissão de evento downstream quando o lead é qualificado —
+    // notifica subscribers (marketing, WhatsApp journeys, analytics) de que
+    // um lead do canal de mensagens atingiu status 'qualified'.
+    if (lead.status === 'qualified') {
+      eventBus.publish(
+        EventTopics.MESSAGING_LEAD_QUALIFIED,
+        {
+          leadId: lead.id,
+          contactId: lead.contactId,
+          name: lead.name,
+          phone: lead.phone,
+          status: lead.status,
+          score: lead.score,
+          vehiclePlate: lead.vehiclePlate,
+          infractionType: lead.infractionType,
+          estimatedFineAmount: lead.estimatedFineAmount,
+          sourceChannel: contact.channel,
+        },
+        'messaging_service'
+      );
+    }
+
     return lead;
   }
 

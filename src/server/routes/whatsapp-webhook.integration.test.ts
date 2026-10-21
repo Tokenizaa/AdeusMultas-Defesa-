@@ -102,11 +102,11 @@ describe('POST /webhooks/whatsapp — gate 1 → gate 1b ordering', () => {
     expect(res.status).toBe(401);
   });
 
-  it('sem segredo + produção → 200 (modo disabled original preservado, sem gate de produção)', async () => {
+  it('sem segredo + produção → 401 (fail-closed: segredo obrigatorio em producao)', async () => {
     process.env.NODE_ENV = 'production';
     delete process.env.EVOLUTION_WEBHOOK_SECRET;
     const res = await post('/webhooks/whatsapp', {}, '{}');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   it('segredo errado (legacy, sem sha256=) → 401', async () => {

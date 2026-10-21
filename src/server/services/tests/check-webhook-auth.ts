@@ -1,7 +1,7 @@
 /**
  * Runnable check — gate 1 do webhook Evolution: segredo setado valida header
  * legacy (timing-safe); header `sha256=<hmac>` defere para o gate HMAC;
- * sem segredo = disabled (dev e produção — comportamento original preservado).
+ * sem segredo = disabled (dev/teste), rejected em producao (fail-closed).
  * Run: npx tsx src/server/services/tests/check-webhook-auth.ts
  */
 import { strict as assert } from 'node:assert';
@@ -54,11 +54,11 @@ checks.push(['segredo setado + header sha256=<hmac> → validated (defere para g
   assert.deepStrictEqual(d, { ok: true, mode: 'validated' });
 }]);
 
-checks.push(['SEM segredo + production → ok disabled (comportamento original preservado)', () => {
+checks.push(['SEM segredo + production → rejected secret-missing-in-production (fail-closed)', () => {
   setEnv(EVOLUTION_WEBHOOK_SECRET_ENV, undefined);
   setEnv('NODE_ENV', 'production');
   const d = authorizeEvolutionWebhook({});
-  assert.deepStrictEqual(d, { ok: true, mode: 'disabled' });
+  assert.deepStrictEqual(d, { ok: false, mode: 'rejected', reason: 'secret-missing-in-production' });
 }]);
 
 checks.push(['BUG B: SEM segredo + development → ok disabled (behaviour dev preservado)', () => {

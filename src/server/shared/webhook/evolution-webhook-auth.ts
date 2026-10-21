@@ -20,7 +20,9 @@
  * RETROCOMPATIBILIDADE (decisao de design — aditiva, sem quebrar fluxo atual):
  *   - Se `EVOLUTION_WEBHOOK_SECRET` NAO estiver setado -> modo `disabled`:
  *     aceita o webhook sem validacao (comportamento original preservado em
- *     dev, testes / simulate-inbound e producao sem segredo).
+ *     dev e testes). Em producao, o modo disabled e rejeitado com log critico
+ *     (fail-closed), pois nao ha segredo para evitar injecao de mensagens
+ *     forjadas.
  *   - Se estiver setado -> modo ativo:
  *       - Header `sha256=<hmac>` (assinatura HMAC do body bruto): DEFERE a
  *         decisao para o gate HMAC do route (gate 1b), que verifica a
@@ -35,6 +37,7 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { logger } from '../../observability/logger';
 
 /** Nome do custom header (lowercase, como o Express expoe em req.headers). */
 export const EVOLUTION_WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
@@ -45,7 +48,7 @@ export const EVOLUTION_WEBHOOK_SECRET_ENV = 'EVOLUTION_WEBHOOK_SECRET';
 export type WebhookAuthDecision =
   | { ok: true; mode: 'disabled' }
   | { ok: true; mode: 'validated' }
-  | { ok: false; mode: 'rejected'; reason: 'missing-header' | 'invalid-secret' };
+  | { ok: false; mode: 'rejected'; reason: 'missing-header' | 'invalid-secret' | 'secret-missing-in-production' };
 
 /**
  * Comparacao constante-em-tempo de duas strings via hash SHA-256 + timingSafeEqual.
@@ -73,7 +76,10 @@ function extractHeader(
 
 /**
  * Autoriza o webhook de entrada da Evolution API.
- * - Sem segredo em env -> { ok: true, mode: 'disabled' } (retrocompativel — inclusive em producao).
+ * - Sem segredo em env + nao-producao -> { ok: true, mode: 'disabled' }
+ *   (retrocompativel em dev/teste).
+ * - Sem segredo em env + producao -> { ok: false, mode: 'rejected', reason: 'secret-missing-in-production' }
+ *   (fail-closed: evita injecao de mensagens forjadas sem segredo configurado).
  * - Com segredo + header `sha256=<hmac>` -> { ok: true, mode: 'validated' }
  *   (defere para o gate HMAC do route — gate 1b — que decide a autenticidade).
  * - Com segredo + header = segredo puro (remetente legado) -> valida via secureCompare.
@@ -83,7 +89,18 @@ export function authorizeEvolutionWebhook(
   headers: Record<string, string | string[] | undefined>
 ): WebhookAuthDecision {
   const secret = resolveWebhookSecret();
+  const isProd = process.env.NODE_ENV === 'production';
+
   if (!secret) {
+    if (isProd) {
+      logger.error(
+        'whatsapp',
+        'webhook_auth',
+        'secret_missing_in_production',
+        'EVOLUTION_WEBHOOK_SECRET nao definido em producao — webhook rejeitado para evitar injecao de mensagens forjadas'
+      );
+      return { ok: false, mode: 'rejected', reason: 'secret-missing-in-production' };
+    }
     return { ok: true, mode: 'disabled' };
   }
 
