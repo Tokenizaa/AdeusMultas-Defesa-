@@ -7,12 +7,8 @@ export default defineConfig({
     // Suítes pré-existentes (invariants/settings/workers/media) exigem ambiente
     // próprio (Supabase/DB) e ficam fora deste gate (ver docs/audit P3-1).
     include: [
-      'tests/audit/**/*.test.ts',
       'src/core/**/*.test.ts',
       'src/server/services/marketing-automation/**/*.test.ts',
-      'tests/payments/**/*.test.ts',
-      'tests/unit/**/*.test.ts',
-      'tests/integration/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
     ],

@@ -79,3 +79,6 @@ wrangler.test.json
 # credentials (leaked outside scope) — inject via CI secret
 .env.audit-e2e
 .sb-sr.key
+
+# E2E artifacts
+artifacts/
