@@ -708,7 +708,7 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
 // PRODUCTION: Block sandbox simulation endpoint — payment state must only be
 // changed by real gateway webhooks (PagBank HMAC or GGPIX IP allowlist).
 router.post('/simulate-payment', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
+  if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     return res.status(501).json({
       error: 'Endpoint de simulação não disponível em produção',
       message: 'Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways.',
@@ -897,7 +897,7 @@ router.post('/simulate-payment', authenticateToken, requireAdmin, async (req: Re
 
 // Alias for backwards compatibility with test scripts
 router.post('/simulate-confirm', async (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
+  if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     return res.status(501).json({
       error: 'Endpoint de simulação não disponível em produção',
       message: 'Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways.',
@@ -932,7 +932,7 @@ router.post('/simulate-confirm', async (req: Request, res: Response) => {
 
 // Admin Sandbox Webhook Trigger
 router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
+  if ((process.env.PAYMENT_MODE || 'sandbox').toLowerCase() === 'production') {
     return res.status(501).json({
       error: 'Endpoint de simulação não disponível em produção',
       message: 'Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways.',
