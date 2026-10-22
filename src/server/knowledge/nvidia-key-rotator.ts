@@ -7,6 +7,7 @@
  */
 
 import { configService } from '../config/config-service';
+import { logger } from '../observability/logger';
 
 /**
  * Rotates through multiple NVIDIA API keys to distribute API load
@@ -48,11 +49,11 @@ export class NvidiaKeyRotator {
     
     // Log how many keys we found
     if (this.keys.length === 0) {
-      console.warn('[NVIDIA Key Rotator] No valid NVIDIA API keys found');
+      logger.warn('knowledge', 'nvidia-key-rotator', 'no-keys', 'No valid NVIDIA API keys found');
     } else if (this.keys.length === 1) {
-      console.log('[NVIDIA Key Rotator] Using single NVIDIA API key');
+      logger.info('knowledge', 'nvidia-key-rotator', 'single-key', 'Using single NVIDIA API key');
     } else {
-      console.log(`[NVIDIA Key Rotator] Loaded ${this.keys.length} NVIDIA API keys for rotation`);
+      logger.info('knowledge', 'nvidia-key-rotator', 'keys-loaded', `Loaded ${this.keys.length} NVIDIA API keys for rotation`);
     }
   }
 
