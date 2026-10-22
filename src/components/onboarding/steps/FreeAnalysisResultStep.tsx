@@ -179,41 +179,45 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   onProceedToDocumentGeneration,
   onSaveToDashboard,
 }) => {
-  const successRate = analysis?.overallSuccessRate ?? 0;
-  const isHighProbability = successRate >= 80;
+  const successRate = analysis?.overallSuccessRate;
+  const isRateUnavailable = successRate === null;
+  const rateValue = isRateUnavailable ? 0 : successRate;
+  const isHighProbability = !isRateUnavailable && rateValue >= 80;
   const dataCompleteness = analysis?.dataCompleteness;
   
   // Animated counter state
   const [displayedRate, setDisplayedRate] = useState(0);
   const [animationComplete, setAnimationComplete] = useState(false);
   
-  // Animate from 0 to successRate on mount
+  // Animate from 0 to successRate on mount (only if rate is available)
   useEffect(() => {
+    if (isRateUnavailable) {
+      setAnimationComplete(true);
+      return;
+    }
     let startTime: number;
-    const duration = 1200; // 1.2 seconds
+    const duration = 1200;
     
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-      // Easing: ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayedRate(Math.round(eased * successRate));
+      setDisplayedRate(Math.round(eased * rateValue));
       
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
-        setDisplayedRate(successRate);
+        setDisplayedRate(rateValue);
         setAnimationComplete(true);
       }
     };
     
     requestAnimationFrame(animate);
-  }, [successRate]);
+  }, [rateValue, isRateUnavailable]);
   
-  // Determina se deve mostrar mensagem de melhoria
-  const showImprovementMessage = !animationComplete || (successRate < 75 && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0);
-  const isLowProbability = successRate < 60;
-  const isMediumProbability = successRate >= 60 && successRate < 80;
+  const showImprovementMessage = !animationComplete || (!isRateUnavailable && rateValue < 75 && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0);
+  const isLowProbability = !isRateUnavailable && rateValue < 60;
+  const isMediumProbability = !isRateUnavailable && rateValue >= 60 && rateValue < 80;
   
   // Calcula pontos de defesa personalizados (top 3 por relevância)
   const defensePoints = analysis?.recommendedArguments
@@ -247,17 +251,31 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         </p>
       </div>
 
-      {/* Probabilidade de Êxito */}
+      {/* Indicador de Força do Diagnóstico */}
       <div className="p-6 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
         <div className="space-y-3">
           <span className="text-base font-bold text-emerald-800 uppercase font-mono block">
-            Probabilidade de Êxito
+            {isRateUnavailable ? 'Indicador Indisponível' : 'Força do Diagnóstico'}
           </span>
-          <div className="text-4xl sm:text-5xl font-extrabold text-emerald-700 font-mono">
-            {displayedRate}%
+          <div className="text-4xl sm:text-5xl font-extrabold font-mono">
+            {isRateUnavailable ? (
+              <span className="text-emerald-700">—</span>
+            ) : (
+              <span className="text-emerald-700">{displayedRate}%</span>
+            )}
           </div>
-          <span className="text-lg text-emerald-800 font-medium">
-            {defensePoints.length > 0 ? (isHighProbability ? 'Alto potencial de anulação' : isMediumProbability ? 'Potencial identificado — análise detalhada disponível' : 'Potencial moderado — recomenda-se reforçar dados') : 'Nenhuma tese autorizada com os dados informados'}
+          <span className="text-lg font-medium">
+            {isRateUnavailable ? (
+              <span className="text-emerald-600">Análise em modo degradado — base jurídica indisponível</span>
+            ) : defensePoints.length > 0 ? (
+              isHighProbability
+                ? 'Alto potencial de anulação'
+                : isMediumProbability
+                ? 'Potencial identificado — análise detalhada disponível'
+                : 'Potencial moderado — recomenda-se reforçar dados'
+            ) : (
+              'Nenhuma tese autorizada com os dados informados'
+            )}
           </span>
           
           {/* Data completeness indicator */}

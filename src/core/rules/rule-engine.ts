@@ -777,6 +777,19 @@ export class ExpertRuleEngine {
         continue;
       }
       const result = rule.evaluate(context);
+      // RC-1: filtro de elegibilidade — se a tese detectada não é elegível
+      // para a família da infração, descartar (não pode virar vício/inconsistência).
+      if (result && !eligible.has(result.legalArgumentId)) {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: 'NOT_APPLICABLE',
+          evaluatedAt: nowIso,
+          reason: `Tese ${result.legalArgumentId} inelegível para família "${classification.family}".`,
+          inputs: { legalArgumentId: result.legalArgumentId, infractionFamily: classification.family },
+        });
+        continue;
+      }
       if (result) {
         detectedInconsistencies.push({
           title: result.title,
@@ -909,7 +922,7 @@ export class ExpertRuleEngine {
 
     // 4b. Dynamic adjustment based on data completeness and evidence quality
     // Count total relevant fields for this infraction family
-    const totalRelevantFields = this.countRelevantFields(classification.family, context);
+    const totalRelevantFields = this.countRelevantFields(classification.family);
     const filledRelevantFields = this.countFilledRelevantFields(classification.family, context);
     const completenessRatio = totalRelevantFields > 0 ? filledRelevantFields / totalRelevantFields : 0.5;
     
@@ -981,7 +994,10 @@ export class ExpertRuleEngine {
       evaluatedRules,
       integrityScore,
       dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
-      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`,
+      summaryReasoning:
+        detectedInconsistencies.length > 0
+          ? `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistência${detectedInconsistencies.length > 1 ? 's' : ''} jurídica${detectedInconsistencies.length > 1 ? 's' : ''} no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`
+          : `O Motor de Regras não identificou inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'} com os dados fornecidos.${gapSummary}`,
       infractionClassification: {
         family: classification.family,
         basis: classification.basis,
@@ -996,82 +1012,99 @@ export class ExpertRuleEngine {
   }
 
   /**
-   * Count total relevant fields for an infraction family
+   * Canonical map of family → context field keys.
+   * Single source of truth for completeness counting.
+   * Keys MUST match RuleEvaluationContext property names exactly.
    */
-  private static countRelevantFields(family: string, context: any): number {
-    const fieldMap: Record<string, string[]> = {
-      velocidade: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'speedLimit', 'measuredSpeed', 'consideredSpeed', 'inmetroAferitionDate',
-        'radarEquipmentId', 'hasR19SignageProof', 'notificationExpeditionDate',
-        'defenseDeadline', 'location'
-      ],
-      alcoolemia: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPsychomotorTerm', 'hasAgentDetailedObservations', 'hasPhotoProof',
-        'hasVideoProof', 'refusedTest', 'offeredRetest', 'bafometerResult',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      semaforo: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPhotoProof', 'hasVideoProof', 'yellowPhaseCrossing',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      celular: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'cellphoneCircumstance', 'hasPhotoProof', 'hasVideoProof',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      estacionamento: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPhotoProof', 'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      generico: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-    };
-    return fieldMap[family]?.length || fieldMap.generico.length;
+  private static readonly FAMILY_CONTEXT_FIELDS: Record<string, string[]> = {
+    velocidade: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'speedLimit',
+      'measuredSpeed',
+      'consideredSpeed',
+      'radarCalibrationDate',
+      'radarEquipmentId',
+      'hasR19SignageProof',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+    alcoolemia: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'hasPsychomotorTerm',
+      'hasAgentDetailedObservations',
+      'hasPhotoProof',
+      'refusedTest',
+      'offeredRetest',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+    semaforo: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'hasPhotoProof',
+      'yellowPhaseCrossing',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+    celular: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'cellphoneCircumstance',
+      'hasPhotoProof',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+    estacionamento: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'hasPhotoProof',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+    generico: [
+      'aitNumber',
+      'infractionCode',
+      'infractionDate',
+      'notificationExpeditionDate',
+      'notificationDeliveryDate',
+      'defenseDeadline',
+      'autuadorBody',
+    ],
+  };
+
+  /**
+   * Count total relevant fields for an infraction family.
+   * Derives from the canonical context field map.
+   */
+  private static countRelevantFields(family: string): number {
+    return this.FAMILY_CONTEXT_FIELDS[family]?.length
+      ?? this.FAMILY_CONTEXT_FIELDS.generico.length;
   }
 
   /**
-   * Count filled relevant fields for an infraction family
+   * Count filled relevant fields for an infraction family.
+   * Uses the canonical context field map and checks the actual context.
    */
   private static countFilledRelevantFields(family: string, context: any): number {
-    const fieldMap: Record<string, string[]> = {
-      velocidade: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'speedLimit', 'measuredSpeed', 'consideredSpeed', 'inmetroAferitionDate',
-        'radarEquipmentId', 'hasR19SignageProof', 'notificationExpeditionDate',
-        'defenseDeadline', 'location'
-      ],
-      alcoolemia: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPsychomotorTerm', 'hasAgentDetailedObservations', 'hasPhotoProof',
-        'hasVideoProof', 'refusedTest', 'offeredRetest', 'bafometerResult',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      semaforo: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPhotoProof', 'hasVideoProof', 'yellowPhaseCrossing',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      celular: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'cellphoneCircumstance', 'hasPhotoProof', 'hasVideoProof',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      estacionamento: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'hasPhotoProof', 'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-      generico: [
-        'aitNumber', 'plate', 'autuadorBody', 'infractionCode', 'dateTime',
-        'notificationExpeditionDate', 'defenseDeadline', 'location'
-      ],
-    };
-    const fields = fieldMap[family] || fieldMap.generico;
-    return fields.filter(f => {
+    const fields = this.FAMILY_CONTEXT_FIELDS[family] || this.FAMILY_CONTEXT_FIELDS.generico;
+    return fields.filter((f) => {
       const v = context[f];
       return v !== undefined && v !== null && v !== '';
     }).length;
@@ -1082,28 +1115,29 @@ export class ExpertRuleEngine {
    */
   private static hasStrongEvidenceForArgument(argumentId: string, context: any): boolean {
     const evidenceMap: Record<string, string[]> = {
-      'ARG-001': ['inmetroAferitionDate', 'radarEquipmentId'], // Radar calibration
-      'ARG-005': ['measuredSpeed', 'consideredSpeed', 'speedLimit', 'inmetroAferitionDate'], // INMETRO tolerance
+      'ARG-001': ['radarCalibrationDate', 'radarEquipmentId'], // Radar calibration
+      'ARG-005': ['measuredSpeed', 'consideredSpeed', 'speedLimit', 'radarCalibrationDate'], // INMETRO tolerance
       'ARG-002': ['hasR19SignageProof'], // R-19 signage
       'ARG-048': ['notificationExpeditionDate', 'notificationDeliveryDate'], // Decadence/dual notification
       'ARG-051': ['infractionCode', 'hasPreviousInfractionsLast12Months'], // Conversion to warning
-      'ARG-025': ['hasPsychomotorTerm', 'hasAgentDetailedObservations', 'bafometerResult'], // Lei Seca
+      'ARG-025': ['hasPsychomotorTerm', 'hasAgentDetailedObservations'], // Lei Seca (bafometerResult not in context)
       'ARG-015': ['hasAgentDetailedObservations'], // Manual citation
     };
     const requiredFields = evidenceMap[argumentId] || [];
-    return requiredFields.every(f => {
+    return requiredFields.every((f) => {
       const v = context[f];
       return v !== undefined && v !== null && v !== '';
     });
   }
 
   /**
-   * Get missing critical fields that would improve probability
+   * Get missing critical fields that would improve probability.
+   * Uses context field names (not wizard field names).
    */
   private static getMissingCriticalFields(family: string, context: any): string[] {
     const criticalMap: Record<string, {field: string, label: string}[]> = {
       velocidade: [
-        {field: 'inmetroAferitionDate', label: 'Data de aferição do INMETRO'},
+        {field: 'radarCalibrationDate', label: 'Data de aferição do INMETRO'},
         {field: 'radarEquipmentId', label: 'Identificação do radar'},
         {field: 'hasR19SignageProof', label: 'Comprovação de sinalização R-19'},
         {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
@@ -1111,13 +1145,12 @@ export class ExpertRuleEngine {
       ],
       alcoolemia: [
         {field: 'hasPsychomotorTerm', label: 'Termo de constatação de sinais de embriaguez'},
-        {field: 'bafometerResult', label: 'Resultado do bafômetro'},
-        {field: 'hasVideoProof', label: 'Vídeo da abordagem'},
+        {field: 'hasAgentDetailedObservations', label: 'Observações circunstanciadas do agente'},
         {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
+        {field: 'refusedTest', label: 'Recusa ao teste do etilômetro'},
       ],
       semaforo: [
         {field: 'hasPhotoProof', label: 'Foto do semáforo'},
-        {field: 'hasVideoProof', label: 'Vídeo da infração'},
         {field: 'yellowPhaseCrossing', label: 'Fase amarela no cruzamento'},
         {field: 'notificationDeliveryDate', label: 'Data de entrega da notificação'},
       ],
@@ -1134,10 +1167,10 @@ export class ExpertRuleEngine {
     };
     const fields = criticalMap[family] || criticalMap.generico;
     return fields
-      .filter(f => {
+      .filter((f) => {
         const v = context[f.field];
         return v === undefined || v === null || v === '';
       })
-      .map(f => f.label);
+      .map((f) => f.label);
   }
 }

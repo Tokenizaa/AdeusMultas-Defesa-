@@ -179,7 +179,8 @@ export interface CaseAnalysis {
   id: string;
   caseId: string;
   status?: AnalysisStatus;
-  overallSuccessRate: number; // Probabilidade técnica estimada (0-100%)
+  overallSuccessRate: number | null; // Probabilidade técnica estimada (0-100%); null = indisponível
+  successRateBasis?: 'CALCULATED' | 'UNAVAILABLE'; // Indica se o score foi calculado ou indisponível
   detectedInconsistencies: {
     title: string;
     description: string;
