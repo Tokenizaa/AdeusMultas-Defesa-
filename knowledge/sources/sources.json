@@ -1,0 +1,32 @@
+[
+  {
+    "id": "SRC_FED_CTB",
+    "name": "Código de Trânsito Brasileiro (Lei 9.503/1997)",
+    "source_type": "LAW",
+    "authority": "Presidência da República",
+    "description": "Lei 9.503/1997 - Institui o Código de Trânsito Brasileiro",
+    "url": "https://www.planalto.gov.br/ccivil_03/leis/L9503.htm",
+    "jurisdiction": "BR_FEDERAL",
+    "is_active": true
+  },
+  {
+    "id": "SRC_FED_CONTRAN",
+    "name": "Resoluções do CONTRAN",
+    "source_type": "REGULATION",
+    "authority": "Conselho Nacional de Trânsito",
+    "description": "Resoluções normativas do Conselho Nacional de Trânsito",
+    "url": "https://www.gov.br/contran/pt-br/assuntos/resolucoes",
+    "jurisdiction": "BR_FEDERAL",
+    "is_active": true
+  },
+  {
+    "id": "SRC_FED_STJ",
+    "name": "Jurisprudência do STJ",
+    "source_type": "JURISPRUDENCE",
+    "authority": "Superior Tribunal de Justiça",
+    "description": "Precedentes vinculantes e sumulas do STJ em matéria de trânsito",
+    "url": "https://www.stj.jus.br/",
+    "jurisdiction": "BR_FEDERAL",
+    "is_active": true
+  }
+]

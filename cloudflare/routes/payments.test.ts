@@ -32,6 +32,12 @@ vi.mock('../pagbank', async () => {
   };
 });
 
+vi.mock('../venopag', () => ({
+  getVenoCashInStatus: vi.fn(),
+  verifyVenoWebhook: vi.fn(),
+  createVenoCashIn: vi.fn(),
+}));
+
 vi.mock('../middleware', () => ({
   authenticateToken: async (c: any, next: any) => {
     c.set('user', { id: 'user-1', email: 'user@example.com', role: 'citizen', name: 'User' });
@@ -51,7 +57,7 @@ vi.mock('./commercial', () => ({
 
 import { Hono } from 'hono';
 import { paymentsRoutes } from './payments';
-import { verifyVenoWebhook } from '../venopag';
+import { getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
 import type { Env } from '../supabase';
 
 function app() {
@@ -61,6 +67,10 @@ function app() {
 }
 
 describe('Phase 12 — payment contracts (Cloudflare)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('rejects resolve-price without serviceType', async () => {
     const response = await app().request('/api/payments/resolve-price');
     expect(response.status).toBe(400);
@@ -216,7 +226,6 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(401);
   });
 
-
   it('persists PAID and treats a repeated PAID webhook as duplicate', async () => {
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'PAID', paid_at: new Date().toISOString() }, error: null });
@@ -233,44 +242,35 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect((await second.json() as any).isDuplicate).toBe(true);
   });
 
-  it('accepts valid GGPIX webhook and marks payment as paid', async () => {
-    // Mock Supabase: existing payment order (pending)
-    h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_gg-1', status: 'aguardando_pagamento', paid_at: null, id: 'order-gg-1' }, error: null });
-    // Mock Supabase update for payment order (to paid) - we need to mock the update chain
-    const updated = vi.fn().mockResolvedValue({ data: { id: 'order-gg-1' }, error: null });
+  it('accepts valid VenoPag webhook and marks payment as paid', async () => {
+    h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_veno-1', status: 'aguardando_pagamento', paid_at: null, id: 'order-veno-1', amount: 150, gateway_transaction_id: 'tx_veno_1', gateway: 'venopag' }, error: null });
+    const updated = vi.fn().mockResolvedValue({ data: { id: 'order-veno-1' }, error: null });
     h.updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: updated })) }));
-    // Mock Supabase case update (to paid) - we need to mock a second from call for 'cases'
-    // We'll adjust the from mock to return different behavior based on table name? 
-    // For simplicity, we'll mock the from call to return an object that has update that returns eq that returns neq that returns maybeSingle that resolves.
-    // We'll update the hoisted function to support this, but given time, we'll skip the case update assertion.
-    // The route will still return 200 if the case update fails? Actually, it throws.
-    // We'll mock the from('cases') call by overriding the mock for the second call.
-    // We'll do: after the first from call (for payment_orders), the second from call (for cases) we want to return an object with update that returns eq that returns neq that returns maybeSingle that resolves.
-    // We'll change the hoisted function to return a from mock that keeps track of calls.
-    // Instead, we'll create a new mock for this test only.
-    // We'll reset the mock and set up a more complex one.
-    // Given the scope, we'll accept that the test may not be perfect but will verify the route doesn't crash on IP validation and basic flow.
+
+    vi.mocked(getVenoCashInStatus).mockResolvedValue({ ok: true, status: 'confirmed', request_number: 'tx_veno_1', amount: 150 });
+    vi.mocked(verifyVenoWebhook).mockResolvedValue(true);
+
     const env = {
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test',
-      GGPIX_WEBHOOK_ALLOWED_IPS: '127.0.0.1,192.168.1.0/24',
+      VENO_CLIENT_ID: 'test-client',
+      VENO_CLIENT_SECRET: 'test-secret',
+      VENO_WEBHOOK_SECRET: 'test-webhook-secret',
     } as any;
     const payload = JSON.stringify({
-      transactionId: 'tx_gg_1',
-      externalId: 'defesai_case_gg-1',
-      status: 'COMPLETE',
-      type: 'PIX_IN',
+      type: 'cashin',
+      status: 'confirmed',
+      request_number: 'tx_veno_1',
+      transaction_id: 'txn_123',
       amount: 150.0,
-      netAmount: 145.0,
-      gatewayFee: 5.0,
-      paidAt: new Date().toISOString(),
     });
 
-    const response = await app().request('/api/webhooks/ggpix', {
+    const response = await app().request('/api/webhooks/venopag', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'cf-connecting-ip': '127.0.0.1',
+        'x-veno-signature': 'valid_signature',
+        'x-veno-client-id': 'test-client',
       },
       body: payload,
     }, env);
@@ -281,32 +281,67 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(body.matched).toBe(true);
   });
 
-  it('rejects GGPIX webhook from IP not in allowlist', async () => {
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('rejects VenoPag webhook with invalid signature', async () => {
+    vi.mocked(verifyVenoWebhook).mockResolvedValue(false);
+
     const env = {
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test',
-      GGPIX_WEBHOOK_ALLOWED_IPS: '192.168.1.0/24',
+      VENO_CLIENT_ID: 'test-client',
+      VENO_CLIENT_SECRET: 'test-secret',
+      VENO_WEBHOOK_SECRET: 'test-webhook-secret',
     } as any;
     const payload = JSON.stringify({
-      transactionId: 'tx_gg_2',
-      externalId: 'defesai_case_gg-2',
-      status: 'COMPLETE',
+      type: 'cashin',
+      status: 'confirmed',
+      request_number: 'tx_veno_2',
+      transaction_id: 'txn_456',
       amount: 150.0,
     });
 
-    const response = await app().request('/api/webhooks/ggpix', {
+    const response = await app().request('/api/webhooks/venopag', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'cf-connecting-ip': '10.0.0.1',
+        'x-veno-signature': 'invalid_signature',
+        'x-veno-client-id': 'test-client',
       },
       body: payload,
     }, env);
     expect(response.status).toBe(401);
     const body = await response.json();
-    expect(body.error).toContain('Webhook GGPIXAPI rejeitado');
-    expect(errorLog).not.toHaveBeenCalled();
-    errorLog.mockRestore();
+    expect(body.error).toContain('Assinatura inv');
+  });
+
+  it('ignores non-cashin VenoPag events', async () => {
+    vi.mocked(verifyVenoWebhook).mockResolvedValue(true);
+
+    const env = {
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test',
+      VENO_CLIENT_ID: 'test-client',
+      VENO_CLIENT_SECRET: 'test-secret',
+      VENO_WEBHOOK_SECRET: 'test-webhook-secret',
+    } as any;
+    const payload = JSON.stringify({
+      type: 'refund',
+      status: 'completed',
+      request_number: 'tx_veno_3',
+      amount: 100.0,
+    });
+
+    const response = await app().request('/api/webhooks/venopag', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-veno-signature': 'valid_signature',
+        'x-veno-client-id': 'test-client',
+      },
+      body: payload,
+    }, env);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.received).toBe(true);
+    expect(body.ignored).toBe(true);
   });
 });
