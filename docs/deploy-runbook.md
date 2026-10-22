@@ -56,6 +56,8 @@ As variáveis estão definidas em `.env.example.example` (modelo) e devem ser pr
 | `NVIDIA_API_KEY` (1, 2, 3) | backend | Chaves da NVIDIA NV-Embed-QA (round-robin) — **segredo** | `nvapi-...` |
 | `NINEROUTER_KEY` | backend | Chave do 9Router (IA) — **segredo** | `...` |
 | `NINEROUTER_URL` | backend | URL base do 9Router | `https://api.9router.com` |
+
+> **Nota sobre providers de IA:** O caminho canônico de produção é o **Cloudflare Worker** (`wrangler.jsonc`), que usa exclusivamente **NVIDIA NV-Embed-QA** para embeddings (via Cloudflare Vectorize) e o **ExpertRuleEngine determinístico** para análise jurídica. O código legado do backend Express (`src/server/`) contém referências a Gemini (`enrichDefenseWithGemini`, health check `geminiConfigured`) que **não fazem parte do deploy canônico** e são mantidas apenas para compatibilidade com o deploy secundário na Vercel. Não configure `GEMINI_API_KEY` para o Worker Cloudflare.
 | `DOCUMENSO_API_TOKEN` | backend | Token da Documenso (assinatura digital) — **segredo** | `...` |
 | `DOCUMENSO_WEBHOOK_SECRET` | backend | Segredo HMAC do webhook Documenso — **segredo** | `...` |
 

@@ -10,7 +10,8 @@ router.get('/health', (req, res) => {
     status: 'ok',
     service: 'DefesAi API',
     version: '2.0.0',
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    // Provider canônico é NVIDIA (Cloudflare Worker). Este endpoint Express
+    // é caminho secundário (Vercel); `geminiConfigured` foi removido.
     activeCases: databaseRows.size,
     timestamp: new Date().toISOString(),
   });
