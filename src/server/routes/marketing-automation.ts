@@ -18,7 +18,7 @@ router.get('/status', async (_req, res) => {
     const status = await marketingAutomationWorker.getStatus();
     res.json(status);
   } catch (err) {
-    res.status(500).json({ error: 'Falha ao obter status', message: (err as Error).message });
+    res.status(500).json({ error: 'Falha ao obter status' });
   }
 });
 
@@ -30,7 +30,7 @@ router.post('/start', async (_req, res) => {
     }
     res.json({ success: true, status: 'RUNNING' });
   } catch (err) {
-    res.status(500).json({ error: 'Falha ao iniciar', message: (err as Error).message });
+    res.status(500).json({ error: 'Falha ao iniciar' });
   }
 });
 
@@ -42,7 +42,7 @@ router.post('/pause', async (_req, res) => {
     }
     res.json({ success: true, status: 'PAUSED' });
   } catch (err) {
-    res.status(500).json({ error: 'Falha ao pausar', message: (err as Error).message });
+    res.status(500).json({ error: 'Falha ao pausar' });
   }
 });
 
@@ -123,7 +123,7 @@ router.get('/campaigns', async (_req, res) => {
 
     res.json(enrichedCampaigns);
   } catch (err) {
-    res.status(500).json({ error: 'Falha ao buscar campanhas', message: (err as Error).message });
+    res.status(500).json({ error: 'Falha ao buscar campanhas' });
   }
 });
 
@@ -234,7 +234,7 @@ router.post('/campaigns', async (req, res) => {
     }
     res.status(201).json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Falha ao criar campanha', message: (err as Error).message });
+    res.status(500).json({ error: 'Falha ao criar campanha' });
   }
 });
 

@@ -362,7 +362,7 @@ router.post('/pix/create', prodAuth, async (req, res) => {
     });
   } catch (error: any) {
     logger.error('payments', 'venopag', 'create_pix_order', 'Error creating PIX order', { error: error.message });
-    res.status(500).json({ error: error.message || 'Erro ao gerar pedido PIX' });
+    res.status(500).json({ error: 'Erro ao gerar pedido PIX' });
   }
 });
 
@@ -390,7 +390,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
       return res.json({ success: true, txId, status: result.status });
     } catch (err: any) {
       logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', {
-        error: err.message,
+        error: 'Erro ao consultar status do pagamento',
         gateway: activeGatewayId,
         environment: process.env.PAYMENT_MODE || 'sandbox',
       });
@@ -398,7 +398,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
     }
   } catch (err: any) {
     logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', { error: err.message });
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Erro ao consultar status do pagamento' });
   }
 });
 
@@ -540,7 +540,7 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     });
   } catch (error: any) {
     logger.error('payments', 'gateway', 'create_credit_card_order', 'Error creating credit card order', { error: error.message });
-    res.status(500).json({ error: error.message || 'Erro ao gerar pedido de cartão de crédito' });
+    res.status(500).json({ error: 'Erro ao gerar pedido de cartão de crédito' });
   }
 });
 
@@ -891,7 +891,7 @@ router.post('/simulate-payment', authenticateToken, requireAdmin, async (req: Re
     });
   } catch (err: any) {
     logger.error('payments', 'simulation', 'error', 'Error simulating payment', { error: err.message });
-    res.status(500).json({ error: err.message || 'Erro ao simular pagamento' });
+    res.status(500).json({ error: 'Erro ao simular pagamento' });
   }
 });
 
@@ -974,7 +974,7 @@ router.post('/sandbox/trigger-webhook', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     logger.error('payments', 'sandbox', 'webhook_trigger', 'Error triggering sandbox webhook', { error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erro ao consultar status do pagamento' });
   }
 });
 

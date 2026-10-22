@@ -43,7 +43,7 @@ CREATE POLICY "payment_orders_select_own" ON public.payment_orders
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM public.cases c
-            WHERE c.id = payment_orders.case_id
+            WHERE c.id = payment_orders.case_id::uuid
             AND c.user_id = auth.uid()
         )
     );

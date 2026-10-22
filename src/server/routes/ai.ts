@@ -142,7 +142,7 @@ Responda em formato JSON estrito com o seguinte schema:
     res.json(fallbackResult);
   } catch (err: any) {
     console.error('Error in /api/ai/analyze-infraction:', err);
-    res.status(500).json({ error: 'Erro ao processar análise jurídica', details: err.message });
+    res.status(500).json({ error: 'Erro ao processar análise jurídica' });
   }
 });
 
@@ -319,7 +319,7 @@ router.post('/ai/generate-defense', async (req, res) => {
     res.json(defenseDoc);
   } catch (err: any) {
     console.error('Error in /api/ai/generate-defense:', err);
-    res.status(500).json({ error: 'Erro ao gerar minuta da defesa', details: err.message });
+    res.status(500).json({ error: 'Erro ao gerar minuta da defesa' });
   }
 });
 
@@ -369,7 +369,7 @@ Instruções:
     });
   } catch (err: any) {
     console.error('Error in chat consultant:', err);
-    res.status(500).json({ error: 'Erro ao responder consulta', details: err.message });
+    res.status(500).json({ error: 'Erro ao responder consulta' });
   }
 });
 
