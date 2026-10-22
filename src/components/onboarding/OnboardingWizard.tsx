@@ -34,10 +34,13 @@ import {
 // ============================================================================
 // Wizard State Persistence (sessionStorage — metadata only)
 // ============================================================================
-// Never persist PII, vehicle/infraction data, analysis results, or document
+// Never persist PII (CPF, RG, CNH, etc.), analysis results, or document
 // qualification data in browser storage. Case data is persisted server-side.
+// Form data (vehicle, infraction, lead name/phone) IS persisted to survive
+// page reloads during onboarding — it's non-sensitive data the user typed.
 
 const WIZARD_STORAGE_KEY = 'defesai_wizard_state';
+const WIZARD_FORM_DATA_KEY = 'defesai_wizard_form_data';
 
 // Código canônico inicial de cada categoria (catálogo INFRACTION_CATALOG).
 // Só as categorias com código equivalente no catálogo têm default.
@@ -53,6 +56,14 @@ interface WizardPersistedState {
   step: number;
   savedCaseId?: string;
   savedClaimToken?: string;
+  savedAt: number;
+}
+
+interface WizardFormDataState {
+  infractionData: InfractionData;
+  vehicleData: VehicleData;
+  leadName: string;
+  leadPhone: string;
   savedAt: number;
 }
 
@@ -78,6 +89,23 @@ function loadWizardState(): WizardPersistedState | null {
   }
 }
 
+function loadWizardFormData(): WizardFormDataState | null {
+  try {
+    const raw = sessionStorage.getItem(WIZARD_FORM_DATA_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WizardFormDataState;
+    // TTL 24h
+    if (Date.now() - parsed.savedAt > 24 * 60 * 60 * 1000) {
+      sessionStorage.removeItem(WIZARD_FORM_DATA_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    try { sessionStorage.removeItem(WIZARD_FORM_DATA_KEY); } catch { /* ignore */ }
+    return null;
+  }
+}
+
 function saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId' | 'savedClaimToken'>) {
   try {
     sessionStorage.setItem(
@@ -85,6 +113,19 @@ function saveWizardState(state: Pick<WizardPersistedState, 'step' | 'savedCaseId
       JSON.stringify({ step: state.step, savedCaseId: state.savedCaseId, savedClaimToken: state.savedClaimToken, savedAt: Date.now() })
     );
   } catch { /* storage unavailable, ignore */ }
+}
+
+function saveWizardFormData(state: WizardFormDataState) {
+  try {
+    sessionStorage.setItem(
+      WIZARD_FORM_DATA_KEY,
+      JSON.stringify({ ...state, savedAt: Date.now() })
+    );
+  } catch { /* storage unavailable, ignore */ }
+}
+
+function clearWizardFormData() {
+  try { sessionStorage.removeItem(WIZARD_FORM_DATA_KEY); } catch { /* ignore */ }
 }
 
 function clearWizardState() {
@@ -126,17 +167,20 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
     // Load persisted wizard state if available (e.g., after email confirmation)
     const savedState = loadWizardState();
+    const savedFormData = loadWizardFormData();
 
     // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
     const [step, setStep] = useState<number>(savedState?.step ?? 1);
     const wizardTopRef = useRef<HTMLDivElement>(null);
+    const stepContentRef = useRef<HTMLDivElement>(null);
+    const stepAnnouncerRef = useRef<HTMLDivElement>(null);
     // Keep the selected procedure available synchronously for persistence.
     // The analysis step can finish before a state-derived closure is refreshed.
     const mappedProcedureRef = useRef<ProcedureType>('defesa_previa');
 
   // Lead Data (Collected in Step 3 for Visitor conversion)
-  const [leadName, setLeadName] = useState<string>(user?.name || '');
-  const [leadPhone, setLeadPhone] = useState<string>(user?.phone || '');
+  const [leadName, setLeadName] = useState<string>(savedFormData?.leadName ?? (user?.name || ''));
+  const [leadPhone, setLeadPhone] = useState<string>(savedFormData?.leadPhone ?? (user?.phone || ''));
   const [isAuthGateOpen, setIsAuthGateOpen] = useState<boolean>(false);
   const [authGateRedirectAction, setAuthGateRedirectAction] = useState<'generation' | 'dashboard'>('generation');
   // Falha de persistência do caso: antes ficava só no console e o usuário
@@ -150,7 +194,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [processStage, setProcessStage] = useState<UserProcessStage>('primeira_notificacao');
   const [infractionCategory, setInfractionCategory] = useState<InfractionCategory>('excesso_velocidade');
 
-  const [vehicleData, setVehicleData] = useState<VehicleData>({
+  const [vehicleData, setVehicleData] = useState<VehicleData>(() => savedFormData?.vehicleData ?? {
     plate: '',
     brandModel: '',
     renavam: '',
@@ -158,7 +202,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     color: '',
   });
 
-  const [infractionData, setInfractionData] = useState<InfractionData>({
+  const [infractionData, setInfractionData] = useState<InfractionData>(() => savedFormData?.infractionData ?? {
     aitNumber: '',
     infractionCode: '',
     description: '',
@@ -239,6 +283,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     saveWizardState({ step, savedCaseId, savedClaimToken });
   }, [step, savedCaseId, savedClaimToken]);
 
+  // Persist form data (vehicle, infraction, lead) on every change — survives reload.
+  useEffect(() => {
+    saveWizardFormData({
+      infractionData,
+      vehicleData,
+      leadName,
+      leadPhone,
+      savedAt: Date.now(),
+    });
+  }, [infractionData, vehicleData, leadName, leadPhone]);
+
   // Persist only navigation metadata immediately before page unload.
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -250,6 +305,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [step, savedCaseId, savedClaimToken]);
+
+  // Focus management and step announcement for accessibility
+  useEffect(() => {
+    // Move focus to step content for keyboard/screen reader users
+    stepContentRef.current?.focus();
+
+    // Announce step change to screen readers
+    const label = getStepHeaderLabel();
+    if (stepAnnouncerRef.current) {
+      stepAnnouncerRef.current.textContent = `Etapa ${step}: ${label}`;
+    }
+  }, [step]);
 
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)
@@ -581,9 +648,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 {isPhase1 ? '100% Gratuito' : 'Minuta Jurídica Oficial'}
               </span>
             </div>
-            <h2 className="text-sm font-bold text-slate-900 mt-1 leading-snug">
-              {getStepHeaderLabel()}
-            </h2>
+            <span className="sr-only" aria-live="polite" aria-atomic="true" ref={stepAnnouncerRef}>
+              Etapa {step}: {getStepHeaderLabel()}
+            </span>
           </div>
         </div>
 
@@ -606,7 +673,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       </div>
 
       {/* Dynamic Step Router */}
-      {step === 1 && (
+      <div ref={stepContentRef} tabIndex={-1} className="mt-6">
+        {step === 1 && (
         <ServiceStep
           selectedSituation={situation}
           onSelectSituation={handleSituationSelect}
@@ -743,6 +811,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onBack={() => setStep(9)}
         />
       )}
+
+      </div>
 
       {/* Smart Account Gate Modal for Visitors */}
       {isAuthGateOpen && (

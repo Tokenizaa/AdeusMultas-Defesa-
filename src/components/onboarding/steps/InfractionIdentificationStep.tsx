@@ -218,7 +218,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
+                        <label htmlFor="input-lead-name" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
                             <User className="w-3 h-3 text-slate-400" />
                             Seu Nome Completo *
                         </label>
@@ -233,7 +233,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     </div>
 
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
+                        <label htmlFor="input-lead-phone" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
                             <Phone className="w-3 h-3 text-emerald-600" />
                             WhatsApp com DDD *
                         </label>
@@ -299,7 +299,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Número do AIT */}
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <label htmlFor="input-ait-number" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <FileText className="w-3.5 h-3.5 text-[#155BCB]" />
                             Número do Auto de Infração (AIT)
                         </label>
@@ -318,7 +318,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                     {/* Placa do Veículo */}
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <label htmlFor="input-vehicle-plate" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <Car className="w-3.5 h-3.5 text-[#155BCB]" />
                             Placa do Veículo *
                         </label>
@@ -339,7 +339,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                 {/* Órgão autuador é indispensável para endereçar a peça formal. */}
                 <div>
-                    <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                    <label htmlFor="input-autuador-body" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                         <Landmark className="w-3.5 h-3.5 text-[#155BCB]" />
                         Órgão Autuador *
                     </label>
@@ -371,7 +371,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                 {/* Código da Infração — FONTE DE VERDADE */}
                 <div>
-                    <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                    <label htmlFor="input-infraction-code" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                         <Hash className="w-3.5 h-3.5 text-[#155BCB]" />
                         Código da Infração *
                     </label>
@@ -440,7 +440,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Data da Infração */}
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <label htmlFor="input-datetime" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-slate-500" />
                             Data da Ocorrência
                         </label>
@@ -458,7 +458,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                     {/* Data de Expedição da Notificação */}
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <label htmlFor="input-notification-expedition-date" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-amber-600" />
                             Data Expedição Notificação
                         </label>
@@ -494,7 +494,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                     {/* Prazo para Defesa (da notificação) */}
                     <div>
-                        <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                        <label htmlFor="input-defense-deadline" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-rose-600" />
                             Prazo Final p/ Defesa
                         </label>
@@ -513,7 +513,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
 
                 {/* Local da Infração */}
                 <div>
-                    <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                    <label htmlFor="input-location" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-[#155BCB]" />
                         Local da Infração *
                     </label>

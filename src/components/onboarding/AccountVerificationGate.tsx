@@ -116,11 +116,15 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
             <p className="text-sm font-bold text-[#155BCB] mt-1 font-mono">{pendingEmail}</p>
           </div>
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900 space-y-2">
-            <p className="font-bold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#155BCB]" />Seus dados foram salvos com segurança</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-800"><li>Nome e telefone preservados</li><li>Diagnóstico jurídico mantido</li><li>Processo retomará de onde parou</li></ul>
+            <p className="font-bold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#155BCB]" />Link de confirmação enviado</p>
+            <ul className="list-disc list-inside space-y-1 text-blue-800">
+              <li>Clique no link do e-mail para ativar sua conta</li>
+              <li>Esta janela detecta a confirmação automaticamente</li>
+              <li>Seus dados do formulário permanecem preenchidos</li>
+            </ul>
           </div>
           <div className="space-y-3">
-            <p className="text-xs text-slate-500">Clique no link do e-mail para confirmar sua conta. Esta janela detectará automaticamente a confirmação.</p>
+            <p className="text-xs text-slate-500">Esta janela fechará sozinha quando você confirmar o e-mail.</p>
             {waitingForConfirmation && <div className="flex items-center justify-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Aguardando confirmação...</span></div>}
             <button onClick={() => { setPendingConfirmation(false); setWaitingForConfirmation(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">Voltar ao Formulário</button>
           </div>
@@ -143,12 +147,25 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
       >
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />Diagnóstico salvo no painel</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />Diagnóstico pronto para salvar</span>
             <div className="flex items-center gap-2"><button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600 font-semibold">Voltar ao Diagnóstico</button><button onClick={onCancel} className="p-2 rounded-lg bg-slate-100 text-slate-600" aria-label="Fechar"><X className="w-4 h-4" /></button></div>
           </div>
           <div><h2 id="modal-title" className="text-xl sm:text-2xl font-bold text-slate-900">Acesso à Sua Defesa Jurídica</h2><p className="text-xs sm:text-sm text-slate-500 mt-1">Verificamos seu cadastro para vincular o auto nº <strong className="font-mono text-slate-800">{infractionData.aitNumber || 'N/A'}</strong> (Placa <strong className="font-mono text-slate-800">{vehicleData.plate || 'N/A'}</strong>) com segurança.</p></div>
         </div>
-        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs"><div className="flex items-center justify-between"><span className="font-bold text-blue-950 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />Diagnóstico Preliminar Concluído ({analysis.overallSuccessRate ?? 0}% de êxito)</span><span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">{analysis.recommendedArguments?.length ?? 0} Teses Mapeadas</span></div><p className="text-[11px] text-blue-900">Seus dados de veículo e autuação continuam preenchidos — você não precisa digitá-los novamente.</p></div>
+        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-blue-950 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />
+              Diagnóstico preliminar pronto
+            </span>
+            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">
+              {analysis.recommendedArguments?.length ?? 0} pontos conferidos
+            </span>
+          </div>
+          <p className="text-[11px] text-blue-900">
+            Seus dados de veículo e autuação continuam preenchidos — você não precisa digitá-los novamente.
+          </p>
+        </div>
         <SharedAuthForm mode={mode} onModeChange={setMode} variant="modal" theme="blue" showPhone phoneRequired showPasswordConfirm showTerms initialName={leadName} initialPhone={leadPhone} onLogin={handleLogin} onRegister={handleRegister} onAuthSuccess={() => {}} onEmailChange={handleEmailChange} />
       </div>
     </div>

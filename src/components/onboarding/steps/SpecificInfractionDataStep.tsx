@@ -145,7 +145,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-speed-limit" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Limite da Via (km/h) *
                 </label>
                 <input
@@ -159,7 +159,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-measured-speed" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Velocidade Medida (km/h) *
                 </label>
                 <input
@@ -173,7 +173,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-considered-speed" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Considerada (com tolerância)
                 </label>
                 <input
@@ -189,7 +189,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-inmetro-date" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Data da Aferição INMETRO (se constar no auto)
                 </label>
                 <input
@@ -205,7 +205,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-radar-equipment-id" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Número do Equipamento / Laudo INMETRO
                 </label>
                 <input
@@ -516,7 +516,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-real-driver-name" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Nome do Real Condutor *
                 </label>
                 <input
@@ -530,7 +530,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-real-driver-cpf" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   CPF do Real Condutor *
                 </label>
                 <input
@@ -544,7 +544,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="input-real-driver-cnh" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   CNH do Real Condutor *
                 </label>
                 <input
@@ -558,7 +558,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
+                <label htmlFor="select-indication-deadline" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
                   Indicação dentro do prazo da Notificação?
                 </label>
                 <select
