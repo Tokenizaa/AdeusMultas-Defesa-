@@ -159,6 +159,7 @@ describe('Arquitetura Jurídica Determinística — Pipeline E2E', () => {
       aitNumber: 'AIT-DEC-9988',
       dateTime: '2026-01-01',
       notificationExpeditionDate: '2026-02-15',
+      notificationDeliveryDate: '2026-02-20',
       location: 'Av. das Américas, 500',
       autuadorBody: 'DETRAN-RJ',
       infractionCode: '745-50',

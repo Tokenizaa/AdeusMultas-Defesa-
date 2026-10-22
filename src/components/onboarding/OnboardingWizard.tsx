@@ -21,6 +21,7 @@ import { useRouter } from '../../core/router/RouterContext';
 import { useAuth } from '../../core/auth/AuthContext';
 import { useAuthFetch } from '../../hooks/useAuthFetch';
 import { emitCasesChanged } from '../../context/casesEvents';
+import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 import {
   UserSituation,
   UserProcessStage,
@@ -37,6 +38,16 @@ import {
 // qualification data in browser storage. Case data is persisted server-side.
 
 const WIZARD_STORAGE_KEY = 'defesai_wizard_state';
+
+// Código canônico inicial de cada categoria (catálogo INFRACTION_CATALOG).
+// Só as categorias com código equivalente no catálogo têm default.
+const CATEGORY_DEFAULT_CODE: Partial<Record<InfractionCategory, string>> = {
+  excesso_velocidade: '745-50',
+  lei_seca: '757-90',
+  celular: '736-62',
+  vermelho: '605-01',
+  estacionamento: '545-21',
+};
 
 interface WizardPersistedState {
   step: number;
@@ -128,6 +139,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [leadPhone, setLeadPhone] = useState<string>(user?.phone || '');
   const [isAuthGateOpen, setIsAuthGateOpen] = useState<boolean>(false);
   const [authGateRedirectAction, setAuthGateRedirectAction] = useState<'generation' | 'dashboard'>('generation');
+  // Falha de persistência do caso: antes ficava só no console e o usuário
+  // acreditava que o diagnóstico estava salvo.
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   // =========================================================================
   // FASE 1: DADOS DA ANÁLISE JURÍDICA (100% GRATUITA)
@@ -335,58 +349,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const handleCategorySelect = (selected: InfractionCategory) => {
     setInfractionCategory(selected);
 
-    // Pre-populate default values according to category if not already set
-    if (selected === 'excesso_velocidade') {
-      setInfractionData((prev) => ({
-        ...prev,
-        ctbArticle: prev.ctbArticle || 'Art. 218, I do CTB',
-        infractionCode: prev.infractionCode || '745-50',
-        description: prev.description || 'Transitar em velocidade superior à máxima permitida em até 20%',
-        severity: 'media',
-        fineAmount: 130.16,
-        points: 4,
-      }));
-    } else if (selected === 'lei_seca') {
-      setInfractionData((prev) => ({
-        ...prev,
-        ctbArticle: prev.ctbArticle || 'Art. 165-A do CTB',
-        infractionCode: prev.infractionCode || '757-90',
-        description: prev.description || 'Recusa ao teste do etilômetro (art. 165-A)',
-        severity: 'gravissima',
-        fineAmount: 2934.70,
-        points: 0,
-      }));
-    } else if (selected === 'celular') {
-      setInfractionData((prev) => ({
-        ...prev,
-        ctbArticle: prev.ctbArticle || 'Art. 252, Parágrafo Único do CTB',
-        infractionCode: prev.infractionCode || '736-62',
-        description: prev.description || 'Dirigir utilizando telefone celular sem segurá-lo ou manuseá-lo',
-        severity: 'media',
-        fineAmount: 130.16,
-        points: 4,
-      }));
-    } else if (selected === 'vermelho') {
-      setInfractionData((prev) => ({
-        ...prev,
-        ctbArticle: prev.ctbArticle || 'Art. 208 do CTB',
-        infractionCode: prev.infractionCode || '605-01',
-        description: prev.description || 'Avançar o sinal vermelho do semáforo',
-        severity: 'gravissima',
-        fineAmount: 293.47,
-        points: 7,
-      }));
-    } else if (selected === 'estacionamento') {
-      setInfractionData((prev) => ({
-        ...prev,
-        ctbArticle: prev.ctbArticle || 'Art. 181 do CTB',
-        infractionCode: prev.infractionCode || '545-21',
-        description: prev.description || 'Estacionar em desacordo com a sinalização / local proibido',
-        severity: 'media',
-        fineAmount: 130.16,
-        points: 4,
-      }));
-    }
+    // Pre-populate a partir do catálogo canônico: multa, pontos, artigo e
+    // severidade são os do código realmente selecionado. Defaults escritos à
+    // mão divergiam do catálogo (ex.: "lei_seca" com 0 pontos) e a tela os
+    // exibia como se fossem dados do usuário.
+    const defaultCode = CATEGORY_DEFAULT_CODE[selected];
+    const item = defaultCode ? INFRACTION_CATALOG.find((x) => x.code === defaultCode) : undefined;
+    if (!item) return;
+
+    setInfractionData((prev) => ({
+      ...prev,
+      ctbArticle: prev.ctbArticle || item.article,
+      infractionCode: prev.infractionCode || item.code,
+      description: prev.description || item.description,
+      severity: item.severity,
+      fineAmount: item.fineAmount,
+      points: item.points,
+    }));
   };
 
   const handleLeadUpdate = (name: string, phone: string) => {
@@ -412,6 +391,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // remota. Exiba a etapa 7 imediatamente; o salvamento continua abaixo e
     // atualiza savedCaseId quando concluir.
     setStep(7);
+    setPersistError(null);
     try {
       const res = await authFetch(isAuthenticated ? '/api/cases' : '/api/cases/anonymous', {
         method: 'POST',
@@ -432,6 +412,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           analysis: caseAnalysis,
         }),
       });
+      if (!res.ok) {
+        throw new Error(`Falha ao salvar o diagnóstico (HTTP ${res.status}).`);
+      }
       const data = await res.json();
       if (data.id) {
         setSavedCaseId(data.id);
@@ -451,6 +434,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       }
     } catch (err) {
       console.error('Error saving case:', err);
+      // O diagnóstico já está na tela; só a gravação falhou. Dizer isso ao
+      // usuário em vez de deixar o console esconder a falha.
+      setPersistError(
+        'Não foi possível salvar este diagnóstico agora. O resultado acima continua válido e você pode gerar a defesa; para guardar o caso no painel, tente novamente em alguns instantes.'
+      );
     }
   };
 
@@ -696,16 +684,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       )}
 
       {step === 7 && (
-        <FreeAnalysisResultStep
-          analysis={caseAnalysis}
-          infractionData={infractionData}
-          vehicleData={vehicleData}
-          serviceType={mappedProcedure}
-          leadName={leadName}
-          leadPhone={leadPhone}
-          onProceedToDocumentGeneration={handleProceedToDocumentGeneration}
-          onSaveToDashboard={handleSaveToDashboard}
-        />
+        <>
+          {persistError && (
+            <div role="alert" className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 leading-relaxed">
+              {persistError}
+            </div>
+          )}
+          <FreeAnalysisResultStep
+            analysis={caseAnalysis}
+            infractionData={infractionData}
+            vehicleData={vehicleData}
+            serviceType={mappedProcedure}
+            leadName={leadName}
+            leadPhone={leadPhone}
+            onProceedToDocumentGeneration={handleProceedToDocumentGeneration}
+            onSaveToDashboard={handleSaveToDashboard}
+          />
+        </>
       )}
 
       {step === 8 && (

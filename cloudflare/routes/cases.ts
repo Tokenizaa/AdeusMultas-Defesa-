@@ -26,6 +26,33 @@ const boundedString = (value: unknown, maxLength: number): string | undefined =>
     ? value.trim()
     : undefined;
 
+// Números e booleanos opcionais: ausente ≠ zero. `null` e `''` viram
+// undefined para que a ausência continue sendo ausência no motor.
+const optionalNumber = (value: unknown): number | undefined =>
+  value === undefined || value === null || value === ''
+    ? undefined
+    : Number.isFinite(Number(value))
+      ? Number(value)
+      : undefined;
+
+const optionalBoolean = (value: unknown): boolean | undefined =>
+  typeof value === 'boolean' ? value : undefined;
+
+const boundedBooleanFlags = (value: unknown): Record<string, boolean> | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const obj = value as Record<string, unknown>;
+  const result: Record<string, boolean> = {};
+  let count = 0;
+  for (const [key, flag] of Object.entries(obj)) {
+    if (typeof flag === 'boolean') {
+      result[key] = flag;
+      count++;
+      if (count >= 64) break;
+    }
+  }
+  return count > 0 ? result : undefined;
+};
+
 function createClaimToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -77,21 +104,47 @@ casesRoutes.post('/cases/anonymous', async (c) => {
     description: boundedString(infractionInput.description, 240) || '',
     ctbArticle: boundedString(infractionInput.ctbArticle, 80) || '',
     severity: boundedString(infractionInput.severity, 20) || 'media',
-    points: Number.isFinite(Number(infractionInput.points)) ? Number(infractionInput.points) : 0,
-    fineAmount: Number.isFinite(Number(infractionInput.fineAmount)) ? Number(infractionInput.fineAmount) : 0,
+    points: optionalNumber(infractionInput.points) ?? 0,
+    fineAmount: optionalNumber(infractionInput.fineAmount) ?? 0,
     // A análise gratuita ainda não coleta o órgão autuador. Preserve a
     // incerteza explicitamente para que o motor determinístico possa avaliar
     // as demais regras sem transformar a ausência em fallback silencioso.
     // Isso não afirma um órgão: documentos e UI continuam exibindo
     // "Não informado".
     autuadorBody: boundedString(infractionInput.autuadorBody, 120) || 'Não informado',
+    autuadorCode: boundedString(infractionInput.autuadorCode, 40) || undefined,
     dateTime: boundedString(infractionInput.dateTime, 40) || undefined,
     location,
-    speedLimit: Number.isFinite(Number(infractionInput.speedLimit)) ? Number(infractionInput.speedLimit) : undefined,
-    measuredSpeed: Number.isFinite(Number(infractionInput.measuredSpeed)) ? Number(infractionInput.measuredSpeed) : undefined,
-    consideredSpeed: Number.isFinite(Number(infractionInput.consideredSpeed)) ? Number(infractionInput.consideredSpeed) : undefined,
+    speedLimit: optionalNumber(infractionInput.speedLimit),
+    measuredSpeed: optionalNumber(infractionInput.measuredSpeed),
+    consideredSpeed: optionalNumber(infractionInput.consideredSpeed),
+    speedMeasured: optionalNumber(infractionInput.speedMeasured),
+    speedConsidered: optionalNumber(infractionInput.speedConsidered),
     radarEquipmentId: boundedString(infractionInput.radarEquipmentId, 120) || undefined,
     inmetroAferitionDate: boundedString(infractionInput.inmetroAferitionDate, 40) || undefined,
+    // Prazos e datas da notificação: sem elas o motor não consegue avaliar
+    // decadência nem dupla notificação. Descartá-las aqui produzia uma
+    // análise diferente da que o navegador já havia mostrado ao usuário.
+    notificationExpeditionDate: boundedString(infractionInput.notificationExpeditionDate, 40) || undefined,
+    notificationDeliveryDate: boundedString(infractionInput.notificationDeliveryDate, 40) || undefined,
+    defenseDeadline: boundedString(infractionInput.defenseDeadline, 40) || undefined,
+    // Fatos e evidências declaradas pelo condutor: também são fatos do caso.
+    hasPreviousInfractionsLast12Months: optionalBoolean(infractionInput.hasPreviousInfractionsLast12Months),
+    hasR19SignageProof: optionalBoolean(infractionInput.hasR19SignageProof),
+    hasPsychomotorTerm: optionalBoolean(infractionInput.hasPsychomotorTerm),
+    hasAgentDetailedObservations: optionalBoolean(infractionInput.hasAgentDetailedObservations),
+    hasPhotoProof: optionalBoolean(infractionInput.hasPhotoProof),
+    hasRegulatorySign: optionalBoolean(infractionInput.hasRegulatorySign),
+    refusedTest: optionalBoolean(infractionInput.refusedTest),
+    offeredRetest: optionalBoolean(infractionInput.offeredRetest),
+    yellowPhaseCrossing: optionalBoolean(infractionInput.yellowPhaseCrossing),
+    cellphoneCircumstance: boundedString(infractionInput.cellphoneCircumstance, 240) || undefined,
+    emergencyPassage: optionalBoolean(infractionInput.emergencyPassage),
+    realDriverName: boundedString(infractionInput.realDriverName, 160) || undefined,
+    realDriverCpf: boundedString(infractionInput.realDriverCpf, 20) || undefined,
+    realDriverCnh: boundedString(infractionInput.realDriverCnh, 20) || undefined,
+    indicationWithinDeadline: optionalBoolean(infractionInput.indicationWithinDeadline),
+    evidenceFlags: boundedBooleanFlags(infractionInput.evidenceFlags),
     formalFlawsDetected: [],
   };
   const requestedServiceType = body?.serviceType;

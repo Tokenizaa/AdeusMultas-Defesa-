@@ -21,6 +21,13 @@ import {
   BarChart2
 } from 'lucide-react';
 import { CaseAnalysis, InfractionData, VehicleData, ProcedureType } from '../../../types';
+import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
+import { calculateConsideredSpeed } from '../../../core/onboarding/rules-matrix';
+
+// Códigos de infração de severidade leve/média (base do Art. 267 do CTB).
+const MEDIA_OR_LIGHT_CODES = new Set(
+  INFRACTION_CATALOG.filter((i) => i.severity === 'media' || i.severity === 'leve').map((i) => i.code)
+);
 
 // FUNÇÃO AUXILIAR: Formata explicações jurídicas no estilo GOV.BR
 const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData; vehicle: VehicleData }) => {
@@ -36,8 +43,12 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
       title: 'Validação do radar que mediu sua velocidade',
       lawExplanation: 'Segundo a Resolução CONTRAN nº 798/2020, Art. 4º, III, todo equipamento de medição de velocidade deve passar por verificação anual obrigatória no INMETRO ou IPEM delegado. Sem laudo válido (máximo 12 meses na data da infração), a medição perde fé pública.',
       evidenceCheck: (data) => {
-        if (data.infraction.radarCalibrationDate) {
-          const calibDate = new Date(data.infraction.radarCalibrationDate);
+        // O campo do formulário é inmetroAferitionDate (radarCalibrationDate é
+        // só o alias interno do motor): ler o alias deixava o card sempre
+        // "sem registro", mesmo com a data preenchida pelo usuário.
+        const calibrationDate = data.infraction.inmetroAferitionDate;
+        if (calibrationDate) {
+          const calibDate = new Date(calibrationDate);
           const infDate = new Date(data.infraction.dateTime);
           const diffMonths = (infDate.getTime() - calibDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
           return diffMonths > 12 
@@ -54,8 +65,9 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
       lawExplanation: 'A Lei nº 14.071/2020 alterou o Art. 267 do CTB para determinar que, quando a infração é leve ou média e o condutor não cometeu infrações nos últimos 12 meses, a autoridade é OBRIGADA a converter a multa em advertência por escrito, sem pagamento nem pontos na CNH.',
       evidenceCheck: (data) => {
         const infractionCode = data.infraction.infractionCode;
-        // Simplificação para demonstração - na prática usaria o catálogo completo
-        const isLightOrMedium = ['745-50', '735-80', '736-62', '735-80'].includes(infractionCode); 
+        // Códigos de severidade leve/média vêm do catálogo canônico — a lista
+        // fixa aqui divergia dele (faltava um código e repetia outro).
+        const isLightOrMedium = MEDIA_OR_LIGHT_CODES.has(infractionCode);
         const hasRecentInfractions = data.infraction.hasPreviousInfractionsLast12Months === true;
         
         if (!isLightOrMedium) return 'Infração classificada como grave/gravíssima (não se aplica Art. 267)';
@@ -87,12 +99,15 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
         if (![measured, considered, limit].every(Number.isFinite)) {
           return 'Dados de velocidade insuficientes para conferência aritmética';
         }
-        const tolerance = measured <= 100 ? 7 : measured * 0.07;
-        const expected = measured - tolerance;
+        // Mesma função usada pelo formulário: o card aplicava tolerância
+        // diferente da do app (7 km/h até 100 km/h contra 107 km/h) e
+        // contradizia o valor que o usuário digitou.
+        const expected = calculateConsideredSpeed(measured);
+        const deduction = Math.round((measured - expected) * 10) / 10;
         const delta = Math.abs(expected - considered);
         return delta <= 1
-          ? `Cálculo validado: ${measured} km/h − ${Number(tolerance.toFixed(1))} km/h = ${considered} km/h considerados (limite ${limit} km/h)`
-          : `Divergência calculada: esperado ${Number(expected.toFixed(1))} km/h considerados, informado ${considered} km/h`;
+          ? `Cálculo validado: ${measured} km/h − ${deduction} km/h = ${considered} km/h considerados (limite ${limit} km/h)`
+          : `Divergência calculada: esperado ${expected} km/h considerados, informado ${considered} km/h`;
       },
       userImpact: 'A análise usa os dados de velocidade preenchidos. A cópia da notificação é evidência complementar para protocolo, não requisito para esta validação aritmética.',
       confidenceBase: 'Res. CONTRAN 798/2020, Anexo II'
@@ -304,18 +319,26 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="space-y-3">
           <span className="text-base font-bold uppercase font-mono text-slate-400">Enquadramento</span>
-          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.ctbArticle || 'Art. 218 do CTB'}</p>
-          <p className="text-base text-slate-500 font-mono">Cód. {infractionData.infractionCode || '745-50'}</p>
+          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.ctbArticle || 'não informado'}</p>
+          <p className="text-base text-slate-500 font-mono">Cód. {infractionData.infractionCode || 'não informado'}</p>
         </div>
         <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão Julgador</span>
+          <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão Autuador</span>
           <p className="text-lg font-bold text-slate-900 truncate">{infractionData.autuadorBody || '— não informado —'}</p>
           <p className="text-base text-slate-500">Instância: Defesa Administrativa</p>
         </div>
         <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Impacto Estimado</span>
-          <p className="text-lg font-bold text-slate-900">R$ {infractionData.fineAmount?.toFixed(2) || '130,16'}</p>
-          <p className="text-base text-amber-700 font-semibold">{infractionData.points || 4} Pontos na CNH</p>
+          <span className="text-base font-bold uppercase font-mono text-slate-400">Valor da Multa</span>
+          <p className="text-lg font-bold text-slate-900">
+            {infractionData.fineAmount
+              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(infractionData.fineAmount)
+              : 'não informado'}
+          </p>
+          <p className="text-base text-amber-700 font-semibold">
+            {infractionData.points === undefined
+              ? 'pontos não informados'
+              : `${infractionData.points} ${infractionData.points === 1 ? 'ponto' : 'pontos'} na CNH`}
+          </p>
         </div>
       </div>
 

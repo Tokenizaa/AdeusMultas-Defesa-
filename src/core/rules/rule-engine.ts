@@ -14,7 +14,7 @@ import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { classifyInfraction, CANONICAL_PROCEDURE_BY_FAMILY, type InfractionClassification } from './infraction-classifier';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
-import { CaseAnalysis, DetectedFlaw, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
+import { CaseAnalysis, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
 
 /** Parse datas do payload sem depender da implementação local de Date.parse. */
 const parseLegalDate = (value: unknown): Date => {
@@ -840,64 +840,39 @@ export class ExpertRuleEngine {
     }
 
     // 2. Garantia constitucional do devido processo legal (Súmula 312 STJ).
-    //    Aplicável SOMENTE quando há violação real da dupla notificação:
-    //    - Notificação de Autuação foi expedida (notificationExpeditionDate existe)
-    //    - MAS Notificação de Autuação NÃO foi entregue (notificationDeliveryDate ausente)
-    //    - Isso caracteriza envio direto de penalidade sem oportunidade de Defesa Prévia.
-    const hasDualNotificationViolation =
-      context.notificationExpeditionDate &&
-      !context.notificationDeliveryDate;
-
-    const constArg = ARGUMENTS_CATALOG.find((a) => a.id === 'ARG-049');
-    if (constArg && hasDualNotificationViolation && !recommendedArgs.some((r) => r.id === constArg.id)) {
-      recommendedArgs.push({
-        id: constArg.id,
-        code: constArg.code,
-        title: constArg.title,
-        category: constArg.category,
-        legalBase: constArg.legalBase,
-        contranResolution: constArg.resolutions.join(', '),
-        summary: constArg.description,
-        detailedText: constArg.formattedParagraphs.map((p) => p.heading + '\n' + p.text).join('\n\n'),
-        confidenceScore: constArg.confidenceScore,
-        applicabilityNote: constArg.whenToUse.join('; '),
-      });
-
-      const flaw: DetectedFlaw = {
-        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-        argumentId: 'ARG-049',
-        severity: 'alta' as const,
-        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        description: 'Injeção obrigatória de tese constitucional de garantia do contraditório e ampla defesa',
-        impact: 'Nulidade do processo por ausência de dupla notificação',
-        statutoryBasis: 'Art. 5º, LIV e LV da CF/88 c/c Súmula 312 do STJ',
-      };
-      detectedFlaws.push(flaw);
-
-      evaluatedRules.push({
-        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-        name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        status: 'FAIL',
-        evaluatedAt: nowIso,
-        legalArgumentId: 'ARG-049',
-        impact: 'Nulidade do processo por ausência de dupla notificação',
-        severity: 'alta',
-        reason: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
-        inputs: {
-          notificationExpeditionDate: context.notificationExpeditionDate,
-          notificationDeliveryDate: context.notificationDeliveryDate,
-        },
-      });
-
-      detectedInconsistencies.push({
-        title: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-        description: 'Violação da dupla notificação: autuação expedida mas não entregue, seguido de penalidade direta',
-        severity: 'alta',
-        legalArgumentId: 'ARG-049',
-        impact: 'Nulidade do processo por ausência de dupla notificação',
-      });
-
-    } // Close if (constArg && hasDualNotificationViolation && ...)
+    //    FAIL CLOSED: a violação da dupla notificação SÓ é afirmada com prova
+    //    de não entrega da Notificação de Autuação. A ausência da data de
+    //    entrega NÃO é prova de não entrega: significa apenas que a hipótese
+    //    não pôde ser avaliada (DATA_GAP) — nunca um vício.
+    if (context.notificationExpeditionDate) {
+      if (context.notificationDeliveryDate) {
+        evaluatedRules.push({
+          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+          name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+          status: 'PASS',
+          evaluatedAt: nowIso,
+          reason: 'Notificação de Autuação expedida e com data de entrega informada: não há violação da dupla notificação nos dados fornecidos.',
+          inputs: {
+            notificationExpeditionDate: context.notificationExpeditionDate,
+            notificationDeliveryDate: context.notificationDeliveryDate,
+          },
+        });
+      } else {
+        dataGaps.push({
+          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+          missingData: ['notificationDeliveryDate'],
+          reason: 'A data de entrega da Notificação de Autuação não foi informada. Sem ela não é possível afirmar violação da dupla notificação (Súmula 312 STJ).',
+        });
+        evaluatedRules.push({
+          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+          name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+          status: 'DATA_GAP',
+          evaluatedAt: nowIso,
+          reason: 'Faltam dados obrigatórios: notificationDeliveryDate',
+          inputs: { notificationExpeditionDate: context.notificationExpeditionDate },
+        });
+      }
+    }
 
     // 3. Procedimento recomendado — derivado da família e dos fatos, nunca
     //    default universal. Ordem: (1) conversão em advertência comprovada

@@ -451,6 +451,24 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         </span>
                     </div>
 
+                    {/* Data de Entrega da Notificação */}
+                    <div>
+                        <label htmlFor="input-notification-delivery-date" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                            Data de Entrega da Notificação
+                        </label>
+                        <input
+                            id="input-notification-delivery-date"
+                            type="date"
+                            value={infractionData.notificationDeliveryDate?.split(' ')[0] || ''}
+                            onChange={(e) => onUpdateInfraction({ ...infractionData, notificationDeliveryDate: e.target.value })}
+                            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                            Consta no aviso de recebimento. Sem essa data, a violação da dupla notificação não pode ser avaliada.
+                        </span>
+                    </div>
+
                     {/* Prazo para Defesa (da notificação) */}
                     <div>
                         <label className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">

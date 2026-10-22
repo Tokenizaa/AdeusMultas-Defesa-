@@ -78,23 +78,38 @@ describe('ExpertRuleEngine validation', () => {
     expect(result.recommendedProcedure).toBe('conversao_advertencia');
   });
 
-  it('should include ARG-049 ONLY when dual notification violation exists', () => {
-    // Without notification dates - no dual notification violation
+  it('should NOT include ARG-049 when data is missing; only DATA_GAP or PASS', () => {
+    // Without notification dates - no dual notification data
     const result = ExpertRuleEngine.evaluate('case_123', validInfraction);
     const hasConstArg = result.recommendedArguments.some(a => a.id === 'ARG-049');
     expect(hasConstArg).toBe(false);
+    const gap = result.dataGaps?.find(g => g.ruleId === 'RULE_CONSTITUTIONAL_DUE_PROCESS');
+    expect(gap).toBeUndefined();
 
-    // With notificationExpeditionDate but NO notificationDeliveryDate - violation EXISTS
+    // With notificationExpeditionDate but NO notificationDeliveryDate - DATA_GAP
     const infractionWithViolation = {
       ...validInfraction,
       notificationExpeditionDate: '2026-01-10T10:00:00',
-      // notificationDeliveryDate intentionally omitted = not delivered
+      // notificationDeliveryDate intentionally omitted = unknown
     };
     const resultWithViolation = ExpertRuleEngine.evaluate('case_124', infractionWithViolation);
     const hasConstArgWithViolation = resultWithViolation.recommendedArguments.some(a => a.id === 'ARG-049');
-    expect(hasConstArgWithViolation).toBe(true);
-    expect(resultWithViolation.detectedInconsistencies.some(i => i.legalArgumentId === 'ARG-049')).toBe(true);
-    expect(resultWithViolation.evaluatedRules.some(r => r.legalArgumentId === 'ARG-049' && r.status === 'FAIL')).toBe(true);
+    expect(hasConstArgWithViolation).toBe(false);
+    const gapViolation = resultWithViolation.dataGaps?.find(g => g.ruleId === 'RULE_CONSTITUTIONAL_DUE_PROCESS');
+    expect(gapViolation).toBeDefined();
+    expect(gapViolation?.missingData).toContain('notificationDeliveryDate');
+    expect(resultWithViolation.evaluatedRules.some(r => r.ruleId === 'RULE_CONSTITUTIONAL_DUE_PROCESS' && r.status === 'DATA_GAP')).toBe(true);
+
+    // With BOTH dates - PASS, no violation
+    const infractionWithBoth = {
+      ...validInfraction,
+      notificationExpeditionDate: '2026-01-10T10:00:00',
+      notificationDeliveryDate: '2026-01-12T14:30:00',
+    };
+    const resultWithBoth = ExpertRuleEngine.evaluate('case_125', infractionWithBoth);
+    const passRule = resultWithBoth.evaluatedRules.find(r => r.ruleId === 'RULE_CONSTITUTIONAL_DUE_PROCESS');
+    expect(passRule?.status).toBe('PASS');
+    expect(resultWithBoth.dataGaps?.find(g => g.ruleId === 'RULE_CONSTITUTIONAL_DUE_PROCESS')).toBeUndefined();
   });
 
   // ===== Fase 2: FAIL CLOSED — dados insuficientes nunca viram vício =====
