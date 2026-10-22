@@ -4,6 +4,7 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { analyzeTicketWithGemini } from '../gemini';
 import { aiProviderManager } from '../observability/ai-provider-manager';
+import { logger } from '../observability/logger';
 import { ocrService } from '../services/ocr-service';
 import type { InfractionSeverity } from '../../types';
 
@@ -322,7 +323,7 @@ router.post('/ocr/analyze', authenticateToken, async (req, res) => {
       message: 'Envie imageUrl, base64 ou rawText para análise do auto de infração.',
     });
   } catch (error) {
-    console.error('[OCR Route] Error processing request:', error);
+    logger.error('ocr', 'analyze', 'handler_error', '[OCR Route] Error processing request', { error: String(error) });
     return res.status(500).json({
       error: 'Falha interna no servidor',
       message: 'Erro ao processar solicitação de OCR.',

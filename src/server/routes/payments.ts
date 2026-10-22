@@ -348,6 +348,35 @@ router.post('/pix/create', prodAuth, async (req, res) => {
       userRole: (req as any).user?.role,
     });
 
+    // Upsert em payment_orders (fonte de verdade para KPIs e reconciliação)
+    try {
+      const caseIdUuid = domainIdToUuid(caseId || `case_${Date.now()}`);
+      const supabaseForOrder = getSupabaseServerClient();
+      if (supabaseForOrder && caseIdUuid) {
+        await (supabaseForOrder.from('payment_orders') as any).upsert({
+          case_id: caseIdUuid,
+          user_id: effectiveUserId && /^[0-9a-f-]{36}$/i.test(effectiveUserId) ? effectiveUserId : null,
+          reference_id: `defesai_case_${caseId}`,
+          pagbank_order_id: orderResult.gatewayTransactionId || `ord_${caseId}`,
+          gateway: 'venopag',
+          status: 'PENDING',
+          amount: finalAmount,
+          currency: 'BRL',
+          payment_method: 'pix',
+          paid_at: null,
+          base_amount: finalAmount,
+          discount_amount: 0,
+          final_amount: finalAmount,
+          expires_at: null,
+        }, { onConflict: 'case_id' });
+      }
+    } catch (orderErr: any) {
+      logger.warn('payments', 'venopag', 'order_insert', 'Non-blocking order insert issue (PIX creation)', {
+        error: orderErr?.message,
+        caseId,
+      });
+    }
+
     res.json({
       success: true,
       order: orderResult,
@@ -394,7 +423,7 @@ router.get('/pix/status/:txId', prodAuth, async (req, res) => {
         gateway: activeGatewayId,
         environment: process.env.PAYMENT_MODE || 'sandbox',
       });
-      return res.status(500).json({ error: err.message || 'Erro ao consultar status do pagamento' });
+      return res.status(500).json({ error: 'Erro ao consultar status do pagamento' });
     }
   } catch (err: any) {
     logger.error('payments', 'gateway', 'pix_status', 'Error querying payment status', { error: err.message });
@@ -1249,6 +1278,36 @@ router.post('/webhooks/venopag', async (req: Request, res: Response) => {
 
           const updatedRow = CanonicalMapper.domainToRow(domain);
           await caseRepository.set(caseId, updatedRow);
+
+          // Upsert em payment_orders (fonte de verdade para KPIs e reconciliação)
+          try {
+            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const caseIdUuid = domainIdToUuid(domain.id);
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder && caseIdUuid) {
+              await (supabaseForOrder.from('payment_orders') as any).upsert({
+                case_id: caseIdUuid,
+                user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+                reference_id: event.referenceId || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: 'venopag',
+                status: 'PAID',
+                amount: domain.payment.amount,
+                currency: 'BRL',
+                payment_method: 'pix',
+                paid_at: event.paidAt || new Date().toISOString(),
+                base_amount: domain.payment.amount,
+                discount_amount: 0,
+                final_amount: domain.payment.amount,
+                expires_at: null,
+              }, { onConflict: 'case_id' });
+            }
+          } catch (orderErr: any) {
+            logger.warn('payments', 'venopag', 'order_insert', 'Non-blocking order insert issue (webhook VenoPag)', {
+              error: orderErr?.message,
+              caseId: domain.id,
+            });
+          }
 
           commercialService.processPaymentConfirmationEvent({
             paymentId: event.gatewayTransactionId || `ord_${domain.id}`,

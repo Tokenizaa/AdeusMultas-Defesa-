@@ -7,6 +7,7 @@ import { whatsappService } from '../services/whatsapp-service';
 import { configService } from '../config/config-service';
 import { isEligibleLeadForCampaign } from '../services/marketing-automation/eligibility';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
+import { logger } from '../observability/logger';
 
 const router = Router();
 
@@ -756,7 +757,7 @@ router.get('/queue', async (_req, res) => {
         message: 'Job de scraping enfileirado. Consulte GET /api/marketing/automation/scrape/' + job.id + ' para status.',
       });
     } catch (err) {
-      console.error('Erro no endpoint /scrape:', err);
+      logger.error('marketing', 'scrape', 'create_job', 'Erro no endpoint /scrape', { error: String(err) });
       res.status(500).json({ error: 'Falha ao criar job de scraping', message: (err as Error).message });
     }
   });
@@ -782,7 +783,7 @@ router.get('/queue', async (_req, res) => {
         collectionRunId: job.collectionRunId,
       });
     } catch (err) {
-      console.error('Erro no endpoint /scrape/:jobId:', err);
+      logger.error('marketing', 'scrape', 'get_job_status', 'Erro no endpoint /scrape/:jobId', { error: String(err) });
       res.status(500).json({ error: 'Falha ao obter status do job', message: (err as Error).message });
     }
   });
@@ -798,7 +799,7 @@ router.get('/queue', async (_req, res) => {
 
       res.json({ success: true, jobId, status: 'cancelled' });
     } catch (err) {
-      console.error('Erro no endpoint /scrape/:jobId/cancel:', err);
+      logger.error('marketing', 'scrape', 'cancel_job', 'Erro no endpoint /scrape/:jobId/cancel', { error: String(err) });
       res.status(500).json({ error: 'Falha ao cancelar job', message: (err as Error).message });
     }
   });
@@ -835,7 +836,7 @@ router.get('/queue', async (_req, res) => {
         leads: leads || [],
       });
     } catch (err) {
-      console.error('Erro no endpoint /scrape/:jobId/results:', err);
+      logger.error('marketing', 'scrape', 'get_job_results', 'Erro no endpoint /scrape/:jobId/results', { error: String(err) });
       res.status(500).json({ error: 'Falha ao buscar resultados', message: (err as Error).message });
     }
   });
@@ -845,7 +846,7 @@ router.get('/queue', async (_req, res) => {
       const jobs = await scrapeWorker.listJobs(20);
       res.json({ jobs });
     } catch (err) {
-      console.error('Erro no endpoint /scrapes:', err);
+      logger.error('marketing', 'scrape', 'list_jobs', 'Erro no endpoint /scrapes', { error: String(err) });
       res.status(500).json({ error: 'Falha ao listar jobs', message: (err as Error).message });
     }
   });
@@ -900,7 +901,7 @@ router.get('/export/:collectionRunId?', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (err) {
-    console.error('Erro no endpoint /export:', err);
+    logger.error('marketing', 'export', 'generate_xlsx', 'Erro no endpoint /export', { error: String(err) });
     res.status(500).json({ error: 'Falha ao gerar XLSX', message: (err as Error).message });
   }
 });
@@ -959,7 +960,7 @@ router.get('/export', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (err) {
-    console.error('Erro no endpoint /export (filtered):', err);
+    logger.error('marketing', 'export', 'generate_xlsx_filtered', 'Erro no endpoint /export (filtered)', { error: String(err) });
     res.status(500).json({ error: 'Falha ao gerar XLSX', message: (err as Error).message });
   }
 });

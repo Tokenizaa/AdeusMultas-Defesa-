@@ -6,6 +6,7 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { ocrService } from '../services/ocr-service';
 import type { CanonicalOnboardingPayload, CaseDomain, CaseApplicantData } from '../../types';
 import { authenticateToken } from '../middleware/auth-middleware';
+import { logger } from '../observability/logger';
 
 const router = Router();
 router.use(authenticateToken);
@@ -31,7 +32,7 @@ async function getAuthorizedCase(req: any, res: any, id: string) {
     if (!authorized(req, row)) { res.status(403).json({ error: 'Acesso ao caso não autorizado.' }); return null; }
     return row;
   } catch (error) {
-    console.error('[onboarding-v2] read persisted case', error);
+    logger.error('admin', 'read_persisted_case', 'error', '[onboarding-v2] read persisted case', { error: String(error) });
     res.status(503).json({ error: 'Persistência do caso indisponível.', code: 'CASE_PERSISTENCE_UNAVAILABLE' });
     return null;
   }
@@ -46,7 +47,7 @@ router.post('/onboarding-v2/draft', async (req, res) => {
     const caseDomain: CaseDomain = { ...domain, userId: req.user?.id, isAnonymous: !req.user?.id, claimToken, status: 'draft', currentStage: 1, createdAt: domain.createdAt, updatedAt: new Date().toISOString() };
     const row = CanonicalMapper.domainToRow(caseDomain); await databaseRows.set(id, row);
     return res.status(201).json({ case: CanonicalMapper.rowToDomain(row), claimToken });
-  } catch (error) { console.error('[onboarding-v2] create draft', error); return res.status(500).json({ error: 'Falha ao criar caso.' }); }
+  } catch (error) { logger.error('admin', 'create_draft', 'error', '[onboarding-v2] create draft', { error: String(error) }); return res.status(500).json({ error: 'Falha ao criar caso.' }); }
 });
 
 router.put('/onboarding-v2/draft', async (req, res) => {
@@ -75,7 +76,7 @@ router.post('/onboarding-v2/cases/:id/evidence', async (req, res) => {
     const ocrAuxiliaryData = { ...(current.ocrAuxiliaryData || {}), extractedText: result.textoCompleto, confidenceScore: result.confianca, provider: result.provedor, filename, mimeType, processedAt: new Date().toISOString() };
     const next: CaseDomain = { ...current, infraction, vehicle, ocrAuxiliaryData, updatedAt: new Date().toISOString() }; await databaseRows.set(current.id, CanonicalMapper.domainToRow(next));
     return res.json({ case: next, ocr: { provider: result.provedor, confidence: result.confianca, rawText: result.textoCompleto } });
-  } catch (error) { console.error('[onboarding-v2] evidence OCR', error); return res.status(502).json({ error: 'Falha ao processar evidência.', code: 'EVIDENCE_OCR_FAILED' }); }
+  } catch (error) { logger.error('admin', 'evidence_ocr', 'error', '[onboarding-v2] evidence OCR', { error: String(error) }); return res.status(502).json({ error: 'Falha ao processar evidência.', code: 'EVIDENCE_OCR_FAILED' }); }
 });
 
 router.post('/onboarding-v2/cases/:id/analysis', async (req, res) => { const row = await getAuthorizedCase(req, res, req.params.id); if (!row) return; const domain = CanonicalMapper.rowToDomain(row); if (!domain.infraction?.aitNumber || !domain.infraction?.infractionCode) return res.status(400).json({ error: 'Infração incompleta para análise.' }); const analysis = RagPipeline.analyzeInfraction(domain.id, domain.infraction); const updated: CaseDomain = { ...domain, analysis, status: 'analisado', currentStage: 2, updatedAt: new Date().toISOString() }; await databaseRows.set(domain.id, CanonicalMapper.domainToRow(updated)); return res.json({ caseId: domain.id, status: 'completed', analysis }); });

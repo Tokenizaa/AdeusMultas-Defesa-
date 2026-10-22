@@ -347,13 +347,13 @@ router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Erro ao buscar user_profiles:', error);
+      logger.error('admin', 'users', 'fetch_profiles', 'Erro ao buscar user_profiles', { error: String(error) });
       return res.status(500).json({ error: 'Erro ao carregar usuários.' });
     }
 
     res.json({ users: data || [], total: (data || []).length });
   } catch (err) {
-    console.error('Erro em /api/admin/users GET:', err);
+    logger.error('admin', 'users', 'get', 'Erro em /api/admin/users GET', { error: String(err) });
     res.status(500).json({ error: 'Erro ao carregar usuários.' });
   }
 });
@@ -383,7 +383,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
       .maybeSingle();
 
     if (profileError) {
-      console.error('Erro ao buscar profile:', profileError);
+      logger.error('admin', 'users', 'find_profile', 'Erro ao buscar profile', { error: String(profileError) });
       return res.status(500).json({ error: 'Erro ao localizar usuário.' });
     }
 
@@ -448,7 +448,7 @@ router.get('/admin/e2e-tests/stats', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error fetching E2E test stats:', error);
+    logger.error('admin', 'e2e-tests', 'stats', 'Error fetching E2E test stats', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
@@ -507,7 +507,7 @@ res.json({
   message: "Test execution started" 
 });
 } catch (error) {
-  console.error('Error starting E2E test run:', error);
+  logger.error('admin', 'e2e-tests', 'start_run', 'Error starting E2E test run', { error: String(error) });
   res.status(500).json({ error: 'Failed to start test execution' });
 }
 });
@@ -543,7 +543,7 @@ router.post('/admin/e2e-tests/execute-failed', async (req, res) => {
       message: 'Failed test execution endpoint - implement based on specific requirements' 
     });
   } catch (error) {
-    console.error('Error executing failed tests:', error);
+    logger.error('admin', 'e2e-tests', 'execute_failed', 'Error executing failed tests', { error: String(error) });
     res.status(500).json({ error: 'Failed to execute failed tests' });
   }
 });
@@ -562,7 +562,7 @@ router.post('/admin/e2e-tests/execute-service', async (req, res) => {
       message: `Service execution endpoint for ${service} - implement based on specific requirements` 
     });
   } catch (error) {
-    console.error('Error executing service tests:', error);
+    logger.error('admin', 'e2e-tests', 'execute_service', 'Error executing service tests', { error: String(error) });
     res.status(500).json({ error: 'Failed to execute service tests' });
   }
 });

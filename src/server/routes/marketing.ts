@@ -99,8 +99,8 @@ router.post('/publish-7-cache', async (_req, res) => {
   try {
     await marketingService.reload();
     const allContents = await marketingService.getEditorialContents();
-    console.log('[publish-7-cache] total contents:', allContents.length);
-    allContents.forEach(c => console.log('  ', c.id, c.status, c.title));
+    logger.info('marketing', 'publish-7-cache', 'contents_loaded', '[publish-7-cache] total contents', { count: allContents.length });
+    allContents.forEach(c => logger.debug('marketing', 'publish-7-cache', 'content_item', '  ', { id: c.id, status: c.status, title: c.title }));
 
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
     const igId = process.env.INSTAGRAM_ACCOUNT_ID;

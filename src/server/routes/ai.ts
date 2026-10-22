@@ -3,6 +3,7 @@ import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { getGeminiClient, enrichDefenseWithGemini } from '../gemini';
 import { DefenseBlock, InfractionData, ProcedureType } from '../../types';
 import { runControlledPipeline, registerRefinementProvider } from '../../core/ai/ai-orchestrator';
+import { logger } from '../observability/logger';
 
 const router = Router();
 
@@ -98,7 +99,7 @@ Responda em formato JSON estrito com o seguinte schema:
           return res.json(fullResult);
         }
       } catch (geminiError) {
-        console.error('Gemini call failed, using RAG Pipeline result', geminiError);
+        logger.error('ai', 'analyze-infraction', 'gemini_fallback', 'Gemini call failed, using RAG Pipeline result', { error: String(geminiError) });
         if (process.env.NODE_ENV === 'production') {
           return res.status(503).json({
             error: 'Serviço de análise indisponível',
@@ -141,7 +142,7 @@ Responda em formato JSON estrito com o seguinte schema:
 
     res.json(fallbackResult);
   } catch (err: any) {
-    console.error('Error in /api/ai/analyze-infraction:', err);
+    logger.error('ai', 'analyze-infraction', 'handler_error', 'Error in /api/ai/analyze-infraction', { error: String(err) });
     res.status(500).json({ error: 'Erro ao processar análise jurídica' });
   }
 });
@@ -318,7 +319,7 @@ router.post('/ai/generate-defense', async (req, res) => {
 
     res.json(defenseDoc);
   } catch (err: any) {
-    console.error('Error in /api/ai/generate-defense:', err);
+    logger.error('ai', 'generate-defense', 'handler_error', 'Error in /api/ai/generate-defense', { error: String(err) });
     res.status(500).json({ error: 'Erro ao gerar minuta da defesa' });
   }
 });
@@ -368,7 +369,7 @@ Instruções:
       reply: `Como especialista pericial do **Adeus Multa**, oriento que: toda autuação de velocidade exige que o equipamento medidor comprove verificação periódica anual válida pelo INMETRO (Resolução CONTRAN 798/2020). Além disso, pela Lei 14.071/2020 (Art. 267 CTB), infrações médias ou leves de condutores sem reincidência nos últimos 12 meses devem ser convertidas em advertência por escrito.`,
     });
   } catch (err: any) {
-    console.error('Error in chat consultant:', err);
+    logger.error('ai', 'chat_consultant', 'handler_error', 'Error in chat consultant', { error: String(err) });
     res.status(500).json({ error: 'Erro ao responder consulta' });
   }
 });

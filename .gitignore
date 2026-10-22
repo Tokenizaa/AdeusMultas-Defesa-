@@ -81,5 +81,8 @@ wrangler.test.json
 .env.audit-e2e
 .sb-sr.key
 
+# Cloudflare Wrangler local state/cache (nunca commitar)
+.wrangler/
+
 # E2E artifacts
 artifacts/

@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import { scrapeWorker } from '../services/scrape-worker';
 import { supabaseAdmin } from '../../scraper-prospecting/supabase';
 import { SearchConfig } from '../../scraper-prospecting/types';
+import { logger } from '../observability/logger';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.post(['/', '/scrape'], async (req: Request, res: Response) => {
       message: `Job de scraping enfileirado com sucesso. Consulte GET /api/scrape/${job.id} para acompanhar o progresso.`,
     });
   } catch (err: any) {
-    console.error('Erro ao criar job de scraping:', err);
+    logger.error('marketing', 'create_job', 'handler_error', 'Erro ao criar job de scraping', { error: String(err) });
     res.status(500).json({
       success: false,
       error: 'Falha ao criar job de scraping',
