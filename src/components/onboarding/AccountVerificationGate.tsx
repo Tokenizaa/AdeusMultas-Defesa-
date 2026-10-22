@@ -130,16 +130,25 @@ export const AccountVerificationGate: React.FC<AccountVerificationGateProps> = (
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onClick={onCancel}>
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6" onClick={(e) => e.stopPropagation()}>
+    <div 
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" 
+      onClick={onCancel}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="modal-title"
+    >
+      <div 
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6" 
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />100% dos Dados Coletados Preservados</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />Diagnóstico salvo no painel</span>
             <div className="flex items-center gap-2"><button onClick={onCancel} className="text-xs text-slate-400 hover:text-slate-600 font-semibold">Voltar ao Diagnóstico</button><button onClick={onCancel} className="p-2 rounded-lg bg-slate-100 text-slate-600" aria-label="Fechar"><X className="w-4 h-4" /></button></div>
           </div>
-          <div><h2 className="text-xl sm:text-2xl font-bold text-slate-900">Acesso à Sua Defesa Jurídica</h2><p className="text-xs sm:text-sm text-slate-500 mt-1">Verificamos seu cadastro para vincular o auto nº <strong className="font-mono text-slate-800">{infractionData.aitNumber || 'N/A'}</strong> (Placa <strong className="font-mono text-slate-800">{vehicleData.plate || 'N/A'}</strong>) com segurança.</p></div>
+          <div><h2 id="modal-title" className="text-xl sm:text-2xl font-bold text-slate-900">Acesso à Sua Defesa Jurídica</h2><p className="text-xs sm:text-sm text-slate-500 mt-1">Verificamos seu cadastro para vincular o auto nº <strong className="font-mono text-slate-800">{infractionData.aitNumber || 'N/A'}</strong> (Placa <strong className="font-mono text-slate-800">{vehicleData.plate || 'N/A'}</strong>) com segurança.</p></div>
         </div>
-        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs"><div className="flex items-center justify-between"><span className="font-bold text-blue-950 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />Diagnóstico Preliminar Concluído ({analysis.overallSuccessRate ?? 0}% de êxito)</span><span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">{analysis.recommendedArguments?.length ?? 0} Teses Mapeadas</span></div><p className="text-[11px] text-blue-900">Você não precisará preencher os dados do veículo e da autuação novamente.</p></div>
+        <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs"><div className="flex items-center justify-between"><span className="font-bold text-blue-950 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />Diagnóstico Preliminar Concluído ({analysis.overallSuccessRate ?? 0}% de êxito)</span><span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">{analysis.recommendedArguments?.length ?? 0} Teses Mapeadas</span></div><p className="text-[11px] text-blue-900">Seus dados de veículo e autuação continuam preenchidos — você não precisa digitá-los novamente.</p></div>
         <SharedAuthForm mode={mode} onModeChange={setMode} variant="modal" theme="blue" showPhone phoneRequired showPasswordConfirm showTerms initialName={leadName} initialPhone={leadPhone} onLogin={handleLogin} onRegister={handleRegister} onAuthSuccess={() => {}} onEmailChange={handleEmailChange} />
       </div>
     </div>

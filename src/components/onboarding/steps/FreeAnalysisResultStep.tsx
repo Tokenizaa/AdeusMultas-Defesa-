@@ -34,92 +34,105 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
   // Mapeia argumentos para explicações no estilo GOV.BR (focadas no usuário)
   const govBrExplanations: Record<string, {
     title: string;
+    whatWeChecked: string;
     lawExplanation: string;
     evidenceCheck: (data: any) => string;
     userImpact: string;
     confidenceBase: string;
   }> = {
     'ARG-001': {
-      title: 'Validação do radar que mediu sua velocidade',
-      lawExplanation: 'Segundo a Resolução CONTRAN nº 798/2020, Art. 4º, III, todo equipamento de medição de velocidade deve passar por verificação anual obrigatória no INMETRO ou IPEM delegado. Sem laudo válido (máximo 12 meses na data da infração), a medição perde fé pública.',
+      title: 'O radar estava com a medição válida na data da infração?',
+      whatWeChecked:
+        'A data da última aferição do radar (feita pelo INMETRO ou pelo IPEM, o órgão que faz a vistoria) comparada com a data da sua infração. A regra é simples: o radar precisa ser vistoriado pelo menos uma vez por ano.',
+      lawExplanation:
+        'A Resolução CONTRAN nº 798/2020 (art. 4º, III) obriga todo medidor de velocidade a passar por essa vistoria oficial no máximo uma vez por ano. Sem ela em dia, o aparelho não tem valor de prova — e a multa que ele mediu pode ser cancelada.',
       evidenceCheck: (data) => {
-        // O campo do formulário é inmetroAferitionDate (radarCalibrationDate é
-        // só o alias interno do motor): ler o alias deixava o card sempre
-        // "sem registro", mesmo com a data preenchida pelo usuário.
         const calibrationDate = data.infraction.inmetroAferitionDate;
         if (calibrationDate) {
           const calibDate = new Date(calibrationDate);
           const infDate = new Date(data.infraction.dateTime);
           const diffMonths = (infDate.getTime() - calibDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-          return diffMonths > 12 
-            ? `Última averificação há ${Math.round(diffMonths)} meses (fora da validade de 12 meses)`
-            : `Última averificação há ${Math.round(diffMonths)} meses (dentro da validade)`;
+          return diffMonths > 12
+            ? `A última vistoria foi há ${Math.round(diffMonths)} meses — o radar estava com a medição VENCIDA na data da infração.`
+            : `A última vistoria foi há ${Math.round(diffMonths)} meses — o radar estava com a medição EM_DIA na data da infração.`;
         }
-        return 'Não há registro de data de averificação disponível para validação';
+        return 'SEM_DADOS: Não há registro da data da vistoria do radar, então este ponto ficou sem confirmação.';
       },
-      userImpact: 'Se confirmado que o radar estava com calibração vencida, este é fundamento sólido para solicitar anulação da multa',
-      confidenceBase: 'Res. CONTRAN 798/2020'
+      userImpact:
+        'Se o radar estava com a vistoria vencida, esse é um dos argumentos mais fortes do seu caso e pode levar ao cancelamento da multa. Dá para confirmar com a certidão do INMETRO, que é gratuita.',
+      confidenceBase: 'Resolução CONTRAN nº 798/2020, art. 4º, III'
     },
     'ARG-051': {
-      title: 'Direito à advertência por escrito (Art. 267 do CTB)',
-      lawExplanation: 'A Lei nº 14.071/2020 alterou o Art. 267 do CTB para determinar que, quando a infração é leve ou média e o condutor não cometeu infrações nos últimos 12 meses, a autoridade é OBRIGADA a converter a multa em advertência por escrito, sem pagamento nem pontos na CNH.',
+      title: 'Dá para trocar esta multa por advertência (sem pagar e sem pontos)?',
+      whatWeChecked:
+        'A gravidade da sua infração (leve ou média) e se você tem alguma infração registrada nos últimos 12 meses.',
+      lawExplanation:
+        'Desde a Lei 14.071/2020, o art. 267 do CTB obriga o órgão de trânsito a converter em advertência por escrito toda multa leve ou média de quem não tem infração nos últimos 12 meses. Na advertência, não se paga nada e não entra ponto na CNH.',
       evidenceCheck: (data) => {
         const infractionCode = data.infraction.infractionCode;
-        // Códigos de severidade leve/média vêm do catálogo canônico — a lista
-        // fixa aqui divergia dele (faltava um código e repetia outro).
         const isLightOrMedium = MEDIA_OR_LIGHT_CODES.has(infractionCode);
         const hasRecentInfractions = data.infraction.hasPreviousInfractionsLast12Months === true;
-        
-        if (!isLightOrMedium) return 'Infração classificada como grave/gravíssima (não se aplica Art. 267)';
-        if (hasRecentInfractions) return 'Constam infrações nos últimos 12 meses (não se aplica Art. 267)';
-        return 'Infração leve/média constatada e não há infrações recentes nos últimos 12 meses';
+
+        if (!isLightOrMedium) return 'NAO_APLICA: Esta infração é grave ou gravíssima, então a conversão em advertência não se aplica ao seu caso.';
+        if (hasRecentInfractions) return 'NAO_APLICA: Constam infrações nos últimos 12 meses, então a conversão em advertência não se aplica ao seu caso.';
+        return 'ATENDIDO: A infração é leve ou média e não há infrações nos últimos 12 meses: os requisitos do art. 267 estão atendidos.';
       },
-      userImpact: 'Você tem DIREITO SUBJETIVO de converter esta multa em advertência por escrito - não pagará valor e não perderá pontos na CNH',
-      confidenceBase: 'Lei 14.071/2020, art. 267 do CTB'
+      userImpact:
+        'Nesses casos a lei não deixa o órgão escolher: a multa vira advertência. Na prática, R$ 0 e 0 pontos na CNH. Se o órgão negar, é um pedido simples de fazer — e este é um dos poucos pontos do seu caso que não depende de foto nem de documento difícil de conseguir.',
+      confidenceBase: 'Art. 267 do CTB (redação da Lei 14.071/2020)'
     },
     'ARG-002': {
-      title: 'Sinalização de velocidade adequada no local',
-      lawExplanation: 'O Art. 90, caput e §1º do CTB estabelece que nenhuma sanção pode ser aplicada por inobservância de sinalização quando esta for insuficiente, incorreta ou ausente. Para validade da medição por radar, é obrigatória placa R-19 visível na distância técnica mínima (Res. CONTRAN 798/2020).',
+      title: 'Existia placa de velocidade no local?',
+      whatWeChecked:
+        'Se há comprovação de que existia, no local, a placa de velocidade máxima (a placa circular com o número, código R-19) visível antes do radar — e se ela estava na distância correta.',
+      lawExplanation:
+        'O art. 90 do CTB diz que ninguém pode ser multado por desobedecer a uma placa que estava ausente, escondida ou mal posicionada. Para a fiscalização por radar, a Resolução CONTRAN nº 798/2020 exige a placa R-19 visível antes do radar.',
       evidenceCheck: (data) => {
-        if (data.infraction.hasR19SignageProof === false) return 'Ausência de comprovação de sinalização regulatória nos documentos';
-        if (data.infraction.hasR19SignageProof === true) return 'Comprovação de sinalização regulatória presente nos documentos';
-        return 'Não há comprovação fotográfica de sinalização regulatória disponível';
+        if (data.infraction.hasR19SignageProof === false) return 'AUSENCIA: Você informou que não há comprovação de placa de velocidade no local.';
+        if (data.infraction.hasR19SignageProof === true) return 'PRESENTE: Há comprovação de placa de velocidade nos documentos que você enviou.';
+        return 'SEM_DADOS: Não há foto da placa no local, então este ponto ficou sem confirmação.';
       },
-      userImpact: 'Se constatada ausência ou inadequação da sinalização, isso pode invalidar a medição de velocidade como prova da infração',
-      confidenceBase: 'Art. 90 do CTB, Res. CONTRAN 798/2020'
-    }
-    ,
+      userImpact:
+        'Se a placa não existia ou estava escondida, o órgão não pode exigir que você respeitasse um limite que não estava sinalizado — e isso pode cancelar a multa. É um dos pontos mais checados em caso de radar.',
+      confidenceBase: 'Art. 90 do CTB e Resolução CONTRAN nº 798/2020'
+    },
     'ARG-005': {
-      title: 'Conferência da velocidade considerada pelo INMETRO',
-      lawExplanation: 'A penalidade deve usar a velocidade considerada, obtida após a dedução da margem metrológica, e não a velocidade medida bruta. Para velocidades de até 100 km/h, a conferência usa a tolerância de 7 km/h prevista na tabela aplicável.',
+      title: 'A velocidade que foi cobrada está correta?',
+      whatWeChecked:
+        'Refizemos a conta da velocidade. O radar mede um valor "bruto", mas a multa tem que ser calculada sobre o valor já com a margem de erro do aparelho descontada (7 km/h, para medições até 100 km/h).',
+      lawExplanation:
+        'A Resolução CONTRAN nº 798/2020 (Anexo II) define a margem de erro admitida em cada faixa de velocidade. A multa só pode ser cobrada sobre a velocidade "considerada" — a velocidade medida já com essa margem descontada. Se o órgão fez a conta com o valor errado, a infração pode mudar de faixa ou nem existir.',
       evidenceCheck: (data) => {
         const measured = Number(data.infraction.measuredSpeed ?? data.infraction.speedMeasured);
         const considered = Number(data.infraction.consideredSpeed ?? data.infraction.speedConsidered);
         const limit = Number(data.infraction.speedLimit);
         if (![measured, considered, limit].every(Number.isFinite)) {
-          return 'Dados de velocidade insuficientes para conferência aritmética';
+          return 'SEM_DADOS: Faltam os números de velocidade para refazer a conta.';
         }
-        // Mesma função usada pelo formulário: o card aplicava tolerância
-        // diferente da do app (7 km/h até 100 km/h contra 107 km/h) e
-        // contradizia o valor que o usuário digitou.
         const expected = calculateConsideredSpeed(measured);
         const deduction = Math.round((measured - expected) * 10) / 10;
         const delta = Math.abs(expected - considered);
         return delta <= 1
-          ? `Cálculo validado: ${measured} km/h − ${deduction} km/h = ${considered} km/h considerados (limite ${limit} km/h)`
-          : `Divergência calculada: esperado ${expected} km/h considerados, informado ${considered} km/h`;
+          ? `VALIDADO: A conta fecha: ${measured} km/h medidos − ${deduction} km/h de margem de erro = ${considered} km/h considerados (limite de ${limit} km/h).`
+          : `DIVERGENCIA: A conta não fecha: com ${measured} km/h medidos e margem de ${deduction} km/h, o esperado seria ${expected} km/h, mas o auto registra ${considered} km/h.`;
       },
-      userImpact: 'A análise usa os dados de velocidade preenchidos. A cópia da notificação é evidência complementar para protocolo, não requisito para esta validação aritmética.',
-      confidenceBase: 'Res. CONTRAN 798/2020, Anexo II'
+      userImpact:
+        'Se o número não fecha, existe chance de a multa cair numa faixa mais barata — ou de não existir. Como é só aritmética, dá para conferir e mostrar o resultado na peça sem depender de nenhum documento.',
+      confidenceBase: 'Resolução CONTRAN nº 798/2020, Anexo II'
     }
   };
 
   const explanation = govBrExplanations[arg.id] || {
     title: arg.title,
-    lawExplanation: `${arg.legalBase} ${arg.contraranResolution ? `(c/c ${arg.contraranResolution})` : ''}`,
-    evidenceCheck: () => 'Verificação específica não configurada para este argumento',
-    userImpact: arg.summary,
-    confidenceBase: 'Base jurídica padrão'
+    whatWeChecked:
+      'Conferimos este ponto nos dados que você enviou.',
+    lawExplanation:
+      'Em poucas palavras: a lei estabelece este direito ou obrigação. Referência: ' + arg.legalBase,
+    evidenceCheck: () =>
+      'Não deu para confirmar este ponto com os dados que você enviou. Ele pode ser verificado no processo administrativo — no painel, em Documentos do órgão.',
+    userImpact:
+      'O que isso significa para você: se este ponto for confirmado, pode ajudar na sua defesa. Próximo passo: confira se tem o documento original no painel.',
+    confidenceBase: arg.legalBase
   };
 
   // Calcula nível de confiança baseado na evidência disponível
@@ -131,20 +144,30 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
   let confidenceLevel: 'Baixo' | 'Médio' | 'Alto' | 'Muito Alto' = 'Médio';
   let confidenceReason = '';
    
-  // Lógica de confiança baseada na qualidade da evidência
-  if (explanation.confidenceBase.includes('Lei') && 
-      (evidenceResult.includes('constatada') || evidenceResult.includes('fora da validade'))) {
+  // Lógica de confiança baseada em prefixos estruturados do evidenceCheck
+  // (não mais casar substring em português frágil)
+  if (evidenceResult.startsWith('VENCIDO:') || evidenceResult.startsWith('ATENDIDO:')) {
     confidenceLevel = 'Muito Alto';
-    confidenceReason = 'Baseado em lei com alteração recente que tornou o direito obrigatório';
-  } else if (explanation.confidenceBase.includes('Res.') && 
-             (evidenceResult.includes('fora da validade') || evidenceResult.includes('dentro da validade'))) {
+    confidenceReason = evidenceResult.startsWith('VENCIDO:')
+      ? 'Baseado em resolução técnica: radar com vistoria vencida na data da infração'
+      : 'Baseado em lei: requisitos do art. 267 CTB atendidos';
+  } else if (evidenceResult.startsWith('EM_DIA:') || evidenceResult.startsWith('PRESENTE:') || evidenceResult.startsWith('VALIDADO:')) {
     confidenceLevel = 'Alto';
-    confidenceReason = 'Baseado em resolução técnica com prazo claro e objetivo';
-  } else if (evidenceResult.includes('Não há registro') || 
-             evidenceResult.includes('Não há comprovação') ||
-             evidenceResult.includes('ausência de')) {
+    confidenceReason = evidenceResult.startsWith('EM_DIA:')
+      ? 'Baseado em resolução técnica: radar com vistoria em dia na data da infração'
+      : evidenceResult.startsWith('PRESENTE:')
+        ? 'Baseado em resolução técnica: placa de velocidade comprovada'
+        : 'Baseado em resolução técnica: cálculo da velocidade validado';
+  } else if (evidenceResult.startsWith('SEM_DADOS:') || evidenceResult.startsWith('AUSENCIA:')) {
     confidenceLevel = 'Médio';
-    confidenceReason = 'Baseado em ausência de comprovação disponível nos dados fornecidos';
+    confidenceReason = evidenceResult.startsWith('SEM_DADOS:')
+      ? 'Baseado em ausência de comprovação disponível nos dados fornecidos'
+      : 'Baseado em declaração do condutor: ausência de placa de velocidade';
+  } else if (evidenceResult.startsWith('NAO_APLICA:') || evidenceResult.startsWith('DIVERGENCIA:')) {
+    confidenceLevel = 'Baixo';
+    confidenceReason = evidenceResult.startsWith('NAO_APLICA:')
+      ? 'Este ponto não se aplica à infração informada'
+      : 'Há divergência entre o valor calculado e o valor do auto';
   } else {
     confidenceLevel = 'Baixo';
     confidenceReason = 'Evidência insuficiente para conclusão definitiva';
@@ -239,10 +262,10 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       <div className="space-y-4">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          Diagnóstico Jurídico Gratuito Concluído
+          Diagnóstico concluído — grátis
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          {leadName ? `Diagnóstico de ${leadName.split(' ')[0]}` : 'Resultado da Análise Preliminar'}
+          Resultado do seu diagnóstico
         </h1>
         <p className="text-base text-slate-500">
           Auto nº <span className="font-mono font-bold text-slate-800">{infractionData.aitNumber || 'N/A'}</span> • 
@@ -255,7 +278,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       <div className="p-6 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
         <div className="space-y-3">
           <span className="text-base font-bold text-emerald-800 uppercase font-mono block">
-            {isRateUnavailable ? 'Indicador Indisponível' : 'Força do Diagnóstico'}
+            {isRateUnavailable ? 'Indicador Indisponível' : 'Força da sua defesa'}
           </span>
           <div className="text-4xl sm:text-5xl font-extrabold font-mono">
             {isRateUnavailable ? (
@@ -264,17 +287,22 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               <span className="text-emerald-700">{displayedRate}%</span>
             )}
           </div>
+          {!isRateUnavailable && (
+            <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
+              Quanto a sua defesa tem de chance de prosperar com os dados que você enviou. Não é previsão de resultado — a decisão final é do órgão.
+            </p>
+          )}
           <span className="text-lg font-medium">
             {isRateUnavailable ? (
               <span className="text-emerald-600">Análise em modo degradado — base jurídica indisponível</span>
             ) : defensePoints.length > 0 ? (
               isHighProbability
-                ? 'Alto potencial de anulação'
+                ? 'Vários pontos fortes no seu caso'
                 : isMediumProbability
-                ? 'Potencial identificado — análise detalhada disponível'
-                : 'Potencial moderado — recomenda-se reforçar dados'
+                ? 'Há pontos que valem a pena usar na defesa'
+                : 'Ainda falta comprovar alguns pontos'
             ) : (
-              'Nenhuma tese autorizada com os dados informados'
+              'Com os dados de hoje, não encontramos ponto forte'
             )}
           </span>
           
@@ -282,8 +310,8 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           {dataCompleteness && (
             <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
               <div className="flex items-center justify-center gap-4 text-sm text-emerald-700">
-                <span className="font-mono">{dataCompleteness.filledFields}/{dataCompleteness.totalFields} campos preenchidos</span>
-                <span className="px-2 py-1 bg-emerald-100 rounded-full font-mono">{dataCompleteness.ratio}% completo</span>
+                <span className="font-mono">Você preencheu {dataCompleteness.filledFields} de {dataCompleteness.totalFields} dados</span>
+                <span className="px-2 py-1 bg-emerald-100 rounded-full font-mono">{dataCompleteness.ratio}%</span>
               </div>
               <div className="w-full max-w-xs mx-auto h-2 bg-emerald-100 rounded-full overflow-hidden">
                 <div 
@@ -299,10 +327,10 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2 animate-pulse">
               <div className="flex items-center gap-2 text-amber-800">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium">Probabilidade pode melhorar com mais dados</span>
+                <span className="font-medium">Seu caso fica mais forte com mais {dataCompleteness.missingCriticalFields.length} dados</span>
               </div>
               <p className="text-sm text-amber-700 pl-7">
-                Adicionar as informações abaixo pode aumentar sua probabilidade de êxito:
+                Preencha o que falta para a análise ficar mais completa:
               </p>
               <ul className="text-sm text-amber-700 pl-7 space-y-1">
                 {dataCompleteness.missingCriticalFields.slice(0, 4).map((field, idx) => (
@@ -312,11 +340,11 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                   </li>
                 ))}
                 {dataCompleteness.missingCriticalFields.length > 4 && (
-                  <li className="text-amber-600">+{dataCompleteness.missingCriticalFields.length - 4} outros campos relevantes</li>
+                  <li className="text-amber-600">+{dataCompleteness.missingCriticalFields.length - 4} outros dados relevantes</li>
                 )}
               </ul>
               <p className="text-xs text-amber-600 pl-7 italic">
-                A probabilidade é recalculada automaticamente ao preencher mais dados no formulário.
+                Você pode voltar ao formulário e completar esses dados quando quiser — o diagnóstico é refeito na hora.
               </p>
             </div>
           )}
@@ -326,7 +354,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
               <div className="flex items-center justify-center gap-2 text-emerald-800">
                 <Sparkles className="w-4 h-4" />
-                <span className="font-medium">Excelente! Seus dados fornecem base sólida para a defesa.</span>
+                <span className="font-medium">Os dados que você enviou já permitem montar a defesa.</span>
               </div>
             </div>
           )}
@@ -365,10 +393,10 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         <div className="flex items-center gap-3">
           <FileCheck2 className="w-5 h-5 text-orange-500" />
           <h3 className="text-lg font-bold text-slate-900 font-mono uppercase">
-            Principais pontos verificados para sua defesa ({defensePoints?.length || 0})
+            O que conferimos no seu caso ({defensePoints?.length || 0})
             {analysis?.recommendedArguments?.length > 3 && (
               <span className="text-base text-slate-500 ml-2">
-                (+{analysis.recommendedArguments.length - 3} outros pontos disponíveis na visualização completa)
+                (+{analysis.recommendedArguments.length - 3} outros pontos — você vê todos ao salvar no painel)
               </span>
             )}
           </h3>
@@ -402,7 +430,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                       </div>
                       <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que verificamos</span>
                     </div>
-                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.title}</p>
+                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.whatWeChecked}</p>
                   </div>
 
                   {/* O que a lei diz */}
@@ -465,11 +493,31 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         ) : (
           <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center">
             <p className="text-lg text-slate-600 leading-relaxed">
-              Nenhum vício formal ou tese de anulação foi identificado com base nas informações fornecidas. 
-              Recomendamos reunir mais documentos ou consultar um advogado para uma análise mais detalhada.
+              Com os dados que você enviou, não encontramos problema na autuação. Isso não quer dizer que a multa está certa: se você tiver a notificação original, fotos do local ou prints, vale reenviar — a análise fica mais forte. Se preferir, um advogado pode revisar o caso com você.
             </p>
           </div>
         )}
+      </div>
+
+      {/* Próximos passos — a tela precisa dizer o que fazer */}
+      <div className="p-5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3">
+        <h3 className="text-base font-bold text-slate-900">O que fazer agora</h3>
+        <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
+          <li>Salve este diagnóstico no painel — ele fica guardado e você pode voltar a ele quando quiser.</li>
+          <li>
+            {infractionData.defenseDeadline
+              ? `Seu prazo para apresentar a defesa termina em ${infractionData.defenseDeadline.split('T')[0]}. Protocolar antes garante o efeito suspensivo.`
+              : 'Confira na notificação a data limite para apresentar a defesa — protocolo depois dessa data costuma esvaziar a defesa.'}
+          </li>
+          <li>
+            {analysis?.recommendedArguments?.[0]
+              ? `Para o ponto mais forte do seu caso ("${analysis.recommendedArguments[0].title}"), o documento que faz falta é: ${analysis.recommendedArguments[0].requiredDocuments?.[0] ?? 'a cópia da sua notificação de autuação'}.`
+              : 'Separe a cópia da sua notificação de autuação — é o documento que o órgão vai pedir.'}
+          </li>
+        </ol>
+        <p className="text-xs text-slate-500">
+          A defesa é protocolada por escrito no DETRAN ou no órgão autuador indicado acima. Você não precisa ir a lugar nenhum: dá para fazer online.
+        </p>
       </div>
 
       {/* Botões de ação */}
@@ -479,7 +527,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             onClick={onSaveToDashboard}
             className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-lg font-bold transition-colors cursor-pointer border border-slate-700"
           >
-            Salvar e Ver no Painel
+            Salvar no painel
           </button>
 
           <button
@@ -487,7 +535,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             onClick={onProceedToDocumentGeneration}
             className="w-full sm:w-auto px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-lg font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-3 cursor-pointer uppercase tracking-tight"
           >
-            <span>Gerar Minha Defesa</span>
+            <span>Montar minha defesa</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>

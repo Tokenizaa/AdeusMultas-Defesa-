@@ -32,6 +32,20 @@ import {
 } from '../../../utils/test-data-generator';
 import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
 
+// Mapa de categoria do wizard → códigos da infração (baseado no catálogo)
+// Usado para filtrar o <select> de código da infração pela categoria escolhida na etapa 3.
+const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
+  excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
+  lei_seca: ['757-90', '516-91', '758-70', '759-50'],
+  celular: ['736-62'],
+  vermelho: ['605-01', '606-80'],
+  estacionamento: ['545-21', '546-01', '547-80', '548-60', '549-40', '550-80', '551-60'],
+  indicacao_condutor: [],
+  conversao_advertencia: [],
+  cnh_geral: [],
+  outro: [],
+};
+
 interface InfractionIdentificationStepProps {
     infractionData: InfractionData;
     vehicleData: VehicleData;
@@ -383,11 +397,20 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     className="w-full text-sm font-medium bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                     >
                         <option value="">Selecione o código da infração...</option>
-                        {INFRACTION_CATALOG.map((item) => (
-                            <option key={item.code} value={item.code}>
+                        {category && CATEGORY_CODE_MAP[category]?.length
+                          ? CATEGORY_CODE_MAP[category].map((code) => {
+                              const item = INFRACTION_CATALOG.find((x) => x.code === code);
+                              return item ? (
+                                <option key={item.code} value={item.code}>
+                                  {item.code} — {item.description.slice(0, 70)}...
+                                </option>
+                              ) : null;
+                            })
+                          : INFRACTION_CATALOG.map((item) => (
+                              <option key={item.code} value={item.code}>
                                 {item.code} — {item.description.slice(0, 70)}...
-                            </option>
-                        ))}
+                              </option>
+                            ))}
                     </select>
                     {/* Resumo auto-preenchido */}
                     {infractionData.infractionCode && infractionData.ctbArticle && (

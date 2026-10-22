@@ -14,8 +14,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
   {
     id: 'ARG-001',
     code: 'INMETRO_CALIBRATION_EXPIRED',
-    title: 'Aferição Metrológica do Radar Vencida ou Ausente (Res. CONTRAN 798/2020)',
-    description: 'Nulidade absoluta da autuação por excesso de velocidade quando o equipamento medidor de velocidade não foi submetido à verificação metrológica anual obrigatória (validade máxima de 12 meses) pelo INMETRO ou IPEM delegado.',
+    title: 'Radar com a vistoria vencida na data da infração',
+    description:
+      'Quando o radar que aplicou a multa estava com mais de 12 meses sem vistoria oficial, a medição perde a validade que a lei exige e a multa pode ser cancelada. Dá para confirmar com a certidão gratuita do INMETRO.',
     category: 'merito',
     impactType: 'anulacao_total',
     confidenceScore: 95,
@@ -61,8 +62,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
   {
     id: 'ARG-002',
     code: 'LACK_OF_REGULATORY_SIGNAGE',
-    title: 'Ausência ou Ilegibilidade de Sinalização Regulamentadora R-19 (Art. 90 do CTB)',
-    description: 'Inaplicabilidade de penalidade de trânsito em virtude de sinalização de velocidade inexistente, insuficiente, encoberta por vegetação/obstáculos ou instalada fora das distâncias regulamentares.',
+    title: 'Placa de velocidade ausente ou escondida no local',
+    description:
+      'Quando não havia placa de velocidade visível no local — ou ela estava encoberta ou fora do lugar — o órgão não pode cobrar a multa por desrespeito a um limite que não estava sinalizado. Uma foto do trecho costuma resolver este ponto.',
     category: 'preliminar',
     impactType: 'anulacao_total',
     confidenceScore: 90,
@@ -107,8 +109,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
   {
     id: 'ARG-003',
     code: 'RADAR_ESTUDO_TECNICO_AUSENTE',
-    title: 'Inexistência de Estudo Técnico de Engenharia de Instalação do Radar Fixo (Art. 6º Res. 798/20)',
-    description: 'Nulidade do local de fiscalização por radar fixo ante a falta de estudo de engenharia prévio com ART que comprove a criticidade e histórico de sinistros do trecho.',
+    title: 'O estudo técnico do radar fixo não existe ou está vencido',
+    description:
+      'Para instalar um radar fixo, o órgão precisa de um estudo de engenharia que prove que o trecho é perigoso e precisa de fiscalização. Esse estudo vence a cada 2 anos. Se não tem estudo ou ele está vencido, as multas desse radar podem ser canceladas.',
     category: 'merito',
     impactType: 'anulacao_total',
     confidenceScore: 88,
@@ -139,8 +142,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     id: 'ARG-004',
     code: 'RADAR_PORTATIL_SEM_OPERADOR_VISIVEL',
     category: 'merito',
-    title: 'Operação Oculta ou Descaracterizada de Radar Portátil / Móvel (Art. 13 Res. 798/20)',
-    description: 'Proibição de utilização de radar portátil escondido atrás de árvores, muretas, pontes ou operado por agente desprovido de uniforme ostensivo.',
+    title: 'O radar portátil estava escondido ou o agente não era visível',
+    description:
+      'A lei proíbe usar radar portátil escondido atrás de árvores, muretas ou pontes, ou operado por agente sem uniforme visível. Se a fiscalização foi assim, a multa pode ser cancelada. Fotos da operação costumam provar este ponto.',
     impactType: 'anulacao_total',
     confidenceScore: 92,
     whenToUse: ['Autuações por radar portátil em que o agente fiscalizador estava oculto à visualização dos motoristas'],
@@ -162,8 +166,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     id: 'ARG-005',
     code: 'RADAR_MARGEM_ERRO_RECLASSIFICACAO',
     category: 'merito',
-    title: 'Erro de Enquadramento por Inobservância da Velocidade Considerada (Tabela INMETRO)',
-    description: 'Reclassificação ou anulação da infração quando o abatimento da margem metrológica (7 km/h ou 7%) rebaixa a gravidade da penalidade.',
+    title: 'A velocidade que foi cobrada está correta?',
+    description:
+      'A multa tem que ser calculada sobre a velocidade já com a margem de erro do radar descontada (7 km/h, para medições até 100 km/h). Se o órgão fez a conta com o valor bruto do radar, a infração pode mudar de faixa — ou nem existir. Como é só aritmética, dá para conferir e mostrar o resultado na peça sem depender de documento.',
     impactType: 'reclassificacao',
     confidenceScore: 94,
     whenToUse: ['Autuações no limiar entre faixas de velocidade (ex: entre 20% e 50% ou acima de 50%)'],
@@ -231,8 +236,9 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     id: 'ARG-008',
     code: 'EXCESSO_VELOCIDADE_ESTADO_NECESSIDADE_SOCORRO',
     category: 'merito',
-    title: 'Excludente de Ilicitude: Estado de Necessidade e Socorro Médico Urgente',
-    description: 'Afastamento da ilicitude da infração de velocidade quando comprovado o transporte emergencial de paciente em risco de morte.',
+    title: 'Era uma emergência médica e não havia outra escolha',
+    description:
+      'Quando você estava levando alguém com risco de vida para o hospital e não dava para esperar, a lei entende que não houve infração — o bem "vida" está acima da multa. O prontuário de urgência com data e hora prova este ponto.',
     impactType: 'anulacao_total',
     confidenceScore: 91,
     whenToUse: ['Condução rápida para atendimento de emergência hospitalar com entrada comprovada'],

@@ -54,12 +54,12 @@ export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({
   }, [infractionData]);
 
   const stages = [
-    { label: 'Recebendo e validando dados informados pelo condutor', duration: 700 },
-    { label: 'Cruzando autuação com 390 dispositivos do CTB e Resoluções do CONTRAN', duration: 800 },
-    { label: 'Auditando decadência de prazo (Art. 281-A CTB — Lei 14.071/2020) e aferição de radar', duration: 800 },
-    { label: 'Verificando vigência temporal: Lei 14.071/2020, 14.229/2021, 14.440/2022, 14.599/2023', duration: 700 },
-    { label: 'Calibrando probabilidade de deferimento perante o órgão autuador', duration: 700 },
-    { label: 'Diagnóstico jurídico 100% gratuito concluído com sucesso!', duration: 500 },
+    { label: 'Conferindo os dados que você enviou', duration: 700 },
+    { label: 'Checando a infração na legislação de trânsito', duration: 800 },
+    { label: 'Verificando prazos e equipamento de medição', duration: 800 },
+    { label: 'Conferindo as leis que mudaram nos últimos anos', duration: 700 },
+    { label: 'Montando o seu diagnóstico', duration: 700 },
+    { label: 'Diagnóstico pronto', duration: 500 },
   ];
 
   useEffect(() => {
@@ -90,13 +90,13 @@ export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({
 
       <div className="space-y-2">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 font-mono">
-          Processamento em Tempo Real
+          Análise em andamento
         </span>
         <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-          Analisando sua autuação com Inteligência Jurídica
+          Estamos conferindo a sua autuação
         </h2>
         <p className="text-slate-500 text-xs sm:text-sm max-w-md mx-auto">
-          Aplicando 390 dispositivos do CTB, 7 peças-modelo validadas e precedentes do STJ em tempo real.
+          Cada verificação é feita por regras fixas do Código de Trânsito e das normas do CONTRAN, com o texto da lei ao lado de cada resultado.
         </p>
       </div>
 
