@@ -11,10 +11,18 @@ Comprovar o comportamento integrado do produto a partir da interface real, usand
 
 Esta especificação não autoriza:
 - alterar comportamento de produção para fazer testes passarem;
-- executar a bateria contra produção, realizar pagamentos reais ou fazer deploy sem autorização explícita;
+- realizar pagamentos reais ou fazer deploy sem autorização explícita;
 - remover testes unitários, integração, auditoria ou segurança;
 - recriar a antiga infraestrutura E2E por cópia;
 - usar mocks para simular uma etapa que o próprio cenário declara estar validando como integração real.
+
+**Execução contra URL de produção autorizada:** https://adeusmulta.defesai.com.br/
+- A execução da bateria E2E contra a URL de produção é **permitida** como alvo de validação, desde que:
+  1. **Pagamentos reais permaneçam bloqueados** (usar sandbox/test adapter do VenoPag/Stripe configurado no projeto);
+  2. **Dados sintéticos exclusivos** sejam usados (prefixo `E2E_` + `E2E_TEST_RUN_ID` em todos os campos de identificação);
+  3. **Nenhuma limpeza destrutiva automática** seja executada (resíduos relatados, não apagados);
+  4. **Verificações de banco** usem projeto Supabase de homologação/teste explicitamente configurado, não produção;
+  5. O relatório identifique explicitamente `environment: "production-url"` e o SHA testado.
 
 ## 2. Os 70 cenários oficiais
 
@@ -91,10 +99,11 @@ Verificações diretas de banco servem para observar e confirmar o resultado. N�
 - Criar um caso separado por cenário e execução quando houver persistência. Nunca reutilizar um caso para simular dez cenários.
 - Não criar usuário/caso durante descoberta ou listagem dos testes.
 - Não apagar automaticamente usuários, casos, pagamentos, evidências ou dados persistidos.
-- Exigir URL e projeto Supabase de teste explicitamente configurados; interromper se o alvo não puder ser confirmado.
-- Bloquear pagamentos reais por padrão. Sandbox/test adapter só pode ser usado conforme o contrato real e a configuração segura do projeto.
+- **URL de execução:** a bateria pode ser apontada para `https://adeusmulta.defesai.com.br/` (produção) ou para ambiente de homologação, mediante variável `E2E_BASE_URL` configurada no runner. O projeto Supabase usado para verificações de persistência **deve ser de homologação/teste**, nunca produção — interromper se o alvo não puder ser confirmado.
+- Bloquear pagamentos reais por padrão. Sandbox/test adapter só pode ser usado conforme o contrato real e a configuração segura do projeto (VenoPag sandbox / Stripe test mode).
 - Executar sequencialmente por serviço: os dez cenários, o relatório do serviço e a verificação de resíduos antes de iniciar o seguinte.
 - Reexecutar com um novo identificador, sem reaproveitar identificadores ou artefatos de execução anterior.
+- **Prefixo de dados sintéticos em produção:** todos os campos de identificação (nome, CPF, placa, AIT, telefone, email) devem usar prefixo `E2E_` + `E2E_TEST_RUN_ID` para permitir rastreamento e não contaminar dados reais.
 
 Nenhum nome de variável histórico é obrigatório por si só. Ao implementar, verificar os nomes e mecanismos realmente consumidos pelo código atual; não restaurar variáveis, flags ou scripts obsoletos só porque aparecem em relatórios antigos.
 
@@ -102,7 +111,7 @@ Nenhum nome de variável histórico é obrigatório por si só. Ao implementar, 
 
 Cada cenário deve registrar, sem segredos:
 - identificador da execução, serviço e cenário;
-- commit SHA, ambiente e versão do navegador;
+- commit SHA, ambiente (`production-url` | `homologacao` | `local`), versão do navegador e `E2E_BASE_URL` usada;
 - estado final `PASS`, `FAIL` ou `BLOCKED`;
 - IDs dos registros relevantes, sem credenciais ou tokens;
 - etapas executadas e verificações realizadas;
@@ -120,7 +129,7 @@ A bateria só pode ser declarada concluída quando:
 - não há `FAIL` ou `BLOCKED` ocultado, ignorado ou convertido em sucesso;
 - os gates de integridade, segurança e pagamento aplicáveis passaram;
 - resíduos e efeitos persistentes foram relatados; nenhuma limpeza destrutiva foi executada automaticamente;
-- o relatório identifica o SHA exato testado e o ambiente usado.
+- o relatório identifica o SHA exato testado, o ambiente usado (`production-url` | `homologacao` | `local`) e a `E2E_BASE_URL` alvo.
 
 A existência do código, a conclusão do build, testes unitários verdes ou uma execução parcial não equivalem à certificação dos 70 cenários.
 
