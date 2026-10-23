@@ -3,7 +3,8 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
-import { authenticateToken, type AuthenticatedUser } from '../middleware';
+import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
+import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
 import { commercialRoutes } from './commercial';
 import type { NormalizedWebhookEvent } from '../../src/server/integrations/gateway/types';
@@ -146,6 +147,8 @@ routes.get('/payments/gateway/status', (c) => {
     gateway,
     environment: gateway === 'venopag' ? 'production' : (c.env.PAGBANK_ENV || 'sandbox'),
     simulated: false,
+    // Expose admin testing only when the environment explicitly opts into sandbox.
+    testMode: String(c.env.PAYMENT_MODE || '').toLowerCase() === 'sandbox',
   }, configured ? 200 : 503);
 });
 
@@ -276,6 +279,55 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
   const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId, serviceType: body.serviceType, gatewayOrderId: order.orderId, gatewayTransactionId: order.gatewayTransactionId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'pix', qrCodeText: order.pixCopyPaste || order.qrCodeText, qrCodeUrl: order.qrCodeUrl });
   return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
+});
+
+routes.post('/payments/simulate-payment', authenticateToken, requireAdmin, async (c) => {
+  // Fail closed: payment bypass exists only in an explicitly configured sandbox.
+  if (String(c.env.PAYMENT_MODE || '').toLowerCase() !== 'sandbox') {
+    throw new HTTPException(501, {
+      message: 'Endpoint de simulação não disponível fora do ambiente sandbox.',
+    });
+  }
+
+  const body = await c.req.json<any>().catch(() => ({}));
+  const caseId = typeof body.caseId === 'string' ? body.caseId.trim() : '';
+  if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório para simulação de pagamento.' });
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HTTPException(400, { message: 'Valor de simulação inválido.' });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: row, error: readError } = await supabase.from('cases').select('*').eq('id', caseId).maybeSingle();
+  if (readError) throw new HTTPException(500, { message: 'Não foi possível consultar o caso para simulação.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado para simulação.' });
+
+  const domain = rowToDomain(row);
+  if (domain.isPaid) {
+    return c.json({ success: true, simulated: true, alreadyPaid: true, case: domain });
+  }
+
+  const now = new Date().toISOString();
+  domain.isPaid = true;
+  domain.paidAt = now;
+  domain.status = 'defesa_pronta';
+  domain.currentStage = 3;
+  domain.timeline = [
+    ...(domain.timeline || []),
+    {
+      id: 'tl_sim_' + Date.now(),
+      title: 'Pagamento aprovado em modo de teste',
+      description: 'Simulação administrativa de R$ ' + amount.toFixed(2).replace('.', ',') + '; nenhuma cobrança foi enviada a um gateway.',
+      timestamp: now,
+      type: 'payment',
+    },
+  ];
+
+  const updatedRow = domainToRow(domain);
+  const { data: updated, error: updateError } = await supabase.from('cases').update(updatedRow).eq('id', caseId).select('*').single();
+  if (updateError || !updated) throw new HTTPException(500, { message: 'Não foi possível persistir o pagamento simulado.' });
+
+  return c.json({ success: true, simulated: true, case: rowToDomain(updated) });
 });
 
 routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
