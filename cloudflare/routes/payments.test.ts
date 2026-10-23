@@ -96,8 +96,40 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     } as any);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      ok: true, configured: true, gateway: 'venopag', environment: 'production', simulated: false,
+      ok: true, configured: true, gateway: 'venopag', environment: 'production', simulated: false, testMode: false,
     });
+  });
+
+  it('advertises admin test mode only when sandbox is explicitly configured', async () => {
+    const response = await app().request('/api/payments/gateway/status', {}, {
+      PAYMENT_MODE: 'sandbox',
+      VENO_PRIMARY_GATEWAY: 'venopag',
+      VENO_CLIENT_ID: 'client-test',
+      VENO_CLIENT_SECRET: 'secret-test',
+      VENO_WEBHOOK_SECRET: 'webhook-secret',
+    } as any);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ testMode: true, gateway: 'venopag' });
+  });
+
+  it('blocks admin payment simulation unless PAYMENT_MODE is explicitly sandbox', async () => {
+    const response = await app().request('/api/payments/simulate-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caseId: 'case-test', amount: 100 }),
+    }, { PAYMENT_MODE: 'production' } as any);
+    expect(response.status).toBe(501);
+    expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
+  });
+
+  it('requires caseId before attempting an admin payment simulation', async () => {
+    const response = await app().request('/api/payments/simulate-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: 100 }),
+    }, { PAYMENT_MODE: 'sandbox' } as any);
+    expect(response.status).toBe(400);
+    expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
   });
 
   it('requires caseId before creating a PIX order', async () => {
