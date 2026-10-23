@@ -122,6 +122,33 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
   });
 
+  it('persists a simulated payment for an existing case in sandbox', async () => {
+    h.maybeSingle.mockResolvedValueOnce({
+      data: {
+        id: 'case-1', title: 'Caso sintético', user_id: 'user-1', status: 'analisado', current_stage: 2,
+        service_type: 'defesa_previa', is_paid: false, is_anonymous: false, paid_at: null,
+        vehicle_plate: 'BRA2E19', vehicle_brand_model: 'Veículo de teste', ait_number: 'AIT-TEST-1',
+        infraction_code: '745-50', infraction_description: 'Excesso de velocidade', ctb_article: 'Art. 218',
+        severity: 'media', points: 4, fine_amount: 130.16, autuador_body: 'DETRAN-SP',
+        date_time: '2026-10-20', location: 'Rua de teste, 10 - São Paulo/SP',
+        timeline_json: '[]', formal_flaws_json: '[]',
+      },
+      error: null,
+    });
+    const response = await app().request('/api/payments/simulate-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caseId: 'case-1', amount: 100, paymentMethod: 'pix', gateway: 'pagbank' }),
+    }, { PAYMENT_MODE: 'sandbox' } as any);
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.success).toBe(true);
+    expect(body.simulated).toBe(true);
+    expect(body.case.isPaid).toBe(true);
+    expect(body.case.status).toBe('defesa_pronta');
+    expect(h.update).toHaveBeenCalled();
+  });
+
   it('requires caseId before attempting an admin payment simulation', async () => {
     const response = await app().request('/api/payments/simulate-payment', {
       method: 'POST',
