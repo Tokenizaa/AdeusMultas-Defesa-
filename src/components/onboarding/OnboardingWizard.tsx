@@ -748,6 +748,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           infractionData={infractionData}
           onComplete={handleAnalysisCompleted} 
           onAnalysisComplete={handleAnalysisComplete}
+          onBack={() => setStep(5)}
         />
       )}
 
