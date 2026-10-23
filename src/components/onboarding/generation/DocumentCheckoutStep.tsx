@@ -268,8 +268,10 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 },
                 {
                     id: `tl_${Date.now()}_3`,
-                    title: 'Petição Formal Gerada',
-                    description: 'Minuta jurídica diagramada pronta para protocolo no órgão autuador.',
+                    title: markPaid ? 'Petição Formal Gerada' : 'Dados preparados para simulação',
+                    description: markPaid
+                        ? 'Minuta jurídica diagramada pronta para protocolo no órgão autuador.'
+                        : 'Dados preparados para testar o fluxo; aguardando confirmação do simulador.',
                     timestamp: new Date().toISOString(),
                     type: 'defense',
                 },
