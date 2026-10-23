@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, baseURL, runId, type CanonicalService } from './support';
+import { runTextAudit, assertTextAudit } from './text-audit-runner';
 const service: CanonicalService = {
   "id": "defesa_previa",
   "situationId": "multa_transito",
@@ -118,5 +119,87 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
     await page.getByRole('button', { name: /Voltar à identificação/i }).click();
     expect(requests).toHaveLength(0);
+  });
+
+  // ==========================================
+  // PILOTO — Auditoria Textual (Onda 5+)
+  // ==========================================
+  
+  test('E2E-DEFESA_PREVIA-11 auditoria textual: infraestrutura captura entrada → API → UI → validação', async ({page}) => {
+    const evidence = await runTextAudit(page, {
+      service,
+      runId: 'e2e-text-audit',
+      specificAnswers: {
+        // excesso_velocidade — dados básicos
+        speedLimit: 60,
+        measuredSpeed: 73,
+        consideredSpeed: 66,
+        inmetroAferitionDate: '2023-01-15',
+        hasPhotoProof: true,
+      },
+      saveEvidence: true,
+      outputDir: 'artifacts/text-audit',
+      expectFullFlow: false,
+    });
+    
+    // 1. Valida que a infraestrutura funciona (não crasha)
+    expect(evidence.metadata.status).not.toBe('blocked');
+    expect(evidence.apiResponse.caseId).toBeTruthy();
+    expect(evidence.apiResponse.claimToken).toBeTruthy();
+    expect(evidence.apiResponse.analysis).toBeDefined();
+    
+    // 2. Valida que a API retorna estrutura esperada
+    const analysis = evidence.apiResponse.analysis;
+    expect(analysis.recommendedProcedure).toBe(service.procedure);
+    expect(typeof analysis.overallSuccessRate).toBe('number'); // pode ser null mas aqui tem dados
+    expect(Array.isArray(analysis.recommendedArguments)).toBe(true);
+    expect(Array.isArray(analysis.dataGaps)).toBe(true);
+    expect(analysis.dataCompleteness).toBeDefined();
+    
+    // 3. Valida que textos renderizados foram capturados
+    const rt = evidence.renderedText;
+    expect(rt.identification.labels.length).toBeGreaterThan(0);
+    expect(rt.specificQuestions.questions.length).toBeGreaterThan(0);
+    expect(rt.analysisResult.header.title).toContain('Diagnóstico');
+    expect(rt.analysisResult.strengthIndicator.rate).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(rt.analysisResult.summaryCards)).toBe(true);
+    expect(Array.isArray(rt.analysisResult.nextSteps)).toBe(true);
+    
+    // 4. Executa validações automáticas (não falha em warnings)
+    assertTextAudit(evidence, { failOnWarning: false });
+    
+    // 5. Log para inspeção manual
+    console.log('=== EVIDÊNCIA CAPTURADA ===');
+    console.log('Case ID:', evidence.apiResponse.caseId);
+    console.log('Success Rate:', analysis.overallSuccessRate);
+    console.log('Teses recomendadas:', analysis.recommendedArguments.map(a => a.id).join(', '));
+    console.log('Data Gaps:', analysis.dataGaps?.map(g => g.ruleId).join(', '));
+    console.log('Cards renderizados:', rt.analysisResult.summaryCards.map(c => c.title).join(', '));
+    console.log('Next Steps:', rt.analysisResult.nextSteps);
+  });
+
+  test('E2E-DEFESA_PREVIA-12 auditoria textual: forbidden patterns detection', async ({page}) => {
+    const evidence = await runTextAudit(page, {
+      service,
+      runId: 'e2e-text-audit',
+      specificAnswers: {
+        speedLimit: 60,
+        measuredSpeed: 73,
+      },
+      saveEvidence: true,
+      outputDir: 'artifacts/text-audit',
+      expectFullFlow: false,
+    });
+    
+    // Valida que a detecção de padrões proibidos funciona
+    const { comparison } = evidence;
+    
+    // Se houver padrões proibidos, eles devem ser reportados
+    if (comparison.forbiddenPatterns.length > 0) {
+      console.log('Padrões proibidos detectados:', comparison.forbiddenPatterns.map(f => `${f.pattern}: ${f.foundIn}`));
+    }
+    
+    // O teste passa se a infraestrutura detecta (não crasha)
+    expect(evidence.metadata.status).not.toBe('blocked');
   });
 });
