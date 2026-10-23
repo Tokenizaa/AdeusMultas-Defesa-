@@ -324,10 +324,10 @@ routes.post('/payments/simulate-payment', authenticateToken, requireAdmin, async
   ];
 
   const updatedRow = domainToRow(domain);
-  const { data: updated, error: updateError } = await supabase.from('cases').update(updatedRow).eq('id', caseId).select('*').single();
-  if (updateError || !updated) throw new HTTPException(500, { message: 'Não foi possível persistir o pagamento simulado.' });
+  const { error: updateError } = await supabase.from('cases').update(updatedRow).eq('id', caseId);
+  if (updateError) throw new HTTPException(500, { message: 'Não foi possível persistir o pagamento simulado.' });
 
-  return c.json({ success: true, simulated: true, case: rowToDomain(updated) });
+  return c.json({ success: true, simulated: true, case: domain });
 });
 
 routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
