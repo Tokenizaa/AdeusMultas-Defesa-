@@ -767,6 +767,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             leadPhone={leadPhone}
             onProceedToDocumentGeneration={handleProceedToDocumentGeneration}
             onSaveToDashboard={handleSaveToDashboard}
+            onBack={() => setStep(5)}
           />
         </>
       )}
