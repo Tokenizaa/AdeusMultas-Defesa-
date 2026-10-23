@@ -1,7 +1,7 @@
 import { InfractionData } from '../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
-import { generateRandomAIT } from '../../utils/test-data-generator';
+import { generateRandomAIT, generateRandomCPF, generateRandomCNH, generateRandomName } from '../../utils/test-data-generator';
 
 /**
  * testFillData — dados de teste 🧪 COERENTES com a categoria de infração selecionada.
@@ -88,6 +88,9 @@ export function buildCoherentTestInfraction(
         measuredSpeed,
         consideredSpeed,
         inmetroAferitionDate: recentDate(),
+        radarEquipmentId: 'TEST-RADAR-001',
+        hasR19SignageProof: true,
+        hasPhotoProof: true,
         ...extras,
       };
     }
@@ -103,6 +106,7 @@ export function buildCoherentTestInfraction(
         ...neutral,
         ...catalogFields(code),
         hasPsychomotorTerm: false, // Dispara ARG-025 se termo ausente/sem sinais
+        offeredRetest: false,
         // Coerência: Lei Seca não possui medição de velocidade.
         speedLimit: undefined,
         measuredSpeed: undefined,
@@ -122,7 +126,8 @@ export function buildCoherentTestInfraction(
         ...current,
         ...neutral,
         ...catalogFields('736-62'),
-        hasAgentDetailedObservations: chosen === 'sem_abordagem' ? false : undefined,
+        cellphoneCircumstance: chosen,
+        hasAgentDetailedObservations: chosen === 'sem_abordagem' ? false : true,
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
@@ -135,11 +140,15 @@ export function buildCoherentTestInfraction(
 
     case 'vermelho': {
       const motivos = ['amarelo_rapido', 'emergencia', 'noturno_seguranca', 'cruzamento_travado'];
-      extras = { notes: `vermelho_${pick(motivos)}` };
+      const chosen = pick(motivos);
+      extras = { notes: `vermelho_${chosen}` };
       return {
         ...current,
         ...neutral,
         ...catalogFields('605-01'),
+        yellowPhaseCrossing: chosen === 'amarelo_rapido',
+        emergencyPassage: chosen === 'emergencia',
+        hasPhotoProof: true,
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
@@ -151,8 +160,8 @@ export function buildCoherentTestInfraction(
     }
 
     case 'estacionamento': {
-      const tipos = ['embarque_rapido', 'sinalizacao_apagada', 'pane_mecanica', 'zona_azul_app'];
-      extras = { notes: `estacionamento_${pick(tipos)}` };
+      // O select não é controlado; use sua opção inicial para manter UI e estado coerentes.
+      extras = { notes: 'estacionamento_embarque_rapido' };
       return {
         ...current,
         ...neutral,
@@ -167,8 +176,26 @@ export function buildCoherentTestInfraction(
       };
     }
 
+    case 'indicacao_condutor': {
+      return {
+        ...current,
+        ...neutral,
+        ...catalogFields(current.infractionCode && catalogItemByCode(current.infractionCode) ? current.infractionCode : '745-50'),
+        realDriverName: generateRandomName().toUpperCase(),
+        realDriverCpf: generateRandomCPF().replace(/\\D/g, ''),
+        realDriverCnh: generateRandomCNH(),
+        indicationWithinDeadline: true,
+        speedLimit: undefined,
+        measuredSpeed: undefined,
+        consideredSpeed: undefined,
+        speedMeasured: undefined,
+        speedConsidered: undefined,
+        inmetroAferitionDate: undefined,
+      };
+    }
+
     default: {
-      // conversao_advertencia | indicacao_condutor | cnh_geral | outro:
+      // conversao_advertencia | cnh_geral | outro:
       // campos mínimos válidos, sem contradizer a seleção humana.
       // Se já existe código escolhido, mantém o conjunto canônico DELE;
       // caso contrário, sorteia um item do catálogo coerente (todos os
@@ -180,6 +207,7 @@ export function buildCoherentTestInfraction(
         ...current,
         ...neutral,
         ...catalogFields(existingCode),
+        ...(category === 'conversao_advertencia' ? { hasPreviousInfractionsLast12Months: false } : {}),
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
