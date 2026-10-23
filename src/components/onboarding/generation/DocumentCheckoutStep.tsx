@@ -107,7 +107,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         console.log("[DocumentCheckoutStep] serviceType:", serviceType, "couponCode:", couponCode);
         let active = true;
         fetch('/api/payments/gateway/status')
-            .then((r) => (r.ok ? r.json() : null))
+            .then((r) => r.json().catch(() => null))
             .then((data) => {
                 if (active && data && typeof data.testMode === 'boolean') setTestMode(data.testMode);
             })
@@ -417,7 +417,9 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
 
             const data = await res.json();
             if (res.ok && data.success && data.case) {
-                onPaymentSuccess(data.case);
+                // O endpoint de simulação confirma o estado no servidor; em seguida,
+                // o fluxo normal persiste a qualificação e gera a petição pelo Worker.
+                await finalizeAfterPayment();
             } else {
                 throw new Error(readableApiError(data, 'O simulador de pagamento não confirmou a transação.'));
             }
