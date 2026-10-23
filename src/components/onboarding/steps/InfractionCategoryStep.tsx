@@ -75,7 +75,7 @@ export const InfractionCategoryStep: React.FC<InfractionCategoryStepProps> = ({
     {
       id: 'conversao_advertencia',
       title: 'Advertência — Art. 267',
-      subtitle: 'Isenção de 100% do valor da multa e zero pontos na CNH (sem reincidência).',
+      subtitle: 'Possível conversão em advertência por escrito, sem multa e sem pontos, se a infração for leve ou média e não houver reincidência em 12 meses.',
       badge: 'Art. 267 CTB',
       icon: <FileCheck2 className="w-5 h-5" />,
     },

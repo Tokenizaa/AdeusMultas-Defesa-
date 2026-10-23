@@ -121,7 +121,7 @@ export const EXPERT_RULES: RuleModel[] = [
   // Rule 3: Conversão Compulsória em Advertência por Escrito (Art. 267 CTB)
   {
     id: 'RULE_CONVERSAO_ADVERTENCIA_267',
-    name: 'Direito Subjetivo à Conversão em Advertência (Art. 267 CTB)',
+    name: 'Conversão em Advertência por Escrito (Art. 267 CTB)',
     description: 'Identifica se a infração é de gravidade leve ou média e se o condutor cumpre os requisitos de não reincidência.',
     category: 'direito_material',
     validFrom: '2021-04-12', // Lei 14.071/2020
@@ -146,10 +146,10 @@ export const EXPERT_RULES: RuleModel[] = [
         return {
           ruleId: 'RULE_CONVERSAO_ADVERTENCIA_267',
           title: 'Direito Vinculado à Conversão em Advertência por Escrito',
-          description: 'Infração de natureza leve ou média sem reincidência no prontuário nos últimos 12 meses garante cancelamento compulsório da multa e dos pontos.',
+          description: 'Infração de natureza leve ou média sem reincidência no prontuário nos últimos 12 meses é candidata à conversão em advertência por escrito, com cancelamento da multa e dos pontos, se confirmada pelo órgão autuador.',
           severity: 'alta',
           legalArgumentId: 'ARG-051',
-          impact: '100% de isenção do pagamento financeiro (R$ 130,16) e 0 pontos na CNH.',
+          impact: 'Conversão em advertência por escrito: sem multa e sem pontuação, se confirmada pelo órgão autuador e comprovado o prontuário.',
           statutoryBasis: 'Artigo 267 do CTB (Redação pela Lei nº 14.071/2020)',
         };
       }

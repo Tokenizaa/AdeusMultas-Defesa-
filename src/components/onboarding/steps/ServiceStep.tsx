@@ -50,7 +50,7 @@ export const ServiceStep: React.FC<ServiceStepProps> = ({
           Qual situação você quer resolver?
         </h1>
         <p className="text-slate-600 text-sm leading-relaxed max-w-lg mx-auto">
-          Escolha o tipo de infração para aplicarmos as defesas adequadas.
+          Escolha a situação que descreve o seu caso
         </p>
       </div>
 
@@ -106,7 +106,7 @@ export const ServiceStep: React.FC<ServiceStepProps> = ({
         </span>
         <span className="flex items-center gap-1.5">
           <Database className="w-4 h-4 text-blue-600 shrink-0" />
-          Base jurídica atualizada com a Lei 14.071/20
+          Base jurídica atualizada com a Lei 14.071/2020
         </span>
       </div>
     </div>

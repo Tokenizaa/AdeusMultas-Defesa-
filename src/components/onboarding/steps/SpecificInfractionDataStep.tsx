@@ -200,7 +200,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
-                  Aferição com mais de 12 meses na data da infração gera anulação imediata.
+                  Aferição com mais de 12 meses na data da infração é um argumento forte para questionar a validade da medição do radar.
                 </span>
               </div>
 
@@ -477,12 +477,12 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
               <FileCheck2 className="w-4 h-4 text-emerald-600" />
-              <span>Requisitos Legais para 100% de Isenção (Art. 267 do CTB)</span>
+              <span>Requisitos do Art. 267 do CTB (conversão em advertência por escrito)</span>
             </div>
 
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-2.5">
               <p className="font-medium leading-relaxed">
-                Pela Lei 14.071/2020, se você não cometeu nenhuma outra infração nos últimos 12 meses, a autoridade de trânsito é <strong>obrigada</strong> a converter sua multa em advertência por escrito (0 reais de valor e 0 pontos na CNH).
+                Pela Lei 14.071/2020, o art. 267 do CTB prevê a conversão em advertência por escrito quando a infração for leve ou média e não houver reincidência em 12 meses. A conversão depende da análise do órgão autuador e da comprovação do prontuário.
               </p>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pt-1">
                 <input
@@ -493,7 +493,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
                 />
                 <label htmlFor="chk-no-reoffense" className="cursor-pointer">
-                  Confirmo que não cometi nenhuma infração nos últimos 12 meses.
+                  Confirmo que não cometi nenhuma outra infração nos últimos 12 meses (o extrato de prontuário será solicitado para comprovação).
                 </label>
               </div>
             </div>

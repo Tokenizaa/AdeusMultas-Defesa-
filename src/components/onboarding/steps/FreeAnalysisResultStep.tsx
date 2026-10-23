@@ -78,7 +78,7 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
         return 'ATENDIDO: A infração é leve ou média e não há infrações nos últimos 12 meses: os requisitos do art. 267 estão atendidos.';
       },
       userImpact:
-        'Nesses casos a lei não deixa o órgão escolher: a multa vira advertência. Na prática, R$ 0 e 0 pontos na CNH. Se o órgão negar, é um pedido simples de fazer — e este é um dos poucos pontos do seu caso que não depende de foto nem de documento difícil de conseguir.',
+        'Nesses casos a lei não deixa o órgão escolher: a multa vira advertência. Na prática, sem multa e sem pontuação — se o órgão confirmar a conversão e o prontuário estiver em dia. Se o órgão negar, é um pedido simples de fazer.',
       confidenceBase: 'Art. 267 do CTB (redação da Lei 14.071/2020)'
     },
     'ARG-002': {
@@ -366,14 +366,14 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       {/* Resumo informativo (3 colunas) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Enquadramento</span>
+          <span className="text-base font-bold uppercase font-mono text-slate-400">Tipo da Infração</span>
           <p className="text-lg font-bold text-slate-900 truncate">{infractionData.ctbArticle || 'não informado'}</p>
           <p className="text-base text-slate-500 font-mono">Cód. {infractionData.infractionCode || 'não informado'}</p>
         </div>
         <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão Autuador</span>
+          <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão que Aplicou a Multa</span>
           <p className="text-lg font-bold text-slate-900 truncate">{infractionData.autuadorBody || '— não informado —'}</p>
-          <p className="text-base text-slate-500">Instância: Defesa Administrativa</p>
+          <p className="text-base text-slate-500">Onde o caso é analisado: defesa administrativa (recurso por escrito ao DETRAN)</p>
         </div>
         <div className="space-y-3">
           <span className="text-base font-bold uppercase font-mono text-slate-400">Valor da Multa</span>
@@ -385,7 +385,10 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           <p className="text-base text-amber-700 font-semibold">
             {infractionData.points === undefined
               ? 'pontos não informados'
-              : `${infractionData.points} ${infractionData.points === 1 ? 'ponto' : 'pontos'} na CNH`}
+              : `${infractionData.points} ${infractionData.points === 1 ? 'ponto' : 'pontos'} na CNH, se a multa for mantida`}
+          </p>
+          <p className="text-xs text-slate-500 font-mono">
+            Quanto vale a multa e os pontos dependem da decisão do órgão.
           </p>
         </div>
       </div>

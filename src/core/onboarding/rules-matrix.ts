@@ -57,9 +57,9 @@ export const USER_SITUATIONS: ServiceDefinition[] = [
   },
   {
     id: 'conversao_advertencia',
-    title: 'Conversão em Advertência (0 Reais de Multa)',
-    subtitle: 'Art. 267 do CTB (Lei 14.071/20). Isenção total de pagamento e 0 pontos na CNH para infrações leves ou médias.',
-    badge: '100% Isenção',
+    title: 'Conversão em Advertência por Escrito',
+    subtitle: 'Art. 267 do CTB (Lei 14.071/2020). Conversão em advertência por escrito quando a infração for leve ou média e não houver reincidência em 12 meses.',
+    badge: 'Art. 267 CTB',
     mappedProcedure: 'conversao_advertencia',
     inferredStage: 'conversao_advertencia',
     defaultInfractionCategory: 'conversao_advertencia',
@@ -133,7 +133,7 @@ export const USER_PROCESS_STAGES: StageDefinition[] = [
   {
     id: 'conversao_advertencia',
     title: 'Quero converter em Advertência por Escrito',
-    subtitle: 'Direito subjetivo para condutores sem reincidência no último ano (Art. 267 CTB).',
+    subtitle: 'Conversão em advertência por escrito para condutores sem reincidência no último ano (Art. 267 CTB).',
     badge: 'Art. 267 CTB',
     mappedProcedure: 'conversao_advertencia',
   },

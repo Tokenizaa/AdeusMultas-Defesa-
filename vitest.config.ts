@@ -8,7 +8,10 @@ export default defineConfig({
     // ficam fora deste gate.
     include: [
       'src/core/**/*.test.ts',
+      'src/core/onboarding/legal-validation.test.ts',
+      'src/core/onboarding/reference-cases-legal-validation.test.ts',
       'src/components/checkout/checkout-pix-only.test.tsx',
+      'src/components/onboarding/steps/onboarding-copy-regression.test.tsx',
       'src/server/services/marketing-automation/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',

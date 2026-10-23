@@ -164,10 +164,10 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     Passo 3 de 4 • Identificação da Autuação
                 </span>
                 <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                    Qual é o auto de infração e o condutor?
+                    Dados da autuação e do condutor
                 </h1>
                 <p className="text-slate-500 text-xs sm:text-sm">
-                    Coletamos os dados da autuação e seu contato para envio imediato do diagnóstico jurídico gratuito e alertas de prazo.
+                    Coletamos os dados da autuação e seu contato para o diagnóstico jurídico gratuito.
                 </p>
             </div>
 
@@ -271,7 +271,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         Anexe uma foto ou PDF da notificação para melhorar a análise (Opcional)
                     </p>
                     <p className="text-[11px] text-slate-500">
-                        Formatos aceitos: PDF, JPG ou PNG. Os dados abaixo devem ser preenchidos manualmente.
+                        Formatos aceitos: PDF, JPG ou PNG. O upload faz OCR e preenche os campos automaticamente. Revise antes de continuar.
                     </p>
                 </div>
                 <span className="text-[11px] font-bold text-[#155BCB] bg-white border border-blue-200 px-3 py-1 rounded-lg group-hover:bg-[#155BCB] group-hover:text-white transition-colors shrink-0">
@@ -452,7 +452,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
-                            Art. 281-A CTB
+                            Prazo de decadência (Art. 281, §1º, II CTB)
                         </span>
                     </div>
 
