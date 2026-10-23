@@ -2,8 +2,12 @@
  * @file weekly-monitor-scheduler.ts
  * Orquestrador e Agendador Semanal de Monitoramento Nacional (SNM-JO).
  * Executa o ciclo de coleta, normalização, detecção de mudanças, validação e relatórios.
+ *
+ * Reutiliza os componentes existentes: SourceFetcher, ContentNormalizer,
+ * SnapshotStore (agora com persistência durável), ChangeDetector,
+ * ValidationEngine, ReviewQueueService, NotificationAlertService,
+ * WeeklyReportGenerator. Não cria novo monitor, catálogo ou raspador.
  */
-
 import {
   KnowledgeSource,
   MonitoringCycleSummary,
@@ -28,6 +32,7 @@ export class WeeklyMonitorScheduler {
 
   /**
    * Executa um ciclo completo de monitoramento nacional.
+   * Reutiliza componentes existentes sem duplicar arquitetura.
    */
   public static async runCycle(
     customSources?: KnowledgeSource[],
@@ -84,10 +89,11 @@ export class WeeklyMonitorScheduler {
             contentHash: hash,
             normalizedText: normalized.normalizedText,
             rawSample: result.content.slice(0, 500),
+            status: 'confirmed',
           };
 
-          // Compara com snapshot anterior
-          const previousSnapshot = SnapshotStore.getLatestSnapshot(source.id);
+          // Compara com snapshot anterior (agora async por persistência durável)
+          const previousSnapshot = await SnapshotStore.getLatestSnapshot(source.id);
           if (previousSnapshot) {
             const change = ChangeDetector.detectChange(snapshot, previousSnapshot, source);
             if (change) {
@@ -95,13 +101,31 @@ export class WeeklyMonitorScheduler {
             }
           }
 
-          // Salva novo snapshot
-          SnapshotStore.saveSnapshot(snapshot);
+          // Salva novo snapshot (memória + Supabase)
+          await SnapshotStore.saveSnapshot(snapshot);
           snapshotsCreated += 1;
         } else {
           failedFetches += 1;
           source.fetchErrorCount = (source.fetchErrorCount || 0) + 1;
           source.lastErrorMessage = result.errorMessage;
+
+          // Falha de coleta: preserva o último snapshot válido (não o remove).
+          // Registra um snapshot de falha para rastreabilidade, sem sobrescrever o anterior.
+          const failureSnapshot: KnowledgeSnapshot = {
+            id: `SNP_FAIL_${source.id}_${Date.now()}`,
+            sourceId: source.id,
+            url: source.url,
+            uf: source.uf,
+            fetchedAt: result.fetchedAt,
+            httpStatus: result.httpStatus,
+            contentLength: 0,
+            contentHash: source.contentHash ?? '',
+            normalizedText: '',
+            rawSample: `Falha de coleta: ${result.errorMessage ?? 'erro desconhecido'}`,
+            status: 'collection_failed',
+            errorMessage: result.errorMessage,
+          };
+          await SnapshotStore.saveSnapshot(failureSnapshot);
         }
       }
 

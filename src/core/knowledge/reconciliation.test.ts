@@ -11,6 +11,15 @@
  * vectorStore, WeeklyMonitorScheduler, CanonicalKnowledgeRegistry).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock do config-service para evitar falha de carregamento do módulo
+// no ambiente de teste (o SnapshotStore usa configService para Supabase).
+vi.mock('../../server/config/config-service', () => ({
+  configService: {
+    get: vi.fn(() => undefined),
+  },
+}));
+
 import {
   KnowledgeSource,
   KnowledgeSnapshot,
@@ -29,6 +38,8 @@ import { OFFICIAL_SOURCES_REGISTRY } from './sources-registry';
 import { WeeklyMonitorScheduler } from './scheduler/weekly-monitor-scheduler';
 import { IngestionService } from '../../server/knowledge/ingestion-service';
 import { vectorStore } from '../../server/knowledge/vector-store';
+import { ValidationEngine } from './validation/validation-engine';
+import { ReviewQueueService } from './validation/review-queue-service';
 
 // ---------------------------------------------------------------------------
 // Fixtures de fontes (usando IDs do catálogo canônico OFFICIAL_SOURCES_REGISTRY)
@@ -122,12 +133,12 @@ describe('Reconciliação — fonte coletada presente no catálogo', () => {
 });
 
 describe('Reconciliação — documento persistido com URL e proveniência', () => {
-  it('SnapshotStore preserva URL, hash e metadados de origem do snapshot', () => {
+  it('SnapshotStore preserva URL, hash e metadados de origem do snapshot', async () => {
     const hash = calculateSha256Sync('Art. 1º do CTB — texto normativo');
     const snap = snapshotFor(FED_CTB_SOURCE.id, 'Art. 1º do CTB — texto normativo', hash);
 
-    SnapshotStore.saveSnapshot(snap);
-    const latest = SnapshotStore.getLatestSnapshot(FED_CTB_SOURCE.id);
+    await SnapshotStore.saveSnapshot(snap);
+    const latest = await SnapshotStore.getLatestSnapshot(FED_CTB_SOURCE.id);
 
     expect(latest).not.toBeNull();
     expect(latest!.sourceId).toBe(FED_CTB_SOURCE.id);
@@ -281,13 +292,13 @@ describe('Reconciliação — alteração de conteúdo gerando nova versão', ()
 });
 
 describe('Reconciliação — URL indisponível não apaga snapshot anterior', () => {
-  it('falha de fetch mantém o snapshot anterior no SnapshotStore', () => {
+  it('falha de fetch mantém o snapshot anterior no SnapshotStore', async () => {
     const hashV1 = calculateSha256Sync('Conteúdo versão 1');
     const snapV1 = snapshotFor(CONTRAN_SOURCE.id, 'Conteúdo versão 1', hashV1);
-    SnapshotStore.saveSnapshot(snapV1);
+    await SnapshotStore.saveSnapshot(snapV1);
 
     // Simula uma segunda coleta que falhou (sem novo snapshot salvo)
-    const previous = SnapshotStore.getLatestSnapshot(CONTRAN_SOURCE.id);
+    const previous = await SnapshotStore.getLatestSnapshot(CONTRAN_SOURCE.id);
     expect(previous).not.toBeNull();
     expect(previous!.contentHash).toBe(hashV1);
 
@@ -449,5 +460,73 @@ describe('Reconciliação — WeeklyMonitorScheduler reaproveita componentes exi
     expect(normalized.normalizedText).toContain('Art. 218');
     expect(h1).toBe(h2);
     expect(h1).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('Reconciliação — fluxo de revisão e impacto (alteração → revisão humana)', () => {
+  it('alteração normativa detectada cria evento rastreável e encaminha para revisão humana sem alterar teses', () => {
+    // 1. Snapshot anterior (texto vigente)
+    const prevHash = calculateSha256Sync('Texto da resolução vigente — Art. 5º procedimentos de fiscalização');
+    const prev = snapshotFor(CONTRAN_SOURCE.id, 'Texto da resolução vigente — Art. 5º procedimentos de fiscalização', prevHash);
+
+    // 2. Snapshot alterado (revogação de norma)
+    const newHash = calculateSha256Sync('Texto alterado — esta resolução revoga a norma anterior');
+    const curr = snapshotFor(CONTRAN_SOURCE.id, 'Texto alterado — esta resolução revoga a norma anterior', newHash);
+
+    // Salva snapshots para histórico
+    SnapshotStore.saveSnapshot(prev);
+    SnapshotStore.saveSnapshot(curr);
+
+    // 3. ChangeDetector detecta mudança
+    const change = ChangeDetector.detectChange(curr, prev, CONTRAN_SOURCE);
+    expect(change).not.toBeNull();
+    expect(change!.sourceId).toBe(CONTRAN_SOURCE.id);
+    expect(change!.sourceUrl).toBe(CONTRAN_SOURCE.url);
+    expect(change!.previousHash).toBe(prevHash);
+    expect(change!.newHash).toBe(newHash);
+    expect(change!.changeType).toBe('REVOCATION');
+    expect(change!.riskLevel).toBe('P0_LEGAL_CRITICAL');
+    expect(change!.status).toBe('PENDING_REVIEW');
+
+    // 4. ValidationEngine valida e roteia para revisão humana
+    const validation = ValidationEngine.validateAndRoute([change!]);
+    expect(validation.itemsForHumanReview.length).toBe(1);
+    const reviewItem = validation.itemsForHumanReview[0];
+    expect(reviewItem.changeId).toBe(change!.id);
+    expect(reviewItem.sourceUrl).toBe(CONTRAN_SOURCE.url);
+    expect(reviewItem.status).toBe('PENDING_REVIEW');
+
+    // 5. ReviewQueueService enfileira o item
+    ReviewQueueService.enqueueItems(validation.itemsForHumanReview);
+    const pending = ReviewQueueService.getPending();
+    expect(pending.length).toBe(1);
+    expect(pending[0].id).toBe(`REV_${change!.id}`);
+
+    // 6. A alteração NÃO altera teses automaticamente (status permanece PENDING_REVIEW)
+    // A aprovação exige ação humana explícita (ReviewQueueService.approve)
+    expect(change!.status).toBe('PENDING_REVIEW');
+    expect(reviewItem.status).toBe('PENDING_REVIEW');
+    expect(pending[0].status).toBe('PENDING_REVIEW');
+
+    // 7. O evento de alteração está relacionado à fonte e ao documento correspondentes
+    expect(change!.sourceId).toBe(CONTRAN_SOURCE.id);
+    expect(change!.uf).toBe('FEDERAL');
+  });
+
+  it('falha de coleta não gera evento de mudança nem altera teses', async () => {
+    await SnapshotStore.clear();
+
+    // Simula falha de coleta — não há snapshot anterior válido
+    const previous = await SnapshotStore.getLatestSnapshot(CONTRAN_SOURCE.id);
+    expect(previous).toBeNull();
+
+    // Sem snapshot anterior, ChangeDetector não gera mudança (null)
+    const snap = snapshotFor(CONTRAN_SOURCE.id, 'Qualquer texto', 'qualquer-hash');
+    const change = ChangeDetector.detectChange(snap, null, CONTRAN_SOURCE);
+    expect(change).toBeNull();
+
+    // Nenhum evento de mudança é criado — não há impacto em teses
+    const validation = ValidationEngine.validateAndRoute([]);
+    expect(validation.itemsForHumanReview.length).toBe(0);
   });
 });

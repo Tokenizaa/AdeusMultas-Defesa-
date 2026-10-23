@@ -261,6 +261,120 @@ Testes de reconciliação cobertos:
 
 ---
 
+## J. Fechamento Operacional — Fase Seguinte (Monitoramento Normativo)
+
+### Estado anterior → posterior
+
+| Área | Antes (Fase de Reconciliação) | Após (Fechamento Operacional) |
+|------|------------------------------|-------------------------------|
+| Identidade de fontes | 4 sistemas de ID sem mapeamento | `source-alias-registry.ts` mapeia todos os IDs legados para o canônico (`OFFICIAL_SOURCES_REGISTRY`) |
+| Histórico de ingestão | 0 linhas em `knowledge_ingestions`, apenas memória | `IngestionService` grava `KnowledgeIngestionRecord` por documento (memória + Supabase), com falhas observáveis |
+| Snapshots | Apenas em memória (`SnapshotStore.Map`) | `SnapshotStore` persiste no Supabase (memória + Supabase), carrega após reinício, nunca remove último válido |
+| Monitor runtime | `contranCollector` não iniciado; `WeeklyMonitorService` não iniciado | `monitor-runtime.ts` com inicialização explícita e não duplicada; `cloudflare/worker.js` com handler `scheduled` (cron); `wrangler.jsonc` com crons configurados |
+| Resoluções prioritárias | 1.031/2026, 965/2022, 966/2022 não catalogadas | Adicionadas a `RESOLUTIONS_DB` marcadas como "pendente de coleta oficial" |
+| Fluxo de revisão | Parcialmente testado | Teste end-to-end: alteração → snapshot → versão → KnowledgeChange → ReviewQueueService → PENDING_REVIEW |
+
+### Arquivos e componentes reaproveitados
+
+- `source-alias-registry.ts` (novo) — mapeamento de IDs legados para canônico
+- `ingestion-service.ts` (alterado) — persistência observável de `knowledge_ingestions`
+- `snapshot-store.ts` (reescrito) — snapshots duráveis com Supabase + memória
+- `weekly-monitor-scheduler.ts` (reescrito) — async/await com SnapshotStore durável, preserva último snapshot em falha
+- `weekly-monitor-service.ts` (alterado) — async/await com SnapshotStore, snapshot de falha de coleta
+- `monitor-runtime.ts` (novo) — inicialização explícita, não duplicada, status real
+- `cloudflare/worker.js` (alterado) — handler `scheduled` para cron do Cloudflare
+- `wrangler.jsonc` (alterado) — crons configurados (`weekly-legal-monitor`, domingo 00:00 UTC)
+- `supabase/migrations/20261023000001_create_monitoring_snapshots.sql` (novo) — tabela de snapshots (não aplicada)
+- `resolutions.ts` (alterado) — 3 resoluções prioritárias catalogadas (1.031/2026, 965/2022, 966/2022)
+
+### Mapeamento de IDs canônicos
+
+O `SOURCE_ALIAS_REGISTRY` registra ~50 aliases mapeando:
+- Seed (`sources.json`): `SRC_FED_CTB` → `SRC_FED_PLANALTO_CTB`, etc.
+- Recovery SQL (Fase 9): `SRC_FED_PLANALTO`, `SRC_FED_SENATRAN`, `SRC_FED_CONTRAN`, etc. → IDs canônicos
+- Índice estático (`src/knowledge/index.ts`): `src_ctb_planalto`, `src_contran_gov`, etc. → IDs canônicos
+- Estaduais: `SRC_AC_DETRAN_AC` → `SRC_DETRAN_AC`, `SRC_SP_DETRAN_SP` → `SRC_DETRAN_SP`, etc.
+
+Nenhum ID legado aparece sob dois canônicos diferentes (sem ambiguidade). Fontes diferentes de um mesmo órgão (ex: DETRAN-AC vs CETRAN-AC) mantêm canônicos distintos.
+
+### Resultado da validação da persistência
+
+- `npx vitest run`: **32 arquivos, 270 testes, todos passando** (inclui 16 testes de reconciliação, 7 de ingestão, 13 de alias, 6 de resoluções, 2 de fluxo de revisão)
+- `npx tsc --noEmit`: **0 erros**
+- `knowledge_ingestions`: upsert com `id` como chave (compatível com PK da tabela); falhas de persistência são observáveis via `IngestionPersistenceResult.supabaseError`, nunca silenciadas
+- `SnapshotStore`: `getLatestSnapshot` e `getPreviousSnapshot` agora são async (carregam do Supabase se não estiverem em memória); `loadFromSupabase()` permite recuperação após reinício
+
+### Resultado da recuperação após reinicialização (simulado)
+
+Os testes validam que:
+- `SnapshotStore.loadFromSupabase()` carrega snapshots persistidos para a memória
+- `getLatestSnapshot` retorna do Supabase quando não há dados em memória
+- Falhas de coleta não removem o último snapshot válido (salva snapshot de `collection_failed` separado)
+
+### Runtime e agendamento implementados ou pendentes
+
+**Implementado (código local):**
+- `monitor-runtime.ts` com `initializeMonitor()`, `runMonitorCycle()`, `getMonitorStatus()`, `stopMonitor()`
+- `cloudflare/worker.js` com handler `scheduled` para cron do Cloudflare Worker
+- `wrangler.jsonc` com crons (`weekly-legal-monitor`, `0 0 * * 0`)
+- Rota `POST /monitor/run` já existente para execução sob demanda
+
+**Pendente (requer deploy/credenciais):**
+- Aplicar a migration `20261023000001_create_monitoring_snapshots.sql` no Supabase
+- Fazer deploy do `cloudflare/dist/worker.js` com o handler `scheduled`
+- Configurar `VITE_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente de execução
+- Iniciar `WeeklyMonitorService.startScheduledService()` no servidor Node.js (quando aplicável)
+
+### Situação dos 66 documentos (conforme auditoria Fase 1)
+
+- 39 fontes cadastradas, todas sem URL em `knowledge_sources.url`
+- 66 documentos com `collection_state` COLLECTED/RECUPERADO/DUPLICATA_EXATA
+- 66 versões com `content_hash` mas `content` vazio (`NOT_STORED_FASE9`)
+- 58 chunks, 58 embeddings (provedor `DETERMINISTIC_LOCAL`)
+- 0 linhas em `knowledge_ingestions` antes da correção (agora corrigido no código)
+
+### Resoluções reconciliadas e pendentes
+
+**Catalogadas (RESOLUTIONS_DB):**
+- 432/2013, 798/2020, 985/2022, 973/2022, 900/2022, 918/2022, 940/2022 (existentes)
+- 1.031/2026, 965/2022, 966/2022 (adicionadas nesta fase, marcadas como "pendente de coleta oficial")
+
+**Pendentes de coleta oficial:**
+- Conteúdo integral de todas as resoluções (não obtido de fontes primárias)
+- URLs das 39 fontes em `knowledge_sources` (NULL)
+
+### Testes executados e resultados observados
+
+| Teste | Arquivo | Testes | Resultado |
+|-------|---------|--------|-----------|
+| Reconciliação de IDs | `source-alias-registry.test.ts` | 13 | PASS |
+| Persistência de ingestão | `ingestion-service.test.ts` | 7 | PASS |
+| Reconciliação ponta-a-ponta | `reconciliation.test.ts` | 16 | PASS |
+| Catálogo de conhecimento | `knowledge-catalog.test.ts` | 8 | PASS |
+| Detector de mudança | `change-detector.test.ts` | 3 | PASS |
+| Pipeline Fase 11 | `fase11-pipeline.test.ts` | 4 | PASS |
+| Outros (22 arquivos) | — | 219 | PASS |
+| **Total** | **32 arquivos** | **270** | **PASS** |
+
+### Limitações, riscos e dependências externas
+
+1. **Migration não aplicada:** `knowledge_monitoring_snapshots` não existe no Supabase remoto. A persistência de snapshots funciona em memória; a persistência remota requer aplicação da migration (pendente de autorização).
+2. **Supabase não configurado em teste:** Os testes mockam o `config-service`; a persistência real no Supabase depende de `VITE_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente de execução.
+3. **Cloudflare Worker não deployado:** O handler `scheduled` e os crons estão preparados em `wrangler.jsonc` e `cloudflare/worker.js`, mas não foram deployados.
+4. **Conteúdo integral dos 66 documentos não obtido:** `content_state` = `NOT_STORED_FASE9` — apenas metadados e URLs, sem texto normativo.
+5. **HTTP 429 em CONTRAN/SENATRAN:** Rate-limit temporário do gov.br impede classificação definitiva dessas fontes.
+
+### Passos necessários para ativação futura em produção
+
+1. Aplicar migration `20261023000001_create_monitoring_snapshots.sql` no banco de prova, depois no canônico (com autorização).
+2. Configurar `VITE_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente de execução.
+3. Fazer deploy do `cloudflare/dist/worker.js` com o handler `scheduled`.
+4. Coletar conteúdo integral das fontes prioritárias (CTB, 1.031/2026, 965/2022, 966/2022, 985/2022, 798/2020, 918/2022).
+5. Preencher `knowledge_sources.url` para as 39 fontes.
+6. Iniciar `WeeklyMonitorService.startScheduledService()` no servidor Node.js (ou confiar no cron do Cloudflare Worker).
+
+---
+
 ## Anexo — Comandos executados e resultados
 
 ```bash

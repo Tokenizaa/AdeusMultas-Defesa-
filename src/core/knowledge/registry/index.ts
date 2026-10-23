@@ -4,3 +4,4 @@
  */
 
 export * from './canonical-registry';
+export * from './source-alias-registry';

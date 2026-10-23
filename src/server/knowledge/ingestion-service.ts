@@ -48,6 +48,16 @@ export interface IngestDocumentPayload {
   metadata?: Record<string, any>;
 }
 
+/**
+ * Resultado da tentativa de persistência de um registro de ingestão.
+ */
+export interface IngestionPersistenceResult {
+  persistedToMemory: boolean;
+  persistedToSupabase: boolean;
+  supabaseError?: string;
+  recordId: string;
+}
+
 export class IngestionService {
   private static instance: IngestionService;
   private ingestionHistory: KnowledgeIngestionRecord[] = [];
@@ -85,6 +95,7 @@ export class IngestionService {
   /**
    * Registra um registro de ingestão por documento (telemetria em knowledge_ingestions).
    * Persiste em Supabase quando o cliente estiver disponível e mantém cópia em memória.
+   * Falhas de persistência no Supabase são observáveis via retorno, nunca silenciadas como sucesso.
    */
   private async recordIngestion(
     correlationId: string,
@@ -94,7 +105,7 @@ export class IngestionService {
     startedAt: number,
     triggeredBy: string,
     errorMessage?: string,
-  ): Promise<void> {
+  ): Promise<IngestionPersistenceResult> {
     const record: KnowledgeIngestionRecord = {
       id: `ing_${correlationId}`,
       startedAt: new Date(startedAt).toISOString(),
@@ -116,6 +127,9 @@ export class IngestionService {
         perDocument: true,
       },
     };
+
+    let persistedToSupabase = false;
+    let supabaseError: string | undefined;
 
     this.ingestionHistory.unshift(record);
     if (this.ingestionHistory.length > 50) {
@@ -142,8 +156,15 @@ export class IngestionService {
           error_message: record.errorMessage,
           details: record.details,
         });
-      } catch {
-        // Falha ao persistir no Supabase não falha a ingestão do documento; mantém em memória.
+        persistedToSupabase = true;
+      } catch (err: any) {
+        supabaseError = err instanceof Error ? err.message : String(err);
+        logger.error('ai', 'ingestion_service', 'ingestion_persist_failed', `Falha ao persistir ingestão no Supabase para documento ${documentId}: ${supabaseError}`, {
+          correlationId,
+          documentId,
+          recordId: record.id,
+          error: supabaseError,
+        });
       }
     }
 
@@ -152,7 +173,66 @@ export class IngestionService {
       documentId,
       ingestionStatus: status,
       chunksCount,
+      persistedToSupabase,
     });
+
+    return {
+      persistedToMemory: true,
+      persistedToSupabase,
+      supabaseError,
+      recordId: record.id,
+    };
+  }
+
+  /**
+   * Verifica se o cliente Supabase está configurado e disponível para persistência.
+   */
+  public isSupabaseConfigured(): boolean {
+    return this.supabaseClient !== null;
+  }
+
+  /**
+   * Recupera o histórico de ingestões persistidas no Supabase.
+   * Retorna vazio se o Supabase não estiver configurado ou na falha da consulta.
+   */
+  public async getPersistedIngestions(): Promise<KnowledgeIngestionRecord[]> {
+    if (!this.supabaseClient) {
+      return [];
+    }
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('knowledge_ingestions')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        logger.error('ai', 'ingestion_service', 'ingestions_fetch_failed', `Falha ao recuperar ingestões persistidas: ${error.message}`);
+        return [];
+      }
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        status: row.status,
+        totalFiles: row.total_files,
+        processedDocuments: row.processed_documents,
+        skippedDocuments: row.skipped_documents,
+        createdChunks: row.created_chunks,
+        generatedEmbeddings: row.generated_embeddings,
+        failedCount: row.failed_count,
+        durationMs: row.duration_ms,
+        providerUsed: row.provider_used,
+        modelUsed: row.model_used,
+        triggeredBy: row.triggered_by,
+        errorMessage: row.error_message,
+        details: row.details || {},
+      }));
+    } catch (err: any) {
+      logger.error('ai', 'ingestion_service', 'ingestions_fetch_failed', `Exceção ao recuperar ingestões persistidas: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
   }
 
   /**
@@ -161,7 +241,7 @@ export class IngestionService {
   public async ingestDocument(
     payload: IngestDocumentPayload,
     options?: { correlationId?: string; forceReindex?: boolean }
-  ): Promise<{ status: 'PROCESSED' | 'SKIPPED'; chunksCount: number; versionId: string }> {
+  ): Promise<{ status: 'PROCESSED' | 'SKIPPED'; chunksCount: number; versionId: string; persistenceResult: IngestionPersistenceResult }> {
     const correlationId = options?.correlationId || `corr_ing_${Date.now()}`;
     const startedAt = Date.now();
     const content = payload.content.trim();
@@ -198,7 +278,7 @@ export class IngestionService {
           correlationId,
           documentId: payload.documentId,
         });
-        await this.recordIngestion(
+        const persistence = await this.recordIngestion(
           correlationId,
           payload.documentId,
           'SKIPPED',
@@ -206,7 +286,12 @@ export class IngestionService {
           startedAt,
           options?.correlationId || 'INGEST_DOCUMENT',
         );
-        return { status: 'SKIPPED', chunksCount: 0, versionId: currentVer.id };
+        logger.info('ai', 'ingestion_service', 'ingest_document_skipped', `Documento '${payload.title}' inalterado (hash ${contentHash.substring(0, 8)}). Pulando reindexação. Persistência: ${persistence.persistedToSupabase ? 'supabase' : 'memória'}${persistence.supabaseError ? ' | erro: ' + persistence.supabaseError : ''}`, {
+          correlationId,
+          documentId: payload.documentId,
+          persistenceResult: persistence,
+        });
+        return { status: 'SKIPPED', chunksCount: 0, versionId: currentVer.id, persistenceResult: persistence };
       }
 
       if (currentVer) {
@@ -287,7 +372,7 @@ export class IngestionService {
       chunksCount: chunks.length,
     });
 
-    await this.recordIngestion(
+    const persistence = await this.recordIngestion(
       correlationId,
       payload.documentId,
       'PROCESSED',
@@ -295,8 +380,15 @@ export class IngestionService {
       startedAt,
       options?.correlationId || 'INGEST_DOCUMENT',
     );
+    logger.info('ai', 'ingestion_service', 'ingest_document', `Documento '${payload.title}' indexado com sucesso: ${chunks.length} chunks e ${embeddings.length} embeddings gerados. Persistência: ${persistence.persistedToSupabase ? 'supabase' : 'memória'}${persistence.supabaseError ? ' | erro: ' + persistence.supabaseError : ''}`, {
+      correlationId,
+      documentId: payload.documentId,
+      versionId,
+      chunksCount: chunks.length,
+      persistenceResult: persistence,
+    });
 
-    return { status: 'PROCESSED', chunksCount: chunks.length, versionId };
+    return { status: 'PROCESSED', chunksCount: chunks.length, versionId, persistenceResult: persistence };
   }
 
   /**
@@ -554,7 +646,38 @@ export class IngestionService {
       this.ingestionHistory.pop();
     }
 
-    logger.info('ai', 'ingestion_service', 'bulk_ingest', `Ingestão concluída em ${durationMs}ms: ${processedDocuments} docs processados, ${skippedDocuments} ignorados (idempotência), ${createdChunks} chunks criados.`, {
+    // Persiste o registro de ingestão em massa no Supabase quando disponível.
+    // Falha de persistência não corrompe o histórico em memória; é observável via log.
+    if (this.supabaseClient) {
+      try {
+        await this.supabaseClient.from('knowledge_ingestions').upsert({
+          id: record.id,
+          started_at: record.startedAt,
+          completed_at: record.completedAt,
+          status: record.status,
+          total_files: record.totalFiles,
+          processed_documents: record.processedDocuments,
+          skipped_documents: record.skippedDocuments,
+          created_chunks: record.createdChunks,
+          generated_embeddings: record.generatedEmbeddings,
+          failed_count: record.failedCount,
+          duration_ms: record.durationMs,
+          provider_used: record.providerUsed,
+          model_used: record.modelUsed,
+          triggered_by: record.triggeredBy,
+          error_message: record.errorMessage,
+          details: record.details,
+        });
+      } catch (err: any) {
+        const supabaseError = err instanceof Error ? err.message : String(err);
+        logger.error('ai', 'ingestion_service', 'bulk_ingest_persist_failed', `Falha ao persistir ingestão em massa no Supabase: ${supabaseError}`, {
+          ingestionId,
+          error: supabaseError,
+        });
+      }
+    }
+
+    logger.info('ai', 'ingestion_service', 'bulk_ingest', `Ingestão concluída em ${durationMs}ms: ${processedDocuments} docs processados, ${skippedDocuments} ignorados (idempotência), ${createdChunks} chunks criados. Supabase: ${this.supabaseClient ? 'configurado' : 'não configurado'}`, {
       ingestionId,
       durationMs,
     });

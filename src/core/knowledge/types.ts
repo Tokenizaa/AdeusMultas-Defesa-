@@ -110,6 +110,8 @@ export interface KnowledgeSource {
   lastErrorMessage?: string;
 }
 
+export type SnapshotStatus = 'confirmed' | 'collection_failed' | 'inconclusive';
+
 export interface KnowledgeSnapshot {
   id: string;
   sourceId: string;
@@ -121,6 +123,8 @@ export interface KnowledgeSnapshot {
   contentHash: string;
   normalizedText: string;
   rawSample?: string;
+  status?: SnapshotStatus;
+  errorMessage?: string;
 }
 
 export interface KnowledgeChange {

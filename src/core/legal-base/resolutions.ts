@@ -78,4 +78,28 @@ export const RESOLUTIONS_DB: ResolutionModel[] = [
     keyArticles: 'Art. 1º a 15º (Fiscalização eletrônica, homologação INMETRO, margem de tolerância, sinalização, comprovação da infração); Anexo I (Formulário de autuação eletrônica); Anexo II (Critérios de instalação de equipamentos).',
     impactOnDefenses: 'Complementa a Res. 798/2020 para fiscalização eletrônica. Estabelece requisitos de homologação, sinalização e margem de tolerância para equipamentos de fiscalização automatizada. A ausência de homologação ou laudo INMETRO válido invalida a autuação.',
   },
+  {
+    number: 'Resolução CONTRAN nº 1.031/2026',
+    body: 'CONTRAN',
+    year: 2026,
+    subject: 'Fiscalização de álcool e outras substâncias psicoativas (conforme FASE-7 — Catálogo Mestre de Fontes Jurídicas).',
+    keyArticles: 'Pendente de coleta oficial — vigência, dispositivos e alterações a confirmar na fonte primária.',
+    impactOnDefenses: 'Pendente de validação jurídica. Não alterar teses, fundamentos ou minutas automaticamente. Encaminhar para revisão humana.',
+  },
+  {
+    number: 'Resolução CONTRAN nº 965/2022',
+    body: 'CONTRAN',
+    year: 2022,
+    subject: 'Estacionamento de veículos de idosos e pessoas com deficiência (referenciada por ARG-024).',
+    keyArticles: 'Pendente de coleta oficial — dispositivos a confirmar na fonte primária.',
+    impactOnDefenses: 'Pendente de validação jurídica. Não alterar teses automaticamente.',
+  },
+  {
+    number: 'Resolução CONTRAN nº 966/2022',
+    body: 'CONTRAN',
+    year: 2022,
+    subject: 'Estacionamento de veículos de idosos e pessoas com deficiência (referenciada por ARG-024).',
+    keyArticles: 'Pendente de coleta oficial — dispositivos a confirmar na fonte primária.',
+    impactOnDefenses: 'Pendente de validação jurídica. Não alterar teses automaticamente.',
+  },
 ];

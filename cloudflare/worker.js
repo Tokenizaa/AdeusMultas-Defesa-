@@ -22,6 +22,8 @@ import { aiRoutes } from './routes/ai'
 import { commercialRoutes } from './routes/commercial'
 import { documentsRoutes } from './routes/documents'
 
+import { runMonitorCycle, initializeMonitor } from '../src/core/knowledge/scheduler/monitor-runtime'
+
 const app = new Hono()
 app.use('*', secureHeaders())
 app.use('*', cors())
@@ -90,5 +92,14 @@ app.get('*', async (c) => {
   return assetResponse
 })
 
-export default { fetch: app.fetch }
+export default {
+  fetch: app.fetch,
+  async scheduled(event, env, ctx) {
+    // Inicializa o monitor se ainda não estiver (idempotente)
+    initializeMonitor(false);
+    // Executa um ciclo de monitoramento sob demanda do cron do Cloudflare.
+    // ctx.waitUntil garante que o Worker não seja encerrado antes da conclusão.
+    ctx.waitUntil(runMonitorCycle(undefined, 6000));
+  },
+};
 export { app };
