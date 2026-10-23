@@ -6,7 +6,8 @@ import {
   ShieldCheck,
   Scale,
   Zap,
-  FileSearch
+  FileSearch,
+  ArrowLeft
 } from 'lucide-react';
 import { InfractionData, CaseAnalysis } from '../../../types';
 import { ExpertRuleEngine } from '../../../core/rules/rule-engine';
@@ -15,12 +16,14 @@ interface AnalysisProcessingStepProps {
   infractionData: InfractionData;
   onComplete: () => void;
   onAnalysisComplete: (analysis: CaseAnalysis) => void;
+  onBack: () => void;
 }
 
 export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({ 
   infractionData, 
   onComplete, 
-  onAnalysisComplete 
+  onAnalysisComplete,
+  onBack
 }) => {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [analysisResult, setAnalysisResult] = useState<CaseAnalysis | null>(null);
@@ -143,6 +146,16 @@ export const AnalysisProcessingStep: React.FC<AnalysisProcessingStepProps> = ({
           );
         })}
       </div>
+
+      <button
+        type="button"
+        id="btn-back-from-analysis-processing"
+        onClick={onBack}
+        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Voltar às perguntas
+      </button>
     </div>
   );
 };
