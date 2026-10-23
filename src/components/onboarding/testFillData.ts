@@ -182,7 +182,7 @@ export function buildCoherentTestInfraction(
         ...neutral,
         ...catalogFields(current.infractionCode && catalogItemByCode(current.infractionCode) ? current.infractionCode : '745-50'),
         realDriverName: generateRandomName().toUpperCase(),
-        realDriverCpf: generateRandomCPF().replace(/\\D/g, ''),
+        realDriverCpf: generateRandomCPF().replace(/\D/g, ''),
         realDriverCnh: generateRandomCNH(),
         indicationWithinDeadline: true,
         speedLimit: undefined,
