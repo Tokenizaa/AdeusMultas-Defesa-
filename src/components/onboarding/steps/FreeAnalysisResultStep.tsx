@@ -190,6 +190,7 @@ interface FreeAnalysisResultStepProps {
   leadPhone?: string;
   onProceedToDocumentGeneration: () => void;
   onSaveToDashboard: () => void;
+  onBack: () => void;
 }
 
 export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
@@ -201,6 +202,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   leadPhone = '',
   onProceedToDocumentGeneration,
   onSaveToDashboard,
+  onBack,
 }) => {
   const successRate = analysis?.overallSuccessRate;
   const isRateUnavailable = successRate === null;
@@ -523,6 +525,15 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       {/* Botões de ação */}
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <button
+            type="button"
+            id="btn-back-to-edit-diagnosis"
+            onClick={onBack}
+            className="w-full sm:w-auto px-5 py-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Voltar e corrigir dados
+          </button>
           <button
             onClick={onSaveToDashboard}
             className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-lg font-bold transition-colors cursor-pointer border border-slate-700"
