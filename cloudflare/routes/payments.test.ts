@@ -32,11 +32,14 @@ vi.mock('../pagbank', async () => {
   };
 });
 
-vi.mock('../venopag', () => ({
-  getVenoCashInStatus: vi.fn(),
-  verifyVenoWebhook: vi.fn(),
-  createVenoCashIn: vi.fn(),
-}));
+vi.mock('../venopag', async () => {
+  const actual = await vi.importActual<any>('../venopag');
+  return {
+    ...actual,
+    getVenoCashInStatus: vi.fn(),
+    verifyVenoWebhook: vi.fn(),
+  };
+});
 
 vi.mock('../middleware', () => ({
   authenticateToken: async (c: any, next: any) => {

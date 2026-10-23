@@ -13,6 +13,6 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 10_000 },
   reporter: [['list'], ['html', { outputFolder: 'artifacts/e2e-report', open: 'never' }]],
-  use: { baseURL, trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'retain-on-failure', ignoreHTTPSErrors: false },
+  use: { baseURL, trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'off', ignoreHTTPSErrors: false },
   outputDir: 'artifacts/e2e-results',
 });
