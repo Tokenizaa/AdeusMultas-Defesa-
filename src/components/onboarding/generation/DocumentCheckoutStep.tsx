@@ -445,7 +445,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             {/* Admin / Test Sandbox Facilitator Toolbar */}
-            {(isAdmin || testMode) && (
+            {isAdmin && testMode && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
