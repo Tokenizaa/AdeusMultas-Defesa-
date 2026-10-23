@@ -8,6 +8,7 @@ export default defineConfig({
     // ficam fora deste gate.
     include: [
       'src/core/**/*.test.ts',
+      'src/components/checkout/checkout-pix-only.test.tsx',
       'src/server/services/marketing-automation/**/*.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
