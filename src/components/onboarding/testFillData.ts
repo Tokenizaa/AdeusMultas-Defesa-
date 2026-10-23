@@ -208,6 +208,7 @@ export function buildCoherentTestInfraction(
         ...neutral,
         ...catalogFields(existingCode),
         ...(category === 'conversao_advertencia' ? { hasPreviousInfractionsLast12Months: false } : {}),
+        notes: current.notes || 'Relato sintético gerado para validar o preenchimento automático.',
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
