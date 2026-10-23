@@ -178,15 +178,6 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     console.log('Next Steps:', rt.analysisResult.nextSteps);
   });
 
-  test('E2E-DEFESA_PREVIA-13 navegação: permite voltar do resultado para corrigir respostas', async ({page}) => {
-    await openService(page, service);
-    await createCaseThroughAnalysis(page, 'result-back-navigation', service);
-    await expect(page.getByRole('heading', { name: 'Resultado do seu diagnóstico' })).toBeVisible();
-    await page.locator('#btn-back-to-edit-diagnosis').click();
-    await expect(page.getByText('Perguntas Específicas do Seu Caso')).toBeVisible();
-    await expect(page.locator('#btn-run-analysis')).toBeVisible();
-  });
-
   test('E2E-DEFESA_PREVIA-12 auditoria textual: forbidden patterns detection', async ({page}) => {
     const evidence = await runTextAudit(page, {
       service,
@@ -211,4 +202,13 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     // O teste passa se a infraestrutura detecta (não crasha)
     expect(evidence.metadata.status).not.toBe('blocked');
   });
+  test('E2E-DEFESA_PREVIA-13 navegação: permite voltar do resultado para corrigir respostas', async ({page}) => {
+    await openService(page, service);
+    await createCaseThroughAnalysis(page, 'result-back-navigation', service);
+    await expect(page.getByRole('heading', { name: 'Resultado do seu diagnóstico' })).toBeVisible();
+    await page.locator('#btn-back-to-edit-diagnosis').click();
+    await expect(page.getByText('Perguntas Específicas do Seu Caso')).toBeVisible();
+    await expect(page.locator('#btn-run-analysis')).toBeVisible();
+  });
+
 });
