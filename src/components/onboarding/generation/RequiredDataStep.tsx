@@ -75,7 +75,23 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
           isAdmin={isAdmin}
           onClick={() => {
             const data = generateRandomDocumentData();
-            onUpdateDocumentData({ ...documentData, ...data });
+            const processNumbers = isSuspension
+              ? {
+                  ...documentData.processNumbers,
+                  psddNumber: documentData.processNumbers?.psddNumber || `TEST-PSDD-${Date.now()}`,
+                  suspensionMonths: documentData.processNumbers?.suspensionMonths ?? 12,
+                }
+              : isCassation
+                ? {
+                    ...documentData.processNumbers,
+                    pcddNumber: documentData.processNumbers?.pcddNumber || `TEST-PCDD-${Date.now()}`,
+                  }
+                : documentData.processNumbers;
+            onUpdateDocumentData({
+              ...documentData,
+              ...data,
+              ...((isSuspension || isCassation) ? { processNumbers } : {}),
+            });
           }}
         />
       </div>
