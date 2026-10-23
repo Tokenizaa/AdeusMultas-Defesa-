@@ -325,22 +325,33 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             customFacts: documentData.factsNarrative,
                         }),
                     });
-                    if (genRes.ok) {
-                        const genData = await genRes.json();
-                        if (genData.defenseDraft) {
-                            finalCase.defenseDraft = genData.defenseDraft;
-                        }
-                        if (genData.case) {
-                            finalCase = { ...finalCase, ...genData.case };
-                        }
+                    const rawGeneration = await genRes.text();
+                    let genData: any;
+                    try { genData = rawGeneration ? JSON.parse(rawGeneration) : {}; }
+                    catch { genData = { error: rawGeneration }; }
+                    if (!genRes.ok) {
+                        throw new Error(readableApiError(genData, 'A geração da petição falhou.'));
+                    }
+                    if (genData.defenseDraft) {
+                        finalCase.defenseDraft = genData.defenseDraft;
+                    }
+                    if (genData.case) {
+                        finalCase = { ...finalCase, ...genData.case };
+                    }
+                    if (!finalCase.defenseDraft) {
+                        throw new Error('O servidor salvou o caso, mas não retornou a petição gerada. O fluxo não será marcado como concluído.');
                     }
                 } catch (genErr) {
                     console.error('Error generating defense during finalize:', genErr);
+                    throw genErr;
                 }
             }
             onPaymentSuccess(finalCase);
-        } catch (err) {
-            console.error('Error generating document:', err);
+        } catch (err: any) {
+            const message = err?.message || 'Não foi possível concluir a geração da petição.';
+            console.error('Error generating document:', message);
+            setPayError(message);
+            throw err;
         } finally {
             setIsProcessing(false);
         }
@@ -404,11 +415,12 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             if (res.ok && data.success && data.case) {
                 onPaymentSuccess(data.case);
             } else {
-                await finalizeAfterPayment();
+                throw new Error(readableApiError(data, 'O simulador de pagamento não confirmou a transação.'));
             }
         } catch (err: any) {
-            console.error('Error during admin simulation:', err);
-            await finalizeAfterPayment();
+            const message = err?.message || 'Falha ao simular o pagamento.';
+            console.error('Error during admin simulation:', message);
+            setPayError(message);
         } finally {
             setIsProcessing(false);
         }
@@ -420,22 +432,9 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         try {
             await finalizeAfterPayment();
         } catch (err: any) {
-            console.error('Error during direct approval:', err);
-            // If finalizeAfterPayment fails, we still want to try to persist a basic case
-            try {
-                const basicCase = buildCasePayload();
-                basicCase.isPaid = true;
-                basicCase.status = 'defesa_pronta';
-                basicCase.payment = {
-                    status: 'approved',
-                    amount: Number((effectivePrice ?? 0).toFixed(2)),
-                    paidAt: new Date().toISOString(),
-                    paymentMethod: paymentMethod === 'credit_card' ? 'credit_card' : 'pix',
-                };
-                onPaymentSuccess(basicCase);
-            } catch (fallbackErr) {
-                console.error('Error in fallback case creation:', fallbackErr);
-            }
+            const message = err?.message || 'A aprovação de teste falhou.';
+            console.error('Error during direct approval:', message);
+            setPayError(message);
         } finally {
             setIsProcessing(false);
         }
@@ -478,7 +477,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             <QrCode className="w-3.5 h-3.5 text-orange-400" />
                             <span>Simular Pagamento (GGPIXAPI)</span>
                         </button>
-                        <button
+                        {isAdmin && <button
                             type="button"
                             id="btn-admin-direct-approve"
                             onClick={handleAdminDirectApproval}
@@ -486,8 +485,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{isProcessing ? 'Processando...' : '✅ Aprovar Automaticamente'}</span>
-                        </button>
+                            <span>{isProcessing ? 'Processando...' : 'Aprovar em modo de teste'}</span>
+                        </button>}
                     </div>
                 </div>
             )}
