@@ -221,7 +221,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         setCreditCardError(error);
     };
 
-    const buildCasePayload = (): CaseDomain => {
+    const buildCasePayload = (markPaid = true): CaseDomain => {
         return {
             id: currentCaseId || `case_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             title: `Recurso Auto ${infractionData.aitNumber || 'N/A'} — ${infractionData.ctbArticle || 'Art. 218 CTB'}`,
@@ -230,8 +230,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             clientPhone: documentData.applicantPhone,
             clientCpf: documentData.applicantCpf,
             userId: userId || undefined,
-            status: 'defesa_pronta',
-            currentStage: 3,
+            status: markPaid ? 'defesa_pronta' : 'analisado',
+            currentStage: markPaid ? 3 : 2,
             serviceType: serviceType || undefined,
             vehicle: vehicleData,
             infraction: infractionData,
@@ -239,12 +239,12 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             processNumbers: documentData.processNumbers,
             analysis,
             isAnonymous: false,
-            isPaid: true,
-            paidAt: new Date().toISOString(),
+            isPaid: markPaid,
+            paidAt: markPaid ? new Date().toISOString() : undefined,
             payment: {
-                status: 'approved',
+                status: markPaid ? 'approved' : 'pending',
                 amount: Number((pixData?.amount ?? effectivePrice ?? 0).toFixed(2)),
-                paidAt: new Date().toISOString(),
+                ...(markPaid ? { paidAt: new Date().toISOString() } : {}),
                 paymentMethod: paymentMethod === 'credit_card' ? 'credit_card' : 'pix',
             },
             createdAt: new Date().toISOString(),
@@ -259,8 +259,10 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 },
                 {
                     id: `tl_${Date.now()}_2`,
-                    title: `Pagamento ${paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'} Confirmado`,
-                    description: `Valor de R$ ${(effectivePrice ?? pixData?.amount ?? 0).toFixed(2)} recebido com sucesso.`,
+                    title: markPaid ? `Pagamento ${paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'} Confirmado` : 'Pagamento pendente',
+                    description: markPaid
+                        ? `Valor de R$ ${(effectivePrice ?? pixData?.amount ?? 0).toFixed(2)} recebido com sucesso.`
+                        : 'Registro preparado para simulação administrativa; nenhuma cobrança foi confirmada.',
                     timestamp: new Date().toISOString(),
                     type: 'payment',
                 },
@@ -275,12 +277,12 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         };
     };
 
-    const persistCase = async (): Promise<CaseDomain> => {
+    const persistCase = async (markPaid = true): Promise<CaseDomain> => {
         // The payment webhook may mark the existing onboarding case as paid
         // before the user clicks "Já paguei". Never POST that same case again:
         // the primary key then produces a 400 duplicate response and blocks
         // document generation.
-        const casePayload = buildCasePayload();
+        const casePayload = buildCasePayload(markPaid);
         const endpoint = currentCaseId ? `/api/cases/${encodeURIComponent(currentCaseId)}` : '/api/cases';
         const saveRes = await authFetch(endpoint, {
             method: currentCaseId ? 'PUT' : 'POST',
@@ -397,7 +399,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
         setIsProcessing(true);
         setPayError(null);
         try {
-            let activeCase = await persistCase();
+            let activeCase = await persistCase(false);
             const caseId = activeCase.id || currentCaseId || `case_${Date.now()}`;
 
             const res = await fetch('/api/payments/simulate-payment', {
@@ -427,17 +429,13 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     };
 
     const handleAdminDirectApproval = async () => {
-        setIsProcessing(true);
-        setPayError(null);
-        try {
-            await finalizeAfterPayment();
-        } catch (err: any) {
-            const message = err?.message || 'A aprovação de teste falhou.';
-            console.error('Error during direct approval:', message);
-            setPayError(message);
-        } finally {
-            setIsProcessing(false);
+        if (!isAdmin || !testMode) {
+            setPayError('A aprovação automática está disponível somente para administradores em ambiente de teste.');
+            return;
         }
+        // Usa o endpoint administrativo protegido no servidor. Não marca o caso
+        // como pago no cliente nem contorna o bloqueio de PAYMENT_MODE=production.
+        await handleAdminSimulatePayment('pagbank');
     };
 
     return (
@@ -477,7 +475,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             <QrCode className="w-3.5 h-3.5 text-orange-400" />
                             <span>Simular Pagamento (GGPIXAPI)</span>
                         </button>
-                        {isAdmin && <button
+                        {isAdmin && testMode && <button
                             type="button"
                             id="btn-admin-direct-approve"
                             onClick={handleAdminDirectApproval}
