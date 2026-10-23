@@ -16,9 +16,11 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { chunkingService } from './chunking-service';
 import { embeddingService } from './embedding-service';
 import { vectorStore } from './vector-store';
+import { configService } from '../config/config-service';
 import { logger } from '../observability/logger';
 import {
   KnowledgeSource,
@@ -49,8 +51,11 @@ export interface IngestDocumentPayload {
 export class IngestionService {
   private static instance: IngestionService;
   private ingestionHistory: KnowledgeIngestionRecord[] = [];
+  private supabaseClient: SupabaseClient | null = null;
 
-  private constructor() {}
+  private constructor() {
+    this.initSupabaseClient();
+  }
 
   public static getInstance(): IngestionService {
     if (!IngestionService.instance) {
@@ -59,8 +64,95 @@ export class IngestionService {
     return IngestionService.instance;
   }
 
+  private initSupabaseClient(): void {
+    const url = configService.get('VITE_SUPABASE_URL');
+    const serviceKey =
+      configService.get('SUPABASE_SECRET_KEY') || configService.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (url && serviceKey && url.startsWith('https://')) {
+      try {
+        this.supabaseClient = createClient(url, serviceKey);
+        logger.info('ai', 'ingestion_service', 'supabase_init', 'Supabase client inicializado para registro de ingestão.');
+      } catch (err: any) {
+        logger.warn('ai', 'ingestion_service', 'supabase_init', `Falha ao inicializar Supabase para ingestão: ${err.message}. Operando apenas em memória.`);
+      }
+    }
+  }
+
   public hashContent(text: string): string {
     return crypto.createHash('sha256').update(text.trim()).digest('hex');
+  }
+
+  /**
+   * Registra um registro de ingestão por documento (telemetria em knowledge_ingestions).
+   * Persiste em Supabase quando o cliente estiver disponível e mantém cópia em memória.
+   */
+  private async recordIngestion(
+    correlationId: string,
+    documentId: string,
+    status: 'PROCESSED' | 'SKIPPED',
+    chunksCount: number,
+    startedAt: number,
+    triggeredBy: string,
+    errorMessage?: string,
+  ): Promise<void> {
+    const record: KnowledgeIngestionRecord = {
+      id: `ing_${correlationId}`,
+      startedAt: new Date(startedAt).toISOString(),
+      completedAt: new Date().toISOString(),
+      status: errorMessage ? 'FAILED' : (status === 'SKIPPED' ? 'COMPLETED' : 'COMPLETED'),
+      totalFiles: 1,
+      processedDocuments: status === 'PROCESSED' ? 1 : 0,
+      skippedDocuments: status === 'SKIPPED' ? 1 : 0,
+      createdChunks: chunksCount,
+      generatedEmbeddings: chunksCount,
+      failedCount: errorMessage ? 1 : 0,
+      durationMs: Date.now() - startedAt,
+      providerUsed: 'IngestionService',
+      modelUsed: 'sha256-content-hash',
+      triggeredBy,
+      errorMessage,
+      details: {
+        documentId,
+        perDocument: true,
+      },
+    };
+
+    this.ingestionHistory.unshift(record);
+    if (this.ingestionHistory.length > 50) {
+      this.ingestionHistory.pop();
+    }
+
+    if (this.supabaseClient) {
+      try {
+        await this.supabaseClient.from('knowledge_ingestions').upsert({
+          id: record.id,
+          started_at: record.startedAt,
+          completed_at: record.completedAt,
+          status: record.status,
+          total_files: record.totalFiles,
+          processed_documents: record.processedDocuments,
+          skipped_documents: record.skippedDocuments,
+          created_chunks: record.createdChunks,
+          generated_embeddings: record.generatedEmbeddings,
+          failed_count: record.failedCount,
+          duration_ms: record.durationMs,
+          provider_used: record.providerUsed,
+          model_used: record.modelUsed,
+          triggered_by: record.triggeredBy,
+          error_message: record.errorMessage,
+          details: record.details,
+        });
+      } catch {
+        // Falha ao persistir no Supabase não falha a ingestão do documento; mantém em memória.
+      }
+    }
+
+    logger.info('ai', 'ingestion_service', 'ingestion_recorded', `Registro de ingestão gravado para documento ${documentId}: ${status}`, {
+      correlationId,
+      documentId,
+      ingestionStatus: status,
+      chunksCount,
+    });
   }
 
   /**
@@ -71,6 +163,7 @@ export class IngestionService {
     options?: { correlationId?: string; forceReindex?: boolean }
   ): Promise<{ status: 'PROCESSED' | 'SKIPPED'; chunksCount: number; versionId: string }> {
     const correlationId = options?.correlationId || `corr_ing_${Date.now()}`;
+    const startedAt = Date.now();
     const content = payload.content.trim();
     const contentHash = this.hashContent(content);
     const jurisdiction = payload.jurisdiction || 'BR_FEDERAL';
@@ -105,6 +198,14 @@ export class IngestionService {
           correlationId,
           documentId: payload.documentId,
         });
+        await this.recordIngestion(
+          correlationId,
+          payload.documentId,
+          'SKIPPED',
+          0,
+          startedAt,
+          options?.correlationId || 'INGEST_DOCUMENT',
+        );
         return { status: 'SKIPPED', chunksCount: 0, versionId: currentVer.id };
       }
 
@@ -185,6 +286,15 @@ export class IngestionService {
       versionId,
       chunksCount: chunks.length,
     });
+
+    await this.recordIngestion(
+      correlationId,
+      payload.documentId,
+      'PROCESSED',
+      chunks.length,
+      startedAt,
+      options?.correlationId || 'INGEST_DOCUMENT',
+    );
 
     return { status: 'PROCESSED', chunksCount: chunks.length, versionId };
   }
