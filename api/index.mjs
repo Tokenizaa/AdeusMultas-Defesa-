@@ -2262,13 +2262,12 @@ var ConfigService = class {
         category: "payments",
         type: "select",
         description: "Gateway utilizado para novas cobran\xE7as PIX. Pagamentos existentes N\xC3O s\xE3o afetados pela troca.",
-        defaultValue: "ggpixapi",
+        defaultValue: "venopag",
         isSecret: false,
         isRequired: true,
         isEditable: true,
         options: [
-          { label: "PagBank / PagSeguro (Apenas Sandbox \u2014 PIX + Cart\xE3o)", value: "pagbank" },
-          { label: "GGPIXAPI (Produ\xE7\xE3o \u2014 Apenas PIX In)", value: "ggpixapi" }
+          { label: "VenoPag (PIX)", value: "venopag" }
         ],
         envSource: "PAYMENT_ACTIVE_GATEWAY"
       },
@@ -2284,8 +2283,7 @@ var ConfigService = class {
         isEditable: true,
         options: [
           { label: "Usar Padr\xE3o do Environment (PAYMENT_ACTIVE_GATEWAY)", value: "" },
-          { label: "PagBank / PagSeguro (Apenas Sandbox)", value: "pagbank" },
-          { label: "GGPIXAPI (Produ\xE7\xE3o)", value: "ggpixapi" }
+          { label: "VenoPag (PIX)", value: "venopag" }
         ],
         envSource: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE"
       },
@@ -2938,27 +2936,31 @@ var ConfigService = class {
 var configService = new ConfigService();
 
 // src/server/db/supabase-server.ts
-var clientInstance = null;
-function ensureClient() {
-  if (clientInstance) return clientInstance;
-  const url2 = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || configService.get("SUPABASE_URL") || configService.get("VITE_SUPABASE_URL");
-  const serviceRoleKey2 = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || configService.get("SUPABASE_SECRET_KEY") || configService.get("SUPABASE_SERVICE_ROLE_KEY");
-  const serviceKey = serviceRoleKey2;
-  if (url2 && serviceKey) {
-    try {
-      clientInstance = createClient(url2, serviceKey);
-      logger.info("supabase", "db_server", "init", "Supabase server client conectado.");
-    } catch (err) {
-      logger.error("supabase", "db_server", "init", `Falha ao inicializar Supabase: ${err.message}.`);
-      clientInstance = null;
-    }
-  } else {
-    clientInstance = null;
-  }
-  return clientInstance;
+function resolveSupabaseUrl() {
+  return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || configService.get("SUPABASE_URL") || configService.get("VITE_SUPABASE_URL") || null;
 }
-function getSupabaseServerClient() {
-  return ensureClient();
+function resolveAnonKey() {
+  return process.env.SUPABASE_ANON_KEY || configService.get("SUPABASE_ANON_KEY") || null;
+}
+function buildClient(url2, key, accessToken) {
+  try {
+    const headers = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return createClient(url2, key, {
+      global: { headers }
+    });
+  } catch (err) {
+    logger.error("supabase", "db_server", "init", `Falha ao inicializar Supabase: ${err.message}.`);
+    return null;
+  }
+}
+function getSupabaseServerClient(accessToken) {
+  const url2 = resolveSupabaseUrl();
+  const key = resolveAnonKey();
+  if (!url2 || !key) return null;
+  return buildClient(url2, key, accessToken);
 }
 
 // src/server/db/uuid-v5.ts
@@ -3682,7 +3684,8 @@ async function authenticateToken(req, res, next) {
         );
       }
     }
-    if (!isProduction) {
+    const devBypassEnabled = process.env.ENABLE_DEV_AUTH_BYPASS === "true";
+    if (!isProduction && devBypassEnabled) {
       if (!supabase) {
         req.user = {
           id: "usr_admin_defesai",
@@ -5350,11 +5353,11 @@ var NvidiaKeyRotator = class {
     }
     this.keys = allKeys;
     if (this.keys.length === 0) {
-      console.warn("[NVIDIA Key Rotator] No valid NVIDIA API keys found");
+      logger.warn("knowledge", "nvidia-key-rotator", "no-keys", "No valid NVIDIA API keys found");
     } else if (this.keys.length === 1) {
-      console.log("[NVIDIA Key Rotator] Using single NVIDIA API key");
+      logger.info("knowledge", "nvidia-key-rotator", "single-key", "Using single NVIDIA API key");
     } else {
-      console.log(`[NVIDIA Key Rotator] Loaded ${this.keys.length} NVIDIA API keys for rotation`);
+      logger.info("knowledge", "nvidia-key-rotator", "keys-loaded", `Loaded ${this.keys.length} NVIDIA API keys for rotation`);
     }
   }
   /**
@@ -7589,6 +7592,41 @@ router.get(["/integrations/overview", "/admin/integrations/overview"], async (re
     }
   });
 });
+router.get("/admin/pricing", requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase indispon\xEDvel." });
+    }
+    const { data, error } = await supabase.from("service_pricings").select("id, service_type, service_name, standard_price, promotional_price, is_active, valid_from, valid_until");
+    if (error) throw error;
+    res.json({ pricing: data || [] });
+  } catch (err) {
+    logger.error("admin", "pricing", "get", `Erro ao listar precifica\xE7\xE3o: ${err.message}`);
+    res.status(500).json({ error: "Erro ao carregar precifica\xE7\xE3o." });
+  }
+});
+router.patch("/admin/pricing/:serviceType", requireAdmin, async (req, res) => {
+  try {
+    const { standardPrice, promotionalPrice, reason } = req.body;
+    if (standardPrice === void 0 || standardPrice === null) {
+      return res.status(400).json({ error: "standardPrice \xE9 obrigat\xF3rio." });
+    }
+    if (standardPrice < 0) {
+      return res.status(400).json({ error: "standardPrice deve ser maior que zero." });
+    }
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase indispon\xEDvel." });
+    }
+    const { error } = await supabase.from("service_pricings").update({ standard_price: standardPrice, promotional_price: promotionalPrice || null }).eq("service_type", req.params.serviceType);
+    if (error) throw error;
+    res.json({ success: true, serviceType: req.params.serviceType, standardPrice, promotionalPrice });
+  } catch (err) {
+    logger.error("admin", "pricing", "update", `Erro ao atualizar precifica\xE7\xE3o: ${err.message}`);
+    res.status(500).json({ error: "Erro ao atualizar precifica\xE7\xE3o." });
+  }
+});
 router.get(["/users", "/admin/users"], requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabaseServerClient();
@@ -7608,12 +7646,12 @@ router.get(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     query = query.order("created_at", { ascending: false });
     const { data, error } = await query;
     if (error) {
-      console.error("Erro ao buscar user_profiles:", error);
+      logger.error("admin", "users", "fetch_profiles", "Erro ao buscar user_profiles", { error: String(error) });
       return res.status(500).json({ error: "Erro ao carregar usu\xE1rios." });
     }
     res.json({ users: data || [], total: (data || []).length });
   } catch (err) {
-    console.error("Erro em /api/admin/users GET:", err);
+    logger.error("admin", "users", "get", "Erro em /api/admin/users GET", { error: String(err) });
     res.status(500).json({ error: "Erro ao carregar usu\xE1rios." });
   }
 });
@@ -7632,7 +7670,7 @@ router.put(["/users", "/admin/users"], requireAdmin, async (req, res) => {
     }
     const { data: profile, error: profileError } = await supabase.from("user_profiles").select("user_id, email, name, role").eq("email", email).maybeSingle();
     if (profileError) {
-      console.error("Erro ao buscar profile:", profileError);
+      logger.error("admin", "users", "find_profile", "Erro ao buscar profile", { error: String(profileError) });
       return res.status(500).json({ error: "Erro ao localizar usu\xE1rio." });
     }
     if (!profile) {
@@ -7675,7 +7713,7 @@ router.get("/admin/e2e-tests/stats", async (req, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("Error fetching E2E test stats:", error);
+    logger.error("admin", "e2e-tests", "stats", "Error fetching E2E test stats", { error: String(error) });
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
@@ -7716,7 +7754,7 @@ router.post("/admin/e2e-tests/run", async (req, res) => {
       message: "Test execution started"
     });
   } catch (error) {
-    console.error("Error starting E2E test run:", error);
+    logger.error("admin", "e2e-tests", "start_run", "Error starting E2E test run", { error: String(error) });
     res.status(500).json({ error: "Failed to start test execution" });
   }
 });
@@ -7742,7 +7780,7 @@ router.post("/admin/e2e-tests/execute-failed", async (req, res) => {
       message: "Failed test execution endpoint - implement based on specific requirements"
     });
   } catch (error) {
-    console.error("Error executing failed tests:", error);
+    logger.error("admin", "e2e-tests", "execute_failed", "Error executing failed tests", { error: String(error) });
     res.status(500).json({ error: "Failed to execute failed tests" });
   }
 });
@@ -7757,7 +7795,7 @@ router.post("/admin/e2e-tests/execute-service", async (req, res) => {
       message: `Service execution endpoint for ${service} - implement based on specific requirements`
     });
   } catch (error) {
-    console.error("Error executing service tests:", error);
+    logger.error("admin", "e2e-tests", "execute_service", "Error executing service tests", { error: String(error) });
     res.status(500).json({ error: "Failed to execute service tests" });
   }
 });
@@ -7767,7 +7805,7 @@ var admin_default = router;
 import { Router as Router2 } from "express";
 
 // src/integrations/meta/webhooks/meta-webhook-service.ts
-import crypto from "crypto";
+import crypto2 from "crypto";
 
 // src/data/marketing-agents-data.ts
 var INITIAL_MARKETING_AGENTS = [
@@ -8344,10 +8382,10 @@ var MetaWebhookService = class {
       return false;
     }
     const expectedSignature = signatureHeader.replace("sha256=", "");
-    const hmac = crypto.createHmac("sha256", appSecret);
+    const hmac = crypto2.createHmac("sha256", appSecret);
     hmac.update(typeof rawPayload === "string" ? rawPayload : rawPayload.toString("utf8"));
     const calculatedSignature = hmac.digest("hex");
-    return crypto.timingSafeEqual(
+    return crypto2.timingSafeEqual(
       Buffer.from(calculatedSignature, "hex"),
       Buffer.from(expectedSignature, "hex")
     );
@@ -8439,7 +8477,7 @@ var MetaWebhookService = class {
 var metaWebhookService = new MetaWebhookService();
 
 // src/integrations/meta/tests/meta-integration-suite.ts
-import crypto2 from "crypto";
+import crypto3 from "crypto";
 async function runMetaIntegrationTests() {
   const results = [];
   const runTest = async (id, name, category, fn) => {
@@ -8648,7 +8686,7 @@ async function runMetaIntegrationTests() {
       "Webhooks",
       async () => {
         const payload = JSON.stringify({ object: "page", entry: [{ id: "109847291847192", time: Date.now() }] });
-        const hmac = crypto2.createHmac("sha256", configuredAppSecret);
+        const hmac = crypto3.createHmac("sha256", configuredAppSecret);
         hmac.update(payload);
         const signature = `sha256=${hmac.digest("hex")}`;
         const isValid = metaWebhookService.verifySignature(payload, signature);
@@ -8679,7 +8717,7 @@ async function runMetaIntegrationTests() {
       "Webhooks",
       async () => {
         const payloadStr = JSON.stringify(payloadWh03);
-        const hmac = crypto2.createHmac("sha256", configuredAppSecret);
+        const hmac = crypto3.createHmac("sha256", configuredAppSecret);
         hmac.update(payloadStr);
         const sig = `sha256=${hmac.digest("hex")}`;
         const result = await metaWebhookService.handleWebhookPayload(payloadStr, sig, payloadWh03);
@@ -10226,6 +10264,24 @@ var MessagingService = class {
       void this.persistConversation(withLead);
     }
     void this.persistContact(contact);
+    if (lead.status === "qualified") {
+      eventBus.publish(
+        EventTopics.MESSAGING_LEAD_QUALIFIED,
+        {
+          leadId: lead.id,
+          contactId: lead.contactId,
+          name: lead.name,
+          phone: lead.phone,
+          status: lead.status,
+          score: lead.score,
+          vehiclePlate: lead.vehiclePlate,
+          infractionType: lead.infractionType,
+          estimatedFineAmount: lead.estimatedFineAmount,
+          sourceChannel: contact.channel
+        },
+        "messaging_service"
+      );
+    }
     return lead;
   }
   getStats() {
@@ -10835,7 +10891,7 @@ router2.get(webhookRoutePaths, (req, res) => {
 });
 router2.post(webhookRoutePaths, async (req, res) => {
   const signature = req.headers["x-hub-signature-256"];
-  const rawPayload = JSON.stringify(req.body);
+  const rawPayload = req.rawBody;
   const payload = req.body || {};
   try {
     const objectType = payload.object || "page";
@@ -14650,8 +14706,8 @@ var RAW_ARGUMENTS_CATALOG = [
   {
     id: "ARG-001",
     code: "INMETRO_CALIBRATION_EXPIRED",
-    title: "Aferi\xE7\xE3o Metrol\xF3gica do Radar Vencida ou Ausente (Res. CONTRAN 798/2020)",
-    description: "Nulidade absoluta da autua\xE7\xE3o por excesso de velocidade quando o equipamento medidor de velocidade n\xE3o foi submetido \xE0 verifica\xE7\xE3o metrol\xF3gica anual obrigat\xF3ria (validade m\xE1xima de 12 meses) pelo INMETRO ou IPEM delegado.",
+    title: "Radar com a vistoria vencida na data da infra\xE7\xE3o",
+    description: "Quando o radar que aplicou a multa estava com mais de 12 meses sem vistoria oficial, a medi\xE7\xE3o perde a validade que a lei exige e a multa pode ser cancelada. D\xE1 para confirmar com a certid\xE3o gratuita do INMETRO.",
     category: "merito",
     impactType: "anulacao_total",
     confidenceScore: 95,
@@ -14697,8 +14753,8 @@ var RAW_ARGUMENTS_CATALOG = [
   {
     id: "ARG-002",
     code: "LACK_OF_REGULATORY_SIGNAGE",
-    title: "Aus\xEAncia ou Ilegibilidade de Sinaliza\xE7\xE3o Regulamentadora R-19 (Art. 90 do CTB)",
-    description: "Inaplicabilidade de penalidade de tr\xE2nsito em virtude de sinaliza\xE7\xE3o de velocidade inexistente, insuficiente, encoberta por vegeta\xE7\xE3o/obst\xE1culos ou instalada fora das dist\xE2ncias regulamentares.",
+    title: "Placa de velocidade ausente ou escondida no local",
+    description: "Quando n\xE3o havia placa de velocidade vis\xEDvel no local \u2014 ou ela estava encoberta ou fora do lugar \u2014 o \xF3rg\xE3o n\xE3o pode cobrar a multa por desrespeito a um limite que n\xE3o estava sinalizado. Uma foto do trecho costuma resolver este ponto.",
     category: "preliminar",
     impactType: "anulacao_total",
     confidenceScore: 90,
@@ -14743,8 +14799,8 @@ var RAW_ARGUMENTS_CATALOG = [
   {
     id: "ARG-003",
     code: "RADAR_ESTUDO_TECNICO_AUSENTE",
-    title: "Inexist\xEAncia de Estudo T\xE9cnico de Engenharia de Instala\xE7\xE3o do Radar Fixo (Art. 6\xBA Res. 798/20)",
-    description: "Nulidade do local de fiscaliza\xE7\xE3o por radar fixo ante a falta de estudo de engenharia pr\xE9vio com ART que comprove a criticidade e hist\xF3rico de sinistros do trecho.",
+    title: "O estudo t\xE9cnico do radar fixo n\xE3o existe ou est\xE1 vencido",
+    description: "Para instalar um radar fixo, o \xF3rg\xE3o precisa de um estudo de engenharia que prove que o trecho \xE9 perigoso e precisa de fiscaliza\xE7\xE3o. Esse estudo vence a cada 2 anos. Se n\xE3o tem estudo ou ele est\xE1 vencido, as multas desse radar podem ser canceladas.",
     category: "merito",
     impactType: "anulacao_total",
     confidenceScore: 88,
@@ -14775,8 +14831,8 @@ var RAW_ARGUMENTS_CATALOG = [
     id: "ARG-004",
     code: "RADAR_PORTATIL_SEM_OPERADOR_VISIVEL",
     category: "merito",
-    title: "Opera\xE7\xE3o Oculta ou Descaracterizada de Radar Port\xE1til / M\xF3vel (Art. 13 Res. 798/20)",
-    description: "Proibi\xE7\xE3o de utiliza\xE7\xE3o de radar port\xE1til escondido atr\xE1s de \xE1rvores, muretas, pontes ou operado por agente desprovido de uniforme ostensivo.",
+    title: "O radar port\xE1til estava escondido ou o agente n\xE3o era vis\xEDvel",
+    description: "A lei pro\xEDbe usar radar port\xE1til escondido atr\xE1s de \xE1rvores, muretas ou pontes, ou operado por agente sem uniforme vis\xEDvel. Se a fiscaliza\xE7\xE3o foi assim, a multa pode ser cancelada. Fotos da opera\xE7\xE3o costumam provar este ponto.",
     impactType: "anulacao_total",
     confidenceScore: 92,
     whenToUse: ["Autua\xE7\xF5es por radar port\xE1til em que o agente fiscalizador estava oculto \xE0 visualiza\xE7\xE3o dos motoristas"],
@@ -14798,8 +14854,8 @@ var RAW_ARGUMENTS_CATALOG = [
     id: "ARG-005",
     code: "RADAR_MARGEM_ERRO_RECLASSIFICACAO",
     category: "merito",
-    title: "Erro de Enquadramento por Inobserv\xE2ncia da Velocidade Considerada (Tabela INMETRO)",
-    description: "Reclassifica\xE7\xE3o ou anula\xE7\xE3o da infra\xE7\xE3o quando o abatimento da margem metrol\xF3gica (7 km/h ou 7%) rebaixa a gravidade da penalidade.",
+    title: "A velocidade que foi cobrada est\xE1 correta?",
+    description: "A multa tem que ser calculada sobre a velocidade j\xE1 com a margem de erro do radar descontada (7 km/h, para medi\xE7\xF5es at\xE9 100 km/h). Se o \xF3rg\xE3o fez a conta com o valor bruto do radar, a infra\xE7\xE3o pode mudar de faixa \u2014 ou nem existir. Como \xE9 s\xF3 aritm\xE9tica, d\xE1 para conferir e mostrar o resultado na pe\xE7a sem depender de documento.",
     impactType: "reclassificacao",
     confidenceScore: 94,
     whenToUse: ["Autua\xE7\xF5es no limiar entre faixas de velocidade (ex: entre 20% e 50% ou acima de 50%)"],
@@ -14867,8 +14923,8 @@ var RAW_ARGUMENTS_CATALOG = [
     id: "ARG-008",
     code: "EXCESSO_VELOCIDADE_ESTADO_NECESSIDADE_SOCORRO",
     category: "merito",
-    title: "Excludente de Ilicitude: Estado de Necessidade e Socorro M\xE9dico Urgente",
-    description: "Afastamento da ilicitude da infra\xE7\xE3o de velocidade quando comprovado o transporte emergencial de paciente em risco de morte.",
+    title: "Era uma emerg\xEAncia m\xE9dica e n\xE3o havia outra escolha",
+    description: 'Quando voc\xEA estava levando algu\xE9m com risco de vida para o hospital e n\xE3o dava para esperar, a lei entende que n\xE3o houve infra\xE7\xE3o \u2014 o bem "vida" est\xE1 acima da multa. O prontu\xE1rio de urg\xEAncia com data e hora prova este ponto.',
     impactType: "anulacao_total",
     confidenceScore: 91,
     whenToUse: ["Condu\xE7\xE3o r\xE1pida para atendimento de emerg\xEAncia hospitalar com entrada comprovada"],
@@ -18583,7 +18639,7 @@ var KnowledgeService = class _KnowledgeService {
 var knowledgeService = KnowledgeService.getInstance();
 
 // src/server/knowledge/embedding-service.ts
-import crypto3 from "crypto";
+import crypto4 from "crypto";
 var EmbeddingService = class _EmbeddingService {
   constructor() {
     this.cache = /* @__PURE__ */ new Map();
@@ -18599,7 +18655,7 @@ var EmbeddingService = class _EmbeddingService {
    * Generates SHA-256 hash of normalized text
    */
   hashText(text) {
-    return crypto3.createHash("sha256").update(text.trim().toLowerCase()).digest("hex");
+    return crypto4.createHash("sha256").update(text.trim().toLowerCase()).digest("hex");
   }
   /**
    * Generate embedding vector for a single text chunk
@@ -22533,8 +22589,8 @@ router7.post("/publish-7-cache", async (_req, res) => {
   try {
     await marketingService.reload();
     const allContents = await marketingService.getEditorialContents();
-    console.log("[publish-7-cache] total contents:", allContents.length);
-    allContents.forEach((c) => console.log("  ", c.id, c.status, c.title));
+    logger.info("marketing", "publish-7-cache", "contents_loaded", "[publish-7-cache] total contents", { count: allContents.length });
+    allContents.forEach((c) => logger.debug("marketing", "publish-7-cache", "content_item", "  ", { id: c.id, status: c.status, title: c.title }));
     const systemToken = process.env.META_ACCESS_TOKEN || process.env.PAGE_ACCESS_TOKEN;
     const igId = process.env.INSTAGRAM_ACCOUNT_ID;
     if (!systemToken || !igId) return res.status(500).json({ success: false, message: "Credenciais Meta n\xE3o configuradas no .env" });
@@ -23028,7 +23084,17 @@ function extractHeader(headers, name) {
 }
 function authorizeEvolutionWebhook(headers) {
   const secret = resolveWebhookSecret();
+  const isProd = process.env.NODE_ENV === "production";
   if (!secret) {
+    if (isProd) {
+      logger.error(
+        "whatsapp",
+        "webhook_auth",
+        "secret_missing_in_production",
+        "EVOLUTION_WEBHOOK_SECRET nao definido em producao \u2014 webhook rejeitado para evitar injecao de mensagens forjadas"
+      );
+      return { ok: false, mode: "rejected", reason: "secret-missing-in-production" };
+    }
     return { ok: true, mode: "disabled" };
   }
   const provided = extractHeader(headers, EVOLUTION_WEBHOOK_SECRET_HEADER);
@@ -24173,6 +24239,17 @@ var ExpertRuleEngine = class {
         continue;
       }
       const result = rule.evaluate(context);
+      if (result && !eligible.has(result.legalArgumentId)) {
+        evaluatedRules.push({
+          ruleId: rule.id,
+          name: rule.name,
+          status: "NOT_APPLICABLE",
+          evaluatedAt: nowIso,
+          reason: `Tese ${result.legalArgumentId} ineleg\xEDvel para fam\xEDlia "${classification.family}".`,
+          inputs: { legalArgumentId: result.legalArgumentId, infractionFamily: classification.family }
+        });
+        continue;
+      }
       if (result) {
         detectedInconsistencies.push({
           title: result.title,
@@ -24230,52 +24307,34 @@ ${p.text}`).join("\n\n"),
         });
       }
     }
-    const hasDualNotificationViolation = context.notificationExpeditionDate && !context.notificationDeliveryDate;
-    const constArg = ARGUMENTS_CATALOG.find((a) => a.id === "ARG-049");
-    if (constArg && hasDualNotificationViolation && !recommendedArgs.some((r) => r.id === constArg.id)) {
-      recommendedArgs.push({
-        id: constArg.id,
-        code: constArg.code,
-        title: constArg.title,
-        category: constArg.category,
-        legalBase: constArg.legalBase,
-        contranResolution: constArg.resolutions.join(", "),
-        summary: constArg.description,
-        detailedText: constArg.formattedParagraphs.map((p) => p.heading + "\n" + p.text).join("\n\n"),
-        confidenceScore: constArg.confidenceScore,
-        applicabilityNote: constArg.whenToUse.join("; ")
-      });
-      const flaw = {
-        ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
-        argumentId: "ARG-049",
-        severity: "alta",
-        title: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
-        description: "Inje\xE7\xE3o obrigat\xF3ria de tese constitucional de garantia do contradit\xF3rio e ampla defesa",
-        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
-        statutoryBasis: "Art. 5\xBA, LIV e LV da CF/88 c/c S\xFAmula 312 do STJ"
-      };
-      detectedFlaws.push(flaw);
-      evaluatedRules.push({
-        ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
-        name: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
-        status: "FAIL",
-        evaluatedAt: nowIso,
-        legalArgumentId: "ARG-049",
-        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o",
-        severity: "alta",
-        reason: "Viola\xE7\xE3o da dupla notifica\xE7\xE3o: autua\xE7\xE3o expedida mas n\xE3o entregue, seguido de penalidade direta",
-        inputs: {
-          notificationExpeditionDate: context.notificationExpeditionDate,
-          notificationDeliveryDate: context.notificationDeliveryDate
-        }
-      });
-      detectedInconsistencies.push({
-        title: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
-        description: "Viola\xE7\xE3o da dupla notifica\xE7\xE3o: autua\xE7\xE3o expedida mas n\xE3o entregue, seguido de penalidade direta",
-        severity: "alta",
-        legalArgumentId: "ARG-049",
-        impact: "Nulidade do processo por aus\xEAncia de dupla notifica\xE7\xE3o"
-      });
+    if (context.notificationExpeditionDate) {
+      if (context.notificationDeliveryDate) {
+        evaluatedRules.push({
+          ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
+          name: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
+          status: "PASS",
+          evaluatedAt: nowIso,
+          reason: "Notifica\xE7\xE3o de Autua\xE7\xE3o expedida e com data de entrega informada: n\xE3o h\xE1 viola\xE7\xE3o da dupla notifica\xE7\xE3o nos dados fornecidos.",
+          inputs: {
+            notificationExpeditionDate: context.notificationExpeditionDate,
+            notificationDeliveryDate: context.notificationDeliveryDate
+          }
+        });
+      } else {
+        dataGaps.push({
+          ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
+          missingData: ["notificationDeliveryDate"],
+          reason: "A data de entrega da Notifica\xE7\xE3o de Autua\xE7\xE3o n\xE3o foi informada. Sem ela n\xE3o \xE9 poss\xEDvel afirmar viola\xE7\xE3o da dupla notifica\xE7\xE3o (S\xFAmula 312 STJ)."
+        });
+        evaluatedRules.push({
+          ruleId: "RULE_CONSTITUTIONAL_DUE_PROCESS",
+          name: "Garantia Constitucional do Devido Processo Legal (S\xFAmula 312 STJ)",
+          status: "DATA_GAP",
+          evaluatedAt: nowIso,
+          reason: "Faltam dados obrigat\xF3rios: notificationDeliveryDate",
+          inputs: { notificationExpeditionDate: context.notificationExpeditionDate }
+        });
+      }
     }
     let procedure = CANONICAL_PROCEDURE_BY_FAMILY[classification.family] || "";
     if (detectedInconsistencies.some((i) => i.legalArgumentId === "ARG-051")) {
@@ -24301,7 +24360,7 @@ ${p.text}`).join("\n\n"),
     } else if (detectedInconsistencies.length > 0) {
       baseScore = Math.min(90, 50 + detectedInconsistencies.length * 15);
     }
-    const totalRelevantFields = this.countRelevantFields(classification.family, context);
+    const totalRelevantFields = this.countRelevantFields(classification.family);
     const filledRelevantFields = this.countFilledRelevantFields(classification.family, context);
     const completenessRatio = totalRelevantFields > 0 ? filledRelevantFields / totalRelevantFields : 0.5;
     let evidenceQualityBonus = 0;
@@ -24345,7 +24404,7 @@ ${p.text}`).join("\n\n"),
       evaluatedRules,
       integrityScore,
       dataGaps: dataGaps.length > 0 ? dataGaps : void 0,
-      summaryReasoning: `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.${gapSummary}`,
+      summaryReasoning: detectedInconsistencies.length > 0 ? `O Motor de Regras identificou ${detectedInconsistencies.length} inconsist\xEAncia${detectedInconsistencies.length > 1 ? "s" : ""} jur\xEDdica${detectedInconsistencies.length > 1 ? "s" : ""} no AIT n\xBA ${infraction.aitNumber || "SN"}. H\xE1 fundamenta\xE7\xE3o legal e t\xE9cnica para protocolo perante a autoridade competente.${gapSummary}` : `O Motor de Regras n\xE3o identificou inconsist\xEAncias jur\xEDdicas no AIT n\xBA ${infraction.aitNumber || "SN"} com os dados fornecidos.${gapSummary}`,
       infractionClassification: {
         family: classification.family,
         basis: classification.basis,
@@ -24358,181 +24417,98 @@ ${p.text}`).join("\n\n"),
       dataCompleteness
     };
   }
-  /**
-   * Count total relevant fields for an infraction family
-   */
-  static countRelevantFields(family, context) {
-    const fieldMap = {
+  static {
+    /**
+     * Canonical map of family → context field keys.
+     * Single source of truth for completeness counting.
+     * Keys MUST match RuleEvaluationContext property names exactly.
+     */
+    this.FAMILY_CONTEXT_FIELDS = {
       velocidade: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "speedLimit",
         "measuredSpeed",
         "consideredSpeed",
-        "inmetroAferitionDate",
+        "radarCalibrationDate",
         "radarEquipmentId",
         "hasR19SignageProof",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ],
       alcoolemia: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "hasPsychomotorTerm",
         "hasAgentDetailedObservations",
         "hasPhotoProof",
-        "hasVideoProof",
         "refusedTest",
         "offeredRetest",
-        "bafometerResult",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ],
       semaforo: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "hasPhotoProof",
-        "hasVideoProof",
         "yellowPhaseCrossing",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ],
       celular: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "cellphoneCircumstance",
         "hasPhotoProof",
-        "hasVideoProof",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ],
       estacionamento: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "hasPhotoProof",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ],
       generico: [
         "aitNumber",
-        "plate",
-        "autuadorBody",
         "infractionCode",
-        "dateTime",
+        "infractionDate",
         "notificationExpeditionDate",
+        "notificationDeliveryDate",
         "defenseDeadline",
-        "location"
+        "autuadorBody"
       ]
     };
-    return fieldMap[family]?.length || fieldMap.generico.length;
   }
   /**
-   * Count filled relevant fields for an infraction family
+   * Count total relevant fields for an infraction family.
+   * Derives from the canonical context field map.
+   */
+  static countRelevantFields(family) {
+    return this.FAMILY_CONTEXT_FIELDS[family]?.length ?? this.FAMILY_CONTEXT_FIELDS.generico.length;
+  }
+  /**
+   * Count filled relevant fields for an infraction family.
+   * Uses the canonical context field map and checks the actual context.
    */
   static countFilledRelevantFields(family, context) {
-    const fieldMap = {
-      velocidade: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "speedLimit",
-        "measuredSpeed",
-        "consideredSpeed",
-        "inmetroAferitionDate",
-        "radarEquipmentId",
-        "hasR19SignageProof",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ],
-      alcoolemia: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "hasPsychomotorTerm",
-        "hasAgentDetailedObservations",
-        "hasPhotoProof",
-        "hasVideoProof",
-        "refusedTest",
-        "offeredRetest",
-        "bafometerResult",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ],
-      semaforo: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "hasPhotoProof",
-        "hasVideoProof",
-        "yellowPhaseCrossing",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ],
-      celular: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "cellphoneCircumstance",
-        "hasPhotoProof",
-        "hasVideoProof",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ],
-      estacionamento: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "hasPhotoProof",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ],
-      generico: [
-        "aitNumber",
-        "plate",
-        "autuadorBody",
-        "infractionCode",
-        "dateTime",
-        "notificationExpeditionDate",
-        "defenseDeadline",
-        "location"
-      ]
-    };
-    const fields = fieldMap[family] || fieldMap.generico;
+    const fields = this.FAMILY_CONTEXT_FIELDS[family] || this.FAMILY_CONTEXT_FIELDS.generico;
     return fields.filter((f) => {
       const v = context[f];
       return v !== void 0 && v !== null && v !== "";
@@ -24543,9 +24519,9 @@ ${p.text}`).join("\n\n"),
    */
   static hasStrongEvidenceForArgument(argumentId, context) {
     const evidenceMap = {
-      "ARG-001": ["inmetroAferitionDate", "radarEquipmentId"],
+      "ARG-001": ["radarCalibrationDate", "radarEquipmentId"],
       // Radar calibration
-      "ARG-005": ["measuredSpeed", "consideredSpeed", "speedLimit", "inmetroAferitionDate"],
+      "ARG-005": ["measuredSpeed", "consideredSpeed", "speedLimit", "radarCalibrationDate"],
       // INMETRO tolerance
       "ARG-002": ["hasR19SignageProof"],
       // R-19 signage
@@ -24553,8 +24529,8 @@ ${p.text}`).join("\n\n"),
       // Decadence/dual notification
       "ARG-051": ["infractionCode", "hasPreviousInfractionsLast12Months"],
       // Conversion to warning
-      "ARG-025": ["hasPsychomotorTerm", "hasAgentDetailedObservations", "bafometerResult"],
-      // Lei Seca
+      "ARG-025": ["hasPsychomotorTerm", "hasAgentDetailedObservations"],
+      // Lei Seca (bafometerResult not in context)
       "ARG-015": ["hasAgentDetailedObservations"]
       // Manual citation
     };
@@ -24565,12 +24541,13 @@ ${p.text}`).join("\n\n"),
     });
   }
   /**
-   * Get missing critical fields that would improve probability
+   * Get missing critical fields that would improve probability.
+   * Uses context field names (not wizard field names).
    */
   static getMissingCriticalFields(family, context) {
     const criticalMap = {
       velocidade: [
-        { field: "inmetroAferitionDate", label: "Data de aferi\xE7\xE3o do INMETRO" },
+        { field: "radarCalibrationDate", label: "Data de aferi\xE7\xE3o do INMETRO" },
         { field: "radarEquipmentId", label: "Identifica\xE7\xE3o do radar" },
         { field: "hasR19SignageProof", label: "Comprova\xE7\xE3o de sinaliza\xE7\xE3o R-19" },
         { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" },
@@ -24578,13 +24555,12 @@ ${p.text}`).join("\n\n"),
       ],
       alcoolemia: [
         { field: "hasPsychomotorTerm", label: "Termo de constata\xE7\xE3o de sinais de embriaguez" },
-        { field: "bafometerResult", label: "Resultado do baf\xF4metro" },
-        { field: "hasVideoProof", label: "V\xEDdeo da abordagem" },
-        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" }
+        { field: "hasAgentDetailedObservations", label: "Observa\xE7\xF5es circunstanciadas do agente" },
+        { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" },
+        { field: "refusedTest", label: "Recusa ao teste do etil\xF4metro" }
       ],
       semaforo: [
         { field: "hasPhotoProof", label: "Foto do sem\xE1foro" },
-        { field: "hasVideoProof", label: "V\xEDdeo da infra\xE7\xE3o" },
         { field: "yellowPhaseCrossing", label: "Fase amarela no cruzamento" },
         { field: "notificationDeliveryDate", label: "Data de entrega da notifica\xE7\xE3o" }
       ],
@@ -29131,7 +29107,7 @@ router10.post("/ocr/analyze", authenticateToken, async (req, res) => {
       message: "Envie imageUrl, base64 ou rawText para an\xE1lise do auto de infra\xE7\xE3o."
     });
   } catch (error) {
-    console.error("[OCR Route] Error processing request:", error);
+    logger.error("ocr", "analyze", "handler_error", "[OCR Route] Error processing request", { error: String(error) });
     return res.status(500).json({
       error: "Falha interna no servidor",
       message: "Erro ao processar solicita\xE7\xE3o de OCR."
@@ -29142,10 +29118,10 @@ var ocr_default = router10;
 
 // src/server/routes/payments.ts
 import { Router as Router11 } from "express";
-import crypto5 from "node:crypto";
+import crypto6 from "node:crypto";
 
 // src/server/integrations/pagbank.ts
-import * as crypto4 from "crypto";
+import * as crypto5 from "crypto";
 import QRCode from "qrcode";
 
 // src/server/db/payment-repository.ts
@@ -29307,7 +29283,7 @@ var PagBankIntegrationService = class {
       logger.warn("payments", "pagbank", "verify_webhook", "Missing signature header");
       return false;
     }
-    const expectedSignature = `sha256=${crypto4.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex")}`;
+    const expectedSignature = `sha256=${crypto5.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex")}`;
     const receivedSignature = signatureHeader.startsWith("sha256=") ? signatureHeader : `sha256=${signatureHeader}`;
     if (expectedSignature.length !== receivedSignature.length) {
       logger.warn("payments", "pagbank", "verify_webhook", "Signature length mismatch", {
@@ -29316,7 +29292,7 @@ var PagBankIntegrationService = class {
       });
       return false;
     }
-    return crypto4.timingSafeEqual(
+    return crypto5.timingSafeEqual(
       Buffer.from(expectedSignature),
       Buffer.from(receivedSignature)
     );
@@ -29726,217 +29702,98 @@ var PagBankIntegrationService = class {
 };
 var pagBankIntegration = new PagBankIntegrationService();
 
-// src/server/integrations/gateway/pagbank-adapter.ts
-function mapPagBankStatus(status) {
-  const map = {
-    PENDING: "PENDING",
-    WAITING: "WAITING",
-    AUTHORIZED: "AUTHORIZED",
-    PAID: "PAID",
-    DECLINED: "DECLINED",
-    CANCELED: "CANCELED",
-    CANCELLED: "CANCELED",
-    REFUNDED: "REFUNDED",
-    PROCESSING: "WAITING",
-    INITIAL: "PENDING"
-  };
-  return map[status] || "PENDING";
-}
-function toGatewayPixResult(order, gateway) {
-  return {
-    gatewayTransactionId: order.orderId,
-    referenceId: order.referenceId,
-    gateway,
-    status: mapPagBankStatus(order.status),
-    amountInCents: Math.round(order.amount * 100),
-    pixCopyPaste: order.qrCodeText || "",
-    qrCodeUrl: order.qrCodeUrl,
-    qrCodeDataUrl: order.qrCodeDataUrl,
-    expiresAt: order.expiresAt,
-    createdAt: order.createdAt
-  };
-}
-var PagBankAdapter = class {
-  constructor() {
-    this.id = "pagbank";
-    this.displayName = "PagBank / PagSeguro";
-  }
-  isConfigured() {
-    const token = process.env.PAGBANK_TOKEN || process.env.PAGSEGURO_TOKEN || "";
-    return Boolean(token && !token.startsWith("mock_"));
-  }
-  async createPix(input) {
-    const order = await pagBankIntegration.createPixOrder({
-      caseId: input.caseId,
-      referenceId: input.referenceId,
-      customer: {
-        name: input.payer.name || "Condutor DefesAi",
-        email: input.payer.email || "contato@defesai.com.br",
-        taxId: input.payer.document || "12345678909",
-        phone: input.payer.phone ? {
-          area: input.payer.phone.substring(0, 2),
-          number: input.payer.phone.substring(2)
-        } : void 0
-      },
-      amount: input.amountInCents / 100,
-      // PagBank recebe em float BRL
-      description: input.description,
-      notificationUrls: input.webhookUrl ? [input.webhookUrl] : void 0
-    });
-    return toGatewayPixResult(order, "pagbank");
-  }
-  async createCreditCard(input) {
-    const order = await pagBankIntegration.createCreditCardOrder({
-      caseId: input.caseId,
-      referenceId: input.referenceId,
-      customer: {
-        name: input.payer.name || "Condutor DefesAi",
-        email: input.payer.email || "contato@defesai.com.br",
-        taxId: input.payer.document || "12345678909"
-      },
-      amount: input.amountInCents / 100,
-      installments: input.installments,
-      cardToken: input.cardToken,
-      authenticationMethod: input.authenticationMethod,
-      softDescriptor: input.softDescriptor,
-      notificationUrls: input.webhookUrl ? [input.webhookUrl] : void 0
-    });
-    return {
-      gatewayTransactionId: order.orderId,
-      referenceId: order.referenceId,
-      gateway: "pagbank",
-      status: mapPagBankStatus(order.status),
-      amountInCents: Math.round(order.amount * 100),
-      createdAt: order.createdAt,
-      threeDsUrl: order.threeDsUrl,
-      threeDsChallengeRequired: order.threeDsChallengeRequired
-    };
-  }
-  async getPaymentStatus(gatewayTransactionId) {
-    const order = pagBankIntegration.getOrder(gatewayTransactionId);
-    return {
-      gatewayTransactionId,
-      gateway: "pagbank",
-      status: order ? mapPagBankStatus(order.status) : "PENDING",
-      paidAt: order?.status === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : void 0
-    };
-  }
-  processWebhook(rawBody, headers, body) {
-    const payload = body;
-    const signature = headers["x-hub-signature-256"] || headers["x-pagbank-signature"] || headers["x-authenticity-token"];
-    const result = pagBankIntegration.processWebhook(rawBody, signature, payload);
-    if (!result.signatureValid) {
-      throw new Error("Assinatura HMAC inv\xE1lida ou ausente");
-    }
-    const firstCharge = payload.charges?.[0];
-    const amountValue = firstCharge?.amount?.value || 0;
-    return {
-      gatewayEventId: payload.id || `wh_pagbank_${Date.now()}`,
-      gateway: "pagbank",
-      gatewayTransactionId: result.orderId || payload.id || "",
-      referenceId: payload.reference_id || firstCharge?.reference_id || void 0,
-      status: mapPagBankStatus(firstCharge?.status || "PENDING"),
-      transactionType: firstCharge?.payment_method?.type || "PIX",
-      amountInCents: amountValue,
-      paidAt: firstCharge?.paid_at || void 0,
-      rawPayload: body,
-      isDuplicate: result.isDuplicate,
-      received: result.received ?? true
-    };
-  }
-};
-var pagbankAdapter = new PagBankAdapter();
-
-// src/server/integrations/gateway/ggpix-adapter.ts
+// src/server/integrations/gateway/venopag-adapter.ts
 import QRCode2 from "qrcode";
-var GGRAPI_BASE_URL = "https://ggpixapi.com/api/v1";
-var GGRAPI_BACKUP_URL = "https://ggatepixapi.com/api/v1";
+var VENOPAG_API_BASE = "https://venopagments.com/api";
 function getConfig(env) {
   const e = env || process.env;
-  const allowedIpsRaw = e.GGPIX_WEBHOOK_ALLOWED_IPS || "";
-  const allowedIps = allowedIpsRaw.split(",").map((ip) => ip.trim()).filter(Boolean);
   return {
-    apiKey: e.GGPIX_API_KEY || "",
-    appUrl: e.APP_URL || "https://defesai.com.br",
-    enabled: e.GGPIX_ENABLED === "true",
-    webhookAllowedIps: allowedIps.length > 0 ? allowedIps : void 0
+    clientId: e.VENO_CLIENT_ID || "",
+    clientSecret: e.VENO_CLIENT_SECRET || "",
+    webhookSecret: e.VENO_WEBHOOK_SECRET || "",
+    appUrl: e.APP_URL || "https://adeusmulta.defesai.com.br",
+    enabled: e.VENO_ENABLED === "true"
   };
 }
 function isProductionMode(env) {
   const e = env || process.env;
   return (e.PAYMENT_MODE || "sandbox").toLowerCase() === "production";
 }
-function validateWebhookSourceIp(headers, allowedIps, env) {
-  if (!allowedIps || allowedIps.length === 0) {
-    if (isProductionMode(env)) {
-      logger.error("payments", "ggpix", "webhook_ip", "GGPIX_WEBHOOK_ALLOWED_IPS n\xE3o configurado \u2014 webhook rejeitado em produ\xE7\xE3o");
-      return false;
-    }
-    return true;
-  }
-  const forwardedFor = headers["x-forwarded-for"];
-  const realIp = headers["x-real-ip"];
-  const cfConnectingIp = headers["cf-connecting-ip"];
-  const clientIp = forwardedFor?.split(",")[0]?.trim() || realIp || cfConnectingIp || "";
-  if (!clientIp) {
-    logger.warn("payments", "ggpix", "webhook_ip", "N\xE3o foi poss\xEDvel determinar IP do cliente");
-    return false;
-  }
-  const isAllowed = allowedIps.some((allowed) => {
-    if (allowed.includes("/")) {
-      const [baseIp, prefixStr] = allowed.split("/");
-      const prefix = parseInt(prefixStr, 10);
-      if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
-      const mask = ~((1 << 32 - prefix) - 1);
-      const clientNum = ipToNumber(clientIp);
-      const baseNum = ipToNumber(baseIp);
-      return (clientNum & mask) === (baseNum & mask);
-    }
-    return allowed === clientIp;
-  });
-  if (!isAllowed) {
-    logger.warn("payments", "ggpix", "webhook_ip", "Webhook GGPIXAPI rejeitado \u2014 IP n\xE3o permitido", { clientIp, allowedIps });
-  }
-  return isAllowed;
-}
-function ipToNumber(ip) {
-  return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-}
-function mapGGPixStatus(status) {
+function mapVenoStatus(status) {
   const map = {
     PENDING: "PENDING",
     COMPLETE: "PAID",
     FAILED: "DECLINED",
-    CANCELED: "CANCELED"
+    CANCELED: "CANCELED",
+    EXPIRED: "CANCELED"
   };
   return map[status] || "PENDING";
 }
-async function ggFetch(path2, options = {}, config = getConfig()) {
-  const headers = {
-    "Content-Type": "application/json",
-    "X-API-Key": config.apiKey,
-    ...options.headers
-  };
+async function venoFetch(path2, options = {}, config = getConfig()) {
+  const { clientId, clientSecret } = config;
+  if (!clientId || !clientSecret) {
+    throw new Error("VenoPag indispon\xEDvel: credenciais n\xE3o configuradas (VENO_CLIENT_ID, VENO_CLIENT_SECRET).");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12e3);
   try {
-    const res = await fetch(`${GGRAPI_BASE_URL}${path2}`, { ...options, headers });
-    if (res.ok || res.status < 500) return res;
-    throw new Error(`Server error ${res.status}`);
-  } catch (err) {
-    logger.warn("payments", "ggpix", "gg_fetch", "Primary host failed, trying contingency", {
-      error: String(err)
+    const response = await fetch(`${VENOPAG_API_BASE}${path2}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Id": clientId,
+        "X-Client-Secret": clientSecret,
+        ...options.headers
+      }
     });
-    const res = await fetch(`${GGRAPI_BACKUP_URL}${path2}`, { ...options, headers });
-    return res;
+    const data = await response.json();
+    if (!response.ok || data?.ok === false) {
+      throw new Error(typeof data?.error === "string" ? data.error : "Falha ao processar pagamento VenoPag.");
+    }
+    return data;
+  } catch (err) {
+    if (isProductionMode()) {
+      logger.error("payments", "venopag", "veno_fetch", "VenoPag request failed in production", { error: err.message });
+      throw new Error("Falha ao conectar com VenoPag. Pagamento n\xE3o processado.");
+    }
+    logger.warn("payments", "venopag", "veno_fetch", "VenoPag request failed \u2014 modo dev", { error: err.message });
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
 }
-var GGPIXAdapter = class {
+function constantTimeEqual(left, right) {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return diff === 0;
+}
+async function verifyVenoSignature(rawBody, signature, clientId, webhookSecret, expectedClientId) {
+  if (!webhookSecret || !expectedClientId || !signature || clientId !== expectedClientId) return false;
+  const match = /^t=(\d+),v1=([a-f0-9]{64})$/i.exec(signature.trim());
+  if (!match) return false;
+  const timestamp = Number(match[1]);
+  if (Math.abs(Date.now() / 1e3 - timestamp) > 300) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(webhookSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${match[1]}.${rawBody}`));
+  const expected = Array.from(new Uint8Array(mac), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return constantTimeEqual(expected, match[2].toLowerCase());
+}
+var VenoPagAdapter = class {
   constructor(customEnv) {
-    this.id = "ggpixapi";
-    this.displayName = "GGPIXAPI (PIX)";
+    this.id = "venopag";
+    this.displayName = "VenoPag (PIX)";
     this.config = getConfig(customEnv);
   }
   isConfigured() {
-    return this.config.enabled && Boolean(this.config.apiKey);
+    return this.config.enabled && Boolean(this.config.clientId) && Boolean(this.config.clientSecret);
   }
   async createPix(input) {
     const cleanDoc = (input.payer.document || "12345678909").replace(/\D/g, "");
@@ -29945,54 +29802,41 @@ var GGPIXAdapter = class {
       throw new Error("amountInCents inv\xE1lido: deve ser um n\xFAmero maior que zero.");
     }
     const amountInCents = input.amountInCents;
-    let transactionId = `ggpix_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    let transactionId = `venopag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     let pixCopyPaste = `00020126580014br.gov.bcb.pix0136${referenceId}520400005303986540${(amountInCents / 100).toFixed(2)}5802BR5916DEFESAI TECNOLOG6009SAO PAULO62070503***6304`;
     let status = "PENDING";
     let feeInCents = void 0;
     let netAmountInCents = void 0;
     if (this.isConfigured()) {
-      const webhookUrl = input.webhookUrl || `${this.config.appUrl.replace(/\/$/, "")}/api/webhooks/ggpix`;
+      const webhookUrl = input.webhookUrl || `${this.config.appUrl.replace(/\/$/, "")}/api/webhooks/venopag`;
       try {
-        const response = await ggFetch("/pix/in", {
-          method: "POST",
-          body: JSON.stringify({
-            amountCents: input.amountInCents,
-            description: input.description,
-            payerName: input.payer.name || "Condutor DefesAi",
-            payerDocument: cleanDoc,
-            externalId: referenceId,
-            webhookUrl,
-            payerEmail: input.payer.email,
-            payerPhone: input.payer.phone
-          })
-        }, this.config);
-        if (response.ok) {
-          const data = await response.json();
-          transactionId = data.id || transactionId;
-          pixCopyPaste = data.pixCopyPaste || data.pixCode || pixCopyPaste;
-          status = mapGGPixStatus(data.status);
-          feeInCents = data.fees?.total;
-          netAmountInCents = data.fees?.netAmount;
-        } else {
-          const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }));
-          if (isProductionMode()) {
-            logger.error("payments", "ggpix", "create_pix", "GGPIXAPI retornou erro em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", {
-              httpStatus: response.status,
-              error: errorData
-            });
-            throw new Error(`GGPIXAPI retornou erro HTTP ${response.status}. Pagamento n\xE3o processado.`);
-          }
-          logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI PIX In returned non-200 \u2014 modo dev: usando dados locais", {
-            httpStatus: response.status,
-            error: errorData
-          });
-        }
+        const response = await venoFetch(
+          "/cashin",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              amount: input.amountInCents / 100,
+              description: input.description.slice(0, 120),
+              name: input.payer.name || "Condutor DefesAi",
+              document: cleanDoc,
+              external_id: referenceId,
+              webhook_url: webhookUrl,
+              payer_email: input.payer.email,
+              payer_phone: input.payer.phone
+            })
+          },
+          this.config
+        );
+        transactionId = response.request_number || response.transaction_id || transactionId;
+        pixCopyPaste = response.copyPaste || pixCopyPaste;
+        status = mapVenoStatus(response.status);
       } catch (err) {
         if (isProductionMode()) {
-          logger.error("payments", "ggpix", "create_pix", "GGPIXAPI falhou em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", { error: err.message });
-          throw new Error("Falha ao conectar com GGPIXAPI. Pagamento n\xE3o processado.");
+          logger.error("payments", "venopag", "create_pix", "VenoPag falhou em produ\xE7\xE3o \u2014 transa\xE7\xE3o N\xC3O criada", { error: err.message });
+          throw new Error("Falha ao conectar com VenoPag. Pagamento n\xE3o processado.");
         }
-        logger.warn("payments", "ggpix", "create_pix", "GGPIXAPI request failed \u2014 modo dev: usando dados locais", { error: err.message });
+        logger.warn("payments", "venopag", "create_pix", "VenoPag request failed \u2014 modo dev", { error: err.message });
+        throw err;
       }
     }
     let qrCodeDataUrl = "";
@@ -30003,13 +29847,13 @@ var GGPIXAdapter = class {
         color: { dark: "#071D41", light: "#ffffff" }
       });
     } catch (err) {
-      logger.warn("payments", "ggpix", "qr_generation", "QR Code generation error", { error: String(err) });
+      logger.warn("payments", "venopag", "qr_generation", "QR Code generation error", { error: String(err) });
     }
     const expiresAt = new Date(Date.now() + 30 * 60 * 1e3).toISOString();
     return {
       gatewayTransactionId: transactionId,
       referenceId,
-      gateway: "ggpixapi",
+      gateway: "venopag",
       status,
       amountInCents,
       pixCopyPaste,
@@ -30023,178 +29867,77 @@ var GGPIXAdapter = class {
   }
   async createCreditCard(_input) {
     throw new Error(
-      "GGPIXAPI n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito. Para usar cart\xE3o, altere o gateway ativo para PagBank nas configura\xE7\xF5es."
+      "VenoPag n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito. Apenas PIX est\xE1 dispon\xEDvel neste gateway."
     );
   }
   async getPaymentStatus(gatewayTransactionId) {
     if (!this.isConfigured()) {
-      return { gatewayTransactionId, gateway: "ggpixapi", status: "PENDING" };
+      return { gatewayTransactionId, gateway: "venopag", status: "PENDING" };
     }
     let response;
     try {
-      response = await ggFetch(`/transactions/${gatewayTransactionId}`, {
-        method: "GET"
-      }, this.config);
+      response = await venoFetch(
+        `/consult-transaction?request_number=${encodeURIComponent(gatewayTransactionId)}`,
+        { method: "GET" },
+        this.config
+      );
     } catch (error) {
       if (process.env.PAYMENT_MODE !== "production") {
-        logger.warn("payments", "ggpix", "get_status", "Transaction query unavailable in non-production", {
+        logger.warn("payments", "venopag", "get_status", "Transaction query unavailable in non-production", {
           transactionId: gatewayTransactionId
         });
-        return { gatewayTransactionId, gateway: "ggpixapi", status: "PENDING" };
+        return { gatewayTransactionId, gateway: "venopag", status: "PENDING" };
       }
       throw error;
     }
-    if (!response.ok) {
-      logger.warn("payments", "ggpix", "get_status", "Transaction query failed", {
-        transactionId: gatewayTransactionId,
-        httpStatus: response.status
-      });
-      return {
-        gatewayTransactionId,
-        gateway: "ggpixapi",
-        status: "PENDING"
-      };
-    }
-    const data = await response.json();
+    const data = response;
     return {
       gatewayTransactionId,
-      gateway: "ggpixapi",
-      status: mapGGPixStatus(data.status),
-      paidAt: data.paidAt
+      gateway: "venopag",
+      status: mapVenoStatus(data.status),
+      paidAt: data.paid_at
     };
   }
-  processWebhook(_rawBody, headers, body) {
-    const runtimeConfig = getConfig(process.env);
-    const allowedIps = runtimeConfig.webhookAllowedIps || this.config.webhookAllowedIps;
-    if (!validateWebhookSourceIp(headers, allowedIps, process.env)) {
-      throw new Error("Webhook GGPIXAPI rejeitado: IP de origem n\xE3o autorizado");
+  processWebhook(rawBody, headers, body) {
+    const signature = headers["x-veno-signature"];
+    const clientId = headers["x-veno-client-id"];
+    const webhookSecret = this.config.webhookSecret;
+    const expectedClientId = this.config.clientId;
+    const isValid = verifyVenoSignature(rawBody, signature, clientId, webhookSecret, expectedClientId);
+    if (!isValid) {
+      throw new Error("Webhook VenoPag rejeitado: assinatura HMAC inv\xE1lida ou client_id n\xE3o confere");
     }
     const payload = body && typeof body === "object" ? body : {};
+    const stableEventId = `venopag_${payload.request_number || "unknown"}_${payload.status || "unknown"}`;
     return {
-      gatewayEventId: `ggpix_${payload.transactionId || "evt"}_${payload.status || "status"}_${Date.now()}`,
-      gateway: "ggpixapi",
-      gatewayTransactionId: payload.transactionId || "",
-      referenceId: payload.externalId || void 0,
-      status: mapGGPixStatus(payload.status || "PENDING"),
+      gatewayEventId: stableEventId,
+      gateway: "venopag",
+      gatewayTransactionId: payload.request_number || payload.transaction_id || "",
+      referenceId: void 0,
+      status: mapVenoStatus(payload.status || "PENDING"),
       transactionType: payload.type || "PIX_IN",
-      amountInCents: payload.amount || 0,
-      netAmountInCents: payload.netAmount,
-      gatewayFeeInCents: payload.gatewayFee,
-      paidAt: payload.paidAt,
+      amountInCents: Math.round((payload.amount || 0) * 100),
+      // VenoPag envia em reais
+      netAmountInCents: void 0,
+      gatewayFeeInCents: void 0,
+      paidAt: payload.paid_at,
       rawPayload: body,
       isDuplicate: false,
-      // GGPIXAPI não tem HMAC, idempotência por externalId
+      // Preenchido pelo handler via webhookRepository.acceptEvent (durável)
       received: true
     };
   }
 };
-var ggpixAdapter = new GGPIXAdapter();
-
-// src/server/integrations/gateway/test-adapter.ts
-var IS_DEV = process.env.NODE_ENV !== "production" || process.env.PAYMENT_MODE === "sandbox";
-var TestGatewayAdapter = class {
-  constructor() {
-    this.id = "test";
-    this.displayName = "Test Gateway (Dev Only)";
-  }
-  isConfigured() {
-    if (!IS_DEV) {
-      logger.warn("payments", "test_gateway", "isConfigured", "Test gateway disabled in production");
-      return false;
-    }
-    return true;
-  }
-  async createPix(input) {
-    if (!IS_DEV) {
-      throw new Error("Test gateway only available in development/sandbox mode");
-    }
-    const gatewayTransactionId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const referenceId = input.referenceId || input.caseId;
-    const now = /* @__PURE__ */ new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 60 * 1e3);
-    const pixCopyPaste = this.generateFakePixCopyPaste(input.amountInCents, referenceId);
-    logger.info("payments", "test_gateway", "createPix", "Test PIX created", {
-      gatewayTransactionId,
-      amountInCents: input.amountInCents,
-      referenceId
-    });
-    return {
-      gatewayTransactionId,
-      referenceId,
-      gateway: this.id,
-      status: "PENDING",
-      amountInCents: input.amountInCents,
-      pixCopyPaste,
-      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCopyPaste)}`,
-      qrCodeDataUrl: await this.generateQrCodeDataUrl(pixCopyPaste),
-      expiresAt: expiresAt.toISOString(),
-      createdAt: now.toISOString(),
-      feeInCents: 0,
-      netAmountInCents: input.amountInCents
-    };
-  }
-  async getPaymentStatus(gatewayTransactionId) {
-    if (!IS_DEV) {
-      throw new Error("Test gateway only available in development/sandbox mode");
-    }
-    return {
-      gatewayTransactionId,
-      gateway: this.id,
-      status: "PAID",
-      paidAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  processWebhook(rawBody, headers, body) {
-    const parsed = typeof body === "object" && body !== null ? body : {};
-    const gatewayTransactionId = parsed.gatewayTransactionId || `test_${Date.now()}`;
-    return {
-      gatewayEventId: `test_evt_${Date.now()}`,
-      gateway: this.id,
-      gatewayTransactionId,
-      referenceId: parsed.referenceId,
-      status: "PAID",
-      transactionType: "PIX_IN",
-      amountInCents: parsed.amountInCents || 0,
-      netAmountInCents: parsed.amountInCents || 0,
-      gatewayFeeInCents: 0,
-      paidAt: (/* @__PURE__ */ new Date()).toISOString(),
-      rawPayload: body,
-      isDuplicate: false
-    };
-  }
-  generateFakePixCopyPaste(amountInCents, referenceId) {
-    const amount = (amountInCents / 100).toFixed(2);
-    return `00020126580014br.gov.bcb.pix0136test@defesai0204MULT520400005303986540${amount.padStart(10, "0")}5802BR5916DEFESAI TECNOLOG6009SAO PAULO62070503***6304`;
-  }
-  async generateQrCodeDataUrl(text) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="white"/><text x="100" y="100" font-family="monospace" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">${text.substring(0, 50)}</text></svg>`;
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
-  }
-};
-var testAdapter = IS_DEV ? new TestGatewayAdapter() : null;
+var venopagAdapter = new VenoPagAdapter();
 
 // src/server/integrations/gateway/gateway-manager.ts
-function isProductionEnvironment() {
-  return (process.env.VERCEL_ENV || "").toLowerCase().trim() === "production" || (process.env.NODE_ENV || "").toLowerCase().trim() === "production" || (process.env.PAYMENT_MODE || "").toLowerCase().trim() === "production";
-}
 function resolveActiveGatewayIdFromEnv() {
-  const envValue = (process.env.PAYMENT_ACTIVE_GATEWAY || "").toLowerCase().trim();
-  if (isProductionEnvironment() && envValue === "pagbank") return "ggpixapi";
-  const configOverride = configService.get("PAYMENT_ACTIVE_GATEWAY_OVERRIDE");
-  if (configOverride && (configOverride === "ggpixapi" || configOverride === "pagbank" || configOverride === "test")) return configOverride;
-  if (isProductionEnvironment()) return "ggpixapi";
-  if (isProductionEnvironment()) return "ggpixapi";
-  if (envValue === "ggpixapi" || envValue === "ggpix") return "ggpixapi";
-  if (envValue === "pagbank") return "pagbank";
-  if (envValue === "test") return "test";
-  return "ggpixapi";
+  return "venopag";
 }
 var GatewayManager = class {
   constructor() {
     this.gateways = /* @__PURE__ */ new Map();
-    this.gateways.set("pagbank", pagbankAdapter);
-    this.gateways.set("ggpixapi", ggpixAdapter);
-    if (testAdapter) this.gateways.set("test", testAdapter);
+    this.gateways.set("venopag", venopagAdapter);
     logger.info("payments", "gateway_manager", "init", "Gateway manager initialized", { availableGateways: Array.from(this.gateways.keys()) });
   }
   resolveActiveGatewayId() {
@@ -30204,7 +29947,7 @@ var GatewayManager = class {
     const currentId = this.resolveActiveGatewayId();
     const active = this.gateways.get(currentId);
     if (!active) throw new Error(`Gateway '${currentId}' not found.`);
-    if (!active.isConfigured()) throw new Error(`Gateway '${active.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais.`);
+    if (!active.isConfigured()) throw new Error(`Gateway '${active.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais (VENO_CLIENT_ID, VENO_CLIENT_SECRET).`);
     return active;
   }
   getGateway(id) {
@@ -30219,33 +29962,26 @@ var GatewayManager = class {
       const isConfigured = gw.isConfigured();
       let notConfiguredReason;
       if (!isConfigured) {
-        if (gw.id === "pagbank") notConfiguredReason = "PAGBANK_TOKEN n\xE3o configurado";
-        else if (gw.id === "ggpixapi") notConfiguredReason = "GGPIX_API_KEY ou GGPIX_ENABLED n\xE3o configurado";
-        else if (gw.id === "test") notConfiguredReason = "Apenas para desenvolvimento/teste (NODE_ENV !== production)";
+        notConfiguredReason = "VENO_CLIENT_ID / VENO_CLIENT_SECRET / VENO_ENABLED n\xE3o configurados";
       }
-      return { id: gw.id, displayName: gw.displayName, status: isConfigured ? "configured" : "not_configured", isActive: gw.id === this.resolveActiveGatewayId(), supportsCreditCard: gw.id === "pagbank", notConfiguredReason };
+      return { id: gw.id, displayName: gw.displayName, status: isConfigured ? "configured" : "not_configured", isActive: true, supportsCreditCard: false, notConfiguredReason };
     });
   }
   getActiveGatewayId() {
-    return this.resolveActiveGatewayId();
+    return "venopag";
   }
-  isProductionGateway(id) {
-    return id === "ggpixapi";
+  isProductionGateway(_id) {
+    return true;
   }
   async setActiveGateway(id, updatedBy = "admin") {
+    if (id !== "venopag") return { success: false, message: `Gateway '${id}' n\xE3o suportado. Apenas VenoPag est\xE1 dispon\xEDvel.` };
     const gateway = this.gateways.get(id);
-    if (!gateway) return { success: false, message: `Gateway '${id}' n\xE3o encontrado.` };
-    if (!gateway.isConfigured()) return { success: false, message: `Gateway '${gateway.displayName}' n\xE3o est\xE1 configurado. Configure as credenciais antes de ativ\xE1-lo.` };
-    const previousId = this.resolveActiveGatewayId();
-    const updateResult = await configService.update({ key: "PAYMENT_ACTIVE_GATEWAY_OVERRIDE", value: id, updatedBy });
-    if (!updateResult.success) return { success: false, message: `Falha ao persistir override: ${updateResult.message}` };
-    logger.info("payments", "gateway_manager", "set_active", `Gateway changed: ${previousId} \u2192 ${id} (persisted to ConfigService)`, { previousGateway: previousId, newGateway: id, updatedBy });
-    return { success: true, message: `Gateway alterado para '${gateway.displayName}'. Novos pagamentos usar\xE3o este gateway.` };
+    if (!gateway || !gateway.isConfigured()) return { success: false, message: `Gateway VenoPag n\xE3o est\xE1 configurado. Configure as credenciais.` };
+    logger.info("payments", "gateway_manager", "set_active", `Gateway VenoPag confirmado como ativo`, { gateway: id, updatedBy });
+    return { success: true, message: `Gateway VenoPag ativo.` };
   }
-  supportsCreditCard(gatewayId) {
-    const id = gatewayId || this.resolveActiveGatewayId();
-    const gateway = this.gateways.get(id);
-    return gateway?.createCreditCard !== void 0;
+  supportsCreditCard(_gatewayId) {
+    return false;
   }
 };
 var gatewayManager = new GatewayManager();
@@ -30253,18 +29989,14 @@ var gatewayManager = new GatewayManager();
 // src/server/integrations/gateway/webhook-handler.ts
 function detectGatewayFromPath(path2) {
   const normalized = path2.toLowerCase();
-  if (normalized.includes("pagbank")) return "pagbank";
-  if (normalized.includes("ggpix")) return "ggpixapi";
+  if (normalized.includes("venopag")) return "venopag";
   return null;
 }
 function detectGatewayFromPayload(body) {
   if (!body || typeof body !== "object") return null;
   const obj = body;
-  if (Array.isArray(obj.charges) || "reference_id" in obj && "created_at" in obj) {
-    return "pagbank";
-  }
-  if ("transactionId" in obj && "type" in obj && "status" in obj) {
-    return "ggpixapi";
+  if ("request_number" in obj && "status" in obj) {
+    return "venopag";
   }
   return null;
 }
@@ -30321,6 +30053,196 @@ function processGatewayWebhook(requestPath, rawBody, headers, body) {
     return null;
   }
 }
+
+// src/server/db/webhook-repository.ts
+function allowInMemoryWebhookPersistence() {
+  return process.env.ALLOW_IN_MEMORY_WEBHOOK_PERSISTENCE === "true";
+}
+var WebhookRepository = class {
+  constructor() {
+    this.client = getSupabaseServerClient();
+    // Fallback em memória apenas para dev/isolado sem Supabase.
+    this.memoryEvents = /* @__PURE__ */ new Map();
+  }
+  getClient() {
+    if (this.client) return this.client;
+    this.client = getSupabaseServerClient();
+    return this.client;
+  }
+  // =========================================================================
+  // 1. accept — aceitar evento de forma durável e idempotente
+  // =========================================================================
+  /**
+   * Insere o evento se for novo (event_id UNIQUE). Retorna isNew=true quando
+   * o evento foi aceito pela primeira vez; isNew=false quando já existia
+   * (entrega duplicada — deve ser ignorada sem aplicar efeitos colaterais).
+   *
+   * Lança erro se não conseguir persistir (FAIL CLOSED): nunca confirma 2xx
+   * sem saber se o evento é novo ou duplicado.
+   */
+  async acceptEvent(eventId, provider, payload) {
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryWebhookPersistence()) {
+        const existing = this.memoryEvents.get(eventId);
+        if (existing) {
+          logger.warn("supabase", "webhook_repository", "accept", "Evento duplicado (mem\xF3ria)", { eventId, metadata: { provider } });
+          return { eventId, provider, payload, isNew: false };
+        }
+        this.memoryEvents.set(eventId, { provider, payload, status: "received", attempts: 0 });
+        logger.info("supabase", "webhook_repository", "accept", "Evento aceito (mem\xF3ria)", { eventId, metadata: { provider } });
+        return { eventId, provider, payload, isNew: true };
+      }
+      throw new Error("WebhookRepository: Supabase client n\xE3o configurado \u2014 aceita\xE7\xE3o dur\xE1vel obrigat\xF3ria. Habilite ALLOW_IN_MEMORY_WEBHOOK_PERSISTENCE=true para dev isolado.");
+    }
+    try {
+      const { data, error } = await client.from("webhook_events").insert({
+        event_id: eventId,
+        provider,
+        payload: payload ?? null,
+        status: "received",
+        attempts: 0
+      }).select("event_id").maybeSingle();
+      if (error) {
+        if (error.code === "23505") {
+          logger.info("supabase", "webhook_repository", "accept", "Evento duplicado ignorado (unique_violation)", { eventId, metadata: { provider } });
+          return { eventId, provider, payload, isNew: false };
+        }
+        logger.error("supabase", "webhook_repository", "accept", `Falha ao aceitar evento webhook: ${error.message}`, { eventId, code: error.code, metadata: { provider } });
+        throw new Error(`Falha ao aceitar evento webhook ${eventId}: ${error.message}`);
+      }
+      if (!data) {
+        logger.info("supabase", "webhook_repository", "accept", "Evento duplicado ignorado (sem dados retornados)", { eventId, metadata: { provider } });
+        return { eventId, provider, payload, isNew: false };
+      }
+      logger.info("supabase", "webhook_repository", "accept", "Evento aceito (dur\xE1vel)", { eventId, metadata: { provider } });
+      return { eventId, provider, payload, isNew: true };
+    } catch (err) {
+      if (err?.code === "23505") {
+        return { eventId, provider, payload, isNew: false };
+      }
+      throw err;
+    }
+  }
+  // =========================================================================
+  // 2. claim — lease de evento pendente para processamento (worker)
+  // =========================================================================
+  /**
+   * Faz lease atômico de um evento em status 'received' com attempts < maxAttempts,
+   * incrementando attempts e marcando status='processing'. Usa FOR UPDATE SKIP LOCKED
+   * para que múltiplos workers não processem o mesmo evento simultaneamente.
+   *
+   * Retorna null se não houver eventos disponíveis.
+   */
+  async claimPendingEvent(maxAttempts = 5) {
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryWebhookPersistence()) {
+        for (const [eventId, ev] of this.memoryEvents) {
+          if (ev.status === "received" && ev.attempts < maxAttempts) {
+            ev.attempts += 1;
+            ev.status = "processing";
+            return { eventId, provider: ev.provider, payload: ev.payload, attempts: ev.attempts };
+          }
+        }
+        return null;
+      }
+      throw new Error("WebhookRepository: Supabase client n\xE3o configurado \u2014 claim obrigat\xF3rio.");
+    }
+    try {
+      const { data, error } = await client.rpc("claim_webhook_event", { p_max_attempts: maxAttempts });
+      if (error) {
+        logger.error("supabase", "webhook_repository", "claim", `Falha ao claimar evento: ${error.message}`);
+        return null;
+      }
+      if (!data || data.length === 0) return null;
+      const row = data[0];
+      return {
+        eventId: row.event_id,
+        provider: row.provider,
+        payload: row.payload,
+        attempts: row.attempts
+      };
+    } catch (err) {
+      logger.error("supabase", "webhook_repository", "claim", `Erro ao claimar evento: ${err?.message || err}`);
+      return null;
+    }
+  }
+  // =========================================================================
+  // 3. complete — marcar evento como processado com sucesso
+  // =========================================================================
+  /**
+   * Marca o evento como processado (status='processed', processed_at=now()).
+   * Idempotente: chamar múltiplas vezes não causa erro.
+   */
+  async completeEvent(eventId) {
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryWebhookPersistence()) {
+        const ev = this.memoryEvents.get(eventId);
+        if (ev) {
+          ev.status = "processed";
+          ev.processedAt = /* @__PURE__ */ new Date();
+        }
+        return;
+      }
+      throw new Error("WebhookRepository: Supabase client n\xE3o configurado \u2014 complete obrigat\xF3rio.");
+    }
+    try {
+      const { error } = await client.from("webhook_events").update({ status: "processed", processed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("event_id", eventId);
+      if (error) {
+        logger.error("supabase", "webhook_repository", "complete", `Falha ao completar evento ${eventId}: ${error.message}`);
+        throw new Error(`Falha ao completar evento webhook ${eventId}: ${error.message}`);
+      }
+      logger.info("supabase", "webhook_repository", "complete", "Evento marcado como processado", { eventId });
+    } catch (err) {
+      logger.error("supabase", "webhook_repository", "complete", `Erro ao completar evento ${eventId}: ${err?.message || err}`);
+      throw err;
+    }
+  }
+  // =========================================================================
+  // 4. fail — marcar evento como falhado (para DLQ / inspeção)
+  // =========================================================================
+  async failEvent(eventId, errorMessage) {
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryWebhookPersistence()) {
+        const ev = this.memoryEvents.get(eventId);
+        if (ev) {
+          ev.status = "failed";
+        }
+        return;
+      }
+      return;
+    }
+    try {
+      await client.from("webhook_events").update({ status: "failed", processing_error: errorMessage }).eq("event_id", eventId);
+    } catch (err) {
+      logger.error("supabase", "webhook_repository", "fail", `Erro ao falhar evento ${eventId}: ${err?.message || err}`);
+    }
+  }
+  // =========================================================================
+  // 5. isProcessed — consulta rápida se evento já foi processado
+  // =========================================================================
+  async isProcessed(eventId) {
+    const client = this.getClient();
+    if (!client) {
+      if (allowInMemoryWebhookPersistence()) {
+        const ev = this.memoryEvents.get(eventId);
+        return !!ev && ev.status === "processed";
+      }
+      return false;
+    }
+    try {
+      const { data, error } = await client.from("webhook_events").select("status").eq("event_id", eventId).maybeSingle();
+      if (error || !data) return false;
+      return data.status === "processed";
+    } catch {
+      return false;
+    }
+  }
+};
+var webhookRepository = new WebhookRepository();
 
 // src/core/documents/defense-integrity.ts
 import { createHash as createHash3 } from "node:crypto";
@@ -30440,7 +30362,7 @@ function canPayCase(req, caseId) {
   if (typeof provided !== "string" || !provided || !row?.claim_token) return false;
   const a = Buffer.from(provided);
   const b = Buffer.from(row.claim_token);
-  return a.length === b.length && crypto5.timingSafeEqual(a, b);
+  return a.length === b.length && crypto6.timingSafeEqual(a, b);
 }
 function assertCanPayCase(req, res, caseId) {
   if (!caseId) return true;
@@ -30500,7 +30422,7 @@ router11.use("/webhooks/pagbank", (req, _res, next) => {
     next();
   });
 });
-router11.use("/webhooks/ggpix", (req, _res, next) => {
+router11.use("/webhooks/venopag", (req, _res, next) => {
   if (req.rawBody !== void 0) return next();
   let rawBody = "";
   req.setEncoding("utf8");
@@ -30512,7 +30434,7 @@ router11.use("/webhooks/ggpix", (req, _res, next) => {
     next();
   });
 });
-router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => {
+router11.post("/pix/create", prodAuth, async (req, res) => {
   try {
     const {
       caseId,
@@ -30553,10 +30475,10 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       },
       amountInCents: Math.round(finalAmount * 100),
       description: `DefesAi - ${offerResult.offer.name}`,
-      webhookUrl: `${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/${gateway.id === "ggpixapi" ? "ggpix" : "pagbank"}`
+      webhookUrl: `${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/venopag`
     });
     const domain = { serviceType: offerResult.offer.serviceType, commercialOfferId: offerResult.offer.commercialId };
-    logger.info("payments", "gateway", "create_pix_order", "PIX order created", {
+    logger.info("payments", "gateway", "create_pix_order", "VenoPag PIX order created", {
       serviceType: offerResult.offer.serviceType,
       pricingId: offerResult.offer.commercialId,
       baseAmount: offerResult.offer.baseAmount,
@@ -30570,6 +30492,33 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       environment: process.env.PAYMENT_MODE || "sandbox",
       userRole: req.user?.role
     });
+    try {
+      const caseIdUuid = domainIdToUuid(caseId || `case_${Date.now()}`);
+      const supabaseForOrder = getSupabaseServerClient();
+      if (supabaseForOrder && caseIdUuid) {
+        await supabaseForOrder.from("payment_orders").upsert({
+          case_id: caseIdUuid,
+          user_id: effectiveUserId && /^[0-9a-f-]{36}$/i.test(effectiveUserId) ? effectiveUserId : null,
+          reference_id: `defesai_case_${caseId}`,
+          pagbank_order_id: orderResult.gatewayTransactionId || `ord_${caseId}`,
+          gateway: "venopag",
+          status: "PENDING",
+          amount: finalAmount,
+          currency: "BRL",
+          payment_method: "pix",
+          paid_at: null,
+          base_amount: finalAmount,
+          discount_amount: 0,
+          final_amount: finalAmount,
+          expires_at: null
+        }, { onConflict: "case_id" });
+      }
+    } catch (orderErr) {
+      logger.warn("payments", "venopag", "order_insert", "Non-blocking order insert issue (PIX creation)", {
+        error: orderErr?.message,
+        caseId
+      });
+    }
     res.json({
       success: true,
       order: orderResult,
@@ -30583,8 +30532,8 @@ router11.post(["/pagbank/orders", "/pix/create"], prodAuth, async (req, res) => 
       gateway: gateway.id
     });
   } catch (error) {
-    logger.error("payments", "pix_create", "create_pix_order", "Error creating PIX order", { error: error.message });
-    res.status(500).json({ error: error.message || "Erro ao gerar pedido PIX" });
+    logger.error("payments", "venopag", "create_pix_order", "Error creating PIX order", { error: error.message });
+    res.status(500).json({ error: "Erro ao gerar pedido PIX" });
   }
 });
 router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
@@ -30606,15 +30555,15 @@ router11.get("/pix/status/:txId", prodAuth, async (req, res) => {
       return res.json({ success: true, txId, status: result.status });
     } catch (err) {
       logger.error("payments", "gateway", "pix_status", "Error querying payment status", {
-        error: err.message,
+        error: "Erro ao consultar status do pagamento",
         gateway: activeGatewayId,
         environment: process.env.PAYMENT_MODE || "sandbox"
       });
-      return res.status(500).json({ error: err.message || "Erro ao consultar status do pagamento" });
+      return res.status(500).json({ error: "Erro ao consultar status do pagamento" });
     }
   } catch (err) {
     logger.error("payments", "gateway", "pix_status", "Error querying payment status", { error: err.message });
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Erro ao consultar status do pagamento" });
   }
 });
 router11.post("/credit-card/create", prodAuth, async (req, res) => {
@@ -30667,10 +30616,10 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     }
     const gateway = gatewayManager.getActiveGateway();
     if (!assertCanPayCase(req, res, caseId)) return;
-    if (gateway.id !== "pagbank") {
+    if (gateway.id !== "venopag") {
       return res.status(400).json({
         error: "Gateway ativo n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito.",
-        message: `O gateway '${gateway.displayName}' s\xF3 aceita PIX. Altere o gateway para PagBank nas configura\xE7\xF5es de pagamento.`,
+        message: "O gateway VenoPag s\xF3 aceita PIX. Apenas PIX est\xE1 dispon\xEDvel.",
         gateway: gateway.id,
         supportedMethods: ["pix"]
       });
@@ -30737,7 +30686,7 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     });
   } catch (error) {
     logger.error("payments", "gateway", "create_credit_card_order", "Error creating credit card order", { error: error.message });
-    res.status(500).json({ error: error.message || "Erro ao gerar pedido de cart\xE3o de cr\xE9dito" });
+    res.status(500).json({ error: "Erro ao gerar pedido de cart\xE3o de cr\xE9dito" });
   }
 });
 router11.get("/pagbank/orders/:id", (req, res) => {
@@ -30752,100 +30701,115 @@ router11.post("/webhooks/pagbank", async (req, res) => {
     const rawBody = req.rawBody || JSON.stringify(req.body);
     const payload = req.body;
     const signature = req.headers["x-hub-signature-256"] || req.headers["x-pagbank-signature"] || req.headers["x-authenticity-token"];
-    const webhookResult = pagBankIntegration.processWebhook(rawBody, signature, payload);
-    if (!webhookResult.signatureValid) {
+    const signatureValid = pagBankIntegration.verifyWebhookSignature(rawBody, signature);
+    if (!signatureValid) {
       logger.error("payments", "pagbank", "webhook", "Invalid signature - rejecting webhook", {
-        eventId: payload.id
+        eventId: payload?.id
       });
       return res.status(401).json({ error: "Assinatura inv\xE1lida", received: false });
     }
-    const rawReference = webhookResult.referenceId || typeof payload.reference_id === "string" ? payload.reference_id : typeof payload.referenceId === "string" ? payload.referenceId : null;
-    const caseId = typeof rawReference === "string" ? rawReference.replace("defesai_case_", "") : null;
-    if (caseId && webhookResult.status === "PAID") {
+    const webhookEventId = payload.id || `wh_${Date.now()}`;
+    const firstCharge = payload.charges?.[0];
+    const isPaid = firstCharge?.status === "PAID";
+    const referenceId = payload.reference_id || firstCharge?.reference_id || "";
+    const caseId = typeof referenceId === "string" ? referenceId.replace("defesai_case_", "") : null;
+    const accepted = await webhookRepository.acceptEvent(webhookEventId, "pagbank", payload);
+    if (!accepted.isNew) {
+      logger.info("payments", "pagbank", "webhook", "Webhook duplicado \u2014 aceita\xE7\xE3o dur\xE1vel ignorou", {
+        webhookEventId,
+        caseId
+      });
+    }
+    if (isPaid && caseId) {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
-        const paymentAmount = Number((webhookResult.amountInCents || 0) / 100);
-        domain.isPaid = true;
-        domain.paidAt = (/* @__PURE__ */ new Date()).toISOString();
-        domain.status = "defesa_pronta";
-        domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || "recurso_jari";
-        const paymentMethod = domain.payment?.paymentMethod || (webhookResult.transactionType === "CREDIT_CARD" ? "credit_card" : "pix");
-        domain.payment = {
-          status: "approved",
-          amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
-          paidAt: (/* @__PURE__ */ new Date()).toISOString(),
-          transactionId: webhookResult.orderId || webhookResult.gatewayTransactionId,
-          paymentMethod
-        };
-        if (webhookResult.commercialOfferId) {
-          domain.commercialOfferId = webhookResult.commercialOfferId;
-        }
-        if (webhookResult.serviceType && !domain.serviceType) {
-          domain.serviceType = webhookResult.serviceType;
-        }
-        try {
-          const defense = generateDefenseDraftForDomain(domain);
-          defense.generationCount = 1;
-          defense.integrityHash = computeDefenseIntegrityHash(
-            defense,
-            domain.analysis
-          );
-          domain.defenseDraft = defense;
-          domain.documentGenerationStatus = "ready";
+        const alreadyPaid = domain.isPaid === true && domain.payment?.transactionId === (firstCharge?.reference_id || payload.id || void 0);
+        if (!alreadyPaid) {
+          const paymentAmount = Number((firstCharge?.amount?.value || 0) / 100);
+          domain.isPaid = true;
+          domain.paidAt = firstCharge?.paid_at || (/* @__PURE__ */ new Date()).toISOString();
+          domain.status = "defesa_pronta";
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || "recurso_jari";
+          const paymentMethod = domain.payment?.paymentMethod || (firstCharge?.payment_method?.type === "CREDIT_CARD" ? "credit_card" : "pix");
+          domain.payment = {
+            status: "approved",
+            amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
+            paidAt: (/* @__PURE__ */ new Date()).toISOString(),
+            transactionId: firstCharge?.reference_id || payload.id || `ord_${domain.id}`,
+            paymentMethod
+          };
+          try {
+            const defense = generateDefenseDraftForDomain(domain);
+            defense.generationCount = 1;
+            defense.integrityHash = computeDefenseIntegrityHash(
+              defense,
+              domain.analysis
+            );
+            domain.defenseDraft = defense;
+            domain.documentGenerationStatus = "ready";
+            domain.timeline.push({
+              id: `tl_def_auto_${Date.now()}`,
+              title: "Defesa Gerada Automaticamente",
+              description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente ap\xF3s confirma\xE7\xE3o do pagamento.`,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+              type: "defense"
+            });
+          } catch (defenseError) {
+            logger.error("payments", "pagbank", "webhook", "Falha ao gerar defesa automaticamente ap\xF3s pagamento (n\xE3o-bloqueante)", {
+              error: defenseError?.message,
+              caseId: domain.id
+            });
+          }
           domain.timeline.push({
-            id: `tl_def_auto_${Date.now()}`,
-            title: "Defesa Gerada Automaticamente",
-            description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente ap\xF3s confirma\xE7\xE3o do pagamento.`,
+            id: `tl_webhook_${Date.now()}`,
+            title: "Pagamento Confirmado via Webhook PagBank",
+            description: `Transa\xE7\xE3o ${firstCharge?.reference_id || payload.id} aprovada pela institui\xE7\xE3o financeira.`,
             timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-            type: "defense"
+            type: "payment"
           });
-        } catch (defenseError) {
-          logger.error("payments", "pagbank", "webhook", "Falha ao gerar defesa automaticamente ap\xF3s pagamento (n\xE3o-bloqueante)", {
-            error: defenseError?.message,
-            caseId: domain.id
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: firstCharge?.reference_id || payload.id || `ord_${domain.id}`,
+            caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || "Condutor DefesAi",
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount
+          });
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            actor: domain.clientName || "Cliente",
+            role: "citizen",
+            action: "PAYMENT_CONFIRMED",
+            targetResource: domain.id,
+            ipHash: "3a88c42b109e",
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
+            gdprCompliant: true
           });
         }
-        domain.timeline.push({
-          id: `tl_webhook_${Date.now()}`,
-          title: "Pagamento Confirmado via Webhook PagBank",
-          description: `Transa\xE7\xE3o ${webhookResult.orderId || webhookResult.gatewayTransactionId} aprovada pela institui\xE7\xE3o financeira.`,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          type: "payment"
-        });
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-        commercialService.processPaymentConfirmationEvent({
-          paymentId: webhookResult.orderId || webhookResult.gatewayTransactionId || `ord_${domain.id}`,
-          caseId: domain.id,
-          buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-          buyerUserName: domain.clientName || "Condutor DefesAi",
-          grossAmount: domain.payment.amount,
-          discountAmount: 0,
-          effectivelyPaid: domain.payment.amount
-        });
-        auditLogs.unshift({
-          id: `audit_pay_${Date.now()}`,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          actor: domain.clientName || "Cliente",
-          role: "citizen",
-          action: "PAYMENT_CONFIRMED",
-          targetResource: domain.id,
-          ipHash: "3a88c42b109e",
-          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
-          gdprCompliant: true
-        });
       }
     }
-    res.status(200).json({ received: true, ...webhookResult });
+    try {
+      await webhookRepository.completeEvent(webhookEventId);
+    } catch (completeErr) {
+      logger.warn("payments", "pagbank", "webhook", "Falha ao marcar evento como processado \u2014 ser\xE1 retryado pelo worker", {
+        webhookEventId,
+        error: completeErr?.message
+      });
+    }
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId });
   } catch (error) {
     logger.error("payments", "pagbank", "webhook", "Webhook processing error", { error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
 router11.post("/simulate-payment", authenticateToken, requireAdmin, async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
+  if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
     return res.status(501).json({
       error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
       message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
@@ -31013,11 +30977,11 @@ router11.post("/simulate-payment", authenticateToken, requireAdmin, async (req, 
     });
   } catch (err) {
     logger.error("payments", "simulation", "error", "Error simulating payment", { error: err.message });
-    res.status(500).json({ error: err.message || "Erro ao simular pagamento" });
+    res.status(500).json({ error: "Erro ao simular pagamento" });
   }
 });
 router11.post("/simulate-confirm", async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
+  if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
     return res.status(501).json({
       error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
       message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
@@ -31051,52 +31015,34 @@ router11.post("/simulate-confirm", async (req, res) => {
   res.json({ success: true, case: domain });
 });
 router11.post("/sandbox/trigger-webhook", async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
+  if ((process.env.PAYMENT_MODE || "sandbox").toLowerCase() === "production") {
     return res.status(501).json({
       error: "Endpoint de simula\xE7\xE3o n\xE3o dispon\xEDvel em produ\xE7\xE3o",
       message: "Estado de pagamento deve ser alterado apenas via webhooks oficiais dos gateways."
     });
   }
   try {
-    const { gateway = "pagbank", eventType = "PAID", caseId, amount = 89.9 } = req.body;
+    const { gateway = "venopag", eventType = "PAID", caseId, amount = 89.9 } = req.body;
     if (!caseId) {
       return res.status(400).json({ error: "caseId \xE9 obrigat\xF3rio" });
     }
     let payload;
     let path2;
     let headers = {};
-    if (gateway === "pagbank") {
-      path2 = "/webhooks/pagbank";
+    if (gateway === "venopag") {
+      path2 = "/webhooks/venopag";
       payload = {
-        id: `evt_sim_${Date.now()}`,
-        reference_id: `defesai_case_${caseId}`,
-        created_at: (/* @__PURE__ */ new Date()).toISOString(),
-        charges: [
-          {
-            id: `ch_sim_${Date.now()}`,
-            reference_id: `defesai_case_${caseId}`,
-            status: eventType === "PAID" ? "PAID" : "CANCELED",
-            created_at: (/* @__PURE__ */ new Date()).toISOString(),
-            paid_at: eventType === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : void 0,
-            amount: { value: Math.round(amount * 100), currency: "BRL" },
-            payment_method: { type: "PIX" }
-          }
-        ]
-      };
-      headers["x-hub-signature-256"] = "sha256=sandbox_dev_signature";
-    } else {
-      path2 = "/webhooks/ggpix";
-      payload = {
-        transactionId: `ggpix_tx_sim_${Date.now()}`,
-        externalId: `defesai_case_${caseId}`,
+        request_number: `defesai_case_${caseId}`,
         status: eventType === "PAID" ? "COMPLETE" : "CANCELED",
         type: "PIX_IN",
         amount,
-        netAmount: amount * 0.98,
-        gatewayFee: amount * 0.02,
-        paidAt: eventType === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+        client_id: "test_client",
+        created_at: (/* @__PURE__ */ new Date()).toISOString()
       };
-      headers["x-forwarded-for"] = "127.0.0.1";
+      headers["x-veno-client-id"] = "test_client";
+      headers["x-veno-signature"] = "t=0,v1=sandbox_dev_hmac";
+    } else {
+      return res.status(400).json({ error: `Gateway '${gateway}' n\xE3o suportado em sandbox. Use 'venopag'.` });
     }
     const rawBody = JSON.stringify(payload);
     const result = processGatewayWebhook(path2, rawBody, headers, payload);
@@ -31107,75 +31053,90 @@ router11.post("/sandbox/trigger-webhook", async (req, res) => {
     });
   } catch (err) {
     logger.error("payments", "sandbox", "webhook_trigger", "Error triggering sandbox webhook", { error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Erro ao consultar status do pagamento" });
   }
 });
 router11.post("/webhooks/ggpix", async (req, res) => {
   try {
     const rawBody = req.rawBody || JSON.stringify(req.body);
     const payload = req.body;
-    const result = processGatewayWebhook("/webhooks/ggpix", rawBody, req.headers, payload);
-    if (!result) {
-      logger.warn("payments", "ggpix", "webhook", "GGPIXAPI webhook not recognized", {
-        hasTransactionId: !!payload?.transactionId
+    const allowedIpsRaw = process.env.GGPIX_WEBHOOK_ALLOWED_IPS || "";
+    const allowedIps = allowedIpsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const clientIp = req.ip || req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "";
+    const clientIpStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
+    if (allowedIps.length === 0) {
+      logger.warn("payments", "ggpix", "webhook", "Allowlist GGPIX vazia \u2014 webhook rejeitado (fail-closed)", {
+        clientIp: clientIpStr
       });
-      return res.status(400).json({ error: "Webhook n\xE3o reconhecido" });
+      return res.status(401).json({ error: "Allowlist GGPIX nao configurada", received: false });
     }
-    const { event } = result;
-    const caseId = event.referenceId?.replace("defesai_case_", "") || null;
-    if (caseId && event.status === "PAID") {
+    const ipOk = allowedIps.includes(clientIpStr);
+    if (!ipOk) {
+      logger.warn("payments", "ggpix", "webhook", "IP n\xE3o permitido no allowlist GGPIXAPI", {
+        clientIp: clientIpStr,
+        allowedIps
+      });
+      return res.status(401).json({ error: "IP n\xE3o autorizado", received: false });
+    }
+    const gatewayEventId = payload?.gatewayEventId || payload?.event_id || `ggpix_${payload?.referenceId || "evt"}_${payload?.status || "status"}`;
+    const referenceId = payload?.referenceId || null;
+    const caseId = typeof referenceId === "string" ? referenceId.replace("defesai_case_", "") : null;
+    const status = payload?.status || "PENDING";
+    const isPaid = status === "PAID";
+    const accepted = await webhookRepository.acceptEvent(gatewayEventId, "ggpixapi", payload);
+    if (!accepted.isNew) {
+      logger.info("payments", "ggpix", "webhook", "Webhook duplicado \u2014 aceita\xE7\xE3o dur\xE1vel ignorou", {
+        gatewayEventId,
+        caseId
+      });
+    }
+    if (isPaid && caseId) {
       const row = databaseRows.get(caseId);
       if (row) {
         const domain = CanonicalMapper.rowToDomain(row);
-        const paymentAmount = Number((event.amountInCents || 0) / 100);
-        domain.isPaid = true;
-        domain.paidAt = event.paidAt || (/* @__PURE__ */ new Date()).toISOString();
-        domain.status = "defesa_pronta";
-        domain.currentStage = 3;
-        domain.serviceType = domain.serviceType || "recurso_jari";
-        domain.payment = {
-          status: "approved",
-          amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
-          paidAt: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
-          transactionId: event.gatewayTransactionId,
-          paymentMethod: "pix"
-        };
-        if (event.commercialOfferId) {
-          domain.commercialOfferId = event.commercialOfferId;
-        }
-        if (event.serviceType && !domain.serviceType) {
-          domain.serviceType = event.serviceType;
-        }
-        domain.timeline.push({
-          id: `tl_webhook_${Date.now()}`,
-          title: "Pagamento Confirmado via Webhook GGPIXAPI",
-          description: `Transa\xE7\xE3o ${event.gatewayTransactionId} aprovada automaticamente pelo gateway GGPIXAPI.`,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          type: "payment"
-        });
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-        if (event.status === "PAID") {
+        const alreadyPaid = domain.isPaid === true && domain.payment?.transactionId === (payload?.gatewayTransactionId || void 0);
+        if (!alreadyPaid) {
+          const paymentAmount = Number((payload?.amountInCents || 0) / 100);
+          domain.isPaid = true;
+          domain.paidAt = payload?.paidAt || (/* @__PURE__ */ new Date()).toISOString();
+          domain.status = "defesa_pronta";
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || "recurso_jari";
+          domain.payment = {
+            status: "approved",
+            amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
+            paidAt: payload?.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
+            transactionId: payload?.gatewayTransactionId || `ord_${domain.id}`,
+            paymentMethod: "pix"
+          };
+          domain.timeline.push({
+            id: `tl_webhook_${Date.now()}`,
+            title: "Pagamento Confirmado via Webhook GGPIXAPI",
+            description: `Transa\xE7\xE3o ${payload?.gatewayTransactionId} aprovada automaticamente pelo gateway GGPIXAPI.`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            type: "payment"
+          });
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
           try {
-            const paymentAmount2 = Number((event.amountInCents || 0) / 100);
-            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const gatewayTxnId = payload?.gatewayTransactionId || `ord_${domain.id}`;
             const caseIdUuid = domainIdToUuid(domain.id);
             const supabaseForOrder = getSupabaseServerClient();
             if (supabaseForOrder && caseIdUuid) {
               await supabaseForOrder.from("payment_orders").upsert({
                 case_id: caseIdUuid,
                 user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
-                reference_id: event.referenceId || `defesai_case_${domain.id}`,
+                reference_id: payload?.referenceId || `defesai_case_${domain.id}`,
                 pagbank_order_id: gatewayTxnId,
                 gateway: "ggpixapi",
                 status: "PAID",
-                amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
                 currency: "BRL",
                 payment_method: "pix",
-                paid_at: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
-                base_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                paid_at: payload?.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
+                base_amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
                 discount_amount: 0,
-                final_amount: paymentAmount2 > 0 ? paymentAmount2 : domain.payment?.amount || 0,
+                final_amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
                 expires_at: null
               }, { onConflict: "case_id" });
             }
@@ -31185,32 +31146,179 @@ router11.post("/webhooks/ggpix", async (req, res) => {
               caseId: domain.id
             });
           }
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: payload?.gatewayTransactionId || `ord_${domain.id}`,
+            caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || "Condutor DefesAi",
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount
+          });
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            actor: domain.clientName || "Cliente",
+            role: "citizen",
+            action: "PAYMENT_CONFIRMED",
+            targetResource: domain.id,
+            ipHash: "3a88c42b109e",
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via PIX GGPIXAPI confirmado.`,
+            gdprCompliant: true
+          });
         }
-        commercialService.processPaymentConfirmationEvent({
-          paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
-          caseId: domain.id,
-          buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
-          buyerUserName: domain.clientName || "Condutor DefesAi",
-          grossAmount: domain.payment.amount,
-          discountAmount: 0,
-          effectivelyPaid: domain.payment.amount
-        });
-        auditLogs.unshift({
-          id: `audit_pay_${Date.now()}`,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          actor: domain.clientName || "Cliente",
-          role: "citizen",
-          action: "PAYMENT_CONFIRMED",
-          targetResource: domain.id,
-          ipHash: "3a88c42b109e",
-          details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via PIX GGPIXAPI confirmado.`,
-          gdprCompliant: true
-        });
       }
     }
-    res.status(200).json({ received: true, gatewayEventId: event.gatewayEventId });
+    try {
+      await webhookRepository.completeEvent(gatewayEventId);
+    } catch (completeErr) {
+      logger.warn("payments", "ggpix", "webhook", "Falha ao marcar evento como processado \u2014 ser\xE1 retryado pelo worker", {
+        gatewayEventId,
+        error: completeErr?.message
+      });
+    }
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, gatewayEventId });
   } catch (error) {
     logger.error("payments", "ggpix", "webhook", "GGPIXAPI webhook processing error", { error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+router11.post("/webhooks/venopag", async (req, res) => {
+  try {
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    const payload = req.body;
+    const signature = req.headers["x-veno-signature"] || req.headers["x-hub-signature-256"] || req.headers["x-authenticity-token"];
+    const webhookResult = venopagAdapter.processWebhook(rawBody, req.headers, payload);
+    const signatureValid = true;
+    const event = webhookResult;
+    const webhookEventId = event.gatewayEventId || `venopag_${event.gatewayTransactionId || "unknown"}_${event.status || "unknown"}`;
+    const rawReference = event.referenceId || event.gatewayTransactionId || null;
+    const caseId = typeof rawReference === "string" ? rawReference.replace("defesai_case_", "") : null;
+    const accepted = await webhookRepository.acceptEvent(webhookEventId, "venopag", payload);
+    if (!accepted.isNew) {
+      logger.info("payments", "venopag", "webhook", "Webhook duplicado \u2014 aceita\xE7\xE3o dur\xE1vel ignorou", {
+        webhookEventId,
+        caseId
+      });
+    }
+    if (event.status === "PAID" && caseId) {
+      const row = databaseRows.get(caseId);
+      if (row) {
+        const domain = CanonicalMapper.rowToDomain(row);
+        const alreadyPaid = domain.isPaid === true && domain.payment?.transactionId === (event.gatewayTransactionId || void 0);
+        if (!alreadyPaid) {
+          const paymentAmount = Number((event.amountInCents || 0) / 100);
+          domain.isPaid = true;
+          domain.paidAt = event.paidAt || (/* @__PURE__ */ new Date()).toISOString();
+          domain.status = "defesa_pronta";
+          domain.currentStage = 3;
+          domain.serviceType = domain.serviceType || "recurso_jari";
+          domain.payment = {
+            status: "approved",
+            amount: paymentAmount > 0 ? paymentAmount : domain.payment?.amount || 0,
+            paidAt: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
+            transactionId: event.gatewayTransactionId || `ord_${domain.id}`,
+            paymentMethod: "pix"
+          };
+          if (event.commercialOfferId) {
+            domain.commercialOfferId = event.commercialOfferId;
+          }
+          if (event.serviceType && !domain.serviceType) {
+            domain.serviceType = event.serviceType;
+          }
+          try {
+            const defense = generateDefenseDraftForDomain(domain);
+            defense.generationCount = 1;
+            defense.integrityHash = computeDefenseIntegrityHash(
+              defense,
+              domain.analysis
+            );
+            domain.defenseDraft = defense;
+            domain.documentGenerationStatus = "ready";
+            domain.timeline.push({
+              id: `tl_def_auto_${Date.now()}`,
+              title: "Defesa Gerada Automaticamente",
+              description: `Minuta da defesa (${domain.serviceType}) gerada automaticamente ap\xF3s confirma\xE7\xE3o do pagamento.`,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+              type: "defense"
+            });
+          } catch (defenseError) {
+            logger.error("payments", "venopag", "webhook", "Falha ao gerar defesa automaticamente ap\xF3s pagamento (n\xE3o-bloqueante)", {
+              error: defenseError?.message,
+              caseId: domain.id
+            });
+          }
+          domain.timeline.push({
+            id: `tl_webhook_${Date.now()}`,
+            title: "Pagamento Confirmado via Webhook VenoPag",
+            description: `Transa\xE7\xE3o ${event.gatewayTransactionId} aprovada pela institui\xE7\xE3o financeira.`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            type: "payment"
+          });
+          const updatedRow = CanonicalMapper.domainToRow(domain);
+          await caseRepository.set(caseId, updatedRow);
+          try {
+            const gatewayTxnId = event.gatewayTransactionId || `ord_${domain.id}`;
+            const caseIdUuid = domainIdToUuid(domain.id);
+            const supabaseForOrder = getSupabaseServerClient();
+            if (supabaseForOrder && caseIdUuid) {
+              await supabaseForOrder.from("payment_orders").upsert({
+                case_id: caseIdUuid,
+                user_id: domain.userId && /^[0-9a-f-]{36}$/i.test(domain.userId) ? domain.userId : null,
+                reference_id: event.referenceId || `defesai_case_${domain.id}`,
+                pagbank_order_id: gatewayTxnId,
+                gateway: "venopag",
+                status: "PAID",
+                amount: domain.payment.amount,
+                currency: "BRL",
+                payment_method: "pix",
+                paid_at: event.paidAt || (/* @__PURE__ */ new Date()).toISOString(),
+                base_amount: domain.payment.amount,
+                discount_amount: 0,
+                final_amount: domain.payment.amount,
+                expires_at: null
+              }, { onConflict: "case_id" });
+            }
+          } catch (orderErr) {
+            logger.warn("payments", "venopag", "order_insert", "Non-blocking order insert issue (webhook VenoPag)", {
+              error: orderErr?.message,
+              caseId: domain.id
+            });
+          }
+          commercialService.processPaymentConfirmationEvent({
+            paymentId: event.gatewayTransactionId || `ord_${domain.id}`,
+            caseId: domain.id,
+            buyerUserId: domain.clientEmail || `usr_${domain.id.substring(0, 8)}`,
+            buyerUserName: domain.clientName || "Condutor DefesAi",
+            grossAmount: domain.payment.amount,
+            discountAmount: 0,
+            effectivelyPaid: domain.payment.amount
+          });
+          auditLogs.unshift({
+            id: `audit_pay_${Date.now()}`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            actor: domain.clientName || "Cliente",
+            role: "citizen",
+            action: "PAYMENT_CONFIRMED",
+            targetResource: domain.id,
+            ipHash: "3a88c42b109e",
+            details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace(".", ",")} via PIX VenoPag confirmado.`,
+            gdprCompliant: true
+          });
+        }
+      }
+    }
+    try {
+      await webhookRepository.completeEvent(webhookEventId);
+    } catch (completeErr) {
+      logger.warn("payments", "venopag", "webhook", "Falha ao marcar evento como processado \u2014 ser\xE1 retryado pelo worker", {
+        webhookEventId,
+        error: completeErr?.message
+      });
+    }
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId, signatureValid });
+  } catch (error) {
+    logger.error("payments", "venopag", "webhook", "Webhook processing error", { error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
@@ -31228,6 +31336,9 @@ router11.post("/gateway/switch", requireAdmin, async (req, res) => {
   if (!gatewayId) {
     return res.status(400).json({ error: "gatewayId \xE9 obrigat\xF3rio" });
   }
+  if (gatewayId !== "venopag") {
+    return res.status(400).json({ error: `Gateway '${gatewayId}' n\xE3o suportado. Apenas VenoPag est\xE1 dispon\xEDvel.` });
+  }
   const updatedBy = req.user?.email || req.user?.id || "admin";
   const result = await gatewayManager.setActiveGateway(gatewayId, updatedBy);
   if (!result.success) {
@@ -31243,8 +31354,8 @@ import { Router as Router12 } from "express";
 // src/core/knowledge/monitoring/hash-generator.ts
 function calculateSha256Sync(text) {
   try {
-    const crypto8 = __require("crypto");
-    return crypto8.createHash("sha256").update(text, "utf8").digest("hex");
+    const crypto9 = __require("crypto");
+    return crypto9.createHash("sha256").update(text, "utf8").digest("hex");
   } catch (e) {
     let h1 = 3735928559 ^ text.length;
     let h2 = 1103547991 ^ text.length;
@@ -32765,6 +32876,7 @@ function resolveEffectiveStatus(dbStatus, timerAlive, _lastError) {
 
 // src/server/services/marketing-automation/worker.ts
 var POLL_INTERVAL_MS = 1e4;
+var DLQ_BACKOFF_BASE_MS = 6e4;
 var MarketingAutomationWorker = class _MarketingAutomationWorker {
   constructor() {
     this.timer = null;
@@ -32872,11 +32984,36 @@ var MarketingAutomationWorker = class _MarketingAutomationWorker {
       await supabaseAdmin.from("marketing_automation_queue").delete().eq("id", action.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger2.warn(`Action error: ${message}`, { actionId: action.id, error: message });
-      await supabaseAdmin.from("marketing_automation_queue").update({
-        attempts: (action.attempts || 0) + 1,
-        last_error: message
-      }).eq("id", action.id);
+      const attempts = (action.attempts || 0) + 1;
+      const maxAttempts = action.max_attempts ?? 3;
+      if (attempts >= maxAttempts) {
+        const backoffMs = DLQ_BACKOFF_BASE_MS * Math.pow(2, attempts - 1);
+        await supabaseAdmin.from("marketing_automation_dlq").insert({
+          queue_job_id: action.id,
+          lead_campaign_id: action.lead_campaign_id,
+          action: action.action,
+          scheduled_at: action.scheduled_at,
+          attempts,
+          max_attempts: maxAttempts,
+          last_error: message,
+          failure_reason: message,
+          failed_at: (/* @__PURE__ */ new Date()).toISOString(),
+          next_retry_at: new Date(Date.now() + backoffMs).toISOString()
+        });
+        await supabaseAdmin.from("marketing_automation_queue").delete().eq("id", action.id);
+        logger2.error(`Job movido para DLQ (max_attempts=${maxAttempts} atingido)`, {
+          actionId: action.id,
+          leadCampaignId: action.lead_campaign_id,
+          attempts,
+          error: message,
+          nextRetryAt: new Date(Date.now() + backoffMs).toISOString()
+        });
+      } else {
+        await supabaseAdmin.from("marketing_automation_queue").update({
+          attempts,
+          last_error: message
+        }).eq("id", action.id);
+      }
     }
   }
   async handleSendMessage(action) {
@@ -33477,7 +33614,7 @@ router13.get("/status", async (_req, res) => {
     const status = await marketingAutomationWorker.getStatus();
     res.json(status);
   } catch (err) {
-    res.status(500).json({ error: "Falha ao obter status", message: err.message });
+    res.status(500).json({ error: "Falha ao obter status" });
   }
 });
 router13.post("/start", async (_req, res) => {
@@ -33488,7 +33625,7 @@ router13.post("/start", async (_req, res) => {
     }
     res.json({ success: true, status: "RUNNING" });
   } catch (err) {
-    res.status(500).json({ error: "Falha ao iniciar", message: err.message });
+    res.status(500).json({ error: "Falha ao iniciar" });
   }
 });
 router13.post("/pause", async (_req, res) => {
@@ -33499,7 +33636,7 @@ router13.post("/pause", async (_req, res) => {
     }
     res.json({ success: true, status: "PAUSED" });
   } catch (err) {
-    res.status(500).json({ error: "Falha ao pausar", message: err.message });
+    res.status(500).json({ error: "Falha ao pausar" });
   }
 });
 router13.post("/stop", async (_req, res) => {
@@ -33566,7 +33703,7 @@ router13.get("/campaigns", async (_req, res) => {
     );
     res.json(enrichedCampaigns);
   } catch (err) {
-    res.status(500).json({ error: "Falha ao buscar campanhas", message: err.message });
+    res.status(500).json({ error: "Falha ao buscar campanhas" });
   }
 });
 function isValidUrl(url2) {
@@ -33653,7 +33790,7 @@ router13.post("/campaigns", async (req, res) => {
     }
     res.status(201).json(data);
   } catch (err) {
-    res.status(500).json({ error: "Falha ao criar campanha", message: err.message });
+    res.status(500).json({ error: "Falha ao criar campanha" });
   }
 });
 router13.patch("/campaigns/:id", async (req, res) => {
@@ -34016,7 +34153,7 @@ router13.post("/scrape", async (req, res) => {
       message: "Job de scraping enfileirado. Consulte GET /api/marketing/automation/scrape/" + job.id + " para status."
     });
   } catch (err) {
-    console.error("Erro no endpoint /scrape:", err);
+    logger.error("marketing", "scrape", "create_job", "Erro no endpoint /scrape", { error: String(err) });
     res.status(500).json({ error: "Falha ao criar job de scraping", message: err.message });
   }
 });
@@ -34039,7 +34176,7 @@ router13.get("/scrape/:jobId", async (req, res) => {
       collectionRunId: job.collectionRunId
     });
   } catch (err) {
-    console.error("Erro no endpoint /scrape/:jobId:", err);
+    logger.error("marketing", "scrape", "get_job_status", "Erro no endpoint /scrape/:jobId", { error: String(err) });
     res.status(500).json({ error: "Falha ao obter status do job", message: err.message });
   }
 });
@@ -34052,7 +34189,7 @@ router13.post("/scrape/:jobId/cancel", async (req, res) => {
     }
     res.json({ success: true, jobId, status: "cancelled" });
   } catch (err) {
-    console.error("Erro no endpoint /scrape/:jobId/cancel:", err);
+    logger.error("marketing", "scrape", "cancel_job", "Erro no endpoint /scrape/:jobId/cancel", { error: String(err) });
     res.status(500).json({ error: "Falha ao cancelar job", message: err.message });
   }
 });
@@ -34074,7 +34211,7 @@ router13.get("/scrape/:jobId/results", async (req, res) => {
       leads: leads || []
     });
   } catch (err) {
-    console.error("Erro no endpoint /scrape/:jobId/results:", err);
+    logger.error("marketing", "scrape", "get_job_results", "Erro no endpoint /scrape/:jobId/results", { error: String(err) });
     res.status(500).json({ error: "Falha ao buscar resultados", message: err.message });
   }
 });
@@ -34083,7 +34220,7 @@ router13.get("/scrapes", async (_req, res) => {
     const jobs = await scrapeWorker.listJobs(20);
     res.json({ jobs });
   } catch (err) {
-    console.error("Erro no endpoint /scrapes:", err);
+    logger.error("marketing", "scrape", "list_jobs", "Erro no endpoint /scrapes", { error: String(err) });
     res.status(500).json({ error: "Falha ao listar jobs", message: err.message });
   }
 });
@@ -34119,7 +34256,7 @@ router13.get("/export/:collectionRunId?", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (err) {
-    console.error("Erro no endpoint /export:", err);
+    logger.error("marketing", "export", "generate_xlsx", "Erro no endpoint /export", { error: String(err) });
     res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
   }
 });
@@ -34165,7 +34302,7 @@ router13.get("/export", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (err) {
-    console.error("Erro no endpoint /export (filtered):", err);
+    logger.error("marketing", "export", "generate_xlsx_filtered", "Erro no endpoint /export (filtered)", { error: String(err) });
     res.status(500).json({ error: "Falha ao gerar XLSX", message: err.message });
   }
 });
@@ -34199,7 +34336,7 @@ router14.post(["/", "/scrape"], async (req, res) => {
       message: `Job de scraping enfileirado com sucesso. Consulte GET /api/scrape/${job.id} para acompanhar o progresso.`
     });
   } catch (err) {
-    console.error("Erro ao criar job de scraping:", err);
+    logger.error("marketing", "create_job", "handler_error", "Erro ao criar job de scraping", { error: String(err) });
     res.status(500).json({
       success: false,
       error: "Falha ao criar job de scraping",
@@ -36024,7 +36161,8 @@ router17.get("/health", (req, res) => {
     status: "ok",
     service: "DefesAi API",
     version: "2.0.0",
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    // Provider canônico é NVIDIA (Cloudflare Worker). Este endpoint Express
+    // é caminho secundário (Vercel); `geminiConfigured` foi removido.
     activeCases: databaseRows.size,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
@@ -37053,7 +37191,7 @@ function denyCaseAccess(user, res) {
 router18.get("/cases", authenticateToken, (req, res) => {
   const { userId } = req.query;
   const user = req.user;
-  console.log("GET /cases user:", user);
+  logger.info("admin", "list", "request", "GET /cases user", { userId: user?.id, role: user?.role });
   let allRows = Array.from(databaseRows.values());
   if (user && user.role !== "admin") {
     allRows = isCanonicalUserId(user.id) ? allRows.filter((r) => r.user_id === user.id) : [];
@@ -37063,7 +37201,7 @@ router18.get("/cases", authenticateToken, (req, res) => {
     allRows = [];
   }
   const domains = allRows.map((r) => CanonicalMapper.rowToDomain(r));
-  console.log("GET /cases allRows length:", allRows.length);
+  logger.info("admin", "list", "result_count", "GET /cases allRows length", { count: allRows.length });
   domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(domains);
 });
@@ -37415,7 +37553,7 @@ var cases_default = router18;
 
 // src/server/routes/documents.ts
 import { Router as Router19 } from "express";
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 import path from "path";
 var router19 = Router19();
 var BUCKET = "case-documents";
@@ -37487,7 +37625,7 @@ router19.post("/cases/:caseId/documents", authenticateToken, async (req, res) =>
     if (uploadError) {
       return res.status(500).json({ error: `Falha no upload: ${uploadError.message}` });
     }
-    const contentHash = crypto6.createHash("sha256").update(buffer).digest("hex");
+    const contentHash = crypto7.createHash("sha256").update(buffer).digest("hex");
     const { data: doc, error: insertError } = await supabase.from("documents").insert({
       case_id: caseRow.id,
       service_type: caseRow.service_type || "defesa",
@@ -38094,7 +38232,7 @@ Responda em formato JSON estrito com o seguinte schema:
           return res.json(fullResult);
         }
       } catch (geminiError) {
-        console.error("Gemini call failed, using RAG Pipeline result", geminiError);
+        logger.error("ai", "analyze-infraction", "gemini_fallback", "Gemini call failed, using RAG Pipeline result", { error: String(geminiError) });
         if (process.env.NODE_ENV === "production") {
           return res.status(503).json({
             error: "Servi\xE7o de an\xE1lise indispon\xEDvel",
@@ -38132,8 +38270,8 @@ Responda em formato JSON estrito com o seguinte schema:
     };
     res.json(fallbackResult);
   } catch (err) {
-    console.error("Error in /api/ai/analyze-infraction:", err);
-    res.status(500).json({ error: "Erro ao processar an\xE1lise jur\xEDdica", details: err.message });
+    logger.error("ai", "analyze-infraction", "handler_error", "Error in /api/ai/analyze-infraction", { error: String(err) });
+    res.status(500).json({ error: "Erro ao processar an\xE1lise jur\xEDdica" });
   }
 });
 router25.post("/ai/generate-defense", async (req, res) => {
@@ -38291,8 +38429,8 @@ Assinatura do Requerente`,
     };
     res.json(defenseDoc);
   } catch (err) {
-    console.error("Error in /api/ai/generate-defense:", err);
-    res.status(500).json({ error: "Erro ao gerar minuta da defesa", details: err.message });
+    logger.error("ai", "generate-defense", "handler_error", "Error in /api/ai/generate-defense", { error: String(err) });
+    res.status(500).json({ error: "Erro ao gerar minuta da defesa" });
   }
 });
 router25.post(["/ai/chat-consultant", "/ai/consult-traffic"], async (req, res) => {
@@ -38329,8 +38467,8 @@ Pergunta do usu\xE1rio: ${userMessage}` : userMessage;
       reply: `Como especialista pericial do **Adeus Multa**, oriento que: toda autua\xE7\xE3o de velocidade exige que o equipamento medidor comprove verifica\xE7\xE3o peri\xF3dica anual v\xE1lida pelo INMETRO (Resolu\xE7\xE3o CONTRAN 798/2020). Al\xE9m disso, pela Lei 14.071/2020 (Art. 267 CTB), infra\xE7\xF5es m\xE9dias ou leves de condutores sem reincid\xEAncia nos \xFAltimos 12 meses devem ser convertidas em advert\xEAncia por escrito.`
     });
   } catch (err) {
-    console.error("Error in chat consultant:", err);
-    res.status(500).json({ error: "Erro ao responder consulta", details: err.message });
+    logger.error("ai", "chat_consultant", "handler_error", "Error in chat consultant", { error: String(err) });
+    res.status(500).json({ error: "Erro ao responder consulta" });
   }
 });
 var ai_default = router25;
@@ -38435,7 +38573,7 @@ var DOCUMENSO_ENDPOINTS = {
 };
 
 // src/server/lib/documenso/client.ts
-import crypto7 from "crypto";
+import crypto8 from "crypto";
 var DocumensoClient = class {
   constructor(config) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -38554,13 +38692,13 @@ var DocumensoClient = class {
       logger.warn("documenso", "client", "verify-webhook", "No signature header received");
       return false;
     }
-    const expected = crypto7.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
+    const expected = crypto8.createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const receivedBuffer = Buffer.from(receivedSecret);
     const expectedBuffer = Buffer.from(expected);
     if (receivedBuffer.length !== expectedBuffer.length) {
       return false;
     }
-    return crypto7.timingSafeEqual(receivedBuffer, expectedBuffer);
+    return crypto8.timingSafeEqual(receivedBuffer, expectedBuffer);
   }
   /**
    * Get webhook configuration
@@ -39843,7 +39981,7 @@ function createApp() {
   app.use("/api", whatsapp_default);
   app.use("/api", ocr_default);
   app.use("/api/payments", payments_default);
-  app.use("/api/media", media_default);
+  app.use("/api", media_default);
   app.use("/api/notifications", notifications_default);
   app.use("/api/documenso", documenso_default);
   app.get("/api/meta/status", async (_req, res) => res.json(await metaIntegration.getStatus()));
