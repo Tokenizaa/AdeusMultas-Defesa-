@@ -10,6 +10,7 @@
 create table if not exists public.knowledge_monitoring_snapshots (
   id           text primary key,
   source_id    text not null,
+  document_id  text references public.knowledge_documents(id) on delete set null,
   url          text not null,
   uf           text not null default 'FEDERAL',
   fetched_at   timestamptz not null,
@@ -26,12 +27,36 @@ create table if not exists public.knowledge_monitoring_snapshots (
 
 alter table public.knowledge_monitoring_snapshots enable row level security;
 
+-- Políticas de Row Level Security (idempotentes).
+-- O cliente de persistência (SnapshotStore) utiliza a service role
+-- (SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY), que ignora RLS.
+-- As políticas abaixo regem acessos via roles anon/authenticated:
+-- leitura liberada para authenticated; gravação sem policy (negada para
+-- anon/authenticated, permitida apenas para service role).
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'knowledge_monitoring_snapshots'
+      and policyname = 'knowledge_monitoring_snapshots_select_authenticated'
+  ) then
+    create policy knowledge_monitoring_snapshots_select_authenticated
+      on public.knowledge_monitoring_snapshots
+      for select
+      to authenticated
+      using (true);
+  end if;
+end $$;
+
 create index if not exists idx_k_monitoring_snapshots_source
   on public.knowledge_monitoring_snapshots using btree (source_id);
 create index if not exists idx_k_monitoring_snapshots_source_fetched
   on public.knowledge_monitoring_snapshots using btree (source_id, fetched_at desc);
 create index if not exists idx_k_monitoring_snapshots_hash
   on public.knowledge_monitoring_snapshots using btree (content_hash);
+create index if not exists idx_k_monitoring_snapshots_document
+  on public.knowledge_monitoring_snapshots using btree (document_id) where (document_id is not null);
 
 -- Comentários de documentação (sem efeito no esquema)
 comment on table public.knowledge_monitoring_snapshots is
