@@ -409,7 +409,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     caseId,
-                    amount: effectivePrice || 89.90,
+                    amount: effectivePrice,
                     paymentMethod,
                     gateway,
                 }),

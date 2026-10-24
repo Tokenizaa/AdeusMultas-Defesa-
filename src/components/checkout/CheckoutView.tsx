@@ -23,6 +23,7 @@ import { CaseDomain } from '../../types';
 import { CreditCardForm } from './CreditCardForm';
 import { useAuth } from '../../core/auth/AuthContext';
 import { useRouter } from '../../core/router/RouterContext';
+import { api } from '../../lib/api/client';
 
 function readableApiError(value: unknown, fallback: string): string {
   if (typeof value === 'string' && value.trim()) return value;
@@ -101,6 +102,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     documentNumber: number;
     couponDiscount?: number;
   } | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -147,6 +149,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   // Load Pricing from Resolve Price Service (breakdown completo)
   useEffect(() => {
     async function loadPricing() {
+      setPriceError(null);
       try {
         const params = new URLSearchParams({ serviceType });
         if (couponCode) params.set('couponCode', couponCode);
@@ -163,9 +166,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               couponDiscount: data.couponDiscount,
             });
           }
+        } else {
+          setPriceError('Não foi possível resolver o preço do serviço. Tente novamente.');
         }
       } catch (err) {
         console.error('Error loading dynamic price:', err);
+        setPriceError('Não foi possível resolver o preço do serviço. Verifique sua conexão.');
       }
     }
     loadPricing();
@@ -273,8 +279,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setIsProcessing(true);
     try {
       const txId = pixData?.txId || currentCase.id;
-      const res = await fetch(`/api/payments/pix/status/${encodeURIComponent(txId)}`);
-      const data = await res.json();
+      // Usa o client `api` que injeta o JWT do Supabase (endpoint exige autenticação).
+      const data = await api.get<{
+        success: boolean;
+        status: string;
+        paidAt?: string;
+        paymentOrder?: any;
+      }>(`/api/payments/pix/status/${encodeURIComponent(txId)}`);
       if (data.success && data.status === 'PAID') {
         const paidCase: CaseDomain = {
           ...currentCase,
@@ -288,6 +299,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       }
     } catch (err) {
       console.error('Error verifying payment:', err);
+      alert('Não foi possível verificar o pagamento. Verifique sua conexão e tente novamente.');
     } finally {
       setIsProcessing(false);
     }
@@ -326,12 +338,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const handleSimulatePayment = async (gateway: 'pagbank' | 'ggpixapi' = 'pagbank') => {
     try {
       setIsSimulating(true);
+      // Não há fallback de preço hardcoded: o valor vem 100% do catálogo comercial.
+      // Se o preço ainda não resolveu, finalAmount é null e o backend rejeita com
+      // erro claro (sem invenção de valor).
       const res = await fetch('/api/payments/simulate-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caseId: currentCase.id,
-          amount: finalAmount || 89.90,
+          amount: finalAmount,
           paymentMethod,
           gateway,
         }),
@@ -521,7 +536,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-extrabold text-slate-900 font-mono">
-                      {finalAmount !== null ? `R$ ${finalAmount.toFixed(2)}` : 'Carregando preço...'}
+                      {priceError ? (
+                        <span className="text-rose-600">{priceError}</span>
+                      ) : finalAmount !== null ? `R$ ${finalAmount.toFixed(2)}` : 'Carregando preço...'}
                     </span>
                   </div>
                 </div>

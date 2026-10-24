@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { CreditCard, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
 import { TestFillButton } from '../ui/TestFillButton';
 import { generateRandomCardData } from '../../utils/test-data-generator';
+import { api } from '../../lib/api/client';
 
 interface CreditCardFormProps {
   caseId: string;
@@ -192,24 +193,27 @@ export const CreditCardForm: React.FC<CreditCardFormProps> = ({
     setError(null);
 
     try {
-      const res = await fetch('/api/payments/credit-card/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caseId,
-          customerName: cardHolderName,
-          customerEmail,
-          customerCpf: cardCpf,
-          amount,
-          installments,
-          cardToken,
-          authenticationMethod: 'CHALLENGE',
-          softDescriptor: 'DEFAI*RECURSO',
-        }),
+      // Usa o client `api` que injeta o JWT do Supabase (endpoint exige autenticação).
+      const data = await api.post<{
+        success: boolean;
+        order?: { orderId: string };
+        txId?: string;
+        status: string;
+        threeDsUrl?: string;
+        threeDsChallengeRequired?: boolean;
+        error?: string;
+      }>('/api/payments/credit-card/create', {
+        caseId,
+        customerName: cardHolderName,
+        customerEmail,
+        customerCpf: cardCpf,
+        amount,
+        installments,
+        cardToken,
+        authenticationMethod: 'CHALLENGE',
+        softDescriptor: 'DEFAI*RECURSO',
       });
 
-      const data = await res.json();
-      
       if (data.success) {
         onSuccess({
           orderId: data.order?.orderId || data.txId,

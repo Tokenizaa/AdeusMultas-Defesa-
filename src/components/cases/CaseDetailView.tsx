@@ -27,6 +27,20 @@ import { exportDefenseToPDF } from '../../lib/pdf-export';
 import { buildDocumentRollItems, normalizeProcedureId } from '../../core/documents/document-roll';
 import { GoogleDriveButton } from '../common/GoogleDriveButton';
 import { CaseDocumentsSection } from './CaseDocumentsSection';
+import { api } from '../../lib/api/client';
+
+/**
+ * Deriva a jornada processual do caso em linguagem legível ao cidadão,
+ * a partir dos artefatos do pipeline canônico (análise + minuta).
+ * Não expõe detalhes internos técnicos ao usuário.
+ */
+// Formata data de forma segura para exibição no timeline do cidadão.
+// Nunca exibe "Invalid Date" quando o carimbo está ausente ou é inválido.
+function formatCaseDate(timestamp: string | undefined): string {
+  if (!timestamp) return 'Data não informada';
+  const d = new Date(timestamp);
+  return Number.isNaN(d.getTime()) ? 'Data não informada' : d.toLocaleString('pt-BR');
+}
 
 /**
  * Deriva a jornada processual do caso em linguagem legível ao cidadão,
@@ -111,11 +125,8 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
   // Selected argument IDs in Stage 2 (this is user-specific and not in CaseDetailBase)
   const [selectedArgIds, setSelectedArgIds] = React.useState<string[]>(
     caseData?.defenseDraft?.selectedArgumentIds ||
-      caseData?.analysis?.recommendedArguments?.map((a) => a.id) || [
-        'ARG-001',
-        'ARG-003',
-        'ARG-007',
-      ]
+      caseData?.analysis?.recommendedArguments?.map((a) => a.id) ||
+      []
   );
 
   // Stage 2 simplified mode: regular users get automatic selection (top 3
@@ -127,11 +138,8 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
     if (caseData) {
       setSelectedArgIds(
         caseData.defenseDraft?.selectedArgumentIds ||
-          caseData.analysis?.recommendedArguments?.map((a) => a.id) || [
-            'ARG-001',
-            'ARG-003',
-            'ARG-007',
-          ]
+          caseData.analysis?.recommendedArguments?.map((a) => a.id) ||
+          []
       );
     }
   }, [caseData]);
@@ -161,20 +169,22 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
           cityState: a.addressCityState,
         };
       }
-      const res = await fetch(`/api/cases/${resolvedCaseId}/generate-defense`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(30000),
-        body: JSON.stringify({
-          procedureType: currentCase?.serviceType,
-          selectedArgumentIds: selectedArgIds,
-          applicantData,
-        }),
+      // Usa o client `api` que injeta o JWT do Supabase (endpoint exige autenticação).
+      // O fetch direto anterior retornava 401 Unauthorized porque o endpoint
+      // /api/cases/:id/generate-defense é protegido por authenticateToken.
+      const data = await api.post<{
+        success: boolean;
+        defenseDraft?: any;
+        case?: CaseDomain;
+        error?: string;
+      }>(`/api/cases/${encodeURIComponent(resolvedCaseId)}/generate-defense`, {
+        procedureType: currentCase?.serviceType,
+        selectedArgumentIds: selectedArgIds,
+        applicantData,
       });
-      const data = await res.json();
       if (data.success) {
         onUpdateCase(data.case);
-        setEditedDraftText(data.defenseDraft.fullDraftText);
+        setEditedDraftText(data.defenseDraft?.fullDraftText);
         setActiveStage(3);
       } else {
         alert('Não foi possível gerar a defesa agora. Tente novamente em instantes.');
@@ -535,7 +545,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
             /* ---------- MODO SIMPLIFICADO: top-3 automático, somente leitura ---------- */
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {(recommendedArgs.length > 0 ? recommendedArgs : ARGUMENTS_CATALOG.slice(0, 3)).map((arg, idx) => (
+                {(recommendedArgs.length > 0 ? recommendedArgs : []).map((arg, idx) => (
                   <div key={arg.id} className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 flex flex-col text-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-xs uppercase font-mono">
@@ -893,8 +903,8 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-900 text-sm">{item.title}</span>
                     <span className="text-sm font-mono text-slate-400">
-                      {new Date(item.timestamp).toLocaleString('pt-BR')}
-                    </span>
+                    {formatCaseDate(item.timestamp)}
+                  </span>
                   </div>
                   <p className="text-slate-600 mt-0.5 text-sm">{item.description}</p>
                 </div>
