@@ -572,7 +572,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({
                   onChange={(e) => setProfessionalMode(e.target.checked)}
                   className="w-3.5 h-3.5 rounded text-orange-500"
                 />
-                Sou advogado/despachante — quero escolher as teses manualmente
+                Modo avançado — selecionar teses manualmente
               </label>
             </div>
           ) : (

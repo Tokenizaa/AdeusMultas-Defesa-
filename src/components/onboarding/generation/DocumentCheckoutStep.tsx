@@ -253,7 +253,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                 {
                     id: `tl_${Date.now()}_1`,
                     title: 'Diagnóstico Gratuito Realizado',
-                    description: `Análise técnica com ${analysis?.overallSuccessRate != null ? analysis.overallSuccessRate : 0}% de probabilidade de êxito.`,
+                    description: `Análise técnica com ${analysis?.overallSuccessRate != null ? analysis.overallSuccessRate : 0}% de força dos argumentos identificados.`,
                     timestamp: new Date(Date.now() - 300000).toISOString(),
                     type: 'analysis',
                 },
@@ -596,8 +596,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                 <ShieldCheck className="w-5 h-5" />
                             </div>
                             <div className="text-slate-600 text-[11px] leading-tight">
-                                <span className="font-bold text-slate-900 block text-xs mb-0.5">Garantia Incondicional de 7 Dias</span>
-                                Se você não ficar satisfeito com a fundamentação técnica da peça, devolvemos seu dinheiro integralmente via PIX.
+                                <span className="font-bold text-slate-900 block text-xs mb-0.5">Prazo de 7 dias para solicitar reavaliação</span>
+                                Se você não ficar satisfeito com a fundamentação técnica da peça, pode solicitar revisão dentro de 7 dias após a entrega.
                             </div>
                         </div>
                     </div>

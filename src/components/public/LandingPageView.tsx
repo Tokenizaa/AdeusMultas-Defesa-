@@ -67,7 +67,7 @@ export const LandingPageView: React.FC = () => {
         <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-sm font-semibold text-slate-600">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-[#168821]" />
-            <span>Diagnóstico Preliminar em 30 segundos</span>
+            <span>Diagnóstico Preliminar Rápido</span>
           </div>
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-[#168821]" />
@@ -111,7 +111,7 @@ export const LandingPageView: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-[#071D41]">Diagnóstico Jurídico Gratuito</h3>
             <p className="text-sm text-slate-600 leading-relaxed">
-              O sistema cruza as informações com o CTB, resoluções do CONTRAN e normas do INMETRO, calculando a probabilidade real de êxito.
+              O sistema cruza as informações com o CTB, resoluções do CONTRAN e normas do INMETRO, identificando os argumentos aplicáveis ao seu caso.
             </p>
           </div>
 
@@ -219,7 +219,7 @@ export const LandingPageView: React.FC = () => {
           <div className="p-5 bg-white border border-[#CCCCCC] rounded-xl space-y-1.5">
             <h4 className="font-bold text-sm text-[#071D41]">A análise preliminar é realmente gratuita?</h4>
             <p className="text-slate-600 leading-relaxed">
-              Sim, 100% gratuita. Você descobre as teses aplicáveis, probabilidade de êxito e prazos sem pagar nada e sem precisar informar dados bancários.
+              Sim, 100% gratuita. Você descobre as teses aplicáveis, a força dos argumentos identificados e os prazos sem pagar nada e sem precisar informar dados bancários.
             </p>
           </div>
 

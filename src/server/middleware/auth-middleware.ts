@@ -104,11 +104,12 @@ export async function authenticateToken(
         } = await supabase.auth.getUser(token);
 
         if (user && !error) {
-          const role = (user.user_metadata?.role as string) || 'citizen';
+          // P0: role NUNCA vem de user_metadata (editável pelo cliente).
+          // Role é determinada exclusivamente pela tabela user_profiles no servidor.
           req.user = {
             id: user.id,
             email: user.email || '',
-            role,
+            role: 'citizen',
             name: user.user_metadata?.name,
           };
           sanitizeCaseCreateBody(req);
@@ -155,13 +156,13 @@ export async function authenticateToken(
       }
     }
 
-    // 3. Não autenticado — req.user permanece undefined.
-    req.user = undefined;
-    return next();
+    // 3. Não autenticado — falha fechada: retorna 401 em vez de prosseguir sem identidade.
+    res.status(401).json({ error: 'Não autorizado. Token inválido ou ausente.' });
+    return;
   } catch (err: any) {
     logger.error('auth', 'middleware', 'unexpected_error', `Erro no auth: ${err.message}`);
-    req.user = undefined;
-    return next();
+    res.status(401).json({ error: 'Não autorizado. Erro de autenticação.' });
+    return;
   }
 }
 

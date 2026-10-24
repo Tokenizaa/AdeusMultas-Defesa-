@@ -498,7 +498,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         ) : (
           <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center">
             <p className="text-lg text-slate-600 leading-relaxed">
-              Com os dados que você enviou, não encontramos problema na autuação. Isso não quer dizer que a multa está certa: se você tiver a notificação original, fotos do local ou prints, vale reenviar — a análise fica mais forte. Se preferir, um advogado pode revisar o caso com você.
+              Com os dados que você enviou, não encontramos problema na autuação. Isso não quer dizer que a multa está certa: se você tiver a notificação original, fotos do local ou prints, vale reenviar — a análise fica mais forte. Você pode protocolar a petição diretamente no órgão autuador.
             </p>
           </div>
         )}

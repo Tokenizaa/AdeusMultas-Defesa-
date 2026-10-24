@@ -553,7 +553,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div className="text-slate-600 text-sm leading-tight">
-                <span className="font-bold text-slate-900">Garantia Incondicional de 7 Dias:</span> Se você não ficar satisfeito com a fundamentação técnica, devolvemos seu dinheiro integralmente.
+                <span className="font-bold text-slate-900">Prazo de 7 dias para solicitar reavaliação:</span> Se você não ficar satisfeito com a fundamentação técnica, pode solicitar revisão da peça dentro de 7 dias após a entrega.
               </div>
             </div>
           </div>
