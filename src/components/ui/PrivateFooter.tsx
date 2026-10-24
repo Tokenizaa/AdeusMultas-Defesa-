@@ -113,6 +113,24 @@ export const PrivateFooter: React.FC = () => {
               <p className="text-[#C2D9FF] text-sm">
                 Em conformidade com o eMAG e WCAG 2.1 / 2.2 AA.
               </p>
+              <ul className="space-y-1 pt-2">
+                <li>
+                  <button
+                    onClick={() => navigate('/termos-de-uso')}
+                    className="text-orange-400 text-xs hover:underline"
+                  >
+                    Termos de Uso
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => navigate('/politica-de-privacidade')}
+                    className="text-orange-400 text-xs hover:underline"
+                  >
+                    Política de Privacidade (LGPD)
+                  </button>
+                </li>
+              </ul>
             </div>
           </div>
         </div>

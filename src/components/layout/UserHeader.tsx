@@ -67,6 +67,19 @@ export const UserHeader: React.FC<UserHeaderProps> = ({
             {user?.name || 'Condutor'}
           </span>
         </div>
+
+        <button
+          id="user-header-logout"
+          onClick={() => {
+            void logout();
+            navigate('/login', { replace: true });
+          }}
+          className="flex items-center gap-1.5 p-1.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+          aria-label="Sair da conta"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="text-xs font-semibold text-slate-700 hidden sm:inline">Sair</span>
+        </button>
       </div>
     </header>
   );

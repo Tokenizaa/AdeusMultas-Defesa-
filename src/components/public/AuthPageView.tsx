@@ -113,7 +113,6 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({ initialTab = 'login'
             onRegister={handleRegister}
             onAuthSuccess={() => {}} // Navigation already handled in handleLogin/handleRegister
             onForgotPassword={handleForgotPassword}
-            testFillCredentials={{ email: 'motorista@defesai.com.br', password: '123456' }}
           />
         </div>
       </div>

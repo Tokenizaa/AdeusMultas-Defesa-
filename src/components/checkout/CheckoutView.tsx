@@ -422,7 +422,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               <span className="px-2 py-0.5 rounded text-sm font-bold bg-orange-50 text-orange-700 border border-orange-200 uppercase font-mono">
                 Resumo da Defesa
               </span>
-              <span className="text-sm font-mono text-slate-500">Auto nº {currentCase.infraction.aitNumber}</span>
+              <span className="text-sm font-mono text-slate-500">Auto nº {currentCase.infraction?.aitNumber || '—'}</span>
             </div>
 
             <h1 className="text-lg sm:text-xl font-bold text-slate-900">

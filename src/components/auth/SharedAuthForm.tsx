@@ -18,8 +18,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
-import { TestFillButton } from '../ui/TestFillButton';
-import { generateRandomName, generateRandomEmail, generateRandomPhone } from '../../utils/test-data-generator';
+
 
 // ============================================================================
 // Types
@@ -74,9 +73,6 @@ export interface SharedAuthFormProps {
   showForgotPassword?: boolean;
   /** Called when user clicks "Forgot password?" */
   onForgotPassword?: (email: string) => void;
-
-  /** Pre-fill credentials for test button (dev mode only) */
-  testFillCredentials?: { email: string; password: string };
 
   /** Called when email field changes (for auto-detecting existing accounts) */
   onEmailChange?: (email: string) => void;
@@ -146,7 +142,6 @@ export const SharedAuthForm: React.FC<SharedAuthFormProps> = ({
   onAuthSuccess,
   showForgotPassword = false,
   onForgotPassword,
-  testFillCredentials,
   onEmailChange,
 }) => {
   const t = THEME[theme];
@@ -306,23 +301,6 @@ const handleResetPasswordSubmit = async (e: React.FormEvent) => {
 };
 
   // ==========================================================================
-  // Test Fill Handler
-  // ==========================================================================
-  const handleTestFill = () => {
-    if (mode === 'login' && testFillCredentials) {
-      setEmail(testFillCredentials.email);
-      setPassword(testFillCredentials.password);
-    } else if (mode === 'register') {
-      const testName = generateRandomName();
-      setName(testName);
-      setEmail(generateRandomEmail(testName));
-      setPhone(generateRandomPhone());
-      setPassword('123456');
-      if (showPasswordConfirm) setConfirmPassword('123456');
-    }
-  };
-
-  // ==========================================================================
   // Render: Error/Success Alerts
   // ==========================================================================
   const renderAlerts = () => (
@@ -473,60 +451,19 @@ const handleResetPasswordSubmit = async (e: React.FormEvent) => {
         )}
       </button>
 
-      {/* Bottom switcher & Quick Preset Access */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
-        <div className="flex items-center justify-between text-2xs font-mono text-slate-400">
-          <span>Contas de Acesso Rápido:</span>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 font-mono text-2xs">
+      {/* Bottom switcher */}
+      {!isModal && (
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center text-sm text-slate-600 pt-2">
+          Ainda não possui uma conta?{' '}
           <button
             type="button"
-            onClick={() => {
-              setEmail('admin@defesai.com.br');
-              setPassword('admin123');
-            }}
-            className="p-1.5 rounded-lg bg-orange-50 dark:bg-slate-800 text-orange-700 dark:text-orange-300 hover:bg-orange-100 border border-orange-200 dark:border-slate-700 text-center font-bold truncate cursor-pointer transition-colors"
-            title="Admin Geral (admin@defesai.com.br / admin123)"
+            onClick={() => onModeChange('register')}
+            className={`font-bold ${t.primaryText} hover:underline cursor-pointer`}
           >
-            🛡️ Admin OS
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('olfnetto@gmail.com');
-              setPassword('admin123');
-            }}
-            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 border border-slate-200 dark:border-slate-700 text-center font-bold truncate cursor-pointer transition-colors"
-            title="Admin Netto (olfnetto@gmail.com)"
-          >
-            👤 Netto
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('teste001@e2e.local');
-              setPassword('E2E@2026Teste');
-            }}
-            className="p-1.5 rounded-lg bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-slate-700 text-center font-bold truncate cursor-pointer transition-colors"
-            title="Usuário E2E (teste001@e2e.local / E2E@2026Teste)"
-          >
-            🧪 Teste 001
+            Criar conta gratuitamente
           </button>
         </div>
-
-        {!isModal && (
-          <div className="text-center text-sm text-slate-600 pt-2">
-            Ainda não possui uma conta?{' '}
-            <button
-              type="button"
-              onClick={() => onModeChange('register')}
-              className={`font-bold ${t.primaryText} hover:underline cursor-pointer`}
-            >
-              Criar conta gratuitamente
-            </button>
-          </div>
-        )}
-      </div>
+      )}
     </form>
   );
 
@@ -760,9 +697,6 @@ const handleResetPasswordSubmit = async (e: React.FormEvent) => {
   // ==========================================================================
   return (
     <>
-      {/* Test Fill Button */}
-      <TestFillButton onClick={handleTestFill} />
-
       {/* Alerts */}
       {renderAlerts()}
 

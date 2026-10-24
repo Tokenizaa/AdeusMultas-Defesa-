@@ -15,6 +15,8 @@ import { AdminLayout } from './components/layout/AdminLayout';
 import { LandingPageView } from './components/public/LandingPageView';
 import { LoginPageView } from './components/public/LoginPageView';
 import { RegisterPageView } from './components/public/RegisterPageView';
+import { TermsOfUseView } from './components/public/TermsOfUseView';
+import { PrivacyPolicyView } from './components/public/PrivacyPolicyView';
 
 // User Pages
 import { UserDashboardView } from './components/user/UserDashboardView';
@@ -372,7 +374,7 @@ function AppContent() {
   // =========================================================================
   // 3. ÁREA PÚBLICA (Rotas /, /login, /cadastro, /novo-caso)
   // =========================================================================
-  const knownPublicRoutes = ['/', '/login', '/cadastro', '/novo-caso'];
+  const knownPublicRoutes = ['/', '/login', '/cadastro', '/novo-caso', '/termos-de-uso', '/politica-de-privacidade'];
   const matchedPublicRoute = knownPublicRoutes.includes(currentPath);
 
   return (
@@ -384,6 +386,10 @@ function AppContent() {
       {currentPath === '/cadastro' && <RegisterPageView />}
 
       {currentPath === '/novo-caso' && <OnboardingWizard isAdmin={isAdmin} />}
+
+      {currentPath === '/termos-de-uso' && <TermsOfUseView />}
+
+      {currentPath === '/politica-de-privacidade' && <PrivacyPolicyView />}
 
       {/* 404 fallback */}
       {!matchedPublicRoute && (

@@ -68,17 +68,26 @@ export const UserSettingsView: React.FC = () => {
   }, []);
 
   // Profile handlers
+  const [profileError, setProfileError] = useState<string | null>(null);
+
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateProfile({
-      name,
-      cpf,
-      phone,
-      cnh,
-      cityState,
-    });
-    setProfileSavedSuccess(true);
-    setTimeout(() => setProfileSavedSuccess(false), 3000);
+    setProfileError(null);
+    try {
+      await updateProfile({
+        name,
+        cpf,
+        phone,
+        cnh,
+        cityState,
+      });
+      setProfileSavedSuccess(true);
+      setTimeout(() => setProfileSavedSuccess(false), 3000);
+    } catch (err: any) {
+      setProfileSavedSuccess(false);
+      setProfileError(err?.message || 'Não foi possível salvar o perfil. Tente novamente.');
+      setTimeout(() => setProfileError(null), 5000);
+    }
   };
 
   // Settings handlers
@@ -181,6 +190,12 @@ export const UserSettingsView: React.FC = () => {
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-sm font-medium animate-fadeIn">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>Perfil atualizado com sucesso! Suas futuras defesas serão geradas com estes dados.</span>
+            </div>
+          )}
+          {profileError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-800 text-sm font-medium animate-fadeIn">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{profileError}</span>
             </div>
           )}
 
