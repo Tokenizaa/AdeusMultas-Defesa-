@@ -26,15 +26,11 @@
       }
     }
   ],
-  "crons": [
-    {
-      "name": "weekly-legal-monitor",
-      "expression": "0 0 * * 0",
-      "dashboards": [
-        "monitoramento-normativo-semanal"
-      ]
-    }
-  ],
+  "triggers": {
+    "crons": [
+      "0 0 * * 1"
+    ]
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

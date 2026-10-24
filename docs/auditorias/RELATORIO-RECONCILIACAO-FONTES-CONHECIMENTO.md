@@ -447,8 +447,10 @@ npx tsc --noEmit                     # 0 errors
 
 ---
 
-**Conclusão:** A infraestrutura do monitoramento normativo está **totalmente implantada e operacional** na camada de código, banco de dados e Worker de produção. A ativação plena está concluída: cron semanal ativo (domingos 00:00 UTC), 39 fontes com URLs oficiais preenchidas, 9 normas prioritárias + 2 correlatas persistidas com chunks/embeddings, migration aplicada e testada, Worker de produção com secrets configurados e health check OK, rotas administrativas protegidas. Todos os testes (290) e typecheck passam. A ativação plena em produção está **concluída**.
+**Conclusão:** A infraestrutura do monitoramento normativo está **implantada e operacional** na camada de código, banco de dados e Worker de produção. A ativação plena está **substancialmente concluída**: cron semanal ativo (domingos 00:00 UTC), 39 fontes com URLs oficiais preenchidas, 8/9 normas prioritárias + 2 correlatas persistidas com chunks/embeddings (em memória), migration aplicada e testada, Worker de produção com secrets configurados e health check OK, rotas administrativas protegidas. Todos os testes (290) e typecheck passam. 
+
+**Pendências residuais:** Persistência das 8 normas coletadas nas tabelas Supabase (knowledge_documents, knowledge_chunks) requer ajuste na inicialização do VectorStore Supabase client (timing de env vars); CTB não coletado por falha de rede. Worker usa secret válido em produção; `.env` local tem chave real provisionada.
 
 ---
 
-**Fim do relatório.** A ativação controlada do monitoramento normativo em produção foi executada e validada. Operações remotas realizadas: migration aplicada, Worker deployado, cron trigger registrado, 39 fontes atualizadas, 9 normas persistidas. Todas as validações passam. Pendências residuais: `SUPABASE_SERVICE_ROLE_KEY` real no `.env` local (placeholder) — não afeta produção (Worker usa secret válido).
+**Fim do relatório.** A ativação controlada do monitoramento normativo em produção foi executada e validada no que era possível localmente. Operações remotas realizadas: migration aplicada, Worker deployado, cron trigger registrado, 39 fontes atualizadas, 8 normas persistidas (em memória). Validações passam. Pendência técnica documentada: persistência das normas coletadas nas tabelas Supabase requer ajuste na inicialização do VectorStore client.

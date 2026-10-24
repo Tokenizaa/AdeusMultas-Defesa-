@@ -516,13 +516,19 @@ describe('Reconciliação — fluxo de revisão e impacto (alteração → revis
   it('falha de coleta não gera evento de mudança nem altera teses', async () => {
     await SnapshotStore.clear();
 
+    // Usa um ID de fonte único que não existe no Supabase para garantir isolamento do teste
+    const testSource: KnowledgeSource = {
+      ...CONTRAN_SOURCE,
+      id: 'SRC_TEST_FALHA_COLETA_' + Date.now(),
+    };
+
     // Simula falha de coleta — não há snapshot anterior válido
-    const previous = await SnapshotStore.getLatestSnapshot(CONTRAN_SOURCE.id);
+    const previous = await SnapshotStore.getLatestSnapshot(testSource.id);
     expect(previous).toBeNull();
 
     // Sem snapshot anterior, ChangeDetector não gera mudança (null)
-    const snap = snapshotFor(CONTRAN_SOURCE.id, 'Qualquer texto', 'qualquer-hash');
-    const change = ChangeDetector.detectChange(snap, null, CONTRAN_SOURCE);
+    const snap = snapshotFor(testSource.id, 'Qualquer texto', 'qualquer-hash');
+    const change = ChangeDetector.detectChange(snap, null, testSource);
     expect(change).toBeNull();
 
     // Nenhum evento de mudança é criado — não há impacto em teses

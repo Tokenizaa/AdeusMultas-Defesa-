@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authenticateToken, requireAdmin } from '../middleware';
 import { knowledgeService } from '../knowledge/knowledge-service';
 import { SearchKnowledgeOptions } from '../knowledge/types';
 
@@ -440,15 +441,20 @@ router.get('/national/sources', (req, res) => {
   }
 });
 
-router.post('/monitor/run', async (req, res) => {
-  try {
-    const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4000;
-    const result = await WeeklyMonitorScheduler.runCycle(undefined, timeoutMs);
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to run monitoring cycle' });
+router.post(
+  '/monitor/run',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4000;
+      const result = await WeeklyMonitorScheduler.runCycle(undefined, timeoutMs);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || 'Failed to run monitoring cycle' });
+    }
   }
-});
+);
 
 router.get('/monitor/history', (req, res) => {
   try {
@@ -478,57 +484,77 @@ router.get('/monitor/review-queue', (req, res) => {
   }
 });
 
-router.post('/monitor/review-queue/:id/approve', (req, res) => {
-  try {
-    const { reviewer, notes } = req.body;
-    const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
-    if (!success) {
-      return res.status(404).json({ error: 'Review item not found' });
+router.post(
+  '/monitor/review-queue/:id/approve',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { reviewer, notes } = req.body;
+      const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
+      if (!success) {
+        return res.status(404).json({ error: 'Review item not found' });
+      }
+      res.json({ success: true, message: 'Item approved and applied to active registry.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to approve review item' });
     }
-    res.json({ success: true, message: 'Item approved and applied to active registry.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to approve review item' });
   }
-});
+);
 
-router.post('/monitor/review-queue/:id/reject', (req, res) => {
-  try {
-    const { reviewer, reason } = req.body;
-    const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
-    if (!success) {
-      return res.status(404).json({ error: 'Review item not found' });
+router.post(
+  '/monitor/review-queue/:id/reject',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { reviewer, reason } = req.body;
+      const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
+      if (!success) {
+        return res.status(404).json({ error: 'Review item not found' });
+      }
+      res.json({ success: true, message: 'Item rejected.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reject review item' });
     }
-    res.json({ success: true, message: 'Item rejected.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to reject review item' });
   }
-});
+);
 
-router.post('/monitor/review-queue/:id/adjust', (req, res) => {
-  try {
-    const { adjustedData, reviewer, notes } = req.body;
-    const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
-    if (!success) {
-      return res.status(404).json({ error: 'Review item not found' });
+router.post(
+  '/monitor/review-queue/:id/adjust',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { adjustedData, reviewer, notes } = req.body;
+      const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
+      if (!success) {
+        return res.status(404).json({ error: 'Review item not found' });
+      }
+      res.json({ success: true, message: 'Item adjusted and approved.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to adjust review item' });
     }
-    res.json({ success: true, message: 'Item adjusted and approved.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to adjust review item' });
   }
-});
+);
 
-router.post('/monitor/review-queue/:id/false-positive', (req, res) => {
-  try {
-    const { notes } = req.body;
-    const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
-    if (!success) {
-      return res.status(404).json({ error: 'Review item not found' });
+router.post(
+  '/monitor/review-queue/:id/false-positive',
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { notes } = req.body;
+      const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
+      if (!success) {
+        return res.status(404).json({ error: 'Review item not found' });
+      }
+      res.json({ success: true, message: 'Item marked as false positive.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to mark false positive' });
     }
-    res.json({ success: true, message: 'Item marked as false positive.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to mark false positive' });
   }
-});
+);
 
 router.get('/monitor/alerts', (req, res) => {
   try {

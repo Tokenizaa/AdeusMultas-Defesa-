@@ -18,6 +18,7 @@ import { marketingRoutes } from './routes/marketing'
 import { communicationRoutes } from './routes/communication'
 import { ocrRoutes } from './routes/ocr'
 import { knowledgeRoutes } from './routes/knowledge'
+import { monitorRoutes } from './routes/monitor'
 import { aiRoutes } from './routes/ai'
 import { commercialRoutes } from './routes/commercial'
 import { documentsRoutes } from './routes/documents'
@@ -75,6 +76,7 @@ app.route('/api', marketingRoutes)
 app.route('/api', communicationRoutes)
 app.route('/api', ocrRoutes)
 app.route('/api', knowledgeRoutes)
+app.route('/api', monitorRoutes)
 app.route('/api', aiRoutes)
 app.route('/api', commercialRoutes)
 app.route('/api', documentsRoutes)
