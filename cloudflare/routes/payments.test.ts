@@ -197,24 +197,43 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   it('rejects a client-supplied amount that diverges from the server offer', async () => {
     const response = await app().request('/api/payments/credit-card/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.52' },
       body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', cardToken: 'tok-1', amount: 50 }),
-    });
+    }, { ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } } as any);
     expect(response.status).toBe(400);
   });
 
   it('creates a PIX order and persists the payment_order', async () => {
     const response = await app().request('/api/payments/pix/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
       body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
-    }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production', VENO_PRIMARY_GATEWAY: 'pagbank' } as any);
+    }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production', VENO_PRIMARY_GATEWAY: 'pagbank', ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } } as any);
     expect(response.status).toBe(200);
     const body = await response.json() as any;
     expect(body.success).toBe(true);
     expect(body.gateway).toBe('pagbank');
     expect(body.amount).toBe(100);
     expect(h.insertChain).toHaveBeenCalled();
+  });
+
+  it('rejects PIX creation when the rate limit is reached', async () => {
+    const response = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.60' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-rl', customerCpf: '12345678909' }),
+    }, { ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: false }) } } as any);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+  });
+
+  it('fails closed when rate-limit binding is unavailable for PIX creation', async () => {
+    const response = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.61' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-nolimit', customerCpf: '12345678909' }),
+    }, {} as any);
+    expect(response.status).toBe(503);
   });
 
   it('hard-blocks PIX creation in the safe preview before contacting any gateway', async () => {
@@ -261,11 +280,12 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     try {
       const response = await app().request('/api/payments/pix/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.51' },
         body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-veno', customerName: 'Cliente', customerCpf: '12345678909' }),
       }, {
         APP_URL: 'https://adeusmulta.defesai.com.br', VENO_CLIENT_ID: 'client-test',
         VENO_CLIENT_SECRET: 'secret-test', VENO_WEBHOOK_SECRET: 'webhook-secret',
+        ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
       } as any);
       expect(response.status).toBe(200);
       const body = await response.json() as any;

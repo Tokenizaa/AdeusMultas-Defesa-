@@ -159,6 +159,16 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Criação de cobrança temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: `pay:pix:${user.id}:${ipAddress}` });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de criação de cobrança atingido.' });
+  }
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   const referenceId = `defesai_case_${caseId}`;
   // Idempotência: a tela de checkout pode remontar após alteração de campos,
@@ -348,6 +358,16 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (!body.cardToken) throw new HTTPException(400, { message: 'cardToken é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Criação de cobrança temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: `pay:card:${user.id}:${ipAddress}` });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de criação de cobrança atingido.' });
+  }
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   if (body.amount !== undefined && Number(body.amount) !== Number(offer.finalAmount)) throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
   if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });

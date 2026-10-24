@@ -99,7 +99,7 @@ export interface WebhookProcessResult {
  */
 export async function verifyWebhookSignature(env: Env, rawBody: string, signatureHeader: string | null): Promise<boolean> {
   const token = env.PAGBANK_WEBHOOK_SECRET || env.PAGBANK_TOKEN || '';
-  if (!token) return !isProductionMode(env);
+  if (!token) return false; // Fail-closed: sem segredo configurado, nenhum webhook é autenticado.
   if (!signatureHeader) return false;
 
   const received = signatureHeader.trim().toLowerCase().replace(/^sha256=/, '');

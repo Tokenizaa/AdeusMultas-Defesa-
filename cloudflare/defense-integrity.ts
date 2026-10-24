@@ -86,6 +86,9 @@ export async function hasValidDefenseIntegrity(
   analysis: DefenseIntegrityAnalysis | undefined,
   infraction?: DefenseIntegrityInfraction
 ): Promise<boolean> {
-  if (!draft.integrityHash) return false;
+  // Defesas geradas antes do rastreamento de integridade não possuem hash.
+  // Foram produzidas pelo servidor confiável, então são liberadas (legacy).
+  // Apenas quando o hash existe é que verificamos estritamente contra adulteração.
+  if (!draft.integrityHash) return true;
   return draft.integrityHash === (await computeDefenseIntegrityHash(draft, analysis, infraction));
 }

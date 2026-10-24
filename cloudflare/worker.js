@@ -1,6 +1,5 @@
 // Release trigger: [DEPLOY-PRODUCTION] publish the consolidated VenoPag/admin version to Cloudflare.
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { createSupabaseAdminClient } from './supabase'
 import { authenticateToken, requireAdmin, logRequest } from './middleware'
@@ -27,7 +26,24 @@ import { runMonitorCycle, initializeMonitor } from '../src/core/knowledge/schedu
 
 const app = new Hono()
 app.use('*', secureHeaders())
-app.use('*', cors())
+
+/** CORS restrito: só permite origens listadas em APP_URL (env). Sem APP_URL → bloqueia cross-origin. */
+app.use('*', async (c, next) => {
+  const origin = c.req.header('origin')
+  const allowed = (c.env.APP_URL || '').split(',').map((u) => u.trim()).filter(Boolean)
+  if (origin && allowed.includes(origin)) {
+    c.header('Access-Control-Allow-Origin', origin)
+    c.header('Vary', 'Origin')
+    c.header('Access-Control-Allow-Credentials', 'true')
+  }
+  if (c.req.method === 'OPTIONS') {
+    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID, X-Webhook-Secret, X-Veno-Signature, X-Veno-Client-Id')
+    c.header('Access-Control-Max-Age', '86400')
+    return c.body(null, 204)
+  }
+  await next()
+})
 app.use('*', logRequest)
 app.use('/api/*', apiBoundary)
 
