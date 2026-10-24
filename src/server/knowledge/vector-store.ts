@@ -36,10 +36,9 @@ export class VectorStore {
   private embeddings: Map<string, KnowledgeEmbedding> = new Map();
 
   private supabaseClient: SupabaseClient<Database> | null = null;
+  private supabaseInitAttempted = false;
 
-  private constructor() {
-    this.initSupabaseClient();
-  }
+  private constructor() {}
 
   public static getInstance(): VectorStore {
     if (!VectorStore.instance) {
@@ -48,9 +47,13 @@ export class VectorStore {
     return VectorStore.instance;
   }
 
-  private initSupabaseClient() {
+  private ensureSupabaseClient(): void {
+    if (this.supabaseInitAttempted) return;
+    this.supabaseInitAttempted = true;
+
     const url = configService.get('VITE_SUPABASE_URL');
-    const serviceKey = configService.get('SUPABASE_SECRET_KEY') || configService.get('SUPABASE_SERVICE_ROLE_KEY');
+    // Priority: SUPABASE_SERVICE_ROLE_KEY (bypasses RLS) > SUPABASE_SECRET_KEY
+    const serviceKey = configService.get('SUPABASE_SERVICE_ROLE_KEY') || configService.get('SUPABASE_SECRET_KEY');
 
     if (url && serviceKey && url.startsWith('https://')) {
       try {
@@ -60,6 +63,11 @@ export class VectorStore {
         logger.warn('supabase', 'vector_store', 'init', `Falha ao conectar Supabase: ${err.message}. Operando via Store local.`);
       }
     }
+  }
+
+  private getSupabaseClient(): SupabaseClient<Database> | null {
+    this.ensureSupabaseClient();
+    return this.supabaseClient;
   }
 
   // ==========================================
@@ -72,9 +80,10 @@ export class VectorStore {
       updatedAt: new Date().toISOString(),
     });
 
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from('knowledge_sources').upsert({
+        await client.from('knowledge_sources').upsert({
           id: source.id,
           name: source.name,
           source_type: source.sourceType,
@@ -97,9 +106,10 @@ export class VectorStore {
       updatedAt: new Date().toISOString(),
     });
 
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from('knowledge_documents').upsert({
+        await client.from('knowledge_documents').upsert({
           id: doc.id,
           source_id: doc.sourceId,
           title: doc.title,
@@ -120,9 +130,10 @@ export class VectorStore {
   public async upsertVersion(ver: KnowledgeDocumentVersion): Promise<void> {
     this.versions.set(ver.id, ver);
 
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from('knowledge_document_versions').upsert({
+        await client.from('knowledge_document_versions').upsert({
           id: ver.id,
           document_id: ver.documentId,
           version: ver.version,
@@ -143,7 +154,8 @@ export class VectorStore {
       this.chunks.set(chunk.id, chunk);
     }
 
-    if (this.supabaseClient && chunksList.length > 0) {
+    const client = this.getSupabaseClient();
+    if (client && chunksList.length > 0) {
       try {
         const rows = chunksList.map((c) => ({
           id: c.id,
@@ -161,7 +173,7 @@ export class VectorStore {
           document_type: c.documentType,
           metadata: c.metadata,
         }));
-        await this.supabaseClient.from('knowledge_chunks').upsert(rows);
+        await client.from('knowledge_chunks').upsert(rows);
       } catch {
         // Fallback
       }
@@ -173,7 +185,8 @@ export class VectorStore {
       this.embeddings.set(emb.chunkId, emb);
     }
 
-    if (this.supabaseClient && embeddingsList.length > 0) {
+    const client = this.getSupabaseClient();
+    if (client && embeddingsList.length > 0) {
       try {
         const rows = embeddingsList.map((e) => ({
           id: e.id,
@@ -183,7 +196,7 @@ export class VectorStore {
           dimensions: e.dimensions,
           embedding: JSON.stringify(e.embedding),
         }));
-        await this.supabaseClient.from('knowledge_embeddings').upsert(rows);
+        await client.from('knowledge_embeddings').upsert(rows);
       } catch {
         // Fallback
       }
@@ -202,9 +215,11 @@ export class VectorStore {
     const threshold = options?.threshold ?? 0.35;
 
     // 1. Try Supabase pgvector match_knowledge_chunks RPC if online
-    if (this.supabaseClient) {
+    // 1. Try Supabase pgvector match_knowledge_chunks RPC if online
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        const { data, error } = await this.supabaseClient.rpc('match_knowledge_chunks', {
+        const { data, error } = await client.rpc('match_knowledge_chunks', {
           query_embedding: JSON.stringify(queryEmbedding),
           match_threshold: threshold,
           match_count: topK,
