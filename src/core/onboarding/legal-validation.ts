@@ -206,6 +206,175 @@ export const LEGAL_THESES_VALIDATION: Record<string, {
       'Não há vício sem prova de não entrega.',
     ],
   },
+  'ARG-049': {
+    claim:
+      'Ausência de Notificação de Autuação prévia gera cerceamento de defesa e nulidade insanável (Súmula 312 STJ).',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 281, parágrafo único, II c/c Súmula 312 do STJ',
+      inForce: true,
+      reference: 'Súmula 312 do STJ',
+    },
+    requiredFacts: [
+      'recebimento de penalidade sem Notificação de Autuação prévia',
+      'ausência de comprovação de entrega da NA',
+    ],
+    limitations: [
+      'A ausência da NA prévia deve ser comprovada por certidão do órgão autuador.',
+      'Não se aplica quando a NA foi comprovadamente entregue.',
+    ],
+  },
+  'ARG-050': {
+    claim:
+      'Autuação por órgão incompetente territorialmente é nula de pleno direito.',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Arts. 21, 22 e 24 do CTB (Lei 9.503/1997)',
+      inForce: true,
+    },
+    requiredFacts: [
+      'órgão autuador municipal em via de competência estadual/federal',
+      'ausência de convênio formal vigente',
+    ],
+    limitations: [
+      'Requer certidão de circunscrição viária ou Diário Oficial.',
+      'Não se aplica a vias municipais urbanas ou com convênio vigente.',
+    ],
+  },
+  'ARG-042': {
+    claim:
+      'A escala de 40 pontos da Lei 14.071/2020 retroage a processos de suspensão em curso (Tema 1.097 STJ).',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 261, I (redação Lei 14.071/2020) c/c Art. 5º, XL da CF/88',
+      inForce: true,
+    },
+    requiredFacts: [
+      'processo de suspensão por pontos em andamento',
+      'pontuação entre 20 e 39 pontos',
+    ],
+    limitations: [
+      'Não se aplica a processos já transitados em julgado.',
+      'Não se aplica a processos com 2+ infrações gravíssimas (regra de 20 pontos).',
+    ],
+  },
+  'ARG-043': {
+    claim:
+      'PSDD instaurado com multas sub judice (recurso pendente) é nulo por prematuridade.',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 285, §3º c/c Art. 290, parágrafo único',
+      inForce: true,
+    },
+    requiredFacts: [
+      'multas componentes com recurso administrativo pendente',
+      'efeito suspensivo vigente nas multas componentes',
+    ],
+    limitations: [
+      'Requer comprovação de interposição de recurso com efeito suspensivo.',
+      'Não se aplica se todas as multas já foram julgadas em 2ª instância.',
+    ],
+  },
+  'ARG-044': {
+    claim:
+      'Prescrição quinzenal da pretensão punitiva extingue o processo de suspensão.',
+    source: {
+      name: 'Lei Federal 9.873/1999 c/c CTB',
+      device: 'Art. 1º da Lei 9.873/1999 c/c Art. 24 da Res. CONTRAN 723/2018',
+      inForce: true,
+    },
+    requiredFacts: [
+      'transcurso de mais de 5 anos entre o fato e a notificação de abertura do PSDD',
+    ],
+    limitations: [
+      'A prescrição é interrompida por atos de impulso processual da administração.',
+      'Requer histórico do processo administrativo do DETRAN.',
+    ],
+  },
+  'ARG-045': {
+    claim:
+      'Cassação por direção durante suspensão requer prova de efetiva direção pelo condutor suspenso.',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 263, I c/c Art. 5º, XLV da CF/88',
+      inForce: true,
+    },
+    requiredFacts: [
+      'processo de cassação baseado em multa sem abordagem',
+      'veículo na posse de terceiro no momento da autuação',
+    ],
+    limitations: [
+      'Não se aplica se o condutor foi flagrado presencialmente pelo agente.',
+      'Requer declaração de terceiro ou contrato de locação/alienação.',
+    ],
+  },
+  'ARG-046': {
+    claim:
+      'Nulidade do PSDD originário contamina a cassação subsequente (efeito cascata).',
+    source: {
+      name: 'Constituição Federal de 1988',
+      device: 'Art. 5º, LV da CF/88',
+      inForce: true,
+    },
+    requiredFacts: [
+      'suspensão anterior com vício de notificação ou prescrição',
+      'cassação baseada nessa suspensão',
+    ],
+    limitations: [
+      'Requer cópia dos autos do PSDD originário evidenciando o vício.',
+      'Não se aplica se a suspensão anterior foi plenamente válida.',
+    ],
+  },
+  'ARG-039': {
+    claim:
+      'Multa NIC indevida quando a empresa indicou o condutor tempestivamente.',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 257, §7º e §8º c/c Res. CONTRAN 918/2022, Art. 9º',
+      inForce: true,
+    },
+    requiredFacts: [
+      'protocolo tempestivo do FICI pela empresa',
+      'comprovante de protocolo eletrônico ou AR',
+    ],
+    limitations: [
+      'Não se aplica se a empresa deixou transcorrer o prazo.',
+      'Requer comprovante de protocolo da indicação.',
+    ],
+  },
+  'ARG-040': {
+    claim:
+      'Nulidade reflexa da multa NIC quando o AIT originário foi anulado.',
+    source: {
+      name: 'Princípio da Gravitação Jurídica',
+      device: 'O acessório segue a sorte do principal',
+      inForce: true,
+    },
+    requiredFacts: [
+      'AIT originário cancelado por decadência ou nulidade formal',
+      'multa NIC decorrente desse AIT',
+    ],
+    limitations: [
+      'Requer certidão de cancelamento ou decisão de arquivamento do AIT originário.',
+      'Não se aplica se o AIT originário for hígido.',
+    ],
+  },
+  'ARG-041': {
+    claim:
+      'Multa NIC cobrada sem Notificação de Autuação prévia é nula (Súmula 312 STJ).',
+    source: {
+      name: 'Código de Trânsito Brasileiro (CTB)',
+      device: 'Art. 281 c/c Súmula 312 do STJ',
+      inForce: true,
+    },
+    requiredFacts: [
+      'recebimento direto da Notificação de Penalidade sem NA prévia',
+    ],
+    limitations: [
+      'Não se aplica se a NA da NIC foi expedida.',
+      'Requer comprovação de recebimento direto da penalidade.',
+    ],
+  },
 };
 
 /**

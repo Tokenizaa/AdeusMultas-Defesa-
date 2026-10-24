@@ -52,7 +52,7 @@ export const CTB_ARTICLES_DB: CtbArticleModel[] = [
     paragraphsAndIncidents: [
       'Alterado pela Lei nº 14.071/2020: substituiu a expressão "poderá ser imposta" por "deverá ser imposta", transformando o ato em direito subjetivo vinculado da parte.',
     ],
-    practicalApplication: 'Para qualquer infração de 3 pontos (leve) ou 4 pontos (média), o condutor sem histórico nos últimos 12 meses tem 100% de direito à isenção da multa e cancelamento dos pontos.',
+    practicalApplication: 'Para infrações de natureza leve ou média, o condutor sem autuações nos últimos 12 meses tem direito à conversão em advertência por escrito, se confirmado e deferido pelo órgão autuador — não é isenção automática nem resultado garantido.',
     nullityConsequence: 'Indeferimento ilegal passível de mandado de segurança ou recurso ao CETRAN.',
     relatedResolutions: ['Resolução CONTRAN nº 918/2022, Art. 10'],
   },
@@ -244,18 +244,6 @@ export const CTB_ARTICLES_DB: CtbArticleModel[] = [
     practicalApplication: 'Verificar se condição climática justificava, se em rodovia, se farol realmente apagado.',
     nullityConsequence: 'Anulação se não em rodovia, ou se farol aceso (DRL não conta como farol baixo em alguns entendimentos).',
     relatedResolutions: ['Lei 13.154/2015', 'MBFT 985/2022'],
-  },
-  {
-    article: 'Art. 267',
-    title: 'Conversão em Advertência por Escrito (Direito Subjetivo)',
-    caput: 'Deverá ser imposta a penalidade de advertência por escrito para as infrações de natureza leve ou média, passíveis de serem punidas com multa, caso o infrator não tenha cometido nenhuma outra infração nos últimos 12 (doze) meses.',
-    paragraphsAndIncidents: [
-      'Lei 14.071/2020: substituiu "poderá" por "deverá" — direito subjetivo vinculado.',
-      'Não se aplica a infrações graves/gravíssimas, nem a reincidentes nos 12 meses.',
-    ],
-    practicalApplication: 'Para qualquer infração leve (3 pts) ou média (4 pts), condutor sem histórico nos 12 meses tem 100% direito à isenção da multa e cancelamento dos pontos.',
-    nullityConsequence: 'Indeferimento ilegal passível de mandado de segurança ou recurso ao CETRAN.',
-    relatedResolutions: ['Resolução CONTRAN nº 918/2022, Art. 10', 'Lei 14.071/2020'],
   },
   {
     article: 'Art. 273',

@@ -48,6 +48,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
      validFrom: '2020-10-01',
      validUntil: null,
      version: 1,
+     knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TRF-4 AC 5003412-88.2021.4.04.7100 e TJ-SP Apelação 1004589-21.2023.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Obrigatoriedade Legal da Verificação Metrológica Anual pelo INMETRO',
@@ -95,6 +96,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
      validFrom: '1998-01-22',
      validUntil: null,
      version: 1,
+     knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação 1.0000.22.045812-3/001 e STJ REsp 1.345.982/RS).'],
     formattedParagraphs: [
       {
         heading: '1. Do Mandamento Legal do Artigo 90 do Código de Trânsito Brasileiro',
@@ -127,6 +129,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
      validFrom: '2020-10-01',
      validUntil: null,
      version: 1,
+     knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-PR Reexame Necessário 0004512-32.2022.8.16.0004).'],
     formattedParagraphs: [
       {
         heading: '1. Da Obrigatoriedade de Estudo Técnico de Engenharia Prévio',
@@ -179,6 +182,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SC; AC 5001239-44.2022.8.24.0023; Terceira Câmara de Direito Público'],
     requiredDocuments: ['Cópia da Notificação com os campos de velocidade preenchidos'],
     observations: 'O cálculo deve sempre tomar como parâmetro a velocidade considerada, nunca a medida bruta.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SC AC 5001239-44.2022.8.24.0023).'],
     formattedParagraphs: [
       {
         heading: '1. Da Distinção Obrigatória entre Velocidade Medida e Velocidade Considerada',
@@ -202,6 +206,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Recurso Inominado 1001298-55.2021.8.26.0127; Turma Recursal'],
     requiredDocuments: ['Foto ampliada da autuação'],
     observations: 'A incerteza sobre qual veículo disparou o sensor eletromagnético acarreta a insubsistência da autuação.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Recurso Inominado 1001298-55.2021.8.26.0127).'],
     formattedParagraphs: [
       {
         heading: '1. Da Dúvida Razoável e Insubsistência do Registro Fotográfico',
@@ -225,6 +230,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-DFT; Acórdão 1398214; 2ª Turma Recursal dos Juizados Especiais'],
     requiredDocuments: ['Mapa de geolocalização com a distância métrica comprovada'],
     observations: 'A tabela define distâncias em função da velocidade da via (ex: via de 60 km/h exige placa entre 100m e 300m).',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-DFT Acórdão 1398214).'],
     formattedParagraphs: [
       {
         heading: '1. Do Desrespeito às Distâncias Métricas Fixadas pelo CONTRAN',
@@ -249,6 +255,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; REsp 1.258.914/SP; Segunda Turma'],
     requiredDocuments: ['Ficha de atendimento de pronto-socorro / laudo médico'],
     observations: 'O bem jurídico vida e integridade física sobrepõe-se à norma administrativa de velocidade.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ REsp 1.258.914/SP).'],
     formattedParagraphs: [
       {
         heading: '1. Do Estado de Necessidade Justificante no Direito Administrativo Sancionador',
@@ -276,6 +283,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação Cível 1012398-44.2022.8.26.0053; 8ª Câmara de Direito Público'],
     requiredDocuments: ['Notificação com o espelho fotográfico'],
     observations: 'Sem a foto antes da linha de retenção não se pode afastar o ingresso regular na fase amarela.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação Cível 1012398-44.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Exigência Regulamentar de Sequência Fotográfica Completa',
@@ -299,6 +307,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-MG; Apelação Cível 1.0024.14.289123-0/001; 6ª Câmara Cível'],
     requiredDocuments: ['Registro audiovisual da contagem do tempo de amarelo'],
     observations: 'O tempo de amarelo deve permitir parar com segurança ou desobstruir o cruzamento.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação Cível 1.0024.14.289123-0/001).'],
     formattedParagraphs: [
       {
         heading: '1. Do Descumprimento dos Prazos Mínimos de Ciclo Semafórico',
@@ -345,6 +354,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação 1009841-22.2020.8.26.0562; 3ª Câmara de Direito Público'],
     requiredDocuments: ['Foto da autuação evidenciando retenção de tráfego'],
     observations: 'O ato de parar sobre a faixa não se confunde com o avanço doloso do cruzamento.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1009841-22.2020.8.26.0562).'],
     formattedParagraphs: [
       {
         heading: '1. Da Inadequação Típica do Avanço de Sinal em Tráfego Conflagrado',
@@ -368,6 +378,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-PR; Apelação Cível 0001298-77.2021.8.16.0004; 5ª Câmara Cível'],
     requiredDocuments: ['Vídeo da pane ou resposta da central 156'],
     observations: 'Sem sinalização semafórica operante, aplicam-se as regras gerais de preferência de passagem.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-PR Apelação Cível 0001298-77.2021.8.16.0004).'],
     formattedParagraphs: [
       {
         heading: '1. Da Ilegalidade de Autuações Emitidas por Equipamentos em Pane',
@@ -391,6 +402,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Recurso Inominado 1004512-88.2023.8.26.0016; 1ª Turma Cível'],
     requiredDocuments: ['Foto da placa de livre conversão à direita no cruzamento'],
     observations: 'A inovação legislativa da Lei 14.071/2020 autorizou a manobra mediante cautela.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Recurso Inominado 1004512-88.2023.8.26.0016).'],
     formattedParagraphs: [
       {
         heading: '1. Da Expressa Previsão Legal de Livre Conversão no Artigo 44-A do CTB',
@@ -418,6 +430,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-RS; Apelação Cível 70084512984; Vigésima Primeira Câmara Cível'],
     requiredDocuments: ['Espelho do Auto de Infração de Trânsito'],
     observations: 'O MBFT exige que o agente declare explicitamente a posição e o ato praticado pelo condutor.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-RS Apelação Cível 70084512984).'],
     formattedParagraphs: [
       {
         heading: '1. Do Vício de Motivação por Omissão de Circunstâncias Essenciais no AIT',
@@ -441,6 +454,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Recurso Inominado 1002341-12.2022.8.26.0071; 2ª Turma Recursal'],
     requiredDocuments: ['Foto do suporte veicular instalado no painel'],
     observations: 'O CONTRAN expressamente autoriza o uso do celular no suporte para navegação por GPS.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Recurso Inominado 1002341-12.2022.8.26.0071).'],
     formattedParagraphs: [
       {
         heading: '1. Da Licitude do Uso de Dispositivos Eletrônicos em Suporte Veicular',
@@ -464,6 +478,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-MG; Apelação Cível 1.0000.21.098123-4/001; 19ª Câmara Cível'],
     requiredDocuments: ['Foto do veículo na vaga de estacionamento regular'],
     observations: 'Com o veículo estacionado não há a figura da direção veicular ativa.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação Cível 1.0000.21.098123-4/001).'],
     formattedParagraphs: [
       {
         heading: '1. Da Inexistência de Condução Veicular Durante o Estacionamento',
@@ -487,6 +502,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TRF-3; AC 5001298-33.2020.4.03.6100; Quarta Turma'],
     requiredDocuments: ['Foto dos vidros do veículo', 'Nota fiscal do insulfilm'],
     observations: 'A presunção dos atos administrativos é iuris tantum e cede diante da dúvida objetiva.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TRF-3 AC 5001298-33.2020.4.03.6100).'],
     formattedParagraphs: [
       {
         heading: '1. Da Relatividade da Presunção de Veracidade dos Atos Administrativos',
@@ -510,6 +526,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-PR; Apelação Cível 0019283-44.2020.8.16.0004; 4ª Câmara Cível'],
     requiredDocuments: ['Manual do veículo ou foto do painel com pareamento ativo'],
     observations: 'A ligação via viva-voz do carro é plenamente permitida pela legislação.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-PR Apelação Cível 0019283-44.2020.8.16.0004).'],
     formattedParagraphs: [
       {
         heading: '1. Da Legalidade do Atendimento Telefônico por Sistema de Áudio Veicular',
@@ -537,6 +554,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; AC 1003412-55.2021.8.26.0053; 12ª Câmara de Direito Público'],
     requiredDocuments: ['Fotografias panorâmicas da via pública'],
     observations: 'O motorista não pode ser penalizado por ausência de sinalização viária.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP AC 1003412-55.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Do Princípio da Legalidade e Tipicidade Estrita na Sinalização de Trânsito',
@@ -560,6 +578,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-MG; Apelação Cível 1.0000.22.012398-1/001; 7ª Câmara Cível'],
     requiredDocuments: ['Declaração de passageiro com firma reconhecida ou vídeo'],
     observations: 'O tempo estritamente necessário para embarque constitui parada lícita.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação Cível 1.0000.22.012398-1/001).'],
     formattedParagraphs: [
       {
         heading: '1. Da Distinção Jurídica entre os Institutos de Estacionamento e Parada',
@@ -583,6 +602,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-RS; Recurso Inominado 71008761234; Primeira Turma Recursal'],
     requiredDocuments: ['Fotos do meio-fio e da via'],
     observations: 'A pintura amarela isolada não tem eficácia normativa sem a placa de regulamentação.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-RS Recurso Inominado 71008761234).'],
     formattedParagraphs: [
       {
         heading: '1. Da Ineficácia Jurídica da Sinalização Horizontal Isolada',
@@ -606,6 +626,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação 1002398-11.2021.8.26.0053; 1ª Câmara de Direito Público'],
     requiredDocuments: ['Nota fiscal da oficina mecânica', 'Comprovante do reboque/guincho'],
     observations: 'A imobilização forçada por defeito mecânico afasta a voluntariedade da infração.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1002398-11.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Força Maior e Inexigibilidade de Conduta Diversa em Caso de Pane',
@@ -624,11 +645,12 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     whenToUse: ['Multa em vaga especial onde o condutor/passageiro é credenciado e o cartão estava no veículo'],
     whenNotToUse: ['Uso indevido de vaga especial por terceiros sem a presença do beneficiário'],
     requirements: ['Cópia da Credencial Oficial de Estacionamento Válida e comprovante de presença'],
-    legalBase: 'Art. 181, XX do CTB c/c Resoluções CONTRAN nº 965/2022 e 966/2022',
-    resolutions: ['Resolução CONTRAN nº 965/2022 e 966/2022'],
-    relatedJurisprudence: ['TJ-DFT; Acórdão 1401298; 1ª Turma Recursal'],
+    legalBase: 'Art. 181, XX do CTB',
+    resolutions: [],
+    relatedJurisprudence: [],
     requiredDocuments: ['Cópia da Credencial de Idoso ou PCD emitida pelo município/SENATRAN'],
     observations: 'A comprovação de credenciamento válido elide a imposição da penalidade.',
+    knowledgeGaps: ['Resoluções CONTRAN 965/2022 e 966/2022 citadas originalmente pendentes de verificação na fonte primária — não usar como base legal até confirmação.'],
     formattedParagraphs: [
       {
         heading: '1. Do Pleno Direito ao Uso da Vaga Reservada mediante Credencial Válida',
@@ -656,6 +678,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; REsp 1.724.891/PR; Segunda Turma', 'TJ-SP; Apelação 1003412-88.2022.8.26.0053'],
     requiredDocuments: ['Cópia integral do processo administrativo do DETRAN'],
     observations: 'O termo de sinais é requisito solene indispensável para comprovar a alteração da condução.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ REsp 1.724.891/PR e TJ-SP Apelação 1003412-88.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Obrigatoriedade Formal do Termo de Constatação de Sinais',
@@ -679,6 +702,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-PR; Mandado de Segurança 0002134-88.2021.8.16.0004; 4ª Câmara Cível'],
     requiredDocuments: ['Ticket impresso do bafômetro', 'Certidão do INMETRO'],
     observations: 'Equipamento sem calibração oficial não possui validade jurídica probatória.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-PR Mandado de Segurança 0002134-88.2021.8.16.0004).'],
     formattedParagraphs: [
       {
         heading: '1. Da Nulidade do Teste por Caducidade da Calibração Metrológica',
@@ -702,6 +726,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STF; RE 1.224.374/RS (Tema 1.079 - Distinção fática quanto à proporcionalidade)'],
     requiredDocuments: ['Cópia do AIT sem anotação de perigo concreto'],
     observations: 'A recusa não pode ser tratada como confissão ficta de embriaguez.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STF RE 1.224.374/RS).'],
     formattedParagraphs: [
       {
         heading: '1. Do Princípio Nemo Tenetur se Detegere e da Presunção de Inocência',
@@ -725,6 +750,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-RS; AC 70081298341; Vigésima Segunda Câmara Cível'],
     requiredDocuments: ['Extrato impresso do teste de ar alveolar'],
     observations: 'Medições até 0,04 mg/L têm valor considerado zero e não configuram infração.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-RS AC 70081298341).'],
     formattedParagraphs: [
       {
         heading: '1. Da Aplicação da Margem de Tolerância Regulamentar de 0,04 mg/L',
@@ -748,6 +774,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação 1009123-44.2021.8.26.0053'],
     requiredDocuments: ['Cupom impresso pelo etilômetro'],
     observations: 'O teste em branco garante que a câmara de medição estava isenta de vapores residuais.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1009123-44.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Exigência de Purga e Teste em Branco no Procedimento Metrológico',
@@ -771,6 +798,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SC; AC 5003412-11.2021.8.24.0023; 2ª Câmara de Direito Público'],
     requiredDocuments: ['Declaração do condutor e eventual frasco/comprovante'],
     observations: 'O manual do fabricante exige intervalo mínimo de 15 minutos após uso de substâncias orais.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SC AC 5003412-11.2021.8.24.0023).'],
     formattedParagraphs: [
       {
         heading: '1. Da Influência de Vapores Bucais e do Dever de Aguardar 15 Minutos',
@@ -798,6 +826,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Recurso Inominado 1001234-99.2022.8.26.0016'],
     requiredDocuments: ['Foto do interior do veículo com o cinto escuro'],
     observations: 'O agente de trânsito à distância é suscetível a ilusão de ótica por contraste de cores.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Recurso Inominado 1001234-99.2022.8.26.0016).'],
     formattedParagraphs: [
       {
         heading: '1. Do Erro de Percepção Visual e Ausência de Certeza Material',
@@ -821,6 +850,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-MG; Apelação Cível 1.0000.20.098123-1/001'],
     requiredDocuments: ['Laudo médico oficial com CRM'],
     observations: 'A ficha do enquadramento do MBFT prevê expressamente a excludente por motivo médico.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação Cível 1.0000.20.098123-1/001).'],
     formattedParagraphs: [
       {
         heading: '1. Da Excludente Legal por Motivo de Isenção Médica Comprovada',
@@ -844,6 +874,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-RJ; Apelação 0012398-33.2021.8.19.0001'],
     requiredDocuments: ['Fotos dos avisos no veículo'],
     observations: 'O motorista profissional cumpre seu dever ao advertir e disponibilizar o cinto aos passageiros.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-RJ Apelação 0012398-33.2021.8.19.0001).'],
     formattedParagraphs: [
       {
         heading: '1. Do Cumprimento do Dever de Advertência pelo Condutor Profissional',
@@ -867,6 +898,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-RS; Recurso Inominado 71009123841'],
     requiredDocuments: ['CRLV do veículo antigo'],
     observations: 'Não se pode exigir equipamento não obrigatório à época da homologação do modelo.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-RS Recurso Inominado 71009123841).'],
     formattedParagraphs: [
       {
         heading: '1. Da Não Retroatividade de Normas de Equipamentos Obrigatórios a Veículos Antigos',
@@ -894,6 +926,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação 1004123-55.2022.8.26.0053; 1ª Câmara de Direito Público'],
     requiredDocuments: ['Comprovantes bancários autenticados de pagamento dos tributos'],
     observations: 'A mora do órgão administrativo na baixa bancária não pode prejudicar o condutor diligente.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1004123-55.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Comprovação de Quitação Prévia e Inexistência de Culpa do Administrado',
@@ -917,6 +950,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-MG; Apelação Cível 1.0000.22.091234-1/001'],
     requiredDocuments: ['Extrato do aplicativo CDT (Carteira Digital de Trânsito)'],
     observations: 'A Lei 14.071/2020 expressamente dispensou o porte físico mediante consulta sistêmica.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-MG Apelação Cível 1.0000.22.091234-1/001).'],
     formattedParagraphs: [
       {
         heading: '1. Da Expressa Dispensa Legal do Porte de Documentos com Acesso Sistêmico',
@@ -940,6 +974,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-DFT; Acórdão 1391283; 2ª Turma Recursal'],
     requiredDocuments: ['Cópia do CRLV-e com QR Code'],
     observations: 'O CRLV-e em meio digital possui a mesma validade jurídica do documento impresso.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-DFT Acórdão 1391283).'],
     formattedParagraphs: [
       {
         heading: '1. Da Equivalência e Eficácia Plena dos Documentos Digitais Oficiais',
@@ -963,6 +998,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Recurso Inominado 1002341-99.2021.8.26.0053'],
     requiredDocuments: ['CRLV do veículo'],
     observations: 'O erro no caractere da placa torna o AIT inconsistente quanto à identidade do veículo.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Recurso Inominado 1002341-99.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Inconsistência na Identificação do Veículo no Auto de Infração',
@@ -990,6 +1026,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; REsp 1.774.891/SP; Segunda Turma', 'TJ-SP; Apelação 1012398-11.2023.8.26.0053'],
     requiredDocuments: ['Comprovante de protocolo do FICI tempestivo'],
     observations: 'A inércia do órgão em processar o FICI tempestivo não autoriza a lavratura da multa NIC.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ REsp 1.774.891/SP e TJ-SP Apelação 1012398-11.2023.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Ilegalidade da Multa NIC Diante da Indicação Tempestiva do Condutor',
@@ -1013,6 +1050,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; AgInt no REsp 1.892.341/SP; Primeira Turma'],
     requiredDocuments: ['Cópia da decisão de deferimento do AIT originário'],
     observations: 'Anulada a autuação principal, desfazem-se automaticamente todas as penalidades acessórias.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ AgInt no REsp 1.892.341/SP).'],
     formattedParagraphs: [
       {
         heading: '1. Da Extinção da Multa NIC em Virtude da Insubsistência do Auto Originário',
@@ -1036,6 +1074,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação Cível 1009123-99.2022.8.26.0053; 1ª Câmara de Direito Público'],
     requiredDocuments: ['Notificação de penalidade da multa NIC'],
     observations: 'A multa NIC exige contraditório e ampla defesa autônomos.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação Cível 1009123-99.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Necessidade de Dupla Notificação no Procedimento da Multa NIC',
@@ -1063,6 +1102,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; Tema Repetitivo 1.097 (REsp 1.869.589/SP)', 'TJ-SP; Enunciado Cível'],
     requiredDocuments: ['Prontuário da CNH no DETRAN'],
     observations: 'O STJ fixou que a lei mais benéfica retroage aos processos administrativos em curso.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ Tema 1.097 REsp 1.869.589/SP).'],
     formattedParagraphs: [
       {
         heading: '1. Da Eficácia Retroativa da Lei nº 14.071/2020 aos Processos em Trâmite',
@@ -1086,6 +1126,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação Cível 1009841-88.2021.8.26.0053; 2ª Câmara de Direito Público'],
     requiredDocuments: ['Espelho de acompanhamento dos recursos pendentes'],
     observations: 'Pontos de multas sub judice não podem ser computados para atingimento do teto de suspensão.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação Cível 1009841-88.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Impossibilidade de Cômputo de Pontuação sob Efeito Suspensivo',
@@ -1109,6 +1150,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; AgInt no REsp 1.782.391/RJ; Segunda Turma'],
     requiredDocuments: ['Histórico do processo administrativo do DETRAN'],
     observations: 'O direito de punir prescreve em 5 anos contados da data da infração ou do encerramento da esfera recursal.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ AgInt no REsp 1.782.391/RJ).'],
     formattedParagraphs: [
       {
         heading: '1. Da Consumação da Prescrição Quinquenal da Pretensão Punitiva',
@@ -1132,6 +1174,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; REsp 1.698.412/SP; Segunda Turma', 'TJ-SP; Apelação 1004123-99.2021.8.26.0053'],
     requiredDocuments: ['Declaração de real condutor', 'Cópia da CNH do terceiro'],
     observations: 'A propriedade do veículo não autoriza presumir que o condutor suspenso dirigia.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ REsp 1.698.412/SP e TJ-SP Apelação 1004123-99.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Necessidade de Comprovação da Efetiva Direção do Veículo pelo Suspenso',
@@ -1155,6 +1198,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação Cível 1002341-88.2020.8.26.0053; 6ª Câmara de Direito Público'],
     requiredDocuments: ['Cópia do processo de suspensão anterior'],
     observations: 'O ato nulo não gera efeitos jurídicos válidos capazes de fundamentar a cassação.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação Cível 1002341-88.2020.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Do Efeito Cascata da Nulidade do Processo Administrativo Originário',
@@ -1178,6 +1222,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Mandado de Segurança 1009123-11.2022.8.26.0053'],
     requiredDocuments: ['Certificado emitido pelo CFC credenciado'],
     observations: 'O curso preventivo zera a pontuação acumulada para condutores profissionais.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Mandado de Segurança 1009123-11.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Quitação da Pontuação pelo Curso Preventivo de Reciclagem (Art. 261, §5º)',
@@ -1211,6 +1256,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
       'Cópia da Notificação da Autuação contendo a data da infração e a data de expedição/postagem',
     ],
     observations: 'O prazo de 30 dias é decadencial de ordem pública e extingue o próprio direito de punir da autoridade.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1002341-55.2023.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Da Consumação do Prazo Decadencial de 30 Dias para Expedição da Notificação',
@@ -1238,6 +1284,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; Súmula 312', 'TJ-SP; Súmula 127 do STJ'],
     requiredDocuments: ['Cópia da notificação de penalidade e certidão do DETRAN'],
     observations: 'O procedimento de trânsito é bifásico e obrigatório.',
+    knowledgeGaps: ['Referência "TJ-SP; Súmula 127 do STJ" está incorreta (Súmula 127 é do STJ, não do TJ-SP) — pendente de correção na fonte primária.'],
     formattedParagraphs: [
       {
         heading: '1. Da Garantia Constitucional da Dupla Notificação e Súmula 312 do STJ',
@@ -1261,6 +1308,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STJ; REsp 1.458.912/MG; Primeira Turma'],
     requiredDocuments: ['Mapa oficial do trecho viário e extrato do AIT'],
     observations: 'O ato praticado por autoridade incompetente é nulo de pleno direito.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (STJ REsp 1.458.912/MG).'],
     formattedParagraphs: [
       {
         heading: '1. Do Vício de Competência e Violação ao Princípio da Legalidade Estrita',
@@ -1284,6 +1332,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['TJ-SP; Apelação Cível 1004589-11.2022.8.26.0053; 3ª Câmara de Direito Público'],
     requiredDocuments: ['Extrato de prontuário e histórico de CNH'],
     observations: 'A Lei 14.071/2020 transformou o ato de discricionário em poder-dever vinculado da autoridade.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação Cível 1004589-11.2022.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Do Direito Subjetivo do Condutor à Conversão em Advertência por Escrito',
@@ -1307,6 +1356,7 @@ const RAW_ARGUMENTS_CATALOG: Partial<ArgumentModel>[] = [
     relatedJurisprudence: ['STF; ARE 748.371/MT (Tema 660); Plenário', 'TJ-SP; Apelação 1012398-88.2021.8.26.0053'],
     requiredDocuments: ['Cópia da decisão administrativa recorrida'],
     observations: 'O dever de fundamentação concreta dos atos decisórios administrativos é indeclinável.',
+    knowledgeGaps: ['Jurisprudência relacionada pendente de verificação na fonte primária (TJ-SP Apelação 1012398-88.2021.8.26.0053).'],
     formattedParagraphs: [
       {
         heading: '1. Do Vício de Nulidade por Falta de Fundamentação no Julgamento Administrativo',

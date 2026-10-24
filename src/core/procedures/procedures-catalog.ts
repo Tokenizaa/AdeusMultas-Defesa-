@@ -16,7 +16,7 @@ export const PROCEDURES_CATALOG: ProcedureModel[] = [
     objective: 'Impugnar a Notificação de Imposição de Penalidade perante o colegiado da JARI, atacando tanto as preliminares processuais quanto o mérito fático e probatório da autuação.',
     legalBasis: 'Art. 285 do CTB c/c Resolução CONTRAN nº 900/2022',
     competentBody: 'Junta Administrativa de Recursos de Infrações (JARI) do Órgão Autuador',
-    suspensiveEffectRule: 'Concede efeito suspensivo automático após 24 meses (Lei 14.229/21) ou a pedido do recorrente, vedando restrição ao CRLV.',
+    suspensiveEffectRule: 'Efeito suspensivo automático desde a interposição tempestiva do recurso (Art. 283 do CTB), vedando restrição ao CRLV; se não julgado em 24 meses, concede-se de ofício (Lei 14.229/21).',
     stages: [
       { stepNumber: 1, name: 'Recebimento da Notificação de Penalidade (NP)', description: 'Verificação da tempestividade e valor com desconto de 20%.', deadlineDays: 30, actingParty: 'Cidadão/Condutor' },
       { stepNumber: 2, name: 'Elaboração das Razões Recursais à JARI', description: 'Redação das preliminares, mérito aprofundado, juntada de jurisprudência e requerimentos.', deadlineDays: 10, actingParty: 'Cidadão/Condutor' },
