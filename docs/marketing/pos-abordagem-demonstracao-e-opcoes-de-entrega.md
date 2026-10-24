@@ -163,3 +163,38 @@ A próxima etapa deve revisar a demonstração e o momento em que o lead clica n
 ## 9. Histórico da decisão
 
 Esta documentação consolida a discussão de 23 de outubro de 2026 sobre a experiência após o primeiro contato comercial. Ela registra uma direção de produto para consulta futura; não declara funcionalidades implementadas ou certificadas.
+
+## 10. Pré-requisito: validar raspagem e preparação da abordagem
+
+Antes de implementar ou testar a experiência pós-clique descrita acima, a etapa anterior deve ser executada com uma empresa real e rastreável. O teste deve parar imediatamente antes do envio da mensagem de WhatsApp.
+
+### Escopo do teste anterior à abordagem
+
+1. Selecionar uma empresa-alvo e registrar a consulta/fonte que a encontrou.
+2. Executar a raspagem e capturar os dados disponíveis.
+3. Se houver site, abri-lo com Playwright para inspecionar conteúdo, serviços, contatos e experiência móvel; se não houver site acessível, registrar esse fato sem presumir dados.
+4. Consolidar e normalizar os dados, mantendo a origem de cada campo relevante e distinguindo informação confirmada de campo ausente ou inferência.
+5. Verificar duplicidade, inconsistências e dados mínimos necessários para uma abordagem individualizada.
+6. Preparar a mensagem de WhatsApp com base apenas em fatos confirmados.
+7. Exibir/revisar a mensagem preparada e encerrar o teste **antes de enviá-la**.
+
+### Critérios de aceite
+
+- A empresa pode ser identificada sem ambiguidade.
+- Os dados coletados podem ser conferidos nas fontes registradas.
+- Falhas, campos ausentes, bloqueios e páginas inacessíveis ficam explícitos no resultado.
+- A mensagem preparada corresponde à empresa e não contém alegações inventadas.
+- Não há envio real de WhatsApp, contratação, pagamento ou criação de site nesse teste.
+- O resultado inclui evidências suficientes para repetir o teste e diagnosticar falhas.
+
+### Sequência revisada
+
+**Fase 1 — Raspagem até a mensagem preparada (agora):** validar descoberta, coleta, inspeção com Playwright, normalização, persistência e preparação da mensagem, sem enviá-la.
+
+**Fase 2 — Pós-abordagem:** depois que a Fase 1 estiver validada, revisar e implementar a experiência do link de demonstração, incluindo estilos alternáveis e CTA.
+
+**Fase 3 — Entrega/publicação:** detalhar e implementar os caminhos A e C conforme a arquitetura e os limites comerciais forem confirmados.
+
+**Fase 4 — Opção B:** integração de domínio e hospedagem com fornecedor externo, por último, após validação técnica, comercial e de atribuição.
+
+Este acréscimo corrige a ordem de execução sem invalidar as decisões já registradas sobre o pós-clique. A documentação da Fase 2 é planejamento, não uma indicação de que a Fase 1 já tenha sido testada ou aprovada.
