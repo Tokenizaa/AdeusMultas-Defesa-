@@ -636,7 +636,8 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
             effectivelyPaid: domain.payment.amount,
           });
 
-          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+          const forwardedFor = req.headers['x-forwarded-for'];
+      const clientIp = req.ip || (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0]?.trim()) || 'unknown';
       const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
 
       auditLogs.unshift({
@@ -1075,7 +1076,8 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
             effectivelyPaid: domain.payment.amount,
           });
 
-          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+          const forwardedFor = req.headers['x-forwarded-for'];
+      const clientIp = req.ip || (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0]?.trim()) || 'unknown';
       const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
 
       auditLogs.unshift({
@@ -1278,7 +1280,8 @@ router.post('/webhooks/venopag', async (req: Request, res: Response) => {
             });
           }
 
-          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+          const forwardedFor = req.headers['x-forwarded-for'];
+      const clientIp = req.ip || (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0]?.trim()) || 'unknown';
       const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
 
       auditLogs.unshift({
