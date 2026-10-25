@@ -4,7 +4,7 @@ import { createSupabaseAdminClient, createSupabaseAnonClient } from './supabase'
 import { adapterError } from '../src/shared/api/adapters';
 
 export interface AuthenticatedUser { id: string; email: string; role: string; name?: string }
-type AppContext = Context<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>;
+type AppContext = Context<{ Bindings: Env; Variables: { user?: AuthenticatedUser; rawToken?: string } }>;
 
 export const authenticateToken = async (c: AppContext, next: Next) => {
   const authHeader = c.req.header('Authorization');
@@ -33,6 +33,9 @@ export const authenticateToken = async (c: AppContext, next: Next) => {
     role: profile.role,
     name: profile.name,
   });
+  // Armazena o JWT do usuário para que as rotas possam criar um client
+  // Supabase com identidade do usuário e aplicar RLS nas operações de dados.
+  c.set('rawToken', token);
   await next();
 };
 

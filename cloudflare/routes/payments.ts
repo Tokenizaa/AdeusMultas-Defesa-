@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../supabase';
-import { createSupabaseAdminClient } from '../supabase';
+import { createSupabaseAdminClient, createSupabaseUserClient } from '../supabase';
 import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
@@ -91,8 +91,7 @@ async function reserveOrFindPendingOrder(
     .eq('payment_method', 'pix')
     .eq('status', 'PENDING')
     .maybeSingle();
-  // eslint-disable-next-line no-console
-  console.error('[DEBUG reserve] existing=', { caseId: input.caseId, existing, existingAmount: existing?.amount, existingGtw: existing?.gateway_transaction_id, finalAmount });
+  // Log reserved status without exposing sensitive data; avoid logging amounts or gateway tx IDs.
 
   // Fast path: cobrança PENDING já criada e com dados do gateway → reutiliza,
   // nunca gera segunda cobrança.
@@ -725,7 +724,7 @@ routes.post('/webhooks/venopag', async (c) => {
 routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
   const user = c.get('user')!;
   const txId = c.req.param('txId');
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data, error } = await supabase.from('payment_orders').select('*').eq('gateway_transaction_id', txId).eq('user_id', user.id).maybeSingle();
   if (error) throw error;
   if (!data) throw new HTTPException(404, { message: 'Ordem não encontrada.' });

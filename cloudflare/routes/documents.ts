@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../supabase';
-import { createSupabaseAdminClient } from '../supabase';
+import { createSupabaseAdminClient, createSupabaseUserClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { rowToDomain } from '../canonical-mapper';
 
@@ -64,7 +64,7 @@ export const documentsRoutes = new Hono<{ Bindings: Env; Variables: { user?: Aut
 documentsRoutes.post('/documents/:caseId/generate', authenticateToken, async (c) => {
   const user = c.get('user')!;
   const caseId = c.req.param('caseId');
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: caseRow, error: caseError } = await supabase.from('cases').select('*').eq('id', caseId).maybeSingle();
   if (caseError) return c.json({ ok: false, error: { code: 'INTERNAL_ERROR', message: caseError.message } }, 500);
   if (!caseRow) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Caso não encontrado' } }, 404);

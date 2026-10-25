@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../supabase';
-import { createSupabaseAdminClient } from '../supabase';
+import { createSupabaseAdminClient, createSupabaseUserClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { recordAuditLog } from './audit';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
@@ -251,7 +251,7 @@ casesRoutes.post('/cases/anonymous/:id/recover', async (c) => {
 casesRoutes.get('/cases', authenticateToken, async (c) => {
   const user = c.get('user');
   const { userId } = c.req.query();
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
 
   let query = supabase.from('cases').select('*');
   if (!user || user.role !== 'admin') {
@@ -268,7 +268,7 @@ casesRoutes.get('/cases', authenticateToken, async (c) => {
 
 // GET /api/cases/:id
 casesRoutes.get('/cases/:id', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: row, error } = await supabase
     .from('cases')
     .select('*')
@@ -317,7 +317,7 @@ casesRoutes.get('/cases/:id', authenticateToken, async (c) => {
 // Formato estruturado JSON, inclui case, payment_orders e documents (metadados).
 // A trilha de auditoria da exportação é mantida (prova de conformidade).
 casesRoutes.get('/cases/:id/export', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const user = c.get('user');
   const caseId = c.req.param('id');
 
@@ -416,7 +416,7 @@ casesRoutes.post('/cases', authenticateToken, async (c) => {
   domainData.updatedAt = new Date().toISOString();
 
   const row = domainToRow(domainData);
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data, error } = await supabase.from('cases').insert(row).select().single();
 
   if (error) throw new HTTPException(400, { message: error.message });
@@ -425,7 +425,7 @@ casesRoutes.post('/cases', authenticateToken, async (c) => {
 
 // PUT /api/cases/:id
 casesRoutes.put('/cases/:id', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: existingRow } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!existingRow) throw new HTTPException(404, { message: 'Caso não encontrado' });
 
@@ -483,7 +483,7 @@ async function purgeCaseDependencies(supabase: ReturnType<typeof createSupabaseA
     } catch (err) {
       // O storage indisponível não impede a exclusão dos dados pessoais no DB;
       // o fato é registrado e o arquivo órfão é limpo por política de retenção.
-      console.error(`[purge] storage.remove falhou para caso ${caseId}`, err);
+      console.error(`[purge] storage.remove falhou para caso ${caseId}`, { error: err.message });
     }
   }
   if ((documents || []).length) {
@@ -498,11 +498,12 @@ async function purgeCaseDependencies(supabase: ReturnType<typeof createSupabaseA
 
 // Exclusão autenticada (dono do caso ou admin).
 casesRoutes.delete('/cases/:id', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
   const user = c.get('user');
   const caseId = c.req.param('id');
 
-  const { data: row, error: readError } = await supabase
+  // Leitura com client do usuário para aplicar RLS e verificar propriedade.
+  const userSupabase = createSupabaseUserClient(c.env, c.get('rawToken'));
+  const { data: row, error: readError } = await userSupabase
     .from('cases')
     .select('*')
     .eq('id', caseId)
@@ -513,13 +514,16 @@ casesRoutes.delete('/cases/:id', authenticateToken, async (c) => {
     throw new HTTPException(403, { message: 'Você não tem permissão para excluir este caso.' });
   }
 
-  await purgeCaseDependencies(supabase, caseId);
+  // Purga e exclusão usam client admin (service_role) pois RLS não concede
+  // DELETE em documents/payment_orders/cases para usuários comuns.
+  const admin = createSupabaseAdminClient(c.env);
+  await purgeCaseDependencies(admin, caseId);
 
-  const { error } = await supabase.from('cases').delete().eq('id', caseId);
+  const { error } = await admin.from('cases').delete().eq('id', caseId);
   if (error) throw new HTTPException(400, { message: error.message });
 
-  // Verificação de eliminação completa: o caso não deve mais ser recuperável.
-  const { data: after } = await supabase.from('cases').select('id').eq('id', caseId).maybeSingle();
+  // Verificação de eliminação completa com client admin (ignora RLS).
+  const { data: after } = await admin.from('cases').select('id').eq('id', caseId).maybeSingle();
   if (after) {
     throw new HTTPException(500, { message: 'A exclusão não foi confirmada; o caso ainda persiste.' });
   }
@@ -626,7 +630,7 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
     throw new HTTPException(401, { message: 'Identidade de usuário inválida para vinculação do caso.' });
   }
 
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!row) throw new HTTPException(404, { message: 'Caso anônimo não encontrado' });
 
@@ -675,7 +679,7 @@ casesRoutes.post('/cases/:id/claim', authenticateToken, async (c) => {
 
 // GET /api/cases/:id/onboarding-state — retoma a jornada somente para o proprietário autenticado.
 casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: row, error } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (error) throw new HTTPException(500, { message: 'Não foi possível recuperar a jornada.' });
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
@@ -698,7 +702,7 @@ casesRoutes.get('/cases/:id/onboarding-state', authenticateToken, async (c) => {
 
 // POST /api/cases/:id/qualification — persiste somente os dados de qualificação explicitamente fornecidos.
 casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: row, error: readError } = await supabase.from('cases').select('id,user_id,is_anonymous,applicant_json,client_name,client_email,client_phone,client_cpf').eq('id', c.req.param('id')).maybeSingle();
   if (readError) throw new HTTPException(500, { message: 'Não foi possível consultar o caso.' });
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
@@ -734,7 +738,7 @@ casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
 
 // POST /api/cases/:id/generate-defense — gera minuta determinística via RAG + DocumentAssemblyEngine
 casesRoutes.post('/cases/:id/generate-defense', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
+  const supabase = createSupabaseUserClient(c.env, c.get('rawToken'));
   const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
   if (row.is_paid !== true) throw new HTTPException(402, { message: 'Pagamento ainda não foi confirmado pelo servidor. A minuta não pode ser gerada.' });

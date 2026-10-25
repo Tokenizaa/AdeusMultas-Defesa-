@@ -7,6 +7,7 @@ const { mockFrom, mockAnalyze } = vi.hoisted(() => ({
 
 vi.mock('../supabase', () => ({
   createSupabaseAdminClient: vi.fn(() => ({ from: mockFrom })),
+  createSupabaseUserClient: vi.fn(() => ({ from: mockFrom })),
 }));
 
 vi.mock('../middleware', () => ({

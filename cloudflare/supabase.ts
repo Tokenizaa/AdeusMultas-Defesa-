@@ -81,3 +81,28 @@ export function createSupabaseAnonClient(cEnv: Env | undefined = undefined) {
   );
   return createClient<any>(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
+
+/**
+ * Cliente Supabase com identidade do usuário final (anon key + JWT do usuário).
+ *
+ * Aplica RLS (Row Level Security) no contexto do usuário autenticado.
+ * Usar para operações pertencentes ao usuário (casos, documentos, pagamentos,
+ * perfil) em vez do cliente admin, que ignora RLS.
+ *
+ * O `accessToken` é o JWT do Supabase extraído do header Authorization da requisição.
+ */
+export function createSupabaseUserClient(cEnv: Env | undefined = undefined, accessToken?: string) {
+  const url = requireBinding(getEnvBinding(cEnv, 'SUPABASE_URL'), 'SUPABASE_URL');
+  const key = requireBinding(
+    getEnvBinding(cEnv, 'VITE_SUPABASE_ANON_KEY') || getEnvBinding(cEnv, 'SUPABASE_ANON_KEY'),
+    'VITE_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY',
+  );
+  const headers: Record<string, string> = {};
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  return createClient<any>(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers },
+  });
+}
