@@ -672,15 +672,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             return (
               <div
                 key={s}
-                className={`h-2 rounded-full transition-all duration-300 ${
+                className={[
+                  'h-2 rounded-full transition-all duration-300',
                   s === step
                     ? 'w-7 bg-[#155BCB]'
                     : isSkipped
                       ? 'w-2.5 bg-slate-400 text-slate-500 opacity-50'
                       : idx < currentStepIndex
-                      ? 'w-2.5 bg-emerald-600'
-                      : 'w-2.5 bg-slate-200'
-              }`}
+                        ? 'w-2.5 bg-emerald-600'
+                        : 'w-2.5 bg-slate-200',
+                ].join(' ')}
               title={
                 isSkipped
                   ? `Etapa ${idx + 1} de ${totalDisplaySteps} (pulada)`
@@ -792,21 +793,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </>
       )}
       
-      // Ensure infractionData is synced when step changes back from analysis
-      useEffect(() => {
-        // When navigating back from analysis result, ensure infractionData 
-        // has the required fields for SpecificInfractionDataStep
-        if (step === 5) {
-          // Ensure critical fields are populated
-          if (!infractionData.infractionCode) {
-            // Will be populated when user advances again
-          }
-          if (!infractionData.speedLimit && infractionData.measuredSpeed) {
-            // consideredSpeed will be calculated on component mount
-          }
-        }
-      }, [step, infractionData]);
-
       {step === 8 && (
         <RequiredDataStep
           documentData={documentData}
