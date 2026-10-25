@@ -295,7 +295,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           )}
           {!hasRecommendedArguments && (
             <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
-              {isRateUnavailable ? 'Indicador Indisponível — não foi possível confirmar a base jurídica para esta análise. Com os dados de hoje, não encontramos ponto forte confirmado.' : 'Nenhuma tese foi identificada com os dados informados.'}
+              {isRateUnavailable ? 'Indicador Indisponível — Análise em modo degradado — base jurídica indisponível. Com os dados de hoje, não encontramos ponto forte confirmado.' : 'Nenhuma tese foi identificada com os dados informados.'}
             </p>
           )}
           {hasRecommendedArguments && (
