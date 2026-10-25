@@ -605,7 +605,7 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (!body.cardToken) throw new HTTPException(400, { message: 'cardToken é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
-  await assertCaseCanBePaid(c.env, caseId, user);
+  await assertCaseCanBePaid(c.env, caseId, user, String(body.serviceType));
   const ipAddress = c.req.header('cf-connecting-ip');
   const limiter = c.env.ANONYMOUS_CASE_LIMITER;
   if (!ipAddress || !limiter) {
