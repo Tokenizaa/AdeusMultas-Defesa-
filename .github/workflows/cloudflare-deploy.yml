@@ -63,6 +63,15 @@ jobs:
             fi
           fi
 
+      - name: Discover canonical E2E matrix (read-only)
+        env:
+          PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
+          E2E_ALLOW_PERSISTENT_WRITES: 'false'
+          E2E_TEST_RUN_ID: ci-discovery-${{ github.sha }}
+        run: |
+          bun run test:e2e:list | tee /tmp/e2e-discovery.txt
+          grep -Eq 'Total: 70 tests? in 7 files?' /tmp/e2e-discovery.txt
+
       - name: Test Phase 2 OCR
         run: bunx vitest run cloudflare/routes/ocr.test.ts
 
