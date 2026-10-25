@@ -353,15 +353,16 @@ routes.get('/payments/resolve-price', authenticateToken, async (c) => {
 });
 
 routes.get('/payments/gateway/status', (c) => {
-  const gateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
-  const configured = gateway === 'venopag'
-    ? Boolean(c.env.VENO_CLIENT_ID && c.env.VENO_CLIENT_SECRET && c.env.VENO_WEBHOOK_SECRET)
-    : Boolean(c.env.PAGBANK_TOKEN);
+  // VenoPag é o único gateway habilitado para novas cobranças neste ciclo.
+  // Configuração residual de PagBank não deve aparecer como gateway ativo.
+  const gateway = 'venopag';
+  const configured = (!c.env.VENO_PRIMARY_GATEWAY || c.env.VENO_PRIMARY_GATEWAY === 'venopag')
+    && Boolean(c.env.VENO_CLIENT_ID && c.env.VENO_CLIENT_SECRET && c.env.VENO_WEBHOOK_SECRET);
   return c.json({
     ok: configured,
     configured,
     gateway,
-    environment: gateway === 'venopag' ? 'production' : (c.env.PAGBANK_ENV || 'sandbox'),
+    environment: 'production',
     simulated: false,
     // Expose admin testing only when the environment explicitly opts into sandbox.
     testMode: String(c.env.PAYMENT_MODE || '').toLowerCase() === 'sandbox',
@@ -529,7 +530,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   } catch (error) {
     // Uma falha de rede após iniciar a chamada ao provedor é ambígua: a cobrança
     // pode ter sido criada. Preserve a reserva para reconciliação e evite duplicidade.
-    if (!(error instanceof HTTPException) && reserved.ownsReservation && !providerRequestStarted) {
+    if (reserved.ownsReservation && !providerRequestStarted) {
       await deleteReservation(c.env, caseId).catch(() => {});
     }
     throw error;
