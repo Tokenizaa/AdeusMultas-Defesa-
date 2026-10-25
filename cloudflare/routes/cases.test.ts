@@ -397,7 +397,7 @@ describe('applicant qualification', () => {
     expect(response.status).toBe(400);
     expect(query.update).not.toHaveBeenCalled();
   });
-
+});
 
 describe('onboarding state recovery', () => {
   const caseRow = {
