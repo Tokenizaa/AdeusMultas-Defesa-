@@ -125,7 +125,7 @@ describe('3. Escalada de privilégios', () => {
     expect(true).toBe(true);
   });
 
-  it 'role do cliente não deve ser derivado de user_metadata editável pelo cliente', () => {
+  it('role do cliente não deve ser derivado de user_metadata editável pelo cliente', () => {
     // O backend usa user_profiles.role como fonte autoritativa
     expect(true).toBe(true);
   });
@@ -162,7 +162,7 @@ describe('5. Acesso administrativo por usuário comum', () => {
     expect(true).toBe(true);
   });
 
-  it 'GET /api/admin/test com role citizen deve retornar 403', () => {
+  it('GET /api/admin/test com role citizen deve retornar 403', () => {
     // Validado em rotas admin e auth.test.ts
     expect(true).toBe(true);
   });
@@ -173,12 +173,12 @@ describe('5. Acesso administrativo por usuário comum', () => {
  * O backend deve validar e sanitizar todos os parâmetros, não confiando em dados do cliente.
  */
 describe('6. Parâmetros adulterados e campos privilegiados', () => {
-  it 'deve rejeitar PIX creation sem serviceType', () => {
+  it('deve rejeitar PIX creation sem serviceType', () => {
     // Retorna 400 com mensagem de erro
     expect(true).toBe(true);
   });
 
-  it 'deve sanitizar userId do payload do cliente em rotas comerciais', () => {
+  it('deve sanitizar userId do payload do cliente em rotas comerciais', () => {
     // O commercial.ts usa authenticateToken e user vem do token, não do payload
     // Module 01 fix: userId passa a vir exclusivamente de c.get('user').id
     expect(true).toBe(true);
@@ -195,7 +195,7 @@ describe('6. Parâmetros adulterados e campos privilegiados', () => {
  * O backend deve rejeitar payloads que não atendem ao contrato ou excedem limites.
  */
 describe('7. Rejeição de payloads inválidos ou excessivos', () => {
-  it 'deve rejeitar PIX creation sem serviceType', () => {
+  it('deve rejeitar PIX creation sem serviceType', () => {
     // Retorna 400 com mensagem de erro
     expect(true).toBe(true);
   });
