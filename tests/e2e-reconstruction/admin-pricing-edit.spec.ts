@@ -8,8 +8,8 @@ test.describe('Admin — Gerenciamento de Preços via Frontend', () => {
     console.log('Na página de login:', page.url());
 
     // 2. Preencher credenciais do admin
-    await page.locator('input[name="email"], input[type="email"], input#input-email').fill('olfnetto@gmail.com');
-    await page.locator('input[name="password"], input[type="password"], input#input-password').fill('Netto@964212$');
+    await page.locator('input[name="email"], input[type="email"], input#input-email').fill('admin@teste.local');
+    await page.locator('input[name="password"], input[type="password"], input#input-password').fill('test-password');
     await page.locator('button[type="submit"], button:contains("Entrar"), button:contains("Login"), button#btn-login').click();
 
     // 3. Aguardar redirecionamento para o admin
