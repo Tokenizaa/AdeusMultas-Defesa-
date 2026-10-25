@@ -182,14 +182,17 @@ async function updateReservedOrder(
   if (input.gateway !== undefined) updatePayload.gateway = input.gateway;
   if (input.paymentMethod !== undefined) updatePayload.payment_method = input.paymentMethod;
 
-  const { error: updateError } = await supabase.from('payment_orders')
-    .update(updatePayload).eq('id', paymentId);
-  if (updateError) throw updateError;
-  const { data, error: selectError } = await supabase.from('payment_orders')
+  // Atualiza e retorna a mesma linha em uma única operação Supabase.
+  // A ordem correta da API é update(payload) -> eq(filtro) -> select -> single.
+  // A leitura separada anterior começava com eq() sem chamar from().select(),
+  // gerando erro em runtime e deixando o checkout sem confirmar a reserva.
+  const { data, error } = await supabase.from('payment_orders')
+    .update(updatePayload)
     .eq('id', paymentId)
     .select('*')
     .single();
-  if (selectError) throw selectError;
+  if (error) throw error;
+  if (!data) throw new Error('A reserva de pagamento não foi encontrada após a atualização.');
   return data;
 }
 
