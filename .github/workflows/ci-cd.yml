@@ -26,7 +26,3 @@ jobs:
       - name: Build
         run: npm run build
 
-  production-golden-path:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[PHASE4-RUN]')
-    uses: ./.github/workflows/golden-path-production.yml
-    secrets: inherit
