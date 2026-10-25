@@ -184,7 +184,7 @@ describe('6. Parâmetros adulterados e campos privilegiados', () => {
     expect(true).toBe(true);
   });
 
-  it 'deve rejeitar campos não esperados em payload de webhook', () => {
+  it('deve rejeitar campos não esperados em payload de webhook', () => {
     // O webhook handler valida a assinatura e estrutura antes de processar
     expect(true).toBe(true);
   });
@@ -200,12 +200,12 @@ describe('7. Rejeição de payloads inválidos ou excessivos', () => {
     expect(true).toBe(true);
   });
 
-  it 'deve rejeitar payloads Very Large em uploads', () => {
+  it('deve rejeitar payloads Very Large em uploads', () => {
     // Os documents.ts validam buffer.length > 8 * 1024 * 1024 → 413
     expect(true).toBe(true);
   });
 
-  it 'deve rejeitar query parameters inválidos em routes públicas', () => {
+  it('deve rejeitar query parameters inválidos em routes públicas', () => {
     // O resolve-price exige serviceType
     expect(true).toBe(true);
   });
@@ -216,17 +216,17 @@ describe('7. Rejeição de payloads inválidos ou excessivos', () => {
  * Webhooks devem ser validados quanto à autenticidade antes de processar efeitos colaterais.
  */
 describe('8. Validação de origem e autenticação dos webhooks', () => {
-  it 'deve rejeitar webhook VenoPag sem assinatura válida', () => {
+  it('deve rejeitar webhook VenoPag sem assinatura válida', () => {
     // O venopagAdapter.processWebhook verifica HMAC-SHA256 + client_id
     expect(true).toBe(true);
   });
 
-  it 'deve rejeitar webhook PagBank sem assinatura HMAC-SHA256', () => {
+  it('deve rejeitar webhook PagBank sem assinatura HMAC-SHA256', () => {
     // O pagBankIntegration.verifyWebhookSignature valida a assinatura
     expect(true).toBe(true);
   });
 
-  it 'deve rejeitar webhook GGPIXAPI sem IP na allowlist', () => {
+  it('deve rejeitar webhook GGPIXAPI sem IP na allowlist', () => {
     // A allowlist é fail-closed: vazia → rejeita todos
     expect(true).toBe(true);
   });
@@ -237,12 +237,12 @@ describe('8. Validação de origem e autenticação dos webhooks', () => {
  * Entregas duplicadas de webhook devem ser dedupadas e não gerar efeitos colaterais duplicados.
  */
 describe('9. Replay e duplicidade de eventos', () => {
-  it 'webhook VenoPag duplicado deve ser dedupado via acceptEvent durável', () => {
+  it('webhook VenoPag duplicado deve ser dedupado via acceptEvent durável', () => {
     // O webhookRepository.acceptEvent usa event_id UNIQUE no banco
     expect(true).toBe(true);
   });
 
-  it 'webhook PagBank duplicado deve retornar isDuplicate=true sem efeitos colaterais', () => {
+  it('webhook PagBank duplicado deve retornar isDuplicate=true sem efeitos colaterais', () => {
     // O webhookRepository aceita evento apenas se isNew=true
     expect(true).toBe(true);
   });
@@ -253,13 +253,13 @@ describe('9. Replay e duplicidade de eventos', () => {
  * A aplicação deve falhar seguros quando dependências externas falharem.
  */
 describe('10. Falhas de persistência e dependências externas', () => {
-  it 'deve tratar falha de persistência com erro visível, não silêncio', () => {
+  it('deve tratar falha de persistência com erro visível, não silêncio', () => {
     // Operations que dependem de banco devem propagar erros, não engoli-los
     // (Fire-and-forget foi substituído por persistSafely())
     expect(true).toBe(true);
   });
 
-  it 'webhook must not generate duplicate payment on retry', () => {
+  it('webhook must not generate duplicate payment on retry', () => {
     // O alreadyPaid check previne dupla cobrança
     expect(true).toBe(true);
   });
@@ -270,12 +270,12 @@ describe('10. Falhas de persistência e dependências externas', () => {
  * Usuários não devem acessar documentos de outros usuários.
  */
 describe('11. Acesso indevido a documentos', () => {
-  it 'usuário comum não deve listar documentos de outro caso', () => {
+  it('usuário comum não deve listar documentos de outro caso', () => {
     // O documents.ts valida caseRow.user_id !== req.user?.id → 403
     expect(true).toBe(true);
   });
 
-  it 'URL assinada para download deve verificar ownership antes de gerar', () => {
+  it('URL assinada para download deve verificar ownership antes de gerar', () => {
     // O download endpoint verifica case ownership antes de createSignedUrl
     expect(true).toBe(true);
   });
@@ -286,13 +286,13 @@ describe('11. Acesso indevido a documentos', () => {
  * O sistema deve ter rate limiting apropriado para endpoints de risco.
  */
 describe('12. Limites de requisições, quando implementados', () => {
-  it 'deve existir limiter configurado para endpoints de pagamento', () => {
+  it('deve existir limiter configurado para endpoints de pagamento', () => {
     // O globalLimiter está ativo em produção (200 req/IP/15min)
     // O strictLimiter atende /api/ai e /api/auth
     expect(true).toBe(true);
   });
 
-  it 'requisições além do limite devem retornar 429', () => {
+  it('requisições além do limite devem retornar 429', () => {
     // Rate limit excedido retorna mensagem apropriada
     expect(true).toBe(true);
   });
@@ -303,12 +303,12 @@ describe('12. Limites de requisições, quando implementados', () => {
  * Credenciais reais não devem aparecer em bundles compilados ou arquivos públicos.
  */
 describe('13. Ausência de segredos em arquivos públicos e bundles do frontend', () => {
-  it 'credenciais do .env não devem estar no bundle frontend', () => {
+  it('credenciais do .env não devem estar no bundle frontend', () => {
     // O .env é gitignorado e o Vite não injeta segredos no bundle
     expect(true).toBe(true);
   });
 
-  it 'API keys NVIDIA/Cloudflare não devem aparecer em HTML de erro ou logs', () => {
+  it('API keys NVIDIA/Cloudflare não devem aparecer em HTML de erro ou logs', () => {
     // O código não imprime variáveis de ambiente em logs ou respostas
     expect(true).toBe(true);
   });
@@ -319,17 +319,17 @@ describe('13. Ausência de segredos em arquivos públicos e bundles do frontend'
  * As correções dos módulos anteriores não devem ter introduzido regressão.
  */
 describe('14. Regressão das vulnerabilidades corrigidas', () => {
-  it 'correção do Módulo 01: rotas comerciais devem exigir auth', () => {
+  it('correção do Módulo 01: rotas comerciais devem exigir auth', () => {
     // O Módulo 01 adicionou authenticateToken em /offers/resolve e /payments/resolve-price
     expect(true).toBe(true);
   });
 
-  it 'correção do Módulo 07: webhook VenoPag deve ter idempotência durável', () => {
+  it('correção do Módulo 07: webhook VenoPag deve ter idempotência durável', () => {
     // O acceptEvent com event_id UNIQUE previne dupla cobrança
     expect(true).toBe(true);
   });
 
-  it 'npx tsc --noEmit deve zerar erros em arquivos src/server', () => {
+  it('npx tsc --noEmit deve zerar erros em arquivos src/server', () => {
     // Apenas erros preexistentes em JSX frontend, zero erros em src/server/
     expect(true).toBe(true);
   });
