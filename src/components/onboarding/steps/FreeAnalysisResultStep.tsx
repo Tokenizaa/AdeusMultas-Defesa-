@@ -288,14 +288,14 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               <div className="text-4xl sm:text-5xl font-extrabold font-mono">
                 <span className="text-emerald-700">{displayedRate}%</span>
               </div>
-              <p className="text-xs text-slate-600 max-w-md mx-auto">Indicador baseado nos pontos identificados, não é previsão de resultado — a decisão final é do órgão de trânsito.</p>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">Não é previsão de resultado — a decisão final é do órgão.</p>
             </>
           ) : (
             <span className="text-emerald-700">—</span>
           )}
           {!hasRecommendedArguments && (
             <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
-              {isRateUnavailable ? 'Indicador indisponível — não foi possível confirmar a base jurídica para esta análise.' : 'Nenhuma tese foi identificada com os dados informados.'}
+              {isRateUnavailable ? 'Indicador Indisponível — não foi possível confirmar a base jurídica para esta análise. Com os dados de hoje, não encontramos ponto forte confirmado.' : 'Nenhuma tese foi identificada com os dados informados.'}
             </p>
           )}
           {hasRecommendedArguments && (
