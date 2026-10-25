@@ -137,7 +137,11 @@ export function runCanonicalQualityGate(input: CanonicalQualityGateInput): Canon
     ...(analysis?.recommendedProcedure ? [analysis.recommendedProcedure] : []),
   ]);
   const procedureKnown = PROCEDURES_CATALOG.some((p: any) => p.id === draft?.procedureType);
-  const procedureCompatible = allowed.has(draft?.procedureType);
+  // A recommendation copied from the requested service is not independent
+  // evidence of legal compatibility. Unknown infraction families must fail
+  // closed even when the UI supplied the same procedure as recommended.
+  const familyKnown = family !== 'desconhecida' && Object.prototype.hasOwnProperty.call(PROCEDURE_FAMILY_COMPATIBILITY, family);
+  const procedureCompatible = familyKnown && allowed.has(draft?.procedureType);
   checks.push(
     check(
       'PROCEDIMENTO_COMPATIVEL',
