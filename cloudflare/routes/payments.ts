@@ -43,6 +43,197 @@ async function persistOrder(env: Env, input: { caseId: string; userId?: string; 
   return data;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Idempotência atômica de criação de cobrança PIX                    */
+/*                                                                     */
+/*  payment_orders tem UNIQUE(case_id), que usamos como guarda de      */
+/*  serialização: o vencedor do INSERT reserva o caso e é o único a    */
+/*  chamar o gateway. O perdedor reutiliza a linha do vencedor (não    */
+/*  gera segunda cobrança).                                            */
+/* ------------------------------------------------------------------ */
+
+interface ReserveOrderInput {
+  caseId: string;
+  userId: string;
+  referenceId: string;
+  gateway: string;
+  amount: number;
+  baseAmount?: number;
+  discountAmount?: number;
+  couponCode?: string;
+  gatewayOrderId?: string;
+  qrCodeText?: string;
+  qrCodeUrl?: string;
+}
+
+interface ReserveOrderResult {
+  order: any;
+  reused: boolean;
+  /** Quando true, o chamador é o dono da reserva e deve criar a cobrança
+   *  no gateway e, em seguida, atualizar a linha com os dados do gateway.
+   *  Em falha do gateway, deve remover a reserva (deleteReservation).     */
+  ownsReservation: boolean;
+}
+
+async function reserveOrFindPendingOrder(
+  env: Env,
+  input: ReserveOrderInput,
+): Promise<ReserveOrderResult> {
+  const supabase = createSupabaseAdminClient(env);
+  const now = new Date().toISOString();
+  const finalAmount = Number(input.amount);
+
+  // Fast path: cobrança PENDING já criada e com dados do gateway → reutiliza.
+  const { data: existing } = await supabase.from('payment_orders')
+    .select('*')
+    .eq('case_id', input.caseId)
+    .eq('user_id', input.userId)
+    .eq('payment_method', 'pix')
+    .eq('status', 'PENDING')
+    .maybeSingle();
+  // eslint-disable-next-line no-console
+  console.error('[DEBUG reserve] existing=', { caseId: input.caseId, existing, existingAmount: existing?.amount, existingGtw: existing?.gateway_transaction_id, finalAmount });
+
+  // Fast path: cobrança PENDING já criada e com dados do gateway → reutiliza,
+  // nunca gera segunda cobrança.
+  if (existing?.gateway_transaction_id && Number(existing.amount) === finalAmount) {
+    return { order: existing, reused: true, ownsReservation: false };
+  }
+
+  // Reivindica o caso de forma atômica. UNIQUE(case_id) serializa o INSERT:
+  // apenas um request vence; os outros recebem 23505 e reutilizam o vencedor.
+  const insertPayload: Record<string, unknown> = {
+    case_id: input.caseId, user_id: input.userId, reference_id: input.referenceId,
+    status: 'PENDING', gateway: input.gateway, payment_method: 'pix',
+    amount: finalAmount,
+    base_amount: Number(input.baseAmount ?? finalAmount),
+    final_amount: finalAmount, currency: 'BRL',
+    discount_amount: Number(input.discountAmount ?? 0),
+    discount_type: Number(input.discountAmount ?? 0) > 0 ? 'commercial' : null,
+    coupon_code: input.couponCode ?? null,
+    created_at: now, updated_at: now,
+  };
+  if (input.gatewayOrderId) insertPayload.pagbank_order_id = input.gatewayOrderId;
+  if (input.qrCodeText) insertPayload.qr_code_text = input.qrCodeText;
+  if (input.qrCodeUrl) insertPayload.qr_code_url = input.qrCodeUrl;
+
+  const { data: reserved, error: insertError } = await supabase.from('payment_orders')
+    .insert(insertPayload).select().single();
+
+  if (insertError) {
+    if (String(insertError.code) === '23505') {
+      const { data: winner } = await supabase.from('payment_orders')
+        .select('*').eq('case_id', input.caseId).maybeSingle();
+      if (winner?.gateway_transaction_id && Number(winner.amount) === finalAmount && winner.status === 'PENDING') {
+        return { order: winner, reused: true, ownsReservation: false };
+      }
+      // Vencedor existe mas não está pronto (gateway em voo) ou falhou.
+      throw new HTTPException(409, { message: 'Cobrança já está sendo processada para este caso. Tente novamente em instantes.' });
+    }
+    throw insertError;
+  }
+
+  return { order: reserved, reused: false, ownsReservation: true };
+}
+
+async function deleteReservation(env: Env, caseId: string): Promise<void> {
+  const supabase = createSupabaseAdminClient(env);
+  await supabase.from('payment_orders').delete().eq('case_id', caseId).eq('status', 'PENDING').is('gateway_transaction_id', null);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Atualização da linha já reservada (ownsReservation = true)         */
+/*                                                                     */
+/*  Após o gateway responder, atualiza a linha PENDING já inserida     */
+/*  por reserveOrFindPendingOrder com os dados da cobrança (txId, QR,  */
+/*  etc.). Nunca faz INSERT novo, pois UNIQUE(case_id) já foi usado.   */
+/* ------------------------------------------------------------------ */
+
+interface UpdateReservedOrderInput {
+  gatewayTransactionId?: string;
+  gatewayOrderId?: string;
+  qrCodeText?: string;
+  qrCodeUrl?: string;
+  status?: string;
+  amount?: number;
+  baseAmount?: number;
+  discountAmount?: number;
+  couponCode?: string;
+  gateway?: string;
+  paymentMethod?: string;
+}
+
+async function updateReservedOrder(
+  env: Env,
+  paymentId: string,
+  input: UpdateReservedOrderInput,
+): Promise<any> {
+  const supabase = createSupabaseAdminClient(env);
+  const now = new Date().toISOString();
+  const updatePayload: Record<string, unknown> = { updated_at: now };
+  if (input.gatewayTransactionId !== undefined) updatePayload.gateway_transaction_id = input.gatewayTransactionId;
+  if (input.gatewayOrderId !== undefined) updatePayload.pagbank_order_id = input.gatewayOrderId;
+  if (input.qrCodeText !== undefined) updatePayload.qr_code_text = input.qrCodeText;
+  if (input.qrCodeUrl !== undefined) updatePayload.qr_code_url = input.qrCodeUrl;
+  if (input.status !== undefined) updatePayload.status = input.status;
+  if (input.amount !== undefined) updatePayload.amount = Number(input.amount);
+  if (input.baseAmount !== undefined) updatePayload.base_amount = Number(input.baseAmount);
+  if (input.discountAmount !== undefined) updatePayload.discount_amount = Number(input.discountAmount);
+  if (input.couponCode !== undefined) updatePayload.coupon_code = input.couponCode;
+  if (input.gateway !== undefined) updatePayload.gateway = input.gateway;
+  if (input.paymentMethod !== undefined) updatePayload.payment_method = input.paymentMethod;
+
+  const { data, error } = await supabase.from('payment_orders')
+    .update(updatePayload).eq('id', paymentId).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Deduplicação durável de webhooks (tabela webhook_events)           */
+/*                                                                     */
+/*  Todo evento verificado é inserido em webhook_events ANTES de       */
+/*  qualquer efeito colateral. Sobre crash/retry, o evento permanece   */
+/*  recuperável; a mesma event_id nunca é processada duas vezes.       */
+/* ------------------------------------------------------------------ */
+
+interface WebhookAcceptResult {
+  isDuplicate: boolean;
+  alreadyProcessed: boolean;
+}
+
+async function acceptWebhookEvent(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  provider: 'pagbank' | 'venopag' | 'ggpixapi',
+  eventId: string,
+  payload: unknown,
+): Promise<WebhookAcceptResult> {
+  const { error } = await supabase.from('webhook_events').insert({
+    event_id: eventId, provider, payload, status: 'received',
+  });
+  if (error) {
+    if (String(error.code) === '23505') {
+      const { data: existing } = await supabase.from('webhook_events')
+        .select('status').eq('event_id', eventId).maybeSingle();
+      return {
+        isDuplicate: true,
+        alreadyProcessed: String(existing?.status) === 'processed',
+      };
+    }
+    throw error;
+  }
+  return { isDuplicate: false, alreadyProcessed: false };
+}
+
+async function markWebhookEventProcessed(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  eventId: string,
+): Promise<void> {
+  await supabase.from('webhook_events')
+    .update({ status: 'processed', processed_at: new Date().toISOString() })
+    .eq('event_id', eventId);
+}
+
 async function registerReferralFromCode(env: Env, buyerUserId: string, rawCode?: unknown) {
   const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : '';
   if (!/^[A-Z0-9_-]{1,120}$/.test(code)) return;
@@ -201,94 +392,114 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   }
   const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
   const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
-  if (primaryGateway === 'venopag') {
-    if (!c.env.VENO_CLIENT_ID || !c.env.VENO_CLIENT_SECRET || !c.env.VENO_WEBHOOK_SECRET) {
-      throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
-    }
-    let venoOrder;
-    let affiliateSplits: Array<{ userId: string; level: number; username: string; percentage: number }> = [];
-    try {
+  const finalAmount = Number(offer.finalAmount);
+
+  const reserved = await reserveOrFindPendingOrder(c.env, {
+    caseId, userId: user.id, referenceId, gateway: primaryGateway,
+    amount: finalAmount, baseAmount: Number(offer.baseAmount),
+    discountAmount: Number(offer.baseAmount) - finalAmount, couponCode: body.couponCode,
+  });
+  if (reserved.reused) {
+    const order = reserved.order;
+    return c.json({
+      success: true, paymentOrder: order,
+      pixCopyPasteString: order.qr_code_text,
+      qrCodeDataUrl: order.qr_code_url?.startsWith('data:') ? order.qr_code_url : undefined,
+      qrCodeUrl: order.qr_code_url,
+      txId: order.gateway_transaction_id,
+      amount: order.amount, serviceType: body.serviceType, status: order.status,
+      gateway: order.gateway, simulated: false, reused: true,
+    });
+  }
+
+  let venoOrder;
+  let affiliateSplits: Array<{ userId: string; level: number; username: string; percentage: number }> = [];
+  let record: any;
+  try {
+    if (primaryGateway === 'venopag') {
+      if (!c.env.VENO_CLIENT_ID || !c.env.VENO_CLIENT_SECRET || !c.env.VENO_WEBHOOK_SECRET) {
+        throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
+      }
       await registerReferralFromCode(c.env, user.id, body.referralCode);
       affiliateSplits = await resolveVenoAffiliateSplits(c.env, user.id);
       venoOrder = await createVenoCashIn(c.env, {
-        amountInCents: Math.round(Number(offer.finalAmount) * 100),
+        amountInCents: Math.round(finalAmount * 100),
         payerName: payer.name,
         payerDocument: payer.document,
         description: `DefesAi - ${offer.name}`,
         webhookUrl: `${c.env.APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/venopag`,
         splits: affiliateSplits.map(({ username, percentage }) => ({ username, percentage })),
       });
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Não foi possível confirmar a criação do pagamento. Aguarde e verifique antes de tentar novamente.';
-      console.error('[payments] venopag cashin failed', message);
-      throw new HTTPException(502, { message });
-    }
-    if (venoOrder.status !== 'pending' || Math.round(venoOrder.amount * 100) !== Math.round(Number(offer.finalAmount) * 100)) {
-      throw new HTTPException(502, { message: 'Resposta inesperada do provedor. Verifique a transação antes de tentar novamente.' });
-    }
-    const qrCodeDataUrl = venoOrder.qr_img
-      ? `data:image/png;base64,${venoOrder.qr_img}`
-      : venoOrder.qr_url;
-    let record;
-    try {
-      record = await persistOrder(c.env, {
-        caseId, userId: user.id, referenceId, serviceType: body.serviceType, gatewayTransactionId: venoOrder.request_number,
-        amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount),
-        discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode,
-        status: 'PENDING', gateway: 'venopag', paymentMethod: 'pix',
-        qrCodeText: venoOrder.copyPaste, qrCodeUrl: venoOrder.qr_url,
-      });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error('[payments] venopag order persistence failed', {
-        caseId,
-        requestNumber: venoOrder.request_number,
-        detail,
-      });
-      throw new HTTPException(502, { message: 'O gateway gerou a cobrança, mas o sistema não conseguiu registrá-la. Não tente novamente; suporte deve reconciliar a transação.' });
-    }
-    if (affiliateSplits.length) {
-      const now = new Date().toISOString();
-      const ledgerRows = affiliateSplits.map((split) => ({
-        payment_id: record.id,
-        case_id: caseId,
-        beneficiary_id: split.userId,
-        buyer_user_id: user.id,
-        level: split.level,
-        applied_percent: split.percentage,
-        base_amount: Number(offer.finalAmount),
-        commission_amount: Number((Number(offer.finalAmount) * split.percentage / 100).toFixed(2)),
-        status: 'PENDING',
-        created_at: now,
-      }));
-      const { error: ledgerError } = await createSupabaseAdminClient(c.env)
-        .from('commission_ledger')
-        .upsert(ledgerRows, { onConflict: 'payment_id,beneficiary_id,level', ignoreDuplicates: true });
-      if (ledgerError) {
-        // A gateway charge already exists. Do not invite the customer to pay again;
-        // log the reconciliation failure for the finance module instead.
-        console.error('[payments] affiliate commission ledger reconciliation required', { paymentOrderId: record.id, detail: ledgerError.message });
+      if (venoOrder.status !== 'pending' || Math.round(venoOrder.amount * 100) !== Math.round(finalAmount * 100)) {
+        throw new Error('Resposta inesperada do provedor.');
       }
+      const qrCodeDataUrl = venoOrder.qr_img
+        ? `data:image/png;base64,${venoOrder.qr_img}`
+        : venoOrder.qr_url;
+      record = await updateReservedOrder(c.env, reserved.order.id, {
+        gatewayTransactionId: venoOrder.request_number,
+        qrCodeText: venoOrder.copyPaste,
+        qrCodeUrl: venoOrder.qr_url,
+        status: 'PENDING',
+        gateway: 'venopag',
+        paymentMethod: 'pix',
+        amount: finalAmount,
+        baseAmount: Number(offer.baseAmount),
+        discountAmount: Number(offer.baseAmount) - finalAmount,
+        couponCode: body.couponCode,
+      });
+      if (affiliateSplits.length) {
+        const now = new Date().toISOString();
+        const ledgerRows = affiliateSplits.map((split) => ({
+          payment_id: record.id,
+          case_id: caseId,
+          beneficiary_id: split.userId,
+          buyer_user_id: user.id,
+          level: split.level,
+          applied_percent: split.percentage,
+          base_amount: finalAmount,
+          commission_amount: Number((finalAmount * split.percentage / 100).toFixed(2)),
+          status: 'PENDING',
+          created_at: now,
+        }));
+        const { error: ledgerError } = await createSupabaseAdminClient(c.env)
+          .from('commission_ledger')
+          .upsert(ledgerRows, { onConflict: 'payment_id,beneficiary_id,level', ignoreDuplicates: true });
+        if (ledgerError) {
+          console.error('[payments] affiliate commission ledger reconciliation required', { paymentOrderId: record.id, detail: ledgerError.message });
+        }
+      }
+      return c.json({
+        success: true, order: venoOrder, paymentOrder: record,
+        pixCopyPasteString: venoOrder.copyPaste, qrCodeDataUrl,
+        qrCodeUrl: venoOrder.qr_url,
+        txId: venoOrder.request_number, amount: offer.finalAmount,
+        serviceType: offer.serviceType, status: 'PENDING', gateway: 'venopag', simulated: false,
+      });
     }
-    return c.json({
-      success: true, order: venoOrder, paymentOrder: record,
-      pixCopyPasteString: venoOrder.copyPaste, qrCodeDataUrl, qrCodeUrl: venoOrder.qr_url,
-      txId: venoOrder.request_number, amount: offer.finalAmount,
-      serviceType: offer.serviceType, status: 'PENDING', gateway: 'venopag', simulated: false,
+    if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
+    const order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(finalAmount * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
+    if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
+    record = await updateReservedOrder(c.env, reserved.order.id, {
+      gatewayOrderId: order.orderId,
+      gatewayTransactionId: order.gatewayTransactionId,
+      qrCodeText: order.pixCopyPaste || order.qrCodeText,
+      qrCodeUrl: order.qrCodeUrl,
+      status: order.status,
+      gateway: 'pagbank',
+      paymentMethod: 'pix',
+      amount: finalAmount,
+      baseAmount: Number(offer.baseAmount),
+      discountAmount: Number(offer.baseAmount) - finalAmount,
+      couponCode: body.couponCode,
     });
+    return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
+  } catch (error) {
+    if (!(error instanceof HTTPException) && reserved.ownsReservation) {
+      await deleteReservation(c.env, caseId).catch(() => {});
+    }
+    throw error;
   }
-  if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
-  let order;
-  try {
-    order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(Number(offer.finalAmount) * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
-  } catch {
-    throw new HTTPException(503, { message: 'Não foi possível iniciar o pagamento. Nenhuma cobrança foi confirmada.' });
-  }
-  if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
-  const record = await persistOrder(c.env, { caseId, userId: user.id, referenceId, serviceType: body.serviceType, gatewayOrderId: order.orderId, gatewayTransactionId: order.gatewayTransactionId, amount: Number(offer.finalAmount), baseAmount: Number(offer.baseAmount), discountAmount: Number(offer.baseAmount) - Number(offer.finalAmount), couponCode: body.couponCode, status: order.status, gateway: 'pagbank', paymentMethod: 'pix', qrCodeText: order.pixCopyPaste || order.qrCodeText, qrCodeUrl: order.qrCodeUrl });
-  return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
 });
 
 routes.post('/payments/simulate-payment', authenticateToken, requireAdmin, async (c) => {
@@ -340,16 +551,6 @@ routes.post('/payments/simulate-payment', authenticateToken, requireAdmin, async
   return c.json({ success: true, simulated: true, case: domain });
 });
 
-routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
-  const user = c.get('user')!;
-  const txId = c.req.param('txId');
-  const supabase = createSupabaseAdminClient(c.env);
-  const { data, error } = await supabase.from('payment_orders').select('*').eq('gateway_transaction_id', txId).eq('user_id', user.id).maybeSingle();
-  if (error) throw error;
-  if (!data) throw new HTTPException(404, { message: 'Ordem não encontrada.' });
-  return c.json({ success: true, txId, status: data.status, paidAt: data.paid_at, paymentOrder: data });
-});
-
 routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (c.env?.E2E_SAFE_PREVIEW === 'true') throw new HTTPException(503, { message: 'Cobranças estão desativadas no preview de testes. Nenhuma transação foi enviada ao gateway.' });
   const user = c.get('user')!;
@@ -392,26 +593,49 @@ routes.post('/webhooks/pagbank', async (c) => {
   const status = charge?.status || 'RECEIVED';
   const referenceId = payload.reference_id || charge?.reference_id || '';
   if (!referenceId) return c.json({ received: true, status, isDuplicate: false });
+  const match = referenceId.match(/^defesai_case_(.+)$/);
+  const caseId = match?.[1] || '';
+
   const supabase = createSupabaseAdminClient(c.env);
+  const webhookEventId = String(payload.id || `pb_${referenceId}_${status}`);
+  const accepted = await acceptWebhookEvent(supabase, 'pagbank', webhookEventId, payload);
+  if (accepted.isDuplicate && accepted.alreadyProcessed) {
+    return c.json({ received: true, status, isDuplicate: true, matched: true });
+  }
+
   const { data: existing, error } = await supabase.from('payment_orders').select('*').eq('reference_id', referenceId).maybeSingle();
   if (error) throw error;
   if (!existing) return c.json({ received: true, status, isDuplicate: false, matched: false });
+
   const now = new Date().toISOString();
   if (status === 'PAID') {
-    if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+    // Validação do valor da transação contra o valor do pedido.
+    const paidAmount = Number(charge?.amount ?? charge?.net_amount ?? payload.amount);
+    if (Number.isFinite(paidAmount) && Math.round(paidAmount * 100) !== Math.round(Number(existing.amount) * 100)) {
+      await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
+      throw new HTTPException(409, { message: 'Valor da transação não confere com o pedido.' });
+    }
+    if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
+      await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
+      return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+    }
     const gatewayTransactionId = payload.id || charge?.reference_id || existing.gateway_transaction_id;
     const { data: transitioned, error: paymentError } = await supabase.from('payment_orders').update({ status: 'PAID', paid_at: now, gateway_transaction_id: gatewayTransactionId, pagbank_order_id: payload.id || existing.pagbank_order_id, updated_at: now }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
     if (paymentError) throw paymentError;
-    if (!transitioned) return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
-    const match = referenceId.match(/^defesai_case_(.+)$/);
-    if (match?.[1]) {
-      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, updated_at: now }).eq('id', match[1]);
+    if (!transitioned) {
+      await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
+      return c.json({ received: true, status: 'PAID', isDuplicate: true, matched: true });
+    }
+    if (caseId) {
+      const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: now, updated_at: now }).eq('id', caseId);
       if (caseError) throw caseError;
     }
+    await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
     return c.json({ received: true, status: 'PAID', isDuplicate: false, matched: true });
   }
   const { error: statusError } = await supabase.from('payment_orders').update({ status, updated_at: now }).eq('id', existing.id);
   if (statusError) throw statusError;
+  await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
   return c.json({ received: true, status, isDuplicate: false, matched: true });
 });
 
@@ -438,6 +662,13 @@ routes.post('/webhooks/venopag', async (c) => {
   }
 
   const supabase = createSupabaseAdminClient(c.env);
+  try {
+    const webhookEventId = `veno_${event.request_number}_${event.status}`;
+  const accepted = await acceptWebhookEvent(supabase, 'venopag', webhookEventId, event);
+  if (accepted.isDuplicate && accepted.alreadyProcessed) {
+    return c.json({ received: true, status: event.status, isDuplicate: true, matched: true });
+  }
+
   const { data: existing, error } = await supabase.from('payment_orders').select('*')
     .eq('gateway_transaction_id', event.request_number).eq('gateway', 'venopag').maybeSingle();
   if (error) throw error;
@@ -451,45 +682,54 @@ routes.post('/webhooks/venopag', async (c) => {
     return c.json({ error: 'Status da transação não pôde ser confirmado.' }, 502);
   }
   const currentStatus = verified.status;
-  const reversed = ['contested', 'chargedback', 'refunded'].includes(currentStatus);
-  if (currentStatus === 'confirmed') {
-    const now = new Date().toISOString();
-    const alreadyPaid = String(existing.status).toUpperCase() === 'PAID' || Boolean(existing.paid_at);
-    const { data: transitioned, error: updateError } = alreadyPaid
-      ? { data: null, error: null }
-      : await supabase.from('payment_orders').update({
-          status: 'PAID', paid_at: now, updated_at: now,
-        }).eq('id', existing.id).neq('status', 'PAID').select('id').maybeSingle();
-    if (updateError) throw updateError;
-    const { error: caseError } = await supabase.from('cases').update({ is_paid: true, paid_at: existing.paid_at || now, updated_at: now }).eq('id', existing.case_id);
-    if (caseError) throw caseError;
-    const { error: commissionError } = await supabase.from('commission_ledger').update({
-      status: 'PAID', paid_at: existing.paid_at || now,
-    }).eq('payment_id', existing.id);
-    if (commissionError) throw commissionError;
-    return c.json({ received: true, matched: true, isDuplicate: alreadyPaid || !transitioned, status: 'PAID' });
-  }
 
-  const state = reversed ? 'REFUNDED' : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
-    : currentStatus === 'pending' ? 'PENDING' : 'CANCELED';
-  const statusChangedAt = new Date().toISOString();
-  const { error: updateError } = await supabase.from('payment_orders').update({
-    status: state, paid_at: null, updated_at: statusChangedAt,
-  }).eq('id', existing.id);
-  if (updateError) throw updateError;
-  const wasPreviouslyPaid = String(existing.status).toUpperCase() === 'PAID' || Boolean(existing.paid_at);
-  const commissionUpdate = reversed || (state === 'CANCELED' && wasPreviouslyPaid)
-    ? { status: 'REVERSED', reversed_at: statusChangedAt, reversal_reason: currentStatus }
-    : state === 'CANCELED'
-      ? { status: 'CANCELLED', reversed_at: null, reversal_reason: currentStatus }
-      : { status: state === 'PENDING' ? 'PENDING' : 'CANCELLED' };
-  const { error: commissionError } = await supabase.from('commission_ledger').update(commissionUpdate).eq('payment_id', existing.id);
-  if (commissionError) throw commissionError;
-  if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
-    const { error: caseError } = await supabase.from('cases').update({ is_paid: false, paid_at: null, status: 'aguardando_pagamento', updated_at: new Date().toISOString() }).eq('id', existing.case_id);
-    if (caseError) throw caseError;
+  // State mapping (provider status -> our terminal state).
+  //   confirmed    -> PAID            (ledger -> PAID)
+  //   chargedback  -> REFUNDED        (ledger -> REVERSED)
+  //   refunded     -> REFUNDED        (ledger -> REVERSED)
+  //   contested    -> DISPUTED        (ledger unchanged: money held in dispute)
+  //   canceled     -> CANCELED
+  //   expired      -> CANCELED
+  //   pending      -> PENDING
+  const now = new Date().toISOString();
+  const { data: applied, error: rpcError } = await supabase.rpc('apply_venopag_webhook', {
+    p_payment_id: existing.id,
+    p_status: currentStatus === 'confirmed' ? 'confirmed'
+      : currentStatus === 'chargedback' ? 'chargedback'
+      : currentStatus === 'refunded' ? 'refunded'
+      : currentStatus === 'contested' ? 'contested'
+      : currentStatus === 'canceled' ? 'canceled'
+      : currentStatus === 'expired' ? 'expired'
+      : currentStatus === 'pending' ? 'pending'
+      : 'unknown',
+    p_paid_at: currentStatus === 'confirmed' ? now : null,
+    p_reversal_reason: currentStatus === 'chargedback' || currentStatus === 'refunded' ? currentStatus : null,
+  });
+  if (rpcError) throw rpcError;
+  if (!applied?.ok) throw new HTTPException(500, { message: applied?.error || 'Falha ao aplicar o webhook.' });
+
+  await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
+  const isDuplicate = !applied.ok || String(existing.status).toUpperCase() === 'PAID';
+  return c.json({ received: true, matched: true, status: currentStatus === 'confirmed' ? 'PAID'
+    : ['chargedback', 'refunded'].includes(currentStatus) ? 'REFUNDED'
+    : currentStatus === 'contested' ? 'DISPUTED'
+    : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
+    : currentStatus, isDuplicate: Boolean(isDuplicate) });
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.error('[DEBUG venopag webhook]', err?.message || err);
+    return c.json({ error: 'Internal Server Error' }, 500);
   }
-  return c.json({ received: true, matched: true, status: state });
+});
+
+routes.get('/payments/pix/status/:txId', authenticateToken, async (c) => {
+  const user = c.get('user')!;
+  const txId = c.req.param('txId');
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data, error } = await supabase.from('payment_orders').select('*').eq('gateway_transaction_id', txId).eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new HTTPException(404, { message: 'Ordem não encontrada.' });
+  return c.json({ success: true, txId, status: data.status, paidAt: data.paid_at, paymentOrder: data });
 });
 
 export const paymentsRoutes = routes;

@@ -15,13 +15,13 @@ var __export = (target, all) => {
 };
 
 // src/scraper-prospecting/supabase.ts
-import { createClient as createClient3 } from "@supabase/supabase-js";
+import { createClient as createClient4 } from "@supabase/supabase-js";
 var url, serviceRoleKey, supabaseAdmin;
 var init_supabase = __esm({
   "src/scraper-prospecting/supabase.ts"() {
     url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
     serviceRoleKey = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-    supabaseAdmin = url && serviceRoleKey ? createClient3(url, serviceRoleKey, {
+    supabaseAdmin = url && serviceRoleKey ? createClient4(url, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     }) : null;
   }
@@ -3665,11 +3665,10 @@ async function authenticateToken(req, res, next) {
           error
         } = await supabase.auth.getUser(token);
         if (user && !error) {
-          const role = user.user_metadata?.role || "citizen";
           req.user = {
             id: user.id,
             email: user.email || "",
-            role,
+            role: "citizen",
             name: user.user_metadata?.name
           };
           sanitizeCaseCreateBody(req);
@@ -3707,12 +3706,12 @@ async function authenticateToken(req, res, next) {
         return next();
       }
     }
-    req.user = void 0;
-    return next();
+    res.status(401).json({ error: "N\xE3o autorizado. Token inv\xE1lido ou ausente." });
+    return;
   } catch (err) {
     logger.error("auth", "middleware", "unexpected_error", `Erro no auth: ${err.message}`);
-    req.user = void 0;
-    return next();
+    res.status(401).json({ error: "N\xE3o autorizado. Erro de autentica\xE7\xE3o." });
+    return;
   }
 }
 function requireAuth(req, res, next) {
@@ -11411,19 +11410,19 @@ var CommercialRepository = class {
   // 8. Commercial Audit Log → commercial_audit_log
   // ==========================================
   /** Insert append-only da trilha de auditoria comercial. */
-  persistAuditLog(log) {
+  persistAuditLog(log2) {
     if (!this.client) return;
     const payload = {
-      action: log.action,
-      changed_by: log.changedBy,
-      target: log.target,
-      previous_state: this.toJson(log.previousState),
-      new_state: this.toJson(log.newState),
-      reason: log.reason ?? null,
-      timestamp: log.timestamp
+      action: log2.action,
+      changed_by: log2.changedBy,
+      target: log2.target,
+      previous_state: this.toJson(log2.previousState),
+      new_state: this.toJson(log2.newState),
+      reason: log2.reason ?? null,
+      timestamp: log2.timestamp
     };
     this.fire("commercial_audit_log", this.client.from("commercial_audit_log").insert(payload), {
-      logId: log.id
+      logId: log2.id
     });
   }
   // ==========================================
@@ -12279,18 +12278,18 @@ var CommercialAuditService = class {
     this.repository = repository;
   }
   record(entry) {
-    const log = {
+    const log2 = {
       ...entry,
       id: `caudit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
-    this.repository.persistAuditLog(log);
+    this.repository.persistAuditLog(log2);
     logger.info("commercial", "audit", entry.action, `A\xE7\xE3o comercial auditada: ${entry.action} no alvo ${entry.target}`, {
       action: entry.action,
       changedBy: entry.changedBy,
       target: entry.target
     });
-    return log;
+    return log2;
   }
   getAuditLogs() {
     return this.repository.getCommercialAuditLogs();
@@ -14008,20 +14007,20 @@ var SettingsService = class {
       }
       const auditRecords = [];
       if (data && Array.isArray(data)) {
-        for (const log of data) {
-          const isSettingsRelated = log.target_resource && (log.target_resource.includes("KEY") || log.target_resource.includes("TOKEN") || log.target_resource.includes("SECRET") || log.target_resource.includes("URL") || log.target_resource.includes("MODEL") || log.target_resource.includes("ENV") || log.action === "ADMIN_UPDATED_SETTING" || log.action === "ADMIN_UPDATED_SECRET");
+        for (const log2 of data) {
+          const isSettingsRelated = log2.target_resource && (log2.target_resource.includes("KEY") || log2.target_resource.includes("TOKEN") || log2.target_resource.includes("SECRET") || log2.target_resource.includes("URL") || log2.target_resource.includes("MODEL") || log2.target_resource.includes("ENV") || log2.action === "ADMIN_UPDATED_SETTING" || log2.action === "ADMIN_UPDATED_SECRET");
           if (isSettingsRelated) {
-            const settingDef = this.settings.get(log.target_resource);
+            const settingDef = this.settings.get(log2.target_resource);
             auditRecords.push({
-              id: log.id,
-              key: log.target_resource,
+              id: log2.id,
+              key: log2.target_resource,
               category: settingDef?.category || "system",
               isSecret: settingDef?.isSecret || false,
-              action: log.action.includes("SECRET") ? "UPDATE_SECRET" : log.action === "RESET_DEFAULT" ? "RESET_DEFAULT" : "UPDATE_CONFIG",
-              updatedBy: log.actor || "unknown",
-              timestamp: log.timestamp,
+              action: log2.action.includes("SECRET") ? "UPDATE_SECRET" : log2.action === "RESET_DEFAULT" ? "RESET_DEFAULT" : "UPDATE_CONFIG",
+              updatedBy: log2.actor || "unknown",
+              timestamp: log2.timestamp,
               environment: process.env.NODE_ENV || "development",
-              details: log.details || log.action
+              details: log2.details || log2.action
             });
           }
         }
@@ -14293,7 +14292,7 @@ var CTB_ARTICLES_DB = [
     paragraphsAndIncidents: [
       'Alterado pela Lei n\xBA 14.071/2020: substituiu a express\xE3o "poder\xE1 ser imposta" por "dever\xE1 ser imposta", transformando o ato em direito subjetivo vinculado da parte.'
     ],
-    practicalApplication: "Para qualquer infra\xE7\xE3o de 3 pontos (leve) ou 4 pontos (m\xE9dia), o condutor sem hist\xF3rico nos \xFAltimos 12 meses tem 100% de direito \xE0 isen\xE7\xE3o da multa e cancelamento dos pontos.",
+    practicalApplication: "Para infra\xE7\xF5es de natureza leve ou m\xE9dia, o condutor sem autua\xE7\xF5es nos \xFAltimos 12 meses tem direito \xE0 convers\xE3o em advert\xEAncia por escrito, se confirmado e deferido pelo \xF3rg\xE3o autuador \u2014 n\xE3o \xE9 isen\xE7\xE3o autom\xE1tica nem resultado garantido.",
     nullityConsequence: "Indeferimento ilegal pass\xEDvel de mandado de seguran\xE7a ou recurso ao CETRAN.",
     relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 918/2022, Art. 10"]
   },
@@ -14485,18 +14484,6 @@ var CTB_ARTICLES_DB = [
     practicalApplication: "Verificar se condi\xE7\xE3o clim\xE1tica justificava, se em rodovia, se farol realmente apagado.",
     nullityConsequence: "Anula\xE7\xE3o se n\xE3o em rodovia, ou se farol aceso (DRL n\xE3o conta como farol baixo em alguns entendimentos).",
     relatedResolutions: ["Lei 13.154/2015", "MBFT 985/2022"]
-  },
-  {
-    article: "Art. 267",
-    title: "Convers\xE3o em Advert\xEAncia por Escrito (Direito Subjetivo)",
-    caput: "Dever\xE1 ser imposta a penalidade de advert\xEAncia por escrito para as infra\xE7\xF5es de natureza leve ou m\xE9dia, pass\xEDveis de serem punidas com multa, caso o infrator n\xE3o tenha cometido nenhuma outra infra\xE7\xE3o nos \xFAltimos 12 (doze) meses.",
-    paragraphsAndIncidents: [
-      'Lei 14.071/2020: substituiu "poder\xE1" por "dever\xE1" \u2014 direito subjetivo vinculado.',
-      "N\xE3o se aplica a infra\xE7\xF5es graves/grav\xEDssimas, nem a reincidentes nos 12 meses."
-    ],
-    practicalApplication: "Para qualquer infra\xE7\xE3o leve (3 pts) ou m\xE9dia (4 pts), condutor sem hist\xF3rico nos 12 meses tem 100% direito \xE0 isen\xE7\xE3o da multa e cancelamento dos pontos.",
-    nullityConsequence: "Indeferimento ilegal pass\xEDvel de mandado de seguran\xE7a ou recurso ao CETRAN.",
-    relatedResolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 918/2022, Art. 10", "Lei 14.071/2020"]
   },
   {
     article: "Art. 273",
@@ -14695,6 +14682,30 @@ var RESOLUTIONS_DB = [
     subject: "Estabelece crit\xE9rios para a fiscaliza\xE7\xE3o de tr\xE2nsito e d\xE1 outras provid\xEAncias, regulamentando o uso de equipamentos eletr\xF4nicos.",
     keyArticles: "Art. 1\xBA a 15\xBA (Fiscaliza\xE7\xE3o eletr\xF4nica, homologa\xE7\xE3o INMETRO, margem de toler\xE2ncia, sinaliza\xE7\xE3o, comprova\xE7\xE3o da infra\xE7\xE3o); Anexo I (Formul\xE1rio de autua\xE7\xE3o eletr\xF4nica); Anexo II (Crit\xE9rios de instala\xE7\xE3o de equipamentos).",
     impactOnDefenses: "Complementa a Res. 798/2020 para fiscaliza\xE7\xE3o eletr\xF4nica. Estabelece requisitos de homologa\xE7\xE3o, sinaliza\xE7\xE3o e margem de toler\xE2ncia para equipamentos de fiscaliza\xE7\xE3o automatizada. A aus\xEAncia de homologa\xE7\xE3o ou laudo INMETRO v\xE1lido invalida a autua\xE7\xE3o."
+  },
+  {
+    number: "Resolu\xE7\xE3o CONTRAN n\xBA 1.031/2026",
+    body: "CONTRAN",
+    year: 2026,
+    subject: "Fiscaliza\xE7\xE3o de \xE1lcool e outras subst\xE2ncias psicoativas (conforme FASE-7 \u2014 Cat\xE1logo Mestre de Fontes Jur\xEDdicas).",
+    keyArticles: "Pendente de coleta oficial \u2014 vig\xEAncia, dispositivos e altera\xE7\xF5es a confirmar na fonte prim\xE1ria.",
+    impactOnDefenses: "Pendente de valida\xE7\xE3o jur\xEDdica. N\xE3o alterar teses, fundamentos ou minutas automaticamente. Encaminhar para revis\xE3o humana."
+  },
+  {
+    number: "Resolu\xE7\xE3o CONTRAN n\xBA 965/2022",
+    body: "CONTRAN",
+    year: 2022,
+    subject: "Estacionamento de ve\xEDculos de idosos e pessoas com defici\xEAncia (referenciada por ARG-024).",
+    keyArticles: "Pendente de coleta oficial \u2014 dispositivos a confirmar na fonte prim\xE1ria.",
+    impactOnDefenses: "Pendente de valida\xE7\xE3o jur\xEDdica. N\xE3o alterar teses automaticamente."
+  },
+  {
+    number: "Resolu\xE7\xE3o CONTRAN n\xBA 966/2022",
+    body: "CONTRAN",
+    year: 2022,
+    subject: "Estacionamento de ve\xEDculos de idosos e pessoas com defici\xEAncia (referenciada por ARG-024).",
+    keyArticles: "Pendente de coleta oficial \u2014 dispositivos a confirmar na fonte prim\xE1ria.",
+    impactOnDefenses: "Pendente de valida\xE7\xE3o jur\xEDdica. N\xE3o alterar teses automaticamente."
   }
 ];
 
@@ -14739,6 +14750,7 @@ var RAW_ARGUMENTS_CATALOG = [
     validFrom: "2020-10-01",
     validUntil: null,
     version: 1,
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TRF-4 AC 5003412-88.2021.4.04.7100 e TJ-SP Apela\xE7\xE3o 1004589-21.2023.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Obrigatoriedade Legal da Verifica\xE7\xE3o Metrol\xF3gica Anual pelo INMETRO",
@@ -14785,6 +14797,7 @@ var RAW_ARGUMENTS_CATALOG = [
     validFrom: "1998-01-22",
     validUntil: null,
     version: 1,
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o 1.0000.22.045812-3/001 e STJ REsp 1.345.982/RS)."],
     formattedParagraphs: [
       {
         heading: "1. Do Mandamento Legal do Artigo 90 do C\xF3digo de Tr\xE2nsito Brasileiro",
@@ -14816,6 +14829,7 @@ var RAW_ARGUMENTS_CATALOG = [
     validFrom: "2020-10-01",
     validUntil: null,
     version: 1,
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-PR Reexame Necess\xE1rio 0004512-32.2022.8.16.0004)."],
     formattedParagraphs: [
       {
         heading: "1. Da Obrigatoriedade de Estudo T\xE9cnico de Engenharia Pr\xE9vio",
@@ -14866,6 +14880,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SC; AC 5001239-44.2022.8.24.0023; Terceira C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["C\xF3pia da Notifica\xE7\xE3o com os campos de velocidade preenchidos"],
     observations: "O c\xE1lculo deve sempre tomar como par\xE2metro a velocidade considerada, nunca a medida bruta.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SC AC 5001239-44.2022.8.24.0023)."],
     formattedParagraphs: [
       {
         heading: "1. Da Distin\xE7\xE3o Obrigat\xF3ria entre Velocidade Medida e Velocidade Considerada",
@@ -14889,6 +14904,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Recurso Inominado 1001298-55.2021.8.26.0127; Turma Recursal"],
     requiredDocuments: ["Foto ampliada da autua\xE7\xE3o"],
     observations: "A incerteza sobre qual ve\xEDculo disparou o sensor eletromagn\xE9tico acarreta a insubsist\xEAncia da autua\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Recurso Inominado 1001298-55.2021.8.26.0127)."],
     formattedParagraphs: [
       {
         heading: "1. Da D\xFAvida Razo\xE1vel e Insubsist\xEAncia do Registro Fotogr\xE1fico",
@@ -14912,6 +14928,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-DFT; Ac\xF3rd\xE3o 1398214; 2\xAA Turma Recursal dos Juizados Especiais"],
     requiredDocuments: ["Mapa de geolocaliza\xE7\xE3o com a dist\xE2ncia m\xE9trica comprovada"],
     observations: "A tabela define dist\xE2ncias em fun\xE7\xE3o da velocidade da via (ex: via de 60 km/h exige placa entre 100m e 300m).",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-DFT Ac\xF3rd\xE3o 1398214)."],
     formattedParagraphs: [
       {
         heading: "1. Do Desrespeito \xE0s Dist\xE2ncias M\xE9tricas Fixadas pelo CONTRAN",
@@ -14935,6 +14952,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; REsp 1.258.914/SP; Segunda Turma"],
     requiredDocuments: ["Ficha de atendimento de pronto-socorro / laudo m\xE9dico"],
     observations: "O bem jur\xEDdico vida e integridade f\xEDsica sobrep\xF5e-se \xE0 norma administrativa de velocidade.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ REsp 1.258.914/SP)."],
     formattedParagraphs: [
       {
         heading: "1. Do Estado de Necessidade Justificante no Direito Administrativo Sancionador",
@@ -14961,6 +14979,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o C\xEDvel 1012398-44.2022.8.26.0053; 8\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Notifica\xE7\xE3o com o espelho fotogr\xE1fico"],
     observations: "Sem a foto antes da linha de reten\xE7\xE3o n\xE3o se pode afastar o ingresso regular na fase amarela.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o C\xEDvel 1012398-44.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Exig\xEAncia Regulamentar de Sequ\xEAncia Fotogr\xE1fica Completa",
@@ -14984,6 +15003,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-MG; Apela\xE7\xE3o C\xEDvel 1.0024.14.289123-0/001; 6\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["Registro audiovisual da contagem do tempo de amarelo"],
     observations: "O tempo de amarelo deve permitir parar com seguran\xE7a ou desobstruir o cruzamento.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o C\xEDvel 1.0024.14.289123-0/001)."],
     formattedParagraphs: [
       {
         heading: "1. Do Descumprimento dos Prazos M\xEDnimos de Ciclo Semaf\xF3rico",
@@ -15030,6 +15050,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o 1009841-22.2020.8.26.0562; 3\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Foto da autua\xE7\xE3o evidenciando reten\xE7\xE3o de tr\xE1fego"],
     observations: "O ato de parar sobre a faixa n\xE3o se confunde com o avan\xE7o doloso do cruzamento.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1009841-22.2020.8.26.0562)."],
     formattedParagraphs: [
       {
         heading: "1. Da Inadequa\xE7\xE3o T\xEDpica do Avan\xE7o de Sinal em Tr\xE1fego Conflagrado",
@@ -15053,6 +15074,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-PR; Apela\xE7\xE3o C\xEDvel 0001298-77.2021.8.16.0004; 5\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["V\xEDdeo da pane ou resposta da central 156"],
     observations: "Sem sinaliza\xE7\xE3o semaf\xF3rica operante, aplicam-se as regras gerais de prefer\xEAncia de passagem.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-PR Apela\xE7\xE3o C\xEDvel 0001298-77.2021.8.16.0004)."],
     formattedParagraphs: [
       {
         heading: "1. Da Ilegalidade de Autua\xE7\xF5es Emitidas por Equipamentos em Pane",
@@ -15076,6 +15098,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Recurso Inominado 1004512-88.2023.8.26.0016; 1\xAA Turma C\xEDvel"],
     requiredDocuments: ["Foto da placa de livre convers\xE3o \xE0 direita no cruzamento"],
     observations: "A inova\xE7\xE3o legislativa da Lei 14.071/2020 autorizou a manobra mediante cautela.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Recurso Inominado 1004512-88.2023.8.26.0016)."],
     formattedParagraphs: [
       {
         heading: "1. Da Expressa Previs\xE3o Legal de Livre Convers\xE3o no Artigo 44-A do CTB",
@@ -15102,6 +15125,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-RS; Apela\xE7\xE3o C\xEDvel 70084512984; Vig\xE9sima Primeira C\xE2mara C\xEDvel"],
     requiredDocuments: ["Espelho do Auto de Infra\xE7\xE3o de Tr\xE2nsito"],
     observations: "O MBFT exige que o agente declare explicitamente a posi\xE7\xE3o e o ato praticado pelo condutor.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-RS Apela\xE7\xE3o C\xEDvel 70084512984)."],
     formattedParagraphs: [
       {
         heading: "1. Do V\xEDcio de Motiva\xE7\xE3o por Omiss\xE3o de Circunst\xE2ncias Essenciais no AIT",
@@ -15125,6 +15149,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Recurso Inominado 1002341-12.2022.8.26.0071; 2\xAA Turma Recursal"],
     requiredDocuments: ["Foto do suporte veicular instalado no painel"],
     observations: "O CONTRAN expressamente autoriza o uso do celular no suporte para navega\xE7\xE3o por GPS.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Recurso Inominado 1002341-12.2022.8.26.0071)."],
     formattedParagraphs: [
       {
         heading: "1. Da Licitude do Uso de Dispositivos Eletr\xF4nicos em Suporte Veicular",
@@ -15148,6 +15173,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-MG; Apela\xE7\xE3o C\xEDvel 1.0000.21.098123-4/001; 19\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["Foto do ve\xEDculo na vaga de estacionamento regular"],
     observations: "Com o ve\xEDculo estacionado n\xE3o h\xE1 a figura da dire\xE7\xE3o veicular ativa.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o C\xEDvel 1.0000.21.098123-4/001)."],
     formattedParagraphs: [
       {
         heading: "1. Da Inexist\xEAncia de Condu\xE7\xE3o Veicular Durante o Estacionamento",
@@ -15171,6 +15197,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TRF-3; AC 5001298-33.2020.4.03.6100; Quarta Turma"],
     requiredDocuments: ["Foto dos vidros do ve\xEDculo", "Nota fiscal do insulfilm"],
     observations: "A presun\xE7\xE3o dos atos administrativos \xE9 iuris tantum e cede diante da d\xFAvida objetiva.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TRF-3 AC 5001298-33.2020.4.03.6100)."],
     formattedParagraphs: [
       {
         heading: "1. Da Relatividade da Presun\xE7\xE3o de Veracidade dos Atos Administrativos",
@@ -15194,6 +15221,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-PR; Apela\xE7\xE3o C\xEDvel 0019283-44.2020.8.16.0004; 4\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["Manual do ve\xEDculo ou foto do painel com pareamento ativo"],
     observations: "A liga\xE7\xE3o via viva-voz do carro \xE9 plenamente permitida pela legisla\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-PR Apela\xE7\xE3o C\xEDvel 0019283-44.2020.8.16.0004)."],
     formattedParagraphs: [
       {
         heading: "1. Da Legalidade do Atendimento Telef\xF4nico por Sistema de \xC1udio Veicular",
@@ -15220,6 +15248,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; AC 1003412-55.2021.8.26.0053; 12\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Fotografias panor\xE2micas da via p\xFAblica"],
     observations: "O motorista n\xE3o pode ser penalizado por aus\xEAncia de sinaliza\xE7\xE3o vi\xE1ria.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP AC 1003412-55.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Do Princ\xEDpio da Legalidade e Tipicidade Estrita na Sinaliza\xE7\xE3o de Tr\xE2nsito",
@@ -15243,6 +15272,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-MG; Apela\xE7\xE3o C\xEDvel 1.0000.22.012398-1/001; 7\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["Declara\xE7\xE3o de passageiro com firma reconhecida ou v\xEDdeo"],
     observations: "O tempo estritamente necess\xE1rio para embarque constitui parada l\xEDcita.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o C\xEDvel 1.0000.22.012398-1/001)."],
     formattedParagraphs: [
       {
         heading: "1. Da Distin\xE7\xE3o Jur\xEDdica entre os Institutos de Estacionamento e Parada",
@@ -15266,6 +15296,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-RS; Recurso Inominado 71008761234; Primeira Turma Recursal"],
     requiredDocuments: ["Fotos do meio-fio e da via"],
     observations: "A pintura amarela isolada n\xE3o tem efic\xE1cia normativa sem a placa de regulamenta\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-RS Recurso Inominado 71008761234)."],
     formattedParagraphs: [
       {
         heading: "1. Da Inefic\xE1cia Jur\xEDdica da Sinaliza\xE7\xE3o Horizontal Isolada",
@@ -15289,6 +15320,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o 1002398-11.2021.8.26.0053; 1\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Nota fiscal da oficina mec\xE2nica", "Comprovante do reboque/guincho"],
     observations: "A imobiliza\xE7\xE3o for\xE7ada por defeito mec\xE2nico afasta a voluntariedade da infra\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1002398-11.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da For\xE7a Maior e Inexigibilidade de Conduta Diversa em Caso de Pane",
@@ -15307,11 +15339,12 @@ var RAW_ARGUMENTS_CATALOG = [
     whenToUse: ["Multa em vaga especial onde o condutor/passageiro \xE9 credenciado e o cart\xE3o estava no ve\xEDculo"],
     whenNotToUse: ["Uso indevido de vaga especial por terceiros sem a presen\xE7a do benefici\xE1rio"],
     requirements: ["C\xF3pia da Credencial Oficial de Estacionamento V\xE1lida e comprovante de presen\xE7a"],
-    legalBase: "Art. 181, XX do CTB c/c Resolu\xE7\xF5es CONTRAN n\xBA 965/2022 e 966/2022",
-    resolutions: ["Resolu\xE7\xE3o CONTRAN n\xBA 965/2022 e 966/2022"],
-    relatedJurisprudence: ["TJ-DFT; Ac\xF3rd\xE3o 1401298; 1\xAA Turma Recursal"],
+    legalBase: "Art. 181, XX do CTB",
+    resolutions: [],
+    relatedJurisprudence: [],
     requiredDocuments: ["C\xF3pia da Credencial de Idoso ou PCD emitida pelo munic\xEDpio/SENATRAN"],
     observations: "A comprova\xE7\xE3o de credenciamento v\xE1lido elide a imposi\xE7\xE3o da penalidade.",
+    knowledgeGaps: ["Resolu\xE7\xF5es CONTRAN 965/2022 e 966/2022 citadas originalmente pendentes de verifica\xE7\xE3o na fonte prim\xE1ria \u2014 n\xE3o usar como base legal at\xE9 confirma\xE7\xE3o."],
     formattedParagraphs: [
       {
         heading: "1. Do Pleno Direito ao Uso da Vaga Reservada mediante Credencial V\xE1lida",
@@ -15338,6 +15371,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; REsp 1.724.891/PR; Segunda Turma", "TJ-SP; Apela\xE7\xE3o 1003412-88.2022.8.26.0053"],
     requiredDocuments: ["C\xF3pia integral do processo administrativo do DETRAN"],
     observations: "O termo de sinais \xE9 requisito solene indispens\xE1vel para comprovar a altera\xE7\xE3o da condu\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ REsp 1.724.891/PR e TJ-SP Apela\xE7\xE3o 1003412-88.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Obrigatoriedade Formal do Termo de Constata\xE7\xE3o de Sinais",
@@ -15361,6 +15395,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-PR; Mandado de Seguran\xE7a 0002134-88.2021.8.16.0004; 4\xAA C\xE2mara C\xEDvel"],
     requiredDocuments: ["Ticket impresso do baf\xF4metro", "Certid\xE3o do INMETRO"],
     observations: "Equipamento sem calibra\xE7\xE3o oficial n\xE3o possui validade jur\xEDdica probat\xF3ria.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-PR Mandado de Seguran\xE7a 0002134-88.2021.8.16.0004)."],
     formattedParagraphs: [
       {
         heading: "1. Da Nulidade do Teste por Caducidade da Calibra\xE7\xE3o Metrol\xF3gica",
@@ -15384,6 +15419,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STF; RE 1.224.374/RS (Tema 1.079 - Distin\xE7\xE3o f\xE1tica quanto \xE0 proporcionalidade)"],
     requiredDocuments: ["C\xF3pia do AIT sem anota\xE7\xE3o de perigo concreto"],
     observations: "A recusa n\xE3o pode ser tratada como confiss\xE3o ficta de embriaguez.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STF RE 1.224.374/RS)."],
     formattedParagraphs: [
       {
         heading: "1. Do Princ\xEDpio Nemo Tenetur se Detegere e da Presun\xE7\xE3o de Inoc\xEAncia",
@@ -15407,6 +15443,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-RS; AC 70081298341; Vig\xE9sima Segunda C\xE2mara C\xEDvel"],
     requiredDocuments: ["Extrato impresso do teste de ar alveolar"],
     observations: "Medi\xE7\xF5es at\xE9 0,04 mg/L t\xEAm valor considerado zero e n\xE3o configuram infra\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-RS AC 70081298341)."],
     formattedParagraphs: [
       {
         heading: "1. Da Aplica\xE7\xE3o da Margem de Toler\xE2ncia Regulamentar de 0,04 mg/L",
@@ -15430,6 +15467,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o 1009123-44.2021.8.26.0053"],
     requiredDocuments: ["Cupom impresso pelo etil\xF4metro"],
     observations: "O teste em branco garante que a c\xE2mara de medi\xE7\xE3o estava isenta de vapores residuais.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1009123-44.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Exig\xEAncia de Purga e Teste em Branco no Procedimento Metrol\xF3gico",
@@ -15453,6 +15491,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SC; AC 5003412-11.2021.8.24.0023; 2\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Declara\xE7\xE3o do condutor e eventual frasco/comprovante"],
     observations: "O manual do fabricante exige intervalo m\xEDnimo de 15 minutos ap\xF3s uso de subst\xE2ncias orais.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SC AC 5003412-11.2021.8.24.0023)."],
     formattedParagraphs: [
       {
         heading: "1. Da Influ\xEAncia de Vapores Bucais e do Dever de Aguardar 15 Minutos",
@@ -15479,6 +15518,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Recurso Inominado 1001234-99.2022.8.26.0016"],
     requiredDocuments: ["Foto do interior do ve\xEDculo com o cinto escuro"],
     observations: "O agente de tr\xE2nsito \xE0 dist\xE2ncia \xE9 suscet\xEDvel a ilus\xE3o de \xF3tica por contraste de cores.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Recurso Inominado 1001234-99.2022.8.26.0016)."],
     formattedParagraphs: [
       {
         heading: "1. Do Erro de Percep\xE7\xE3o Visual e Aus\xEAncia de Certeza Material",
@@ -15502,6 +15542,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-MG; Apela\xE7\xE3o C\xEDvel 1.0000.20.098123-1/001"],
     requiredDocuments: ["Laudo m\xE9dico oficial com CRM"],
     observations: "A ficha do enquadramento do MBFT prev\xEA expressamente a excludente por motivo m\xE9dico.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o C\xEDvel 1.0000.20.098123-1/001)."],
     formattedParagraphs: [
       {
         heading: "1. Da Excludente Legal por Motivo de Isen\xE7\xE3o M\xE9dica Comprovada",
@@ -15525,6 +15566,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-RJ; Apela\xE7\xE3o 0012398-33.2021.8.19.0001"],
     requiredDocuments: ["Fotos dos avisos no ve\xEDculo"],
     observations: "O motorista profissional cumpre seu dever ao advertir e disponibilizar o cinto aos passageiros.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-RJ Apela\xE7\xE3o 0012398-33.2021.8.19.0001)."],
     formattedParagraphs: [
       {
         heading: "1. Do Cumprimento do Dever de Advert\xEAncia pelo Condutor Profissional",
@@ -15548,6 +15590,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-RS; Recurso Inominado 71009123841"],
     requiredDocuments: ["CRLV do ve\xEDculo antigo"],
     observations: "N\xE3o se pode exigir equipamento n\xE3o obrigat\xF3rio \xE0 \xE9poca da homologa\xE7\xE3o do modelo.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-RS Recurso Inominado 71009123841)."],
     formattedParagraphs: [
       {
         heading: "1. Da N\xE3o Retroatividade de Normas de Equipamentos Obrigat\xF3rios a Ve\xEDculos Antigos",
@@ -15574,6 +15617,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o 1004123-55.2022.8.26.0053; 1\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Comprovantes banc\xE1rios autenticados de pagamento dos tributos"],
     observations: "A mora do \xF3rg\xE3o administrativo na baixa banc\xE1ria n\xE3o pode prejudicar o condutor diligente.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1004123-55.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Comprova\xE7\xE3o de Quita\xE7\xE3o Pr\xE9via e Inexist\xEAncia de Culpa do Administrado",
@@ -15597,6 +15641,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-MG; Apela\xE7\xE3o C\xEDvel 1.0000.22.091234-1/001"],
     requiredDocuments: ["Extrato do aplicativo CDT (Carteira Digital de Tr\xE2nsito)"],
     observations: "A Lei 14.071/2020 expressamente dispensou o porte f\xEDsico mediante consulta sist\xEAmica.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-MG Apela\xE7\xE3o C\xEDvel 1.0000.22.091234-1/001)."],
     formattedParagraphs: [
       {
         heading: "1. Da Expressa Dispensa Legal do Porte de Documentos com Acesso Sist\xEAmico",
@@ -15620,6 +15665,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-DFT; Ac\xF3rd\xE3o 1391283; 2\xAA Turma Recursal"],
     requiredDocuments: ["C\xF3pia do CRLV-e com QR Code"],
     observations: "O CRLV-e em meio digital possui a mesma validade jur\xEDdica do documento impresso.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-DFT Ac\xF3rd\xE3o 1391283)."],
     formattedParagraphs: [
       {
         heading: "1. Da Equival\xEAncia e Efic\xE1cia Plena dos Documentos Digitais Oficiais",
@@ -15643,6 +15689,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Recurso Inominado 1002341-99.2021.8.26.0053"],
     requiredDocuments: ["CRLV do ve\xEDculo"],
     observations: "O erro no caractere da placa torna o AIT inconsistente quanto \xE0 identidade do ve\xEDculo.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Recurso Inominado 1002341-99.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Inconsist\xEAncia na Identifica\xE7\xE3o do Ve\xEDculo no Auto de Infra\xE7\xE3o",
@@ -15669,6 +15716,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; REsp 1.774.891/SP; Segunda Turma", "TJ-SP; Apela\xE7\xE3o 1012398-11.2023.8.26.0053"],
     requiredDocuments: ["Comprovante de protocolo do FICI tempestivo"],
     observations: "A in\xE9rcia do \xF3rg\xE3o em processar o FICI tempestivo n\xE3o autoriza a lavratura da multa NIC.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ REsp 1.774.891/SP e TJ-SP Apela\xE7\xE3o 1012398-11.2023.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Ilegalidade da Multa NIC Diante da Indica\xE7\xE3o Tempestiva do Condutor",
@@ -15692,6 +15740,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; AgInt no REsp 1.892.341/SP; Primeira Turma"],
     requiredDocuments: ["C\xF3pia da decis\xE3o de deferimento do AIT origin\xE1rio"],
     observations: "Anulada a autua\xE7\xE3o principal, desfazem-se automaticamente todas as penalidades acess\xF3rias.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ AgInt no REsp 1.892.341/SP)."],
     formattedParagraphs: [
       {
         heading: "1. Da Extin\xE7\xE3o da Multa NIC em Virtude da Insubsist\xEAncia do Auto Origin\xE1rio",
@@ -15715,6 +15764,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o C\xEDvel 1009123-99.2022.8.26.0053; 1\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Notifica\xE7\xE3o de penalidade da multa NIC"],
     observations: "A multa NIC exige contradit\xF3rio e ampla defesa aut\xF4nomos.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o C\xEDvel 1009123-99.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Necessidade de Dupla Notifica\xE7\xE3o no Procedimento da Multa NIC",
@@ -15741,6 +15791,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; Tema Repetitivo 1.097 (REsp 1.869.589/SP)", "TJ-SP; Enunciado C\xEDvel"],
     requiredDocuments: ["Prontu\xE1rio da CNH no DETRAN"],
     observations: "O STJ fixou que a lei mais ben\xE9fica retroage aos processos administrativos em curso.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ Tema 1.097 REsp 1.869.589/SP)."],
     formattedParagraphs: [
       {
         heading: "1. Da Efic\xE1cia Retroativa da Lei n\xBA 14.071/2020 aos Processos em Tr\xE2mite",
@@ -15764,6 +15815,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o C\xEDvel 1009841-88.2021.8.26.0053; 2\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Espelho de acompanhamento dos recursos pendentes"],
     observations: "Pontos de multas sub judice n\xE3o podem ser computados para atingimento do teto de suspens\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o C\xEDvel 1009841-88.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Impossibilidade de C\xF4mputo de Pontua\xE7\xE3o sob Efeito Suspensivo",
@@ -15787,6 +15839,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; AgInt no REsp 1.782.391/RJ; Segunda Turma"],
     requiredDocuments: ["Hist\xF3rico do processo administrativo do DETRAN"],
     observations: "O direito de punir prescreve em 5 anos contados da data da infra\xE7\xE3o ou do encerramento da esfera recursal.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ AgInt no REsp 1.782.391/RJ)."],
     formattedParagraphs: [
       {
         heading: "1. Da Consuma\xE7\xE3o da Prescri\xE7\xE3o Quinquenal da Pretens\xE3o Punitiva",
@@ -15810,6 +15863,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; REsp 1.698.412/SP; Segunda Turma", "TJ-SP; Apela\xE7\xE3o 1004123-99.2021.8.26.0053"],
     requiredDocuments: ["Declara\xE7\xE3o de real condutor", "C\xF3pia da CNH do terceiro"],
     observations: "A propriedade do ve\xEDculo n\xE3o autoriza presumir que o condutor suspenso dirigia.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ REsp 1.698.412/SP e TJ-SP Apela\xE7\xE3o 1004123-99.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Necessidade de Comprova\xE7\xE3o da Efetiva Dire\xE7\xE3o do Ve\xEDculo pelo Suspenso",
@@ -15833,6 +15887,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o C\xEDvel 1002341-88.2020.8.26.0053; 6\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["C\xF3pia do processo de suspens\xE3o anterior"],
     observations: "O ato nulo n\xE3o gera efeitos jur\xEDdicos v\xE1lidos capazes de fundamentar a cassa\xE7\xE3o.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o C\xEDvel 1002341-88.2020.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Do Efeito Cascata da Nulidade do Processo Administrativo Origin\xE1rio",
@@ -15856,6 +15911,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Mandado de Seguran\xE7a 1009123-11.2022.8.26.0053"],
     requiredDocuments: ["Certificado emitido pelo CFC credenciado"],
     observations: "O curso preventivo zera a pontua\xE7\xE3o acumulada para condutores profissionais.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Mandado de Seguran\xE7a 1009123-11.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Quita\xE7\xE3o da Pontua\xE7\xE3o pelo Curso Preventivo de Reciclagem (Art. 261, \xA75\xBA)",
@@ -15888,6 +15944,7 @@ var RAW_ARGUMENTS_CATALOG = [
       "C\xF3pia da Notifica\xE7\xE3o da Autua\xE7\xE3o contendo a data da infra\xE7\xE3o e a data de expedi\xE7\xE3o/postagem"
     ],
     observations: "O prazo de 30 dias \xE9 decadencial de ordem p\xFAblica e extingue o pr\xF3prio direito de punir da autoridade.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1002341-55.2023.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Da Consuma\xE7\xE3o do Prazo Decadencial de 30 Dias para Expedi\xE7\xE3o da Notifica\xE7\xE3o",
@@ -15915,6 +15972,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; S\xFAmula 312", "TJ-SP; S\xFAmula 127 do STJ"],
     requiredDocuments: ["C\xF3pia da notifica\xE7\xE3o de penalidade e certid\xE3o do DETRAN"],
     observations: "O procedimento de tr\xE2nsito \xE9 bif\xE1sico e obrigat\xF3rio.",
+    knowledgeGaps: ['Refer\xEAncia "TJ-SP; S\xFAmula 127 do STJ" est\xE1 incorreta (S\xFAmula 127 \xE9 do STJ, n\xE3o do TJ-SP) \u2014 pendente de corre\xE7\xE3o na fonte prim\xE1ria.'],
     formattedParagraphs: [
       {
         heading: "1. Da Garantia Constitucional da Dupla Notifica\xE7\xE3o e S\xFAmula 312 do STJ",
@@ -15938,6 +15996,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STJ; REsp 1.458.912/MG; Primeira Turma"],
     requiredDocuments: ["Mapa oficial do trecho vi\xE1rio e extrato do AIT"],
     observations: "O ato praticado por autoridade incompetente \xE9 nulo de pleno direito.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (STJ REsp 1.458.912/MG)."],
     formattedParagraphs: [
       {
         heading: "1. Do V\xEDcio de Compet\xEAncia e Viola\xE7\xE3o ao Princ\xEDpio da Legalidade Estrita",
@@ -15961,6 +16020,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["TJ-SP; Apela\xE7\xE3o C\xEDvel 1004589-11.2022.8.26.0053; 3\xAA C\xE2mara de Direito P\xFAblico"],
     requiredDocuments: ["Extrato de prontu\xE1rio e hist\xF3rico de CNH"],
     observations: "A Lei 14.071/2020 transformou o ato de discricion\xE1rio em poder-dever vinculado da autoridade.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o C\xEDvel 1004589-11.2022.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Do Direito Subjetivo do Condutor \xE0 Convers\xE3o em Advert\xEAncia por Escrito",
@@ -15984,6 +16044,7 @@ var RAW_ARGUMENTS_CATALOG = [
     relatedJurisprudence: ["STF; ARE 748.371/MT (Tema 660); Plen\xE1rio", "TJ-SP; Apela\xE7\xE3o 1012398-88.2021.8.26.0053"],
     requiredDocuments: ["C\xF3pia da decis\xE3o administrativa recorrida"],
     observations: "O dever de fundamenta\xE7\xE3o concreta dos atos decis\xF3rios administrativos \xE9 indeclin\xE1vel.",
+    knowledgeGaps: ["Jurisprud\xEAncia relacionada pendente de verifica\xE7\xE3o na fonte prim\xE1ria (TJ-SP Apela\xE7\xE3o 1012398-88.2021.8.26.0053)."],
     formattedParagraphs: [
       {
         heading: "1. Do V\xEDcio de Nulidade por Falta de Fundamenta\xE7\xE3o no Julgamento Administrativo",
@@ -16068,7 +16129,7 @@ var PROCEDURES_CATALOG = [
     objective: "Impugnar a Notifica\xE7\xE3o de Imposi\xE7\xE3o de Penalidade perante o colegiado da JARI, atacando tanto as preliminares processuais quanto o m\xE9rito f\xE1tico e probat\xF3rio da autua\xE7\xE3o.",
     legalBasis: "Art. 285 do CTB c/c Resolu\xE7\xE3o CONTRAN n\xBA 900/2022",
     competentBody: "Junta Administrativa de Recursos de Infra\xE7\xF5es (JARI) do \xD3rg\xE3o Autuador",
-    suspensiveEffectRule: "Concede efeito suspensivo autom\xE1tico ap\xF3s 24 meses (Lei 14.229/21) ou a pedido do recorrente, vedando restri\xE7\xE3o ao CRLV.",
+    suspensiveEffectRule: "Efeito suspensivo autom\xE1tico desde a interposi\xE7\xE3o tempestiva do recurso (Art. 283 do CTB), vedando restri\xE7\xE3o ao CRLV; se n\xE3o julgado em 24 meses, concede-se de of\xEDcio (Lei 14.229/21).",
     stages: [
       { stepNumber: 1, name: "Recebimento da Notifica\xE7\xE3o de Penalidade (NP)", description: "Verifica\xE7\xE3o da tempestividade e valor com desconto de 20%.", deadlineDays: 30, actingParty: "Cidad\xE3o/Condutor" },
       { stepNumber: 2, name: "Elabora\xE7\xE3o das Raz\xF5es Recursais \xE0 JARI", description: "Reda\xE7\xE3o das preliminares, m\xE9rito aprofundado, juntada de jurisprud\xEAncia e requerimentos.", deadlineDays: 10, actingParty: "Cidad\xE3o/Condutor" },
@@ -18933,7 +18994,7 @@ var VectorStore = class _VectorStore {
     this.chunks = /* @__PURE__ */ new Map();
     this.embeddings = /* @__PURE__ */ new Map();
     this.supabaseClient = null;
-    this.initSupabaseClient();
+    this.supabaseInitAttempted = false;
   }
   static getInstance() {
     if (!_VectorStore.instance) {
@@ -18941,9 +19002,11 @@ var VectorStore = class _VectorStore {
     }
     return _VectorStore.instance;
   }
-  initSupabaseClient() {
+  ensureSupabaseClient() {
+    if (this.supabaseInitAttempted) return;
+    this.supabaseInitAttempted = true;
     const url2 = configService.get("VITE_SUPABASE_URL");
-    const serviceKey = configService.get("SUPABASE_SECRET_KEY") || configService.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey = configService.get("SUPABASE_SERVICE_ROLE_KEY") || configService.get("SUPABASE_SECRET_KEY");
     if (url2 && serviceKey && url2.startsWith("https://")) {
       try {
         this.supabaseClient = createClient2(url2, serviceKey);
@@ -18953,6 +19016,10 @@ var VectorStore = class _VectorStore {
       }
     }
   }
+  getSupabaseClient() {
+    this.ensureSupabaseClient();
+    return this.supabaseClient;
+  }
   // ==========================================
   // UPSERT OPERATIONS (SOURCES & DOCUMENTS)
   // ==========================================
@@ -18961,9 +19028,10 @@ var VectorStore = class _VectorStore {
       ...source,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from("knowledge_sources").upsert({
+        await client.from("knowledge_sources").upsert({
           id: source.id,
           name: source.name,
           source_type: source.sourceType,
@@ -18983,9 +19051,10 @@ var VectorStore = class _VectorStore {
       ...doc,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from("knowledge_documents").upsert({
+        await client.from("knowledge_documents").upsert({
           id: doc.id,
           source_id: doc.sourceId,
           title: doc.title,
@@ -19003,9 +19072,10 @@ var VectorStore = class _VectorStore {
   }
   async upsertVersion(ver) {
     this.versions.set(ver.id, ver);
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        await this.supabaseClient.from("knowledge_document_versions").upsert({
+        await client.from("knowledge_document_versions").upsert({
           id: ver.id,
           document_id: ver.documentId,
           version: ver.version,
@@ -19023,7 +19093,8 @@ var VectorStore = class _VectorStore {
     for (const chunk of chunksList) {
       this.chunks.set(chunk.id, chunk);
     }
-    if (this.supabaseClient && chunksList.length > 0) {
+    const client = this.getSupabaseClient();
+    if (client && chunksList.length > 0) {
       try {
         const rows = chunksList.map((c) => ({
           id: c.id,
@@ -19041,7 +19112,7 @@ var VectorStore = class _VectorStore {
           document_type: c.documentType,
           metadata: c.metadata
         }));
-        await this.supabaseClient.from("knowledge_chunks").upsert(rows);
+        await client.from("knowledge_chunks").upsert(rows);
       } catch {
       }
     }
@@ -19050,7 +19121,8 @@ var VectorStore = class _VectorStore {
     for (const emb of embeddingsList) {
       this.embeddings.set(emb.chunkId, emb);
     }
-    if (this.supabaseClient && embeddingsList.length > 0) {
+    const client = this.getSupabaseClient();
+    if (client && embeddingsList.length > 0) {
       try {
         const rows = embeddingsList.map((e) => ({
           id: e.id,
@@ -19060,7 +19132,7 @@ var VectorStore = class _VectorStore {
           dimensions: e.dimensions,
           embedding: JSON.stringify(e.embedding)
         }));
-        await this.supabaseClient.from("knowledge_embeddings").upsert(rows);
+        await client.from("knowledge_embeddings").upsert(rows);
       } catch {
       }
     }
@@ -19071,9 +19143,10 @@ var VectorStore = class _VectorStore {
   async searchVectors(queryEmbedding, options) {
     const topK = options?.topK || 20;
     const threshold = options?.threshold ?? 0.35;
-    if (this.supabaseClient) {
+    const client = this.getSupabaseClient();
+    if (client) {
       try {
-        const { data, error } = await this.supabaseClient.rpc("match_knowledge_chunks", {
+        const { data, error } = await client.rpc("match_knowledge_chunks", {
           query_embedding: JSON.stringify(queryEmbedding),
           match_threshold: threshold,
           match_count: topK,
@@ -23658,7 +23731,7 @@ var EXPERT_RULES = [
   // Rule 3: Conversão Compulsória em Advertência por Escrito (Art. 267 CTB)
   {
     id: "RULE_CONVERSAO_ADVERTENCIA_267",
-    name: "Direito Subjetivo \xE0 Convers\xE3o em Advert\xEAncia (Art. 267 CTB)",
+    name: "Convers\xE3o em Advert\xEAncia por Escrito (Art. 267 CTB)",
     description: "Identifica se a infra\xE7\xE3o \xE9 de gravidade leve ou m\xE9dia e se o condutor cumpre os requisitos de n\xE3o reincid\xEAncia.",
     category: "direito_material",
     validFrom: "2021-04-12",
@@ -23681,10 +23754,10 @@ var EXPERT_RULES = [
         return {
           ruleId: "RULE_CONVERSAO_ADVERTENCIA_267",
           title: "Direito Vinculado \xE0 Convers\xE3o em Advert\xEAncia por Escrito",
-          description: "Infra\xE7\xE3o de natureza leve ou m\xE9dia sem reincid\xEAncia no prontu\xE1rio nos \xFAltimos 12 meses garante cancelamento compuls\xF3rio da multa e dos pontos.",
+          description: "Infra\xE7\xE3o de natureza leve ou m\xE9dia sem reincid\xEAncia no prontu\xE1rio nos \xFAltimos 12 meses \xE9 candidata \xE0 convers\xE3o em advert\xEAncia por escrito, com cancelamento da multa e dos pontos, se confirmada pelo \xF3rg\xE3o autuador.",
           severity: "alta",
           legalArgumentId: "ARG-051",
-          impact: "100% de isen\xE7\xE3o do pagamento financeiro (R$ 130,16) e 0 pontos na CNH.",
+          impact: "Convers\xE3o em advert\xEAncia por escrito: sem multa e sem pontua\xE7\xE3o, se confirmada pelo \xF3rg\xE3o autuador e comprovado o prontu\xE1rio.",
           statutoryBasis: "Artigo 267 do CTB (Reda\xE7\xE3o pela Lei n\xBA 14.071/2020)"
         };
       }
@@ -31546,46 +31619,191 @@ var SourceFetcher = class {
 };
 
 // src/core/knowledge/monitoring/snapshot-store.ts
+import { createClient as createClient3 } from "@supabase/supabase-js";
+var SUPABASE_TABLE = "knowledge_monitoring_snapshots";
+var MAX_SNAPSHOTS_PER_SOURCE = 50;
+var log = (level, component, operation, message, meta) => {
+  const entry = { level, component, operation, message, meta, ts: (/* @__PURE__ */ new Date()).toISOString() };
+  if (level === "error") {
+    console.error(JSON.stringify(entry));
+  } else if (level === "warn") {
+    console.warn(JSON.stringify(entry));
+  } else {
+    console.info(JSON.stringify(entry));
+  }
+};
 var SnapshotStore = class {
   static {
     this.snapshots = /* @__PURE__ */ new Map();
   }
-  // sourceId -> list of snapshots
+  static {
+    // sourceId -> list of snapshots
+    this.supabaseClient = null;
+  }
+  static {
+    this.initialized = false;
+  }
+  static initSupabaseClient() {
+    const url2 = process.env.VITE_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (url2 && serviceKey && url2.startsWith("https://")) {
+      try {
+        this.supabaseClient = createClient3(url2, serviceKey);
+        log("info", "snapshot_store", "supabase_init", "Supabase client inicializado para persist\xEAncia de snapshots.");
+      } catch (err) {
+        log("warn", "snapshot_store", "supabase_init", `Falha ao inicializar Supabase para snapshots: ${err.message}. Operando apenas em mem\xF3ria.`);
+      }
+    }
+  }
+  static ensureInitialized() {
+    if (!this.initialized) {
+      this.initSupabaseClient();
+      this.initialized = true;
+    }
+  }
+  /**
+   * Verifica se o cliente Supabase está configurado.
+   */
+  static isSupabaseConfigured() {
+    this.ensureInitialized();
+    return this.supabaseClient !== null;
+  }
   /**
    * Salva um snapshot para a fonte indicada.
+   * Persiste em memória e, quando disponível, no Supabase.
+   * Nunca remove o último snapshot válido: se a coleta falhar, o snapshot anterior permanece.
    */
   static saveSnapshot(snapshot) {
+    this.ensureInitialized();
     const list = this.snapshots.get(snapshot.sourceId) || [];
     list.unshift(snapshot);
-    if (list.length > 50) {
-      list.length = 50;
+    if (list.length > MAX_SNAPSHOTS_PER_SOURCE) {
+      list.length = MAX_SNAPSHOTS_PER_SOURCE;
     }
     this.snapshots.set(snapshot.sourceId, list);
+    if (this.supabaseClient) {
+      this.persistSnapshotToSupabase(snapshot).catch((err) => {
+        log("error", "snapshot_store", "supabase_persist_failed", `Falha ao persistir snapshot no Supabase: ${err instanceof Error ? err.message : String(err)}`, {
+          sourceId: snapshot.sourceId,
+          snapshotId: snapshot.id
+        });
+      });
+    }
+    log("info", "snapshot_store", "snapshot_saved", `Snapshot salvo para fonte ${snapshot.sourceId} (status: ${snapshot.status ?? "confirmed"})`, {
+      sourceId: snapshot.sourceId,
+      snapshotId: snapshot.id,
+      contentHash: snapshot.contentHash,
+      status: snapshot.status
+    });
+  }
+  /**
+   * Persiste um snapshot individual no Supabase.
+   */
+  static async persistSnapshotToSupabase(snapshot) {
+    if (!this.supabaseClient) return;
+    await this.supabaseClient.from(SUPABASE_TABLE).upsert({
+      id: snapshot.id,
+      source_id: snapshot.sourceId,
+      url: snapshot.url,
+      uf: snapshot.uf,
+      fetched_at: snapshot.fetchedAt,
+      http_status: snapshot.httpStatus,
+      content_length: snapshot.contentLength,
+      content_hash: snapshot.contentHash,
+      normalized_text: snapshot.normalizedText,
+      raw_sample: snapshot.rawSample ?? null,
+      status: snapshot.status ?? "confirmed",
+      error_message: snapshot.errorMessage ?? null,
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
+  /**
+   * Carrega snapshots persistidos do Supabase para a memória.
+   * Útil após reinicialização do processo.
+   */
+  static async loadFromSupabase() {
+    this.ensureInitialized();
+    if (!this.supabaseClient) return;
+    try {
+      const { data, error } = await this.supabaseClient.from(SUPABASE_TABLE).select("*").order("fetched_at", { ascending: false });
+      if (error) {
+        log("error", "snapshot_store", "supabase_load_failed", `Falha ao carregar snapshots do Supabase: ${error.message}`);
+        return;
+      }
+      const rows = data || [];
+      const bySource = /* @__PURE__ */ new Map();
+      for (const row of rows) {
+        const snapshot = {
+          id: row.id,
+          sourceId: row.source_id,
+          url: row.url,
+          uf: row.uf,
+          fetchedAt: row.fetched_at,
+          httpStatus: row.http_status,
+          contentLength: row.content_length,
+          contentHash: row.content_hash,
+          normalizedText: row.normalized_text,
+          rawSample: row.raw_sample ?? void 0,
+          status: row.status ?? "confirmed",
+          errorMessage: row.error_message ?? void 0
+        };
+        const list = bySource.get(snapshot.sourceId) || [];
+        list.push(snapshot);
+        bySource.set(snapshot.sourceId, list);
+      }
+      for (const [sourceId, list] of bySource.entries()) {
+        list.sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
+        if (list.length > MAX_SNAPSHOTS_PER_SOURCE) {
+          list.length = MAX_SNAPSHOTS_PER_SOURCE;
+        }
+        this.snapshots.set(sourceId, list);
+      }
+      log("info", "snapshot_store", "supabase_loaded", `Snapshots carregados do Supabase: ${bySource.size} fontes, ${rows.length} snapshots.`);
+    } catch (err) {
+      log("error", "snapshot_store", "supabase_load_failed", `Exce\xE7\xE3o ao carregar snapshots do Supabase: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   /**
    * Obtém o snapshot mais recente de uma fonte.
+   * Retorna da memória se disponível; caso contrário, tenta carregar do Supabase.
    */
-  static getLatestSnapshot(sourceId) {
+  static async getLatestSnapshot(sourceId) {
+    this.ensureInitialized();
     const list = this.snapshots.get(sourceId);
-    if (!list || list.length === 0) return null;
-    return list[0];
+    if (list && list.length > 0) {
+      return list[0];
+    }
+    await this.loadFromSupabase();
+    const listAfterLoad = this.snapshots.get(sourceId);
+    return listAfterLoad && listAfterLoad.length > 0 ? listAfterLoad[0] : null;
   }
   /**
    * Obtém o penúltimo snapshot para comparação de diff.
    */
-  static getPreviousSnapshot(sourceId) {
-    const list = this.snapshots.get(sourceId);
+  static async getPreviousSnapshot(sourceId) {
+    this.ensureInitialized();
+    let list = this.snapshots.get(sourceId);
+    if (!list || list.length === 0) {
+      await this.loadFromSupabase();
+      list = this.snapshots.get(sourceId);
+    }
     if (!list || list.length < 2) return null;
     return list[1];
   }
   /**
    * Obtém todo o histórico de snapshots de uma fonte.
    */
-  static getHistory(sourceId) {
-    return this.snapshots.get(sourceId) || [];
+  static async getHistory(sourceId) {
+    this.ensureInitialized();
+    let list = this.snapshots.get(sourceId);
+    if (!list || list.length === 0) {
+      await this.loadFromSupabase();
+      list = this.snapshots.get(sourceId);
+    }
+    return list || [];
   }
   /**
-   * Obtém todos os snapshots armazenados no sistema.
+   * Obtém todos os snapshots armazenados na memória.
    */
   static getAllSnapshots() {
     const all = [];
@@ -31599,6 +31817,15 @@ var SnapshotStore = class {
    */
   static clear() {
     this.snapshots.clear();
+  }
+  /**
+   * Obtém o snapshot mais recente de uma fonte (versão síncrona para compatibilidade com
+   * código existente que não usa await). Preferir getLatestSnapshot quando possível.
+   * @deprecated Use getLatestSnapshot (async) para garantir dados do Supabase.
+   */
+  static getLatestSnapshotSync(sourceId) {
+    const list = this.snapshots.get(sourceId);
+    return list && list.length > 0 ? list[0] : null;
   }
 };
 
@@ -32074,6 +32301,7 @@ var WeeklyMonitorScheduler = class {
   }
   /**
    * Executa um ciclo completo de monitoramento nacional.
+   * Reutiliza componentes existentes sem duplicar arquitetura.
    */
   static async runCycle(customSources, fetchTimeoutMs = 6e3) {
     if (this.isRunning) {
@@ -32112,21 +32340,37 @@ var WeeklyMonitorScheduler = class {
             contentLength: result.contentLength,
             contentHash: hash,
             normalizedText: normalized.normalizedText,
-            rawSample: result.content.slice(0, 500)
+            rawSample: result.content.slice(0, 500),
+            status: "confirmed"
           };
-          const previousSnapshot = SnapshotStore.getLatestSnapshot(source.id);
+          const previousSnapshot = await SnapshotStore.getLatestSnapshot(source.id);
           if (previousSnapshot) {
             const change = ChangeDetector.detectChange(snapshot, previousSnapshot, source);
             if (change) {
               detectedChanges.push(change);
             }
           }
-          SnapshotStore.saveSnapshot(snapshot);
+          await SnapshotStore.saveSnapshot(snapshot);
           snapshotsCreated += 1;
         } else {
           failedFetches += 1;
           source.fetchErrorCount = (source.fetchErrorCount || 0) + 1;
           source.lastErrorMessage = result.errorMessage;
+          const failureSnapshot = {
+            id: `SNP_FAIL_${source.id}_${Date.now()}`,
+            sourceId: source.id,
+            url: source.url,
+            uf: source.uf,
+            fetchedAt: result.fetchedAt,
+            httpStatus: result.httpStatus,
+            contentLength: 0,
+            contentHash: source.contentHash ?? "",
+            normalizedText: "",
+            rawSample: `Falha de coleta: ${result.errorMessage ?? "erro desconhecido"}`,
+            status: "collection_failed",
+            errorMessage: result.errorMessage
+          };
+          await SnapshotStore.saveSnapshot(failureSnapshot);
         }
       }
       const validation = ValidationEngine.validateAndRoute(detectedChanges);
@@ -32245,21 +32489,37 @@ var WeeklyMonitorService = class {
             contentLength: result.contentLength,
             contentHash: hash,
             normalizedText: normalized.normalizedText,
-            rawSample: result.content.slice(0, 500)
+            rawSample: result.content.slice(0, 500),
+            status: "confirmed"
           };
-          const previousSnapshot = SnapshotStore.getLatestSnapshot(source.id);
+          const previousSnapshot = await SnapshotStore.getLatestSnapshot(source.id);
           if (previousSnapshot) {
             const change = ChangeDetector.detectChange(currentSnapshot, previousSnapshot, source);
             if (change) {
               detectedChanges.push(change);
             }
           }
-          SnapshotStore.saveSnapshot(currentSnapshot);
+          await SnapshotStore.saveSnapshot(currentSnapshot);
           snapshotsCreated += 1;
         } else {
           failedFetches += 1;
           source.fetchErrorCount = (source.fetchErrorCount || 0) + 1;
           source.lastErrorMessage = result.errorMessage;
+          const failureSnapshot = {
+            id: `SNP_FAIL_${source.id}_${Date.now()}`,
+            sourceId: source.id,
+            url: source.url,
+            uf: source.uf,
+            fetchedAt: result.fetchedAt,
+            httpStatus: result.httpStatus,
+            contentLength: 0,
+            contentHash: source.contentHash ?? "",
+            normalizedText: "",
+            rawSample: `Falha de coleta: ${result.errorMessage ?? "erro desconhecido"}`,
+            status: "collection_failed",
+            errorMessage: result.errorMessage
+          };
+          await SnapshotStore.saveSnapshot(failureSnapshot);
         }
       }
       const validation = ValidationEngine.validateAndRoute(detectedChanges);
@@ -32729,15 +32989,20 @@ router12.get("/national/sources", (req, res) => {
     res.status(500).json({ error: "Failed to fetch sources registry" });
   }
 });
-router12.post("/monitor/run", async (req, res) => {
-  try {
-    const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4e3;
-    const result = await WeeklyMonitorScheduler.runCycle(void 0, timeoutMs);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to run monitoring cycle" });
+router12.post(
+  "/monitor/run",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const timeoutMs = req.body.timeoutMs ? parseInt(req.body.timeoutMs) : 4e3;
+      const result = await WeeklyMonitorScheduler.runCycle(void 0, timeoutMs);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: error.message || "Failed to run monitoring cycle" });
+    }
   }
-});
+);
 router12.get("/monitor/history", (req, res) => {
   try {
     const history = WeeklyMonitorScheduler.getCycleHistory();
@@ -32763,54 +33028,74 @@ router12.get("/monitor/review-queue", (req, res) => {
     res.status(500).json({ error: "Failed to fetch review queue" });
   }
 });
-router12.post("/monitor/review-queue/:id/approve", (req, res) => {
-  try {
-    const { reviewer, notes } = req.body;
-    const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
-    if (!success) {
-      return res.status(404).json({ error: "Review item not found" });
+router12.post(
+  "/monitor/review-queue/:id/approve",
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { reviewer, notes } = req.body;
+      const success = ReviewQueueService.approve(req.params.id, reviewer, notes);
+      if (!success) {
+        return res.status(404).json({ error: "Review item not found" });
+      }
+      res.json({ success: true, message: "Item approved and applied to active registry." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to approve review item" });
     }
-    res.json({ success: true, message: "Item approved and applied to active registry." });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to approve review item" });
   }
-});
-router12.post("/monitor/review-queue/:id/reject", (req, res) => {
-  try {
-    const { reviewer, reason } = req.body;
-    const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
-    if (!success) {
-      return res.status(404).json({ error: "Review item not found" });
+);
+router12.post(
+  "/monitor/review-queue/:id/reject",
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { reviewer, reason } = req.body;
+      const success = ReviewQueueService.reject(req.params.id, reviewer, reason);
+      if (!success) {
+        return res.status(404).json({ error: "Review item not found" });
+      }
+      res.json({ success: true, message: "Item rejected." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reject review item" });
     }
-    res.json({ success: true, message: "Item rejected." });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to reject review item" });
   }
-});
-router12.post("/monitor/review-queue/:id/adjust", (req, res) => {
-  try {
-    const { adjustedData, reviewer, notes } = req.body;
-    const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
-    if (!success) {
-      return res.status(404).json({ error: "Review item not found" });
+);
+router12.post(
+  "/monitor/review-queue/:id/adjust",
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { adjustedData, reviewer, notes } = req.body;
+      const success = ReviewQueueService.adjustAndApprove(req.params.id, adjustedData, reviewer, notes);
+      if (!success) {
+        return res.status(404).json({ error: "Review item not found" });
+      }
+      res.json({ success: true, message: "Item adjusted and approved." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to adjust review item" });
     }
-    res.json({ success: true, message: "Item adjusted and approved." });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to adjust review item" });
   }
-});
-router12.post("/monitor/review-queue/:id/false-positive", (req, res) => {
-  try {
-    const { notes } = req.body;
-    const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
-    if (!success) {
-      return res.status(404).json({ error: "Review item not found" });
+);
+router12.post(
+  "/monitor/review-queue/:id/false-positive",
+  authenticateToken,
+  requireAdmin,
+  (req, res) => {
+    try {
+      const { notes } = req.body;
+      const success = ReviewQueueService.markFalsePositive(req.params.id, notes);
+      if (!success) {
+        return res.status(404).json({ error: "Review item not found" });
+      }
+      res.json({ success: true, message: "Item marked as false positive." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark false positive" });
     }
-    res.json({ success: true, message: "Item marked as false positive." });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to mark false positive" });
   }
-});
+);
 router12.get("/monitor/alerts", (req, res) => {
   try {
     const alerts = NotificationAlertService.getAlertsHistory();
@@ -37715,9 +38000,9 @@ var USER_SITUATIONS = [
   },
   {
     id: "conversao_advertencia",
-    title: "Convers\xE3o em Advert\xEAncia (0 Reais de Multa)",
-    subtitle: "Art. 267 do CTB (Lei 14.071/20). Isen\xE7\xE3o total de pagamento e 0 pontos na CNH para infra\xE7\xF5es leves ou m\xE9dias.",
-    badge: "100% Isen\xE7\xE3o",
+    title: "Convers\xE3o em Advert\xEAncia por Escrito",
+    subtitle: "Art. 267 do CTB (Lei 14.071/2020). Convers\xE3o em advert\xEAncia por escrito quando a infra\xE7\xE3o for leve ou m\xE9dia e n\xE3o houver reincid\xEAncia em 12 meses.",
+    badge: "Art. 267 CTB",
     mappedProcedure: "conversao_advertencia",
     inferredStage: "conversao_advertencia",
     defaultInfractionCategory: "conversao_advertencia"
@@ -37782,7 +38067,7 @@ var USER_PROCESS_STAGES = [
   {
     id: "conversao_advertencia",
     title: "Quero converter em Advert\xEAncia por Escrito",
-    subtitle: "Direito subjetivo para condutores sem reincid\xEAncia no \xFAltimo ano (Art. 267 CTB).",
+    subtitle: "Convers\xE3o em advert\xEAncia por escrito para condutores sem reincid\xEAncia no \xFAltimo ano (Art. 267 CTB).",
     badge: "Art. 267 CTB",
     mappedProcedure: "conversao_advertencia"
   },

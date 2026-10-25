@@ -328,7 +328,7 @@ function inferExpectedPrefix(argId: string, dataGaps?: CaseAnalysis['dataGaps'])
   // Heurística baseada no ID da tese
   if (argId === 'ARG-001') return 'VENCIDO'; // precisa inmetroAferitionDate
   if (argId === 'ARG-002') return 'AUSENCIA'; // precisa hasR19SignageProof
-  if (argId === 'ARG-005') return 'VALIDADO'; // precisa speed data
+  if (argId === 'ARG-005') return 'SEM_DADOS'; // validação aritmética requer 3 valores de velocidade — não assumir VALIDADO sem detecção explícita
   if (argId === 'ARG-051') return 'ATENDIDO'; // precisa hasPreviousInfractionsLast12Months
   return 'UNKNOWN';
 }

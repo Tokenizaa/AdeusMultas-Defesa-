@@ -3,10 +3,13 @@ import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, type AuthenticatedUser } from '../middleware';
+import { recordAuditLog } from './audit';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { computeDefenseIntegrityHash, hasValidDefenseIntegrity } from '../defense-integrity';
 import { analyzeInfractionCompat, generateDefenseDraftCompat } from '../rag-adapter';
 import { runCanonicalQualityGate } from '../quality-gate';
+
+const DOCUMENTS_BUCKET = 'case-documents';
 
 const isCanonicalUserId = (value: string | undefined): boolean =>
   typeof value === 'string' &&
@@ -310,6 +313,85 @@ casesRoutes.get('/cases/:id', authenticateToken, async (c) => {
   return c.json(domain);
 });
 
+// GET /api/cases/:id/export — DSAR: todos os dados pessoais do titular do caso
+// Formato estruturado JSON, inclui case, payment_orders e documents (metadados).
+// A trilha de auditoria da exportação é mantida (prova de conformidade).
+casesRoutes.get('/cases/:id/export', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const user = c.get('user');
+  const caseId = c.req.param('id');
+
+  const { data: row, error: readError } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', caseId)
+    .maybeSingle();
+  if (readError) throw new HTTPException(500, { message: 'Erro ao consultar caso para exportação.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
+  if (!canAccessCase(user, row)) {
+    throw new HTTPException(403, { message: 'Você não tem permissão para exportar este caso.' });
+  }
+
+  const [{ data: payments }, { data: documents }] = await Promise.all([
+    supabase.from('payment_orders').select('*').eq('case_id', caseId).order('created_at', { ascending: true }),
+    supabase
+      .from('documents')
+      .select('id,service_type,status,storage_path,mime_type,size_bytes,content_hash,generated_at,created_at')
+      .eq('case_id', caseId)
+      .order('created_at', { ascending: true }),
+  ]);
+
+  const exportedAt = new Date().toISOString();
+  const exportData = {
+    caseId,
+    exportedAt,
+    format: 'json',
+    legalBasis: 'LGPD Art. 18, II — direito de acesso aos dados pessoais',
+    dataController: 'DefesAi (Encarregado/DPO: dpo@defesai.com.br)',
+    note: 'Este export contém todos os dados pessoais do titular presentes nesta plataforma. '
+      + 'Dados de pagamento processados pelo gateway (VenoPag/PagBank) permanecem sob responsabilidade do gateway.',
+    case: rowToDomain(row),
+    paymentOrders: (payments || []).map((p: any) => ({
+      id: p.id,
+      gateway: p.gateway,
+      amount: p.amount,
+      finalAmount: p.final_amount,
+      currency: p.currency,
+      status: p.status,
+      paymentMethod: p.payment_method,
+      gatewayTransactionId: p.gateway_transaction_id,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    })),
+    documents: (documents || []).map((d: any) => ({
+      id: d.id,
+      serviceType: d.service_type,
+      status: d.status,
+      mimeType: d.mime_type,
+      sizeBytes: d.size_bytes,
+      contentHash: d.content_hash,
+      generatedAt: d.generated_at,
+      createdAt: d.created_at,
+      downloadUrl: d.storage_path ? `${c.env.APP_URL ?? ''}/api/documents/${d.id}` : null,
+    })),
+  };
+
+  await recordAuditLog(c.env, {
+    actor: user.id,
+    actorRole: user.role,
+    action: 'case.exported',
+    targetResource: 'cases',
+    targetId: caseId,
+    details: { exportedAt, recordCount: { payments: (payments || []).length, documents: (documents || []).length } },
+    correlationId: c.req.header('x-request-id') ?? null,
+    gdprCompliant: true,
+  });
+
+  c.header('Content-Type', 'application/json; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="dados-caso-${caseId}.json"`);
+  return c.json(exportData, 200);
+});
+
 // POST /api/cases — cria caso
 casesRoutes.post('/cases', authenticateToken, async (c) => {
   const user = c.get('user')!;
@@ -370,43 +452,171 @@ casesRoutes.put('/cases/:id', authenticateToken, async (c) => {
   return c.json(rowToDomain(data));
 });
 
-// DELETE /api/cases/:id — anonimiza (LGPD)
-casesRoutes.delete('/cases/:id', authenticateToken, async (c) => {
-  const supabase = createSupabaseAdminClient(c.env);
-  const { data: row } = await supabase.from('cases').select('*').eq('id', c.req.param('id')).maybeSingle();
-  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
+// ---------------------------------------------------------------------------
+// Exclusão real de dados pessoais (LGPD Art. 18, VI — eliminação)
+//
+// O DELETE remove completamente o caso e seus dependentes diretos:
+//   - linha de cases (todos os campos de identificação: nome, CPF, telefone,
+//     e-mail, placa, AIT, dados do veículo, requerente, minuta, análise,
+//     timeline, JSONs)
+//   - documentos gerados (linha da tabela documents + arquivo no bucket
+//     case-documents do Supabase Storage)
+//   - payment_orders vinculados (reconciliação interna; o registro fiscal
+//     definitivo permanece no gateway de pagamento — VenoPag/PagBank — que é
+//     quem detém a obrigação legal de retenção de transações financeiras)
+//
+// A tabela audit_logs NÃO é excluída: a trilha de auditoria da própria
+// exclusão é a prova de conformidade e não é um dado pessoal do titular a ser
+// apagado a pedido.
+// ---------------------------------------------------------------------------
 
-  const user = c.get('user');
-  if (!canAccessCase(user, row)) {
-    throw new HTTPException(403, { message: 'Você não tem permissão para acessar este caso' });
+async function purgeCaseDependencies(supabase: ReturnType<typeof createSupabaseAdminClient>, caseId: string): Promise<void> {
+  // 1. Documentos: remover arquivos do storage, depois as linhas da tabela.
+  const { data: documents } = await supabase
+    .from('documents')
+    .select('id,storage_path')
+    .eq('case_id', caseId);
+  const storagePaths = (documents || []).map((d: any) => d.storage_path).filter(Boolean);
+  if (storagePaths.length) {
+    try {
+      await supabase.storage.from(DOCUMENTS_BUCKET).remove(storagePaths);
+    } catch (err) {
+      // O storage indisponível não impede a exclusão dos dados pessoais no DB;
+      // o fato é registrado e o arquivo órfão é limpo por política de retenção.
+      console.error(`[purge] storage.remove falhou para caso ${caseId}`, err);
+    }
+  }
+  if ((documents || []).length) {
+    const { error: docsError } = await supabase.from('documents').delete().eq('case_id', caseId);
+    if (docsError) throw new HTTPException(500, { message: 'Falha ao excluir documentos vinculados ao caso.' });
   }
 
-  const anonymized = {
-    client_name: '[REMOVIDO]',
-    client_email: null,
-    client_phone: null,
-    client_cpf: null,
-    user_id: null,
-    applicant_json: null,
-    defense_draft_json: null,
-    analysis_json: null,
-    evidence_json: null,
-    ocr_auxiliary_json: null,
-    timeline_json: null,
-    claim_token: null,
-    commercial_offer_id: null,
-    formal_flaws_json: null,
-    protocol_info_json: null,
-    real_driver_name: null,
-    real_driver_cpf: null,
-    real_driver_cnh: null,
-    cellphone_circumstance: null,
-    updated_at: new Date().toISOString(),
-  };
+  // 2. Payment orders: exclusão da reconciliação interna.
+  const { error: payError } = await supabase.from('payment_orders').delete().eq('case_id', caseId);
+  if (payError) throw new HTTPException(500, { message: 'Falha ao excluir ordens de pagamento vinculadas ao caso.' });
+}
 
-  const { error } = await supabase.from('cases').update(anonymized).eq('id', c.req.param('id'));
+// Exclusão autenticada (dono do caso ou admin).
+casesRoutes.delete('/cases/:id', authenticateToken, async (c) => {
+  const supabase = createSupabaseAdminClient(c.env);
+  const user = c.get('user');
+  const caseId = c.req.param('id');
+
+  const { data: row, error: readError } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', caseId)
+    .maybeSingle();
+  if (readError) throw new HTTPException(500, { message: 'Erro ao consultar caso para exclusão.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado' });
+  if (!canAccessCase(user, row)) {
+    throw new HTTPException(403, { message: 'Você não tem permissão para excluir este caso.' });
+  }
+
+  await purgeCaseDependencies(supabase, caseId);
+
+  const { error } = await supabase.from('cases').delete().eq('id', caseId);
   if (error) throw new HTTPException(400, { message: error.message });
-  return c.json({ success: true, message: 'Dados pessoais removidos. Caso retido para conformidade legal.' });
+
+  // Verificação de eliminação completa: o caso não deve mais ser recuperável.
+  const { data: after } = await supabase.from('cases').select('id').eq('id', caseId).maybeSingle();
+  if (after) {
+    throw new HTTPException(500, { message: 'A exclusão não foi confirmada; o caso ainda persiste.' });
+  }
+
+  await recordAuditLog(c.env, {
+    actor: user.id,
+    actorRole: user.role,
+    action: 'case.deleted',
+    targetResource: 'cases',
+    targetId: caseId,
+    details: {
+      deletedAt: new Date().toISOString(),
+      scope: 'full_deletion',
+      dependenciesPurged: ['documents', 'payment_orders', 'cases'],
+      legalBasis: 'LGPD Art. 18, VI — eliminação de dados pessoais',
+    },
+    correlationId: c.req.header('x-request-id') ?? null,
+    gdprCompliant: true,
+  });
+
+  return c.json({
+    success: true,
+    message: 'Caso e dados pessoais excluídos completamente de todos os sistemas da plataforma.',
+    deletedAt: new Date().toISOString(),
+    caseId,
+  });
+});
+
+// Exclusão anônima autenticada por claim_token (sem login).
+// O titular anônimo pode solicitar a eliminação do próprio caso usando o token
+// de alta entropia emitido na criação do caso anônimo.
+casesRoutes.delete('/cases/anonymous/:id', async (c) => {
+  const ipAddress = c.req.header('cf-connecting-ip');
+  const limiter = c.env.ANONYMOUS_CASE_LIMITER;
+  if (!ipAddress || !limiter) {
+    throw new HTTPException(503, { message: 'Exclusão anônima temporariamente indisponível.' });
+  }
+  const { success } = await limiter.limit({ key: `delete-anon:${ipAddress}` });
+  if (!success) {
+    c.header('Retry-After', '60');
+    throw new HTTPException(429, { message: 'Limite temporário de exclusão anônima atingido.' });
+  }
+
+  const body = await c.req.json<any>().catch(() => null);
+  const providedToken = body?.claimToken;
+  if (typeof providedToken !== 'string' || !/^[a-f0-9]{64}$/i.test(providedToken)) {
+    // Resposta indistinguível de "não encontrado" para não revelar existência.
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const caseId = c.req.param('id');
+
+  const { data: row, error: readError } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', caseId)
+    .eq('is_anonymous', true)
+    .is('user_id', null)
+    .maybeSingle();
+  if (readError) throw new HTTPException(503, { message: 'Não foi possível consultar o caso.' });
+  if (!row || !claimTokensMatch(providedToken, row.claim_token)) {
+    throw new HTTPException(404, { message: 'Caso não encontrado ou token inválido.' });
+  }
+
+  await purgeCaseDependencies(supabase, caseId);
+
+  const { error } = await supabase.from('cases').delete().eq('id', caseId);
+  if (error) throw new HTTPException(400, { message: error.message });
+
+  const { data: after } = await supabase.from('cases').select('id').eq('id', caseId).maybeSingle();
+  if (after) {
+    throw new HTTPException(500, { message: 'A exclusão não foi confirmada; o caso ainda persiste.' });
+  }
+
+  await recordAuditLog(c.env, {
+    actor: 'anonymous:claim_token',
+    actorRole: null,
+    action: 'case.deleted.anonymous',
+    targetResource: 'cases',
+    targetId: caseId,
+    details: {
+      deletedAt: new Date().toISOString(),
+      scope: 'full_deletion',
+      dependenciesPurged: ['documents', 'payment_orders', 'cases'],
+      legalBasis: 'LGPD Art. 18, VI — eliminação de dados pessoais (titular anônimo)',
+    },
+    correlationId: c.req.header('x-request-id') ?? null,
+    gdprCompliant: true,
+  });
+
+  return c.json({
+    success: true,
+    message: 'Caso anônimo e dados pessoais excluídos completamente.',
+    deletedAt: new Date().toISOString(),
+    caseId,
+  });
 });
 
 // POST /api/cases/:id/claim — vincula caso anônimo ao usuário

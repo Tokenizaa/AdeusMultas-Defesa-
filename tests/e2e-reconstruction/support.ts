@@ -44,7 +44,7 @@ export async function createCaseThroughAnalysis(page: Page, label: string, servi
   await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
   const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/cases/anonymous', { timeout: 45_000 });
   await page.locator('#btn-run-analysis').click();
-  await expect(page.getByText('Analisando sua autuação com Inteligência Jurídica')).toBeVisible();
+  await expect(page.getByText('Estamos conferindo a sua autuação')).toBeVisible();
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   const body = await response.json();

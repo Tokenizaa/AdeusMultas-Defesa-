@@ -385,7 +385,7 @@ export async function runTextAudit(page: Page, config: TextAuditConfig): Promise
     await page.waitForTimeout(500); // dá tempo do step aparecer
     const processing = await captureProcessingText(page);
     
-    await expect(page.getByText('Analisando sua autuação com Inteligência Jurídica')).toBeVisible();
+    await expect(page.getByText('Estamos conferindo a sua autuação')).toBeVisible();
     const response = await responsePromise;
     expect(response.status()).toBe(201);
     

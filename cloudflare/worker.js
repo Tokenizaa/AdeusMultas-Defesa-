@@ -23,6 +23,7 @@ import { commercialRoutes } from './routes/commercial'
 import { documentsRoutes } from './routes/documents'
 
 import { runMonitorCycle, initializeMonitor } from '../src/core/knowledge/scheduler/monitor-runtime'
+import { runRetention } from './retention'
 
 const app = new Hono()
 app.use('*', secureHeaders())
@@ -116,8 +117,11 @@ export default {
     // Inicializa o monitor se ainda não estiver (idempotente)
     initializeMonitor(false);
     // Executa um ciclo de monitoramento sob demanda do cron do Cloudflare.
-    // ctx.waitUntil garante que o Worker não seja encerrado antes da conclusão.
     ctx.waitUntil(runMonitorCycle(undefined, 6000));
+
+    // Executa o job automatizado de retenção de dados pessoais (LGPD Art. 18, VI).
+    // Roda no cron semanal (0 0 * * 1) configurado no wrangler.jsonc.
+    ctx.waitUntil(runRetention(env, 'cron', 'system:cron'));
   },
 };
 export { app };

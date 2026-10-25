@@ -81,7 +81,8 @@ function simulatedOrder(params: PixOrderParams): PixOrderResult {
 export interface PagBankWebhookPayload {
   id?: string;
   reference_id?: string;
-  charges?: Array<{ status?: string; reference_id?: string; payment_method?: { type?: string } }>;
+  amount?: number;
+  charges?: Array<{ status?: string; reference_id?: string; amount?: number; net_amount?: number; payment_method?: { type?: string } }>;
 }
 
 export interface WebhookProcessResult {

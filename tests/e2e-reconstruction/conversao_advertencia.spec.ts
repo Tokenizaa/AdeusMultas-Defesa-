@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, baseURL, runId, type CanonicalService } from './support';
+import { runTextAudit, assertTextAudit } from './text-audit-runner';
 const service: CanonicalService = {
   "id": "conversao_advertencia",
   "situationId": "conversao_advertencia",
@@ -117,5 +118,75 @@ test.describe('conversao_advertencia — dez cenários canônicos', () => {
     await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
     await page.getByRole('button', { name: /Voltar à identificação/i }).click();
     expect(requests).toHaveLength(0);
+  });
+
+  // ==========================================
+  // Auditoria Textual (Onda 5+)
+  // ==========================================
+  
+  test('E2E-CONVERSAO_ADVERTENCIA-11 auditoria textual: infraestrutura captura entrada → API → UI → validação', async ({page}) => {
+    const evidence = await runTextAudit(page, {
+      service,
+      runId: 'e2e-text-audit',
+      specificAnswers: {
+        // conversao_advertencia — dados básicos
+        hasPreviousInfractionsLast12Months: false,
+      },
+      saveEvidence: true,
+      outputDir: 'artifacts/text-audit',
+      expectFullFlow: false,
+    });
+    
+    expect(evidence.metadata.status).not.toBe('blocked');
+    expect(evidence.apiResponse.caseId).toBeTruthy();
+    expect(evidence.apiResponse.claimToken).toBeTruthy();
+    expect(evidence.apiResponse.analysis).toBeDefined();
+    
+    const analysis = evidence.apiResponse.analysis;
+    expect(analysis.recommendedProcedure).toBe(service.procedure);
+    expect(typeof analysis.overallSuccessRate).toBe('number');
+    expect(Array.isArray(analysis.recommendedArguments)).toBe(true);
+    expect(Array.isArray(analysis.dataGaps)).toBe(true);
+    expect(analysis.dataCompleteness).toBeDefined();
+    
+    const rt = evidence.renderedText;
+    expect(rt.identification.labels.length).toBeGreaterThan(0);
+    expect(rt.specificQuestions.questions.length).toBeGreaterThan(0);
+    expect(rt.analysisResult.header.title).toContain('diagnóstico');
+    expect(typeof rt.analysisResult.strengthIndicator.rate === 'number' || rt.analysisResult.strengthIndicator.rate === null).toBe(true);
+    expect(Array.isArray(rt.analysisResult.summaryCards)).toBe(true);
+    expect(Array.isArray(rt.analysisResult.nextSteps)).toBe(true);
+    
+    assertTextAudit(evidence, { failOnWarning: false });
+  });
+
+  test('E2E-CONVERSAO_ADVERTENCIA-12 auditoria textual: forbidden patterns detection', async ({page}) => {
+    const evidence = await runTextAudit(page, {
+      service,
+      runId: 'e2e-text-audit',
+      specificAnswers: {
+        hasPreviousInfractionsLast12Months: false,
+      },
+      saveEvidence: true,
+      outputDir: 'artifacts/text-audit',
+      expectFullFlow: false,
+    });
+    
+    const { comparison } = evidence;
+    
+    if (comparison.forbiddenPatterns.length > 0) {
+      console.log('Padrões proibidos detectados:', comparison.forbiddenPatterns.map(f => `${f.pattern}: ${f.foundIn}`));
+    }
+    
+    expect(evidence.metadata.status).not.toBe('blocked');
+  });
+
+  test('E2E-CONVERSAO_ADVERTENCIA-13 navegação: permite voltar do resultado para corrigir respostas', async ({page}) => {
+    await openService(page, service);
+    await createCaseThroughAnalysis(page, 'result-back-navigation', service);
+    await expect(page.getByRole('heading', { name: 'Resultado do seu diagnóstico' })).toBeVisible();
+    await page.locator('#btn-back-to-edit-diagnosis').click();
+    await expect(page.getByText('Perguntas Específicas do Seu Caso')).toBeVisible();
+    await expect(page.locator('#btn-run-analysis')).toBeVisible();
   });
 });

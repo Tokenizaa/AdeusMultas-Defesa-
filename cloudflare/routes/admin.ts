@@ -2,6 +2,13 @@ import { Hono } from 'hono';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
 import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
+import {
+  getRetentionPolicies,
+  updateRetentionPolicy,
+  getRetentionExecutions,
+  runRetention,
+} from '../retention';
+import { recordAuditLog } from './audit';
 
 const AI_MODEL = '@cf/openai/gpt-oss-20b';
 const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
@@ -246,6 +253,79 @@ adminRoutes.get('/admin/documents', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
   const { data } = await supabase.from('cases').select('id,title,client_name,service_type,status,defense_draft_json,created_at').not('defense_draft_json', 'is', null).order('created_at', { ascending: false }).limit(200);
   return c.json({ documents: (data || []).map((d: any) => ({ id: d.id, title: d.title, clientName: d.client_name, serviceType: d.service_type, status: d.status, hasDraft: Boolean(d.defense_draft_json), createdAt: d.created_at })) });
+});
+
+// ---------------------------------------------------------------------------
+// Políticas de retenção de dados pessoais (LGPD)
+// Somente administradores. Define por quanto tempo cada categoria de dado
+// é mantida antes da exclusão automática, com base legal documentada.
+// ---------------------------------------------------------------------------
+
+// GET /admin/retention/policy — lista políticas de retenção
+adminRoutes.get('/admin/retention/policy', async (c) => {
+  const policies = await getRetentionPolicies(c.env);
+  return c.json({ policies });
+});
+
+// PUT /admin/retention/policy/:category — atualiza política de retenção
+adminRoutes.put('/admin/retention/policy/:category', async (c) => {
+  const user = c.get('user');
+  if (!user || user.role !== 'admin') {
+    return c.json({ error: { code: 'FORBIDDEN', message: 'Acesso restrito a administradores' } }, 403);
+  }
+  const category = c.req.param('category');
+  const body = await c.req.json<any>().catch(() => ({}));
+  const allowed = new Set([
+    'retention_days',
+    'description',
+    'legal_basis',
+    'legal_basis_article',
+    'applies_to_anonymous',
+    'applies_to_authenticated',
+    'hard_delete_after_days',
+  ]);
+  const fields: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in body) fields[key] = body[key];
+  }
+  if (Object.keys(fields).length === 0) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Nenhum campo válido para atualização.' } }, 400);
+  }
+  if (fields.retention_days !== undefined && (!Number.isFinite(Number(fields.retention_days)) || Number(fields.retention_days) <= 0)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'retention_days deve ser um inteiro positivo.' } }, 400);
+  }
+  if (fields.hard_delete_after_days !== undefined && fields.hard_delete_after_days !== null && (!Number.isFinite(Number(fields.hard_delete_after_days)) || Number(fields.hard_delete_after_days) <= 0)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'hard_delete_after_days deve ser um inteiro positivo ou null.' } }, 400);
+  }
+  const updated = await updateRetentionPolicy(c.env, category, fields as any, user.id);
+  await recordAuditLog(c.env, {
+    actor: user.id,
+    actorRole: user.role,
+    action: 'retention.policy.updated',
+    targetResource: 'data_retention_policies',
+    targetId: category,
+    details: { category, updatedFields: Object.keys(fields), legalBasis: 'LGPD Art. 6º, II e Art. 18, VI' },
+    correlationId: c.req.header('x-request-id') ?? null,
+    gdprCompliant: true,
+  });
+  return c.json({ success: true, policy: updated });
+});
+
+// POST /admin/retention/run — executa job de retenção manualmente
+adminRoutes.post('/admin/retention/run', async (c) => {
+  const user = c.get('user');
+  if (!user || user.role !== 'admin') {
+    return c.json({ error: { code: 'FORBIDDEN', message: 'Acesso restrito a administradores' } }, 403);
+  }
+  const result = await runRetention(c.env, 'manual', user.id);
+  return c.json({ success: result.status === 'completed', result });
+});
+
+// GET /admin/retention/executions — histórico de execuções de retenção
+adminRoutes.get('/admin/retention/executions', async (c) => {
+  const limit = Math.min(Number(c.req.query('limit') || 50), 500);
+  const executions = await getRetentionExecutions(c.env, limit);
+  return c.json({ executions });
 });
 
 export default adminRoutes;

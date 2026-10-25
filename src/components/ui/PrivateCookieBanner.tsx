@@ -39,7 +39,16 @@ export const PrivateCookieBanner: React.FC = () => {
               <span>Privacidade e Proteção de Dados (LGPD — Lei nº 13.709/2018)</span>
             </h4>
             <p className="text-sm text-orange-300 leading-relaxed">
-              Utilizamos cookies e tecnologias similares estritamente essenciais para garantir a segurança da sessão, acessibilidade e a correta geração das defesas de trânsito.
+              Utilizamos cookies e tecnologias similares estritamente essenciais para garantir a
+              segurança da sessão, acessibilidade e a correta geração das defesas de trânsito.
+              {' '}
+              <a
+                href="/politica-de-privacidade"
+                className="text-orange-100 hover:underline underline-offset-1"
+              >
+                Leia nossa Política de Privacidade (LGPD)
+              </a>
+              .
             </p>
           </div>
         </div>

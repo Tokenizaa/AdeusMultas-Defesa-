@@ -12,7 +12,7 @@ import { RouterProvider } from '../../core/router/RouterContext';
 // inicializadores lazy de useState, que rodam durante renderToString. Shimamos
 // o mínimo necessário para que a renderização decorra sem rede nem DOM real.
 // ---------------------------------------------------------------------------
-const originalWindow = globalThis.window as unknown as Window | undefined;
+const originalWindow = (globalThis as any).window;
 
 const mockLocation = {
   pathname: '/checkout/case-pix-only-1',
@@ -39,11 +39,11 @@ beforeAll(() => {
       clear: () => undefined,
     },
     navigator: { clipboard: { writeText: () => Promise.resolve() } },
-  } as unknown as Window;
+  } as any;
 });
 
 afterAll(() => {
-  globalThis.window = originalWindow;
+  (globalThis as any).window = originalWindow;
 });
 
 const currentCase = {

@@ -9,11 +9,23 @@ const h = vi.hoisted(() => {
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
   const select = vi.fn(() => ({ eq }));
   const update = vi.fn(() => ({ eq: vi.fn(() => ({ neq: updateNeq })) }));
-  const from = vi.fn(() => ({ select, update, insert: insertChain }));
+  const from = vi.fn((table) => {
+    if (table === 'webhook_events') {
+      return {
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockResolvedValue({ data: null, error: null }),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    }
+    return { select, update, insert: insertChain };
+  });
+  const rpc = vi.fn().mockResolvedValue({ data: { ok: true, status: 'confirmed', payment_id: 'order-1' }, error: null });
   return {
-    transitioned, updateNeq, eq, maybeSingle, single, insertChain, select, update, from,
+    transitioned, updateNeq, eq, maybeSingle, single, insertChain, select, update, from, rpc,
     config: {
-      createSupabaseAdminClient: vi.fn(() => ({ from })),
+      createSupabaseAdminClient: vi.fn(() => ({ from, rpc })),
     },
     pixOrder: { orderId: 'order-pix-1', gatewayTransactionId: 'tx-pix-1', status: 'aguardando_pagamento', pixCopyPaste: '000201...', qrCodeUrl: 'https://qr.example/pix.png', simulated: false },
     cardOrder: { orderId: 'order-card-1', referenceId: 'defesai_case_case-1', status: 'aguardando_pagamento', simulated: false },
@@ -36,6 +48,10 @@ vi.mock('../venopag', async () => {
   const actual = await vi.importActual<any>('../venopag');
   return {
     ...actual,
+    createVenoCashIn: vi.fn().mockResolvedValue({
+      ok: true, status: 'pending', amount: 100, request_number: 'veo_test_123',
+      transaction_id: 'tx_123', copyPaste: '000201venopag', qr_url: 'https://venopagments.com/qr', qr_img: 'cG5n',
+    }),
     getVenoCashInStatus: vi.fn(),
     verifyVenoWebhook: vi.fn(),
   };

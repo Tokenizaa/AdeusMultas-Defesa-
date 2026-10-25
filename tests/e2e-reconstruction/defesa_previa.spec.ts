@@ -160,8 +160,9 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     const rt = evidence.renderedText;
     expect(rt.identification.labels.length).toBeGreaterThan(0);
     expect(rt.specificQuestions.questions.length).toBeGreaterThan(0);
-    expect(rt.analysisResult.header.title).toContain('Diagnóstico');
-    expect(rt.analysisResult.strengthIndicator.rate).toBeGreaterThanOrEqual(0);
+    expect(rt.analysisResult.header.title).toContain('diagnóstico');
+    // strengthIndicator.rate pode ser null quando indisponível
+    expect(typeof rt.analysisResult.strengthIndicator.rate === 'number' || rt.analysisResult.strengthIndicator.rate === null).toBe(true);
     expect(Array.isArray(rt.analysisResult.summaryCards)).toBe(true);
     expect(Array.isArray(rt.analysisResult.nextSteps)).toBe(true);
     

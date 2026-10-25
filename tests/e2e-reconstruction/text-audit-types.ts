@@ -341,6 +341,17 @@ export const FORBIDDEN_PATTERNS: ForbiddenPatternRule[] = [
     allowedContexts: [],
   },
   {
+    pattern: /100% de direito|100% direito|100% de êxito|100% êxito/gi,
+    description: 'Reclamação categórica de direito ou êxito garantido — não é isenção automática nem resultado garantido',
+    severity: 'error',
+    allowedContexts: [
+      {
+        description: 'Disclaimer explícito "não é garantido" ou "depende do órgão"',
+        check: (ctx) => /não é garantido|não é automático|depende do órgão|se confirmado/i.test(ctx),
+      },
+    ],
+  },
+  {
     pattern: /\[object Object\]|undefined|null(?!\s*(?:como|valor|dado))/gi,
     description: 'Valores técnicos vazados na UI',
     severity: 'error',
