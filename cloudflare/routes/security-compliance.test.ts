@@ -25,7 +25,7 @@ vi.mock('../supabase', () => ({
 }));
 
 function app() {
-  const app = new Hono<{ Bindings: any; Variables: { user?: { id: string; role: string; email: string } } }>();
+  const app = new Hono<{ Bindings: any; Variables: { user?: { id: string; role: string; email: string; name?: string }; rawToken?: string } }>();
   app.get('/private', authenticateToken, (c) => c.json({ user: c.get('user') }));
   app.get('/admin', authenticateToken, requireAdmin, (c) => c.json({ ok: true }));
   return app;
