@@ -9,10 +9,18 @@ const h = vi.hoisted(() => {
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
   const select = vi.fn(() => ({ eq }));
-  const update = vi.fn(() => ({ eq: vi.fn(() => ({ neq: updateNeq })) }));
+  const update = vi.fn(() => ({
+    eq: vi.fn(() => ({
+      neq: updateNeq,
+      select: vi.fn(() => ({ single })),
+    })),
+  }));
   const from = vi.fn((table) => {
     if (table === 'cases') {
-      return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: caseMaybeSingle })) })) };
+      return {
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: caseMaybeSingle })) })),
+        update,
+      };
     }
     if (table === 'webhook_events') {
       return {
@@ -97,7 +105,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('resolves the offer through the domain service using the authenticated user', async () => {
-    const response = await app().request('/api/payments/resolve-price?serviceType=defesa_previa&userId=attacker');
+    const response = await app().request('/api/payments/resolve-price?serviceType=defesa_previa&userId=attacker', {}, {} as any);
     expect(response.status).toBe(200);
     const resolver = (await import('./commercial')).resolveOffer;
     expect(vi.mocked(resolver)).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ serviceType: 'defesa_previa', userId: 'user-1' }));
@@ -344,7 +352,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
     h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'PAID', paid_at: new Date().toISOString() }, error: null });
     const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test' } as any;
-    const payload = JSON.stringify({ id: 'evt-1', reference_id: 'defesai_case_case-1', charges: [{ status: 'PAID' }] });
+    const payload = JSON.stringify({ id: 'evt-1', reference_id: 'defesai_case_case-1', charges: [{ status: 'PAID', amount: 100 }] });
 
     const first = await app().request('/api/webhooks/pagbank', { method: 'POST', headers: { 'content-type': 'application/json', 'x-authenticity-token': 'valid' }, body: payload }, env);
     expect(first.status).toBe(200);
