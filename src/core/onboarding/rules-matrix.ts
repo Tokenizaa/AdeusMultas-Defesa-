@@ -16,7 +16,9 @@ export type UserSituation =
   | 'suspensao_cnh'
   | 'cassacao_cnh'
   | 'indicacao_condutor'
-  | 'conversao_advertencia';
+  | 'conversao_advertencia'
+  | 'defesa_previa'
+  | 'recurso_cetran';
 
 export type UserProcessStage =
   | 'primeira_notificacao'       // Notificação de Autuação (Defesa Prévia)
