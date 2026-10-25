@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { commercialRoutes } from './commercial';
 
+vi.mock('../middleware', () => ({
+  authenticateToken: async (_c: any, next: any) => next(),
+  requireAdmin: async (_c: any, next: any) => next(),
+}));
+
 describe('commercial Cloudflare routes', () => {
   function app() {
     const app = new Hono<any>();

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../supabase';
 import { createSupabaseAdminClient } from '../supabase';
+import { authenticateToken, type AuthenticatedUser } from '../middleware';
 import { adapterError, adapterOk } from '../../src/shared/api/adapters';
 
 const routes = new Hono<{ Bindings: Env }>();
@@ -115,11 +116,13 @@ async function resolveOffer(env: Env, input: {
 
 routes.get('/offers/health', async (c) => adapterOk(c, { provider: 'cloudflare-supabase', route: 'commercial-offers' }));
 
-routes.post('/offers/resolve', async (c) => {
+routes.post('/offers/resolve', authenticateToken, async (c) => {
   try {
-    const body = await c.req.json<{ serviceType: string; stageId?: string | null; userId?: string; documentCount?: number; couponCode?: string }>();
+    const user = c.get('user') as AuthenticatedUser;
+    const body = await c.req.json<{ serviceType: string; stageId?: string | null; documentCount?: number; couponCode?: string }>();
     if (!body.serviceType?.trim()) return adapterError(c, 'VALIDATION_ERROR', 'serviceType é obrigatório', 400);
-    const result = await resolveOffer(c.env, body);
+    // O identificador do usuário vem exclusivamente do token autenticado; nunca do payload do cliente.
+    const result = await resolveOffer(c.env, { ...body, userId: user.id });
     return adapterOk(c, result);
   } catch (error) {
     console.error('[commercial] resolve failed', error instanceof Error ? error.message : String(error));
@@ -127,11 +130,18 @@ routes.post('/offers/resolve', async (c) => {
   }
 });
 
-routes.get('/payments/resolve-price', async (c) => {
+routes.get('/payments/resolve-price', authenticateToken, async (c) => {
   try {
+    const user = c.get('user') as AuthenticatedUser;
     const serviceType = c.req.query('serviceType');
     if (!serviceType?.trim()) return adapterError(c, 'VALIDATION_ERROR', 'serviceType é obrigatório', 400);
-    const result = await resolveOffer(c.env, { serviceType, userId: c.req.query('userId'), documentCount: c.req.query('documentCount') ? Number(c.req.query('documentCount')) : undefined, couponCode: c.req.query('couponCode') });
+    // O identificador do usuário vem exclusivamente do token autenticado; nunca da query string do cliente.
+    const result = await resolveOffer(c.env, {
+      serviceType,
+      userId: user.id,
+      documentCount: c.req.query('documentCount') ? Number(c.req.query('documentCount')) : undefined,
+      couponCode: c.req.query('couponCode'),
+    });
     if (!result.offer) return adapterError(c, 'NOT_FOUND', result.reason || 'Oferta não encontrada', 404);
     return adapterOk(c, { price: result.offer.finalAmount, offer: result.offer });
   } catch (error) {

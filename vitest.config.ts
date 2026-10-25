@@ -13,6 +13,7 @@ export default defineConfig({
       'src/components/checkout/checkout-pix-only.test.tsx',
       'src/components/onboarding/steps/onboarding-copy-regression.test.tsx',
       'src/server/services/marketing-automation/**/*.test.ts',
+      'cloudflare/middleware.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
       'cloudflare/defense-integrity.test.ts',
