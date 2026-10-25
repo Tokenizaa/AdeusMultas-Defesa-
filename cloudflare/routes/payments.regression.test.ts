@@ -154,7 +154,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
             })),
           };
         }
-        return { select: vi.fn(), insert: vi.fn(), update: vi.fn() };
+        return makeChain(null);
       });
 
       createVenoCashIn.mockResolvedValue({
@@ -333,7 +333,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
         body: payload,
       }, { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test', PAGBANK_TOKEN: 'tok' } as any);
       expect(res.status).toBe(409);
-      expect((await res.json() as any).error).toContain('não confere');
+      expect(await res.text()).toContain('Valor ausente, inválido ou divergente');
     });
   });
 
