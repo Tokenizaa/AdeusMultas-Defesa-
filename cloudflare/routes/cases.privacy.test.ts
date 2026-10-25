@@ -104,7 +104,7 @@ describe('GET /cases/:id/export (DSAR)', () => {
     expect(response.headers.get('content-disposition')).toContain(`dados-caso-${CASE_ID}.json`);
 
     expect(recordAuditLog).toHaveBeenCalledTimes(1);
-    const audit = (recordAuditLog as any).mock.calls[0][0];
+    const audit = (recordAuditLog as any).mock.calls[0][1];
     expect(audit.action).toBe('case.exported');
     expect(audit.actor).toBe(OWNER_ID);
     expect(audit.targetId).toBe(CASE_ID);
@@ -182,7 +182,7 @@ describe('DELETE /cases/:id — exclusão real', () => {
     expect(casesMaybeCalls).toBe(2);
 
     expect(recordAuditLog).toHaveBeenCalledTimes(1);
-    const audit = (recordAuditLog as any).mock.calls[0][0];
+    const audit = (recordAuditLog as any).mock.calls[0][1];
     expect(audit.action).toBe('case.deleted');
     expect(audit.actor).toBe(OWNER_ID);
     expect(audit.targetId).toBe(CASE_ID);
@@ -263,7 +263,7 @@ describe('DELETE /cases/anonymous/:id — exclusão via claim_token', () => {
     expect(casesMaybeCalls).toBe(2);
 
     expect(recordAuditLog).toHaveBeenCalledTimes(1);
-    const audit = (recordAuditLog as any).mock.calls[0][0];
+    const audit = (recordAuditLog as any).mock.calls[0][1];
     expect(audit.action).toBe('case.deleted.anonymous');
     expect(audit.actor).toBe('anonymous:claim_token');
   });
