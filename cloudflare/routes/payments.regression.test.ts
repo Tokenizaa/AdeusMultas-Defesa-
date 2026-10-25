@@ -37,6 +37,7 @@ vi.mock('./commercial', () => ({
 }));
 
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { paymentsRoutes } from './payments';
 import { createSupabaseAdminClient } from '../supabase';
 import { createVenoCashIn, getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
@@ -46,6 +47,7 @@ import type { Env } from '../supabase';
 function app() {
   const hono = new Hono<{ Bindings: Env }>();
   hono.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
     return c.json({ error: 'Internal Server Error', detail: String(err?.message || err) }, 500);
   });
   hono.route('/api', paymentsRoutes);
@@ -140,7 +142,16 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
                 }),
               })),
             })),
-            update: vi.fn().mockResolvedValue({ data: null, error: null }),
+            update: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: 'res-1', case_id: 'case-1', user_id: 'user-1', status: 'PENDING', amount: 100, gateway: 'venopag', payment_method: 'pix', gateway_transaction_id: 'veo_1', qr_code_text: '000201venopag', qr_code_url: 'https://venopagments.com/qr' },
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
           };
         }
         return { select: vi.fn(), insert: vi.fn(), update: vi.fn() };
