@@ -19,7 +19,7 @@ function normalizeServiceType(raw: string) {
   return PROCEDURE_TO_COMMERCIAL[key] ?? key;
 }
 
-async function resolveOffer(env: Env, input: {
+export async function resolveOffer(env: Env, input: {
   serviceType: string; stageId?: string | null; userId?: string; documentCount?: number; couponCode?: string;
 }) {
   const normalized = normalizeServiceType(input.serviceType);

@@ -66,12 +66,9 @@ vi.mock('../middleware', () => ({
 }));
 
 vi.mock('./commercial', () => ({
-  commercialRoutes: {
-    fetch: vi.fn(async () => new Response(JSON.stringify({
-      ok: true,
-      data: { offer: { serviceType: 'defesa_previa', name: 'Defesa Prévia', finalAmount: 100, baseAmount: 100 } },
-    }), { status: 200, headers: { 'content-type': 'application/json' } })),
-  },
+  resolveOffer: vi.fn(async (_env: any, input: any) => ({
+    offer: { serviceType: input.serviceType, name: 'Defesa Prévia', finalAmount: 100, baseAmount: 100 },
+  })),
 }));
 
 import { Hono } from 'hono';
@@ -95,12 +92,11 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(400);
   });
 
-  it('resolves the commercial offer through the sub-app relative path', async () => {
-    const response = await app().request('/api/payments/resolve-price?serviceType=defesa_previa');
+  it('resolves the offer through the domain service using the authenticated user', async () => {
+    const response = await app().request('/api/payments/resolve-price?serviceType=defesa_previa&userId=attacker');
     expect(response.status).toBe(200);
-    expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
-    const request = (vi.mocked((await import('./commercial')).commercialRoutes.fetch)).mock.calls.at(-1)?.[0] as Request;
-    expect(new URL(request.url).pathname).toBe('/offers/resolve');
+    const resolver = (await import('./commercial')).resolveOffer;
+    expect(vi.mocked(resolver)).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ serviceType: 'defesa_previa', userId: 'user-1' }));
   });
 
   it('reports the configured primary gateway without exposing credentials', async () => {

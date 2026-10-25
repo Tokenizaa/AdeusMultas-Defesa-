@@ -6,22 +6,18 @@ import { createSupabaseAdminClient, createSupabaseUserClient } from '../supabase
 import { authenticateToken, requireAdmin, type AuthenticatedUser } from '../middleware';
 import { rowToDomain, domainToRow } from '../canonical-mapper';
 import { createPixOrder, createCreditCardOrder, verifyWebhookSignature, type PagBankWebhookPayload } from '../pagbank';
-import { commercialRoutes } from './commercial';
+import { resolveOffer } from './commercial';
 import type { NormalizedWebhookEvent } from '../../src/server/integrations/gateway/types';
 import { createVenoCashIn, getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
 
 const routes = new Hono<{ Bindings: Env; Variables: { user?: AuthenticatedUser } }>();
 
 async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?: string, userId?: string) {
-  // `commercialRoutes` is mounted at `/api` by the worker, but its own
-  // sub-application receives paths relative to that mount. Calling it with
-  // `/api/offers/resolve` bypasses the route and makes checkout fail before
-  // any gateway request is attempted.
-  const request = new globalThis.Request('https://internal/offers/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceType, couponCode, userId }) });
-  const response = await commercialRoutes.fetch(request, env);
-  const payload = await response.json() as any;
-  if (!response.ok || !payload?.ok || !payload?.data?.offer) throw new HTTPException((response.status || 502) as ContentfulStatusCode, { message: payload?.error?.message || payload?.reason || 'Oferta comercial indisponível.' });
-  return payload.data.offer;
+  // Reutiliza o serviço de domínio diretamente. A rota HTTP /offers/resolve
+  // continua autenticada; não simulamos uma requisição interna sem Bearer token.
+  const result = await resolveOffer(env, { serviceType, couponCode, userId });
+  if (!result.offer) throw new HTTPException(404, { message: result.reason || 'Oferta comercial indisponível.' });
+  return result.offer;
 }
 
 async function persistOrder(env: Env, input: { caseId: string; userId?: string; referenceId: string; serviceType?: string; gatewayOrderId?: string; gatewayTransactionId: string; amount: number; baseAmount?: number; discountAmount?: number; couponCode?: string; status: string; gateway: string; paymentMethod?: string; qrCodeText?: string; qrCodeUrl?: string }) {
@@ -126,7 +122,12 @@ async function reserveOrFindPendingOrder(
       if (winner?.gateway_transaction_id && Number(winner.amount) === finalAmount && winner.status === 'PENDING') {
         return { order: winner, reused: true, ownsReservation: false };
       }
-      // Vencedor existe mas não está pronto (gateway em voo) ou falhou.
+      // UNIQUE(case_id) impede criar outra ordem. Se a ordem existente é terminal,
+      // não gere nova cobrança às cegas: o gateway pode liquidar uma transação antiga.
+      const terminalStatus = String(winner?.status || '').toUpperCase();
+      if (winner && ['CANCELED', 'CANCELLED', 'EXPIRED', 'FAILED', 'REFUNDED', 'CHARGEBACK'].includes(terminalStatus)) {
+        throw new HTTPException(409, { message: 'A cobrança anterior está em estado terminal. Confirme a reconciliação com o gateway antes de liberar nova tentativa; nenhuma cobrança duplicada foi criada.' });
+      }
       throw new HTTPException(409, { message: 'Cobrança já está sendo processada para este caso. Tente novamente em instantes.' });
     }
     throw insertError;
@@ -321,11 +322,12 @@ async function resolveVenoAffiliateSplits(env: Env, buyerUserId: string): Promis
   return splits;
 }
 
-routes.get('/payments/resolve-price', async (c) => {
+routes.get('/payments/resolve-price', authenticateToken, async (c) => {
   try {
     const serviceType = c.req.query('serviceType');
     if (!serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
-    const offer = await resolveCommercialOffer(c.env, serviceType, c.req.query('couponCode'), c.req.query('userId'));
+    const user = c.get('user')!;
+    const offer = await resolveCommercialOffer(c.env, serviceType, c.req.query('couponCode'), user.id);
     return c.json({ ok: true, ...offer });
   } catch (error) {
     if (error instanceof HTTPException) throw error;
@@ -578,6 +580,9 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   }
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
   if (body.amount !== undefined && Number(body.amount) !== Number(offer.finalAmount)) throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
+  const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
+  if (primaryGateway === 'venopag') throw new HTTPException(503, { message: 'Pagamento com cartão ainda não está habilitado para VenoPag. Use PIX; nenhuma cobrança foi enviada.' });
+  if (primaryGateway !== 'pagbank') throw new HTTPException(503, { message: 'Gateway de cartão não configurado para esta modalidade.' });
   if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
   let order;
   try {
@@ -617,10 +622,15 @@ routes.post('/webhooks/pagbank', async (c) => {
   const now = new Date().toISOString();
   if (status === 'PAID') {
     // Validação do valor da transação contra o valor do pedido.
-    const paidAmount = Number(charge?.amount ?? charge?.net_amount ?? payload.amount);
-    if (Number.isFinite(paidAmount) && Math.round(paidAmount * 100) !== Math.round(Number(existing.amount) * 100)) {
+    const rawPaidAmount = charge?.amount ?? charge?.net_amount ?? payload.amount;
+    const paidAmount = rawPaidAmount === null || rawPaidAmount === undefined || rawPaidAmount === ''
+      ? Number.NaN
+      : Number(rawPaidAmount);
+    const orderAmount = Number(existing.amount);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0 || !Number.isFinite(orderAmount) || orderAmount <= 0 ||
+        Math.round(paidAmount * 100) !== Math.round(orderAmount * 100)) {
       await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
-      throw new HTTPException(409, { message: 'Valor da transação não confere com o pedido.' });
+      throw new HTTPException(409, { message: 'Valor ausente, inválido ou divergente do pedido; pagamento não confirmado.' });
     }
     if (String(existing.status).toUpperCase() === 'PAID' || existing.paid_at) {
       await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});

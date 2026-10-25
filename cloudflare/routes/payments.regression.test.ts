@@ -31,12 +31,9 @@ vi.mock('../middleware', () => ({
 }));
 
 vi.mock('./commercial', () => ({
-  commercialRoutes: {
-    fetch: vi.fn(async () => new Response(JSON.stringify({
-      ok: true,
-      data: { offer: { serviceType: 'defesa_previa', name: 'Defesa Prévia', finalAmount: 100, baseAmount: 100 } },
-    }), { status: 200, headers: { 'content-type': 'application/json' } })),
-  },
+  resolveOffer: vi.fn(async (_env: any, input: any) => ({
+    offer: { serviceType: input.serviceType, name: 'Defesa Prévia', finalAmount: 100, baseAmount: 100 },
+  })),
 }));
 
 import { Hono } from 'hono';
