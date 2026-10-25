@@ -493,83 +493,19 @@ router.post('/credit-card/create', prodAuth, async (req, res) => {
     // Autorização canônica do caso (sessão ou claim token).
     if (!assertCanPayCase(req, res, caseId)) return;
 
-    if (gateway.id !== 'venopag') {
-      return res.status(400).json({
-        error: 'Gateway ativo não suporta pagamento com cartão de crédito.',
-        message: 'O gateway VenoPag só aceita PIX. Apenas PIX está disponível.',
-        gateway: gateway.id,
-        supportedMethods: ['pix'],
-      });
-    }
-
-    logger.info('payments', 'gateway', 'credit_card_gateway_check', 'Credit card gateway validated', {
+    // VenoPag é o único gateway ativo e suporta APENAS PIX.
+    // Pagamento com cartão de crédito não está disponível. Bloqueado para
+    // evitar chamada a gateway descontinuado (PagBank) ou exposição de
+    // funcionalidade inexistente.
+    return res.status(400).json({
+      error: 'Pagamento com cartão de crédito não disponível.',
+      message: 'O gateway ativo (VenoPag) suporta apenas PIX. Selecione PIX como forma de pagamento.',
       gateway: gateway.id,
-      environment: process.env.PAYMENT_MODE || 'sandbox',
-      userRole: (req as any).user?.role,
-      serviceType: offerResult.offer?.serviceType,
-    });
-
-    const orderResult = await pagBankIntegration.createCreditCardOrder({
-      caseId: caseId || `case_${Date.now()}`,
-      referenceId: `defesai_case_${caseId || Date.now()}`,
-      customer: {
-        name: payer.name,
-        email: payer.email,
-        taxId: payer.cpf,
-      },
-      amount: offerResult.offer.price,
-      installments: Number(installments),
-      cardToken,
-      authenticationMethod,
-      softDescriptor,
-      notificationUrls: [`${process.env.APP_URL || 'https://www.defesai.shop'}/api/webhooks/pagbank`],
-    });
-
-    // Update case with payment and commercial offer reference
-    if (caseId) {
-      const row = databaseRows.get(caseId);
-      if (row) {
-        const domain = CanonicalMapper.rowToDomain(row);
-        domain.payment = {
-          status: 'pending',
-          amount: offerResult.offer.price,
-          transactionId: orderResult.orderId,
-          paymentMethod: 'credit_card',
-        };
-        domain.serviceType = offerResult.offer.serviceType as any;
-        domain.commercialOfferId = offerResult.offer.commercialId;
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-      }
-    }
-
-    logger.info('payments', 'gateway', 'create_credit_card_order', 'Credit card order endpoint called', {
-      caseId,
-      status: 'success',
-      metadata: {
-        orderId: orderResult.orderId,
-        orderStatus: orderResult.status,
-        threeDsRequired: orderResult.threeDsChallengeRequired,
-        serviceType: offerResult.offer.serviceType,
-        commercialOfferId: offerResult.offer.commercialId,
-        gateway: 'pagbank',
-      },
-    });
-
-    res.json({
-      success: true,
-      order: orderResult,
-      txId: orderResult.orderId,
-      amount: offerResult.offer.price,
-      serviceType: offerResult.offer.serviceType,
-      commercialOfferId: offerResult.offer.commercialId,
-      status: orderResult.threeDsChallengeRequired ? 'aguardando_3ds' : 'autorizado',
-      threeDsUrl: orderResult.threeDsUrl,
-      threeDsChallengeRequired: orderResult.threeDsChallengeRequired,
+      supportedMethods: ['pix'],
     });
   } catch (error: any) {
-    logger.error('payments', 'gateway', 'create_credit_card_order', 'Error creating credit card order', { error: error.message });
-    res.status(500).json({ error: 'Erro ao gerar pedido de cartão de crédito' });
+    logger.error('payments', 'gateway', 'create_credit_card_order', 'Error in credit card endpoint', { error: error.message });
+    res.status(500).json({ error: 'Erro ao processar solicitação de cartão de crédito' });
   }
 });
 

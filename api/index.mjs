@@ -3770,7 +3770,7 @@ var corsMiddleware = cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-user-id", "x-user-role", "x-user-email", "x-user-name"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 });
 
 // src/server/middleware/rate-limit.ts
@@ -30689,77 +30689,15 @@ router11.post("/credit-card/create", prodAuth, async (req, res) => {
     }
     const gateway = gatewayManager.getActiveGateway();
     if (!assertCanPayCase(req, res, caseId)) return;
-    if (gateway.id !== "venopag") {
-      return res.status(400).json({
-        error: "Gateway ativo n\xE3o suporta pagamento com cart\xE3o de cr\xE9dito.",
-        message: "O gateway VenoPag s\xF3 aceita PIX. Apenas PIX est\xE1 dispon\xEDvel.",
-        gateway: gateway.id,
-        supportedMethods: ["pix"]
-      });
-    }
-    logger.info("payments", "gateway", "credit_card_gateway_check", "Credit card gateway validated", {
+    return res.status(400).json({
+      error: "Pagamento com cart\xE3o de cr\xE9dito n\xE3o dispon\xEDvel.",
+      message: "O gateway ativo (VenoPag) suporta apenas PIX. Selecione PIX como forma de pagamento.",
       gateway: gateway.id,
-      environment: process.env.PAYMENT_MODE || "sandbox",
-      userRole: req.user?.role,
-      serviceType: offerResult.offer?.serviceType
-    });
-    const orderResult = await pagBankIntegration.createCreditCardOrder({
-      caseId: caseId || `case_${Date.now()}`,
-      referenceId: `defesai_case_${caseId || Date.now()}`,
-      customer: {
-        name: payer.name,
-        email: payer.email,
-        taxId: payer.cpf
-      },
-      amount: offerResult.offer.price,
-      installments: Number(installments),
-      cardToken,
-      authenticationMethod,
-      softDescriptor,
-      notificationUrls: [`${process.env.APP_URL || "https://www.defesai.shop"}/api/webhooks/pagbank`]
-    });
-    if (caseId) {
-      const row = databaseRows.get(caseId);
-      if (row) {
-        const domain = CanonicalMapper.rowToDomain(row);
-        domain.payment = {
-          status: "pending",
-          amount: offerResult.offer.price,
-          transactionId: orderResult.orderId,
-          paymentMethod: "credit_card"
-        };
-        domain.serviceType = offerResult.offer.serviceType;
-        domain.commercialOfferId = offerResult.offer.commercialId;
-        const updatedRow = CanonicalMapper.domainToRow(domain);
-        await caseRepository.set(caseId, updatedRow);
-      }
-    }
-    logger.info("payments", "gateway", "create_credit_card_order", "Credit card order endpoint called", {
-      caseId,
-      status: "success",
-      metadata: {
-        orderId: orderResult.orderId,
-        orderStatus: orderResult.status,
-        threeDsRequired: orderResult.threeDsChallengeRequired,
-        serviceType: offerResult.offer.serviceType,
-        commercialOfferId: offerResult.offer.commercialId,
-        gateway: "pagbank"
-      }
-    });
-    res.json({
-      success: true,
-      order: orderResult,
-      txId: orderResult.orderId,
-      amount: offerResult.offer.price,
-      serviceType: offerResult.offer.serviceType,
-      commercialOfferId: offerResult.offer.commercialId,
-      status: orderResult.threeDsChallengeRequired ? "aguardando_3ds" : "autorizado",
-      threeDsUrl: orderResult.threeDsUrl,
-      threeDsChallengeRequired: orderResult.threeDsChallengeRequired
+      supportedMethods: ["pix"]
     });
   } catch (error) {
-    logger.error("payments", "gateway", "create_credit_card_order", "Error creating credit card order", { error: error.message });
-    res.status(500).json({ error: "Erro ao gerar pedido de cart\xE3o de cr\xE9dito" });
+    logger.error("payments", "gateway", "create_credit_card_order", "Error in credit card endpoint", { error: error.message });
+    res.status(500).json({ error: "Erro ao processar solicita\xE7\xE3o de cart\xE3o de cr\xE9dito" });
   }
 });
 router11.get("/pagbank/orders/:id", (req, res) => {
