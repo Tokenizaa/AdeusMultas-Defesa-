@@ -94,6 +94,9 @@ jobs:
       - name: Test Phase 6 Payments
         run: bunx vitest run cloudflare/routes/payments.test.ts
 
+      - name: Test VenoPag payment lifecycle regressions
+        run: bunx vitest run cloudflare/routes/payments.regression.test.ts
+
       - name: Test Phase 13 AI observability
         run: bunx vitest run cloudflare/routes/admin.ai-metrics.test.ts
 
