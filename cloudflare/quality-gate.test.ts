@@ -29,3 +29,29 @@ describe('canonical quality gate jurisdiction', () => {
     expect(result?.passed).toBe(true);
   });
 });
+
+describe('canonical quality gate procedure compatibility', () => {
+  it('blocks an unknown infraction family even when the requested service is echoed as recommended', () => {
+    const report = runCanonicalQualityGate({
+      infraction: { autuadorBody: 'DETRAN-SP', infractionCode: '999-99', aitNumber: 'AIT-UNKNOWN' },
+      analysis: {
+        recommendedArguments: [],
+        recommendedProcedure: 'defesa_previa',
+        infractionClassification: { family: 'desconhecida' },
+      },
+      draft: {
+        procedureType: 'defesa_previa',
+        selectedArgumentIds: [],
+        fullDraftText: 'Minuta de teste',
+      },
+      applicant: {},
+      vehicle: {},
+      serviceType: 'defesa_previa',
+    });
+
+    const result = report.checks.find((item) => item.check === 'PROCEDIMENTO_COMPATIVEL');
+    expect(result?.passed).toBe(false);
+    expect(result?.severity).toBe('error');
+    expect(result?.message).toContain('não se aplica à família');
+  });
+});
