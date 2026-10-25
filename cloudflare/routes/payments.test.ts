@@ -4,7 +4,7 @@ const h = vi.hoisted(() => {
   const transitioned = vi.fn().mockResolvedValue({ data: { id: 'payment-1' }, error: null });
   const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
   const eq = vi.fn(() => ({ eq, maybeSingle, limit: vi.fn(() => ({ maybeSingle })), neq: updateNeq }));
-  const maybeSingle = vi.fn().mockResolvedValue({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
+  const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'order-1', case_id: 'case-1', reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null, amount: 100, gateway: 'pagbank' }, error: null });
   const caseMaybeSingle = vi.fn().mockResolvedValue({ data: { id: 'case-1', user_id: 'user-1', is_paid: false }, error: null });
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
@@ -97,6 +97,13 @@ function app() {
 describe('Phase 12 — payment contracts (Cloudflare)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.maybeSingle.mockReset().mockResolvedValue({
+      data: { id: 'order-1', case_id: 'case-1', reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null, amount: 100, gateway: 'pagbank' },
+      error: null,
+    });
+    h.caseMaybeSingle.mockReset().mockResolvedValue({
+      data: { id: 'case-1', user_id: 'user-1', is_paid: false }, error: null,
+    });
   });
 
   it('rejects resolve-price without serviceType', async () => {
@@ -333,7 +340,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       expect(body.txId).toBe('veo_test_123');
       expect(body.pixCopyPasteString).toBe('000201venopag');
       expect(body.qrCodeDataUrl).toBe('data:image/png;base64,cG5n');
-      expect(providerFetch).toHaveBeenCalledOnce();
+      expect(createVenoCashIn).toHaveBeenCalledOnce();
       expect(h.insertChain).toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
@@ -349,8 +356,8 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('persists PAID and treats a repeated PAID webhook as duplicate', async () => {
-    h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
-    h.maybeSingle.mockResolvedValueOnce({ data: { reference_id: 'defesai_case_case-1', status: 'PAID', paid_at: new Date().toISOString() }, error: null });
+    h.maybeSingle.mockResolvedValueOnce({ data: { id: 'order-1', case_id: 'case-1', reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null, amount: 100, gateway: 'pagbank' }, error: null });
+    h.maybeSingle.mockResolvedValueOnce({ data: { id: 'order-1', case_id: 'case-1', reference_id: 'defesai_case_case-1', status: 'PAID', paid_at: new Date().toISOString(), amount: 100, gateway: 'pagbank' }, error: null });
     const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test' } as any;
     const payload = JSON.stringify({ id: 'evt-1', reference_id: 'defesai_case_case-1', charges: [{ status: 'PAID', amount: 100 }] });
 
