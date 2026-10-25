@@ -100,3 +100,11 @@
 - **Resultado de execução ainda não comprovado:** a integração GitHub disponível nesta sessão não retornou status nem workflow run associado a esses commits. Portanto, não declarar os testes verdes até que o CI os execute.
 - **Impacto na liberação:** relatórios anteriores que contavam essas asserções como comprovação de segurança não são evidência válida. Os testes reais de `auth.test.ts` e `isolation.test.ts` permanecem como evidência separada, com os limites de mocks já documentados.
 
+## Continuação — bloqueio de procedimento jurídico e qualidade da evidência de segurança
+
+- Commit `4c254823b2ce7e6233337b36a9f8d9c21b35b3af`: o Quality Gate não aceita mais família de infração `desconhecida` como procedimento compatível apenas porque `recommendedProcedure` repete o serviço escolhido na interface. Isso elimina um bypass concreto do check de compatibilidade no caminho fail-closed.
+- Commit `00bd693b5c4936a0bfb22fd689a7c8a4d0b8a636`: regressão cobrindo família desconhecida, procedimento `defesa_previa` e recomendação ecoada pelo onboarding; o check deve falhar com severidade `error`.
+- A suíte de segurança foi substituída por testes reais do middleware nos commits `93c38956e4de26afd0fb66585bb5561c7705ceba` e `eda7a9c4a10f629b142534a9a1a17a90615432cc`.
+- **Execução ainda não comprovada:** os endpoints de status do GitHub não retornaram check runs/workflow runs para esses commits. As mudanças foram commitadas na `main`, mas não serão rotuladas como aprovadas até haver resultado de CI. Nenhum deploy foi iniciado.
+- **Limite residual do gate:** famílias conhecidas ainda dependem da matriz `PROCEDURE_FAMILY_COMPATIBILITY` e de validação jurídica específica de cada serviço. Esta correção fecha apenas o caso de família desconhecida; não certifica todas as sete modalidades.
+
