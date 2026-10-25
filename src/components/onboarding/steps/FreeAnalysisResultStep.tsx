@@ -309,7 +309,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               )}
             </span>
           )}
-          </span>
+          )}
           
           {/* Data completeness indicator */}
           {dataCompleteness && (
