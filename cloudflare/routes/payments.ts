@@ -765,12 +765,15 @@ routes.post('/webhooks/venopag', async (c) => {
   if (!applied?.ok) throw new HTTPException(500, { message: applied?.error || 'Falha ao aplicar o webhook.' });
 
   await markWebhookEventProcessed(supabase, webhookEventId).catch(() => {});
-  const isDuplicate = !applied.ok || String(existing.status).toUpperCase() === 'PAID';
-  return c.json({ received: true, matched: true, status: currentStatus === 'confirmed' ? 'PAID'
+  const responseStatus = currentStatus === 'confirmed' ? 'PAID'
     : ['chargedback', 'refunded'].includes(currentStatus) ? 'REFUNDED'
     : currentStatus === 'contested' ? 'DISPUTED'
     : ['canceled', 'expired'].includes(currentStatus) ? 'CANCELED'
-    : currentStatus, isDuplicate: Boolean(isDuplicate) });
+    : currentStatus.toUpperCase();
+  const previousStatus = String(existing.status || '').toUpperCase();
+  const isDuplicate = previousStatus === responseStatus
+    || (responseStatus === 'PENDING' && previousStatus === 'AGUARDANDO_PAGAMENTO');
+  return c.json({ received: true, matched: true, status: responseStatus, isDuplicate });
   } catch (err: any) {
     // eslint-disable-next-line no-console
     console.error('[DEBUG venopag webhook]', err?.message || err);
