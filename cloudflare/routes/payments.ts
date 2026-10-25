@@ -417,13 +417,16 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
       reused: true,
     });
   }
-  const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
-  if (![11, 14].includes(payer.document.length)) {
-    throw new HTTPException(400, { message: 'Informe um CPF ou CNPJ válido para gerar o PIX VenoPag.' });
-  }
   const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
   if (primaryGateway !== 'venopag') {
     throw new HTTPException(503, { message: 'Este ambiente está configurado para priorizar VenoPag. PagBank permanece desativado para novas cobranças.' });
+  }
+  if (!c.env.VENO_CLIENT_ID || !c.env.VENO_CLIENT_SECRET || !c.env.VENO_WEBHOOK_SECRET) {
+    throw new HTTPException(503, { message: 'Pagamento VenoPag temporariamente indisponível: credenciais não configuradas.' });
+  }
+  const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
+  if (![11, 14].includes(payer.document.length)) {
+    throw new HTTPException(400, { message: 'Informe um CPF ou CNPJ válido para gerar o PIX VenoPag.' });
   }
   const finalAmount = Number(offer.finalAmount);
 
