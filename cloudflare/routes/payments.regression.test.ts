@@ -391,6 +391,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
       expect(res.status).toBe(200);
       const body = await res.json() as any;
       expect(body.status).toBe('REFUNDED');
+      expect(body.isDuplicate).toBe(false);
       const rpcArgs = adminClient.rpc.mock.calls[0];
       expect(rpcArgs[0]).toBe('apply_venopag_webhook');
       expect(rpcArgs[1].p_status).toBe('chargedback');
