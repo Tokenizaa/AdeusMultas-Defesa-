@@ -401,6 +401,9 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   }
   const payer = { name: body.customerName || 'Condutor DefesAi', email: body.customerEmail || user.email || 'contato@defesai.shop', document: String(body.customerCpf || '').replace(/\D/g, '') };
   const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
+  if (primaryGateway !== 'venopag') {
+    throw new HTTPException(503, { message: 'Este ambiente está configurado para priorizar VenoPag. PagBank permanece desativado para novas cobranças.' });
+  }
   const finalAmount = Number(offer.finalAmount);
 
   const reserved = await reserveOrFindPendingOrder(c.env, {
@@ -676,6 +679,10 @@ routes.post('/webhooks/venopag', async (c) => {
   try { event = JSON.parse(rawBody); } catch { return c.json({ error: 'Body inválido.' }, 400); }
   if (event.type !== 'cashin' || !event.request_number || typeof event.status !== 'string') {
     return c.json({ received: true, ignored: true });
+  }
+  const supportedStatuses = new Set(['pending', 'confirmed', 'chargedback', 'refunded', 'contested', 'canceled', 'expired']);
+  if (!supportedStatuses.has(event.status.toLowerCase())) {
+    return c.json({ error: 'Status VenoPag não suportado; evento não foi aplicado.' }, 422);
   }
 
   const supabase = createSupabaseAdminClient(c.env);
