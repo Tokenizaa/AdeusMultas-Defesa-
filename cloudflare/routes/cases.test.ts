@@ -397,4 +397,78 @@ describe('applicant qualification', () => {
     expect(response.status).toBe(400);
     expect(query.update).not.toHaveBeenCalled();
   });
+
+
+describe('onboarding state recovery', () => {
+  const caseRow = {
+    id: '00000000-0000-4000-8000-000000000097',
+    user_id: '00000000-0000-4000-8000-000000000001',
+    is_anonymous: false,
+    is_paid: false,
+    service_type: 'defesa_previa',
+    status: 'em_analise',
+    created_at: '2026-10-25T00:00:00.000Z',
+    updated_at: '2026-10-25T00:00:00.000Z',
+  };
+
+  function configureQueries(paymentResult: any) {
+    const caseQuery: any = {
+      select: vi.fn(() => caseQuery),
+      eq: vi.fn(() => caseQuery),
+      maybeSingle: vi.fn().mockResolvedValue({ data: caseRow, error: null }),
+    };
+    const paymentQuery: any = {
+      select: vi.fn(() => paymentQuery),
+      eq: vi.fn(() => paymentQuery),
+      order: vi.fn(() => paymentQuery),
+      limit: vi.fn(() => paymentQuery),
+      maybeSingle: vi.fn().mockResolvedValue(paymentResult),
+    };
+    mockFrom.mockReset().mockImplementation((table: string) => table === 'cases' ? caseQuery : paymentQuery);
+    return { caseQuery, paymentQuery };
+  }
+
+  it('restores the pending PIX details when the case is resumed', async () => {
+    configureQueries({
+      data: {
+        status: 'PENDING',
+        amount: 89.9,
+        gateway_transaction_id: 'veno-resume-1',
+        qr_code_text: '000201synthetic',
+        qr_code_url: 'https://example.test/qr.png',
+      },
+      error: null,
+    });
+
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000097/onboarding-state',
+      { method: 'GET', headers: { Authorization: 'Bearer test-user' } },
+      {} as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: caseRow.id,
+      paymentStatus: 'PENDING',
+      payment: {
+        txId: 'veno-resume-1',
+        amount: 89.9,
+        copyPaste: '000201synthetic',
+        qrCodeUrl: 'https://example.test/qr.png',
+      },
+    });
+  });
+
+  it('returns a visible service error when payment state cannot be recovered', async () => {
+    configureQueries({ data: null, error: { message: 'database unavailable' } });
+
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000097/onboarding-state',
+      { method: 'GET', headers: { Authorization: 'Bearer test-user' } },
+      {} as any,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain('Não foi possível recuperar o estado do pagamento.');
+  });
 });
