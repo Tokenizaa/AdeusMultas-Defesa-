@@ -133,10 +133,10 @@ async function savePaymentToDatabase(
   const { createClient } = await import('@supabase/supabase-js');
 
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SECRET_KEY;
 
   if (!url || !serviceKey) {
-    throw new Error('[PagBank] Supabase não configurado — não é possível persistir pagamento');
+    throw new Error('[PagBank] SUPABASE_SECRET_KEY é obrigatória — SUPABASE_SERVICE_ROLE_KEY não pode ser usada como fallback (bypassa RLS). Configure SUPABASE_SECRET_KEY no ambiente.');
   }
 
   const supabase = createClient(url, serviceKey, {

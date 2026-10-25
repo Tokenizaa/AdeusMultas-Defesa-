@@ -21,6 +21,15 @@ const EVIDENCE_DEPENDENT_ARGUMENTS: Record<string, string> = {
   'ARG-012': 'fotoRetencaoTrafego',
   'ARG-019': 'manualVeiculoOuFotoPainel',
   'ARG-020': 'fotoPlacaR6aAusente',
+  // Additional evidence-dependent arguments mapped from ARGUMENTS_CATALOG
+  // requiredDocuments single-evidence items. See audit P3/P3-01.
+  'ARG-006': 'fotoAmpliadaAutuacao',
+  'ARG-009': 'espejoFotografico',
+  'ARG-010': 'registroAudiovisual',
+  'ARG-014': 'fotoPlacaConversao',
+  'ARG-016': 'fotoSuporteVeicular',
+  'ARG-017': 'fotoVeiculoVaga',
+  'ARG-031': 'fotoInteriorCinto',
 };
 
 export class RagPipeline {

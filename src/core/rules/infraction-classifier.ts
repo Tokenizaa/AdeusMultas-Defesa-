@@ -126,6 +126,8 @@ const FAMILY_BY_CODE_PREFIX: Array<[string, InfractionFamily]> = [
   ['704', 'capacidade'],
   ['685', 'lotacao'],
   ['244', 'capacidade'],
+  ['502', 'alcoolemia'],
+  ['503', 'alcoolemia'],
 ];
 
 /** Último recurso: artigo do CTB. */

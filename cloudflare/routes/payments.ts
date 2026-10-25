@@ -182,9 +182,14 @@ async function updateReservedOrder(
   if (input.gateway !== undefined) updatePayload.gateway = input.gateway;
   if (input.paymentMethod !== undefined) updatePayload.payment_method = input.paymentMethod;
 
-  const { data, error } = await supabase.from('payment_orders')
-    .update(updatePayload).eq('id', paymentId).select('*').single();
-  if (error) throw error;
+  const { error: updateError } = await supabase.from('payment_orders')
+    .update(updatePayload).eq('id', paymentId);
+  if (updateError) throw updateError;
+  const { data, error: selectError } = await supabase.from('payment_orders')
+    .eq('id', paymentId)
+    .select('*')
+    .single();
+  if (selectError) throw selectError;
   return data;
 }
 

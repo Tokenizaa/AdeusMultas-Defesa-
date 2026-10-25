@@ -58,28 +58,6 @@ const fullCaseRow = {
   created_at: '2026-01-10T10:00:00Z',
   updated_at: '2026-01-10T10:00:00Z',
   claim_token: null,
-};
-
-/**
- * Objeto query encadeável compatível com supabase-js.
- * Cada método da cadeia retorna um objeto thenable que, quando awaited,
- * resolve para { data, error }. maybeSingle/single resolvem com maybeData.
- */
-function makeQuery(maybeData: any = null): any {
-  const result = { data: maybeData, error: null };
-  const chain: any = {
-    select: vi.fn(function (this: any) { return chain; }),
-    eq: vi.fn(function (this: any) { return chain; }),
-    is: vi.fn(function (this: any) { return chain; }),
-    order: vi.fn(function (this: any) { return chain; }),
-    update: vi.fn(function (this: any) { return chain; }),
-    delete: vi.fn(function (this: any) { return chain; }),
-    insert: vi.fn(function (this: any) { return chain; }),
-    single: vi.fn(async () => result),
-    maybeSingle: vi.fn(async () => result),
-    then: vi.fn(async (resolve: any) => resolve(result)),
-  };
-  return chain;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,11 +68,15 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
   let query: any;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockAnalyze.mockReset().mockResolvedValue({ recommendedArguments: [] });
     (recordAuditLog as any).mockReset();
-    mockFrom.mockReset();
-    query = makeQuery(fullCaseRow);
-    mockFrom.mockReturnValue(query);
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({ data: fullCaseRow, error: null })),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
   });
 
   it('exporta todos os dados pessoais do caso para o dono autenticado', async () => {
@@ -125,11 +107,9 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
   });
 
   it('rejeita exportação para usuário que não é o dono', async () => {
-    query.maybeSingle.mockResolvedValueOnce({ data: { ...fullCaseRow, user_id: 'outro-usuario' }, error: null });
-
     const response = await casesRoutes.request(
       `/api/cases/${CASE_ID}/export`,
-      { method: 'GET', headers: { Authorization: 'Bearer token-dono' } },
+      { method: 'GET', headers: { Authorization: 'Bearer token-outro' } },
       {} as any,
     );
 
@@ -162,13 +142,15 @@ describe('DELETE /api/cases/:id — exclusão real', () => {
   beforeEach(() => {
     casesMaybeCalls = 0;
     (recordAuditLog as any).mockReset();
-    query = makeQuery();
-    mockFrom.mockReturnValue(query);
-    // 1ª chamada (busca) encontra o caso; 2ª (verificação pós-exclusão) vazio.
-    query.maybeSingle.mockImplementation(async () => {
-      casesMaybeCalls += 1;
-      return casesMaybeCalls === 1 ? { data: fullCaseRow, error: null } : { data: null, error: null };
-    });
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => {
+        casesMaybeCalls += 1;
+        return casesMaybeCalls === 1 ? { data: fullCaseRow, error: null } : { data: null, error: null };
+      }),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
   });
 
   it('exclui o caso, documentos e payment_orders, verifica eliminação e grava auditoria', async () => {
@@ -240,14 +222,15 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
   beforeEach(() => {
     casesMaybeCalls = 0;
     (recordAuditLog as any).mockReset();
-    query = makeQuery();
-    mockFrom.mockReturnValue(query);
-    const anonRow = { ...fullCaseRow, id: CASE_ID, user_id: null, is_anonymous: true, claim_token: TOKEN };
-    // 1ª chamada (busca) encontra o caso anônimo; 2ª (verificação) vazio.
-    query.maybeSingle.mockImplementation(async () => {
-      casesMaybeCalls += 1;
-      return casesMaybeCalls === 1 ? { data: anonRow, error: null } : { data: null, error: null };
-    });
+    query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => {
+        casesMaybeCalls += 1;
+        return casesMaybeCalls === 1 ? { data: { ...fullCaseRow, id: CASE_ID, user_id: null, is_anonymous: true, claim_token: TOKEN }, error: null } : { data: null, error: null };
+      }),
+    };
+    mockFrom.mockReset().mockReturnValue(query);
   });
 
   it('exclui caso anônimo apenas com claim_token válido, sem autenticação', async () => {

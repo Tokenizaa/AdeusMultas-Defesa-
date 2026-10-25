@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
+import { runFinalQualityGate } from '../../core/validation/final-quality-gate';
+import { buildDataLineage } from '../../core/validation/data-lineage';
+import { type QualityGateInput } from '../../types';
+import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
+import { DOCUMENT_BLOCKS } from '../../core/templates/document-blocks';
 import { getGeminiClient, enrichDefenseWithGemini } from '../gemini';
-import { DefenseBlock, InfractionData, ProcedureType } from '../../types';
+import { DefenseBlock } from '../../types';
 import { runControlledPipeline, registerRefinementProvider } from '../../core/ai/ai-orchestrator';
 import { logger } from '../observability/logger';
 
@@ -218,21 +223,46 @@ router.post('/ai/generate-defense', async (req, res) => {
       { tone: 'formal_rigorous' }
     );
 
-    // Construct defense blocks
+    // --- Canonical Quality Gate (Fase 8) ---
+    // Block defense generation if required checks fail.
+    // Fail-closed: 422 if any check does not pass.
+    const lineage = buildDataLineage(
+      caseData?.onboardingPayload || {},
+      { id: caseData?.id || `case_${Date.now()}`, analysis, serviceType: procedureType },
+      analysis,
+      pipelineResult.draft.fullDraftText,
+      ARGUMENTS_CATALOG,
+      DOCUMENT_BLOCKS
+    );
+    const qualityGateInput: QualityGateInput = {
+      onboardingPayload: caseData?.onboardingPayload || {},
+      canonicalCase: {
+        id: caseData?.id || `case_${Date.now()}`,
+        analysis,
+        serviceType: procedureType,
+      },
+      analysis,
+      finalDocument: pipelineResult.draft.fullDraftText,
+      lineage,
+      argumentsCatalog: ARGUMENTS_CATALOG,
+      blocksCatalog: DOCUMENT_BLOCKS,
+    };
+    const qualityGate = runFinalQualityGate(qualityGateInput);
+    if (!qualityGate.overallPass) {
+      return res.status(422).json({
+        message: `Documento reprovado no Quality Gate (${qualityGate.score}%): ${qualityGate.checks
+          .filter((c) => !c.passed)
+          .map((c) => `${c.check} — ${c.message}`)
+          .join(' | ')}`,
+      });
+    }
+
     const blocks: DefenseBlock[] = [
       {
         id: 'blk_1',
         titulo: 'Endereçamento e Cabeçalho',
         categoria: 'cabecalho',
         conteudo: `ILUSTRÍSSIMO SENHOR DIRETOR / PRESIDENTE DA JARI DO ${orgaoAutuador.toUpperCase()}`,
-        ativo: true,
-        editavel: true,
-      },
-      {
-        id: 'blk_2',
-        titulo: 'Qualificação do Condutor e Veículo',
-        categoria: 'cabecalho',
-        conteudo: `${(applicant.name || 'CONDUTOR / PROPRIETÁRIO').toUpperCase()}, CPF: ${applicant.cpf || 'NÃO INFORMADO'}, CNH: ${applicant.cnh || 'NÃO INFORMADO'}, proprietário do veículo Placa ${vehiclePlate || 'N/A'}, vem apresentar DEFESA ADMINISTRATIVA.`,
         ativo: true,
         editavel: true,
       },

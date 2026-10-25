@@ -87,6 +87,22 @@ export const USER_SITUATIONS: ServiceDefinition[] = [
     badge: 'Instância Crítica',
     mappedProcedure: 'cassacao_cnh',
   },
+  {
+    id: 'defesa_previa',
+    title: 'Defesa Prévia da Autuação',
+    subtitle: 'Defesa interposta antes da aplicação de penalidade, nos termos do Art. 281 do CTB.',
+    badge: 'Defesa Prévia',
+    mappedProcedure: 'defesa_previa',
+    inferredStage: 'primeira_notificacao',
+  },
+  {
+    id: 'recurso_cetran',
+    title: 'Recurso ao CETRAN / CONTRAN',
+    subtitle: 'Recurso de 2ª instância perante o Conselho Estadual de Trânsito ou CONTRAN.',
+    badge: 'Recurso CETRAN',
+    mappedProcedure: 'recurso_cetran',
+    inferredStage: 'recurso_jari_negado',
+  },
 ];
 
 export interface StageDefinition {

@@ -206,7 +206,6 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
 }) => {
   const successRate = analysis?.overallSuccessRate;
   const hasRecommendedArguments = analysis?.recommendedArguments && analysis.recommendedArguments.length > 0;
-  const hasRecommendedArguments = analysis?.recommendedArguments && analysis.recommendedArguments.length > 0;
   const isRateUnavailable = successRate === null || !hasRecommendedArguments;
   const rateValue = isRateUnavailable ? 0 : successRate;
   const isHighProbability = !isRateUnavailable && rateValue >= 80 && hasRecommendedArguments;
@@ -308,7 +307,6 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                 'Com os dados de hoje, não encontramos ponto forte'
               )}
             </span>
-          )}
           )}
           
           {/* Data completeness indicator */}

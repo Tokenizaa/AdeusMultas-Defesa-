@@ -1,6 +1,11 @@
 import { Router, Response } from 'express';
 import { CanonicalMapper } from '../../core/mappers/canonical-mapper';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
+import { runFinalQualityGate } from '../../core/validation/final-quality-gate';
+import { buildDataLineage } from '../../core/validation/data-lineage';
+import { QualityGateInput } from '../../types';
+import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
+import { DOCUMENT_BLOCKS } from '../../core/templates/document-blocks';
 import { eventBus, EventTopics } from '../../core/events/topics';
 import { caseRepository } from '../db/case-repository';
 import { auditService } from '../services/audit-service';
@@ -139,6 +144,54 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
       logger.info('system', 'ai_controlled_refinement', 'ai_controlled_refinement', 'Refinamento de prosa da IA aplicado após validação de integridade.', { caseId: domain.id });
     } else if (pipelineResult.controlled.reason === 'PROVIDER_UNAVAILABLE') {
       logger.info('system', 'ai_fallback_deterministic', 'ai_fallback_deterministic', 'IA indisponível; minuta determinística mantida.', { caseId: domain.id });
+    }
+
+    // --- Canonical Quality Gate (Fase 8) ---
+    // Block defense generation if required checks fail.
+    // Fail-closed: 422 if any check does not pass.
+    // Build lineage from case domain data and catalogs.
+    const lineage = buildDataLineage(
+      domain.applicant || {},
+      domain,
+      domain.analysis as any,
+      defense.fullDraftText,
+      ARGUMENTS_CATALOG,
+      DOCUMENT_BLOCKS
+    );
+    // Construct minimal quality gate input with available domain data.
+    // Type assertions used because CaseDomain/InfractionData don't expose all
+    // CanonicalOnboardingPayload fields directly; the gate checks what it can.
+    const qualityGateInput = {
+      onboardingPayload: {
+        procedureType: domain.serviceType,
+        vehicle: {
+          plate: domain.vehicle.plate,
+          brandModel: domain.vehicle.brandModel,
+        },
+        infraction: {
+          aitNumber: domain.infraction.aitNumber,
+          infractionCode: domain.infraction.infractionCode,
+          description: domain.infraction.description,
+          ctbArticle: domain.infraction.ctbArticle,
+          severity: domain.infraction.severity,
+          points: domain.infraction.points,
+          fineAmount: domain.infraction.fineAmount,
+          autuadorBody: domain.infraction.autuadorBody,
+        },
+      } as any,
+      canonicalCase: domain,
+      analysis: domain.analysis as any,
+      finalDocument: defense.fullDraftText,
+      lineage,
+      argumentsCatalog: ARGUMENTS_CATALOG,
+      blocksCatalog: DOCUMENT_BLOCKS,
+    } as any;
+    const qualityGate = runFinalQualityGate(qualityGateInput);
+    if (!qualityGate.overallPass) {
+      return res.status(422).json({
+        error: `Documento reprovado no Quality Gate (${qualityGate.score}%)`,
+        details: qualityGate.checks.filter((c) => !c.passed),
+      });
     }
 
     domain.defenseDraft = defense;
