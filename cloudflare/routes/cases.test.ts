@@ -356,6 +356,33 @@ describe('applicant qualification', () => {
     expect(result.applicant.applicantCpf).not.toContain('12345678909');
   });
 
+  it('does not report success when the qualification update affects zero rows', async () => {
+    query.maybeSingle
+      .mockResolvedValueOnce({ data: row, error: null }) // initial ownership/read check
+      .mockResolvedValueOnce({ data: null, error: null }); // UPDATE ... RETURNING found no row
+
+    const response = await casesRoutes.request(
+      '/cases/00000000-0000-4000-8000-000000000097/qualification',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-user' },
+        body: JSON.stringify({
+          name: 'Pessoa de Teste',
+          cpf: '123.456.789-09',
+          cnh: '12345678900',
+          cnhCategory: 'B',
+          addressStreet: 'Rua de Teste',
+          addressNumber: '10',
+          cityState: 'São Paulo/SP',
+        }),
+      },
+      {} as any,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ message: 'A qualificação não foi persistida. Recarregue o caso e tente novamente.' });
+  });
+
   it('rejects incomplete qualification without writing personal data', async () => {
     const response = await casesRoutes.request(
       '/cases/00000000-0000-4000-8000-000000000097/qualification',
