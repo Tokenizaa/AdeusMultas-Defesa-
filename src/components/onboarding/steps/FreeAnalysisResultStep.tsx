@@ -284,15 +284,18 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
             {hasRecommendedArguments ? 'Força da sua defesa' : 'Sem teses detectadas'}
           </span>
           {hasRecommendedArguments ? (
-            <div className="text-4xl sm:text-5xl font-extrabold font-mono">
-              <span className="text-emerald-700">{displayedRate}%</span>
-            </div>
+            <>
+              <div className="text-4xl sm:text-5xl font-extrabold font-mono">
+                <span className="text-emerald-700">{displayedRate}%</span>
+              </div>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">Indicador baseado nos pontos identificados, não é previsão de resultado — a decisão final é do órgão de trânsito.</p>
+            </>
           ) : (
             <span className="text-emerald-700">—</span>
           )}
           {!hasRecommendedArguments && (
             <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
-              isRateUnavailable ? 'Análise em modo degradado — base jurídica indisponível' : 'null (sem teses detectadas)'
+              {isRateUnavailable ? 'Indicador indisponível — não foi possível confirmar a base jurídica para esta análise.' : 'Nenhuma tese foi identificada com os dados informados.'}
             </p>
           )}
           {hasRecommendedArguments && (
