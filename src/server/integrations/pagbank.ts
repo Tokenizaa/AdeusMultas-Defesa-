@@ -540,7 +540,7 @@ if (data.id) {
  * Confirma pagamento (Usado pelo Webhook ou Sandbox Simulator)
  * Garante idempotência: gatilhos duplicados não duplicam operações.
  */
-  public confirmPayment(orderOrCaseId: string): { success: boolean; order: PagBankOrderResult; alreadyPaid: boolean } {
+  public async confirmPayment(orderOrCaseId: string): Promise<{ success: boolean; order: PagBankOrderResult; alreadyPaid: boolean }> {
     let order = this.getOrder(orderOrCaseId);
     if (!order) {
       // Create on the fly if not found
@@ -560,7 +560,7 @@ if (data.id) {
 
     const alreadyPaid = order.status === 'PAID';
     order.status = 'PAID';
-    paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
+    await paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
 
     if (!alreadyPaid) {
       eventBus.publish(
@@ -576,7 +576,7 @@ if (data.id) {
 /**
     * Processa webhook recebido do PagBank com verificação de assinatura HMAC-SHA256 e idempotência
     */
-  public processWebhook(
+  public async processWebhook(
     rawBody: string,
     signatureHeader: string | undefined,
     payload: PagBankWebhookPayload
@@ -587,7 +587,7 @@ if (data.id) {
     status?: string;
     isDuplicate: boolean;
     signatureValid: boolean;
-} {
+}> {
      // 0. Verificar assinatura HMAC-SHA256 (BLOQUEADOR: Requisito oficial do PagBank)
      const signatureValid = this.verifyWebhookSignature(rawBody, signatureHeader || '');
     
@@ -631,7 +631,7 @@ const referenceId = payload.reference_id || firstCharge?.reference_id || '';
      if (!matchedOrder && referenceId) matchedOrder = this.orders.get(referenceId) || null;
 
     if (isPaid && matchedOrder) {
-      this.confirmPayment(matchedOrder.orderId);
+      await this.confirmPayment(matchedOrder.orderId);
     }
 
     logger.info('payments', 'pagbank', 'process_webhook', 'Webhook processed successfully', {
