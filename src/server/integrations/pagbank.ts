@@ -619,7 +619,7 @@ const webhookEventId = payload.id || `wh_${Date.now()}`;
 const referenceId = payload.reference_id || firstCharge?.reference_id || '';
 
      // Persistir evento de webhook (idempotente por pagbank_event_id)
-     paymentRepository.persistWebhookEvent({
+     await paymentRepository.persistWebhookEvent({
        pagbankEventId: webhookEventId,
        eventType: `pagbank.charge.${(firstCharge?.status || 'received').toLowerCase()}`,
        payload,
