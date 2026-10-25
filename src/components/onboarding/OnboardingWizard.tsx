@@ -121,7 +121,13 @@ function saveWizardFormData(state: WizardFormDataState) {
       WIZARD_FORM_DATA_KEY,
       JSON.stringify({ ...state, savedAt: Date.now() })
     );
-  } catch { /* storage unavailable, ignore */ }
+  } catch { /* sessionStorage unavailable, ignore */ }
+  try {
+    localStorage.setItem(
+      'defesai_wizard_form_data_local_v1',
+      JSON.stringify({ ...state, savedAt: Date.now() })
+    );
+  } catch { /* localStorage unavailable, ignore */ }
 }
 
 function clearWizardFormData() {
@@ -656,17 +662,30 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
         {/* Dynamic mini progress tracker reflecting real active steps */}
         <div className="flex items-center gap-1.5 self-end sm:self-center">
-          {activeSteps.map((s, idx) => (
-            <div
-              key={s}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                s === step
-                  ? 'w-7 bg-[#155BCB]'
-                  : idx < currentStepIndex
-                  ? 'w-2.5 bg-emerald-600'
-                  : 'w-2.5 bg-slate-200'
+          {activeSteps.map((s, idx) => {
+            // Determinar se esta etapa foi pulada para a situação atual
+            const sitDef = USER_SITUATIONS.find((s) => s.id === situation);
+            const stageSkipped = skipsStageStep && idx + 1 === 2; // Etapa 2 (fase) pulada
+            const categorySkipped = skipsCategoryStep && idx + 1 === 3; // Etapa 3 (categoria) pulada
+            const isSkipped = stageSkipped || categorySkipped;
+
+            return (
+              <div
+                key={s}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  s === step
+                    ? 'w-7 bg-[#155BCB]'
+                    : isSkipped
+                      ? 'w-2.5 bg-slate-400 text-slate-500 opacity-50'
+                      : idx < currentStepIndex
+                      ? 'w-2.5 bg-emerald-600'
+                      : 'w-2.5 bg-slate-200'
               }`}
-              title={`Etapa ${idx + 1} de ${totalDisplaySteps}`}
+              title={
+                isSkipped
+                  ? `Etapa ${idx + 1} de ${totalDisplaySteps} (pulada)`
+                  : `Etapa ${idx + 1} de ${totalDisplaySteps}`
+              }
             />
           ))}
         </div>

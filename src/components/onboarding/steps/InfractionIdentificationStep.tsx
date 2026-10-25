@@ -96,14 +96,15 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         (vehicleData.plate?.trim().length || 0) >= 7 &&
         (infractionData.infractionCode?.trim().length || 0) >= 3 &&
         (infractionData.location?.trim().length || 0) >= 5 &&
-        (infractionData.autuadorBody?.trim().length || 0) >= 3;
+        (infractionData.autuadorBody?.trim().length || 0) >= 3 &&
+        (infractionData.aitNumber?.trim().length || 0) >= 3;
 
     const handleFileUpload = async (file: File) => {
         setIsReadingFile(true);
         setOcrStatusMessage(`Enviando "${file.name}" para análise interna...`);
 
         try {
-            const res = await fetch('/api/ocr/analyze', {
+            const res = await authFetch('/api/ocr/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

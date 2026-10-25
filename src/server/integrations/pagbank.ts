@@ -225,7 +225,7 @@ expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
      this.orders.set(orderId, orderResult);
     this.orders.set(referenceId, orderResult);
     this.orders.set(`case_${caseId}`, orderResult);
-paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
+await paymentRepository.persistOrder(orderResult, { paymentMethod: 'pix' });
 
      // Chamar API real do PagBank se o token estiver configurado
      // [PRODUCTION] Bloquear tokens mock em produção — criar pagamento falso é fraude
@@ -334,7 +334,7 @@ threeDsChallengeRequired: authenticationMethod === 'CHALLENGE',
      this.orders.set(orderId, orderResult);
     this.orders.set(referenceId, orderResult);
     this.orders.set(`case_${caseId}`, orderResult);
-    paymentRepository.persistOrder(orderResult, { paymentMethod: 'credit_card' });
+    await paymentRepository.persistOrder(orderResult, { paymentMethod: 'credit_card' });
 
 // Chamar API real do PagBank se o token estiver configurado
 // [PRODUCTION] Bloquear tokens mock em produção
@@ -560,7 +560,7 @@ if (data.id) {
 
     const alreadyPaid = order.status === 'PAID';
     order.status = 'PAID';
-    paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
+    await paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
 
     if (!alreadyPaid) {
       eventBus.publish(

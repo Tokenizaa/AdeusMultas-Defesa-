@@ -148,15 +148,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   // Load Pricing from Resolve Price Service (breakdown completo)
   useEffect(() => {
+    let active = true;
     async function loadPricing() {
       setPriceError(null);
       try {
         const params = new URLSearchParams({ serviceType });
         if (couponCode) params.set('couponCode', couponCode);
         const res = await fetch(`/api/payments/resolve-price?${params.toString()}`);
-        if (res.ok) {
+        if (active && res.ok) {
           const data = await res.json();
-          if (typeof data.baseAmount === 'number' && typeof data.finalAmount === 'number') {
+          if (active && typeof data.baseAmount === 'number' && typeof data.finalAmount === 'number') {
             setResolvedBreakdown({
               baseAmount: data.baseAmount,
               promotionDiscount: data.promotionDiscount || 0,
@@ -166,15 +167,18 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               couponDiscount: data.couponDiscount,
             });
           }
-        } else {
+        } else if (active) {
           setPriceError('Não foi possível resolver o preço do serviço. Tente novamente.');
         }
       } catch (err) {
-        console.error('Error loading dynamic price:', err);
-        setPriceError('Não foi possível resolver o preço do serviço. Verifique sua conexão.');
+        if (active) {
+          console.error('Error loading dynamic price:', err);
+          setPriceError('Não foi possível resolver o preço do serviço. Verifique sua conexão.');
+        }
       }
     }
     loadPricing();
+    return () => { active = false; };
   }, [serviceType, couponCode]);
 
   const validateCouponCode = async (codeToTest: string) => {

@@ -56,20 +56,21 @@ export class PaymentRepository {
   }
 
   /**
-   * Executa uma query Supabase em fire-and-forget, convertendo o PromiseLike
-   * retornado pelos builders em Promise real e engolindo qualquer erro.
+   * Executa uma query Supabase de forma aguardada (await), propagando erros
+   * em vez de os engolir silenciosamente. Use este método para escritas
+   * financeiras críticas onde a integridade dos dados é essencial.
    */
-  private fire(
+  private async persistSafely(
     domain: string,
     query: PromiseLike<{ error: { message: string } | null }>,
     meta?: Record<string, unknown>
-  ): void {
-    if (!this.client) return;
-    Promise.resolve(query)
-      .then(({ error }) => {
-        if (error) this.warn(domain, 'persist', error.message, meta);
-      })
-      .catch((err: any) => this.warn(domain, 'persist', err?.message || err, meta));
+  ): Promise<{ error: { message: string } | null }> {
+    if (!this.client) {
+      throw new Error(`[${domain}] Supabase client não disponível — escrita financeira bloqueada.`);
+    }
+    const { error } = await Promise.resolve(query);
+    if (error) this.warn(domain, 'persist', error.message, meta);
+    return { error };
   }
 
   // ==========================================
@@ -152,7 +153,7 @@ export class PaymentRepository {
       // Campo gateway — registra qual provedor criou este pagamento
       ...(extras.gateway ? { gateway: extras.gateway } : {}),
     };
-    this.fire('payment_orders', this.client.from('payment_orders').upsert(payload, { onConflict: 'case_id' }), {
+    await this.persistSafely('payment_orders', this.client.from('payment_orders').upsert(payload, { onConflict: 'case_id' }), {
       caseId: order.caseId,
       orderId,
       gateway: extras.gateway,
@@ -185,11 +186,9 @@ export class PaymentRepository {
       attempts: 1,
       processed_at: params.processed ? new Date().toISOString() : null,
     };
-    this.fire(
-      'payment_webhook_events',
-      this.client.from('payment_webhook_events').upsert(payload, { onConflict: 'pagbank_event_id' }),
-      { pagbankEventId: params.pagbankEventId }
-    );
+    await this.persistSafely('payment_webhook_events', this.client.from('payment_webhook_events').upsert(payload, { onConflict: 'pagbank_event_id' }), {
+      pagbankEventId: params.pagbankEventId
+    });
   }
 
   // ==========================================

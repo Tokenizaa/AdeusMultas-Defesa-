@@ -19,6 +19,7 @@ import { buildDocumentRollText } from '../../core/documents/document-roll';
 import { CaseDomain } from '../../types';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 import { assertPaymentCaseAccess, resolveEffectiveUser } from '../payments/case-access';
+import { emailService } from '../services/email-service';
 import { PRICING } from '../config/pricing';
 const router = Router();
 
@@ -635,14 +636,17 @@ router.post('/webhooks/pagbank', async (req: Request, res: Response) => {
             effectivelyPaid: domain.payment.amount,
           });
 
-          auditLogs.unshift({
+          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+      const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
+
+      auditLogs.unshift({
             id: `audit_pay_${Date.now()}`,
             timestamp: new Date().toISOString(),
             actor: domain.clientName || 'Cliente',
             role: 'citizen',
             action: 'PAYMENT_CONFIRMED',
             targetResource: domain.id,
-            ipHash: '3a88c42b109e',
+            ipHash,
             details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via ${paymentMethod.toUpperCase()} PagBank confirmado.`,
             gdprCompliant: true,
           });
@@ -1071,14 +1075,17 @@ router.post('/webhooks/ggpix', async (req: Request, res: Response) => {
             effectivelyPaid: domain.payment.amount,
           });
 
-          auditLogs.unshift({
+          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+      const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
+
+      auditLogs.unshift({
             id: `audit_pay_${Date.now()}`,
             timestamp: new Date().toISOString(),
             actor: domain.clientName || 'Cliente',
             role: 'citizen',
             action: 'PAYMENT_CONFIRMED',
             targetResource: domain.id,
-            ipHash: '3a88c42b109e',
+            ipHash,
             details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX GGPIXAPI confirmado.`,
             gdprCompliant: true,
           });
@@ -1255,14 +1262,33 @@ router.post('/webhooks/venopag', async (req: Request, res: Response) => {
             effectivelyPaid: domain.payment.amount,
           });
 
-          auditLogs.unshift({
+          // Email de confirmação de pagamento ao cliente
+          try {
+            await emailService.sendPaymentConfirmation({
+              userName: domain.clientName || 'Condutor DefesAi',
+              caseId: domain.id,
+              amount: domain.payment.amount,
+              paymentMethod: 'pix',
+              transactionId: event.gatewayTransactionId || `ord_${domain.id}`,
+            });
+          } catch (emailErr: any) {
+            logger.warn('payments', 'venopag', 'webhook', 'Falha ao enviar email de confirmação de pagamento (não-bloqueante)', {
+              error: emailErr?.message,
+              caseId: domain.id,
+            });
+          }
+
+          const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+      const ipHash = clientIp === 'unknown' ? '3a88c42b109e' : crypto.createHash('md5').update(clientIp).digest('hex').substring(0, 8);
+
+      auditLogs.unshift({
             id: `audit_pay_${Date.now()}`,
             timestamp: new Date().toISOString(),
             actor: domain.clientName || 'Cliente',
             role: 'citizen',
             action: 'PAYMENT_CONFIRMED',
             targetResource: domain.id,
-            ipHash: '3a88c42b109e',
+            ipHash,
             details: `Pagamento de R$ ${domain.payment.amount.toFixed(2).replace('.', ',')} via PIX VenoPag confirmado.`,
             gdprCompliant: true,
           });
@@ -1280,7 +1306,7 @@ router.post('/webhooks/venopag', async (req: Request, res: Response) => {
       });
     }
 
-    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId, signatureValid });
+    res.status(200).json({ received: true, duplicate: !accepted.isNew, eventId: webhookEventId, matched: accepted.isNew, signatureValid });
   } catch (error: any) {
     logger.error('payments', 'venopag', 'webhook', 'Webhook processing error', { error: error.message });
     res.status(400).json({ error: error.message });

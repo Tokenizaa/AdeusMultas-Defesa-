@@ -20,7 +20,12 @@ function isProductionEnvironment(): boolean {
 }
 
 function resolveActiveGatewayIdFromEnv(): GatewayId {
-  // VenoPag é o único gateway — sempre retorna 'venopag'
+  const envGateway = process.env.PAYMENT_ACTIVE_GATEWAY;
+  const validGateways = ['venopag'];
+  if (envGateway && validGateways.includes(envGateway)) {
+    return envGateway;
+  }
+  // Fallback para VenoPag quando não configurado ou inválido
   return 'venopag';
 }
 
@@ -50,7 +55,7 @@ export class GatewayManager {
       return { id: gw.id, displayName: gw.displayName, status: isConfigured ? 'configured' : 'not_configured', isActive: true, supportsCreditCard: false, notConfiguredReason };
     });
   }
-  getActiveGatewayId(): GatewayId { return 'venopag'; }
+  getActiveGatewayId(): GatewayId { return this.resolveActiveGatewayId(); }
   isProductionGateway(_id: GatewayId): boolean { return true; }
   async setActiveGateway(id: GatewayId, updatedBy: string = 'admin'): Promise<{ success: boolean; message: string }> {
     // VenoPag é o único gateway — não permite troca
