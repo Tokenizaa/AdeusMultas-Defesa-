@@ -70,3 +70,24 @@
 - Não foi feita escrita persistente contra produção: a configuração atual não confirmou um Supabase de teste para verificações diretas e a execução exige ambiente explicitamente autorizado.
 
 **Próximo bloqueador:** comprovar o ciclo de onboarding e caso em execução E2E segura, preservando os testes unitários já aprovados. A análise jurídica não deve avançar para certificação de produção enquanto esse ciclo estiver sem evidência real.
+
+## Fase 3 — Análise jurídica e Quality Gate
+
+**Decisão atual: CORREÇÃO LOCALIZADA VALIDADA EM CI; FLUXO JURÍDICO INTEGRADO AINDA NÃO CERTIFICADO EM PRODUÇÃO.**
+
+### Evidência e correção
+
+- O código atual de `cloudflare/routes/cases.ts` já invoca `runCanonicalQualityGate` depois da geração da minuta e bloqueia a entrega com HTTP 422 quando qualquer verificação bloqueante falha. Relatórios anteriores que afirmam que a invocação não existe estão desatualizados em relação ao código atual.
+- Commit `b37c26f30478f8a85f9b8af8d2c5817f350ef6c6`: corrigiu a verificação de jurisdição para que strings-placeholder (`Não informado`, `desconhecido`, `N/A` e equivalentes) não sejam tratadas como órgão autuador válido.
+- Commit `1a74f76e5a1ae3ccc798a4115ab5e245236c073d`: adicionou regressões para valores ausentes/placeholders e para `DETRAN-SP`.
+- CI completo, incluindo testes Vitest, typecheck e build: **PASS**. Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40196810016
+- Workflow Cloudflare: **PASS** para discovery e testes de contrato. O passo de deploy foi **SKIPPED** pelo gate de publicação; isso não comprova que a correção esteja implantada em produção. Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40196810036
+
+### Limites e próximo bloqueador
+
+- Não foi executada geração real de documento nem uma bateria E2E com persistência.
+- A inspeção de projetos Supabase conectados encontrou apenas o projeto de produção `llmxnpgjpxcvyrqjkfwb` para este produto; não há branch de desenvolvimento Supabase listado. Portanto, a verificação de persistência real exigida pela especificação E2E está **BLOQUEADA** até existir um projeto de teste explicitamente configurado. Não foram feitas escritas sintéticas em produção nem criado projeto novo.
+- A correção não resolve por si só a cobertura jurídica dos catálogos, o teste de classificação FARI, nem comprova que documentos reais passam nos gates com evidência jurídica suficiente.
+- Nenhum deploy de produção foi realizado e nenhum pagamento real foi criado.
+
+**Próxima ação:** preparar/confirmar um ambiente Supabase de teste isolado; depois executar os cenários E2E autorizados que percorrem análise, geração documental, persistência e recuperação. Não reexecutar testes unitários já verdes sem regressão ou mudança relevante.
