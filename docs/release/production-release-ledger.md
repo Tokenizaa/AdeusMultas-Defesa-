@@ -91,3 +91,12 @@
 - Nenhum deploy de produção foi realizado e nenhum pagamento real foi criado.
 
 **Próxima ação:** preparar/confirmar um ambiente Supabase de teste isolado; depois executar os cenários E2E autorizados que percorrem análise, geração documental, persistência e recuperação. Não reexecutar testes unitários já verdes sem regressão ou mudança relevante.
+
+## Evidência de segurança — substituição de testes placebo
+
+- Commit `93c38956e4de26afd0fb66585bb5561c7705ceba`: substituiu a suíte `cloudflare/routes/security-compliance.test.ts`, que continha 30+ asserções `expect(true).toBe(true)` e mockava o próprio middleware, por cinco testes que executam o `authenticateToken` e o `requireAdmin` reais, mockando apenas a fronteira Supabase.
+- Commit `eda7a9c4a10f629b142534a9a1a17a90615432cc`: alinhou o contexto tipado do teste com as variáveis `user` e `rawToken` usadas pelo middleware.
+- Os novos cenários cobrem ausência de token (401), token inválido (401), perfil ausente (403), tentativa de elevar privilégios via metadados editáveis (403) e acesso administrativo com papel autoritativo `user_profiles.role=admin` (200).
+- **Resultado de execução ainda não comprovado:** a integração GitHub disponível nesta sessão não retornou status nem workflow run associado a esses commits. Portanto, não declarar os testes verdes até que o CI os execute.
+- **Impacto na liberação:** relatórios anteriores que contavam essas asserções como comprovação de segurança não são evidência válida. Os testes reais de `auth.test.ts` e `isolation.test.ts` permanecem como evidência separada, com os limites de mocks já documentados.
+
