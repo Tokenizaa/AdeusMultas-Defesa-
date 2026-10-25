@@ -658,7 +658,7 @@ routes.post('/webhooks/pagbank', async (c) => {
   if (status === 'PAID') {
     // Validação do valor da transação contra o valor do pedido.
     const rawPaidAmount = charge?.amount ?? charge?.net_amount ?? payload.amount;
-    const paidAmount = rawPaidAmount === null || rawPaidAmount === undefined || rawPaidAmount === ''
+    const paidAmount = rawPaidAmount == null
       ? Number.NaN
       : Number(rawPaidAmount);
     const orderAmount = Number(existing.amount);
