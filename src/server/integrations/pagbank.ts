@@ -580,7 +580,7 @@ if (data.id) {
     rawBody: string,
     signatureHeader: string | undefined,
     payload: PagBankWebhookPayload
-  ): {
+  ): Promise<{
     received: boolean;
     orderId?: string;
     caseId?: string;
