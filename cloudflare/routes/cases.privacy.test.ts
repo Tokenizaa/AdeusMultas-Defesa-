@@ -150,6 +150,9 @@ describe('DELETE /cases/:id — exclusão real', () => {
     query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      order: vi.fn(() => query),
+      delete: vi.fn(() => query),
       maybeSingle: vi.fn(async () => {
         casesMaybeCalls += 1;
         return casesMaybeCalls === 1 ? { data: fullCaseRow, error: null } : { data: null, error: null };
@@ -230,6 +233,9 @@ describe('DELETE /cases/anonymous/:id — exclusão via claim_token', () => {
     query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      order: vi.fn(() => query),
+      delete: vi.fn(() => query),
       maybeSingle: vi.fn(async () => {
         casesMaybeCalls += 1;
         return casesMaybeCalls === 1 ? { data: { ...fullCaseRow, id: CASE_ID, user_id: null, is_anonymous: true, claim_token: TOKEN }, error: null } : { data: null, error: null };
