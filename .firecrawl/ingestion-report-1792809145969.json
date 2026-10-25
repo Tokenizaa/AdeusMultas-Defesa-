@@ -1,0 +1,200 @@
+[
+  {
+    "documentId": "DOC-LEI-9503-CTB-CONSOLIDADO",
+    "title": "Código de Trânsito Brasileiro (CTB Completo Consolidado - Planalto)",
+    "status": "PROCESSED",
+    "contentHash": "fbc0ff03e822d135",
+    "size": 421962,
+    "chunksCount": 253,
+    "versionId": "ver_DOC-LEI-9503-CTB-CONSOLIDADO_1792809060963",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "planalto.gov.br",
+      "consolidation_date": "2026-08-19"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-1031-2026",
+    "title": "Resolução CONTRAN nº 1.031/2026",
+    "status": "PROCESSED",
+    "contentHash": "1b15a6461b329524",
+    "size": 30543,
+    "chunksCount": 17,
+    "versionId": "ver_DOC-RES-CONTRAN-1031-2026_1792809112929",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/resolucao10312026.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": "RES-432-2013",
+      "alters_annex_of": "RES-985-2022"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-965-2022",
+    "title": "Resolução CONTRAN nº 965/2022",
+    "status": "PROCESSED",
+    "contentHash": "b09ca5a16f2bb0a4",
+    "size": 9912,
+    "chunksCount": 7,
+    "versionId": "ver_DOC-RES-CONTRAN-965-2022_1792809117094",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/Resolucao9652022.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": [
+        "RES-302-2008",
+        "RES-303-2008",
+        "RES-304-2008"
+      ],
+      "altered_by": "RES-1012-2024",
+      "process_number": "80000.113319/2016-17"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-966-2022",
+    "title": "Resolução CONTRAN nº 966/2022",
+    "status": "PROCESSED",
+    "contentHash": "cf4f9434654e3c55",
+    "size": 13403,
+    "chunksCount": 8,
+    "versionId": "ver_DOC-RES-CONTRAN-966-2022_1792809566285",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/Resolucao9662022.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": [
+        "RES-682-2017",
+        "RES-703-2017",
+        "ART-5-RES-799-2020"
+      ],
+      "process_number": "50000.034185/2021-67",
+      "effective_dates": {
+        "motorcycles": "2019-01-01",
+        "new_projects": "2022-10-18",
+        "cars_production": "2024-10-18",
+        "heavy_production": "2025-10-18"
+      }
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-985-2022",
+    "title": "Resolução CONTRAN nº 985/2022",
+    "status": "PROCESSED",
+    "contentHash": "24c14ddc15dfa955",
+    "size": 33891,
+    "chunksCount": 20,
+    "versionId": "ver_DOC-RES-CONTRAN-985-2022_1792809121883",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/Resolucao9852022.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": "RES-925-2022",
+      "altered_by": [
+        "RES-1003-2023",
+        "RES-1009-2024",
+        "RES-1012-2024",
+        "RES-1013-2024",
+        "RES-1031-2026"
+      ],
+      "process_number": "50000.007555/2021-93",
+      "annexes": [
+        "MBFT Part I",
+        "MBFT Part II",
+        "MBFT Part III",
+        "MBFT Part IV",
+        "MBFT Part V",
+        "MBFT Part VI",
+        "MBFT Part VII"
+      ]
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-798-2020",
+    "title": "Resolução CONTRAN nº 798/2020",
+    "status": "PROCESSED",
+    "contentHash": "0418aa40b1973432",
+    "size": 32045,
+    "chunksCount": 19,
+    "versionId": "ver_DOC-RES-CONTRAN-798-2020_1792809126614",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/resolucao798-2020.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": "RES-396-2011",
+      "altered_by": "RES-804-2020",
+      "process_number": "80001.020255/2007-01",
+      "effective_date": "2020-11-01"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-804-2020",
+    "title": "Resolução CONTRAN nº 804/2020",
+    "status": "PROCESSED",
+    "contentHash": "7f98c45eea6c08bf",
+    "size": 8828,
+    "chunksCount": 6,
+    "versionId": "ver_DOC-RES-CONTRAN-804-2020_1792809131006",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/resolucao8042020.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "alters": "RES-798-2020",
+      "process_number": "80001.020255/2007-01"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-918-2022",
+    "title": "Resolução CONTRAN nº 918/2022",
+    "status": "PROCESSED",
+    "contentHash": "ea238a245f346fb0",
+    "size": 50015,
+    "chunksCount": 53,
+    "versionId": "ver_DOC-RES-CONTRAN-918-2022_1792809133172",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/Resolucao9182022.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "revokes": [
+        "RES-156-2004",
+        "RES-424-2012",
+        "RES-442-2013",
+        "RES-574-2015",
+        "RES-619-2016",
+        "RES-697-2017",
+        "RES-736-2018",
+        "RES-845-2021",
+        "DEL-115-2011"
+      ],
+      "altered_by": "RES-991-2023",
+      "process_number": "50000.031757/2021-56",
+      "effective_date": "2022-04-01"
+    }
+  },
+  {
+    "documentId": "DOC-RES-CONTRAN-991-2023",
+    "title": "Resolução CONTRAN nº 991/2023",
+    "status": "PROCESSED",
+    "contentHash": "1491f64eb3b8112e",
+    "size": 7123,
+    "chunksCount": 4,
+    "versionId": "ver_DOC-RES-CONTRAN-991-2023_1792809144214",
+    "persistedToSupabase": false,
+    "sourceUrl": "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-contran/resolucoes/Resolucao9912023.pdf",
+    "metadata": {
+      "collection_date": "2026-10-24T02:31:00.932Z",
+      "source_official": "gov.br/transportes",
+      "alters": "RES-918-2022",
+      "process_number": "50000.031757/2021-56",
+      "effective_date": "2023-04-25"
+    }
+  }
+]
