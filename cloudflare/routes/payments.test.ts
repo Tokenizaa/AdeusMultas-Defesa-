@@ -5,7 +5,7 @@ const h = vi.hoisted(() => {
   const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
   const eq = vi.fn(() => ({ eq, maybeSingle, limit: vi.fn(() => ({ maybeSingle })), neq: updateNeq }));
   const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'order-1', case_id: 'case-1', reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null, amount: 100, gateway: 'pagbank' }, error: null });
-  const caseMaybeSingle = vi.fn().mockResolvedValue({ data: { id: 'case-1', user_id: 'user-1', is_paid: false }, error: null });
+  const caseMaybeSingle = vi.fn().mockResolvedValue({ data: { id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' }, error: null });
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
   const select = vi.fn(() => ({ eq }));
@@ -102,7 +102,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       error: null,
     });
     h.caseMaybeSingle.mockReset().mockResolvedValue({
-      data: { id: 'case-1', user_id: 'user-1', is_paid: false }, error: null,
+      data: { id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' }, error: null,
     });
   });
 
@@ -206,6 +206,29 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
       ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
     } as any);
     expect(response.status).toBe(403);
+    expect(createVenoCashIn).not.toHaveBeenCalled();
+  });
+
+  it('rejects checkout when requested service differs from the persisted case before contacting VenoPag', async () => {
+    h.caseMaybeSingle.mockResolvedValueOnce({
+      data: { id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'recurso_jari' },
+      error: null,
+    });
+
+    const response = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.21' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
+    }, {
+      VENO_PRIMARY_GATEWAY: 'venopag',
+      VENO_CLIENT_ID: 'client-test',
+      VENO_CLIENT_SECRET: 'secret-test',
+      VENO_WEBHOOK_SECRET: 'webhook-secret',
+      ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toContain('não corresponde ao procedimento salvo no caso');
     expect(createVenoCashIn).not.toHaveBeenCalled();
   });
 
