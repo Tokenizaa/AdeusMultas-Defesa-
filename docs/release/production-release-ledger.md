@@ -16,11 +16,13 @@
 
 ### Evidência verificável
 
-- CI completo, incluindo Vitest, typecheck e build: **PASS**, SHA `f2cd0107a811e76bbba874995c568a4119ede119`.  
-  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194366295
+- CI completo, incluindo Vitest, typecheck e build: **PASS**, SHA `b29d826068cac5e2af6e7c9cc9d6df491dd832ba`.  
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194862271
 - Workflow Cloudflare, incluindo descoberta da matriz E2E e testes de contratos/regressão de pagamentos: **PASS**, mesmo SHA.  
-  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194366341
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194862293
 - Cobertura de pagamento existente e executada pelo workflow: resolução de oferta no backend, bloqueio de valor divergente informado pelo cliente, criação PIX VenoPag, HMAC, confirmação PAID, repetição de webhook, idempotência de criação, contestação, chargeback/estorno e o novo caso de evento `pending` fora de ordem.
+- Commit `11ae0b8c6af756117b0d5c52d01be9f496b14fc0` + `b29d826068cac5e2af6e7c9cc9d6df491dd832ba`: valida que o `serviceType` enviado ao checkout corresponde ao `service_type` persistido no caso, tanto no PIX quanto no cartão. Divergências são recusadas antes de qualquer chamada ao gateway.
+- Testes no SHA mais recente: `payments.test.ts` 23/23, `payments.regression.test.ts` 7/7 e `cases.test.ts` 22/22 aprovados no workflow Cloudflare.
 - Verificação pública sem escrita: `GET /api/health` respondeu HTTP 200 em 25/10/2026; o Worker reportou banco conectado e gateway `venopag` configurado para produção.
 
 ### Limites da evidência
@@ -53,10 +55,10 @@
 
 ### Evidência verificável
 
-- CI completo, Vitest + typecheck + build: **PASS**, SHA `46e15e9401d7d7cc9c31c700319c140ac4ee85ac`.  
-  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194679037
-- Workflow Cloudflare, incluindo a suíte de contratos/regressão de casos: **PASS**, mesmo SHA.  
-  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194679024
+- CI completo, Vitest + typecheck + build: **PASS** no SHA mais recente `b29d826068cac5e2af6e7c9cc9d6df491dd832ba`.  
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194862271
+- Workflow Cloudflare, incluindo a suíte de contratos/regressão de casos e pagamentos: **PASS**, SHA `b29d826068cac5e2af6e7c9cc9d6df491dd832ba`.  
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194862293
 - `cloudflare/routes/cases.test.ts`: 22/22 testes passaram no workflow Cloudflare, incluindo criação anônima, recuperação/claim por token, tipos de serviço, qualificação e retomada do estado de pagamento.
 - Página pública `/novo-caso`: HTTP 200 e primeiro passo do onboarding renderizado em 25/10/2026. Nenhum formulário foi enviado e nenhum caso foi criado nesta verificação.
 
