@@ -338,6 +338,33 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
   });
 
   describe('Webhook VenoPag — transação e reversões', () => {
+    it('ignora evento pending fora de ordem quando o pagamento já está PAID', async () => {
+      setPaymentOrderExisting({
+        id: 'order-veno-paid', case_id: 'case-1', status: 'PAID',
+        paid_at: '2026-10-25T10:00:00Z', amount: 150, gateway: 'venopag',
+        gateway_transaction_id: 'tx_veno_paid', payment_method: 'pix',
+      });
+      getVenoCashInStatus.mockResolvedValue({
+        ok: true, status: 'pending', request_number: 'tx_veno_paid', amount: 150,
+      });
+
+      const response = await app().request('/api/webhooks/venopag', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-veno-signature': 't=1,v1=deadbeef',
+          'x-veno-client-id': 'client-test',
+        },
+        body: JSON.stringify({
+          type: 'cashin', status: 'pending', request_number: 'tx_veno_paid', amount: 150,
+        }),
+      }, envBase);
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ status: 'PAID', ignored: true });
+      expect(adminClient.rpc).not.toHaveBeenCalled();
+    });
+
     it('contested → DISPUTED (sem reversão de ledger)', async () => {
       const order = {
         id: 'order-veno-1', case_id: 'case-1', status: 'PENDING', paid_at: null,
