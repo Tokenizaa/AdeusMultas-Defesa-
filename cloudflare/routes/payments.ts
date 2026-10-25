@@ -101,13 +101,14 @@ async function reserveOrFindPendingOrder(
     .eq('case_id', input.caseId)
     .eq('user_id', input.userId)
     .eq('payment_method', 'pix')
+    .eq('gateway', 'venopag')
     .eq('status', 'PENDING')
     .maybeSingle();
   // Log reserved status without exposing sensitive data; avoid logging amounts or gateway tx IDs.
 
   // Fast path: cobrança PENDING já criada e com dados do gateway → reutiliza,
   // nunca gera segunda cobrança.
-  if (existing?.gateway_transaction_id && Number(existing.amount) === finalAmount) {
+  if (existing?.gateway === input.gateway && existing.gateway_transaction_id && Number(existing.amount) === finalAmount) {
     return { order: existing, reused: true, ownsReservation: false };
   }
 
@@ -135,7 +136,7 @@ async function reserveOrFindPendingOrder(
     if (String(insertError.code) === '23505') {
       const { data: winner } = await supabase.from('payment_orders')
         .select('*').eq('case_id', input.caseId).maybeSingle();
-      if (winner?.gateway_transaction_id && Number(winner.amount) === finalAmount && winner.status === 'PENDING') {
+      if (winner?.gateway === input.gateway && winner.gateway_transaction_id && Number(winner.amount) === finalAmount && winner.status === 'PENDING') {
         return { order: winner, reused: true, ownsReservation: false };
       }
       // UNIQUE(case_id) impede criar outra ordem. Se a ordem existente é terminal,
