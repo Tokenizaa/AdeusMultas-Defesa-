@@ -397,4 +397,53 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
       expect(rpcArgs[1].p_reversal_reason).toBe('chargedback');
     });
   });
+
+  it('não reutiliza cobrança PIX pendente do PagBank como se fosse VenoPag', async () => {
+    const legacyOrder = {
+      id: 'legacy-pagbank-order',
+      case_id: 'case-1',
+      user_id: 'user-1',
+      status: 'PENDING',
+      amount: 100,
+      gateway: 'pagbank',
+      payment_method: 'pix',
+      gateway_transaction_id: 'legacy-pagbank-tx',
+    };
+    let paymentLookupCount = 0;
+    adminClient.from = vi.fn((table: string) => {
+      if (table === 'cases') {
+        return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+      }
+      if (table === 'payment_orders') {
+        const query = {
+          eq: vi.fn(() => query),
+          maybeSingle: vi.fn(async () => {
+            paymentLookupCount += 1;
+            if (paymentLookupCount >= 3) return { data: legacyOrder, error: null };
+            return { data: null, error: null };
+          }),
+        };
+        return {
+          select: vi.fn(() => query),
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key' } }),
+            })),
+          })),
+        };
+      }
+      return makeChain(null);
+    });
+
+    const response = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.51' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
+    }, envBase);
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toContain('Cobrança já está sendo processada');
+    expect(createVenoCashIn).not.toHaveBeenCalled();
+  });
+
 });
