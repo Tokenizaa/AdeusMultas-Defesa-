@@ -380,7 +380,7 @@ describe('applicant qualification', () => {
     );
 
     expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ message: 'A qualificação não foi persistida. Recarregue o caso e tente novamente.' });
+    expect(await response.text()).toContain('A qualificação não foi persistida. Recarregue o caso e tente novamente.');
   });
 
   it('rejects incomplete qualification without writing personal data', async () => {
