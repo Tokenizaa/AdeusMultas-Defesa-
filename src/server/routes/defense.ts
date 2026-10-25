@@ -150,8 +150,14 @@ router.post('/api/cases/:id/generate-defense', authenticateToken, async (req, re
     // Block defense generation if required checks fail.
     // Fail-closed: 422 if any check does not pass.
     // Build lineage from case domain data and catalogs.
+    const lineagePayload = {
+      procedureType: domain.serviceType,
+      applicant: domain.applicant ?? {},
+      vehicle: domain.vehicle,
+      infraction: domain.infraction,
+    } as any;
     const lineage = buildDataLineage(
-      domain.applicant || {},
+      lineagePayload,
       domain,
       domain.analysis as any,
       defense.fullDraftText,
