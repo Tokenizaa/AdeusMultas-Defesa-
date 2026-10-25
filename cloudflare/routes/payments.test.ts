@@ -238,18 +238,15 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     expect(response.status).toBe(400);
   });
 
-  it('creates a PIX order and persists the payment_order', async () => {
+  it('keeps legacy PagBank disabled for new PIX charges while VenoPag is primary', async () => {
     const response = await app().request('/api/payments/pix/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
       body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
     }, { APP_URL: 'https://adeusmulta.defesai.com.br', PAGBANK_TOKEN: 'test-token', PAYMENT_MODE: 'production', PAGBANK_ENV: 'production', VENO_PRIMARY_GATEWAY: 'pagbank', ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } } as any);
-    expect(response.status).toBe(200);
-    const body = await response.json() as any;
-    expect(body.success).toBe(true);
-    expect(body.gateway).toBe('pagbank');
-    expect(body.amount).toBe(100);
-    expect(h.insertChain).toHaveBeenCalled();
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain('PagBank permanece desativado');
+    expect(h.insertChain).not.toHaveBeenCalled();
   });
 
   it('rejects PIX creation when the rate limit is reached', async () => {
