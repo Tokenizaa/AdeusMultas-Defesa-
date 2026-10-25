@@ -152,7 +152,8 @@ export function runCanonicalQualityGate(input: CanonicalQualityGateInput): Canon
   );
 
   // ── 5) JURISDIÇÃO (gap herdado da FASE 12.6 §9) ──────────────────────────
-  const autuador = String(infraction?.autuadorBody ?? '');
+  const autuador = String(infraction?.autuadorBody ?? '').trim();
+  const missingAutuador = !autuador || /^(?:não informado|nao informado|desconhecido|unknown|n\/a)$/i.test(autuador);
   const declaredUf = /\b([A-Z]{2})\b/.exec(autuador)?.[1] ?? null;
   const mismatches: string[] = [];
   if (declaredUf && /\b(DETRAN|CET|DER|SPTRANS|BHTRANS|TRANS[A-Z]+)-[A-Z]{2}\b/i.test(autuador)) {
@@ -162,10 +163,10 @@ export function runCanonicalQualityGate(input: CanonicalQualityGateInput): Canon
   checks.push(
     check(
       'JURISDICAO',
-      mismatches.length === 0 && autuador.length > 0,
-      mismatches.length > 0 || !autuador ? 'error' : 'info',
-      !autuador
-        ? 'Órgão autuador ausente — impossível validar jurisdição'
+      mismatches.length === 0 && !missingAutuador,
+      mismatches.length > 0 || missingAutuador ? 'error' : 'info',
+      missingAutuador
+        ? 'Órgão autuador ausente ou não informado — impossível validar jurisdição'
         : mismatches.length > 0
           ? `Órgão autuador com jurisdição inconsistente: ${mismatches.join(', ')}`
           : `Jurisdição declarada coerente com o órgão autuador: ${autuador}`,
