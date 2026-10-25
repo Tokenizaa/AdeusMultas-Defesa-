@@ -682,13 +682,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         ? 'w-2.5 bg-emerald-600'
                         : 'w-2.5 bg-slate-200',
                 ].join(' ')}
-              title={
-                isSkipped
-                  ? `Etapa ${idx + 1} de ${totalDisplaySteps} (pulada)`
-                  : `Etapa ${idx + 1} de ${totalDisplaySteps}`
-              }
-            />
-          ))}
+                title={
+                  isSkipped
+                    ? `Etapa ${idx + 1} de ${totalDisplaySteps} (pulada)`
+                    : `Etapa ${idx + 1} de ${totalDisplaySteps}`
+                }
+              />
+            );
+          })}
         </div>
       </div>
 
