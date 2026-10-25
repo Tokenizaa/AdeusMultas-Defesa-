@@ -70,7 +70,15 @@ jobs:
           E2E_TEST_RUN_ID: ci-discovery-${{ github.sha }}
         run: |
           bun run test:e2e:list | tee /tmp/e2e-discovery.txt
-          grep -Eq 'Total: 70 tests? in 7 files?' /tmp/e2e-discovery.txt
+          services="DEFESA_PREVIA RECURSO_JARI RECURSO_CETRAN SUSPENSAO CASSACAO INDICACAO_CONDUTOR CONVERSAO_ADVERTENCIA"
+          for service in $services; do
+            count=$(grep -Ec "E2E-${service}-(0[1-9]|10)( |$)" /tmp/e2e-discovery.txt || true)
+            if [ "$count" -ne 10 ]; then
+              echo "Expected 10 canonical scenarios for $service, found $count"
+              exit 1
+            fi
+          done
+          echo "Verified 70 canonical scenarios across 7 services (supplemental tests are counted separately)."
 
       - name: Test Phase 2 OCR
         run: bunx vitest run cloudflare/routes/ocr.test.ts
