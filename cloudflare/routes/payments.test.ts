@@ -5,11 +5,15 @@ const h = vi.hoisted(() => {
   const updateNeq = vi.fn(() => ({ select: vi.fn(() => ({ maybeSingle: transitioned })) }));
   const eq = vi.fn(() => ({ eq, maybeSingle, limit: vi.fn(() => ({ maybeSingle })), neq: updateNeq }));
   const maybeSingle = vi.fn().mockResolvedValue({ data: { reference_id: 'defesai_case_case-1', status: 'aguardando_pagamento', paid_at: null }, error: null });
+  const caseMaybeSingle = vi.fn().mockResolvedValue({ data: { id: 'case-1', user_id: 'user-1', is_paid: false }, error: null });
   const single = vi.fn().mockResolvedValue({ data: { id: 'order-1' }, error: null });
   const insertChain = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
   const select = vi.fn(() => ({ eq }));
   const update = vi.fn(() => ({ eq: vi.fn(() => ({ neq: updateNeq })) }));
   const from = vi.fn((table) => {
+    if (table === 'cases') {
+      return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: caseMaybeSingle })) })) };
+    }
     if (table === 'webhook_events') {
       return {
         insert: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -23,7 +27,7 @@ const h = vi.hoisted(() => {
   });
   const rpc = vi.fn().mockResolvedValue({ data: { ok: true, status: 'confirmed', payment_id: 'order-1' }, error: null });
   return {
-    transitioned, updateNeq, eq, maybeSingle, single, insertChain, select, update, from, rpc,
+    transitioned, updateNeq, eq, maybeSingle, caseMaybeSingle, single, insertChain, select, update, from, rpc,
     config: {
       createSupabaseAdminClient: vi.fn(() => ({ from, rpc })),
     },
@@ -73,7 +77,7 @@ vi.mock('./commercial', () => ({
 
 import { Hono } from 'hono';
 import { paymentsRoutes } from './payments';
-import { getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
+import { createVenoCashIn, getVenoCashInStatus, verifyVenoWebhook } from '../venopag';
 import type { Env } from '../supabase';
 
 function app() {
@@ -135,7 +139,7 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
   });
 
   it('persists a simulated payment for an existing case in sandbox', async () => {
-    h.maybeSingle.mockResolvedValueOnce({
+    h.caseMaybeSingle.mockResolvedValueOnce({
       data: {
         id: 'case-1', title: 'Caso sintético', user_id: 'user-1', status: 'analisado', current_stage: 2,
         service_type: 'defesa_previa', is_paid: false, is_anonymous: false, paid_at: null,
@@ -169,6 +173,25 @@ describe('Phase 12 — payment contracts (Cloudflare)', () => {
     }, { PAYMENT_MODE: 'sandbox' } as any);
     expect(response.status).toBe(400);
     expect(h.config.createSupabaseAdminClient).not.toHaveBeenCalled();
+  });
+
+  it('blocks PIX creation when the authenticated user does not own the case', async () => {
+    h.caseMaybeSingle.mockResolvedValueOnce({
+      data: { id: 'case-1', user_id: 'another-user', is_paid: false }, error: null,
+    });
+    const response = await app().request('/api/payments/pix/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
+      body: JSON.stringify({ serviceType: 'defesa_previa', caseId: 'case-1', customerCpf: '12345678909' }),
+    }, {
+      VENO_PRIMARY_GATEWAY: 'venopag',
+      VENO_CLIENT_ID: 'client-test',
+      VENO_CLIENT_SECRET: 'secret-test',
+      VENO_WEBHOOK_SECRET: 'webhook-secret',
+      ANONYMOUS_CASE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+    expect(response.status).toBe(403);
+    expect(createVenoCashIn).not.toHaveBeenCalled();
   });
 
   it('requires caseId before creating a PIX order', async () => {
