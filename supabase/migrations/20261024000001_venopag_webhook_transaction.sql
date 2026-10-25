@@ -77,5 +77,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.apply_venopag_webhook(uuid, text, timestamptz, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.apply_venopag_webhook(uuid, text, timestamptz, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.apply_venopag_webhook(uuid, text, timestamptz, text) TO service_role;
