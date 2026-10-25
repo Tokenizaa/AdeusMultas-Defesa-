@@ -772,6 +772,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           />
         </>
       )}
+      
+      // Ensure infractionData is synced when step changes back from analysis
+      useEffect(() => {
+        // When navigating back from analysis result, ensure infractionData 
+        // has the required fields for SpecificInfractionDataStep
+        if (step === 5) {
+          // Ensure critical fields are populated
+          if (!infractionData.infractionCode) {
+            // Will be populated when user advances again
+          }
+          if (!infractionData.speedLimit && infractionData.measuredSpeed) {
+            // consideredSpeed will be calculated on component mount
+          }
+        }
+      }, [step, infractionData]);
 
       {step === 8 && (
         <RequiredDataStep

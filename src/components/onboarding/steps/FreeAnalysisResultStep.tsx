@@ -205,9 +205,11 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   onBack,
 }) => {
   const successRate = analysis?.overallSuccessRate;
-  const isRateUnavailable = successRate === null;
+  const hasRecommendedArguments = analysis?.recommendedArguments && analysis.recommendedArguments.length > 0;
+  const hasRecommendedArguments = analysis?.recommendedArguments && analysis.recommendedArguments.length > 0;
+  const isRateUnavailable = successRate === null || !hasRecommendedArguments;
   const rateValue = isRateUnavailable ? 0 : successRate;
-  const isHighProbability = !isRateUnavailable && rateValue >= 80;
+  const isHighProbability = !isRateUnavailable && rateValue >= 80 && hasRecommendedArguments;
   const dataCompleteness = analysis?.dataCompleteness;
   
   // Animated counter state
@@ -241,8 +243,8 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   }, [rateValue, isRateUnavailable]);
   
   const showImprovementMessage = !animationComplete || (!isRateUnavailable && rateValue < 75 && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0);
-  const isLowProbability = !isRateUnavailable && rateValue < 60;
-  const isMediumProbability = !isRateUnavailable && rateValue >= 60 && rateValue < 80;
+  const isLowProbability = !isRateUnavailable && rateValue < 60 && hasRecommendedArguments;
+  const isMediumProbability = !isRateUnavailable && rateValue >= 60 && rateValue < 80 && hasRecommendedArguments;
   
   // Calcula pontos de defesa personalizados (top 3 por relevância)
   const defensePoints = analysis?.recommendedArguments
@@ -280,32 +282,33 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       <div className="p-6 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
         <div className="space-y-3">
           <span className="text-base font-bold text-emerald-800 uppercase font-mono block">
-            {isRateUnavailable ? 'Indicador Indisponível' : 'Força da sua defesa'}
+            {hasRecommendedArguments ? 'Força da sua defesa' : 'Sem teses detectadas'}
           </span>
-          <div className="text-4xl sm:text-5xl font-extrabold font-mono">
-            {isRateUnavailable ? (
-              <span className="text-emerald-700">—</span>
-            ) : (
+          {hasRecommendedArguments ? (
+            <div className="text-4xl sm:text-5xl font-extrabold font-mono">
               <span className="text-emerald-700">{displayedRate}%</span>
-            )}
-          </div>
-          {!isRateUnavailable && (
+            </div>
+          ) : (
+            <span className="text-emerald-700">—</span>
+          )}
+          {!hasRecommendedArguments && (
             <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
-              Quanto a sua defesa tem de chance de prosperar com os dados que você enviou. Não é previsão de resultado — a decisão final é do órgão.
+              isRateUnavailable ? 'Análise em modo degradado — base jurídica indisponível' : 'null (sem teses detectadas)'
             </p>
           )}
-          <span className="text-lg font-medium">
-            {isRateUnavailable ? (
-              <span className="text-emerald-600">Análise em modo degradado — base jurídica indisponível</span>
-            ) : defensePoints.length > 0 ? (
-              isHighProbability
-                ? 'Vários pontos fortes no seu caso'
-                : isMediumProbability
-                ? 'Há pontos que valem a pena usar na defesa'
-                : 'Ainda falta comprovar alguns pontos'
-            ) : (
-              'Com os dados de hoje, não encontramos ponto forte'
-            )}
+          {hasRecommendedArguments && (
+            <span className="text-lg font-medium">
+              {defensePoints.length > 0 ? (
+                isHighProbability
+                  ? 'Vários pontos fortes no seu caso'
+                  : isMediumProbability
+                  ? 'Há pontos que valem a pena usar na defesa'
+                  : 'Ainda falta comprovar alguns pontos'
+              ) : (
+                'Com os dados de hoje, não encontramos ponto forte'
+              )}
+            </span>
+          )}
           </span>
           
           {/* Data completeness indicator */}
