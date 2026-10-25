@@ -92,7 +92,7 @@ function setPaymentOrderExisting(order: any) {
     if (table === 'webhook_events') {
       return {
         insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-        update: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) })),
         select: vi.fn(() => makeChain(null)),
         eq: vi.fn(() => makeChain(null)),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
