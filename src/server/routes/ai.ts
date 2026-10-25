@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { RagPipeline } from '../../core/rag/rag-pipeline';
 import { runFinalQualityGate } from '../../core/validation/final-quality-gate';
 import { buildDataLineage } from '../../core/validation/data-lineage';
-import { type QualityGateInput } from '../../types';
+import { type QualityGateInput, type InfractionData, type ProcedureType } from '../../types';
 import { ARGUMENTS_CATALOG } from '../../core/arguments/arguments-catalog';
 import { DOCUMENT_BLOCKS } from '../../core/templates/document-blocks';
 import { getGeminiClient, enrichDefenseWithGemini } from '../gemini';
