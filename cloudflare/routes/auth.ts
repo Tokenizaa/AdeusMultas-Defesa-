@@ -14,7 +14,7 @@ authRoutes.get('/auth/me', authenticateToken, async (c) => {
   const supabaseAdmin = createSupabaseAdminClient(c.env);
   try {
     const { data: profileData, error: profileError } = await supabaseAdmin
-      .from('profiles')
+      .from('user_profiles')
       .select('role')
       .eq('email', user.email)
       .maybeSingle();
