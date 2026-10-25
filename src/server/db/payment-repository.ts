@@ -87,7 +87,7 @@ export class PaymentRepository {
    * Campo `gateway` registra qual provedor criou o pagamento — essencial
    * para a regra de que trocar gateway não migra pagamentos existentes.
    */
-  persistOrder(
+  async persistOrder(
     order: PagBankOrderResult | {
       caseId: string;
       orderId?: string;
@@ -108,7 +108,7 @@ export class PaymentRepository {
       userId?: string;
       gateway?: GatewayId;
     } = {}
-  ): void {
+  ): Promise<void> {
     if (!this.client) return;
 
     // Mesmo mapeamento do case-repository: id sintético (`case_*`) → UUID v5
