@@ -38,4 +38,33 @@
 4. Executar uma única validação PIX real controlada, somente após os demais bloqueios serem resolvidos e mediante autorização explícita.
 5. Anexar evidências da transação, webhook e estado persistido, sem incluir credenciais ou dados pessoais reais.
 
-**Próxima fase:** onboarding e caso, após encerrar as correções pendentes de pagamento; não reabrir os testes verdes sem alteração relevante ou regressão.
+**Próxima etapa:** onboarding e caso. A validação real de pagamento permanece um gate antes da liberação; não reabrir os testes verdes sem alteração relevante ou regressão.
+
+## Fase 2 — Onboarding e caso
+
+**Decisão atual: CORREÇÕES DE PERSISTÊNCIA APROVADAS EM TESTES; E2E REAL AINDA NÃO COMPROVADO.**
+
+### Correções entregues
+
+- Commit `2b4b1845c9d46ae293390ed63fe65cbca457e70a`: a rota de qualificação agora exige que a atualização retorne o ID do caso; se nenhuma linha for atualizada, responde `409` em vez de reportar sucesso falso.
+- Commits `82ebe0e556588a88b3aa6db125e60f9cb573c8ca` e `cf2c6fb0c9e13379c1563d58de569a1478348829`: teste de regressão para atualização sem linhas afetadas e ajuste da asserção ao formato real da resposta HTTP.
+- Commit `88129c252db3ee113956fd45919aac139a393d02`: a recuperação do estado de onboarding agora responde `503` quando a consulta do pagamento falha, em vez de devolver sucesso incompleto com pagamento ausente.
+- Commits `edf234767f8317254b039180edb9c8754c20bab4` e `46e15e9401d7d7cc9c31c700319c140ac4ee85ac`: regressões para retomada do PIX pendente, erro de banco na retomada e fechamento correto da suíte de testes.
+
+### Evidência verificável
+
+- CI completo, Vitest + typecheck + build: **PASS**, SHA `46e15e9401d7d7cc9c31c700319c140ac4ee85ac`.  
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194679037
+- Workflow Cloudflare, incluindo a suíte de contratos/regressão de casos: **PASS**, mesmo SHA.  
+  Execução: https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40194679024
+- `cloudflare/routes/cases.test.ts`: 22/22 testes passaram no workflow Cloudflare, incluindo criação anônima, recuperação/claim por token, tipos de serviço, qualificação e retomada do estado de pagamento.
+- Página pública `/novo-caso`: HTTP 200 e primeiro passo do onboarding renderizado em 25/10/2026. Nenhum formulário foi enviado e nenhum caso foi criado nesta verificação.
+
+### Limites da evidência e pendências
+
+- Os testes de contrato usam mocks de banco; ainda não comprovam a persistência real nem o isolamento de titular no Supabase de produção.
+- O fluxo de autenticação/cadastro e o ciclo completo criação anônima → recuperação → claim → qualificação → retomada precisam de execução E2E autorizada com evidências de cada etapa.
+- A descoberta dos 70 cenários canônicos é aprovada, mas não equivale à execução dos 70 cenários.
+- Não foi feita escrita persistente contra produção: a configuração atual não confirmou um Supabase de teste para verificações diretas e a execução exige ambiente explicitamente autorizado.
+
+**Próximo bloqueador:** comprovar o ciclo de onboarding e caso em execução E2E segura, preservando os testes unitários já aprovados. A análise jurídica não deve avançar para certificação de produção enquanto esse ciclo estiver sem evidência real.
