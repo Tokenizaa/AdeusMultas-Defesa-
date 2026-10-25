@@ -560,7 +560,7 @@ if (data.id) {
 
     const alreadyPaid = order.status === 'PAID';
     order.status = 'PAID';
-    await paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
+    paymentRepository.persistOrder(order, { paymentMethod: order.paymentMethod || 'pix' });
 
     if (!alreadyPaid) {
       eventBus.publish(
