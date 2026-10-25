@@ -8,8 +8,18 @@ const BUCKET = 'case-documents';
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 function pdfEscape(value: string): string {
-  const ascii = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7E\n\r]/g, '?');
-  return ascii.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  // Escape PDF special characters while preserving Unicode/acentuação.
+  // PDF uses \\ as escape, \( and \) for literal parentheses.
+  // We only need to escape backslash, left paren, and right paren.
+  // Do NOT strip diacritical marks — Portuguese legal documents depend on acentuação.
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\\)');
+  // Normalize dash characters to regular hyphen, preserving surrounding text
+  const normalized = escaped.replace(/[—–]/g, '-');
+  // Keep all Unicode characters; only replace truly non-printable if absolutely needed
+  return normalized;
 }
 
 function wrap(text: string, max = 92): string[] {

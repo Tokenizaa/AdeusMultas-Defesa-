@@ -38,7 +38,36 @@ const supabase = {
   },
 };
 
-vi.mock('../supabase', () => ({ createSupabaseAdminClient: vi.fn(() => supabase) }));
+vi.mock('../supabase', () => ({
+  createSupabaseAdminClient: vi.fn(() => supabase),
+  createSupabaseUserClient: vi.fn((cEnv, accessToken) => ({
+    from: vi.fn((table: string) => {
+      const chain: any = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        maybeSingle: vi.fn(async () => {
+          if (table === 'cases') return { data: caseRow, error: null };
+          if (table === 'payment_orders') return { data: { id: 'payment-1' }, error: null };
+          if (table === 'documents') return { data: { id: 'doc-1', storage_path: 'path.pdf', content_hash: 'hash', size_bytes: 1000, mime_type: 'application/pdf', generated_at: new Date().toISOString(), created_at: new Date().toISOString() }, error: null };
+          return { data: null, error: null };
+        }),
+        insert: vi.fn(() => chain),
+        update: vi.fn(() => chain),
+        single: vi.fn(async () => ({ data: { id: 'document-1' }, error: null })),
+      };
+      return chain;
+    }),
+    storage: {
+      from: vi.fn(() => ({
+        upload: vi.fn(async (_path: string, file: Uint8Array) => {
+          expect(file).toBeInstanceOf(Uint8Array);
+          return { data: { path: _path }, error: null };
+        }),
+        createSignedUrl: vi.fn(async (path: string) => ({ data: { signedUrl: `https://signed.test/${path}` }, error: null })),
+      })),
+    },
+  })),
+}));
 vi.mock('../middleware', () => ({
   authenticateToken: async (c: any, next: any) => {
     c.set('user', { id: caseRow.user_id, role: 'citizen', email: 'test@example.com' });
