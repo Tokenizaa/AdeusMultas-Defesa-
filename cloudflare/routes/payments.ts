@@ -20,6 +20,22 @@ async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?
   return result.offer;
 }
 
+async function assertCaseCanBePaid(env: Env, caseId: string, user: AuthenticatedUser): Promise<void> {
+  const supabase = createSupabaseAdminClient(env);
+  const { data: row, error } = await supabase.from('cases')
+    .select('id,user_id,is_paid')
+    .eq('id', caseId)
+    .maybeSingle();
+  if (error) throw new HTTPException(503, { message: 'Não foi possível validar o titular do caso.' });
+  if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
+  if (user.role !== 'admin' && row.user_id !== user.id) {
+    throw new HTTPException(403, { message: 'Você não tem permissão para pagar este caso.' });
+  }
+  if (row.is_paid === true) {
+    throw new HTTPException(409, { message: 'Este caso já está marcado como pago.' });
+  }
+}
+
 async function persistOrder(env: Env, input: { caseId: string; userId?: string; referenceId: string; serviceType?: string; gatewayOrderId?: string; gatewayTransactionId: string; amount: number; baseAmount?: number; discountAmount?: number; couponCode?: string; status: string; gateway: string; paymentMethod?: string; qrCodeText?: string; qrCodeUrl?: string }) {
   const supabase = createSupabaseAdminClient(env);
   const now = new Date().toISOString();
@@ -359,6 +375,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
+  await assertCaseCanBePaid(c.env, caseId, user);
   const ipAddress = c.req.header('cf-connecting-ip');
   const limiter = c.env.ANONYMOUS_CASE_LIMITER;
   if (!ipAddress || !limiter) {
@@ -424,6 +441,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     });
   }
 
+  let providerRequestStarted = false;
   let venoOrder;
   let affiliateSplits: Array<{ userId: string; level: number; username: string; percentage: number }> = [];
   let record: any;
@@ -434,6 +452,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
       }
       await registerReferralFromCode(c.env, user.id, body.referralCode);
       affiliateSplits = await resolveVenoAffiliateSplits(c.env, user.id);
+      providerRequestStarted = true;
       venoOrder = await createVenoCashIn(c.env, {
         amountInCents: Math.round(finalAmount * 100),
         payerName: payer.name,
@@ -490,6 +509,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
       });
     }
     if (!c.env.PAGBANK_TOKEN) throw new HTTPException(503, { message: 'Pagamento temporariamente indisponível. Tente novamente mais tarde.' });
+    providerRequestStarted = true;
     const order = await createPixOrder(c.env as any, { caseId, referenceId, payer, amountInCents: Math.round(finalAmount * 100), description: `DefesAi - ${offer.name}`, webhookUrl: `${(c.env as any).APP_URL || 'https://adeusmulta.defesai.com.br'}/api/webhooks/pagbank` });
     if (order.simulated) throw new HTTPException(503, { message: 'Pagamento simulado não é aceito neste ambiente.' });
     record = await updateReservedOrder(c.env, reserved.order.id, {
@@ -507,7 +527,9 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     });
     return c.json({ success: true, order, paymentOrder: record, pixCopyPasteString: order.pixCopyPaste, qrCodeDataUrl: order.qrCodeUrl || undefined, txId: order.gatewayTransactionId, amount: offer.finalAmount, serviceType: offer.serviceType, status: order.status, gateway: 'pagbank', simulated: order.simulated });
   } catch (error) {
-    if (!(error instanceof HTTPException) && reserved.ownsReservation) {
+    // Uma falha de rede após iniciar a chamada ao provedor é ambígua: a cobrança
+    // pode ter sido criada. Preserve a reserva para reconciliação e evite duplicidade.
+    if (!(error instanceof HTTPException) && reserved.ownsReservation && !providerRequestStarted) {
       await deleteReservation(c.env, caseId).catch(() => {});
     }
     throw error;
@@ -571,6 +593,7 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
   if (!body.cardToken) throw new HTTPException(400, { message: 'cardToken é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
+  await assertCaseCanBePaid(c.env, caseId, user);
   const ipAddress = c.req.header('cf-connecting-ip');
   const limiter = c.env.ANONYMOUS_CASE_LIMITER;
   if (!ipAddress || !limiter) {
