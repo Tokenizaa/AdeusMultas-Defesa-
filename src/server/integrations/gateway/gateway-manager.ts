@@ -22,8 +22,8 @@ function isProductionEnvironment(): boolean {
 function resolveActiveGatewayIdFromEnv(): GatewayId {
   const envGateway = process.env.PAYMENT_ACTIVE_GATEWAY;
   const validGateways = ['venopag'];
-  if (envGateway && validGateways.includes(envGateway)) {
-    return envGateway;
+  if (envGateway === 'venopag') {
+    return 'venopag';
   }
   // Fallback para VenoPag quando não configurado ou inválido
   return 'venopag';
