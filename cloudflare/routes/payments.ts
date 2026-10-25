@@ -739,6 +739,20 @@ routes.post('/webhooks/venopag', async (c) => {
   }
   const currentStatus = verified.status.toLowerCase();
 
+  // A pending callback must never downgrade an order already confirmed as paid.
+  // This can happen with delayed/out-of-order provider notifications. Preserve
+  // the paid state and close this event as intentionally ignored; a later
+  // authoritative refund/chargeback remains processable under its own event ID.
+  const wasAlreadyPaid = String(existing.status || '').toUpperCase() === 'PAID' || Boolean(existing.paid_at);
+  if (wasAlreadyPaid && currentStatus === 'pending') {
+    await markWebhookEventProcessed(supabase, webhookEventId);
+    return c.json({
+      error: 'Evento pendente fora de ordem; pagamento confirmado preservado.',
+      status: 'PAID',
+      ignored: true,
+    }, 409);
+  }
+
   // State mapping (provider status -> our terminal state).
   //   confirmed    -> PAID            (ledger -> PAID)
   //   chargedback  -> REFUNDED        (ledger -> REVERSED)
