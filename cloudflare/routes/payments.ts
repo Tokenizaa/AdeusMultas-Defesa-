@@ -400,6 +400,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
     .eq('case_id', caseId)
     .eq('user_id', user.id)
     .eq('payment_method', 'pix')
+    .eq('gateway', 'venopag')
     .eq('status', 'PENDING')
     .maybeSingle();
   if (existingOrder?.gateway === 'venopag' && existingOrder.gateway_transaction_id && Number(existingOrder.amount) === Number(offer.finalAmount)) {
