@@ -16,7 +16,9 @@ vi.mock('../supabase', () => ({
 
 vi.mock('../middleware', () => ({
   authenticateToken: async (c: any, next: () => Promise<void>) => {
-    c.set('user', { id: '00000000-0000-4000-8000-000000000001', email: 'dono@example.com', role: 'citizen' });
+    const auth = c.req.header('authorization') || '';
+    const isOtherUser = auth.includes('token-outro');
+    c.set('user', { id: isOtherUser ? '00000000-0000-4000-8000-000000000002' : '00000000-0000-4000-8000-000000000001', email: isOtherUser ? 'outro@example.com' : 'dono@example.com', role: 'citizen' });
     await next();
   },
   requireAdmin: async (_c: unknown, next: () => Promise<void>) => next(),
@@ -61,10 +63,10 @@ const fullCaseRow = {
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/cases/:id/export (DSAR)
+// GET /cases/:id/export (DSAR)
 // ---------------------------------------------------------------------------
 
-describe('GET /api/cases/:id/export (DSAR)', () => {
+describe('GET /cases/:id/export (DSAR)', () => {
   let query: any;
 
   beforeEach(() => {
@@ -74,6 +76,9 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
     query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      is: vi.fn(() => query),
+      order: vi.fn(() => query),
+      delete: vi.fn(() => query),
       maybeSingle: vi.fn(async () => ({ data: fullCaseRow, error: null })),
     };
     mockFrom.mockReset().mockReturnValue(query);
@@ -81,7 +86,7 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
 
   it('exporta todos os dados pessoais do caso para o dono autenticado', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}/export`,
+      `/cases/${CASE_ID}/export`,
       { method: 'GET', headers: { Authorization: 'Bearer token-dono' } },
       {} as any,
     );
@@ -108,7 +113,7 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
 
   it('rejeita exportação para usuário que não é o dono', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}/export`,
+      `/cases/${CASE_ID}/export`,
       { method: 'GET', headers: { Authorization: 'Bearer token-outro' } },
       {} as any,
     );
@@ -121,7 +126,7 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
     query.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
 
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}/export`,
+      `/cases/${CASE_ID}/export`,
       { method: 'GET', headers: { Authorization: 'Bearer token-dono' } },
       {} as any,
     );
@@ -132,10 +137,10 @@ describe('GET /api/cases/:id/export (DSAR)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/cases/:id — exclusão real
+// DELETE /cases/:id — exclusão real
 // ---------------------------------------------------------------------------
 
-describe('DELETE /api/cases/:id — exclusão real', () => {
+describe('DELETE /cases/:id — exclusão real', () => {
   let query: any;
   let casesMaybeCalls: number;
 
@@ -158,7 +163,7 @@ describe('DELETE /api/cases/:id — exclusão real', () => {
     query.data = [];
 
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}`,
+      `/cases/${CASE_ID}`,
       { method: 'DELETE', headers: { Authorization: 'Bearer token-dono' } },
       {} as any,
     );
@@ -186,7 +191,7 @@ describe('DELETE /api/cases/:id — exclusão real', () => {
     query.maybeSingle.mockImplementation(async () => ({ data: { ...fullCaseRow, user_id: 'outro-usuario' }, error: null }));
 
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}`,
+      `/cases/${CASE_ID}`,
       { method: 'DELETE', headers: { Authorization: 'Bearer token-dono' } },
       {} as any,
     );
@@ -200,7 +205,7 @@ describe('DELETE /api/cases/:id — exclusão real', () => {
     query.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
 
     const response = await casesRoutes.request(
-      `/api/cases/${CASE_ID}`,
+      `/cases/${CASE_ID}`,
       { method: 'DELETE', headers: { Authorization: 'Bearer token-dono' } },
       {} as any,
     );
@@ -211,10 +216,10 @@ describe('DELETE /api/cases/:id — exclusão real', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/cases/anonymous/:id — exclusão via claim_token
+// DELETE /cases/anonymous/:id — exclusão via claim_token
 // ---------------------------------------------------------------------------
 
-describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => {
+describe('DELETE /cases/anonymous/:id — exclusão via claim_token', () => {
   let query: any;
   let casesMaybeCalls: number;
   const ANON_LIMITER = { limit: vi.fn().mockResolvedValue({ success: true }) };
@@ -235,7 +240,7 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
 
   it('exclui caso anônimo apenas com claim_token válido, sem autenticação', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/anonymous/${CASE_ID}`,
+      `/cases/anonymous/${CASE_ID}`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
@@ -259,7 +264,7 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
 
   it('retorna 404 para claim_token inválido (indistinguível de não encontrado)', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/anonymous/${CASE_ID}`,
+      `/cases/anonymous/${CASE_ID}`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.51' },
@@ -275,7 +280,7 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
 
   it('retorna 404 quando o token não tem formato de 64 hex (sem revelar existência)', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/anonymous/${CASE_ID}`,
+      `/cases/anonymous/${CASE_ID}`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.52' },
@@ -291,7 +296,7 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
   it('aplica rate limit por IP na exclusão anônima', async () => {
     const limiterMock = { limit: vi.fn().mockResolvedValue({ success: false }) };
     const response = await casesRoutes.request(
-      `/api/cases/anonymous/${CASE_ID}`,
+      `/cases/anonymous/${CASE_ID}`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.53' },
@@ -308,7 +313,7 @@ describe('DELETE /api/cases/anonymous/:id — exclusão via claim_token', () => 
 
   it('falha fechado quando o limiter ou IP está indisponível', async () => {
     const response = await casesRoutes.request(
-      `/api/cases/anonymous/${CASE_ID}`,
+      `/cases/anonymous/${CASE_ID}`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
