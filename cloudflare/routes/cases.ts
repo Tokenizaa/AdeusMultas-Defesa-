@@ -724,15 +724,16 @@ casesRoutes.post('/cases/:id/qualification', authenticateToken, async (c) => {
   if (applicant.applicantName.length < 3 || applicant.applicantCpf.length !== 11 || !applicant.applicantCnh || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressCityState || !/^[A-E]{1,2}$/.test(applicant.cnhCategory)) {
     throw new HTTPException(400, { message: 'Confira nome, CPF, CNH, endereço, município/UF e categoria da CNH.' });
   }
-  const { error: updateError } = await supabase.from('cases').update({
+  const { data: updated, error: updateError } = await supabase.from('cases').update({
     client_name: applicant.applicantName,
     client_email: typeof body.email === 'string' ? body.email.trim().toLowerCase() : row.client_email,
     client_phone: typeof body.phone === 'string' ? body.phone.trim() : row.client_phone,
     client_cpf: applicant.applicantCpf,
     applicant_json: JSON.stringify(applicant),
     updated_at: new Date().toISOString(),
-  }).eq('id', row.id).eq('user_id', user.id);
+  }).eq('id', row.id).eq('user_id', user.id).select('id').maybeSingle();
   if (updateError) throw new HTTPException(500, { message: 'Não foi possível salvar a qualificação.' });
+  if (!updated?.id) throw new HTTPException(409, { message: 'A qualificação não foi persistida. Recarregue o caso e tente novamente.' });
   return c.json({ success: true, applicant: { ...applicant, applicantCpf: '***.***.***-' + applicant.applicantCpf.slice(-2) } });
 });
 
