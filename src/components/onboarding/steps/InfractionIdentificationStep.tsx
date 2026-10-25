@@ -19,6 +19,7 @@ import {
     Landmark,
 } from 'lucide-react';
 import { InfractionData, VehicleData } from '../../../types';
+import { useAuthFetch } from '../../../hooks/useAuthFetch';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 
 import { TestFillButton } from '../../ui/TestFillButton';
@@ -74,6 +75,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
     onBack,
     isAdmin = false,
 }) => {
+    const authFetch = useAuthFetch();
     const [isReadingFile, setIsReadingFile] = useState(false);
     const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
 
