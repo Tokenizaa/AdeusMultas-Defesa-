@@ -79,7 +79,7 @@ function makeChain(data: any = null): any {
 function resetAdminClient() {
   const baseChain = makeChain(null);
   adminClient.from = vi.fn((table: string) => table === 'cases'
-    ? makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false })
+    ? makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' })
     : makeChain(null));
   adminClient.rpc = vi.fn().mockResolvedValue({ data: { ok: true }, error: null });
 }
@@ -130,7 +130,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
       });
       // Primeira requisição: não existe pagamento pendente → reserva e chama gateway.
       adminClient.from = vi.fn((table: string) => {
-        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' });
         if (table === 'payment_orders') {
           return {
             select: vi.fn(() => chain()),
@@ -188,7 +188,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
         }),
       });
       adminClient.from = vi.fn((table: string) => {
-        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' });
         if (table === 'payment_orders') {
           return {
             select: vi.fn(() => chain2()),
@@ -249,7 +249,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
             maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
         }
-        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' });
         if (table === 'payment_orders') {
           return {
             select: vi.fn(() => paymentChain()),
@@ -312,7 +312,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
             error: null,
           }),
         });
-        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+        if (table === 'cases') return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' });
         if (table === 'payment_orders') {
           return {
             select: vi.fn(() => amountChain()),
@@ -440,7 +440,7 @@ describe('Regressão — pagamentos e ciclo financeiro', () => {
     let paymentLookupCount = 0;
     adminClient.from = vi.fn((table: string) => {
       if (table === 'cases') {
-        return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false });
+        return makeChain({ id: 'case-1', user_id: 'user-1', is_paid: false, service_type: 'defesa_previa' });
       }
       if (table === 'payment_orders') {
         const query = {
