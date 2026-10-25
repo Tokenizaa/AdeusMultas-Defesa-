@@ -168,13 +168,13 @@ export class PaymentRepository {
    * Upsert append-only com idempotência por `pagbank_event_id`
    * (coluna UNIQUE TEXT) — o mesmo evento do PagBank nunca duplica.
    */
-  persistWebhookEvent(params: {
+  async persistWebhookEvent(params: {
     pagbankEventId: string;
     eventType: string;
     payload: PagBankWebhookPayload;
     processed: boolean;
     processingError?: string;
-  }): void {
+  }): Promise<void> {
     if (!this.client) return;
     if (!params.pagbankEventId) return;
     const payload: Database['public']['Tables']['payment_webhook_events']['Insert'] = {
