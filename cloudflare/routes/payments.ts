@@ -717,7 +717,7 @@ routes.post('/webhooks/venopag', async (c) => {
 
   const supabase = createSupabaseAdminClient(c.env);
   try {
-    const webhookEventId = `veno_${event.request_number}_${event.status}`;
+    const webhookEventId = `veno_${event.request_number}_${event.status.toLowerCase()}`;
   const accepted = await acceptWebhookEvent(supabase, 'venopag', webhookEventId, event);
   if (accepted.isDuplicate && accepted.alreadyProcessed) {
     return c.json({ received: true, status: event.status, isDuplicate: true, matched: true });
@@ -735,7 +735,7 @@ routes.post('/webhooks/venopag', async (c) => {
       Math.round(Number(verified.amount) * 100) !== Math.round(Number(existing.amount) * 100)) {
     return c.json({ error: 'Status da transação não pôde ser confirmado.' }, 502);
   }
-  const currentStatus = verified.status;
+  const currentStatus = verified.status.toLowerCase();
 
   // State mapping (provider status -> our terminal state).
   //   confirmed    -> PAID            (ledger -> PAID)
