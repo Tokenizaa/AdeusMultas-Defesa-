@@ -20,16 +20,19 @@ async function resolveCommercialOffer(env: Env, serviceType: string, couponCode?
   return result.offer;
 }
 
-async function assertCaseCanBePaid(env: Env, caseId: string, user: AuthenticatedUser): Promise<void> {
+async function assertCaseCanBePaid(env: Env, caseId: string, user: AuthenticatedUser, requestedServiceType: string): Promise<void> {
   const supabase = createSupabaseAdminClient(env);
   const { data: row, error } = await supabase.from('cases')
-    .select('id,user_id,is_paid')
+    .select('id,user_id,is_paid,service_type')
     .eq('id', caseId)
     .maybeSingle();
   if (error) throw new HTTPException(503, { message: 'Não foi possível validar o titular do caso.' });
   if (!row) throw new HTTPException(404, { message: 'Caso não encontrado.' });
   if (user.role !== 'admin' && row.user_id !== user.id) {
     throw new HTTPException(403, { message: 'Você não tem permissão para pagar este caso.' });
+  }
+  if (typeof row.service_type !== 'string' || row.service_type !== requestedServiceType) {
+    throw new HTTPException(409, { message: 'O serviço solicitado não corresponde ao procedimento salvo no caso. Atualize o checkout antes de continuar.' });
   }
   if (row.is_paid === true) {
     throw new HTTPException(409, { message: 'Este caso já está marcado como pago.' });
@@ -377,7 +380,7 @@ routes.post('/payments/pix/create', authenticateToken, async (c) => {
   if (!body.serviceType) throw new HTTPException(400, { message: 'serviceType é obrigatório.' });
   const caseId = String(body.caseId || '');
   if (!caseId) throw new HTTPException(400, { message: 'caseId é obrigatório.' });
-  await assertCaseCanBePaid(c.env, caseId, user);
+  await assertCaseCanBePaid(c.env, caseId, user, String(body.serviceType));
   const ipAddress = c.req.header('cf-connecting-ip');
   const limiter = c.env.ANONYMOUS_CASE_LIMITER;
   if (!ipAddress || !limiter) {
