@@ -10,25 +10,32 @@ export function synthetic(label: string) {
   const suffix = (runId + '-' + label + '-' + Date.now().toString(36)).replace(/[^a-z0-9-]/gi, '').slice(-24);
   return { name: 'E2E ' + suffix, phone: '11987654321', plate: 'BRA2E19', authority: 'DETRAN-SP', location: 'Av. Paulista, 1000 - São Paulo/SP (' + suffix + ')', aitNumber: 'AIT-' + suffix.toUpperCase() };
 }
-export async function openService(page: Page, service: CanonicalService) {
+export async function openService(
+  page: Page,
+  service: CanonicalService,
+  options: { selectStage?: boolean } = {},
+) {
   await page.goto(new URL('/novo-caso', baseURL).toString());
   await expect(page.locator('#service-option-' + service.situationId)).toBeVisible();
   await page.locator('#service-option-' + service.situationId).click();
 
-  // O fluxo depende da situação escolhida: algumas situações inferem a fase e
-  // pulam a tela de etapa; outras exibem a etapa e depois a categoria.
+  // A etapa é opcional: situações que inferem a fase não exibem esse seletor.
+  // Por padrão, só tentamos selecionar uma etapa explicitamente mapeada.
+  const shouldSelectStage = options.selectStage ?? Boolean(service.stageId);
   await page.waitForFunction(
-    ({ stageId, categoryId }) =>
+    ({ stageId, categoryId, shouldSelectStage }) =>
       Boolean(document.querySelector('#input-lead-name')) ||
       Boolean(document.querySelector('#category-card-' + categoryId)) ||
-      Boolean(stageId && document.querySelector('#stage-option-' + stageId)),
-    { stageId: service.stageId, categoryId: service.categoryId },
+      Boolean(shouldSelectStage && stageId && document.querySelector('#stage-option-' + stageId)),
+    { stageId: service.stageId, categoryId: service.categoryId, shouldSelectStage },
     { timeout: 10_000 },
   );
 
-  const stageOption = service.stageId ? page.locator('#stage-option-' + service.stageId) : null;
-  if (stageOption && await stageOption.isVisible().catch(() => false)) {
-    await stageOption.click();
+  if (shouldSelectStage && service.stageId) {
+    const stageOption = page.locator('#stage-option-' + service.stageId);
+    if (await stageOption.isVisible().catch(() => false)) {
+      await stageOption.click();
+    }
   }
 
   const categoryOption = page.locator('#category-card-' + service.categoryId);
