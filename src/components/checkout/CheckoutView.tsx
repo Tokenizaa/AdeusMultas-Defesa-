@@ -590,6 +590,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               <button
                 role="tab"
                 aria-selected={paymentMethod === 'credit_card'}
+                className="hidden"
                 onClick={() => {
                   setPaymentMethod('credit_card');
                   setCreditCardResult(null);
