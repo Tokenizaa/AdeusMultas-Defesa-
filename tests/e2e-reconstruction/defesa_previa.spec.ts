@@ -3,8 +3,7 @@ import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPii
 import { runTextAudit, assertTextAudit } from './text-audit-runner';
 const service: CanonicalService = {
   "id": "defesa_previa",
-  "situationId": "multa_transito",
-  "stageId": "primeira_notificacao",
+  "situationId": "defesa_previa",
   "categoryId": "excesso_velocidade",
   "procedure": "defesa_previa"
 };
