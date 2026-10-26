@@ -14,12 +14,28 @@ export async function openService(page: Page, service: CanonicalService) {
   await page.goto(new URL('/novo-caso', baseURL).toString());
   await expect(page.locator('#service-option-' + service.situationId)).toBeVisible();
   await page.locator('#service-option-' + service.situationId).click();
-  if (service.stageId) {
-    await expect(page.locator('#stage-option-' + service.stageId)).toBeVisible();
-    await page.locator('#stage-option-' + service.stageId).click();
-    await expect(page.locator('#category-card-' + service.categoryId)).toBeVisible();
-    await page.locator('#category-card-' + service.categoryId).click();
+
+  // O fluxo depende da situação escolhida: algumas situações inferem a fase e
+  // pulam a tela de etapa; outras exibem a etapa e depois a categoria.
+  await page.waitForFunction(
+    ({ stageId, categoryId }) =>
+      Boolean(document.querySelector('#input-lead-name')) ||
+      Boolean(document.querySelector('#category-card-' + categoryId)) ||
+      Boolean(stageId && document.querySelector('#stage-option-' + stageId)),
+    { stageId: service.stageId, categoryId: service.categoryId },
+    { timeout: 10_000 },
+  );
+
+  const stageOption = service.stageId ? page.locator('#stage-option-' + service.stageId) : null;
+  if (stageOption && await stageOption.isVisible().catch(() => false)) {
+    await stageOption.click();
   }
+
+  const categoryOption = page.locator('#category-card-' + service.categoryId);
+  if (await categoryOption.isVisible().catch(() => false)) {
+    await categoryOption.click();
+  }
+
   await expect(page.locator('#input-lead-name')).toBeVisible();
 }
 export async function fillIdentification(page: Page, label: string, overrides: Partial<ReturnType<typeof synthetic>> = {}) {
