@@ -9,7 +9,7 @@ const service: CanonicalService = {
 };
 test.describe('defesa_previa — dez cenários canônicos', () => {
   test('E2E-DEFESA_PREVIA-01 caminho válido: abre a identificação do serviço', async ({page}) => {
-    await openService(page, service);
+    await openService(page, service, { selectStage: false });
     await expect(page.locator('#input-lead-name')).toBeVisible();
     await expect(page.locator('#input-lead-phone')).toBeVisible();
     await expect(page.locator('#input-vehicle-plate')).toBeVisible();
