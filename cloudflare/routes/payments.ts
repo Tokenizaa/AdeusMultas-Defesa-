@@ -375,7 +375,7 @@ routes.get('/payments/gateway/status', (c) => {
 
 routes.post('/payments/coupon/redeem-free', authenticateToken, async (c) => {
   const user = c.get('user')!;
-  const body = await c.req.json<{ caseId?: string; serviceType?: string; couponCode?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ caseId?: string; serviceType?: string; couponCode?: string }>().catch(() => ({} as { caseId?: string; serviceType?: string; couponCode?: string }));
   const caseId = String(body.caseId || '').trim();
   const serviceType = String(body.serviceType || '').trim();
   const couponCode = String(body.couponCode || '').trim().toUpperCase();
