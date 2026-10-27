@@ -209,7 +209,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             notificationDeliveryDate: addTestDays(5),
                             defenseDeadline: addTestDays(25),
                             location: `${address.street}, ${address.number} - ${address.cityState}`,
-                        };;
+                        };
                         if (onUpdateLead) onUpdateLead(name, phone);
                         setCurrentLeadName(name);
                         setCurrentLeadPhone(phone);
