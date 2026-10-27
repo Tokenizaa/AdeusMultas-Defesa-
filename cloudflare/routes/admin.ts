@@ -19,10 +19,32 @@ export const adminRoutes = new Hono<{ Bindings: Env; Variables: { user?: Authent
 adminRoutes.use('/admin/*', authenticateToken, requireAdmin);
 
 adminRoutes.get('/admin/ai/overview', (c) => c.json({
-  provider: { name: 'Cloudflare Workers AI', runtime: 'cloudflare', model: AI_MODEL, fallback: null },
-  rag: { provider: 'Cloudflare Vectorize', index: VECTORIZE_INDEX, embeddingModel: EMBEDDING_MODEL, dimensions: 768, status: 'configured' },
-  capabilities: { infractionAnalysis: '/api/ai/analyze-infraction', defenseGeneration: '/api/ai/generate-defense', ocr: '/api/ocr/analyze' },
-  observability: { historicalMetrics: true, metricsEndpoint: '/api/admin/ai/metrics' },
+  provider: {
+    name: 'Cloudflare Workers AI',
+    runtime: 'cloudflare',
+    model: AI_MODEL,
+    fallback: null,
+    status: c.env?.AI ? 'configured' : 'not_configured',
+    statusMeaning: 'Binding de runtime presente não comprova disponibilidade do provedor; use o teste de inferência para verificar execução.',
+  },
+  rag: {
+    provider: 'Cloudflare Vectorize',
+    index: VECTORIZE_INDEX,
+    embeddingModel: EMBEDDING_MODEL,
+    dimensions: 768,
+    status: c.env?.VECTORIZE ? 'configured' : 'not_configured',
+    statusMeaning: 'Binding e índice declarados; este endpoint não consulta o índice nem afirma contagem de vetores.',
+  },
+  capabilities: {
+    infractionAnalysis: '/api/ai/analyze-infraction',
+    defenseGeneration: '/api/ai/generate-defense',
+    ocr: '/api/ocr/analyze',
+  },
+  observability: {
+    historicalMetrics: true,
+    metricsEndpoint: '/api/admin/ai/metrics',
+    metricsScope: 'Logs persistidos de execuções de IA na janela móvel de 24 horas.',
+  },
 }));
 
 adminRoutes.get('/admin/overview', async (c) => {
