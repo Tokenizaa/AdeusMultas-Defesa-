@@ -202,6 +202,11 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: HeartPulse,
       },
       {
+        label: 'Certificação Visual Assistida',
+        path: '/admin/assisted-certification',
+        icon: ListChecks,
+      },
+      {
         label: 'Auditoria & LGPD',
         path: '/admin/audit',
         icon: FolderLock,
