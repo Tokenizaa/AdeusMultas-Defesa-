@@ -228,9 +228,17 @@ export function buildCoherentTestInfraction(
       // Se já existe código escolhido, mantém o conjunto canônico DELE;
       // caso contrário, sorteia um item do catálogo coerente (todos os
       // campos derivados do MESMO item) — nunca inventa estrutura alheia.
-      const existingCode = current.infractionCode && catalogItemByCode(current.infractionCode)
-        ? current.infractionCode
-        : pick(INFRACTION_CATALOG).code;
+      const currentCatalogItem = current.infractionCode
+        ? catalogItemByCode(current.infractionCode)
+        : undefined;
+      const eligibleWarningItems = INFRACTION_CATALOG.filter(
+        (item) => item.severity === 'leve' || item.severity === 'media',
+      );
+      const existingCode = category === 'conversao_advertencia'
+        ? (currentCatalogItem && (currentCatalogItem.severity === 'leve' || currentCatalogItem.severity === 'media')
+          ? currentCatalogItem.code
+          : pick(eligibleWarningItems).code)
+        : currentCatalogItem?.code || pick(INFRACTION_CATALOG).code;
       return {
         ...current,
         ...neutral,
