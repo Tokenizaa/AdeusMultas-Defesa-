@@ -1,5 +1,6 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -29,7 +30,7 @@ vi.mock('../middleware/auth-middleware', () => ({
 import monitoringRoutes from './monitoring';
 
 describe('admin monitoring health endpoint', () => {
-  let server: ReturnType<express.Express['listen']> | undefined;
+  let server: Server | undefined;
 
   afterEach(async () => {
     if (server) {
