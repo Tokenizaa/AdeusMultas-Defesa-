@@ -27,6 +27,24 @@ export const AdminIntegrationsView: React.FC = () => {
   const [testStatus, setTestStatus] = useState<Record<string, { testing: boolean; result?: string }>>({});
   const [showDriveModal, setShowDriveModal] = useState(false);
 
+  const statusLabel = (status?: string) => ({
+    HEALTHY: 'Saudável (probe real)',
+    DEGRADED: 'Degradado',
+    DOWN: 'Indisponível',
+    UNKNOWN: 'Não verificado',
+    CONNECTED: 'Conectado',
+    DISCONNECTED: 'Desconectado',
+    CONFIGURED_NOT_PROBED: 'Configurado; conectividade não testada',
+    NOT_CONFIGURED: 'Não configurado',
+    NOT_VERIFIED: 'Não verificado',
+  }[status || ''] || 'Não verificado');
+
+  const statusTone = (status?: string) => {
+    if (status === 'HEALTHY' || status === 'CONNECTED') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+    if (status === 'DOWN' || status === 'DISCONNECTED') return 'bg-red-500/20 text-red-300 border-red-500/30';
+    return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+  };
+
   const fetchIntegrations = async () => {
     try {
       setIsLoading(true);
@@ -47,15 +65,29 @@ export const AdminIntegrationsView: React.FC = () => {
   const handleTestIntegration = async (service: string) => {
     try {
       setTestStatus((prev) => ({ ...prev, [service]: { testing: true } }));
-      const res = await api.post<{ success: boolean; latencyMs?: number; error?: string }>('/api/health/test', {
-        service,
-      });
+      if (service === 'venopag') {
+        const result = await api.get<any>('/api/payments/gateway/status');
+        const gateway = result?.gateways?.find((item: any) => item.id === 'venopag');
+        const configured = gateway?.status === 'configured';
+        setTestStatus((prev) => ({
+          ...prev,
+          [service]: {
+            testing: false,
+            result: configured
+              ? 'Credenciais configuradas; conectividade externa não foi testada.'
+              : `Não configurado: ${gateway?.notConfiguredReason || 'credenciais VenoPag ausentes'}`,
+          },
+        }));
+        return;
+      }
+
+      const res = await api.post<{ success: boolean; latencyMs?: number; error?: string }>('/api/health/test', { service });
       setTestStatus((prev) => ({
         ...prev,
         [service]: {
           testing: false,
           result: res.success
-            ? `Conexão bem-sucedida (${res.latencyMs}ms)`
+            ? `Probe concluído (${res.latencyMs ?? '—'}ms)`
             : `Erro: ${res.error || 'Falha no probe'}`,
         },
       }));
@@ -106,44 +138,45 @@ export const AdminIntegrationsView: React.FC = () => {
 
       {/* Grid of Other Core Platform Integrations */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-sm">
-        {/* 1. PagBank Orders v2 */}
+        {/* 1. VenoPag PIX */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2.5">
               <CreditCard className="w-5 h-5 text-emerald-400" />
               <div>
-                <h2 className="text-sm font-bold text-white uppercase">PagBank (PagSeguro) Orders v2</h2>
-                <p className="text-sm text-slate-500">Gateway de liquidação PIX e Cartões</p>
+                <h2 className="text-sm font-bold text-white uppercase">VenoPag PIX</h2>
+                <p className="text-sm text-slate-500">Gateway ativo; conectividade externa não testada</p>
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              {data?.pagbank?.status || 'HEALTHY'}
+            <span className={`px-2 py-0.5 rounded text-sm font-bold border ${statusTone(data?.venopag?.status)}`}>
+              {statusLabel(data?.venopag?.status)}
             </span>
           </div>
 
           <div className="space-y-2 text-slate-300">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Endpoint Webhook:</span>
-              <span className="text-slate-400 text-sm truncate max-w-[200px]">/api/webhooks/pagbank</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Webhook:</span>
+              <span className="text-slate-400 text-sm truncate max-w-[220px]">{data?.venopag?.webhookPath || '/api/webhooks/venopag'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Idempotência:</span>
-              <span className="text-emerald-400 font-bold">Ativada com Lock</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Credenciais:</span>
+              <span className="text-right">{data?.venopag?.configured ? 'Presentes' : 'Não verificadas/ausentes'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tarifa / Tempo Liquidação:</span>
-              <span>Instantâneo (0s via BACEN)</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Conectividade externa:</span>
+              <span>Não testada</span>
             </div>
+            <div className="text-xs text-slate-500">{data?.venopag?.notConfiguredReason || 'Estado de configuração; não representa confirmação de transação.'}</div>
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
             <button
-              onClick={() => handleTestIntegration('pagbank')}
-              disabled={testStatus['pagbank']?.testing}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={() => handleTestIntegration('venopag')}
+              disabled={testStatus.venopag?.testing}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{testStatus['pagbank']?.testing ? 'Testando...' : 'Testar API Orders v2'}</span>
+              <span>{testStatus.venopag?.testing ? 'Verificando...' : 'Verificar configuração'}</span>
             </button>
             <button
               onClick={() => navigate('/admin/payments')}
@@ -153,9 +186,9 @@ export const AdminIntegrationsView: React.FC = () => {
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
-          {testStatus['pagbank']?.result && (
-            <p className="text-sm text-emerald-400 bg-slate-950 p-2 rounded-lg border border-slate-800">
-              {testStatus['pagbank'].result}
+          {testStatus.venopag?.result && (
+            <p className={`text-sm bg-slate-950 p-2 rounded-lg border border-slate-800 ${testStatus.venopag.result.startsWith('Erro:') || testStatus.venopag.result.startsWith('Não configurado') ? 'text-red-300' : 'text-slate-300'}`}>
+              {testStatus.venopag.result}
             </p>
           )}
         </div>
