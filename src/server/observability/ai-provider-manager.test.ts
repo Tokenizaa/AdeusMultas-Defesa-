@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   analyzeTicketWithGemini: vi.fn(),
+  generateEmbedding: vi.fn(),
+  searchVectors: vi.fn(),
 }));
 
 vi.mock('../config/config-service', () => ({
@@ -24,6 +26,12 @@ vi.mock('./metrics-service', () => ({
 }));
 vi.mock('../gemini', () => ({
   analyzeTicketWithGemini: mocks.analyzeTicketWithGemini,
+}));
+vi.mock('../knowledge/embedding-service', () => ({
+  embeddingService: { generateEmbedding: mocks.generateEmbedding },
+}));
+vi.mock('../knowledge/vector-store', () => ({
+  vectorStore: { searchVectors: mocks.searchVectors },
 }));
 
 import { aiProviderManager } from './ai-provider-manager';
@@ -44,6 +52,11 @@ describe('AiProviderManager 9Router fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     settings.GEMINI_API_KEY = '';
+    settings.NINEROUTER_KEY = 'test-nine-router-key';
+    settings.AI_ENABLE_FALLBACK = true;
+    mocks.analyzeTicketWithGemini.mockReset();
+    mocks.generateEmbedding.mockReset().mockResolvedValue({ embedding: [0.1, 0.2], model: 'local-embedding-model' });
+    mocks.searchVectors.mockReset().mockResolvedValue([]);
     mocks.configGet.mockImplementation((key: string, fallback?: unknown) =>
       Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : fallback
     );
@@ -93,6 +106,42 @@ describe('AiProviderManager 9Router fallback', () => {
       true,
       { isFallback: true, tokens: 18 }
     );
+  });
+
+  it('fails closed when no generative provider responds and no legal source is retrieved', async () => {
+    settings.NINEROUTER_KEY = '';
+    settings.AI_ENABLE_FALLBACK = false;
+    settings.GEMINI_API_KEY = '';
+
+    const result = await aiProviderManager.executeLegalReasoning('consulta sem fontes', {});
+
+    expect(result.success).toBe(false);
+    expect(result.data).toBeNull();
+    expect(result.error).toContain('nenhuma fonte jurídica verificável');
+    expect(mocks.searchVectors).toHaveBeenCalledWith([0.1, 0.2], { topK: 5, threshold: 0.35 });
+    expect(result.stages.find((stage) => stage.stage === 'rag_enhancement')?.status).toBe('failed');
+  });
+
+  it('returns actual retrieved sources as retrieval-only, not as a generated legal opinion', async () => {
+    settings.NINEROUTER_KEY = '';
+    settings.AI_ENABLE_FALLBACK = false;
+    settings.GEMINI_API_KEY = '';
+    mocks.searchVectors.mockResolvedValue([{
+      documentTitle: 'CTB — Art. 218',
+      content: 'Texto recuperado do documento jurídico.',
+      similarity: 0.91,
+      provenance: { source: 'Planalto', document: 'CTB', version: 'v1', article: '218' },
+    }]);
+
+    const result = await aiProviderManager.executeLegalReasoning('consulta com fonte', {});
+
+    expect(result.success).toBe(true);
+    expect(result.providerUsed).toBe('deterministic_rag');
+    expect(result.data).toMatchObject({
+      generated: false,
+      sources: [{ documentTitle: 'CTB — Art. 218', similarity: 0.91 }],
+    });
+    expect(result.data.notice).toContain('não um parecer jurídico');
   });
 
   it('records an actual provider failure and continues to Gemini without claiming 9Router success', async () => {
