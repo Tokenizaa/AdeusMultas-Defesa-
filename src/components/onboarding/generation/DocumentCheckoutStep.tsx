@@ -139,6 +139,11 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             documentNumber: data.documentNumber ?? 0,
                             couponDiscount: data.couponDiscount,
                         });
+                        if (couponCode) {
+                            setCouponMessage(Number(data.couponDiscount || 0) > 0
+                                ? null
+                                : 'O cupom não concedeu desconto. Verifique o código e as condições de uso.');
+                        }
                     }
                 }
             })
@@ -677,7 +682,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                                 )}
                                             </div>
                                             {couponMessage && <p role="status" className="text-xs text-rose-700">{couponMessage}</p>}
-                                            {couponCode && resolvedBreakdown?.couponDiscount !== undefined && (
+                                            {couponCode && Number(resolvedBreakdown?.couponDiscount || 0) > 0 && (
                                                 <p role="status" className="text-xs font-semibold text-emerald-700">
                                                     Cupom {couponCode} aplicado. Desconto: R$ {resolvedBreakdown.couponDiscount.toFixed(2).replace('.', ',')}.
                                                 </p>
