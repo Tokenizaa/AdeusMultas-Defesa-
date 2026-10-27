@@ -85,10 +85,10 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
 
     for (const category of categories) {
       const data = buildCoherentTestInfraction(category, emptyInfraction);
-      expect(data.dateTime).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-      expect(data.notificationExpeditionDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-      expect(data.notificationDeliveryDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-      expect(data.defenseDeadline).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(data.dateTime).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.notificationExpeditionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.notificationDeliveryDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.defenseDeadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(data.notificationExpeditionDate! > data.dateTime).toBe(true);
       expect(data.notificationDeliveryDate! > data.notificationExpeditionDate!).toBe(true);
       expect(data.defenseDeadline! > data.notificationDeliveryDate!).toBe(true);
