@@ -190,7 +190,11 @@ router.get(['/ai/overview', '/admin/ai/overview'], (_req, res) => {
     nineRouterModel: configService.get('NINEROUTER_MODEL', 'qwen/qwen-2.5-72b-instruct'),
     fallbackEnabled: Boolean(configService.get('AI_ENABLE_FALLBACK', true)),
     geminiConfigured: Boolean(configService.get('GEMINI_API_KEY')),
-    embeddingModel: configService.get('NVIDIA_EMBEDDING_MODEL', 'defesai-legal-vectorizer-v1'),
+    embeddingModel: Boolean(configService.get('NVIDIA_API_KEY'))
+      ? configService.get('NVIDIA_EMBEDDING_MODEL', 'nvidia/nv-embedqa-e5-v5')
+      : Boolean(configService.get('AI_ENABLE_FALLBACK', true)) && Boolean(configService.get('NINEROUTER_KEY'))
+        ? 'text-embedding-3-large'
+        : 'defesai-legal-vectorizer-v1',
     vectorStore: vectorStats,
     metrics: {
       nvidia: {
