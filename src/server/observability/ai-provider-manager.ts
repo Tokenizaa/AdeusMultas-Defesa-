@@ -180,35 +180,79 @@ class AiProviderManager {
       }
     }
 
-    // 3. Fallback to 9Router if needed
+    // 3. Fallback / secondary provider: call 9Router for real; never synthesize success.
     if (!resultData && enableFallback && nineRouterKey && nineRouterKey.length > 5) {
       const stage3Start = Date.now();
       try {
+        const nineRouterBaseUrl = configService.get('NINEROUTER_BASE_URL', 'https://api.9router.com/v1');
+        const response = await fetch(`${nineRouterBaseUrl.replace(/\\/$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${nineRouterKey}`,
+          },
+          body: JSON.stringify({
+            model: nineRouterModel,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é o motor de inteligência jurídica da plataforma DefesAi, especialista em CTB e resoluções do CONTRAN.',
+              },
+              { role: 'user', content: `${prompt}\\n\\nContexto:\\n${JSON.stringify(context)}` },
+            ],
+            temperature: options?.temperature ?? configService.get('AI_TEMPERATURE', 0.15),
+            max_tokens: 2048,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`9Router HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (typeof content !== 'string' || !content.trim()) {
+          throw new Error('9Router retornou resposta vazia ou inválida.');
+        }
+
+        const duration = Date.now() - stage3Start;
+        metricsService.recordAiRequest('9router', duration, true, {
+          isFallback: true,
+          tokens: data.usage?.total_tokens,
+        });
         stages.push({
           stage: 'fallback_execution',
           provider: '9Router',
           model: nineRouterModel,
-          durationMs: 420,
+          durationMs: duration,
           status: 'success',
-          details: `Fallback para 9Router executado com sucesso (${nineRouterModel})`,
-        });
-
-        metricsService.recordAiRequest('9router', 420, true, {
-          isFallback: true,
-          tokens: 720,
+          details: `Resposta real recebida do 9Router em ${duration}ms.`,
         });
 
         providerUsed = '9router';
         modelUsed = nineRouterModel;
-        resultData = { fallback: true, provider: '9Router' };
+        resultData = content;
+        fallbackOccurred = true;
       } catch (err: any) {
+        const duration = Date.now() - stage3Start;
+        metricsService.recordAiRequest('9router', duration, false, {
+          isFallback: true,
+          error: err.message,
+        });
         stages.push({
           stage: 'fallback_execution',
           provider: '9Router',
           model: nineRouterModel,
-          durationMs: 300,
+          durationMs: duration,
           status: 'failed',
-          details: `9Router também falhou: ${err.message}`,
+          details: `9Router falhou: ${err.message}`,
+        });
+        logger.warn('ai', 'ai-provider-manager', 'chat_completion', 'Falha no provider 9Router.', {
+          correlationId,
+          requestId,
+          duration,
+          error: err.message,
+          provider: '9router',
         });
       }
     }
