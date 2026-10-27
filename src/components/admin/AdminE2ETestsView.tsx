@@ -294,7 +294,7 @@ export const AdminE2ETestsView: React.FC = () => {
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Total de Execuções</span>
             <p className="text-xl font-bold text-white">{runs.length}</p>
-            <span className="text-2xs text-slate-500">Histórico registrado</span>
+            <span className="text-2xs text-slate-500">Histórico verificado</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
@@ -322,7 +322,7 @@ export const AdminE2ETestsView: React.FC = () => {
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
-            <span className="text-2xs uppercase text-slate-400">Documentos / PDFs</span>
+            <span className="text-2xs uppercase text-slate-400">Casos de teste</span>
             <p className="text-xl font-bold text-purple-400">{totalCasesCreated}</p>
             <span className="text-2xs text-slate-500">Em execuções verificadas</span>
           </div>
