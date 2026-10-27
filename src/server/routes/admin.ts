@@ -11,6 +11,7 @@ import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseAdminClient } from '../db/supabase-server';
 import { adminQueryService } from '../services/admin-query-service';
+import { buildAdminUserDetail } from '../services/admin-user-detail-service';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
@@ -365,6 +366,50 @@ router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error('admin', 'users', 'get', 'Erro em /api/admin/users GET', { error: String(err) });
     res.status(500).json({ error: 'Erro ao carregar usuários.' });
+  }
+});
+
+// GET /api/admin/users/:id — perfil, casos vinculados e pagamentos confirmados da conta
+router.get(['/users/:id', '/admin/users/:id'], async (req, res) => {
+  try {
+    const supabase = getSupabaseAdminClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('user_id, name, email, phone, cpf, role, created_at')
+      .eq('user_id', req.params.id)
+      .maybeSingle();
+
+    if (profileError) {
+      logger.error('admin', 'users', 'detail_profile', 'Erro ao buscar perfil do usuário.', { error: String(profileError) });
+      return res.status(500).json({ error: 'Erro ao carregar perfil do usuário.' });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payment_orders')
+      .select('status, amount, final_amount')
+      .eq('user_id', profile.user_id);
+
+    if (paymentsError) {
+      logger.error('admin', 'users', 'detail_payments', 'Erro ao buscar pagamentos do usuário.', { error: String(paymentsError) });
+      return res.status(500).json({ error: 'Erro ao carregar pagamentos do usuário.' });
+    }
+
+    const detail = buildAdminUserDetail(
+      profile,
+      Array.from(caseRepository.values()),
+      payments || []
+    );
+    return res.json(detail);
+  } catch (err) {
+    logger.error('admin', 'users', 'detail', 'Erro ao carregar detalhe do usuário.', { error: String(err) });
+    return res.status(500).json({ error: 'Erro ao carregar detalhe do usuário.' });
   }
 });
 
