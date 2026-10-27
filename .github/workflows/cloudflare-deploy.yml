@@ -1,5 +1,6 @@
 # Cloudflare production deploy + authoritative migration gates
 # Phase 11 uses Env.FETCH only in tests; production falls back to Worker fetch.
+# Production publication is explicit: include [DEPLOY-PRODUCTION] in the main commit message.
 name: Cloudflare Deploy
 
 on:
