@@ -151,7 +151,7 @@ export const AdminUsersListView: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {new Date(u.createdAt).toLocaleDateString('pt-BR')}
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : '—'}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
