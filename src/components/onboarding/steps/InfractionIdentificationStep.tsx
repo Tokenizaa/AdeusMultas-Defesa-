@@ -42,7 +42,8 @@ const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
   vermelho: ['605-01', '606-80'],
   estacionamento: ['545-21', '546-01', '547-80', '548-60', '549-40', '550-80', '551-60'],
   indicacao_condutor: [],
-  conversao_advertencia: [],
+  // Art. 267 CTB: o catálogo atual só contém estas infrações médias elegíveis.
+  conversao_advertencia: ['745-50', '736-62', '735-80', '685-80'],
   cnh_geral: [],
   outro: [],
 };
