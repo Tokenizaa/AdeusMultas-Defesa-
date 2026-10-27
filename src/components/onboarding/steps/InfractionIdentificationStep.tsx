@@ -133,6 +133,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         fineAmount: infraction.fineAmount || infractionData.fineAmount,
                         autuadorBody: infraction.autuadorBody || infractionData.autuadorBody,
                         notificationExpeditionDate: infraction.notificationExpeditionDate || infractionData.notificationExpeditionDate,
+                        notificationDeliveryDate: infraction.notificationDeliveryDate || infractionData.notificationDeliveryDate,
                         defenseDeadline: infraction.defenseDeadline || infractionData.defenseDeadline,
                         dateTime: infraction.dateTime || infractionData.dateTime,
                         location: infraction.location || infractionData.location,
