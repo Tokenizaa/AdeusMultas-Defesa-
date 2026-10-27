@@ -20,6 +20,7 @@ export default defineConfig({
       'src/server/services/admin-ai-overview.test.ts',
       'src/server/observability/ai-provider-manager.test.ts',
       'src/server/services/admin-integrations-overview.test.ts',
+      'src/server/services/admin-integrations-overview.test.ts',
       'cloudflare/middleware.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
