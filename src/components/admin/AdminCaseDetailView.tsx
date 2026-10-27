@@ -125,16 +125,6 @@ export const AdminCaseDetailView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {!isPaid && (
-            <button
-              onClick={() => handleSimulatePayment(caseData.id)}
-              disabled={isSimulatingPayment}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSimulatingPayment ? 'animate-spin' : ''}`} />
-              <span>{isSimulatingPayment ? 'Verificando...' : 'Verificar Status Gateway'}</span>
-            </button>
-          )}
           <button
             onClick={() => {
               if (!isSimulatingPayment) {
@@ -152,7 +142,7 @@ export const AdminCaseDetailView: React.FC = () => {
       {actionSuccess && (
         <div className="p-3.5 bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 rounded-xl text-sm font-mono flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{actionSuccess === 'success' ? 'Pagamento aprovado via Webhook PagBank simulado!' : 'Erro ao processar pagamento'}</span>
+          <span>{actionSuccess === 'success' ? 'Dados do caso atualizados com sucesso.' : 'Erro ao processar pagamento'}</span>
         </div>
       )}
 
@@ -203,7 +193,7 @@ export const AdminCaseDetailView: React.FC = () => {
           }`}
         >
           <CreditCard className="w-3.5 h-3.5" />
-          <span>Pagamento PagBank</span>
+          <span>Pagamento VenoPag</span>
         </button>
 
         <button
