@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Shield, User, ShieldCheck, Search, Check, RefreshCw } from 'lucide-react';
 import { useAuthFetch } from '../../hooks/useAuthFetch';
 import { AuthUser, UserRole } from '../../types/auth';
+import { useRouter } from '../../core/router/RouterContext';
 
 export const AdminUsersListView: React.FC = () => {
   const authFetch = useAuthFetch();
+  const { navigate } = useRouter();
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -133,7 +135,7 @@ export const AdminUsersListView: React.FC = () => {
                           {u.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-white font-sans">{u.name}</p>
+                          <button type="button" onClick={() => navigate(`/admin/users/${encodeURIComponent(u.id)}`)} className="text-left font-bold text-white font-sans hover:text-orange-400 focus:outline-none focus:underline" title="Ver perfil do usuário">{u.name}</button>
                           <p className="text-sm text-slate-500">{u.cityState || 'Local não informado'}</p>
                         </div>
                       </div>
