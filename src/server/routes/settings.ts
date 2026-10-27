@@ -37,7 +37,8 @@ router.get(['/', '/settings'], async (req, res) => {
 
 router.put(['/', '/settings'], async (req, res) => {
   try {
-    const { key, value, updatedBy } = req.body;
+    const { key, value } = req.body;
+    const actor = req.user?.email || req.user?.id || 'admin';
     if (!key) {
       return res.status(400).json({ success: false, message: 'Parâmetro "key" é obrigatório.' });
     }
@@ -45,7 +46,7 @@ router.put(['/', '/settings'], async (req, res) => {
     const result = await settingsService.updateSetting({
       key,
       value,
-      updatedBy: updatedBy || 'admin@www.defesai.shop',
+      updatedBy: actor,
     });
 
     if (!result.success) {
@@ -56,18 +57,18 @@ router.put(['/', '/settings'], async (req, res) => {
     auditLogs.unshift({
       id: `audit_cfg_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      actor: updatedBy || 'Administrador',
+      actor,
       role: 'admin',
       action: key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN') ? 'ADMIN_UPDATED_SECRET' : 'ADMIN_UPDATED_SETTING',
       targetResource: key,
-      ipHash: '9f83a21b450c',
+      // IP hash omitted rather than recording a fabricated constant.
       details: result.message,
       gdprCompliant: true,
     });
 
-    logger.info('system', 'settings-service', 'update_setting', `Configuração ${key} atualizada por ${updatedBy || 'admin'}`, {
+    logger.info('system', 'settings-service', 'update_setting', `Configuração ${key} atualizada por ${actor}`, {
       key,
-      user: updatedBy,
+      user: actor,
     });
 
     res.json({
@@ -84,12 +85,13 @@ router.put(['/', '/settings'], async (req, res) => {
 });
 
 router.post(['/reset-default', '/settings/reset-default'], async (req, res) => {
-  const { key, updatedBy } = req.body;
+  const { key } = req.body;
+  const actor = req.user?.email || req.user?.id || 'admin';
   if (!key) {
     return res.status(400).json({ success: false, message: 'Chave obrigatória.' });
   }
 
-  const result = await settingsService.resetToDefault(key, updatedBy || 'admin@www.defesai.shop');
+  const result = await settingsService.resetToDefault(key, actor);
   res.json({
     ...result,
     settings: await settingsService.getSettings(),
