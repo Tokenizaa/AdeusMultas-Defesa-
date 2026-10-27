@@ -116,7 +116,7 @@ describe('admin Cloudflare contract', () => {
       return q;
     });
 
-    const response = await app().request('/api/admin/payments');
+    const response = await app().request('/api/admin/payments', {}, { VENO_PRIMARY_GATEWAY: 'venopag' } as any);
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.summary.revenue).toBe(1123.45);
