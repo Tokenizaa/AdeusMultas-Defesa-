@@ -185,7 +185,7 @@ class AiProviderManager {
       const stage3Start = Date.now();
       try {
         const nineRouterBaseUrl = configService.get('NINEROUTER_BASE_URL', 'https://api.9router.com/v1');
-        const response = await fetch(`${nineRouterBaseUrl.replace(/\\/$/, '')}/chat/completions`, {
+        const response = await fetch(`${nineRouterBaseUrl.replace(/\/$/, '')}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -198,7 +198,7 @@ class AiProviderManager {
                 role: 'system',
                 content: 'Você é o motor de inteligência jurídica da plataforma DefesAi, especialista em CTB e resoluções do CONTRAN.',
               },
-              { role: 'user', content: `${prompt}\\n\\nContexto:\\n${JSON.stringify(context)}` },
+              { role: 'user', content: `${prompt}\n\nContexto:\n${JSON.stringify(context)}` },
             ],
             temperature: options?.temperature ?? configService.get('AI_TEMPERATURE', 0.15),
             max_tokens: 2048,
