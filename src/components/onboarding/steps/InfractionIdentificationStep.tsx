@@ -38,7 +38,7 @@ import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../
  * Datas inválidas viram string vazia, nunca um valor que o navegador não exibe.
  */
 function toDateInputValue(value?: string): string {
-    const datePart = value?.match(/^(\\d{4}-\\d{2}-\\d{2})/)?.[1];
+    const datePart = value?.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
     if (!datePart) return '';
     const parsed = new Date(`${datePart}T00:00:00.000Z`);
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === datePart
