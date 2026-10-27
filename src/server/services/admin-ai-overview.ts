@@ -45,15 +45,15 @@ export function buildAdminAiOverview(input: AdminAiOverviewInput) {
       avgLatencyMs: input.metrics.nvidia.avgLatencyMs,
     },
     rag: {
-      provider: input.vectorStore.isSupabaseConnected ? 'Supabase pgvector + memória' : 'VectorStore em memória',
+      provider: input.vectorStore.isSupabaseConnected ? 'Supabase pgvector + memória' : 'VectorStore (conectividade não verificada)',
       index: input.vectorStore.isSupabaseConnected
         ? 'Cliente Supabase configurado; conectividade não verificada'
-        : 'Somente memória; persistência não verificada',
+        : 'Cliente Supabase não inicializado; persistência não verificada',
       embeddingModel: input.embeddingModel,
       dimensions: null,
       status: input.vectorStore.isSupabaseConnected
         ? 'CLIENT_CONFIGURED_HEALTH_NOT_CHECKED'
-        : 'MEMORY_ONLY_PERSISTENCE_NOT_VERIFIED',
+        : 'SUPABASE_CLIENT_NOT_INITIALIZED_PERSISTENCE_NOT_VERIFIED',
       inMemoryCounts: {
         sources: input.vectorStore.sourcesCount,
         documents: input.vectorStore.documentsCount,
