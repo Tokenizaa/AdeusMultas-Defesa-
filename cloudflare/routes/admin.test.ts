@@ -8,11 +8,14 @@ vi.mock('../supabase', () => ({
 }));
 
 vi.mock('../middleware', () => ({
-  authenticateToken: async (_c: any, next: any) => next(),
+  authenticateToken: async (c: any, next: any) => { c.set('user', { id: 'admin-1', email: 'admin@example.com', role: 'admin' }); await next(); },
   requireAdmin: async (_c: any, next: any) => next(),
 }));
 
+vi.mock('./audit', () => ({ recordAuditLog: vi.fn().mockResolvedValue(undefined) }));
+
 import { adminRoutes } from './admin';
+import { recordAuditLog } from './audit';
 
 function app() {
   const app = new Hono();
@@ -139,6 +142,55 @@ describe('admin Cloudflare contract', () => {
     }] });
   });
 
+  it('returns a real user profile, only that user\'s cases, and complete confirmed spend', async () => {
+    const userId = '00000000-0000-4000-8000-000000000123';
+    const profileQuery = query({
+      user_id: userId, name: 'Ana', email: 'ana@example.com', role: 'citizen',
+      cpf: '12345678901', phone: '51999999999', created_at: '2026-09-20T00:00:00Z',
+    });
+    const caseQuery = query([{
+      id: 'case-uuid', app_ref: 'case_app_1', title: 'Recurso JARI',
+      user_id: userId, is_paid: true, ait_number: 'AIT-123', vehicle_plate: 'ABC1D23',
+      autuador_body: 'DETRAN/RS', created_at: '2026-09-21T00:00:00Z',
+    }]);
+    const paymentQuery = query([
+      { id: 'pay-1', amount: 20 },
+      { id: 'pay-2', amount: 15.5 },
+    ]);
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'user_profiles') return profileQuery;
+      if (table === 'cases') return caseQuery;
+      if (table === 'payment_orders') return paymentQuery;
+      return query(null);
+    });
+
+    const response = await app().request(`/api/admin/users/${userId}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.user).toMatchObject({ id: userId, name: 'Ana', email: 'ana@example.com', role: 'citizen' });
+    expect(body.cases).toEqual([expect.objectContaining({
+      id: 'case_app_1', title: 'Recurso JARI', isPaid: true,
+      infraction: { aitNumber: 'AIT-123', autuadorBody: 'DETRAN/RS' },
+      vehicle: { plate: 'ABC1D23' },
+    })]);
+    expect(body.totalSpent).toBe(35.5);
+    expect(caseQuery.eq).toHaveBeenCalledWith('user_id', userId);
+    expect(paymentQuery.eq).toHaveBeenCalledWith('user_id', userId);
+    expect(recordAuditLog).toHaveBeenCalledWith(undefined, expect.objectContaining({
+      actor: 'admin@example.com',
+      action: 'admin.user_profile.viewed',
+      targetId: userId,
+    }));
+  });
+
+  it('returns 404 rather than fabricating a missing user profile', async () => {
+    mockFrom.mockReturnValue(query(null));
+    const response = await app().request('/api/admin/users/00000000-0000-4000-8000-000000000999');
+    expect(response.status).toBe(404);
+    expect((await response.json()).error.code).toBe('NOT_FOUND');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts the existing frontend PUT contract { email, role }', async () => {
     const target = {
       user_id: 'u1', name: 'Maria', email: 'maria@example.com', role: 'citizen',
@@ -159,6 +211,11 @@ describe('admin Cloudflare contract', () => {
       success: true,
       user: { id: 'u1', email: 'maria@example.com', role: 'admin' },
     });
+    expect(recordAuditLog).toHaveBeenCalledWith(undefined, expect.objectContaining({
+      action: 'admin.user_role.updated',
+      targetId: 'u1',
+      details: { previousRole: 'citizen', newRole: 'admin' },
+    }));
   });
 
   it('rejects an invalid role before touching persistence', async () => {
