@@ -22,7 +22,7 @@ function app() {
 
 function query(data: any, error: any = null) {
   const q: any = {};
-  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'not', 'or', 'gte']) q[method] = vi.fn(() => q);
+  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'not', 'or', 'gte', 'in', 'range']) q[method] = vi.fn(() => q);
   q.maybeSingle = vi.fn(async () => ({ data, error }));
   q.single = vi.fn(async () => ({ data, error }));
   q.then = (resolve: any) => Promise.resolve({ data, error }).then(resolve);
@@ -99,6 +99,28 @@ describe('admin Cloudflare contract', () => {
     expect(JSON.stringify(body)).not.toContain('nvidia');
     expect(JSON.stringify(body)).not.toContain('9router');
     expect(JSON.stringify(body)).not.toContain('systemUptimePercent');
+  });
+
+  it('calculates revenue across all paid-order pages, not only a fixed first page', async () => {
+    const firstPage = Array.from({ length: 1000 }, (_, i) => ({ id: `paid-${i}`, amount: 1 }));
+    const secondPage = [{ id: 'paid-1000', amount: 123.45 }];
+    let paymentOrderCalls = 0;
+
+    mockFrom.mockImplementation((table: string) => {
+      const q = query(null);
+      if (table === 'payment_orders') {
+        const callIndex = paymentOrderCalls++;
+        const data = callIndex === 5 ? firstPage : callIndex === 6 ? secondPage : [];
+        q.then = (resolve: any) => Promise.resolve({ data, error: null, count: 0 }).then(resolve);
+      }
+      return q;
+    });
+
+    const response = await app().request('/api/admin/payments', {}, { VENO_PRIMARY_GATEWAY: 'venopag' } as any);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.summary.revenue).toBe(1123.45);
+    expect(paymentOrderCalls).toBe(7);
   });
 
   it('maps user_profiles to the AuthUser frontend contract', async () => {
