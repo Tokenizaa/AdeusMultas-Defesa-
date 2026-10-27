@@ -45,6 +45,28 @@ describe('buildAdminAiOverview', () => {
     expect(result.observability.totalAiRequests).toBe(0);
   });
 
+  it('selects 9Router as the effective primary when NVIDIA is absent and fallback is enabled', () => {
+    const result = buildAdminAiOverview({
+      ...base,
+      nineRouterConfigured: true,
+      geminiConfigured: true,
+      metrics: {
+        ...base.metrics,
+        nineRouter: { requestsTotal: 4, successRate: 75, avgLatencyMs: 540 },
+      },
+    });
+
+    expect(result.provider).toMatchObject({
+      name: '9Router',
+      model: 'fallback-from-config',
+      fallback: 'Google Gemini',
+      status: 'configured',
+      requestsTotal: 4,
+      successRate: 75,
+      avgLatencyMs: 540,
+    });
+  });
+
   it('uses runtime configuration and real counters instead of fixed provider data', () => {
     const result = buildAdminAiOverview({
       ...base,
