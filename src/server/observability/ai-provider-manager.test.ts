@@ -43,6 +43,7 @@ const settings: Record<string, unknown> = {
 describe('AiProviderManager 9Router fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settings.GEMINI_API_KEY = '';
     mocks.configGet.mockImplementation((key: string, fallback?: unknown) =>
       Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : fallback
     );
