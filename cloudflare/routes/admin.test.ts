@@ -169,7 +169,7 @@ describe('admin Cloudflare contract', () => {
     const body = await response.json();
     expect(body.user).toMatchObject({ id: userId, name: 'Ana', email: 'ana@example.com', role: 'citizen' });
     expect(body.cases).toEqual([expect.objectContaining({
-      id: 'case_app_1', title: 'Recurso JARI', isPaid: true,
+      id: 'case-uuid', title: 'Recurso JARI', isPaid: true,
       infraction: { aitNumber: 'AIT-123', autuadorBody: 'DETRAN/RS' },
       vehicle: { plate: 'ABC1D23' },
     })]);
