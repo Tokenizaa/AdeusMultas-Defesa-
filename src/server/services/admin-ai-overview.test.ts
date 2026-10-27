@@ -34,7 +34,7 @@ describe('buildAdminAiOverview', () => {
     expect(result.provider.status).toBe('not_configured');
     expect(result.provider.name).toBe('Deterministic Legal RAG');
     expect(result.provider.fallback).toBeNull();
-    expect(result.rag.status).toBe('MEMORY_ONLY_PERSISTENCE_NOT_VERIFIED');
+    expect(result.rag.status).toBe('SUPABASE_CLIENT_NOT_INITIALIZED_PERSISTENCE_NOT_VERIFIED');
     expect(result.rag.inMemoryCounts).toEqual({
       sources: 2,
       documents: 3,
