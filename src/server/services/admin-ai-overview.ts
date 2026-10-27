@@ -25,20 +25,41 @@ export interface AdminAiOverviewInput {
 }
 
 export function buildAdminAiOverview(input: AdminAiOverviewInput) {
-  const primaryName = input.nvidiaConfigured ? 'NVIDIA NIM' : 'Deterministic Legal RAG';
-  const fallback = input.fallbackEnabled && input.nineRouterConfigured
-    ? `9Router (${input.nineRouterModel})`
-    : input.geminiConfigured
+  const nvidiaIsPrimary = input.nvidiaConfigured;
+  const nineRouterIsPrimary = !nvidiaIsPrimary && input.fallbackEnabled && input.nineRouterConfigured;
+  const geminiIsPrimary = !nvidiaIsPrimary && !nineRouterIsPrimary && input.geminiConfigured;
+  const primaryName = nvidiaIsPrimary
+    ? 'NVIDIA NIM'
+    : nineRouterIsPrimary
+      ? '9Router'
+      : geminiIsPrimary
+        ? 'Google Gemini'
+        : 'Deterministic Legal RAG';
+  const primaryModel = nvidiaIsPrimary
+    ? input.nvidiaModel
+    : nineRouterIsPrimary
+      ? input.nineRouterModel
+      : geminiIsPrimary
+        ? 'gemini-3.7-flash'
+        : 'defesai-legal-vectorizer-v1';
+  const fallback = nvidiaIsPrimary
+    ? input.fallbackEnabled && input.nineRouterConfigured
+      ? `9Router (${input.nineRouterModel})`
+      : input.geminiConfigured
+        ? 'Google Gemini'
+        : null
+    : nineRouterIsPrimary && input.geminiConfigured
       ? 'Google Gemini'
       : null;
+  const remoteProviderConfigured = nvidiaIsPrimary || nineRouterIsPrimary || geminiIsPrimary;
 
   return {
     provider: {
       name: primaryName,
       runtime: 'Node.js API',
-      model: input.nvidiaConfigured ? input.nvidiaModel : 'defesai-legal-vectorizer-v1',
+      model: primaryModel,
       fallback,
-      status: input.nvidiaConfigured ? 'configured' : 'not_configured',
+      status: remoteProviderConfigured ? 'configured' : 'local_fallback',
       statusMeaning: 'Configuração de chave/modelo; não é prova de saúde do provedor.',
       requestsTotal: input.metrics.nvidia.requestsTotal,
       successRate: input.metrics.nvidia.successRate,
