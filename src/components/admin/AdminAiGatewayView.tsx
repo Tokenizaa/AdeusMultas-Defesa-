@@ -118,7 +118,7 @@ export const AdminAiGatewayView: React.FC = () => {
           <p className="text-sm text-slate-400">Runtime: <span className="text-slate-200">{data?.provider.runtime || '—'}</span></p>
           <p className="text-sm text-slate-400">Modelo configurado: <span className="text-slate-200">{data?.provider.model || '—'}</span></p>
           <p className="text-sm text-slate-400">Fallback configurado: <span className="text-slate-200">{data?.provider.fallback ?? 'nenhum'}</span></p>
-          <p className="text-sm text-slate-400">Chamadas NVIDIA: <span className="text-slate-200">{data?.provider.requestsTotal ?? 0}</span> · Sucesso: <span className="text-slate-200">{data?.provider.successRate ?? 0}%</span> · Latência média: <span className="text-slate-200">{data?.provider.avgLatencyMs ?? 0} ms</span></p>
+          <p className="text-sm text-slate-400">Chamadas do provedor primário: <span className="text-slate-200">{data?.provider.requestsTotal ?? 0}</span> · Sucesso: <span className="text-slate-200">{data?.provider.successRate ?? 0}%</span> · Latência média: <span className="text-slate-200">{data?.provider.avgLatencyMs ?? 0} ms</span></p>
           <p className="text-xs text-slate-500">{data?.provider.statusMeaning || 'Estado operacional não verificado.'}</p>
         </section>
 
