@@ -48,6 +48,7 @@ import { AdminAiGatewayView } from './components/admin/AdminAiGatewayView';
 import { AdminIntegrationsView } from './components/admin/AdminIntegrationsView';
 import { AdminSettingsView } from './components/admin/AdminSettingsView';
 import { AdminMonitoringView } from './components/admin/AdminMonitoringView';
+import { AdminAssistedCertificationView } from './components/admin/AdminAssistedCertificationView';
 
 // Commercial Admin Central Hub
 import { CommercialHubView } from './components/commercial/CommercialHubView';
@@ -220,6 +221,9 @@ function AppContent() {
     } else if (currentPath === '/admin/logs') {
       title = 'Logs Estruturados & Tracing';
       subtitle = 'Inspeção de eventos com correlationId e mascaramento LGPD';
+    } else if (currentPath === '/admin/assisted-certification') {
+      title = 'Certificação Visual Assistida';
+      subtitle = 'Avaliação manual dos sete serviços e síntese dos 13 domínios';
     } else if (currentPath === '/admin/monitoring') {
       title = 'Monitoramento & Observabilidade';
       subtitle = 'Saúde de infraestrutura, latências P50/P95/P99 e alertas ativos';
@@ -277,6 +281,7 @@ function AppContent() {
         {currentPath === '/admin/settings' && <AdminSettingsView />}
         {currentPath === '/admin/logs' && <AdminAuditView />}
         {currentPath === '/admin/monitoring' && <AdminMonitoringView />}
+        {currentPath === '/admin/assisted-certification' && <AdminAssistedCertificationView />}
         {currentPath === '/admin/audit' && <AdminAuditView />}
         {/* Commercial Management Hub with Sub-Tabs */}
         {currentPath === '/admin/commercial' && <CommercialHubView initialTab="overview" />}
