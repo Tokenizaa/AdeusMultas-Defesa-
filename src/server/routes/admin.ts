@@ -471,155 +471,71 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   }
 });
 
-// E2E Test Endpoints
-router.get('/admin/e2e-tests/stats', async (req, res) => {
-  try {
-    const supabase = getSupabaseAdminClient() as any;
-    
-    // Get counts from relevant tables
-    const [usersCount, casesCount, runsCount] = await Promise.all([
-      supabase.from('user_profiles').select('user_id', { count: 'exact' }),
-      supabase.from('cases').select('id', { count: 'exact' }),
-      supabase.from('e2e_test_runs').select('id', { count: 'exact' }),
-    ]);
-    
-    // Get service breakdown
-    const { data: servicesData } = await supabase
-      .from('cases')
-      .select('service_type')
-      .not('service_type', 'is', null);
-    
-    const serviceCounts = servicesData?.reduce((acc, row) => {
-      const service = row.service_type;
-      acc[service] = (acc[service] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
-    
-    res.json({
-      users: usersCount.count || 0,
-      cases: casesCount.count || 0,
-      testRuns: runsCount.count || 0,
-      services: serviceCounts,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error('admin', 'e2e-tests', 'stats', 'Error fetching E2E test stats', { error: String(error) });
-    res.status(500).json({ error: 'Failed to fetch statistics' });
-  }
-});
-
-router.get('/admin/e2e-tests/runs', async (req, res) => {
-  try {
-    const supabase = getSupabaseAdminClient() as any;
-    const { data: runs, error } = await supabase
-      .from('e2e_test_runs')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(50);
-    
-    if (error) throw error;
-    res.json({ runs: runs || [] });
-  } catch (error) {
-    console.error('Error fetching E2E test runs:', error);
-    res.status(500).json({ error: 'Failed to fetch test runs' });
-  }
-});
-
-router.post('/admin/e2e-tests/run', async (req, res) => {
-  try {
-    // ponytail: client tipado não inclui e2e_test_runs (migração 20260830000001).
-    // Cast local de ferramenta admin; regenerar types remove.
-    const supabase = getSupabaseAdminClient() as any;
-    const { services, triggeredBy } = req.body;
-    const runId = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    
-    // Create a new test run record
-    const { data: runData, error: runError } = await supabase
-  .from("e2e_test_runs")
-  .insert({
-    id: runId,
-    status: "QUEUED",
-    triggeredBy: triggeredBy || "Admin API",
-    suites_summary: services ? JSON.stringify(services.map(s => ({ 
-      serviceKey: s, 
-      serviceName: s, 
-      totalScenarios: 0, 
-      passed: 0, 
-      failed: 0, 
-      status: "PENDING" 
-    }))) : "[]",
-  })
-  .select()
-  .single();
-
-if (runError) throw runError;
-
-// Return success response
-res.json({ 
-  success: true, 
-  runId, 
-  status: "QUEUED", 
-  message: "Test execution started" 
-});
-} catch (error) {
-  logger.error('admin', 'e2e-tests', 'start_run', 'Error starting E2E test run', { error: String(error) });
-  res.status(500).json({ error: 'Failed to start test execution' });
+// E2E endpoints: do not report stored/synthetic rows as verified execution.
+async function countUnverifiedE2ERunRecords(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) throw new Error('Supabase indisponível.');
+  const { count, error } = await (supabase as any)
+    .from('e2e_test_runs')
+    .select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
 }
-});
-router.get('/admin/e2e-tests/run/:id', async (req, res) => {
+
+router.get('/admin/e2e-tests/stats', async (_req, res) => {
   try {
-    const supabase = getSupabaseAdminClient() as any;
-    const { id } = req.params;
-    
-    const { data: run, error } = await supabase
-      .from('e2e_test_runs')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) throw error;
-    if (!run) {
-      return res.status(404).json({ error: 'Test run not found' });
-    }
-    
-    res.json({ run });
+    const unverifiedStoredRunRecords = await countUnverifiedE2ERunRecords();
+    return res.json({
+      runnerStatus: 'NOT_CONFIGURED',
+      executionEnabled: false,
+      totalUnitTests: null,
+      totalE2ETests: null,
+      availableServices: [],
+      totalRuns: 0,
+      latestRun: null,
+      passRate: null,
+      unverifiedStoredRunRecords,
+      message: 'Execução Playwright real não configurada. Registros históricos não são tratados como evidência.',
+    });
   } catch (error) {
-    console.error('Error fetching E2E test run:', error);
-    res.status(500).json({ error: 'Failed to fetch test run' });
+    logger.error('admin', 'e2e-tests', 'stats', 'Falha ao consultar estado do runner E2E.', { error: String(error) });
+    return res.status(503).json({ error: 'Estado do runner E2E indisponível.' });
   }
 });
 
-router.post('/admin/e2e-tests/execute-failed', async (req, res) => {
+router.get('/admin/e2e-tests/runs', async (_req, res) => {
   try {
-    // This would trigger a run of only failed tests
-    // For now, we'll reuse the run endpoint with appropriate parameters
-    res.json({ 
-      success: true, 
-      message: 'Failed test execution endpoint - implement based on specific requirements' 
-    });
+    const unverifiedStoredRunRecords = await countUnverifiedE2ERunRecords();
+    return res.json({ runs: [], total: 0, runnerStatus: 'NOT_CONFIGURED', unverifiedStoredRunRecords });
   } catch (error) {
-    logger.error('admin', 'e2e-tests', 'execute_failed', 'Error executing failed tests', { error: String(error) });
-    res.status(500).json({ error: 'Failed to execute failed tests' });
+    logger.error('admin', 'e2e-tests', 'runs', 'Falha ao consultar registros E2E.', { error: String(error) });
+    return res.status(503).json({ error: 'Histórico E2E não verificável neste ambiente.' });
   }
 });
 
-router.post('/admin/e2e-tests/execute-service', async (req, res) => {
-  try {
-    const { service } = req.body;
-    if (!service) {
-      return res.status(400).json({ error: 'Service parameter is required' });
-    }
-    
-    // This would trigger a run for a specific service
-    // For now, we'll reuse the run endpoint
-    res.json({ 
-      success: true, 
-      message: `Service execution endpoint for ${service} - implement based on specific requirements` 
-    });
-  } catch (error) {
-    logger.error('admin', 'e2e-tests', 'execute_service', 'Error executing service tests', { error: String(error) });
-    res.status(500).json({ error: 'Failed to execute service tests' });
-  }
+router.post('/admin/e2e-tests/run', (_req, res) => {
+  return res.status(503).json({
+    error: 'Execução E2E real indisponível neste ambiente.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
+});
+
+router.get('/admin/e2e-tests/run/:id', (_req, res) => {
+  return res.status(404).json({ error: 'Nenhuma execução E2E verificada encontrada.' });
+});
+
+router.post('/admin/e2e-tests/execute-failed', (_req, res) => {
+  return res.status(503).json({
+    error: 'Reexecução de falhas indisponível até configurar o runner Playwright real.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
+});
+
+router.post('/admin/e2e-tests/execute-service', (_req, res) => {
+  return res.status(503).json({
+    error: 'Execução por serviço indisponível até configurar o runner Playwright real.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
 });
 
 export default router;
