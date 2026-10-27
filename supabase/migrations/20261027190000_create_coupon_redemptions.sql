@@ -59,7 +59,10 @@ BEGIN
   IF coalesce(c.used_count, 0) >= coalesce(c.total_limit, 2147483647) THEN
     RAISE EXCEPTION 'Limite total de resgates atingido' USING ERRCODE = 'P0001';
   END IF;
-  IF (SELECT count(*) FROM public.coupon_redemptions r WHERE r.coupon_code = upper(trim(p_coupon_code)) AND r.user_id = p_user_id AND r.status = 'REDEEMED') >= coalesce(c.user_limit, 2147483647) THEN
+  IF greatest(
+    (SELECT count(*) FROM public.coupon_redemptions r WHERE r.coupon_code = upper(trim(p_coupon_code)) AND r.user_id = p_user_id AND r.status = 'REDEEMED'),
+    (SELECT count(*) FROM jsonb_array_elements(coalesce(c.usage_history, '[]'::jsonb)) u WHERE coalesce(u->>'userId', u->>'user_id') = p_user_id::text)
+  ) >= coalesce(c.user_limit, 2147483647) THEN
     RAISE EXCEPTION 'Limite de uso por usuário atingido' USING ERRCODE = 'P0001';
   END IF;
   IF p_pre_coupon_amount < 0 OR p_coupon_discount < p_pre_coupon_amount OR p_pre_coupon_amount - p_coupon_discount <> 0 THEN
