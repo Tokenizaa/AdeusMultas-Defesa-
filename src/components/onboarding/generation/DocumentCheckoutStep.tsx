@@ -77,6 +77,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     } | null>(null);
     const [pixError, setPixError] = useState<string | null>(null);
     const [pixReloadKey, setPixReloadKey] = useState<number>(0);
+    const [pixRequested, setPixRequested] = useState<boolean>(false);
+    const [freeCouponRedeeming, setFreeCouponRedeeming] = useState<boolean>(false);
     const [payError, setPayError] = useState<string | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
     const [creditCardResult, setCreditCardResult] = useState<{
@@ -154,7 +156,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     // Load PIX when payment method is PIX
     useEffect(() => {
         console.log("[DocumentCheckoutStep] serviceType:", serviceType, "couponCode:", couponCode);
-        if (paymentMethod !== 'pix') return;
+        if (paymentMethod !== 'pix' || !pixRequested || (effectivePrice !== null && effectivePrice <= 0)) return;
 
         async function loadPix() {
             setPixError(null);
@@ -196,7 +198,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     // Os dados do pagador não devem recriar a cobrança a cada tecla. O
     // backend garante idempotência por caso/usuário; aqui só recarregamos
     // quando muda o caso, a oferta, o método ou o pedido explicitamente.
-    }, [currentCaseId, serviceType, paymentMethod, pixReloadKey, couponCode]);
+    }, [currentCaseId, serviceType, paymentMethod, pixReloadKey, couponCode, pixRequested, effectivePrice]);
 
     const gatewayLabel = pixData?.gateway === 'venopag' ? 'VenoPag' : pixData?.gateway === 'ggpixapi' ? 'GGPIXAPI' : 'PagBank';
 
@@ -360,6 +362,62 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
             throw err;
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+    const handleRedeemFreeCoupon = async () => {
+        if (!currentCaseId || !couponCode || effectivePrice !== 0 || freeCouponRedeeming) return;
+        setFreeCouponRedeeming(true);
+        setPayError(null);
+        try {
+            const redeemRes = await authFetch('/api/payments/coupon/redeem-free', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ caseId: currentCaseId, serviceType, couponCode }),
+            });
+            const redeemText = await redeemRes.text();
+            let redeemData: any;
+            try { redeemData = redeemText ? JSON.parse(redeemText) : {}; } catch { redeemData = { error: redeemText }; }
+            if (!redeemRes.ok || !redeemData.success) {
+                throw new Error(readableApiError(redeemData, 'Não foi possível resgatar o cupom gratuito.'));
+            }
+            const genRes = await authFetch(`/api/cases/${encodeURIComponent(currentCaseId)}/generate-defense`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    procedureType: serviceType,
+                    selectedArgumentIds: analysis?.recommendedArguments?.map((a: any) => a.id) || [],
+                    applicantData: {
+                        name: documentData.applicantName,
+                        cpf: documentData.applicantCpf,
+                        rg: documentData.applicantRg,
+                        cnh: documentData.applicantCnh,
+                        category: documentData.cnhCategory,
+                        address: `${documentData.addressStreet}, ${documentData.addressNumber || ''}`.trim(),
+                        cityState: documentData.addressCityState,
+                        processNumbers: documentData.processNumbers,
+                    },
+                    customFacts: documentData.factsNarrative,
+                }),
+            });
+            const genText = await genRes.text();
+            let genData: any;
+            try { genData = genText ? JSON.parse(genText) : {}; } catch { genData = { error: genText }; }
+            if (!genRes.ok || !genData.defenseDraft) {
+                throw new Error(readableApiError(genData, 'O benefício foi registrado, mas a geração do documento não foi concluída. Tente gerar novamente.'));
+            }
+            const finalCase = buildCasePayload(false);
+            finalCase.isPaid = true;
+            finalCase.status = 'defesa_pronta';
+            finalCase.currentStage = 3;
+            finalCase.defenseDraft = genData.defenseDraft;
+            if (genData.case) Object.assign(finalCase, genData.case);
+            onPaymentSuccess(finalCase);
+        } catch (err: any) {
+            const message = err?.message || 'Falha ao resgatar o cupom gratuito.';
+            setPayError(message);
+        } finally {
+            setFreeCouponRedeeming(false);
         }
     };
 
@@ -596,6 +654,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                                         }
                                                         setCouponMessage(null);
                                                         setPixData(null);
+                                                        setPixRequested(false);
                                                         setCouponCode(code);
                                                     }}
                                                     disabled={!couponDraft.trim() || isProcessing}
@@ -609,6 +668,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                                             setCouponCode('');
                                                             setCouponMessage(null);
                                                             setPixData(null);
+                                                            setPixRequested(false);
                                                         }}
                                                         disabled={isProcessing}
                                                         className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
@@ -711,6 +771,20 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                 </div>
                             </div>
 
+                                {effectivePrice === 0 && couponCode ? (
+                                    <div className="my-4 space-y-3">
+                                        <p className="text-sm font-semibold text-emerald-700">Total R$ 0,00 — nenhum pagamento será cobrado.</p>
+                                        <button type="button" id="btn-redeem-free-coupon" onClick={handleRedeemFreeCoupon} disabled={freeCouponRedeeming || isProcessing || !currentCaseId} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
+                                            {freeCouponRedeeming ? 'Validando cupom e gerando documento...' : 'Resgatar cupom e liberar documento'}
+                                        </button>
+                                        {!currentCaseId && <p className="text-xs text-rose-700">Salve o caso antes de resgatar o cupom.</p>}
+                                    </div>
+                                ) : !pixRequested ? (
+                                    <div className="my-4 space-y-3">
+                                        <p className="text-sm text-slate-600">Confirme o valor e aplique qualquer cupom antes de gerar a cobrança.</p>
+                                        <button type="button" id="btn-generate-pix" onClick={() => setPixRequested(true)} disabled={effectivePrice === null || effectivePrice <= 0 || isProcessing} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Gerar cobrança PIX</button>
+                                    </div>
+                                ) : (
                                 {/* QR Code Container */}
                                 <div className="my-4 text-center">
                                     {pixError ? (
@@ -722,7 +796,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                             <button
                                                 type="button"
                                                 id="btn-retry-pix"
-                                                onClick={() => setPixReloadKey((k) => k + 1)}
+                                                onClick={() => { setPixRequested(true); setPixReloadKey((k) => k + 1); }}
                                                 disabled={isProcessing}
                                                 className="mt-2 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-colors cursor-pointer"
                                             >
@@ -773,6 +847,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                             </button>
                                         </div>
                                     </div>
+                                )}
+
                                 )}
 
                                 {/* Action Buttons: Confirm / Simulate */}
