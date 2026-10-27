@@ -786,6 +786,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                         <button type="button" id="btn-generate-pix" onClick={() => setPixRequested(true)} disabled={effectivePrice === null || effectivePrice <= 0 || isProcessing} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Gerar cobrança PIX</button>
                                     </div>
                                 ) : (
+                                    <>
                                 {/* QR Code Container */}
                                 <div className="my-4 text-center">
                                     {pixError ? (
@@ -850,9 +851,10 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                     </div>
                                 )}
 
+                                    </>
                                 )}
 
-                                {/* Action Buttons: Confirm / Simulate */}
+                                {pixRequested && effectivePrice !== 0 && (
                                 <div className="space-y-2 pt-2 border-t border-slate-200">
                                     {payError && (
                                         <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
@@ -887,6 +889,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                         <span>Ambiente Seguro Criptografado TLS 256-bit</span>
                                     </div>
                                 </div>
+                                )}
                             </div>
                         )}
 
