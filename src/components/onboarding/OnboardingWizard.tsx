@@ -423,28 +423,44 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const handleCategorySelect = (selected: InfractionCategory) => {
     setInfractionCategory(selected);
 
-    // Pre-populate a partir do catálogo canônico: multa, pontos, artigo e
-    // severidade são os do código realmente selecionado. Defaults escritos à
-    // mão divergiam do catálogo (ex.: "lei_seca" com 0 pontos) e a tela os
-    // exibia como se fossem dados do usuário.
+    // Trocar de categoria invalida os dados específicos da categoria anterior.
+    // Evita, por exemplo, carregar velocidades em Lei Seca ou manter código grave
+    // ao entrar em conversão em advertência.
     const defaultCode = CATEGORY_DEFAULT_CODE[selected];
-    const item = defaultCode ? INFRACTION_CATALOG.find((x) => x.code === defaultCode) : undefined;
-    if (!item) return;
+    const item = defaultCode ? INFRACTION_CATALOG.find((candidate) => candidate.code === defaultCode) : undefined;
 
-    setInfractionData((prev) => {
-      const currentItem = INFRACTION_CATALOG.find((candidate) => candidate.code === prev.infractionCode);
-      const invalidForWarningConversion = selected === 'conversao_advertencia'
-        && (!currentItem || (currentItem.severity !== 'leve' && currentItem.severity !== 'media'));
-      return {
-        ...prev,
-        ctbArticle: invalidForWarningConversion ? item.article : (prev.ctbArticle || item.article),
-        infractionCode: invalidForWarningConversion ? item.code : (prev.infractionCode || item.code),
-        description: invalidForWarningConversion ? item.description : (prev.description || item.description),
-        severity: invalidForWarningConversion ? item.severity : item.severity,
-        fineAmount: invalidForWarningConversion ? item.fineAmount : item.fineAmount,
-        points: invalidForWarningConversion ? item.points : item.points,
-      };
-    });
+    setInfractionData((prev) => ({
+      ...prev,
+      infractionCode: item?.code || '',
+      ctbArticle: item?.article || '',
+      description: item?.description || '',
+      severity: item?.severity || 'media',
+      fineAmount: item?.fineAmount || 0,
+      points: item?.points || 0,
+      speedLimit: undefined,
+      measuredSpeed: undefined,
+      consideredSpeed: undefined,
+      speedMeasured: undefined,
+      speedConsidered: undefined,
+      inmetroAferitionDate: undefined,
+      radarEquipmentId: undefined,
+      hasR19SignageProof: undefined,
+      hasPsychomotorTerm: undefined,
+      hasAgentDetailedObservations: undefined,
+      refusedTest: undefined,
+      offeredRetest: undefined,
+      cellphoneCircumstance: undefined,
+      yellowPhaseCrossing: undefined,
+      emergencyPassage: undefined,
+      hasPhotoProof: undefined,
+      hasRegulatorySign: undefined,
+      hasPreviousInfractionsLast12Months: undefined,
+      realDriverName: undefined,
+      realDriverCpf: undefined,
+      realDriverCnh: undefined,
+      indicationWithinDeadline: undefined,
+      notes: undefined,
+    }));
   };
 
   const handleLeadUpdate = (name: string, phone: string) => {
