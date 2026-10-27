@@ -13,6 +13,7 @@ on:
       - 'vitest.config.*'
       - 'src/**'
       - 'scripts/**'
+      - 'supabase/migrations/**'
       - '.github/workflows/cloudflare-deploy.yml'
   pull_request:
     branches: [ main ]
