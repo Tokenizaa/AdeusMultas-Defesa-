@@ -96,7 +96,7 @@ jobs:
         run: bunx vitest run cloudflare/routes/documents.test.ts
 
       - name: Test Phase 9 Admin
-        run: bunx vitest run cloudflare/routes/admin.test.ts
+        run: bunx vitest run cloudflare/routes/admin.test.ts cloudflare/routes/monitor.test.ts cloudflare/routes/audit.test.ts
 
       - name: Test Phase 8 persistence
         run: bunx vitest run cloudflare/routes/notifications.test.ts
