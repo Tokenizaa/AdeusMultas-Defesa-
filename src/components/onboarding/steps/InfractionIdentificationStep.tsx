@@ -99,6 +99,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         (vehicleData.plate?.trim().length || 0) >= 7 &&
         (infractionData.infractionCode?.trim().length || 0) >= 3 &&
         (infractionData.location?.trim().length || 0) >= 5 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(infractionData.dateTime || '') &&
         (infractionData.autuadorBody?.trim().length || 0) >= 3 &&
         (infractionData.aitNumber?.trim().length || 0) >= 3;
 
