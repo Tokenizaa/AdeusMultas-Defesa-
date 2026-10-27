@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ExternalLink, FileDown, ClipboardCheck, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 type Status = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_OBSERVED';
-type Service = { key: string; label: string; stages: string[] };
+type Service = { key: string; label: string; stages: string[]; focus: string[] };
 
 const COMMON_STAGES = [
   'Serviço e situação — ServiceStep',
@@ -17,13 +17,13 @@ const COMMON_STAGES = [
 ];
 
 const SERVICES: Service[] = [
-  { key: 'defesa_previa', label: 'Defesa prévia', stages: [...COMMON_STAGES] },
-  { key: 'recurso_jari', label: 'Recurso JARI', stages: [...COMMON_STAGES] },
-  { key: 'recurso_cetran', label: 'Recurso CETRAN', stages: [...COMMON_STAGES] },
-  { key: 'suspensao', label: 'Suspensão da CNH', stages: [...COMMON_STAGES] },
-  { key: 'cassacao', label: 'Cassação da CNH', stages: [...COMMON_STAGES] },
-  { key: 'indicacao_condutor', label: 'Indicação de condutor', stages: [...COMMON_STAGES] },
-  { key: 'conversao_advertencia', label: 'Conversão em advertência', stages: [...COMMON_STAGES] },
+  { key: 'defesa_previa', label: 'Defesa prévia', stages: [...COMMON_STAGES], focus: ['Notificação de autuação (NA) e prazo de defesa', 'AIT, data, local e órgão autuador', 'Categoria da infração e perguntas condicionais', 'Coerência da análise e minuta de defesa prévia'] },
+  { key: 'recurso_jari', label: 'Recurso JARI', stages: [...COMMON_STAGES], focus: ['Notificação de imposição de penalidade (NIP) e prazo recursal', 'Identificação da autuação e eventual boleto/notificação', 'Fundamentos e campos compatíveis com recurso de primeira instância', 'Coerência da análise e minuta dirigida à JARI'] },
+  { key: 'recurso_cetran', label: 'Recurso CETRAN', stages: [...COMMON_STAGES], focus: ['Decisão de indeferimento da JARI e data da ciência', 'Prazo e identificação do recurso de segunda instância', 'Não confundir CETRAN com defesa prévia ou JARI', 'Coerência da análise e minuta dirigida à instância correta'] },
+  { key: 'suspensao', label: 'Suspensão da CNH', stages: [...COMMON_STAGES], focus: ['Processo e notificação de suspensão', 'Origem alegada: pontuação ou infração autossuspensiva', 'Dados da CNH e prazos efetivamente solicitados na interface', 'Não presumir campos ausentes nem confundir com cassação'] },
+  { key: 'cassacao', label: 'Cassação da CNH', stages: [...COMMON_STAGES], focus: ['Processo específico de cassação (PCDD), quando exibido', 'Fundamento informado e relação com suspensão/reincidência', 'Dados da CNH, notificação e prazos solicitados na interface', 'Não reutilizar silenciosamente dados do fluxo de suspensão'] },
+  { key: 'indicacao_condutor', label: 'Indicação de condutor', stages: [...COMMON_STAGES], focus: ['Dados do proprietário e do condutor indicado em campos separados', 'CPF/CNH sintéticos e coerentes entre si', 'Prazo e requisitos exibidos para a indicação', 'Documento/assinatura e associação correta à autuação'] },
+  { key: 'conversao_advertencia', label: 'Conversão em advertência', stages: [...COMMON_STAGES], focus: ['Código, gravidade e natureza da infração derivados do mesmo item de catálogo', 'Elegibilidade da infração leve/média conforme regra vigente', 'Reincidência nos 12 meses anteriores, se solicitada', 'Resultado deve distinguir elegibilidade potencial de garantia de conversão'] },
 ];
 
 const DOMAINS = [
@@ -167,6 +167,11 @@ export const AdminAssistedCertificationView: React.FC = () => {
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
         <h2 className="flex items-center gap-2 text-lg font-bold"><ClipboardCheck className="h-5 w-5 text-emerald-400" /> Avaliação por serviço e etapa</h2>
+        <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4">
+          <div className="text-sm font-bold text-emerald-300">Foco específico deste serviço</div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">{service.focus.map((item) => <li key={item}>{item}</li>)}</ul>
+          <p className="mt-2 text-xs text-slate-500">Use estes pontos como verificações de coerência. Só avalie campos que realmente apareçam na etapa de produção; registre divergências em vez de presumir que o campo existe.</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm"><span className="text-slate-300">Serviço canônico</span><select value={selectedService} onChange={(event) => { const next = SERVICES.find((item) => item.key === event.target.value) || SERVICES[0]; setSelectedService(next.key); setSelectedStage(next.stages[0]); }} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white">{SERVICES.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
           <label className="space-y-1 text-sm"><span className="text-slate-300">Etapa a registrar</span><select value={selectedStage} onChange={(event) => setSelectedStage(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white">{service.stages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
