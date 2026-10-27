@@ -671,6 +671,7 @@ routes.post('/payments/credit-card/create', authenticateToken, async (c) => {
     throw new HTTPException(429, { message: 'Limite temporário de criação de cobrança atingido.' });
   }
   const offer = await resolveCommercialOffer(c.env, body.serviceType, body.couponCode, user.id);
+  if (Number(offer.finalAmount) <= 0) throw new HTTPException(422, { message: 'O total é zero. Use o resgate gratuito do cupom; nenhuma cobrança de cartão foi criada.' });
   if (body.amount !== undefined && Number(body.amount) !== Number(offer.finalAmount)) throw new HTTPException(400, { message: 'Valor informado não corresponde à oferta comercial.' });
   const primaryGateway = c.env.VENO_PRIMARY_GATEWAY || 'venopag';
   if (primaryGateway === 'venopag') throw new HTTPException(503, { message: 'Pagamento com cartão ainda não está habilitado para VenoPag. Use PIX; nenhuma cobrança foi enviada.' });
