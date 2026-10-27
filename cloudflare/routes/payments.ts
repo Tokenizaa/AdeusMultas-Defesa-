@@ -373,6 +373,83 @@ routes.get('/payments/gateway/status', (c) => {
   }, configured ? 200 : 503);
 });
 
+routes.post('/payments/coupon/redeem-free', authenticateToken, async (c) => {
+  const user = c.get('user')!;
+  const body = await c.req.json<{ caseId?: string; serviceType?: string; couponCode?: string }>().catch(() => ({}));
+  const caseId = String(body.caseId || '').trim();
+  const serviceType = String(body.serviceType || '').trim();
+  const couponCode = String(body.couponCode || '').trim().toUpperCase();
+  if (!caseId || !serviceType || !couponCode) {
+    throw new HTTPException(400, { message: 'Caso, serviço e cupom são obrigatórios.' });
+  }
+  await assertCaseCanBePaid(c.env, caseId, user, serviceType);
+  const offer = await resolveCommercialOffer(c.env, serviceType, couponCode, user.id);
+  if (Number(offer.finalAmount) !== 0 || Number(offer.couponDiscount) < Number(offer.baseAmount) - Number(offer.promotionDiscount) - Number(offer.firstDocumentsDiscount)) {
+    throw new HTTPException(422, { message: 'O cupom não concede 100% de desconto neste caso. Nenhuma cobrança ou liberação foi criada.' });
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: coupon, error: couponError } = await supabase.from('coupons').select('*').eq('code', couponCode).maybeSingle();
+  if (couponError) throw new HTTPException(503, { message: 'Não foi possível validar o cupom.' });
+  if (!coupon || coupon.is_active !== true) throw new HTTPException(422, { message: 'Cupom inválido ou desativado.' });
+  const now = Date.now();
+  if ((coupon.valid_from && new Date(coupon.valid_from).getTime() > now) || (coupon.valid_until && new Date(coupon.valid_until).getTime() < now)) {
+    throw new HTTPException(422, { message: 'Cupom fora do período de validade.' });
+  }
+  const applicable = Array.isArray(coupon.applicable_services) ? coupon.applicable_services : [];
+  if (applicable.length && !applicable.includes('all') && !applicable.includes(offer.serviceType)) {
+    throw new HTTPException(422, { message: 'Cupom não aplicável a este serviço.' });
+  }
+  const minOrder = Number(coupon.min_order_value ?? 0);
+  if (Number(offer.baseAmount) < minOrder) throw new HTTPException(422, { message: 'O valor mínimo do cupom não foi atingido.' });
+
+  const { count: totalUses, error: totalError } = await supabase.from('coupon_redemptions')
+    .select('id', { count: 'exact', head: true }).eq('coupon_code', couponCode);
+  if (totalError) throw new HTTPException(503, { message: 'Não foi possível verificar o limite de resgates.' });
+  const totalLimit = Number(coupon.total_limit ?? coupon.max_uses ?? coupon.usage_limit ?? Number.MAX_SAFE_INTEGER);
+  if (Number.isFinite(totalLimit) && (totalUses ?? 0) >= totalLimit) throw new HTTPException(409, { message: 'O limite de resgates deste cupom foi atingido.' });
+  const { count: userUses, error: userError } = await supabase.from('coupon_redemptions')
+    .select('id', { count: 'exact', head: true }).eq('coupon_code', couponCode).eq('user_id', user.id);
+  if (userError) throw new HTTPException(503, { message: 'Não foi possível verificar os resgates da conta.' });
+  const userLimit = Number(coupon.user_limit ?? coupon.max_uses_per_user ?? Number.MAX_SAFE_INTEGER);
+  if (Number.isFinite(userLimit) && (userUses ?? 0) >= userLimit) throw new HTTPException(409, { message: 'Você já atingiu o limite de uso deste cupom.' });
+
+  const { data: existing } = await supabase.from('coupon_redemptions').select('id').eq('case_id', caseId).maybeSingle();
+  if (existing) throw new HTTPException(409, { message: 'Este caso já possui um benefício resgatado.' });
+
+  const nowIso = new Date().toISOString();
+  const { data: redemption, error: redemptionError } = await supabase.from('coupon_redemptions').insert({
+    coupon_code: couponCode, user_id: user.id, case_id: caseId, service_type: offer.serviceType,
+    base_amount: Number(offer.baseAmount), discount_amount: Number(offer.finalAmount === 0 ? offer.baseAmount : offer.couponDiscount),
+    final_amount: 0, status: 'REDEEMED', redeemed_at: nowIso,
+  }).select('*').single();
+  if (redemptionError) {
+    if (redemptionError.code === '23505') throw new HTTPException(409, { message: 'Este caso ou cupom já foi resgatado.' });
+    throw new HTTPException(503, { message: 'Não foi possível registrar o resgate gratuito.' });
+  }
+
+  const { data: order, error: orderError } = await supabase.from('payment_orders').insert({
+    case_id: caseId, user_id: user.id, gateway: 'coupon', amount: 0, base_amount: Number(offer.baseAmount),
+    final_amount: 0, currency: 'BRL', discount_amount: Number(offer.baseAmount), discount_type: 'coupon',
+    bonus_used_amount: 0, status: 'COMPED', payment_method: 'coupon', coupon_code: couponCode,
+    reference_id: 'coupon_' + redemption.id, paid_at: null, created_at: nowIso, updated_at: nowIso,
+  }).select('*').single();
+  if (orderError) {
+    await supabase.from('coupon_redemptions').delete().eq('id', redemption.id);
+    if (orderError.code === '23505') throw new HTTPException(409, { message: 'Já existe uma ordem de pagamento para este caso.' });
+    throw new HTTPException(503, { message: 'Não foi possível registrar o benefício gratuito.' });
+  }
+
+  const { data: updated, error: caseError } = await supabase.from('cases')
+    .update({ is_paid: true, updated_at: nowIso }).eq('id', caseId).eq('user_id', user.id).eq('is_paid', false).select('id').maybeSingle();
+  if (caseError || !updated) {
+    await supabase.from('payment_orders').delete().eq('id', order.id);
+    await supabase.from('coupon_redemptions').delete().eq('id', redemption.id);
+    throw new HTTPException(409, { message: 'Não foi possível liberar o caso. Atualize a página e tente novamente.' });
+  }
+  return c.json({ success: true, entitlement: 'FREE_COUPON', caseId, couponCode, amount: 0, orderId: order.id });
+});
+
 routes.post('/payments/pix/create', authenticateToken, async (c) => {
   if (c.env?.E2E_SAFE_PREVIEW === 'true') throw new HTTPException(503, { message: 'Cobranças estão desativadas no preview de testes. Nenhuma transação foi enviada à VenoPag.' });
   const user = c.get('user')!;
