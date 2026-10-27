@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockQuery = (result: any = { data: [], error: null, count: 0 }) => {
   const q: any = {};
@@ -41,6 +41,10 @@ const env: any = {
 };
 
 describe('Cloudflare runtime settings contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('returns actual runtime bindings as read-only and masks secret values', async () => {
     const q = mockQuery({ data: [], error: null });
     supabase.from.mockReturnValue(q);
