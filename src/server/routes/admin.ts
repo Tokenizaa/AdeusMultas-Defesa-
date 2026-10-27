@@ -12,6 +12,8 @@ import { domainIdToUuid } from '../db/uuid-v5';
 import { getSupabaseAdminClient } from '../db/supabase-server';
 import { adminQueryService } from '../services/admin-query-service';
 import { buildAdminUserDetail } from '../services/admin-user-detail-service';
+import { buildAdminAiOverview } from '../services/admin-ai-overview';
+import { vectorStore } from '../knowledge/vector-store';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
@@ -177,52 +179,39 @@ router.get(['/documents', '/admin/documents'], (req, res) => {
   });
 });
 
-router.get(['/ai/overview', '/admin/ai/overview'], (req, res) => {
+router.get(['/ai/overview', '/admin/ai/overview'], (_req, res) => {
   const metrics = metricsService.getOverview();
-  const traces = aiProviderManager.getRecentTraces();
+  const vectorStats = vectorStore.getStats();
 
-  res.json({
-    architecture: {
-      gateway: 'AI Provider Gateway (DefesAi Core)',
-      primary: {
-        provider: 'nvidia',
-        name: 'NVIDIA NIM (Primary)',
-        model: 'meta/llama-3.1-70b-instruct',
-        endpoint: 'https://integrate.api.nvidia.com/v1',
-        status: 'healthy',
-        avgLatencyMs: metrics.nvidia.avgLatencyMs,
-        successRate: metrics.nvidia.successRate,
-        totalCalls: metrics.nvidia.requestsTotal,
-      },
-      fallback: {
-        provider: '9router',
-        name: '9Router Gateway (Fallback Contingency)',
-        model: 'deepseek-ai/deepseek-r1',
-        endpoint: 'https://api.9router.com/v1',
-        status: 'healthy',
-        avgLatencyMs: metrics.nineRouter.avgLatencyMs,
-        successRate: metrics.nineRouter.successRate,
-        totalCalls: metrics.nineRouter.requestsTotal,
-      },
-    },
-    ragKnowledge: {
-      totalTheses: 52,
-      checklists: 6,
-      autuadorBodies: 27,
-      embeddingsModel: 'text-embedding-3-small',
-      embeddingsDimension: 1536,
-      ragSyncStatus: 'synced',
-    },
+  const overview = buildAdminAiOverview({
+    nvidiaConfigured: Boolean(configService.get('NVIDIA_API_KEY')),
+    nvidiaModel: configService.get('NVIDIA_CHAT_MODEL', 'meta/llama-3.3-70b-instruct'),
+    nineRouterConfigured: Boolean(configService.get('NINEROUTER_KEY')),
+    nineRouterModel: configService.get('NINEROUTER_MODEL', 'qwen/qwen-2.5-72b-instruct'),
+    fallbackEnabled: Boolean(configService.get('AI_ENABLE_FALLBACK', true)),
+    geminiConfigured: Boolean(configService.get('GEMINI_API_KEY')),
+    embeddingModel: configService.get('NVIDIA_EMBEDDING_MODEL', 'defesai-legal-vectorizer-v1'),
+    vectorStore: vectorStats,
     metrics: {
+      nvidia: {
+        requestsTotal: metrics.nvidia.requestsTotal,
+        successRate: metrics.nvidia.successRate,
+        avgLatencyMs: metrics.nvidia.avgLatencyMs,
+      },
+      nineRouter: {
+        requestsTotal: metrics.nineRouter.requestsTotal,
+        successRate: metrics.nineRouter.successRate,
+        avgLatencyMs: metrics.nineRouter.avgLatencyMs,
+      },
       totalAiRequests: metrics.totalAiRequests,
       fallbackRatePercent: metrics.fallbackRatePercent,
       errorRatePercent: metrics.errorRatePercent,
-      p50LatencyMs: metrics.p50LatencyMs,
       p95LatencyMs: metrics.p95LatencyMs,
-      p99LatencyMs: metrics.p99LatencyMs,
     },
-    recentTraces: traces.slice(0, 10),
+    recentTraceCount: aiProviderManager.getRecentTraces().length,
   });
+
+  return res.json(overview);
 });
 
 router.get(['/integrations/overview', '/admin/integrations/overview'], async (req, res) => {
