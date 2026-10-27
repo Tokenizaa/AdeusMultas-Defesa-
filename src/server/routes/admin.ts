@@ -351,7 +351,17 @@ router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
       return res.status(500).json({ error: 'Erro ao carregar usuários.' });
     }
 
-    res.json({ users: data || [], total: (data || []).length });
+    // Publica o contrato AuthUser esperado pela interface; não vazar o formato snake_case do banco.
+    const users = (data || []).map((profile) => ({
+      id: profile.user_id,
+      name: profile.name || profile.email || 'Usuário sem nome',
+      email: profile.email || '',
+      role: profile.role === 'admin' ? 'admin' : 'citizen',
+      cpf: profile.cpf || undefined,
+      createdAt: profile.created_at || '',
+    }));
+
+    res.json({ users, total: users.length });
   } catch (err) {
     logger.error('admin', 'users', 'get', 'Erro em /api/admin/users GET', { error: String(err) });
     res.status(500).json({ error: 'Erro ao carregar usuários.' });
