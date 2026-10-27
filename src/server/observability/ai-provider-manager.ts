@@ -247,6 +247,7 @@ class AiProviderManager {
           status: 'failed',
           details: `9Router falhou: ${err.message}`,
         });
+        fallbackOccurred = true;
         logger.warn('ai', 'ai-provider-manager', 'chat_completion', 'Falha no provider 9Router.', {
           correlationId,
           requestId,
