@@ -90,7 +90,7 @@ export function buildCoherentTestInfraction(
       // que continue dentro dessa faixa APÓS aplicar a margem do INMETRO.
       const speedLimit = pick([40, 50, 60, 70, 80, 100, 120]);
       const minimumMeasuredSpeed = speedLimit <= 100
-        ? speedLimit + 8
+        ? speedLimit + (speedLimit >= 100 ? 9 : 8)
         : Math.ceil((speedLimit + 1) / 0.93);
       const maxMeasuredSpeed = Math.floor((speedLimit * 1.2) / 0.93);
       const measuredSpeed = randInt(
