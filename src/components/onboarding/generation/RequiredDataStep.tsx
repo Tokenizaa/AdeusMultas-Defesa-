@@ -231,7 +231,7 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
 
           <div>
             <label className="text-[10px] font-bold text-slate-700 uppercase font-mono block mb-1">
-              Categoria CNH
+              Categoria CNH *
             </label>
             <select
               id="input-cnh-category"
@@ -330,14 +330,14 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-[10px] font-bold text-slate-600 font-mono block mb-1">
-                Bairro / Complemento
+                Bairro *
               </label>
               <input
                 id="input-address-neighborhood"
                 type="text"
                 value={documentData.addressNeighborhood || ''}
                 onChange={(e) => onUpdateDocumentData({ ...documentData, addressNeighborhood: e.target.value })}
-                placeholder="Ex: Vila Madalena, Apto 82"
+                placeholder="Ex: Vila Madalena"
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#155BCB]"
               />
             </div>
