@@ -218,7 +218,7 @@ export const AdminE2ETestsView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`w-2.5 h-2.5 rounded-full ${runnerEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               <span className="text-sm font-bold text-orange-400 uppercase tracking-wider font-mono">
                 ADMIN QA • ESTADO DO RUNNER E2E
               </span>
@@ -255,7 +255,7 @@ export const AdminE2ETestsView: React.FC = () => {
             <button
               id="btn-run-all-e2e-tests"
               onClick={() => openConfirmAll(false)}
-              disabled={isExecutingAll}
+              disabled={isExecutingAll || !runnerEnabled}
               className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-mono font-bold rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               {isExecutingAll ? (
