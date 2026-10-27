@@ -52,6 +52,11 @@ export function buildAdminAiOverview(input: AdminAiOverviewInput) {
       ? 'Google Gemini'
       : null;
   const remoteProviderConfigured = nvidiaIsPrimary || nineRouterIsPrimary || geminiIsPrimary;
+  const primaryMetrics = nvidiaIsPrimary
+    ? input.metrics.nvidia
+    : nineRouterIsPrimary
+      ? input.metrics.nineRouter
+      : { requestsTotal: 0, successRate: 0, avgLatencyMs: 0 };
 
   return {
     provider: {
@@ -61,9 +66,9 @@ export function buildAdminAiOverview(input: AdminAiOverviewInput) {
       fallback,
       status: remoteProviderConfigured ? 'configured' : 'local_fallback',
       statusMeaning: 'Configuração de chave/modelo; não é prova de saúde do provedor.',
-      requestsTotal: input.metrics.nvidia.requestsTotal,
-      successRate: input.metrics.nvidia.successRate,
-      avgLatencyMs: input.metrics.nvidia.avgLatencyMs,
+      requestsTotal: primaryMetrics.requestsTotal,
+      successRate: primaryMetrics.successRate,
+      avgLatencyMs: primaryMetrics.avgLatencyMs,
     },
     rag: {
       provider: input.vectorStore.isSupabaseConnected ? 'Supabase pgvector + memória' : 'VectorStore (conectividade não verificada)',
