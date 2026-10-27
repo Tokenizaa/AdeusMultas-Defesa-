@@ -15,6 +15,7 @@ export default defineConfig({
       'src/server/services/marketing-automation/**/*.test.ts',
       'src/server/middleware/auth-middleware.test.ts',
       'src/server/routes/monitoring.test.ts',
+      'src/server/services/admin-user-detail-service.test.ts',
       'cloudflare/middleware.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
