@@ -10,7 +10,7 @@
  * 5. Backend access to unmasked secrets when needed
  */
 
-import { getSupabaseServerClient } from '../db/supabase-server';
+import { getSupabaseAdminClient } from '../db/supabase-server';
 import { logger, LogService } from '../observability/logger';
 import { Database } from '../../types/supabase';
 import { configService } from '../config/config-service';
@@ -66,11 +66,11 @@ export interface SettingAuditRecord {
 
 class SettingsService {
   private settings: Map<string, SettingDefinition> = new Map();
-  private supabase: ReturnType<typeof getSupabaseServerClient> | null = null;
+  private supabase: ReturnType<typeof getSupabaseAdminClient> | null = null;
 
   constructor() {
     this.initializeDefinitions();
-    this.supabase = getSupabaseServerClient();
+    this.supabase = getSupabaseAdminClient();
     this.initializeFromDatabase();
     // Sync definitions with database to ensure defaults are present
     this.syncDefinitionsWithDatabase().catch(err => {
@@ -282,19 +282,19 @@ class SettingsService {
       return { success: false, message: validationError };
     }
 
-    // Update the setting in memory
+    // Persist first: never report success or mutate runtime state when the database write fails.
+    const persistSuccess = await this.persistToDatabase(key, sanitizedValue, updatedBy);
+    if (!persistSuccess) {
+      return {
+        success: false,
+        message: `A configuração '${def.name}' não foi salva no banco. Nenhuma alteração foi aplicada em memória.`,
+      };
+    }
+
     def.currentValue = sanitizedValue;
     def.isConfigured = sanitizedValue !== '' && sanitizedValue !== null && sanitizedValue !== undefined;
     def.lastUpdated = new Date().toISOString();
     def.updatedBy = updatedBy;
-
-    // Persist to database
-    const persistSuccess = await this.persistToDatabase(key, sanitizedValue, updatedBy);
-    if (!persistSuccess) {
-      // We still return success because the memory update worked,
-      // but we log the persistence failure
-      logger.warn('settings-service' as LogService, 'update', 'persist-failed', `Failed to persist setting ${key} to database`);
-    }
 
     // Record audit entry
     await this.recordAudit({
@@ -322,17 +322,19 @@ class SettingsService {
       return { success: false, message: `Configuração não encontrada: ${key}` };
     }
 
-    // Reset to default value
+    // Persist first: a failed reset must not alter the in-memory value.
+    const persistSuccess = await this.persistToDatabase(key, def.defaultValue, updatedBy);
+    if (!persistSuccess) {
+      return {
+        success: false,
+        message: `A configuração '${def.name}' não foi restaurada no banco. Nenhuma alteração foi aplicada em memória.`,
+      };
+    }
+
     def.currentValue = def.defaultValue;
     def.isConfigured = def.defaultValue !== '' && def.defaultValue !== null;
     def.lastUpdated = new Date().toISOString();
     def.updatedBy = updatedBy;
-
-    // Persist to database
-    const persistSuccess = await this.persistToDatabase(key, def.defaultValue, updatedBy);
-    if (!persistSuccess) {
-      logger.warn('settings-service' as LogService, 'reset', 'persist-failed', `Failed to persist reset setting ${key} to database`);
-    }
 
     // Record audit entry
     await this.recordAudit({
@@ -427,19 +429,25 @@ class SettingsService {
     }
 
     try {
-      await this.supabase
+      const { error } = await this.supabase
         .from('audit_logs')
         .insert({
-          action: params.action === 'UPDATE_SECRET' ? 'ADMIN_UPDATED_SECRET' : 
+          action: params.action === 'UPDATE_SECRET' ? 'ADMIN_UPDATED_SECRET' :
                   params.action === 'RESET_DEFAULT' ? 'ADMIN_RESET_SETTING' : 'ADMIN_UPDATED_SETTING',
           actor: params.updatedBy,
           actor_role: 'admin',
           target_resource: params.key,
           details: params.details,
           timestamp: params.timestamp,
-          ip_hash: '00000000000000000000000000000000', // Placeholder - in real implementation would extract from request
+          ip_hash: null,
           gdpr_compliant: true,
         });
+      if (error) {
+        logger.error('settings-service' as LogService, 'audit', 'insert-error', 'Falha ao persistir trilha de auditoria da configuração.', {
+          key: params.key,
+          error: error.message,
+        });
+      }
     } catch (err: any) {
       logger.error('settings-service' as LogService, 'audit', 'db-error', `Failed to record audit entry: ${err.message}`);
     }

@@ -104,13 +104,36 @@ export async function authenticateToken(
         } = await supabase.auth.getUser(token);
 
         if (user && !error) {
-          // P0: role NUNCA vem de user_metadata (editável pelo cliente).
-          // Role é determinada exclusivamente pela tabela user_profiles no servidor.
+          // Role privilegiada vem exclusivamente do perfil persistido no Supabase.
+          // O cliente usa o JWT validado para que a policy de leitura do próprio
+          // perfil seja aplicada; nunca confiar em user_metadata para autorização.
+          let profile: { role?: string; name?: string | null } | null = null;
+          const profileClient = getSupabaseServerClient(token);
+
+          if (profileClient) {
+            const { data, error: profileError } = await profileClient
+              .from('user_profiles')
+              .select('role, name')
+              .eq('user_id', user.id)
+              .maybeSingle();
+
+            if (profileError) {
+              logger.warn(
+                'auth',
+                'middleware',
+                'profile_role_fetch_fail',
+                'Falha ao consultar a role persistida; aplicando privilégio mínimo.'
+              );
+            } else {
+              profile = data;
+            }
+          }
+
           req.user = {
             id: user.id,
             email: user.email || '',
-            role: 'citizen',
-            name: user.user_metadata?.name,
+            role: profile?.role === 'admin' ? 'admin' : 'citizen',
+            name: profile?.name || user.user_metadata?.name,
           };
           sanitizeCaseCreateBody(req);
           return next();

@@ -17,6 +17,8 @@ import { nvidiaKeyRotator } from '../knowledge/nvidia-key-rotator';
 import { logger } from './logger';
 import { metricsService } from './metrics-service';
 import { analyzeTicketWithGemini } from '../gemini';
+import { embeddingService } from '../knowledge/embedding-service';
+import { vectorStore } from '../knowledge/vector-store';
 
 export interface AiPipelineStage {
   stage: 'provider_selection' | 'primary_execution' | 'fallback_execution' | 'rag_enhancement' | 'legal_synthesis';
@@ -84,7 +86,7 @@ class AiProviderManager {
     let resultData: any = null;
     let providerUsed: 'nvidia' | '9router' | 'gemini' | 'deterministic_rag' = 'deterministic_rag';
     let modelUsed = 'rag-deterministic-v1';
-    let fallbackOccurred = false;
+    let fallbackOccurred = !isNvidiaConfigured;
 
     // 2. Try Primary: NVIDIA
     if (isNvidiaConfigured) {
@@ -180,35 +182,80 @@ class AiProviderManager {
       }
     }
 
-    // 3. Fallback to 9Router if needed
+    // 3. Fallback / secondary provider: call 9Router for real; never synthesize success.
     if (!resultData && enableFallback && nineRouterKey && nineRouterKey.length > 5) {
       const stage3Start = Date.now();
       try {
+        const nineRouterBaseUrl = configService.get('NINEROUTER_BASE_URL', 'https://api.9router.com/v1');
+        const response = await fetch(`${nineRouterBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${nineRouterKey}`,
+          },
+          body: JSON.stringify({
+            model: nineRouterModel,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é o motor de inteligência jurídica da plataforma DefesAi, especialista em CTB e resoluções do CONTRAN.',
+              },
+              { role: 'user', content: `${prompt}\n\nContexto:\n${JSON.stringify(context)}` },
+            ],
+            temperature: options?.temperature ?? configService.get('AI_TEMPERATURE', 0.15),
+            max_tokens: 2048,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`9Router HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (typeof content !== 'string' || !content.trim()) {
+          throw new Error('9Router retornou resposta vazia ou inválida.');
+        }
+
+        const duration = Date.now() - stage3Start;
+        metricsService.recordAiRequest('9router', duration, true, {
+          isFallback: true,
+          tokens: data.usage?.total_tokens,
+        });
         stages.push({
           stage: 'fallback_execution',
           provider: '9Router',
           model: nineRouterModel,
-          durationMs: 420,
+          durationMs: duration,
           status: 'success',
-          details: `Fallback para 9Router executado com sucesso (${nineRouterModel})`,
-        });
-
-        metricsService.recordAiRequest('9router', 420, true, {
-          isFallback: true,
-          tokens: 720,
+          details: `Resposta real recebida do 9Router em ${duration}ms.`,
         });
 
         providerUsed = '9router';
         modelUsed = nineRouterModel;
-        resultData = { fallback: true, provider: '9Router' };
+        resultData = content;
+        fallbackOccurred = true;
       } catch (err: any) {
+        const duration = Date.now() - stage3Start;
+        metricsService.recordAiRequest('9router', duration, false, {
+          isFallback: true,
+          error: err.message,
+        });
         stages.push({
           stage: 'fallback_execution',
           provider: '9Router',
           model: nineRouterModel,
-          durationMs: 300,
+          durationMs: duration,
           status: 'failed',
-          details: `9Router também falhou: ${err.message}`,
+          details: `9Router falhou: ${err.message}`,
+        });
+        fallbackOccurred = true;
+        logger.warn('ai', 'ai-provider-manager', 'chat_completion', 'Falha no provider 9Router.', {
+          correlationId,
+          requestId,
+          duration,
+          error: err.message,
+          provider: '9router',
         });
       }
     }
@@ -238,23 +285,69 @@ class AiProviderManager {
       }
 
       if (!resultData) {
-        stages.push({
-          stage: 'rag_enhancement',
-          provider: 'DefesAi Local Kernel',
-          model: 'rag-deterministic-v1',
-          durationMs: 12,
-          status: 'success',
-          details: 'Análise fundamentada via catálogo de 52 teses e resoluções CONTRAN.',
-        });
+        const ragStart = Date.now();
         providerUsed = 'deterministic_rag';
-        modelUsed = 'rag-deterministic-v1';
-        resultData = { mode: 'deterministic_rag' };
+        try {
+          const queryEmbedding = await embeddingService.generateEmbedding(prompt);
+          modelUsed = queryEmbedding.model;
+          const retrievedSources = await vectorStore.searchVectors(queryEmbedding.embedding, {
+            topK: 5,
+            threshold: 0.35,
+          });
+          const duration = Date.now() - ragStart;
+
+          if (retrievedSources.length > 0) {
+            stages.push({
+              stage: 'rag_enhancement',
+              provider: 'DefesAi VectorStore',
+              model: queryEmbedding.model,
+              durationMs: duration,
+              status: 'success',
+              details: `Recuperadas ${retrievedSources.length} fontes; nenhuma análise generativa foi simulada.`,
+            });
+            resultData = {
+              mode: 'deterministic_rag',
+              generated: false,
+              notice: 'Nenhum provedor generativo disponível. Os itens abaixo são fontes recuperadas, não um parecer jurídico.',
+              sources: retrievedSources.map((source) => ({
+                documentTitle: source.documentTitle,
+                content: source.content,
+                similarity: source.similarity,
+                provenance: source.provenance,
+              })),
+            };
+          } else {
+            stages.push({
+              stage: 'rag_enhancement',
+              provider: 'DefesAi VectorStore',
+              model: queryEmbedding.model,
+              durationMs: duration,
+              status: 'failed',
+              details: 'Nenhuma fonte jurídica relevante foi recuperada; não foi gerada análise.',
+            });
+          }
+        } catch (err: any) {
+          stages.push({
+            stage: 'rag_enhancement',
+            provider: 'DefesAi VectorStore',
+            model: modelUsed,
+            durationMs: Date.now() - ragStart,
+            status: 'failed',
+            details: `Falha na recuperação jurídica: ${err.message}`,
+          });
+          logger.warn('ai', 'ai-provider-manager', 'rag_fallback', 'Falha ao recuperar fontes jurídicas.', {
+            correlationId,
+            requestId,
+            error: err.message,
+          });
+        }
       }
     }
 
     const totalDurationMs = Date.now() - startTime;
+    const executionSucceeded = resultData !== null && resultData !== undefined;
     const traceResult: AiExecutionResult = {
-      success: true,
+      success: executionSucceeded,
       providerUsed,
       modelUsed,
       totalDurationMs,
@@ -262,6 +355,9 @@ class AiProviderManager {
       fallbackOccurred,
       correlationId,
       data: resultData,
+      error: executionSucceeded
+        ? undefined
+        : 'Nenhum provedor generativo respondeu e nenhuma fonte jurídica verificável foi recuperada.',
     };
 
     this.recentPipelineTraces.unshift(traceResult);

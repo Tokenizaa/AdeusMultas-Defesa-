@@ -1,14 +1,7 @@
 /**
  * @file AdminE2ETestsView.tsx
- * DefesAi — Central de Testes E2E Persistentes da Plataforma
- * 
- * Implementação completa conforme especificação:
- * - Visão geral de execuções e resultados persistidos
- * - 9 suítes comerciais independentes (Defesa Prévia, JARI, CETRAN, Suspensão, Cassação, etc.)
- * - Disparo individual e em lote com modal de confirmação
- * - Criação e acompanhamento de massa sequencial de usuários (Teste 001..Teste 036)
- * - Botões de Reexecutar Todos / Reexecutar Falhos
- * - Polling assíncrono em tempo real para status RUNNING / QUEUED / PASSED / FAILED / BLOCKED
+ * DefesAi — Estado da Central de Testes E2E.
+ * Exibe somente execuções verificadas. O disparo fica bloqueado até existir um runner real.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -207,12 +200,9 @@ export const AdminE2ETestsView: React.FC = () => {
   };
 
   const latestRun = runs.length > 0 ? runs[0] : null;
-
-  // Totais agregados calculados a partir dos dados persistidos
-  const totalPassedAggregate = runs.reduce((acc, r) => acc + (r.passedTests || 0), 0);
-  const totalFailedAggregate = runs.reduce((acc, r) => acc + (r.failedTests || 0), 0);
-  const totalUsersCreated = 36; // Usuários persistidos no banco
-  const totalCasesCreated = runs.reduce((acc, r) => acc + (r.createdCases?.length || (r.totalTests || 0)), 0);
+  const runnerEnabled = stats?.executionEnabled === true;
+  const totalUsersCreated = runs.reduce((acc, run) => acc + (run.createdUsers?.length || 0), 0);
+  const totalCasesCreated = runs.reduce((acc, run) => acc + (run.createdCases?.length || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -221,9 +211,9 @@ export const AdminE2ETestsView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`w-2.5 h-2.5 rounded-full ${runnerEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               <span className="text-sm font-bold text-orange-400 uppercase tracking-wider font-mono">
-                ADMIN QA • CENTRAL DE TESTES E2E REAIS POR SERVIÇO
+                ADMIN QA • ESTADO DO RUNNER E2E
               </span>
             </div>
             <h1 className="text-2xl font-bold text-white font-mono tracking-tight flex items-center gap-3">
@@ -231,8 +221,7 @@ export const AdminE2ETestsView: React.FC = () => {
               Central de Testes E2E
             </h1>
             <p className="text-sm text-slate-400 max-w-3xl">
-              Módulo permanente de execução ponta a ponta com Playwright, persistência no banco de dados,
-              massa sequencial de usuários (Teste 001..Teste 036) e validação de marca-d'água por serviço.
+              Execuções e resultados só são exibidos quando há evidência real verificável. O histórico legado não verificado fica oculto.
             </p>
           </div>
 
@@ -249,7 +238,7 @@ export const AdminE2ETestsView: React.FC = () => {
             <button
               id="btn-re-run-failed"
               onClick={() => openConfirmAll(true)}
-              disabled={isExecutingAll}
+              disabled={isExecutingAll || !runnerEnabled}
               className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-mono font-bold rounded-xl border border-amber-700/50 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4 text-amber-400" />
@@ -259,7 +248,7 @@ export const AdminE2ETestsView: React.FC = () => {
             <button
               id="btn-run-all-e2e-tests"
               onClick={() => openConfirmAll(false)}
-              disabled={isExecutingAll}
+              disabled={isExecutingAll || !runnerEnabled}
               className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-mono font-bold rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               {isExecutingAll ? (
@@ -270,13 +259,19 @@ export const AdminE2ETestsView: React.FC = () => {
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-white" />
-                  <span>Executar Todos os Testes (36 Cenários)</span>
+                  <span>Executar Todos os Testes</span>
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+
+      {!runnerEnabled && (
+        <div role="status" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          Runner Playwright não configurado. Execuções estão bloqueadas; não há resultados verificados para exibir. Nenhum caso ou usuário será criado por esta tela.
+        </div>
+      )}
 
       {/* Resumo da Execução / Dashboard de Status (Item 15 da especificação) */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -299,37 +294,37 @@ export const AdminE2ETestsView: React.FC = () => {
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Total de Execuções</span>
             <p className="text-xl font-bold text-white">{runs.length}</p>
-            <span className="text-2xs text-slate-500">Histórico registrado</span>
+            <span className="text-2xs text-slate-500">Histórico verificado</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Cenários por Run</span>
-            <p className="text-xl font-bold text-orange-400">36</p>
-            <span className="text-2xs text-slate-500">9 serviços × 4</span>
+            <p className="text-xl font-bold text-orange-400">{latestRun?.totalTests ?? '—'}</p>
+            <span className="text-2xs text-slate-500">Cenários verificados</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Testes Aprovados</span>
-            <p className="text-xl font-bold text-emerald-400">{latestRun?.passedTests ?? 36}</p>
-            <span className="text-2xs text-emerald-400/80">Status: PASS</span>
+            <p className="text-xl font-bold text-emerald-400">{latestRun?.passedTests ?? '—'}</p>
+            <span className="text-2xs text-slate-500">{latestRun ? `Status: ${latestRun.status}` : 'Sem execução verificada'}</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Testes Falhados</span>
-            <p className="text-xl font-bold text-rose-400">{latestRun?.failedTests ?? 0}</p>
-            <span className="text-2xs text-slate-500">Status: FAIL</span>
+            <p className="text-xl font-bold text-rose-400">{latestRun?.failedTests ?? '—'}</p>
+            <span className="text-2xs text-slate-500">{latestRun ? 'Falhas da última execução' : 'Sem execução verificada'}</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Usuários Persistidos</span>
             <p className="text-xl font-bold text-sky-400">{totalUsersCreated}</p>
-            <span className="text-2xs text-slate-500">Teste 001..Teste 036</span>
+            <span className="text-2xs text-slate-500">Usuários em execuções verificadas</span>
           </div>
 
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
-            <span className="text-2xs uppercase text-slate-400">Documentos / PDFs</span>
+            <span className="text-2xs uppercase text-slate-400">Casos de teste</span>
             <p className="text-xl font-bold text-purple-400">{totalCasesCreated}</p>
-            <span className="text-2xs text-slate-500">Com marca-d'água</span>
+            <span className="text-2xs text-slate-500">Em execuções verificadas</span>
           </div>
         </div>
       </div>
@@ -353,6 +348,9 @@ export const AdminE2ETestsView: React.FC = () => {
         </div>
 
         <div className="divide-y divide-slate-800">
+          {!loading && (stats?.availableServices || []).length === 0 && (
+            <p className="p-5 text-sm text-slate-400">Nenhuma suíte executável configurada neste ambiente.</p>
+          )}
           {(stats?.availableServices || []).map((service: ServiceSuiteMeta, index: number) => {
             const isServiceRunning = runningServices[service.key];
             const suiteResult = latestRun?.suites?.find((s) => s.serviceKey === service.key);
@@ -361,7 +359,7 @@ export const AdminE2ETestsView: React.FC = () => {
 
             const status = isServiceRunning
               ? 'RUNNING'
-              : suiteResult?.status || 'PASSED';
+              : suiteResult?.status || 'NOT_RUN';
 
             return (
               <div
@@ -395,7 +393,7 @@ export const AdminE2ETestsView: React.FC = () => {
                     <span>•</span>
                     <span>Usuários: Teste {userRangeStart}..{userRangeEnd}</span>
                     <span>•</span>
-                    <span>4 Cenários E2E Reais</span>
+                    <span>{suiteResult ? `${suiteResult.totalScenarios} cenários registrados` : 'Sem execução verificada'}</span>
                   </div>
                 </div>
 
@@ -424,7 +422,7 @@ export const AdminE2ETestsView: React.FC = () => {
                   <button
                     id={`btn-run-service-${service.key}`}
                     onClick={() => openConfirmService(service)}
-                    disabled={isServiceRunning || isExecutingAll}
+                    disabled={!runnerEnabled || isServiceRunning || isExecutingAll}
                     className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isServiceRunning ? (
@@ -454,6 +452,9 @@ export const AdminE2ETestsView: React.FC = () => {
         </div>
 
         <div className="divide-y divide-slate-800">
+          {!loading && runs.length === 0 && (
+            <p className="p-5 text-sm text-slate-400">Nenhuma execução E2E verificada. Registros legados não comprovados não são apresentados como resultados.</p>
+          )}
           {runs.map((run) => (
             <div
               key={run.id}

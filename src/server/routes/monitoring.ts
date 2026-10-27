@@ -7,10 +7,8 @@ import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
 
-// Public health check - no auth required
-router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'monitoring', timestamp: new Date().toISOString() });
-});
+// Public liveness check is provided by /api/health. Keep /api/monitoring/health
+// behind the admin guard so the dashboard receives the detailed health report.
 
 // Protected admin routes
 router.use(authenticateToken, requireAdmin);

@@ -1,529 +1,164 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Terminal,
-  Search,
-  Filter,
-  RefreshCw,
-  Trash2,
-  Download,
-  AlertTriangle,
-  Info,
-  Check,
-  CheckCircle2,
-  FileCode,
-  ShieldCheck,
-  Eye,
-  ShieldCheck as AuditShieldCheck,
-  Lock,
-  History,
-  X,
-} from 'lucide-react';
-import { LogDetailModal } from './LogDetailModal';
-import { api } from '../../lib/api/client';
-import { AuditLogEntry } from '../../types';
-import type { StructuredLogEntry } from '../../server/observability/logger';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Download, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
+
+type AuditEvent = {
+  id: string;
+  action: string;
+  actor: string;
+  actorRole: string;
+  targetResource: string;
+  targetId: string;
+  details: string;
+  timestamp: string;
+  correlationId: string;
+  gdprCompliant: boolean;
+};
+
+const normalizeAuditEvent = (row: any, index: number): AuditEvent => ({
+  id: String(row.id || `${row.timestamp || 'audit'}-${index}`),
+  action: String(row.action || 'UNKNOWN_ACTION'),
+  actor: String(row.actor || 'unknown'),
+  actorRole: String(row.actor_role || row.actorRole || 'unknown'),
+  targetResource: String(row.target_resource || row.targetResource || '—'),
+  targetId: String(row.target_id || row.targetId || ''),
+  details: typeof row.details === 'string' ? row.details : JSON.stringify(row.details || {}),
+  timestamp: String(row.timestamp || ''),
+  correlationId: String(row.correlation_id || row.correlationId || ''),
+  gdprCompliant: row.gdpr_compliant === true || row.gdprCompliant === true,
+});
 
 export const AdminAuditView: React.FC = () => {
-  // System logs state
-  const [systemLogs, setSystemLogs] = useState<any[]>([]);
-  const [isSystemLoading, setIsSystemLoading] = useState(true);
-  const [selectedSystemLog, setSelectedSystemLog] = useState<any | null>(null);
-  const [systemSearchQuery, setSystemSearchQuery] = useState('');
-  const [systemLevelFilter, setSystemLevelFilter] = useState<string>('all');
-  const [systemServiceFilter, setSystemServiceFilter] = useState<string>('all');
-  const [systemAutoRefresh, setSystemAutoRefresh] = useState(true);
+  const authFetch = useAuthFetch();
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
-  // Audit logs state
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [isAuditLoading, setIsAuditLoading] = useState(true);
-  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogEntry | null>(null);
-  const [auditFilter, setAuditFilter] = useState<string>('');
-
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'system' | 'audit'>('system');
-
-  // Fetch system logs
-  const fetchSystemLogs = async () => {
+  const loadAuditEvents = useCallback(async () => {
+    setIsRefreshing(true);
+    setError(null);
     try {
-      setIsSystemLoading(true);
-      const res = await api.get<any>('/api/logs?limit=200');
-      setSystemLogs(res.results || []);
-    } catch (err: any) {
-      console.error('Error fetching system logs:', err);
-    } finally {
-      setIsSystemLoading(false);
-    }
-  };
-
-  // Fetch audit logs
-  const fetchAuditLogs = async () => {
-    try {
-      setIsAuditLoading(true);
-      const res = await api.get<AuditLogEntry[]>('/api/audit-logs');
-      setAuditLogs(res);
-    } catch (err) {
-      console.error('Error fetching audit logs:', err);
-    } finally {
-      setIsAuditLoading(false);
-    }
-  };
-
-// Clear system logs
-   const handleClearSystemLogs = async () => {
-     if (!confirm('Deseja realmente limpar os logs do sistema da memória?')) return;
-     try {
-       // Note: This would require a backend endpoint to clear logs
-       // For now, we'll just clear the local state
-       setSystemLogs([]);
-     } catch (err: any) {
-       console.error('Error clearing system logs:', err);
-     }
-   };
-
-   // Download system log
-   const handleDownloadSystemLog = (log: any) => {
-     // Convert log to JSON string
-     const logJson = JSON.stringify(log, null, 2);
-     const blob = new Blob([logJson], { type: 'application/json' });
-     const url = URL.createObjectURL(blob);
-     
-     // Create a temporary link to download
-     const a = document.createElement('a');
-     a.href = url;
-     a.download = `system-log-${log.id || log.timestamp || Date.now()}.json`;
-     document.body.appendChild(a);
-     a.click();
-     
-     // Cleanup
-     setTimeout(() => {
-       document.body.removeChild(a);
-       URL.revokeObjectURL(url);
-     }, 100);
-   };
-
-   useEffect(() => {
-    fetchSystemLogs();
-    fetchAuditLogs();
-
-    // Set up auto-refresh for system logs
-    let interval: NodeJS.Timeout | null = null;
-    if (systemAutoRefresh) {
-      interval = setInterval(fetchSystemLogs, 5000);
-    }
-    return () => {
-      if (interval) {
-        clearInterval(interval);
+      const response = await authFetch('/api/audit/logs?limit=200');
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || body?.ok === false) {
+        throw new Error(body?.error?.message || body?.message || `HTTP ${response.status}`);
       }
-    };
-  }, [systemAutoRefresh]);
+      const rows = Array.isArray(body?.logs) ? body.logs : [];
+      setEvents(rows.map(normalizeAuditEvent));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar a trilha de auditoria.');
+      setEvents([]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [authFetch]);
 
-  // Filter system logs
-  const filteredSystemLogs = systemLogs
-    .filter((log) => {
-      const matchesSearch = systemSearchQuery
-        ? (log.message || '').toLowerCase().includes(systemSearchQuery.toLowerCase())
-        : true;
-      const matchesLevel = systemLevelFilter === 'all' || log.level?.toLowerCase() === systemLevelFilter;
-      const matchesService = systemServiceFilter === 'all' || log.service?.toLowerCase() === systemServiceFilter;
-      return matchesSearch && matchesLevel && matchesService;
-    })
-    .sort((a, b) => new Date(b.timestamp || b.createdAt || 0).getTime() - new Date(a.timestamp || a.createdAt || 0).getTime());
+  useEffect(() => { void loadAuditEvents(); }, [loadAuditEvents]);
 
-  // Filter audit logs
-  const filteredAuditLogs = auditLogs.filter(
-    (l) =>
-      l.action.toLowerCase().includes(auditFilter.toLowerCase()) ||
-      l.actor.toLowerCase().includes(auditFilter.toLowerCase()) ||
-      l.details.toLowerCase().includes(auditFilter.toLowerCase()) ||
-      l.targetResource.toLowerCase().includes(auditFilter.toLowerCase())
-  );
+  const filteredEvents = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return events;
+    return events.filter((event) => [
+      event.action, event.actor, event.actorRole, event.targetResource, event.targetId,
+      event.details, event.correlationId,
+    ].some((value) => value.toLowerCase().includes(term)));
+  }, [events, search]);
+
+  const downloadAuditEvents = () => {
+    const blob = new Blob([JSON.stringify(filteredEvents, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `defesai-audit-log-${new Date().toISOString()}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center gap-2">
-            {activeTab === 'system' ? (
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <AuditShieldCheck className="w-4 h-4 text-orange-400" />
-            )}
-            <h1 className="text-xl sm:text-2xl font-bold text-white mt-0.5">
-              {activeTab === 'system' ? 'Logs do Sistema & Operações' : 'Auditoria de Segurança & Trilha Imutável'}
-            </h1>
+    <div className="mx-auto max-w-7xl space-y-6 pb-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
+            <ShieldCheck className="h-4 w-4" /> Auditoria persistida
           </div>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {activeTab === 'system'
-              ? 'Gerencie logs de operações do sistema, eventos de API e atividades de usuários.'
-              : 'Trilha de eventos append-only com mascaramento criptográfico de dados sensíveis e auditoria de agentes.'}
-          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Trilha de auditoria</h1>
+          <p className="mt-1 text-sm text-slate-400">Eventos persistidos em <code>audit_logs</code>. Esta tela não mistura logs técnicos efêmeros com a trilha de auditoria.</p>
         </div>
-
         <div className="flex items-center gap-2">
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setActiveTab('system')}
-className={`px-3 py-1 rounded-xs text-sm font-semibold transition-colors ${
-                    activeTab === 'system'
-                      ? 'bg-orange-500 text-white'
-                      : 'text-slate-400 hover:bg-slate-800'
-                  }`}
-                >
-                  Sistema
-                </button>
-              <button
-                onClick={() => setActiveTab('audit')}
-                className={`px-3 py-1 rounded-xs text-sm font-semibold transition-colors ${
-                  activeTab === 'audit'
-                    ? 'bg-orange-500 text-white'
-                      : 'text-slate-400 hover:bg-slate-800'
-                }`}
-              >
-                Auditoria
-            </button>
-          </div>
-
-          {activeTab === 'system' && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg">
-                Total: <strong className="text-white">{filteredSystemLogs.length}</strong> logs
-              </span>
-            </div>
-          )}
-
-          {activeTab === 'audit' && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg">
-                Total: <strong className="text-white">{filteredAuditLogs.length}</strong> registros
-              </span>
-            </div>
-          )}
+          <button onClick={downloadAuditEvents} disabled={filteredEvents.length === 0} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-40">
+            <Download className="h-4 w-4" /> Exportar JSON
+          </button>
+          <button onClick={() => void loadAuditEvents()} disabled={isRefreshing} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Atualizar
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Tabs Content */}
-      {activeTab === 'system' ? (
-        <div className="space-y-4">
-          {/* System Logs Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Buscar por mensagem, serviço ou nível..."
-                  value={systemSearchQuery}
-                  onChange={(e) => setSystemSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 outline-none shadow-2xs font-medium"
-                />
-              </div>
+      {error && <div role="alert" className="rounded-xl border border-rose-800 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">Falha ao carregar auditoria: {error}</div>}
 
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <select
-                  value={systemLevelFilter}
-                  onChange={(e) => setSystemLevelFilter(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-300 outline-none focus:border-orange-500 font-mono"
-                >
-                  <option value="all">Todos os Níveis</option>
-                  <option value="error">Erro</option>
-                  <option value="warning">Aviso</option>
-                  <option value="info">Informação</option>
-                  <option value="debug">Depuração</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <select
-                  value={systemServiceFilter}
-                  onChange={(e) => setSystemServiceFilter(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-300 outline-none focus:border-orange-500 font-mono"
-                >
-                  <option value="all">Todos os Serviços</option>
-                  <option value="api">API</option>
-                  <option value="auth">Autenticação</option>
-                  <option value="payments">Pagamentos</option>
-                  <option value="integrations">Integrações</option>
-                  <option value="marketing">Marketing</option>
-                  <option value="monitoring">Monitoramento</option>
-                  <option value="system">Sistema</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSystemAutoRefresh(!systemAutoRefresh)}
-className={`px-3 py-1 rounded-xs text-sm font-semibold transition-colors ${
-                    systemAutoRefresh
-                      ? 'bg-orange-500 text-white'
-                      : 'text-slate-400 hover:bg-slate-800'
-                  }`}
-              >
-                {systemAutoRefresh ? 'Pausar Atualização' : 'Ativar Atualização'}
-              </button>
-              <button
-                onClick={handleClearSystemLogs}
-                className="px-3 py-1 rounded-xs text-sm font-semibold text-red-500 hover:text-red-700 transition-colors"
-              >
-                Limpar Logs
-              </button>
-            </div>
+      <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-lg">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar ação, ator, recurso, ID ou detalhes…"
+              className="w-full rounded-lg border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-emerald-600"
+            />
           </div>
-
-          {/* System Logs Table */}
-<div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-950/70 text-slate-400 font-semibold border-b border-slate-800 font-mono text-sm uppercase">
-                  <tr>
-                    <th className="py-3 px-4">Timestamp</th>
-                    <th className="py-3 px-4">Serviço</th>
-                    <th className="py-3 px-4">Nível</th>
-                    <th className="py-3 px-4">Mensagem</th>
-                    <th className="py-3 px-4">Duração</th>
-                    <th className="py-3 px-4">Correlation ID</th>
-                    <th className="py-3 px-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 font-mono text-sm text-slate-300">
-                  {filteredSystemLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-500">
-                        Nenhum log encontrado para os filtros selecionados.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSystemLogs.map((log) => (
-                      <tr key={log.id || log.timestamp} className="hover:bg-slate-800/50 transition-colors">
-                         <td className="py-3 px-4 text-slate-400">
-                           {new Date(log.timestamp || log.createdAt || 0).toLocaleString('pt-BR', {
-                             hour: '2-digit',
-                             minute: '2-digit',
-                             second: '2-digit',
-                           })}
-                         </td>
-                         <td className="py-3 px-4 text-slate-400 text-sm">
-                           {log.service || 'N/A'}
-                         </td>
-                         <td className="py-3 px-4">
-<span
-                              className={`px-2 py-1 rounded-md text-xs font-bold border ${
-                                log.level === 'error'
-                                  ? 'bg-red-950/60 text-red-400 border-red-800/60'
-                                  : log.level === 'warning'
-                                  ? 'bg-amber-950/60 text-amber-400 border-amber-800/60'
-                                  : log.level === 'info'
-                                  ? 'bg-sky-950/60 text-sky-400 border-sky-800/60'
-                                  : 'bg-slate-800 text-slate-400 border-slate-700'
-                              }`}
-                            >
-                              {log.level?.toUpperCase() || 'UNKNOWN'}
-                            </span>
-                         </td>
-                         <td className="py-3 px-4 text-slate-400 break-all max-w-[300px]">
-                           {log.message || 'Sem mensagem'}
-                         </td>
-                         <td className="py-3 px-4 text-center text-slate-400">
-                           {log.duration !== undefined ? `${log.duration} ms` : '—'}
-                         </td>
-                         <td className="py-3 px-4 text-center text-slate-400 font-mono">
-                           {log.correlationId || '—'}
-                         </td>
-                         <td className="py-3 px-4 text-right">
-                           <div className="flex items-center gap-1">
-<button
-                                  onClick={() => setSelectedSystemLog(log)}
-                                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDownloadSystemLog(log)}
-                                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-                             >
-                               <Download className="w-3 h-3" />
-                             </button>
-                           </div>
-                         </td>
-                       </tr>
-                     ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <span className="text-xs text-slate-500">{filteredEvents.length} de {events.length} eventos carregados</span>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Audit Logs Controls */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar por ação, ator, detalhes ou recurso..."
-                value={auditFilter}
-                onChange={(e) => setAuditFilter(e.target.value)}
-                className="w-full pl-4 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 outline-none shadow-2xs font-medium"
-              />
-            </div>
-          </div>
+      </section>
 
-          {/* Audit Logs Table */}
-<div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800 font-mono text-sm uppercase">
-                  <tr>
-                    <th className="py-3 px-4">Timestamp</th>
-                    <th className="py-3 px-4">Ator</th>
-                    <th className="py-3 px-4">Ação</th>
-                    <th className="py-3 px-4">Recurso Alvo</th>
-                    <th className="py-3 px-4">Detalhes</th>
-                    <th className="py-3 px-4">IP Hash</th>
-                    <th className="py-3 px-4">LGPD</th>
-                    <th className="py-3 px-4 text-right">Ações</th>
+      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-slate-400">Carregando eventos persistidos…</div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-400">{error ? 'A trilha não foi carregada.' : 'Nenhum evento corresponde à busca.'}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="border-b border-slate-800 bg-slate-900 text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Ação</th>
+                  <th className="px-4 py-3">Ator</th>
+                  <th className="px-4 py-3">Recurso</th>
+                  <th className="px-4 py-3">Detalhes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-900">
+                {filteredEvents.map((event) => (
+                  <tr key={event.id} className="align-top hover:bg-slate-900/50">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">{event.timestamp ? new Date(event.timestamp).toLocaleString('pt-BR') : '—'}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-100">{event.action}</p>
+                      <p className="mt-1 text-xs text-slate-500">{event.actorRole}</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-300">{event.actor}</td>
+                    <td className="px-4 py-3">
+                      <p className="text-slate-300">{event.targetResource}</p>
+                      {event.targetId && <p className="mt-1 break-all text-xs text-slate-500">{event.targetId}</p>}
+                    </td>
+                    <td className="max-w-lg px-4 py-3 text-xs text-slate-400">
+                      <details>
+                        <summary className="cursor-pointer text-emerald-300">Ver detalhes</summary>
+                        <pre className="mt-2 whitespace-pre-wrap break-words font-mono">{event.details || '{}'}</pre>
+                        {event.correlationId && <p className="mt-2 break-all">Correlation ID: {event.correlationId}</p>}
+                        <p className="mt-1">{event.gdprCompliant ? 'Marcado como GDPR compliant' : 'Conformidade não marcada'}</p>
+                      </details>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 font-mono text-sm text-slate-300">
-                  {filteredAuditLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">
-                        Nenhum registro de auditoria encontrado para os filtros selecionados.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredAuditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-800/50 transition-colors">
-                         <td className="py-3 px-4 text-slate-400">
-                           {new Date(log.timestamp || 0).toLocaleString('pt-BR', {
-                             hour: '2-digit',
-                             minute: '2-digit',
-                             second: '2-digit',
-                           })}
-                         </td>
-                         <td className="py-3 px-4 text-slate-400">
-                           {log.actor || 'Sistema'}
-                         </td>
-                         <td className="py-3 px-4 text-slate-400 text-sm">
-                           {log.action || 'N/A'}
-                         </td>
-                         <td className="py-3 px-4 text-slate-400">
-                           {log.targetResource || 'N/A'}
-                         </td>
-                         <td className="py-3 px-4 text-slate-400">
-                           {log.details || 'Sem detalhes'}
-                         </td>
-                         <td className="py-3 px-4 text-center text-slate-400 font-mono">
-                           {log.ipHash || '—'}
-                         </td>
-                         <td className="py-3 px-4 text-center">
-                           {log.gdprCompliant ? (
-                             <Check className="w-3 h-3 text-green-400" />
-                           ) : (
-                             <AlertTriangle className="w-3 h-3 text-red-400" />
-                           )}
-                         </td>
-                         <td className="py-3 px-4 text-right">
-                           <div className="flex items-center gap-1">
-                             <button
-                               onClick={() => {
-                                 setSelectedAuditLog(log);
-                               }}
-className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </button>
-                           </div>
-                         </td>
-                       </tr>
-                     ))
-                  )}
-                </tbody>
-              </table>
-</div>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-
-      {/* Modals */}
-     {selectedSystemLog && (
-       <LogDetailModal
-         log={selectedSystemLog as StructuredLogEntry}
-         isOpen={true}
-         onClose={() => setSelectedSystemLog(null)}
-         onTraceCorrelation={(correlationId) => {
-           // Implement trace correlation if needed
-           setSelectedSystemLog(null);
-         }}
-       />
-     )}
-     {selectedAuditLog && (
-       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-         <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl">
-           <div className="flex items-center justify-between mb-4">
-             <h3 className="text-xl font-bold text-white">Detalhes do Log de Auditoria</h3>
-             <button
-               onClick={() => setSelectedAuditLog(null)}
-               className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-             >
-               <X className="w-4 h-4" />
-             </button>
-           </div>
-           <div className="space-y-4 text-slate-300">
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">ID:</span>
-               <span className="break-all">{selectedAuditLog.id}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Timestamp:</span>
-               <span className="break-all">
-                 {new Date(selectedAuditLog.timestamp).toLocaleString('pt-BR')}
-               </span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Ator:</span>
-               <span className="break-all">{selectedAuditLog.actor}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Papel:</span>
-               <span className="break-all">{selectedAuditLog.role}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Ação:</span>
-               <span className="break-all">{selectedAuditLog.action}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Recurso Alvo:</span>
-               <span className="break-all">{selectedAuditLog.targetResource}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">IP Hash:</span>
-               <span className="break-all font-mono">{selectedAuditLog.ipHash}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">Detalhes:</span>
-               <span className="break-all">{selectedAuditLog.details}</span>
-             </div>
-             <div className="flex">
-               <span className="w-24 font-mono text-slate-400">LGPD Compliant:</span>
-               <span className="flex items-center">
-                 {selectedAuditLog.gdprCompliant ? (
-                   <Check className="w-3 h-3 text-green-400 mr-2" />
-                 ) : (
-                   <AlertTriangle className="w-3 h-3 text-red-400 mr-2" />
-                 )}
-                  <span className="text-slate-300">
-                    {selectedAuditLog.gdprCompliant ? 'Sim' : 'Não'}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </section>
     </div>
   );
 };

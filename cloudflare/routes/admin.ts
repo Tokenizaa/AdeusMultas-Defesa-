@@ -19,30 +19,75 @@ export const adminRoutes = new Hono<{ Bindings: Env; Variables: { user?: Authent
 adminRoutes.use('/admin/*', authenticateToken, requireAdmin);
 
 adminRoutes.get('/admin/ai/overview', (c) => c.json({
-  provider: { name: 'Cloudflare Workers AI', runtime: 'cloudflare', model: AI_MODEL, fallback: null },
-  rag: { provider: 'Cloudflare Vectorize', index: VECTORIZE_INDEX, embeddingModel: EMBEDDING_MODEL, dimensions: 768, status: 'configured' },
-  capabilities: { infractionAnalysis: '/api/ai/analyze-infraction', defenseGeneration: '/api/ai/generate-defense', ocr: '/api/ocr/analyze' },
-  observability: { historicalMetrics: true, metricsEndpoint: '/api/admin/ai/metrics' },
+  provider: {
+    name: 'Cloudflare Workers AI',
+    runtime: 'cloudflare',
+    model: AI_MODEL,
+    fallback: null,
+    status: c.env?.AI ? 'configured' : 'not_configured',
+    statusMeaning: 'Binding de runtime presente não comprova disponibilidade do provedor; use o teste de inferência para verificar execução.',
+  },
+  rag: {
+    provider: 'Cloudflare Vectorize',
+    index: VECTORIZE_INDEX,
+    embeddingModel: EMBEDDING_MODEL,
+    dimensions: 768,
+    status: c.env?.VECTORIZE ? 'configured' : 'not_configured',
+    statusMeaning: 'Binding e índice declarados; este endpoint não consulta o índice nem afirma contagem de vetores.',
+  },
+  capabilities: {
+    infractionAnalysis: '/api/ai/analyze-infraction',
+    defenseGeneration: '/api/ai/generate-defense',
+    ocr: '/api/ocr/analyze',
+  },
+  observability: {
+    historicalMetrics: true,
+    metricsEndpoint: '/api/admin/ai/metrics',
+    metricsScope: 'Logs persistidos de execuções de IA na janela móvel de 24 horas.',
+  },
 }));
 
 adminRoutes.get('/admin/overview', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ count: totalCases }, { count: analyzedCases }, { count: defenseReadyCases }, { count: paidCases }] = await Promise.all([
+  const [
+    { count: totalCases },
+    { count: analyzedCases },
+    { count: defenseReadyCases },
+    { count: paidCases },
+    { count: profileCount },
+    { data: recentRows, error: recentError },
+    totalRevenue,
+  ] = await Promise.all([
     supabase.from('cases').select('*', { count: 'exact', head: true }),
     supabase.from('cases').select('*', { count: 'exact', head: true }).not('analysis_json', 'is', null),
     supabase.from('cases').select('*', { count: 'exact', head: true }).or('defense_draft_json.not.is.null,status.eq.defesa_pronta'),
     supabase.from('cases').select('*', { count: 'exact', head: true }).eq('is_paid', true),
+    supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
+    supabase.from('cases')
+      .select('id,title,client_name,service_type,status,is_paid,ait_number,infraction_description,vehicle_plate,autuador_body,created_at')
+      .order('created_at', { ascending: false })
+      .limit(10),
+    getTotalPaidRevenue(supabase),
   ]);
-  let totalRevenue = 0;
-  try {
-    const { data } = await supabase.from('payment_orders').select('amount').eq('status', 'PAID');
-    totalRevenue = (data || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0);
-  } catch { totalRevenue = 0; }
-  const { count: profileCount } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true });
+  if (recentError) throw new Error(recentError.message);
+
   const total = totalCases ?? 0;
   const paid = paidCases ?? 0;
   const analyzed = analyzedCases ?? 0;
   const ready = defenseReadyCases ?? 0;
+  const recentCases = (recentRows || []).map((row: any) => ({
+    id: row.id,
+    title: row.title || `Caso #${row.id}`,
+    clientName: row.client_name || '',
+    serviceType: row.service_type || '',
+    status: row.status || '',
+    isPaid: Boolean(row.is_paid),
+    payment: { status: row.is_paid ? 'paid' : 'pending' },
+    infraction: { aitNumber: row.ait_number || '', description: row.infraction_description || '', autuadorBody: row.autuador_body || '' },
+    vehicle: { plate: row.vehicle_plate || '' },
+    createdAt: row.created_at,
+  }));
+
   return c.json({
     metrics: {
       totalUsers: profileCount ?? 0,
@@ -54,6 +99,7 @@ adminRoutes.get('/admin/overview', async (c) => {
       conversionRate: total > 0 ? Number(((paid / total) * 100).toFixed(1)) : 0,
       analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
     },
+    recentCases,
     observability: {
       historicalMetrics: true,
       metricsEndpoint: '/api/admin/ai/metrics',
@@ -68,6 +114,62 @@ adminRoutes.get('/admin/users', async (c) => {
   return c.json({ users: (data || []).map((user: any) => ({ id: user.user_id, name: user.name, email: user.email || '', role: user.role, cpf: user.cpf || undefined, phone: user.phone || undefined, cnh: user.cnh || undefined, cityState: user.city_state || undefined, avatarUrl: user.avatar_url || undefined, createdAt: user.created_at })) });
 });
 
+adminRoutes.get('/admin/users/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'ID de usuário inválido.' } }, 400);
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: profile, error: profileError } = await supabase
+    .from('user_profiles')
+    .select('user_id,name,email,role,cpf,phone,created_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) return c.json({ error: { code: 'NOT_FOUND', message: 'Usuário não encontrado.' } }, 404);
+
+  const [{ data: caseRows, error: casesError }, paymentSummary] = await Promise.all([
+    supabase.from('cases')
+      .select('id,app_ref,title,user_id,is_paid,ait_number,vehicle_plate,autuador_body,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    getPaidPaymentSummary(supabase, userId, ['PAID', 'CONFIRMED']),
+  ]);
+  if (casesError) throw new Error(casesError.message);
+
+  const user = {
+    id: profile.user_id,
+    name: profile.name || '',
+    email: profile.email || '',
+    role: profile.role,
+    cpf: profile.cpf || undefined,
+    phone: profile.phone || undefined,
+    createdAt: profile.created_at || undefined,
+  };
+  const cases = (caseRows || []).map((row: any) => ({
+    id: row.id,
+    title: row.title || row.app_ref || '',
+    isPaid: Boolean(row.is_paid),
+    infraction: { aitNumber: row.ait_number || undefined, autuadorBody: row.autuador_body || undefined },
+    vehicle: { plate: row.vehicle_plate || undefined },
+    createdAt: row.created_at || undefined,
+  }));
+  const totalSpent = paymentSummary.total;
+  const actor = c.get('user') as AuthenticatedUser | undefined;
+  await recordAuditLog(c.env, {
+    actor: actor?.email || actor?.id || 'unknown',
+    actorRole: actor?.role || 'admin',
+    action: 'admin.user_profile.viewed',
+    targetResource: 'user_profiles',
+    targetId: userId,
+    details: { casesReturned: cases.length, paymentRecordsCounted: paymentSummary.count },
+    gdprCompliant: true,
+  });
+  return c.json({ user, cases, totalSpent });
+});
+
 adminRoutes.put('/admin/users', async (c) => {
   const body = await c.req.json<any>().catch(() => ({}));
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -79,6 +181,16 @@ adminRoutes.put('/admin/users', async (c) => {
   if (!target) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Usuário não encontrado' } }, 404);
   const { data, error } = await supabase.from('user_profiles').update({ role, updated_at: new Date().toISOString() }).eq('user_id', target.user_id).select('user_id,name,email,role,cpf,phone,cnh,city_state,avatar_url,created_at').single();
   if (error) throw new Error(error.message);
+  const actor = c.get('user') as AuthenticatedUser | undefined;
+  await recordAuditLog(c.env, {
+    actor: actor?.email || actor?.id || 'unknown',
+    actorRole: actor?.role || 'admin',
+    action: 'admin.user_role.updated',
+    targetResource: 'user_profiles',
+    targetId: data.user_id,
+    details: { previousRole: target.role, newRole: data.role },
+    gdprCompliant: true,
+  });
   return c.json({ success: true, user: { id: data.user_id, name: data.name, email: data.email || '', role: data.role, cpf: data.cpf || undefined, phone: data.phone || undefined, cnh: data.cnh || undefined, cityState: data.city_state || undefined, avatarUrl: data.avatar_url || undefined, createdAt: data.created_at } });
 });
 
@@ -113,20 +225,52 @@ adminRoutes.get('/admin/ai/metrics', async (c) => {
   });
 });
 
+async function getPaidPaymentSummary(
+  supabase: any,
+  userId?: string,
+  statuses: string[] = ['PAID'],
+): Promise<{ total: number; count: number }> {
+  const pageSize = 1000;
+  let offset = 0;
+  let total = 0;
+  let count = 0;
+
+  while (true) {
+    let query = supabase
+      .from('payment_orders')
+      .select('id,amount')
+      .in('status', statuses);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`Falha ao calcular resumo de pagamentos: ${error.message}`);
+    const rows = data || [];
+    total += rows.reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
+    count += rows.length;
+    if (rows.length < pageSize) return { total: Number(total.toFixed(2)), count };
+    offset += rows.length;
+  }
+}
+
+async function getTotalPaidRevenue(supabase: any): Promise<number> {
+  return (await getPaidPaymentSummary(supabase, undefined, ['PAID'])).total;
+}
+
 adminRoutes.get('/admin/payments', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, { data: paidAmounts, error: revenueError }] = await Promise.all([
+  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, revenue] = await Promise.all([
     supabase.from('payment_orders').select('*').order('created_at', { ascending: false }).limit(500),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PAID'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).in('status', ['REFUNDED', 'CONTESTED', 'CHARGEDBACK']),
-    supabase.from('payment_orders').select('id,amount').eq('status', 'PAID').limit(2000),
+    getTotalPaidRevenue(supabase),
   ]);
   if (ordersError) throw new Error(ordersError.message);
-  if (revenueError) throw new Error(revenueError.message);
   const orders = (rawOrders || []).map((order: any) => ({ ...order, is_test: false }));
-  const revenue = (paidAmounts || []).reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
   return c.json({
     orders,
     summary: {
@@ -251,8 +395,58 @@ adminRoutes.get('/admin/payments/commissions', async (c) => {
 
 adminRoutes.get('/admin/documents', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const { data } = await supabase.from('cases').select('id,title,client_name,service_type,status,defense_draft_json,created_at').not('defense_draft_json', 'is', null).order('created_at', { ascending: false }).limit(200);
-  return c.json({ documents: (data || []).map((d: any) => ({ id: d.id, title: d.title, clientName: d.client_name, serviceType: d.service_type, status: d.status, hasDraft: Boolean(d.defense_draft_json), createdAt: d.created_at })) });
+  const { data, error } = await supabase
+    .from('cases')
+    .select('id,title,client_name,client_cpf,service_type,status,is_paid,ait_number,infraction_code,infraction_description,autuador_body,vehicle_plate,defense_draft_json,analysis_json,created_at')
+    .not('defense_draft_json', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+
+  const parseJson = (value: unknown): any => {
+    if (typeof value !== 'string') return value && typeof value === 'object' ? value : {};
+    try { return JSON.parse(value); } catch { return { fullDraftText: value }; }
+  };
+  const serviceLabels: Record<string, string> = {
+    defesa_previa: 'Defesa Prévia',
+    recurso_jari: 'Recurso JARI',
+    recurso_cetran: 'Recurso CETRAN',
+    suspensao: 'Suspensão',
+    cassacao: 'Cassação',
+    indicacao_condutor: 'Indicação de Condutor',
+    conversao_advertencia: 'Conversão em Advertência',
+  };
+  const documents = (data || []).map((row: any) => {
+    const draft = parseJson(row.defense_draft_json);
+    const analysis = parseJson(row.analysis_json);
+    const draftText = [draft.refinedDraft, draft.canonicalDraft, draft.fullDraftText, draft.content, draft.documentText, draft.text]
+      .find((value) => typeof value === 'string' && value.trim().length > 0);
+    const argumentsList = Array.isArray(analysis.recommendedArguments)
+      ? analysis.recommendedArguments
+      : Array.isArray(analysis.selectedArguments) ? analysis.selectedArguments : [];
+
+    return {
+      id: row.id,
+      caseId: row.id,
+      title: row.title || `Minuta ${row.ait_number || row.id}`,
+      clientName: row.client_name || '',
+      clientCpf: row.client_cpf || '',
+      aitNumber: row.ait_number || '',
+      infractionCode: row.infraction_code || '',
+      infractionDescription: row.infraction_description || '',
+      organ: row.autuador_body || '',
+      procedureType: row.service_type || '',
+      procedureLabel: serviceLabels[row.service_type] || row.service_type || 'Não informado',
+      status: row.is_paid ? 'LIBERADO_PAGO' : 'PREVIEW',
+      version: String(draft.version || draft.engineVersion || '1'),
+      thesesCount: argumentsList.length,
+      engine: String(draft.engineVersion || draft.engine || 'Não informado'),
+      generatedAt: row.created_at || '',
+      draftText: typeof draftText === 'string' ? draftText : JSON.stringify(draft, null, 2),
+      vehiclePlate: row.vehicle_plate || '',
+    };
+  });
+  return c.json({ documents });
 });
 
 // ---------------------------------------------------------------------------

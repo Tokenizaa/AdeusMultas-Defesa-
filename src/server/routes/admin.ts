@@ -9,8 +9,13 @@ import { commercialService } from '../commercial/commercial-service';
 import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
-import { getSupabaseServerClient } from '../db/supabase-server';
+import { getSupabaseAdminClient } from '../db/supabase-server';
 import { adminQueryService } from '../services/admin-query-service';
+import { buildAdminUserDetail } from '../services/admin-user-detail-service';
+import { buildAdminAiOverview } from '../services/admin-ai-overview';
+import { buildAdminIntegrationsOverview } from '../services/admin-integrations-overview';
+import { gatewayManager } from '../integrations/gateway/gateway-manager';
+import { vectorStore } from '../knowledge/vector-store';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
@@ -37,7 +42,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   // totalRevenue: prioriza SUM(payment_orders) pago no Supabase; fallback para case.payment.amount
   let totalRevenue: number;
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     const { data: sumData, error: sumError } = supabase
       ? await supabase
           .from('payment_orders')
@@ -176,92 +181,78 @@ router.get(['/documents', '/admin/documents'], (req, res) => {
   });
 });
 
-router.get(['/ai/overview', '/admin/ai/overview'], (req, res) => {
+router.get(['/ai/overview', '/admin/ai/overview'], (_req, res) => {
   const metrics = metricsService.getOverview();
-  const traces = aiProviderManager.getRecentTraces();
+  const vectorStats = vectorStore.getStats();
 
-  res.json({
-    architecture: {
-      gateway: 'AI Provider Gateway (DefesAi Core)',
-      primary: {
-        provider: 'nvidia',
-        name: 'NVIDIA NIM (Primary)',
-        model: 'meta/llama-3.1-70b-instruct',
-        endpoint: 'https://integrate.api.nvidia.com/v1',
-        status: 'healthy',
-        avgLatencyMs: metrics.nvidia.avgLatencyMs,
-        successRate: metrics.nvidia.successRate,
-        totalCalls: metrics.nvidia.requestsTotal,
-      },
-      fallback: {
-        provider: '9router',
-        name: '9Router Gateway (Fallback Contingency)',
-        model: 'deepseek-ai/deepseek-r1',
-        endpoint: 'https://api.9router.com/v1',
-        status: 'healthy',
-        avgLatencyMs: metrics.nineRouter.avgLatencyMs,
-        successRate: metrics.nineRouter.successRate,
-        totalCalls: metrics.nineRouter.requestsTotal,
-      },
-    },
-    ragKnowledge: {
-      totalTheses: 52,
-      checklists: 6,
-      autuadorBodies: 27,
-      embeddingsModel: 'text-embedding-3-small',
-      embeddingsDimension: 1536,
-      ragSyncStatus: 'synced',
-    },
+  const overview = buildAdminAiOverview({
+    nvidiaConfigured: Boolean(configService.get('NVIDIA_API_KEY')),
+    nvidiaModel: configService.get('NVIDIA_CHAT_MODEL', 'meta/llama-3.3-70b-instruct'),
+    nineRouterConfigured: Boolean(configService.get('NINEROUTER_KEY')),
+    nineRouterModel: configService.get('NINEROUTER_MODEL', 'qwen/qwen-2.5-72b-instruct'),
+    fallbackEnabled: Boolean(configService.get('AI_ENABLE_FALLBACK', true)),
+    geminiConfigured: Boolean(configService.get('GEMINI_API_KEY')),
+    embeddingModel: Boolean(configService.get('NVIDIA_API_KEY'))
+      ? configService.get('NVIDIA_EMBEDDING_MODEL', 'nvidia/nv-embedqa-e5-v5')
+      : Boolean(configService.get('AI_ENABLE_FALLBACK', true)) && Boolean(configService.get('NINEROUTER_KEY'))
+        ? 'text-embedding-3-large'
+        : 'defesai-legal-vectorizer-v1',
+    vectorStore: vectorStats,
     metrics: {
+      nvidia: {
+        requestsTotal: metrics.nvidia.requestsTotal,
+        successRate: metrics.nvidia.successRate,
+        avgLatencyMs: metrics.nvidia.avgLatencyMs,
+      },
+      nineRouter: {
+        requestsTotal: metrics.nineRouter.requestsTotal,
+        successRate: metrics.nineRouter.successRate,
+        avgLatencyMs: metrics.nineRouter.avgLatencyMs,
+      },
       totalAiRequests: metrics.totalAiRequests,
       fallbackRatePercent: metrics.fallbackRatePercent,
       errorRatePercent: metrics.errorRatePercent,
-      p50LatencyMs: metrics.p50LatencyMs,
       p95LatencyMs: metrics.p95LatencyMs,
-      p99LatencyMs: metrics.p99LatencyMs,
     },
-    recentTraces: traces.slice(0, 10),
+    recentTraceCount: aiProviderManager.getRecentTraces().length,
   });
+
+  return res.json(overview);
 });
 
-router.get(['/integrations/overview', '/admin/integrations/overview'], async (req, res) => {
-  const metaStatus = metaIntegration.getConnectionState();
-  const healthReport = await healthService.getHealth(false);
+router.get(['/integrations/overview', '/admin/integrations/overview'], async (_req, res) => {
+  try {
+    const metaStatus = metaIntegration.getConnectionState();
+    const healthReport = await healthService.getHealth(false);
+    const venopag = gatewayManager.getGatewayStatus().find((gateway) => gateway.id === 'venopag') || {
+      id: 'venopag',
+      displayName: 'VenoPag PIX',
+      status: 'not_configured' as const,
+      isActive: true,
+      supportsCreditCard: false,
+      notConfiguredReason: 'Gateway VenoPag não encontrado no runtime.',
+    };
 
-  res.json({
-    meta: {
-      name: 'Meta Graph API (Facebook & Instagram)',
-      isConnected: metaStatus.isConnected,
-      connectedUser: metaStatus.user?.name,
-      pagesCount: metaStatus.pages?.length || 0,
-      apiVersion: 'v20.0',
-      status: metaStatus.isConnected ? 'HEALTHY' : 'CONFIGURED_SANDBOX',
-    },
-    pagbank: {
-      name: 'PagBank (PagSeguro) Orders v2',
-      apiVersion: 'v2.0',
-      webhookUrl: 'https://app.www.defesai.shop/api/webhooks/pagbank',
-      idempotencyEnabled: true,
-      status: 'HEALTHY',
-    },
-    supabase: {
-      name: 'Supabase BaaS (Postgres & Auth)',
-      dbStatus: 'HEALTHY',
-      authStatus: 'HEALTHY',
-      storageStatus: 'HEALTHY',
-      edgeFunctionsCount: 4,
-    },
-    ocr: {
-      name: 'Vision OCR & Document Parser',
-      parserAccuracy: 98.2,
-      status: 'HEALTHY',
-    },
-    whatsapp: {
-      name: 'Evolution API (WhatsApp Gateway)',
-      instanceStatus: 'READY',
-      status: 'HEALTHY',
-    },
-  });
+    const overview = buildAdminIntegrationsOverview({
+      healthServices: healthReport.services,
+      meta: {
+        isConnected: metaStatus.isConnected,
+        user: metaStatus.user ? { name: metaStatus.user.name } : undefined,
+        pages: metaStatus.pages,
+      },
+      venopag,
+      whatsappConfigured: Boolean(
+        (process.env.EVOLUTION_API_URL || process.env.EVOLUTION_API_BASE_URL) &&
+        (process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_API_TOKEN)
+      ),
+      googleDriveConfigured: Boolean(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID),
+    });
+
+    return res.json(overview);
+  } catch (error) {
+    logger.error('admin', 'integrations', 'overview', 'Falha ao consultar estado das integrações.', { error: String(error) });
+    return res.status(503).json({ error: 'Estado das integrações indisponível.' });
+  }
 });
 
 // ─────────────────────────────────────────────
@@ -269,7 +260,7 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
 // ─────────────────────────────────────────────
 router.get('/admin/pricing', requireAdmin, async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -297,7 +288,7 @@ router.patch('/admin/pricing/:serviceType', requireAdmin, async (req, res) => {
     if (standardPrice < 0) {
       return res.status(400).json({ error: 'standardPrice deve ser maior que zero.' });
     }
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -318,7 +309,7 @@ router.patch('/admin/pricing/:serviceType', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -351,10 +342,64 @@ router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
       return res.status(500).json({ error: 'Erro ao carregar usuários.' });
     }
 
-    res.json({ users: data || [], total: (data || []).length });
+    // Publica o contrato AuthUser esperado pela interface; não vazar o formato snake_case do banco.
+    const users = (data || []).map((profile) => ({
+      id: profile.user_id,
+      name: profile.name || profile.email || 'Usuário sem nome',
+      email: profile.email || '',
+      role: profile.role === 'admin' ? 'admin' : 'citizen',
+      cpf: profile.cpf || undefined,
+      createdAt: profile.created_at || '',
+    }));
+
+    res.json({ users, total: users.length });
   } catch (err) {
     logger.error('admin', 'users', 'get', 'Erro em /api/admin/users GET', { error: String(err) });
     res.status(500).json({ error: 'Erro ao carregar usuários.' });
+  }
+});
+
+// GET /api/admin/users/:id — perfil, casos vinculados e pagamentos confirmados da conta
+router.get(['/users/:id', '/admin/users/:id'], async (req, res) => {
+  try {
+    const supabase = getSupabaseAdminClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase indisponível.' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('user_id, name, email, phone, cpf, role, created_at')
+      .eq('user_id', req.params.id)
+      .maybeSingle();
+
+    if (profileError) {
+      logger.error('admin', 'users', 'detail_profile', 'Erro ao buscar perfil do usuário.', { error: String(profileError) });
+      return res.status(500).json({ error: 'Erro ao carregar perfil do usuário.' });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payment_orders')
+      .select('status, amount, final_amount')
+      .eq('user_id', profile.user_id);
+
+    if (paymentsError) {
+      logger.error('admin', 'users', 'detail_payments', 'Erro ao buscar pagamentos do usuário.', { error: String(paymentsError) });
+      return res.status(500).json({ error: 'Erro ao carregar pagamentos do usuário.' });
+    }
+
+    const detail = buildAdminUserDetail(
+      profile,
+      Array.from(caseRepository.values()),
+      payments || []
+    );
+    return res.json(detail);
+  } catch (err) {
+    logger.error('admin', 'users', 'detail', 'Erro ao carregar detalhe do usuário.', { error: String(err) });
+    return res.status(500).json({ error: 'Erro ao carregar detalhe do usuário.' });
   }
 });
 
@@ -370,7 +415,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'role inválida. Use admin ou citizen.' });
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -416,155 +461,71 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   }
 });
 
-// E2E Test Endpoints
-router.get('/admin/e2e-tests/stats', async (req, res) => {
-  try {
-    const supabase = getSupabaseServerClient() as any;
-    
-    // Get counts from relevant tables
-    const [usersCount, casesCount, runsCount] = await Promise.all([
-      supabase.from('user_profiles').select('user_id', { count: 'exact' }),
-      supabase.from('cases').select('id', { count: 'exact' }),
-      supabase.from('e2e_test_runs').select('id', { count: 'exact' }),
-    ]);
-    
-    // Get service breakdown
-    const { data: servicesData } = await supabase
-      .from('cases')
-      .select('service_type')
-      .not('service_type', 'is', null);
-    
-    const serviceCounts = servicesData?.reduce((acc, row) => {
-      const service = row.service_type;
-      acc[service] = (acc[service] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
-    
-    res.json({
-      users: usersCount.count || 0,
-      cases: casesCount.count || 0,
-      testRuns: runsCount.count || 0,
-      services: serviceCounts,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error('admin', 'e2e-tests', 'stats', 'Error fetching E2E test stats', { error: String(error) });
-    res.status(500).json({ error: 'Failed to fetch statistics' });
-  }
-});
-
-router.get('/admin/e2e-tests/runs', async (req, res) => {
-  try {
-    const supabase = getSupabaseServerClient() as any;
-    const { data: runs, error } = await supabase
-      .from('e2e_test_runs')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(50);
-    
-    if (error) throw error;
-    res.json({ runs: runs || [] });
-  } catch (error) {
-    console.error('Error fetching E2E test runs:', error);
-    res.status(500).json({ error: 'Failed to fetch test runs' });
-  }
-});
-
-router.post('/admin/e2e-tests/run', async (req, res) => {
-  try {
-    // ponytail: client tipado não inclui e2e_test_runs (migração 20260830000001).
-    // Cast local de ferramenta admin; regenerar types remove.
-    const supabase = getSupabaseServerClient() as any;
-    const { services, triggeredBy } = req.body;
-    const runId = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    
-    // Create a new test run record
-    const { data: runData, error: runError } = await supabase
-  .from("e2e_test_runs")
-  .insert({
-    id: runId,
-    status: "QUEUED",
-    triggeredBy: triggeredBy || "Admin API",
-    suites_summary: services ? JSON.stringify(services.map(s => ({ 
-      serviceKey: s, 
-      serviceName: s, 
-      totalScenarios: 0, 
-      passed: 0, 
-      failed: 0, 
-      status: "PENDING" 
-    }))) : "[]",
-  })
-  .select()
-  .single();
-
-if (runError) throw runError;
-
-// Return success response
-res.json({ 
-  success: true, 
-  runId, 
-  status: "QUEUED", 
-  message: "Test execution started" 
-});
-} catch (error) {
-  logger.error('admin', 'e2e-tests', 'start_run', 'Error starting E2E test run', { error: String(error) });
-  res.status(500).json({ error: 'Failed to start test execution' });
+// E2E endpoints: do not report stored/synthetic rows as verified execution.
+async function countUnverifiedE2ERunRecords(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) throw new Error('Supabase indisponível.');
+  const { count, error } = await (supabase as any)
+    .from('e2e_test_runs')
+    .select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
 }
-});
-router.get('/admin/e2e-tests/run/:id', async (req, res) => {
+
+router.get('/admin/e2e-tests/stats', async (_req, res) => {
   try {
-    const supabase = getSupabaseServerClient() as any;
-    const { id } = req.params;
-    
-    const { data: run, error } = await supabase
-      .from('e2e_test_runs')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) throw error;
-    if (!run) {
-      return res.status(404).json({ error: 'Test run not found' });
-    }
-    
-    res.json({ run });
+    const unverifiedStoredRunRecords = await countUnverifiedE2ERunRecords();
+    return res.json({
+      runnerStatus: 'NOT_CONFIGURED',
+      executionEnabled: false,
+      totalUnitTests: null,
+      totalE2ETests: null,
+      availableServices: [],
+      totalRuns: 0,
+      latestRun: null,
+      passRate: null,
+      unverifiedStoredRunRecords,
+      message: 'Execução Playwright real não configurada. Registros históricos não são tratados como evidência.',
+    });
   } catch (error) {
-    console.error('Error fetching E2E test run:', error);
-    res.status(500).json({ error: 'Failed to fetch test run' });
+    logger.error('admin', 'e2e-tests', 'stats', 'Falha ao consultar estado do runner E2E.', { error: String(error) });
+    return res.status(503).json({ error: 'Estado do runner E2E indisponível.' });
   }
 });
 
-router.post('/admin/e2e-tests/execute-failed', async (req, res) => {
+router.get('/admin/e2e-tests/runs', async (_req, res) => {
   try {
-    // This would trigger a run of only failed tests
-    // For now, we'll reuse the run endpoint with appropriate parameters
-    res.json({ 
-      success: true, 
-      message: 'Failed test execution endpoint - implement based on specific requirements' 
-    });
+    const unverifiedStoredRunRecords = await countUnverifiedE2ERunRecords();
+    return res.json({ runs: [], total: 0, runnerStatus: 'NOT_CONFIGURED', unverifiedStoredRunRecords });
   } catch (error) {
-    logger.error('admin', 'e2e-tests', 'execute_failed', 'Error executing failed tests', { error: String(error) });
-    res.status(500).json({ error: 'Failed to execute failed tests' });
+    logger.error('admin', 'e2e-tests', 'runs', 'Falha ao consultar registros E2E.', { error: String(error) });
+    return res.status(503).json({ error: 'Histórico E2E não verificável neste ambiente.' });
   }
 });
 
-router.post('/admin/e2e-tests/execute-service', async (req, res) => {
-  try {
-    const { service } = req.body;
-    if (!service) {
-      return res.status(400).json({ error: 'Service parameter is required' });
-    }
-    
-    // This would trigger a run for a specific service
-    // For now, we'll reuse the run endpoint
-    res.json({ 
-      success: true, 
-      message: `Service execution endpoint for ${service} - implement based on specific requirements` 
-    });
-  } catch (error) {
-    logger.error('admin', 'e2e-tests', 'execute_service', 'Error executing service tests', { error: String(error) });
-    res.status(500).json({ error: 'Failed to execute service tests' });
-  }
+router.post('/admin/e2e-tests/run', (_req, res) => {
+  return res.status(503).json({
+    error: 'Execução E2E real indisponível neste ambiente.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
+});
+
+router.get('/admin/e2e-tests/run/:id', (_req, res) => {
+  return res.status(404).json({ error: 'Nenhuma execução E2E verificada encontrada.' });
+});
+
+router.post('/admin/e2e-tests/execute-failed', (_req, res) => {
+  return res.status(503).json({
+    error: 'Reexecução de falhas indisponível até configurar o runner Playwright real.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
+});
+
+router.post('/admin/e2e-tests/execute-service', (_req, res) => {
+  return res.status(503).json({
+    error: 'Execução por serviço indisponível até configurar o runner Playwright real.',
+    code: 'E2E_RUNNER_NOT_CONFIGURED',
+  });
 });
 
 export default router;

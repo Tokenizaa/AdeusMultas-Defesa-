@@ -92,15 +92,15 @@ const mockConfigService = {
 };
 
 // Set up mocks before importing the module
-vi.mock('../db/supabase-server', () => ({
-  getSupabaseServerClient: () => mockSupabase
+vi.mock('../../db/supabase-server', () => ({
+  getSupabaseAdminClient: () => mockSupabase
 }));
 
-vi.mock('../config/config-service', () => ({
+vi.mock('../../config/config-service', () => ({
   configService: mockConfigService
 }));
 
-vi.mock('../observability/logger', () => ({
+vi.mock('../../observability/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -208,6 +208,24 @@ describe('SettingsService', () => {
       );
     });
 
+    test('updateSetting() fails closed when database persistence fails', async () => {
+      const setting = settingsService.settings.get('test_string');
+      setting.currentValue = 'persisted-before';
+      setting.isConfigured = true;
+      mockSupabase.upsert.mockResolvedValueOnce({ error: { message: 'permission denied' } });
+
+      const result = await settingsService.updateSetting({
+        key: 'test_string',
+        value: 'must-not-appear',
+        updatedBy: 'test-user'
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('não foi salvo no banco');
+      expect(setting.currentValue).toBe('persisted-before');
+      expect(setting.isConfigured).toBe(true);
+    });
+
     test('updateSetting() handles secrets correctly', async () => {
       // Mock successful database operation
       mockSupabase.upsert.mockResolvedValueOnce({ error: null });
@@ -271,6 +289,20 @@ describe('SettingsService', () => {
         }),
         expect.any(Object)
       );
+    });
+
+    test('resetToDefault() preserves runtime value when database persistence fails', async () => {
+      const setting = settingsService.settings.get('test_string');
+      setting.currentValue = 'persisted-before';
+      setting.isConfigured = true;
+      mockSupabase.upsert.mockResolvedValueOnce({ error: { message: 'permission denied' } });
+
+      const result = await settingsService.resetToDefault('test_string', 'test-user');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('não foi restaurado no banco');
+      expect(setting.currentValue).toBe('persisted-before');
+      expect(setting.isConfigured).toBe(true);
     });
 
     test('resetToDefault() persists change', async () => {
