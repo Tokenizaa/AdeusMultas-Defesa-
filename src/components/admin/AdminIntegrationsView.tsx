@@ -200,48 +200,56 @@ export const AdminIntegrationsView: React.FC = () => {
               <Database className="w-5 h-5 text-emerald-400" />
               <div>
                 <h2 className="text-sm font-bold text-white uppercase">Supabase (PostgreSQL & Auth)</h2>
-                <p className="text-sm text-slate-500">Persistência relacional, autenticação e Edge Functions</p>
+                <p className="text-sm text-slate-500">Estado derivado dos probes de saúde disponíveis</p>
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              HEALTHY
+            <span className={`px-2 py-0.5 rounded text-sm font-bold border ${statusTone(data?.supabase?.dbStatus)}`}>
+              {statusLabel(data?.supabase?.dbStatus)}
             </span>
           </div>
 
           <div className="space-y-2 text-slate-300">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Postgres Database:</span>
-              <span className="text-emerald-400 font-bold">Conectado (Pool Ativo)</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Postgres:</span>
+              <span className="text-right">{data?.supabase?.dbMessage || 'Não verificado'}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Latência DB:</span>
+              <span>{data?.supabase?.dbLatencyMs != null ? `${data.supabase.dbLatencyMs}ms` : 'Não medida'}</span>
+            </div>
+            <div className="flex justify-between gap-3">
               <span className="text-slate-500">GoTrue Auth:</span>
-              <span>Ativo com JWT & RLS</span>
+              <span className={statusTone(data?.supabase?.authStatus).split(' ').slice(1, 2).join(' ')}>{statusLabel(data?.supabase?.authStatus)} · {data?.supabase?.authMessage || 'Sem detalhes'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Edge Functions Deno:</span>
-              <span>4 Funções registradas</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Storage:</span>
+              <span>{statusLabel(data?.supabase?.storageStatus)} · {data?.supabase?.storageMessage || 'Sem detalhes'}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Edge Functions:</span>
+              <span>{data?.supabase?.edgeFunctionsCount ?? 'Contagem não medida'} · {statusLabel(data?.supabase?.edgeFunctionsStatus)}</span>
             </div>
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
             <button
               onClick={() => handleTestIntegration('supabase_db')}
-              disabled={testStatus['supabase_db']?.testing}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              disabled={testStatus.supabase_db?.testing}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{testStatus['supabase_db']?.testing ? 'Testando...' : 'Testar Postgres DB'}</span>
+              <span>{testStatus.supabase_db?.testing ? 'Testando...' : 'Testar Postgres DB'}</span>
             </button>
-            <span className="text-sm text-slate-500">RLS Ativo</span>
+            <span className="text-sm text-amber-300">RLS: não verificado pelo probe</span>
           </div>
-          {testStatus['supabase_db']?.result && (
-            <p className="text-sm text-emerald-400 bg-slate-950 p-2 rounded-lg border border-slate-800">
-              {testStatus['supabase_db'].result}
+          {testStatus.supabase_db?.result && (
+            <p className={`text-sm bg-slate-950 p-2 rounded-lg border border-slate-800 ${testStatus.supabase_db.result.startsWith('Erro:') ? 'text-red-300' : 'text-slate-300'}`}>
+              {testStatus.supabase_db.result}
             </p>
           )}
         </div>
 
-        {/* 3. OCR Vision Parser & WhatsApp */}
+        {/* 3. OCR Vision & WhatsApp */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2.5">
@@ -251,40 +259,42 @@ export const AdminIntegrationsView: React.FC = () => {
                 <p className="text-sm text-slate-500">Extração estruturada de AIT, NIP e Autos</p>
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              98.2% PRECISÃO
+            <span className={`px-2 py-0.5 rounded text-sm font-bold border ${statusTone(data?.ocr?.status)}`}>
+              {statusLabel(data?.ocr?.status)}
             </span>
           </div>
 
           <div className="space-y-2 text-slate-300">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Modelos Suportados:</span>
-              <span>AIT, NIP, Notificação de Penalidade, CNH</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Modelos suportados:</span>
+              <span className="text-right">AIT, NIP, Notificação de Penalidade, CNH</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Latência do probe OCR:</span>
+              <span>{data?.ocr?.latencyMs != null ? `${data.ocr.latencyMs}ms` : 'Não medida'}</span>
+            </div>
+            <div className="text-xs text-slate-500">{data?.ocr?.message || 'Precisão e saúde operacional não medidas.'}</div>
+            <div className="flex justify-between gap-3">
               <span className="text-slate-500">WhatsApp Evolution API:</span>
-              <span className="text-emerald-400 font-bold">Pronto para Envio</span>
+              <span className={statusTone(data?.whatsapp?.status).split(' ').slice(1, 2).join(' ')}>{statusLabel(data?.whatsapp?.status)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tempo Médio de OCR:</span>
-              <span>420ms por imagem</span>
-            </div>
+            <div className="text-xs text-slate-500">{data?.whatsapp?.message || 'Conectividade não verificada.'}</div>
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
             <button
-              onClick={() => handleTestIntegration('ocr_vision')}
-              disabled={testStatus['ocr_vision']?.testing}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={() => handleTestIntegration('ocr')}
+              disabled={testStatus.ocr?.testing}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Zap className="w-3.5 h-3.5 text-orange-400" />
-              <span>{testStatus['ocr_vision']?.testing ? 'Testando...' : 'Testar OCR Vision'}</span>
+              <span>{testStatus.ocr?.testing ? 'Testando...' : 'Testar probe OCR'}</span>
             </button>
-            <span className="text-sm text-slate-500">Confidence Score 97.4%</span>
+            <span className="text-sm text-amber-300">Precisão: não medida</span>
           </div>
-          {testStatus['ocr_vision']?.result && (
-            <p className="text-sm text-emerald-400 bg-slate-950 p-2 rounded-lg border border-slate-800">
-              {testStatus['ocr_vision'].result}
+          {testStatus.ocr?.result && (
+            <p className={`text-sm bg-slate-950 p-2 rounded-lg border border-slate-800 ${testStatus.ocr.result.startsWith('Erro:') ? 'text-red-300' : 'text-slate-300'}`}>
+              {testStatus.ocr.result}
             </p>
           )}
         </div>
@@ -296,27 +306,28 @@ export const AdminIntegrationsView: React.FC = () => {
               <HardDrive className="w-5 h-5 text-amber-400" />
               <div>
                 <h2 className="text-sm font-bold text-white uppercase">Google Drive (Google Workspace API)</h2>
-                <p className="text-sm text-slate-500">Armazenamento em nuvem, exportação de minutas e gestão documental</p>
+                <p className="text-sm text-slate-500">Armazenamento e exportação documental</p>
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              OAUTH 2.0 ATIVO
+            <span className={`px-2 py-0.5 rounded text-sm font-bold border ${statusTone(data?.googleDrive?.status)}`}>
+              {statusLabel(data?.googleDrive?.status)}
             </span>
           </div>
 
           <div className="space-y-2 text-slate-300">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Escopos Habilitados:</span>
-              <span className="text-white font-bold text-sm">drive, drive.file</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Client ID:</span>
+              <span>{data?.googleDrive?.configured ? 'Detectado; OAuth não verificado' : 'Não detectado'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Pasta Padrão:</span>
-              <span className="text-amber-400 font-bold text-sm">Adeus Multa — Recursos</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Escopos:</span>
+              <span>{data?.googleDrive?.scopes ?? 'Não verificados'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Autenticação:</span>
-              <span className="text-emerald-400 font-bold text-sm">Google Identity Services (GSI)</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Pasta padrão:</span>
+              <span>{data?.googleDrive?.defaultFolder ?? 'Não verificada'}</span>
             </div>
+            <div className="text-xs text-slate-500">{data?.googleDrive?.message || 'Estado OAuth não verificado pelo backend.'}</div>
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
@@ -325,9 +336,9 @@ export const AdminIntegrationsView: React.FC = () => {
               className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <HardDrive className="w-3.5 h-3.5" />
-              <span>Gerenciador Google Drive</span>
+              <span>Abrir gerenciador</span>
             </button>
-            <span className="text-sm text-slate-500">OAuth Ativo</span>
+            <span className="text-sm text-amber-300">OAuth não verificado</span>
           </div>
         </div>
       </div>
