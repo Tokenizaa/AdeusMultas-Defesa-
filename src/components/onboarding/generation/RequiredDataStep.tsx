@@ -78,18 +78,18 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
           isAdmin={isAdmin}
           onClick={() => {
             const data = generateRandomDocumentData();
+            // Sempre substituir por identificadores sintéticos e exclusivos do teste.
+            // Não reutilizar número real nem carregar o processo de outro tipo.
             const processNumbers = isSuspension
               ? {
-                  ...documentData.processNumbers,
-                  psddNumber: documentData.processNumbers?.psddNumber || `TEST-PSDD-${Date.now()}`,
-                  suspensionMonths: documentData.processNumbers?.suspensionMonths ?? 12,
+                  psddNumber: `TEST-PSDD-${Date.now()}`,
+                  suspensionMonths: 12,
                 }
               : isCassation
                 ? {
-                    ...documentData.processNumbers,
-                    pcddNumber: documentData.processNumbers?.pcddNumber || `TEST-PCDD-${Date.now()}`,
+                    pcddNumber: `TEST-PCDD-${Date.now()}`,
                   }
-                : documentData.processNumbers;
+                : undefined;
             onUpdateDocumentData({
               ...documentData,
               ...data,
