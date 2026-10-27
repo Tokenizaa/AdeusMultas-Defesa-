@@ -44,7 +44,7 @@ type MonitorCycle = {
   sentToReviewQueue?: number;
 };
 
-async function readApi(path: string, authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, authenticated = true) {
+async function readApi(path: string, authFetch: (input: string, init?: RequestInit) => Promise<Response>, authenticated = true) {
   const response = authenticated ? await authFetch(path) : await fetch(path);
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body?.ok === false) {
