@@ -188,12 +188,14 @@ export function buildCoherentTestInfraction(
     }
 
     case 'estacionamento': {
-      // O select não é controlado; use sua opção inicial para manter UI e estado coerentes.
-      extras = { notes: 'estacionamento_embarque_rapido' };
+      // Cada opção corresponde ao mesmo código/artigo do catálogo canônico.
+      const circumstance = pick(['passeio_faixa', 'zona_azul_app'] as const);
+      const code = circumstance === 'zona_azul_app' ? '554-12' : '545-21';
+      extras = { notes: `estacionamento_${circumstance}` };
       return {
         ...current,
         ...neutral,
-        ...catalogFields('545-21'),
+        ...catalogFields(code),
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
