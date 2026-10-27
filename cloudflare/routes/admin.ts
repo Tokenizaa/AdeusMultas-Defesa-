@@ -105,20 +105,15 @@ adminRoutes.get('/admin/users/:userId', async (c) => {
   if (profileError) throw new Error(profileError.message);
   if (!profile) return c.json({ error: { code: 'NOT_FOUND', message: 'Usuário não encontrado.' } }, 404);
 
-  const [{ data: caseRows, error: casesError }, { data: paidRows, error: paymentsError }] = await Promise.all([
+  const [{ data: caseRows, error: casesError }, paymentSummary] = await Promise.all([
     supabase.from('cases')
       .select('id,app_ref,title,user_id,is_paid,ait_number,vehicle_plate,autuador_body,created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(500),
-    supabase.from('payment_orders')
-      .select('amount,status')
-      .eq('user_id', userId)
-      .in('status', ['PAID', 'CONFIRMED'])
-      .limit(5000),
+    getPaidPaymentSummary(supabase, userId, ['PAID', 'CONFIRMED']),
   ]);
   if (casesError) throw new Error(casesError.message);
-  if (paymentsError) throw new Error(paymentsError.message);
 
   const user = {
     id: profile.user_id,
@@ -137,7 +132,7 @@ adminRoutes.get('/admin/users/:userId', async (c) => {
     vehicle: { plate: row.vehicle_plate || undefined },
     createdAt: row.created_at || undefined,
   }));
-  const totalSpent = Number((paidRows || []).reduce((sum: number, row: any) => sum + (Number(row.amount) || 0), 0).toFixed(2));
+  const totalSpent = paymentSummary.total;
   const actor = c.get('user') as AuthenticatedUser | undefined;
   await recordAuditLog(c.env, {
     actor: actor?.email || actor?.id || 'unknown',
@@ -145,7 +140,7 @@ adminRoutes.get('/admin/users/:userId', async (c) => {
     action: 'admin.user_profile.viewed',
     targetResource: 'user_profiles',
     targetId: userId,
-    details: { casesReturned: cases.length, paymentRecordsCounted: (paidRows || []).length },
+    details: { casesReturned: cases.length, paymentRecordsCounted: paymentSummary.count },
     gdprCompliant: true,
   });
   return c.json({ user, cases, totalSpent });
@@ -206,26 +201,38 @@ adminRoutes.get('/admin/ai/metrics', async (c) => {
   });
 });
 
-async function getTotalPaidRevenue(supabase: any): Promise<number> {
+async function getPaidPaymentSummary(
+  supabase: any,
+  userId?: string,
+  statuses: string[] = ['PAID'],
+): Promise<{ total: number; count: number }> {
   const pageSize = 1000;
   let offset = 0;
   let total = 0;
+  let count = 0;
 
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('payment_orders')
       .select('id,amount')
-      .eq('status', 'PAID')
+      .in('status', statuses);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
-    if (error) throw new Error(`Falha ao calcular receita total de pagamentos: ${error.message}`);
+    if (error) throw new Error(`Falha ao calcular resumo de pagamentos: ${error.message}`);
     const rows = data || [];
     total += rows.reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
-    if (rows.length < pageSize) return Number(total.toFixed(2));
+    count += rows.length;
+    if (rows.length < pageSize) return { total: Number(total.toFixed(2)), count };
     offset += rows.length;
   }
+}
+
+async function getTotalPaidRevenue(supabase: any): Promise<number> {
+  return (await getPaidPaymentSummary(supabase, undefined, ['PAID'])).total;
 }
 
 adminRoutes.get('/admin/payments', async (c) => {
