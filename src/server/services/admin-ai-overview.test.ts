@@ -31,7 +31,7 @@ describe('buildAdminAiOverview', () => {
   it('does not claim provider health or RAG sync when only in-memory state exists', () => {
     const result = buildAdminAiOverview(base);
 
-    expect(result.provider.status).toBe('not_configured');
+    expect(result.provider.status).toBe('local_fallback');
     expect(result.provider.name).toBe('Deterministic Legal RAG');
     expect(result.provider.fallback).toBeNull();
     expect(result.rag.status).toBe('SUPABASE_CLIENT_NOT_INITIALIZED_PERSISTENCE_NOT_VERIFIED');
