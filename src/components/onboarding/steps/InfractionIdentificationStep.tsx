@@ -37,9 +37,9 @@ import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../
 // Usado para filtrar o <select> de código da infração pela categoria escolhida na etapa 3.
 const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
   excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
-  lei_seca: ['757-90', '516-91', '758-70', '759-50'],
+  lei_seca: ['757-90', '516-91'],
   celular: ['736-62'],
-  vermelho: ['605-01', '606-80'],
+  vermelho: ['605-01', '605-02'],
   estacionamento: ['545-21', '554-12'],
   indicacao_condutor: [],
   // Art. 267 CTB: o catálogo atual só contém estas infrações médias elegíveis.
