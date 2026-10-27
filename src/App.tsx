@@ -287,6 +287,16 @@ function AppContent() {
         {currentPath === '/admin/commercial/referrals' && <CommercialHubView initialTab="referrals" />}
         {currentPath === '/admin/commercial/commissions' && <CommercialHubView initialTab="commissions" />}
         {currentPath === '/admin/commercial/settings' && <CommercialHubView initialTab="settings" />}
+        {currentPath === '/admin/assisted-certification' && (
+          <section className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
+            <h2 className="text-lg font-bold">Central de certificação removida</h2>
+            <p className="mt-2 text-sm text-slate-600">O teste deve ser feito no onboarding real. Esta rota antiga não executa testes nem gera relatórios.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button type="button" onClick={() => navigate('/admin')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Voltar ao dashboard</button>
+              <button type="button" onClick={() => navigate('/novo-caso')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Abrir onboarding</button>
+            </div>
+          </section>
+        )}
         {/* PWA Mobile & Desktop Install Prompt */}
         <PWAInstallBanner />
       </AdminLayout>
