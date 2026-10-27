@@ -4,11 +4,7 @@ import {
   Cpu,
   Database,
   CreditCard,
-  Share2,
-  Bot,
-  Scan,
   Server,
-  Bell,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
@@ -22,8 +18,6 @@ import {
   Lock,
   Search,
   ExternalLink,
-  TrendingUp,
-  BookOpen,
 } from 'lucide-react';
 import { SecretEditModal } from './SecretEditModal';
 import { api } from '../../lib/api/client';
