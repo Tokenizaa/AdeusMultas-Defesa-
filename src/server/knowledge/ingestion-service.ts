@@ -301,7 +301,8 @@ export class IngestionService {
       }
     }
 
-    const versionId = `ver_${payload.documentId}_${Date.now()}`;
+    // Date.now() alone can collide when two versions are ingested in the same millisecond.
+    const versionId = `ver_${payload.documentId}_${Date.now()}_${crypto.randomUUID()}`;
 
     // 3. Upsert Document Record
     const docRecord: KnowledgeDocument = {
