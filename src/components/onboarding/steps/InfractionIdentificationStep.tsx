@@ -194,10 +194,22 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             ? buildCoherentTestInfraction(category, infractionData)
                             : buildNeutralTestIdentification(infractionData);
                         const address = generateRandomAddress();
+                        // Garante no próprio handler que os campos controlados de data
+                        // recebam valores ISO YYYY-MM-DD, independentemente do gerador.
+                        const occurrenceDate = baseInfraction.dateTime?.split(' ')[0]
+                            || new Date().toISOString().slice(0, 10);
+                        const addTestDays = (days: number) => {
+                            const date = new Date(`${occurrenceDate}T12:00:00.000Z`);
+                            date.setUTCDate(date.getUTCDate() + days);
+                            return date.toISOString().slice(0, 10);
+                        };
                         const infraction = {
                             ...baseInfraction,
+                            notificationExpeditionDate: addTestDays(3),
+                            notificationDeliveryDate: addTestDays(5),
+                            defenseDeadline: addTestDays(25),
                             location: `${address.street}, ${address.number} - ${address.cityState}`,
-                        };
+                        };;
                         if (onUpdateLead) onUpdateLead(name, phone);
                         setCurrentLeadName(name);
                         setCurrentLeadPhone(phone);
