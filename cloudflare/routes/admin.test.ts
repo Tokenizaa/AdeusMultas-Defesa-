@@ -126,6 +126,64 @@ describe('admin Cloudflare contract', () => {
     expect(paymentOrderCalls).toBe(7);
   });
 
+  it('returns recent case rows for the authenticated admin dashboard', async () => {
+    const row = {
+      id: 'case-1', title: 'Defesa Prévia', client_name: 'Ana', service_type: 'defesa_previa',
+      status: 'defesa_pronta', is_paid: true, ait_number: 'AIT-123',
+      infraction_description: 'Excesso de velocidade', vehicle_plate: 'ABC1D23',
+      autuador_body: 'DETRAN/RS', created_at: '2026-10-26T10:00:00.000Z',
+    };
+    mockFrom.mockImplementation((table: string) => table === 'cases' ? query([row]) : query(null));
+
+    const response = await app().request('/api/admin/overview');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.recentCases[0]).toMatchObject({
+      id: 'case-1',
+      clientName: 'Ana',
+      isPaid: true,
+      payment: { status: 'paid' },
+      infraction: { aitNumber: 'AIT-123', description: 'Excesso de velocidade', autuadorBody: 'DETRAN/RS' },
+      vehicle: { plate: 'ABC1D23' },
+    });
+    expect(body.metrics.totalRevenue).toBe(0);
+  });
+
+  it('returns complete document fields used by the admin document repository', async () => {
+    const row = {
+      id: 'case-doc-1', title: 'Recurso JARI', client_name: 'Ana', client_cpf: '12345678901',
+      service_type: 'recurso_jari', status: 'defesa_pronta', is_paid: true,
+      ait_number: 'AIT-987', infraction_code: '745-5', infraction_description: 'Excesso de velocidade',
+      autuador_body: 'DETRAN/RS', vehicle_plate: 'XYZ9A99',
+      defense_draft_json: JSON.stringify({ version: '2', engineVersion: 'deterministic-v2', canonicalDraft: 'Texto integral da minuta' }),
+      analysis_json: JSON.stringify({ recommendedArguments: [{ id: 'a' }, { id: 'b' }] }),
+      created_at: '2026-10-26T11:00:00.000Z',
+    };
+    mockFrom.mockImplementation((table: string) => table === 'cases' ? query([row]) : query(null));
+
+    const response = await app().request('/api/admin/documents');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.documents[0]).toMatchObject({
+      id: 'case-doc-1',
+      caseId: 'case-doc-1',
+      clientName: 'Ana',
+      clientCpf: '12345678901',
+      aitNumber: 'AIT-987',
+      infractionCode: '745-5',
+      infractionDescription: 'Excesso de velocidade',
+      organ: 'DETRAN/RS',
+      procedureType: 'recurso_jari',
+      procedureLabel: 'Recurso JARI',
+      status: 'LIBERADO_PAGO',
+      version: '2',
+      thesesCount: 2,
+      engine: 'deterministic-v2',
+      draftText: 'Texto integral da minuta',
+      vehiclePlate: 'XYZ9A99',
+    });
+  });
+
   it('maps user_profiles to the AuthUser frontend contract', async () => {
     mockFrom.mockReturnValueOnce(query([{
       user_id: 'u1', name: 'Maria', email: 'maria@example.com', role: 'citizen',

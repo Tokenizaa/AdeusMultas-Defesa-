@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { useRouter } from '../../core/router/RouterContext';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 
 interface AdminDashboardViewProps {
@@ -18,19 +19,24 @@ interface AdminDashboardViewProps {
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelectCase }) => {
   const { navigate } = useRouter();
+  const authFetch = useAuthFetch();
   const [overviewData, setOverviewData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      const res = await fetch('/api/admin/overview');
-      if (res.ok) {
-        const data = await res.json();
-        setOverviewData(data);
+      const res = await authFetch('/api/admin/overview');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`);
       }
+      setOverviewData(data);
     } catch (err) {
-      console.error('Error loading admin overview:', err);
+      setOverviewData(null);
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar a visão geral.');
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +46,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelect
     fetchOverview();
   }, []);
 
-const recentCases = overviewData?.recentCases || [];
+const recentCases = Array.isArray(overviewData?.recentCases) ? overviewData.recentCases : [];
 
 
   return (
@@ -67,7 +73,7 @@ const recentCases = overviewData?.recentCases || [];
             onClick={() => navigate('/admin/cases')}
             className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer font-mono shadow-xs"
           >
-            Fila de Casos ({overviewData?.metrics?.totalCases ?? recentCases.length})
+            Fila de Casos ({overviewData?.metrics?.totalCases ?? '—'})
           </button>
           <button
             onClick={fetchOverview}
@@ -80,6 +86,8 @@ const recentCases = overviewData?.recentCases || [];
         </div>
       </div>
 
+      {error && <div role="alert" className="rounded-xl border border-rose-800 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">Falha ao carregar indicadores reais: {error}</div>}
+
       {/* Indicadores principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
@@ -87,7 +95,7 @@ const recentCases = overviewData?.recentCases || [];
             <span>Total de Casos</span>
             <Folders className="w-4 h-4 text-orange-400" />
           </div>
-          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalCases ?? 0}</div>
+          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalCases ?? '—'}</div>
           <div className="text-sm text-slate-500">Cadastros no sistema</div>
         </div>
 
@@ -97,9 +105,9 @@ const recentCases = overviewData?.recentCases || [];
             <CreditCard className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-emerald-400">
-            R$ {overviewData?.metrics?.totalRevenue?.toFixed(2) ?? '0.00'}
+            R$ {overviewData?.metrics?.totalRevenue !== undefined ? Number(overviewData.metrics.totalRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
           </div>
-          <div className="text-sm text-slate-500">{overviewData?.metrics?.paidCases ?? 0} defesas pagas via PIX</div>
+          <div className="text-sm text-slate-500">{overviewData?.metrics?.paidCases ?? '—'} defesas pagas via PIX</div>
         </div>
 
 
@@ -109,7 +117,7 @@ const recentCases = overviewData?.recentCases || [];
             <span>Condutores</span>
             <Users className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalUsers ?? 0}</div>
+          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalUsers ?? '—'}</div>
           <div className="text-sm text-slate-500">Contas ativas</div>
         </div>
       </div>
@@ -128,7 +136,7 @@ const recentCases = overviewData?.recentCases || [];
             onClick={() => navigate('/admin/cases')}
             className="text-sm font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 cursor-pointer font-mono"
           >
-            <span>Ver todos os {(overviewData?.metrics?.totalCases ?? 0)} casos</span>
+            <span>Ver todos os {(overviewData?.metrics?.totalCases ?? '—')} casos</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -146,6 +154,13 @@ const recentCases = overviewData?.recentCases || [];
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
+              {recentCases.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                    {isLoading ? 'Carregando casos recentes…' : error ? 'Casos recentes indisponíveis.' : 'Nenhum caso recente retornado pela API.'}
+                  </td>
+                </tr>
+              )}
               {recentCases.map((c) => {
                 const isPaid = c.isPaid || c.payment?.status === 'paid' || c.payment?.status === 'approved';
                 return (

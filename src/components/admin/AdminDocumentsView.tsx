@@ -16,6 +16,7 @@ import {
   Car,
 } from 'lucide-react';
 import { useRouter } from '../../core/router/RouterContext';
+import { useAuthFetch } from '../../hooks/useAuthFetch';
 
 interface DocumentRecord {
   id: string;
@@ -40,21 +41,47 @@ interface DocumentRecord {
 
 export const AdminDocumentsView: React.FC = () => {
   const { navigate } = useRouter();
+  const authFetch = useAuthFetch();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null);
 
   const fetchDocuments = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      const res = await fetch('/api/admin/documents');
-      if (!res.ok) throw new Error('Falha ao carregar documentos');
-      const data = await res.json();
-      setDocuments(data.documents || []);
-    } catch (err: any) {
-      console.error('Error fetching documents:', err);
+      const res = await authFetch('/api/admin/documents');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`);
+      }
+      const rows = Array.isArray(data?.documents) ? data.documents : [];
+      setDocuments(rows.map((doc: any) => ({
+        id: String(doc.id || ''),
+        caseId: String(doc.caseId || doc.case_id || doc.id || ''),
+        title: String(doc.title || 'Minuta sem título'),
+        clientName: String(doc.clientName || doc.client_name || ''),
+        clientCpf: String(doc.clientCpf || doc.client_cpf || ''),
+        aitNumber: String(doc.aitNumber || doc.ait_number || ''),
+        infractionCode: String(doc.infractionCode || doc.infraction_code || ''),
+        infractionDescription: String(doc.infractionDescription || doc.infraction_description || ''),
+        organ: String(doc.organ || doc.autuador_body || ''),
+        procedureType: String(doc.procedureType || doc.procedure_type || ''),
+        procedureLabel: String(doc.procedureLabel || doc.procedure_label || doc.procedureType || doc.serviceType || ''),
+        status: String(doc.status || ''),
+        version: String(doc.version || '1'),
+        thesesCount: Number(doc.thesesCount ?? doc.theses_count ?? 0),
+        engine: String(doc.engine || 'Não informado'),
+        generatedAt: String(doc.generatedAt || doc.generated_at || doc.createdAt || doc.created_at || ''),
+        draftText: String(doc.draftText || doc.draft_text || ''),
+        vehiclePlate: String(doc.vehiclePlate || doc.vehicle_plate || ''),
+      })));
+    } catch (err) {
+      setDocuments([]);
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar documentos.');
     } finally {
       setIsLoading(false);
     }
@@ -101,6 +128,8 @@ export const AdminDocumentsView: React.FC = () => {
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
+
+      {error && <div role="alert" className="rounded-xl border border-rose-800 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">Falha ao carregar documentos reais: {error}</div>}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
@@ -210,7 +239,7 @@ export const AdminDocumentsView: React.FC = () => {
               ) : filteredDocuments.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-500">
-                    Nenhum documento encontrado.
+                    {isLoading ? 'Carregando documentos…' : error ? 'Repositório indisponível.' : 'Nenhuma minuta gerada encontrada.'}
                   </td>
                 </tr>
               ) : (

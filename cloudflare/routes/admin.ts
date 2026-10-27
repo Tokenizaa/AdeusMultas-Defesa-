@@ -49,22 +49,45 @@ adminRoutes.get('/admin/ai/overview', (c) => c.json({
 
 adminRoutes.get('/admin/overview', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ count: totalCases }, { count: analyzedCases }, { count: defenseReadyCases }, { count: paidCases }] = await Promise.all([
+  const [
+    { count: totalCases },
+    { count: analyzedCases },
+    { count: defenseReadyCases },
+    { count: paidCases },
+    { count: profileCount },
+    { data: recentRows, error: recentError },
+    totalRevenue,
+  ] = await Promise.all([
     supabase.from('cases').select('*', { count: 'exact', head: true }),
     supabase.from('cases').select('*', { count: 'exact', head: true }).not('analysis_json', 'is', null),
     supabase.from('cases').select('*', { count: 'exact', head: true }).or('defense_draft_json.not.is.null,status.eq.defesa_pronta'),
     supabase.from('cases').select('*', { count: 'exact', head: true }).eq('is_paid', true),
+    supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
+    supabase.from('cases')
+      .select('id,title,client_name,service_type,status,is_paid,ait_number,infraction_description,vehicle_plate,autuador_body,created_at')
+      .order('created_at', { ascending: false })
+      .limit(10),
+    getTotalPaidRevenue(supabase),
   ]);
-  let totalRevenue = 0;
-  try {
-    const { data } = await supabase.from('payment_orders').select('amount').eq('status', 'PAID');
-    totalRevenue = (data || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0);
-  } catch { totalRevenue = 0; }
-  const { count: profileCount } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true });
+  if (recentError) throw new Error(recentError.message);
+
   const total = totalCases ?? 0;
   const paid = paidCases ?? 0;
   const analyzed = analyzedCases ?? 0;
   const ready = defenseReadyCases ?? 0;
+  const recentCases = (recentRows || []).map((row: any) => ({
+    id: row.id,
+    title: row.title || `Caso #${row.id}`,
+    clientName: row.client_name || '',
+    serviceType: row.service_type || '',
+    status: row.status || '',
+    isPaid: Boolean(row.is_paid),
+    payment: { status: row.is_paid ? 'paid' : 'pending' },
+    infraction: { aitNumber: row.ait_number || '', description: row.infraction_description || '', autuadorBody: row.autuador_body || '' },
+    vehicle: { plate: row.vehicle_plate || '' },
+    createdAt: row.created_at,
+  }));
+
   return c.json({
     metrics: {
       totalUsers: profileCount ?? 0,
@@ -76,6 +99,7 @@ adminRoutes.get('/admin/overview', async (c) => {
       conversionRate: total > 0 ? Number(((paid / total) * 100).toFixed(1)) : 0,
       analysisToDocRate: analyzed > 0 ? Number(((ready / analyzed) * 100).toFixed(1)) : 0,
     },
+    recentCases,
     observability: {
       historicalMetrics: true,
       metricsEndpoint: '/api/admin/ai/metrics',
@@ -371,8 +395,58 @@ adminRoutes.get('/admin/payments/commissions', async (c) => {
 
 adminRoutes.get('/admin/documents', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const { data } = await supabase.from('cases').select('id,title,client_name,service_type,status,defense_draft_json,created_at').not('defense_draft_json', 'is', null).order('created_at', { ascending: false }).limit(200);
-  return c.json({ documents: (data || []).map((d: any) => ({ id: d.id, title: d.title, clientName: d.client_name, serviceType: d.service_type, status: d.status, hasDraft: Boolean(d.defense_draft_json), createdAt: d.created_at })) });
+  const { data, error } = await supabase
+    .from('cases')
+    .select('id,title,client_name,client_cpf,service_type,status,is_paid,ait_number,infraction_code,infraction_description,autuador_body,vehicle_plate,defense_draft_json,analysis_json,created_at')
+    .not('defense_draft_json', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+
+  const parseJson = (value: unknown): any => {
+    if (typeof value !== 'string') return value && typeof value === 'object' ? value : {};
+    try { return JSON.parse(value); } catch { return { fullDraftText: value }; }
+  };
+  const serviceLabels: Record<string, string> = {
+    defesa_previa: 'Defesa Prévia',
+    recurso_jari: 'Recurso JARI',
+    recurso_cetran: 'Recurso CETRAN',
+    suspensao: 'Suspensão',
+    cassacao: 'Cassação',
+    indicacao_condutor: 'Indicação de Condutor',
+    conversao_advertencia: 'Conversão em Advertência',
+  };
+  const documents = (data || []).map((row: any) => {
+    const draft = parseJson(row.defense_draft_json);
+    const analysis = parseJson(row.analysis_json);
+    const draftText = [draft.refinedDraft, draft.canonicalDraft, draft.fullDraftText, draft.content, draft.documentText, draft.text]
+      .find((value) => typeof value === 'string' && value.trim().length > 0);
+    const argumentsList = Array.isArray(analysis.recommendedArguments)
+      ? analysis.recommendedArguments
+      : Array.isArray(analysis.selectedArguments) ? analysis.selectedArguments : [];
+
+    return {
+      id: row.id,
+      caseId: row.id,
+      title: row.title || `Minuta ${row.ait_number || row.id}`,
+      clientName: row.client_name || '',
+      clientCpf: row.client_cpf || '',
+      aitNumber: row.ait_number || '',
+      infractionCode: row.infraction_code || '',
+      infractionDescription: row.infraction_description || '',
+      organ: row.autuador_body || '',
+      procedureType: row.service_type || '',
+      procedureLabel: serviceLabels[row.service_type] || row.service_type || 'Não informado',
+      status: row.is_paid ? 'LIBERADO_PAGO' : 'PREVIEW',
+      version: String(draft.version || draft.engineVersion || '1'),
+      thesesCount: argumentsList.length,
+      engine: String(draft.engineVersion || draft.engine || 'Não informado'),
+      generatedAt: row.created_at || '',
+      draftText: typeof draftText === 'string' ? draftText : JSON.stringify(draft, null, 2),
+      vehiclePlate: row.vehicle_plate || '',
+    };
+  });
+  return c.json({ documents });
 });
 
 // ---------------------------------------------------------------------------
