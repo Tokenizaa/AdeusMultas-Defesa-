@@ -1,14 +1,7 @@
 /**
  * @file AdminE2ETestsView.tsx
- * DefesAi — Central de Testes E2E Persistentes da Plataforma
- * 
- * Implementação completa conforme especificação:
- * - Visão geral de execuções e resultados persistidos
- * - 9 suítes comerciais independentes (Defesa Prévia, JARI, CETRAN, Suspensão, Cassação, etc.)
- * - Disparo individual e em lote com modal de confirmação
- * - Criação e acompanhamento de massa sequencial de usuários (Teste 001..Teste 036)
- * - Botões de Reexecutar Todos / Reexecutar Falhos
- * - Polling assíncrono em tempo real para status RUNNING / QUEUED / PASSED / FAILED / BLOCKED
+ * DefesAi — Estado da Central de Testes E2E.
+ * Exibe somente execuções verificadas. O disparo fica bloqueado até existir um runner real.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -331,7 +324,7 @@ export const AdminE2ETestsView: React.FC = () => {
           <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1">
             <span className="text-2xs uppercase text-slate-400">Documentos / PDFs</span>
             <p className="text-xl font-bold text-purple-400">{totalCasesCreated}</p>
-            <span className="text-2xs text-slate-500">Com marca-d'água</span>
+            <span className="text-2xs text-slate-500">Em execuções verificadas</span>
           </div>
         </div>
       </div>
@@ -400,7 +393,7 @@ export const AdminE2ETestsView: React.FC = () => {
                     <span>•</span>
                     <span>Usuários: Teste {userRangeStart}..{userRangeEnd}</span>
                     <span>•</span>
-                    <span>4 Cenários E2E Reais</span>
+                    <span>{suiteResult ? `${suiteResult.totalScenarios} cenários registrados` : 'Sem execução verificada'}</span>
                   </div>
                 </div>
 
