@@ -8,7 +8,7 @@ interface AiOverview {
     runtime: string;
     model: string;
     fallback: string | null;
-    status: 'configured' | 'not_configured';
+    status: 'configured' | 'local_fallback' | 'not_configured';
     statusMeaning: string;
     requestsTotal: number;
     successRate: number;
@@ -113,7 +113,7 @@ export const AdminAiGatewayView: React.FC = () => {
           <h2 className="text-sm font-bold text-slate-300 uppercase">Runtime de inferência</h2>
           <div className={`flex items-center gap-2 ${data?.provider.status === 'configured' ? 'text-emerald-400' : 'text-amber-400'}`}>
             {data?.provider.status === 'configured' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            {data?.provider.name || 'Runtime não identificado'} · {data?.provider.status === 'configured' ? 'Chave configurada' : 'Não configurado'}
+            {data?.provider.name || 'Runtime não identificado'} · {data?.provider.status === 'configured' ? 'Provedor remoto configurado' : data?.provider.status === 'local_fallback' ? 'Fallback local determinístico' : 'Não configurado'}
           </div>
           <p className="text-sm text-slate-400">Runtime: <span className="text-slate-200">{data?.provider.runtime || '—'}</span></p>
           <p className="text-sm text-slate-400">Modelo configurado: <span className="text-slate-200">{data?.provider.model || '—'}</span></p>
