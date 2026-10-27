@@ -46,10 +46,13 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
     (documentData.applicantName?.trim().length || 0) > 3 &&
     /^\d{11}$/.test((documentData.applicantCpf || '').replace(/\D/g, '')) &&
     (documentData.applicantCnh?.trim().length || 0) >= 5 &&
+    Boolean(documentData.cnhCategory) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(documentData.applicantEmail || '') &&
     (documentData.applicantPhone?.replace(/\D/g, '').length || 0) >= 10 &&
     (documentData.addressStreet?.trim().length || 0) >= 3 &&
     (documentData.addressNumber?.trim().length || 0) > 0 &&
+    (documentData.addressNeighborhood?.trim().length || 0) >= 2 &&
+    /^\d{5}-?\d{3}$/.test(documentData.addressZipCode || '') &&
     /^[^/]+\/\s*[A-Z]{2}$/i.test(documentData.addressCityState || '') &&
     (infractionData.autuadorBody?.trim() || '').length > 0 &&
     ((!isSuspension && !isCassation) || (Boolean(processNumber?.trim()) && Boolean(documentData.applicantRg?.trim())));
@@ -232,10 +235,11 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
             </label>
             <select
               id="input-cnh-category"
-              value={documentData.cnhCategory || 'AB'}
+              value={documentData.cnhCategory || ''}
               onChange={(e) => onUpdateDocumentData({ ...documentData, cnhCategory: e.target.value.toUpperCase() })}
               className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none"
             >
+              <option value="" disabled>Selecione a categoria</option>
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="AB">AB</option>
@@ -340,7 +344,7 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
 
             <div>
               <label className="text-[10px] font-bold text-slate-600 font-mono block mb-1">
-                CEP
+                CEP *
               </label>
               <input
                 id="input-address-zipcode"
