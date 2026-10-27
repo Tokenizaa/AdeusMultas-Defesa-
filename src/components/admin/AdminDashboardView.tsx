@@ -113,6 +113,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelect
             Fila de Casos ({overviewData?.metrics?.totalCases ?? 0})
           </button>
           <button
+            onClick={() => navigate('/novo-caso')}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer"
+            title="Abrir o onboarding real com os botões de preenchimento de teste disponíveis para administrador"
+          >
+            Iniciar teste do onboarding
+          </button>
+          <button
             onClick={fetchOverview}
             disabled={isLoading}
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors cursor-pointer border border-slate-700"
