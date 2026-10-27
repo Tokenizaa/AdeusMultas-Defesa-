@@ -64,7 +64,7 @@ adminRoutes.get('/admin/overview', async (c) => {
     supabase.from('cases').select('*', { count: 'exact', head: true }).eq('is_paid', true),
     supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
     supabase.from('cases')
-      .select('id,title,client_name,service_type,status,is_paid,ait_number,vehicle_plate,autuador_body,created_at')
+      .select('id,title,client_name,service_type,status,is_paid,ait_number,infraction_description,vehicle_plate,autuador_body,created_at')
       .order('created_at', { ascending: false })
       .limit(10),
     getTotalPaidRevenue(supabase),
@@ -83,7 +83,7 @@ adminRoutes.get('/admin/overview', async (c) => {
     status: row.status || '',
     isPaid: Boolean(row.is_paid),
     payment: { status: row.is_paid ? 'paid' : 'pending' },
-    infraction: { aitNumber: row.ait_number || '', autuadorBody: row.autuador_body || '' },
+    infraction: { aitNumber: row.ait_number || '', description: row.infraction_description || '', autuadorBody: row.autuador_body || '' },
     vehicle: { plate: row.vehicle_plate || '' },
     createdAt: row.created_at,
   }));
