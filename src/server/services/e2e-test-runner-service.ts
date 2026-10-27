@@ -71,18 +71,6 @@ export interface E2ETestRun {
   logs: string[];
 }
 
-export const ALL_E2E_SERVICES = [
-  { key: 'defesa-previa', procedure: 'defesa_previa', name: 'Defesa Prévia (Notificação de Autuação)' },
-  { key: 'recurso-jari', procedure: 'recurso_jari', name: 'Recurso Ordinário à JARI' },
-  { key: 'recurso-cetran', procedure: 'recurso_cetran', name: 'Recurso Final ao CETRAN' },
-  { key: 'suspensao', procedure: 'suspensao_cnh', name: 'Processo de Suspensão CNH (PSDD)' },
-  { key: 'cassacao', procedure: 'cassacao_cnh', name: 'Processo de Cassação CNH (PCDD)' },
-  { key: 'indicacao-condutor', procedure: 'indicacao_condutor', name: 'Indicação do Real Condutor (FARI)' },
-  { key: 'conversao-advertencia', procedure: 'conversao_advertencia', name: 'Conversão em Advertência (Art. 267)' },
-  { key: 'analise-tecnica', procedure: 'analise_tecnica', name: 'Parecer Técnico de Consistência AIT' },
-  { key: 'relatorio-pericial', procedure: 'relatorio_pericial', name: 'Laudo Pericial Metrológico / Radar' },
-];
-
 class E2ETestRunnerService {
   // Legacy rows are intentionally hidden until their execution provenance can be verified.
   // No historical synthetic run is deleted from storage; it is simply not certified as evidence.
