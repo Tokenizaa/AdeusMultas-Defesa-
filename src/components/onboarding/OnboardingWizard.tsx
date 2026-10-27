@@ -50,6 +50,7 @@ const CATEGORY_DEFAULT_CODE: Partial<Record<InfractionCategory, string>> = {
   celular: '736-62',
   vermelho: '605-01',
   estacionamento: '545-21',
+  conversao_advertencia: '745-50',
 };
 
 interface WizardPersistedState {
@@ -430,15 +431,20 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const item = defaultCode ? INFRACTION_CATALOG.find((x) => x.code === defaultCode) : undefined;
     if (!item) return;
 
-    setInfractionData((prev) => ({
-      ...prev,
-      ctbArticle: prev.ctbArticle || item.article,
-      infractionCode: prev.infractionCode || item.code,
-      description: prev.description || item.description,
-      severity: item.severity,
-      fineAmount: item.fineAmount,
-      points: item.points,
-    }));
+    setInfractionData((prev) => {
+      const currentItem = INFRACTION_CATALOG.find((candidate) => candidate.code === prev.infractionCode);
+      const invalidForWarningConversion = selected === 'conversao_advertencia'
+        && (!currentItem || (currentItem.severity !== 'leve' && currentItem.severity !== 'media'));
+      return {
+        ...prev,
+        ctbArticle: invalidForWarningConversion ? item.article : (prev.ctbArticle || item.article),
+        infractionCode: invalidForWarningConversion ? item.code : (prev.infractionCode || item.code),
+        description: invalidForWarningConversion ? item.description : (prev.description || item.description),
+        severity: invalidForWarningConversion ? item.severity : item.severity,
+        fineAmount: invalidForWarningConversion ? item.fineAmount : item.fineAmount,
+        points: invalidForWarningConversion ? item.points : item.points,
+      };
+    });
   };
 
   const handleLeadUpdate = (name: string, phone: string) => {
