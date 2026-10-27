@@ -18,6 +18,7 @@ export default defineConfig({
       'src/server/services/admin-user-detail-service.test.ts',
       'src/server/services/e2e-test-runner-service.test.ts',
       'src/server/services/admin-ai-overview.test.ts',
+      'src/server/observability/ai-provider-manager.test.ts',
       'cloudflare/middleware.test.ts',
       'cloudflare/routes/**/*.test.ts',
       'cloudflare/venopag.test.ts',
