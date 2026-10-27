@@ -9,7 +9,7 @@ import { commercialService } from '../commercial/commercial-service';
 import { logger } from '../observability/logger';
 import { caseRepository } from '../db/case-repository';
 import { domainIdToUuid } from '../db/uuid-v5';
-import { getSupabaseServerClient } from '../db/supabase-server';
+import { getSupabaseAdminClient } from '../db/supabase-server';
 import { adminQueryService } from '../services/admin-query-service';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
@@ -37,7 +37,7 @@ router.get(['/overview', '/admin/overview'], async (req, res) => {
   // totalRevenue: prioriza SUM(payment_orders) pago no Supabase; fallback para case.payment.amount
   let totalRevenue: number;
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     const { data: sumData, error: sumError } = supabase
       ? await supabase
           .from('payment_orders')
@@ -269,7 +269,7 @@ router.get(['/integrations/overview', '/admin/integrations/overview'], async (re
 // ─────────────────────────────────────────────
 router.get('/admin/pricing', requireAdmin, async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -297,7 +297,7 @@ router.patch('/admin/pricing/:serviceType', requireAdmin, async (req, res) => {
     if (standardPrice < 0) {
       return res.status(400).json({ error: 'standardPrice deve ser maior que zero.' });
     }
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -318,7 +318,7 @@ router.patch('/admin/pricing/:serviceType', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get(['/users', '/admin/users'], requireAdmin, async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -370,7 +370,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'role inválida. Use admin ou citizen.' });
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase indisponível.' });
     }
@@ -419,7 +419,7 @@ router.put(['/users', '/admin/users'], requireAdmin, async (req, res) => {
 // E2E Test Endpoints
 router.get('/admin/e2e-tests/stats', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient() as any;
+    const supabase = getSupabaseAdminClient() as any;
     
     // Get counts from relevant tables
     const [usersCount, casesCount, runsCount] = await Promise.all([
@@ -455,7 +455,7 @@ router.get('/admin/e2e-tests/stats', async (req, res) => {
 
 router.get('/admin/e2e-tests/runs', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient() as any;
+    const supabase = getSupabaseAdminClient() as any;
     const { data: runs, error } = await supabase
       .from('e2e_test_runs')
       .select('*')
@@ -474,7 +474,7 @@ router.post('/admin/e2e-tests/run', async (req, res) => {
   try {
     // ponytail: client tipado não inclui e2e_test_runs (migração 20260830000001).
     // Cast local de ferramenta admin; regenerar types remove.
-    const supabase = getSupabaseServerClient() as any;
+    const supabase = getSupabaseAdminClient() as any;
     const { services, triggeredBy } = req.body;
     const runId = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     
@@ -513,7 +513,7 @@ res.json({
 });
 router.get('/admin/e2e-tests/run/:id', async (req, res) => {
   try {
-    const supabase = getSupabaseServerClient() as any;
+    const supabase = getSupabaseAdminClient() as any;
     const { id } = req.params;
     
     const { data: run, error } = await supabase
