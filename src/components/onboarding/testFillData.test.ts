@@ -64,4 +64,47 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
     const data = buildCoherentTestInfraction('conversao_advertencia', emptyInfraction);
     expect(data.hasPreviousInfractionsLast12Months).toBe(false);
   });
+  it('preenche as três datas de notificação em formato ISO e em ordem cronológica para todas as categorias', () => {
+    const categories = [
+      'excesso_velocidade',
+      'lei_seca',
+      'celular',
+      'vermelho',
+      'estacionamento',
+      'indicacao_condutor',
+      'conversao_advertencia',
+    ] as const;
+
+    for (const category of categories) {
+      const data = buildCoherentTestInfraction(category, emptyInfraction);
+      expect(data.dateTime).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(data.notificationExpeditionDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(data.notificationDeliveryDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(data.defenseDeadline).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(data.notificationExpeditionDate! > data.dateTime).toBe(true);
+      expect(data.notificationDeliveryDate! > data.notificationExpeditionDate!).toBe(true);
+      expect(data.defenseDeadline! > data.notificationDeliveryDate!).toBe(true);
+    }
+  });
+
+  it('gera velocidade considerada acima do limite para o código 745-50', () => {
+    for (let i = 0; i < 100; i++) {
+      const data = buildCoherentTestInfraction('excesso_velocidade', emptyInfraction);
+      expect(data.consideredSpeed).toBeGreaterThan(data.speedLimit!);
+      expect(data.consideredSpeed).toBeLessThanOrEqual(data.speedLimit! * 1.2);
+    }
+  });
+
+  it('não marca termo de sinais como “sem sinais” quando a situação é recusa', () => {
+    // O gerador sorteia entre recusa e teste positivo; testar repetidamente
+    // cobre os dois ramos sem depender de Math.random.
+    const samples = Array.from({ length: 50 }, () => buildCoherentTestInfraction('lei_seca', emptyInfraction));
+    const refusals = samples.filter((data) => data.refusedTest === true);
+    expect(refusals.length).toBeGreaterThan(0);
+    for (const data of refusals) {
+      expect(data.hasPsychomotorTerm).toBeUndefined();
+      expect(data.offeredRetest).toBe(false);
+    }
+  });
+
 });
