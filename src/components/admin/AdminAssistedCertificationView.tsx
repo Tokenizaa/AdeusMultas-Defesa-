@@ -4,14 +4,26 @@ import { ExternalLink, FileDown, ClipboardCheck, ShieldCheck, AlertTriangle } fr
 type Status = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_OBSERVED';
 type Service = { key: string; label: string; stages: string[] };
 
+const COMMON_STAGES = [
+  'Serviço e situação — ServiceStep',
+  'Fase do processo — DefenseStageStep',
+  'Categoria da infração — InfractionCategoryStep',
+  'Identificação da autuação — InfractionIdentificationStep',
+  'Dados específicos da infração — SpecificInfractionDataStep',
+  'Resultado da análise gratuita — FreeAnalysisResultStep',
+  'Dados obrigatórios do documento — RequiredDataStep',
+  'Revisão do documento — DocumentReviewStep',
+  'Checkout e continuidade — DocumentCheckoutStep',
+];
+
 const SERVICES: Service[] = [
-  { key: 'defesa_previa', label: 'Defesa prévia', stages: ['Selecionar serviço e situação', 'Identificação da autuação', 'Dados específicos da infração', 'Dados do condutor', 'Dados do veículo', 'Documentos e dados obrigatórios', 'Análise gratuita e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
-  { key: 'recurso_jari', label: 'Recurso JARI', stages: ['Selecionar serviço e situação', 'Identificação da autuação', 'Dados específicos da infração', 'Dados do condutor', 'Dados do veículo', 'Documentos e dados obrigatórios', 'Análise gratuita e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
-  { key: 'recurso_cetran', label: 'Recurso CETRAN', stages: ['Selecionar serviço e situação', 'Identificação da autuação', 'Dados específicos da infração', 'Dados do condutor', 'Dados do veículo', 'Dados da decisão anterior/JARI', 'Documentos e dados obrigatórios', 'Análise gratuita e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
-  { key: 'suspensao', label: 'Suspensão da CNH', stages: ['Selecionar processo de suspensão', 'Identificação do processo/notificação', 'Dados do condutor e CNH', 'Fundamento e origem da penalidade', 'Histórico e prazos do processo', 'Documentos e dados obrigatórios', 'Análise e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
-  { key: 'cassacao', label: 'Cassação da CNH', stages: ['Selecionar processo de cassação', 'Identificação do processo/notificação', 'Dados do condutor e CNH', 'Fundamento e origem da penalidade', 'Histórico e prazos do processo', 'Documentos e dados obrigatórios', 'Análise e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
-  { key: 'indicacao_condutor', label: 'Indicação de condutor', stages: ['Selecionar indicação de condutor', 'Identificação da autuação', 'Dados do proprietário/condutor responsável', 'Dados do condutor indicado', 'Prazo e condições da indicação', 'Documentos e assinaturas exigidos', 'Validações e resultado', 'Revisão dos dados', 'Retomada e consistência do caso'] },
-  { key: 'conversao_advertencia', label: 'Conversão em advertência', stages: ['Selecionar conversão em advertência', 'Identificação da autuação', 'Classificação e gravidade da infração', 'Histórico de reincidência', 'Condições de elegibilidade', 'Documentos e dados obrigatórios', 'Análise e resultado', 'Revisão e geração da minuta', 'Retomada e consistência do caso'] },
+  { key: 'defesa_previa', label: 'Defesa prévia', stages: [...COMMON_STAGES] },
+  { key: 'recurso_jari', label: 'Recurso JARI', stages: [...COMMON_STAGES] },
+  { key: 'recurso_cetran', label: 'Recurso CETRAN', stages: [...COMMON_STAGES] },
+  { key: 'suspensao', label: 'Suspensão da CNH', stages: [...COMMON_STAGES] },
+  { key: 'cassacao', label: 'Cassação da CNH', stages: [...COMMON_STAGES] },
+  { key: 'indicacao_condutor', label: 'Indicação de condutor', stages: [...COMMON_STAGES] },
+  { key: 'conversao_advertencia', label: 'Conversão em advertência', stages: [...COMMON_STAGES] },
 ];
 
 const DOMAINS = [
