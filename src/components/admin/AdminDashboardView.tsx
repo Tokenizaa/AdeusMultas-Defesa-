@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-
   RefreshCw,
   CreditCard,
   Folders,
@@ -9,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import { useRouter } from '../../core/router/RouterContext';
+import { logger } from '../../server/observability/logger';
 
 
 interface AdminDashboardViewProps {
@@ -16,21 +16,62 @@ interface AdminDashboardViewProps {
   onSelectCase: (c: any) => void;
 }
 
+interface AdminDashboardMetrics {
+  totalCases: number;
+  totalRevenue: number;
+  conversionRate: number;
+  analysisToDocRate: number;
+  paidCases: number;
+  analyzedCases: number;
+  defenseReadyCases: number;
+  totalUsers: number;
+}
+
+interface AdminDashboardData {
+  metrics: AdminDashboardMetrics;
+  recentCases: Array<{
+    id: string;
+    infraction: string;
+    vehicle: string;
+    isPaid: boolean;
+  }>;
+  aiStatus?: {
+    primaryProvider: string;
+    fallbackProvider: string;
+    nvidiaHealthy: boolean;
+    nineRouterHealthy: boolean;
+    fallbackRatePercent: number;
+    p95LatencyMs: number;
+  };
+  integrationsHealth?: {
+    supabase: string;
+    pagbank: string;
+    meta: string;
+    ocr: string;
+  };
+}
+
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelectCase }) => {
   const { navigate } = useRouter();
-  const [overviewData, setOverviewData] = useState<any>(null);
+  const [overviewData, setOverviewData] = useState<AdminDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchOverview = async () => {
+    setIsLoading(true);
+    setFetchError(null);
     try {
-      setIsLoading(true);
       const res = await fetch('/api/admin/overview');
       if (res.ok) {
         const data = await res.json();
-        setOverviewData(data);
+        setOverviewData(data as AdminDashboardData);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setFetchError(`Erro ${res.status}: ${errorData.error || 'Não foi possível carregar os dados do painel'}`);
       }
     } catch (err) {
-      console.error('Error loading admin overview:', err);
+      setFetchError('Erro de conexão ao carregar o painel. Verifique sua rede.');
+      logger.error('admin', 'dashboard', 'fetch_error', `Erro ao buscar visão geral: ${err}`);
     } finally {
       setIsLoading(false);
     }
@@ -40,8 +81,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onSelect
     fetchOverview();
   }, []);
 
-const recentCases = overviewData?.recentCases || [];
-
+  // Derived state for safe rendering
+  const recentCases = overviewData?.recentCases || [];
+  const hasData = !!overviewData && recentCases.length > 0;
+  const hasError = !!fetchError;
 
   return (
     <div className="space-y-6">
@@ -67,7 +110,7 @@ const recentCases = overviewData?.recentCases || [];
             onClick={() => navigate('/admin/cases')}
             className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer font-mono shadow-xs"
           >
-            Fila de Casos ({overviewData?.metrics?.totalCases ?? recentCases.length})
+            Fila de Casos ({overviewData?.metrics?.totalCases ?? 0})
           </button>
           <button
             onClick={fetchOverview}
@@ -80,6 +123,13 @@ const recentCases = overviewData?.recentCases || [];
         </div>
       </div>
 
+      {/* Error state - display if fetch failed */}
+      {hasError && (
+        <div className="bg-red-950/40 border border-red-800 text-red-200 rounded-xl px-4 py-3 text-sm">
+          {fetchError}
+        </div>
+      )}
+
       {/* Indicadores principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
@@ -87,7 +137,9 @@ const recentCases = overviewData?.recentCases || [];
             <span>Total de Casos</span>
             <Folders className="w-4 h-4 text-orange-400" />
           </div>
-          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalCases ?? 0}</div>
+          <div className="text-2xl font-bold text-white">
+            {overviewData?.metrics?.totalCases ?? 0}
+          </div>
           <div className="text-sm text-slate-500">Cadastros no sistema</div>
         </div>
 
@@ -97,11 +149,12 @@ const recentCases = overviewData?.recentCases || [];
             <CreditCard className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-emerald-400">
-            R$ {overviewData?.metrics?.totalRevenue?.toFixed(2) ?? '0.00'}
+            R$ {Number(overviewData?.metrics?.totalRevenue ?? 0).toFixed(2)}
           </div>
-          <div className="text-sm text-slate-500">{overviewData?.metrics?.paidCases ?? 0} defesas pagas via PIX</div>
+          <div className="text-sm text-slate-500">
+            {overviewData?.metrics?.paidCases ?? 0} defesas pagas via PIX
+          </div>
         </div>
-
 
 
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1">
@@ -109,7 +162,9 @@ const recentCases = overviewData?.recentCases || [];
             <span>Condutores</span>
             <Users className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="text-2xl font-bold text-white">{overviewData?.metrics?.totalUsers ?? 0}</div>
+          <div className="text-2xl font-bold text-white">
+            {overviewData?.metrics?.totalUsers ?? 0}
+          </div>
           <div className="text-sm text-slate-500">Contas ativas</div>
         </div>
       </div>
@@ -146,45 +201,65 @@ const recentCases = overviewData?.recentCases || [];
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
-              {recentCases.map((c) => {
-                const isPaid = c.isPaid || c.payment?.status === 'paid' || c.payment?.status === 'approved';
-                return (
-                  <tr key={c.id} className="hover:bg-slate-850/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-white">
-                      {c.infraction?.aitNumber || c.id}
-                    </td>
-                    <td className="py-3 px-4 text-orange-300 font-bold">
-                      {c.vehicle?.plate || 'SEM PLACA'}
-                    </td>
-                    <td className="py-3 px-4 truncate max-w-xs text-slate-200">
-                      {c.infraction?.description || 'Infração de trânsito'}
-                    </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      {c.infraction?.autuadorBody || 'Não informado'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded text-sm font-bold border ${
-                          isPaid
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                            : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                        }`}
-                      >
-                        {isPaid ? 'PAGO (PIX)' : 'AGUARDANDO PIX'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right space-x-2">
-                      
-                      <button
-                        onClick={() => navigate(`/admin/cases/${c.id}`)}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-orange-400 rounded-lg text-sm font-bold transition-colors cursor-pointer border border-slate-700"
-                      >
-                        Inspecionar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {hasError ? (
+                // Error state in table - show error message row
+                <tr key="error">
+                  <td colSpan={6} className="px-4 py-6 text-center text-red-300 text-sm">
+                    {fetchError || 'Erro ao carregar dados recentes'}
+                  </td>
+                </tr>
+              ) : hasData ? (
+                // Data state - render rows
+                recentCases.map((c) => {
+                  const isPaid = c.isPaid || c.payment?.status === 'paid';
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-850/50 transition-colors">
+                      <td className="py-3 px-4 font-bold text-white">
+                        {c.infraction?.aitNumber || c.id}
+                      </td>
+                      <td className="py-3 px-4 text-orange-300 font-bold">
+                        {c.vehicle?.plate || 'SEM PLACA'}
+                      </td>
+                      <td className="py-3 px-4 truncate max-w-xs text-slate-200">
+                        {c.infraction?.description || 'Infração de trânsito'}
+                      </td>
+                      <td className="py-3 px-4 text-slate-400">
+                        {c.infraction?.autuadorBody || 'Não informado'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded text-sm font-bold border ${
+                            isPaid
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          }`}
+                        >
+                          {isPaid ? 'PAGO (PIX)' : 'AGUARDANDO PIX'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-2">
+                        
+                        <button
+                          onClick={() => navigate(`/admin/cases/${c.id}`)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-orange-400 rounded-lg text-sm font-bold transition-colors cursor-pointer border border-slate-700"
+                        >
+                          Inspecionar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                // Empty state - no data available
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400 text-sm">
+                    <strong>Nenhum caso recente encontrado.</strong>
+                    {overviewData?.metrics?.totalCases === 0 && (
+                      <span className="text-slate-500 ml-2">Nenhum caso cadastrado no sistema.</span>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -1,12 +1,40 @@
 import { MetaAccountState, MetaPublishRequest, MetaPublishResult } from '../../types';
 import { authFetch } from '../../lib/authFetch';
 
+/**
+ * Tries to fetch Meta status from the available endpoints.
+ * Priority: /api/meta/status (primary) -> /api/marketing/meta/status (fallback)
+ */
 export async function getMetaStatus(): Promise<MetaAccountState> {
-  const res = await authFetch('/api/integrations/meta/status');
-  if (!res.ok) {
-    throw new Error('Falha ao obter status da integração Meta');
+  // Try primary endpoint first
+  try {
+    const res = await authFetch('/api/meta/status');
+    if (res.ok) {
+      return res.json();
+    }
+  } catch {
+    // Primary failed, try fallback
   }
-  return res.json();
+
+  // Try fallback endpoint
+  try {
+    const res = await authFetch('/api/marketing/meta/status');
+    if (res.ok) {
+      return res.json();
+    }
+  } catch {
+    // Fallback also failed
+  }
+
+  // Return minimal default state if both endpoints fail
+  return {
+    isConnected: false,
+    user: undefined,
+    pages: [],
+    selectedPageId: undefined,
+    selectedInstagramId: undefined,
+    connectedAt: undefined,
+  };
 }
 
 export async function getMetaAuthUrl(redirectUri?: string): Promise<{ authUrl: string }> {
