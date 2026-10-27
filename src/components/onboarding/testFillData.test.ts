@@ -47,9 +47,16 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
     expect(data.hasPhotoProof).toBe(true);
   });
 
-  it('mantém o select de estacionamento coerente com o relato preenchido', () => {
-    const data = buildCoherentTestInfraction('estacionamento', emptyInfraction);
-    expect(data.notes).toBe('estacionamento_embarque_rapido');
+  it('mantém a circunstância de estacionamento coerente com o código do catálogo', () => {
+    for (let i = 0; i < 50; i++) {
+      const data = buildCoherentTestInfraction('estacionamento', emptyInfraction);
+      if (data.notes === 'estacionamento_zona_azul_app') {
+        expect(data.infractionCode).toBe('554-12');
+      } else {
+        expect(data.notes).toBe('estacionamento_passeio_faixa');
+        expect(data.infractionCode).toBe('545-21');
+      }
+    }
   });
 
   it('preenche os dados obrigatórios do condutor indicado', () => {
@@ -60,9 +67,10 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
     expect(data.indicationWithinDeadline).toBe(true);
   });
 
-  it('marca a resposta do requisito de advertência por escrito', () => {
+  it('marca o requisito de advertência e usa infração leve ou média elegível', () => {
     const data = buildCoherentTestInfraction('conversao_advertencia', emptyInfraction);
     expect(data.hasPreviousInfractionsLast12Months).toBe(false);
+    expect(['leve', 'media']).toContain(data.severity);
   });
   it('preenche as três datas de notificação em formato ISO e em ordem cronológica para todas as categorias', () => {
     const categories = [
