@@ -22,7 +22,7 @@ function app() {
 
 function query(data: any, error: any = null) {
   const q: any = {};
-  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'not', 'or']) q[method] = vi.fn(() => q);
+  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'not', 'or', 'gte']) q[method] = vi.fn(() => q);
   q.maybeSingle = vi.fn(async () => ({ data, error }));
   q.single = vi.fn(async () => ({ data, error }));
   q.then = (resolve: any) => Promise.resolve({ data, error }).then(resolve);
@@ -33,7 +33,7 @@ describe('admin Cloudflare contract', () => {
   beforeEach(() => mockFrom.mockReset());
 
   it('exposes factual Cloudflare AI architecture without legacy providers', async () => {
-    const response = await app().request('/api/admin/ai/overview');
+    const response = await app().request('/api/admin/ai/overview', {}, { AI: {}, VECTORIZE: {} } as any);
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.provider).toMatchObject({
@@ -41,6 +41,8 @@ describe('admin Cloudflare contract', () => {
       runtime: 'cloudflare',
       model: '@cf/openai/gpt-oss-20b',
       fallback: null,
+      status: 'configured',
+      statusMeaning: expect.stringContaining('não comprova disponibilidade'),
     });
     expect(body.rag).toMatchObject({
       provider: 'Cloudflare Vectorize',
@@ -48,8 +50,33 @@ describe('admin Cloudflare contract', () => {
       embeddingModel: '@cf/baai/bge-base-en-v1.5',
       dimensions: 768,
       status: 'configured',
+      statusMeaning: expect.stringContaining('não consulta o índice'),
     });
-    expect(body.observability).toEqual({ historicalMetrics: true, metricsEndpoint: "/api/admin/ai/metrics" });
+    expect(body.observability).toMatchObject({
+      historicalMetrics: true,
+      metricsEndpoint: '/api/admin/ai/metrics',
+      metricsScope: expect.stringContaining('24 horas'),
+    });
+  });
+
+  it('returns persisted AI execution metrics for the last 24 hours', async () => {
+    mockFrom.mockReturnValue(query([
+      { operation: 'analyze-infraction', status: 'success', latency_ms: 100 },
+      { operation: 'generate-defense', status: 'error', latency_ms: 200 },
+    ]));
+
+    const response = await app().request('/api/admin/ai/metrics');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      available: true,
+      windowHours: 24,
+      totalCalls: 2,
+      errorRatePercent: 50,
+      avgLatencyMs: 150,
+      p95LatencyMs: 200,
+      byOperation: { 'analyze-infraction': 1, 'generate-defense': 1 },
+    });
+    expect(mockFrom).toHaveBeenCalledWith('ai_execution_logs');
   });
 
   it('returns only factual overview KPIs and defers observability to Phase 13', async () => {
