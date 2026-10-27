@@ -86,9 +86,12 @@ export function buildCoherentTestInfraction(
 
   switch (category) {
     case 'excesso_velocidade': {
+      // O código 745-50 representa excesso de até 20%. Gere uma medição
+      // que continue dentro dessa faixa APÓS aplicar a margem do INMETRO.
       const speedLimit = pick([40, 50, 60, 70, 80, 100, 120]);
-      const measuredSpeed = speedLimit + randInt(5, 35);
-      const consideredSpeed = calculateConsideredSpeed(measuredSpeed) ?? measuredSpeed - 7;
+      const maxMeasuredSpeed = Math.floor((speedLimit * 1.2) / 0.93);
+      const measuredSpeed = randInt(speedLimit + 1, Math.max(speedLimit + 1, maxMeasuredSpeed));
+      const consideredSpeed = calculateConsideredSpeed(measuredSpeed) ?? Math.round(measuredSpeed * 0.93);
       extras = {
         notes: Math.random() > 0.5 ? 'placa_ok' : 'sem_placa_visivel_art90',
       };
