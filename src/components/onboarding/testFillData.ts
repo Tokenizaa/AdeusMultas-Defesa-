@@ -120,7 +120,7 @@ export function buildCoherentTestInfraction(
       const isRecusa = Math.random() > 0.5;
       const code = isRecusa ? '757-90' : '516-91';
       extras = isRecusa
-        ? { notes: 'recusa_bafometro | termo_sem_sinais | reteste_nao_oferecido' }
+        ? { notes: 'recusa_bafometro | termo_nao_entregue | reteste_nao_oferecido' }
         : { notes: 'teste_positivo | termo_entregue | reteste_oferecido' };
       return {
         ...current,
