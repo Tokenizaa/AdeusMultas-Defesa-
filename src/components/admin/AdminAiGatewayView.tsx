@@ -49,7 +49,6 @@ export const AdminAiGatewayView: React.FC = () => {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         setError(errorData.message || 'Falha ao carregar configuração de IA');
-        // Check if fallback metrics are available
         setFallbackAvailable(true);
       } else {
         setData(await res.json());
@@ -88,44 +87,40 @@ export const AdminAiGatewayView: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <div>
-          <div className="flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-orange-400" />
-            <h1 className="text-lg font-bold text-white font-mono">IA Core & Gateway</h1>
-          </div>
-          <p className="text-sm text-slate-400 font-mono mt-1">
-            Runtime atual: Cloudflare Workers AI + Vectorize. Sem fallback Vercel/NVIDIA/9Router.
-          </p>
+        <div className="flex items-center gap-2">
+          <Cpu className="w-5 h-5 text-orange-400" />
+          <h1 className="text-lg font-bold text-white font-mono">IA Core & Gateway</h1>
         </div>
+        <p className="text-sm text-slate-400 font-mono mt-1">
+          Runtime atual: Cloudflare Workers AI + Vectorize. Sem fallback Vercel/NVIDIA/9Router.
+        </p>
         <button onClick={fetchAiOverview} disabled={isLoading} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl disabled:opacity-50" title="Recarregar configuração">
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {error && (
-        <div className="bg-rose-950/40 border border-rose-400/30 rounded-xl p-4 text-sm text-rose-300 mb-4">
-          {error}
-        </div>
-      )}
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        {error ? (
+          <div className="bg-rose-950/40 border border-rose-400/30 rounded-xl p-4 text-sm text-rose-300 mb-4">
+            {error}
+          </div>
+        ) : data ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono">
+            <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
+              <h2 className="text-sm font-bold text-slate-300 uppercase">Runtime de inferência</h2>
+              <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 className="w-4 h-4" /> Cloudflare Workers AI</div>
+              <p className="text-sm text-slate-400">Modelo: <span className="text-slate-200">{data.provider.model || '—'}</span></p>
+              <p className="text-sm text-slate-400">Fallback: <span className="text-slate-200">{data.provider.fallback ?? 'nenhum'}</span></p>
+            </section>
 
-      {!error && data && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono">
-          <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
-            <h2 className="text-sm font-bold text-slate-300 uppercase">Runtime de inferência</h2>
-            <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 className="w-4 h-4" /> Cloudflare Workers AI</div>
-            <p className="text-sm text-slate-400">Modelo: <span className="text-slate-200">{data.provider.model || '—'}</span></p>
-            <p className="text-sm text-slate-400">Fallback: <span className="text-slate-200">{data.provider.fallback ?? 'nenhum'}</span></p>
-          </section>
-
-          <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 font-mono">
-            <h2 className="text-sm font-bold text-slate-300 uppercase">RAG jurídico</h2>
-            <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 className="w-4 h-4" /> {data.rag.status || '—'}</div>
-            <p className="text-sm text-slate-400">Index: <span className="text-slate-200">{data.rag.index || '—'}</span></p>
-            <p className="text-sm text-slate-400">Embedding: <span className="text-slate-200">{data.rag.embeddingModel || '—'} ({data.rag.dimensions || '—'} dimensões)</span></p>
-          </section>
-        </div>}
-
-        {error || !data && (
+            <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 font-mono">
+              <h2 className="text-sm font-bold text-slate-300 uppercase">RAG jurídico</h2>
+              <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 className="w-4 h-4" /> {data.rag.status || '—'}</div>
+              <p className="text-sm text-slate-400">Index: <span className="text-slate-200">{data.rag.index || '—'}</span></p>
+              <p className="text-sm text-slate-400">Embedding: <span className="text-slate-200">{data.rag.embeddingModel || '—'} ({data.rag.dimensions || '—'} dimensões)</span></p>
+            </section>
+          </div>
+        ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 font-mono">
             <p className="text-sm text-slate-400 mb-3">Não foi possível carregar a visão geral da configuração de IA no momento.</p>
             {fallbackAvailable && (
@@ -135,16 +130,16 @@ export const AdminAiGatewayView: React.FC = () => {
           </div>
         )}
 
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 font-mono">
+        <div className="mt-4">
           <h2 className="text-sm font-bold text-slate-300 uppercase">Capacidades migradas</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div className="bg-slate-950 rounded-xl p-3 text-slate-300">Análise de infração<br /><span className="text-slate-500">{error || (data?.capabilities.infractionAnalysis || '—')}</span></div>
             <div className="bg-slate-950 rounded-xl p-3 text-slate-300">Geração de defesa<br /><span className="text-slate-500">{error || (data?.capabilities.defenseGeneration || '—')}</span></div>
             <div className="bg-slate-950 rounded-xl p-3 text-slate-300">OCR<br /><span className="text-slate-500">{error || (data?.capabilities.ocr || '—')}</span></div>
           </div>
-          <p className="text-xs text-slate-500">Métricas históricas de volume, erro, fallback, p95 e uptime serão fornecidas pela Fase {error || (data?.observability?.metricsPhase || 13)} de observabilidade.</p>
-        </section>
-      </div>
+          <p className="text-xs text-slate-500 mt-2">Métricas históricas de volume, erro, fallback, p95 e uptime serão fornecidas pela Fase {error || (data?.observability?.metricsPhase || 13)} de observabilidade.</p>
+        </div>
+      </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 font-mono">
         <div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-orange-400" /><h2 className="text-sm font-bold text-white uppercase">Teste de OCR/IA</h2></div>
