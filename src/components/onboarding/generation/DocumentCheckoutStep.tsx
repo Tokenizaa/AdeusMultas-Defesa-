@@ -98,6 +98,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
     } | null>(null);
     // Código do cupom aplicado (enviado ao backend no create)
     const [couponCode, setCouponCode] = useState<string>('');
+    const [couponDraft, setCouponDraft] = useState<string>('');
+    const [couponMessage, setCouponMessage] = useState<string | null>(null);
     // Modo de teste anunciado pelo servidor (/gateway/status → testMode).
     // Não dependemos de import.meta.env.DEV: funciona também rodando o build
     // localmente enquanto o backend estiver fora de produção.
@@ -572,6 +574,54 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                                 </span>
                                             </div>
                                         )}
+                                        <div className="border-t border-slate-200 pt-3 space-y-2">
+                                            <label htmlFor="onboarding-coupon-code" className="block text-xs font-bold text-slate-700">Cupom de desconto</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    id="onboarding-coupon-code"
+                                                    type="text"
+                                                    value={couponDraft}
+                                                    onChange={(event) => setCouponDraft(event.target.value.toUpperCase())}
+                                                    placeholder="Digite seu cupom"
+                                                    autoComplete="off"
+                                                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const code = couponDraft.trim().toUpperCase();
+                                                        if (!code) {
+                                                            setCouponMessage('Informe um código de cupom.');
+                                                            return;
+                                                        }
+                                                        setCouponMessage(null);
+                                                        setPixData(null);
+                                                        setCouponCode(code);
+                                                    }}
+                                                    disabled={!couponDraft.trim() || isProcessing}
+                                                    className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                                                >Aplicar</button>
+                                                {couponCode && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setCouponDraft('');
+                                                            setCouponCode('');
+                                                            setCouponMessage(null);
+                                                            setPixData(null);
+                                                        }}
+                                                        disabled={isProcessing}
+                                                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                                                    >Remover</button>
+                                                )}
+                                            </div>
+                                            {couponMessage && <p role="status" className="text-xs text-rose-700">{couponMessage}</p>}
+                                            {couponCode && resolvedBreakdown?.couponDiscount !== undefined && (
+                                                <p role="status" className="text-xs font-semibold text-emerald-700">
+                                                    Cupom {couponCode} aplicado. Desconto: R$ {resolvedBreakdown.couponDiscount.toFixed(2).replace('.', ',')}.
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="pt-2 flex justify-between items-baseline">
                                             <div>
                                                 <span className="text-xs font-bold text-slate-900 uppercase font-mono">Investimento Único</span>
