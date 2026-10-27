@@ -1,6 +1,7 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import { once } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +54,7 @@ describe('admin monitoring health endpoint', () => {
     const app = express();
     app.use('/api/monitoring', monitoringRoutes);
     server = app.listen(0);
+    await once(server, 'listening');
 
     const address = server.address() as AddressInfo;
     const response = await fetch(`http://127.0.0.1:${address.port}/api/monitoring/health`);
