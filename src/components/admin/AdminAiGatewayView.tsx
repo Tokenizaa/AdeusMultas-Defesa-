@@ -128,8 +128,8 @@ export const AdminAiGatewayView: React.FC = () => {
             <AlertTriangle className="w-4 h-4" />
             {data?.rag.status === 'CLIENT_CONFIGURED_HEALTH_NOT_CHECKED'
               ? 'Cliente configurado; saúde não verificada'
-              : data?.rag.status === 'MEMORY_ONLY_PERSISTENCE_NOT_VERIFIED'
-                ? 'Somente memória; persistência não verificada'
+              : data?.rag.status === 'SUPABASE_CLIENT_NOT_INITIALIZED_PERSISTENCE_NOT_VERIFIED'
+                ? 'Cliente Supabase não inicializado; persistência não verificada'
                 : 'Estado RAG não verificado'}
           </div>
           <p className="text-sm text-slate-400">Index/persistência: <span className="text-slate-200">{data?.rag.index || '—'}</span></p>
