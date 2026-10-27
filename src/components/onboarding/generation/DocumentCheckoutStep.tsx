@@ -655,6 +655,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                                                         setCouponMessage(null);
                                                         setPixData(null);
                                                         setPixRequested(false);
+                                                        setPaymentMethod('pix');
                                                         setCouponCode(code);
                                                     }}
                                                     disabled={!couponDraft.trim() || isProcessing}
