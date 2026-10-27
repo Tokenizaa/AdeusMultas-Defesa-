@@ -17,6 +17,8 @@ import { nvidiaKeyRotator } from '../knowledge/nvidia-key-rotator';
 import { logger } from './logger';
 import { metricsService } from './metrics-service';
 import { analyzeTicketWithGemini } from '../gemini';
+import { embeddingService } from '../knowledge/embedding-service';
+import { vectorStore } from '../knowledge/vector-store';
 
 export interface AiPipelineStage {
   stage: 'provider_selection' | 'primary_execution' | 'fallback_execution' | 'rag_enhancement' | 'legal_synthesis';
@@ -283,23 +285,69 @@ class AiProviderManager {
       }
 
       if (!resultData) {
-        stages.push({
-          stage: 'rag_enhancement',
-          provider: 'DefesAi Local Kernel',
-          model: 'rag-deterministic-v1',
-          durationMs: 12,
-          status: 'success',
-          details: 'Análise fundamentada via catálogo de 52 teses e resoluções CONTRAN.',
-        });
+        const ragStart = Date.now();
         providerUsed = 'deterministic_rag';
-        modelUsed = 'rag-deterministic-v1';
-        resultData = { mode: 'deterministic_rag' };
+        try {
+          const queryEmbedding = await embeddingService.generateEmbedding(prompt);
+          modelUsed = queryEmbedding.model;
+          const retrievedSources = await vectorStore.searchVectors(queryEmbedding.embedding, {
+            topK: 5,
+            threshold: 0.35,
+          });
+          const duration = Date.now() - ragStart;
+
+          if (retrievedSources.length > 0) {
+            stages.push({
+              stage: 'rag_enhancement',
+              provider: 'DefesAi VectorStore',
+              model: queryEmbedding.model,
+              durationMs: duration,
+              status: 'success',
+              details: `Recuperadas ${retrievedSources.length} fontes; nenhuma análise generativa foi simulada.`,
+            });
+            resultData = {
+              mode: 'deterministic_rag',
+              generated: false,
+              notice: 'Nenhum provedor generativo disponível. Os itens abaixo são fontes recuperadas, não um parecer jurídico.',
+              sources: retrievedSources.map((source) => ({
+                documentTitle: source.documentTitle,
+                content: source.content,
+                similarity: source.similarity,
+                provenance: source.provenance,
+              })),
+            };
+          } else {
+            stages.push({
+              stage: 'rag_enhancement',
+              provider: 'DefesAi VectorStore',
+              model: queryEmbedding.model,
+              durationMs: duration,
+              status: 'failed',
+              details: 'Nenhuma fonte jurídica relevante foi recuperada; não foi gerada análise.',
+            });
+          }
+        } catch (err: any) {
+          stages.push({
+            stage: 'rag_enhancement',
+            provider: 'DefesAi VectorStore',
+            model: modelUsed,
+            durationMs: Date.now() - ragStart,
+            status: 'failed',
+            details: `Falha na recuperação jurídica: ${err.message}`,
+          });
+          logger.warn('ai', 'ai-provider-manager', 'rag_fallback', 'Falha ao recuperar fontes jurídicas.', {
+            correlationId,
+            requestId,
+            error: err.message,
+          });
+        }
       }
     }
 
     const totalDurationMs = Date.now() - startTime;
+    const executionSucceeded = resultData !== null && resultData !== undefined;
     const traceResult: AiExecutionResult = {
-      success: true,
+      success: executionSucceeded,
       providerUsed,
       modelUsed,
       totalDurationMs,
@@ -307,6 +355,9 @@ class AiProviderManager {
       fallbackOccurred,
       correlationId,
       data: resultData,
+      error: executionSucceeded
+        ? undefined
+        : 'Nenhum provedor generativo respondeu e nenhuma fonte jurídica verificável foi recuperada.',
     };
 
     this.recentPipelineTraces.unshift(traceResult);
