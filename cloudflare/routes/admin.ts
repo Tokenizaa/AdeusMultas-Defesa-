@@ -135,20 +135,40 @@ adminRoutes.get('/admin/ai/metrics', async (c) => {
   });
 });
 
+async function getTotalPaidRevenue(supabase: any): Promise<number> {
+  const pageSize = 1000;
+  let offset = 0;
+  let total = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('payment_orders')
+      .select('id,amount')
+      .eq('status', 'PAID')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`Falha ao calcular receita total de pagamentos: ${error.message}`);
+    const rows = data || [];
+    total += rows.reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
+    if (rows.length < pageSize) return Number(total.toFixed(2));
+    offset += rows.length;
+  }
+}
+
 adminRoutes.get('/admin/payments', async (c) => {
   const supabase = createSupabaseAdminClient(c.env);
-  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, { data: paidAmounts, error: revenueError }] = await Promise.all([
+  const [{ data: rawOrders, error: ordersError }, { count: total }, { count: paid }, { count: pending }, { count: reversed }, revenue] = await Promise.all([
     supabase.from('payment_orders').select('*').order('created_at', { ascending: false }).limit(500),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PAID'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
     supabase.from('payment_orders').select('id', { count: 'exact', head: true }).in('status', ['REFUNDED', 'CONTESTED', 'CHARGEDBACK']),
-    supabase.from('payment_orders').select('id,amount').eq('status', 'PAID').limit(2000),
+    getTotalPaidRevenue(supabase),
   ]);
   if (ordersError) throw new Error(ordersError.message);
-  if (revenueError) throw new Error(revenueError.message);
   const orders = (rawOrders || []).map((order: any) => ({ ...order, is_test: false }));
-  const revenue = (paidAmounts || []).reduce((sum: number, order: any) => sum + (Number(order.amount) || 0), 0);
   return c.json({
     orders,
     summary: {
