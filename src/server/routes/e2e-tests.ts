@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { e2eTestRunnerService, ALL_E2E_SERVICES } from '../services/e2e-test-runner-service';
+import { e2eTestRunnerService } from '../services/e2e-test-runner-service';
 import { authenticateToken, requireAdmin } from '../middleware/auth-middleware';
 
 const router = Router();
@@ -13,58 +13,46 @@ const router = Router();
 // Rotas Administrativas Protegidas
 // ==========================================
 
-// Inicia uma nova execução de testes E2E
-router.post('/admin/e2e-tests/run', authenticateToken, requireAdmin, async (req, res) => {
+// A execução permanece bloqueada até existir um runner Playwright real e isolado.
+router.post('/admin/e2e-tests/run', authenticateToken, requireAdmin, async (_req, res) => {
   try {
-    const { services, triggeredBy } = req.body || {};
-    const run = await e2eTestRunnerService.startRun(
-      services,
-      triggeredBy || (req.user ? req.user.email : 'Admin UI')
-    );
-    res.status(202).json({ success: true, run });
+    await e2eTestRunnerService.startRun();
+    return res.status(202).json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: 'Erro ao iniciar execução de testes E2E', details: err.message });
+    if (err?.code === 'E2E_RUNNER_NOT_CONFIGURED') {
+      return res.status(503).json({
+        error: 'Execução E2E indisponível neste ambiente.',
+        code: 'E2E_RUNNER_NOT_CONFIGURED',
+      });
+    }
+    return res.status(500).json({ error: 'Erro ao iniciar execução E2E.' });
   }
 });
 
-// Lista todas as execuções de testes E2E
-router.get('/admin/e2e-tests/runs', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/admin/e2e-tests/runs', authenticateToken, requireAdmin, async (_req, res) => {
   const runs = await e2eTestRunnerService.listRuns();
-  res.json({ runs, total: runs.length });
+  return res.json({ runs, total: runs.length, runnerStatus: 'NOT_CONFIGURED' });
 });
 
-// Retorna detalhes de uma execução específica
-router.get('/admin/e2e-tests/runs/:runId', authenticateToken, requireAdmin, async (req, res) => {
-  const run = await e2eTestRunnerService.getRunById(req.params.runId);
-  if (!run) {
-    return res.status(404).json({ error: 'Execução E2E não encontrada' });
-  }
-  res.json({ run });
+router.get('/admin/e2e-tests/runs/:runId', authenticateToken, requireAdmin, async (_req, res) => {
+  return res.status(404).json({ error: 'Nenhuma execução E2E verificada encontrada.' });
 });
 
-// Retorna a última execução de testes E2E
-router.get('/admin/e2e-tests/latest', authenticateToken, requireAdmin, async (req, res) => {
-  const run = await e2eTestRunnerService.getLatestRun();
-  res.json({ run: run || null });
+router.get('/admin/e2e-tests/latest', authenticateToken, requireAdmin, async (_req, res) => {
+  return res.json({ run: null, runnerStatus: 'NOT_CONFIGURED' });
 });
 
-// Retorna estatísticas e metadados dos serviços E2E
-router.get('/admin/e2e-tests/stats', authenticateToken, requireAdmin, async (req, res) => {
-  const runs = await e2eTestRunnerService.listRuns();
-  const latest = await e2eTestRunnerService.getLatestRun();
-  
-  const totalUnitTests = 216; // Suíte unitária perene do projeto
-  const totalE2ETests = ALL_E2E_SERVICES.length * 4; // 36 cenários
-
-  res.json({
-    totalUnitTests,
-    totalE2ETests,
-    availableServices: ALL_E2E_SERVICES,
-    totalRuns: runs.length,
-    latestRun: latest || null,
-    passRate: latest && latest.totalTests > 0
-      ? Math.round((latest.passedTests / latest.totalTests) * 100)
-      : 100,
+router.get('/admin/e2e-tests/stats', authenticateToken, requireAdmin, async (_req, res) => {
+  return res.json({
+    runnerStatus: 'NOT_CONFIGURED',
+    executionEnabled: false,
+    totalUnitTests: null,
+    totalE2ETests: null,
+    availableServices: [],
+    totalRuns: 0,
+    latestRun: null,
+    passRate: null,
+    message: 'Nenhuma execução é certificada até que o runner Playwright real esteja configurado.',
   });
 });
 
