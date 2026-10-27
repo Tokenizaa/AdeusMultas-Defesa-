@@ -71,6 +71,12 @@ describe('Phase 13 — AI observability metrics (real, not fabricated)', () => {
     const overview = await (await app().request('/api/admin/ai/overview')).json();
     expect(JSON.stringify(overview)).not.toContain('nvidia');
     expect(JSON.stringify(overview)).not.toContain('9router');
-    expect(overview.observability).toEqual({ historicalMetrics: true, metricsEndpoint: '/api/admin/ai/metrics' });
+    expect(overview.observability).toMatchObject({
+      historicalMetrics: true,
+      metricsEndpoint: '/api/admin/ai/metrics',
+      metricsScope: expect.stringContaining('24 horas'),
+    });
+    expect(overview.provider.status).toBe('not_configured');
+    expect(overview.rag.status).toBe('not_configured');
   });
 });
