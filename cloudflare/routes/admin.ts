@@ -90,6 +90,67 @@ adminRoutes.get('/admin/users', async (c) => {
   return c.json({ users: (data || []).map((user: any) => ({ id: user.user_id, name: user.name, email: user.email || '', role: user.role, cpf: user.cpf || undefined, phone: user.phone || undefined, cnh: user.cnh || undefined, cityState: user.city_state || undefined, avatarUrl: user.avatar_url || undefined, createdAt: user.created_at })) });
 });
 
+adminRoutes.get('/admin/users/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'ID de usuário inválido.' } }, 400);
+  }
+
+  const supabase = createSupabaseAdminClient(c.env);
+  const { data: profile, error: profileError } = await supabase
+    .from('user_profiles')
+    .select('user_id,name,email,role,cpf,phone,created_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) return c.json({ error: { code: 'NOT_FOUND', message: 'Usuário não encontrado.' } }, 404);
+
+  const [{ data: caseRows, error: casesError }, { data: paidRows, error: paymentsError }] = await Promise.all([
+    supabase.from('cases')
+      .select('id,app_ref,title,user_id,is_paid,ait_number,vehicle_plate,autuador_body,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    supabase.from('payment_orders')
+      .select('amount,status')
+      .eq('user_id', userId)
+      .in('status', ['PAID', 'CONFIRMED'])
+      .limit(5000),
+  ]);
+  if (casesError) throw new Error(casesError.message);
+  if (paymentsError) throw new Error(paymentsError.message);
+
+  const user = {
+    id: profile.user_id,
+    name: profile.name || '',
+    email: profile.email || '',
+    role: profile.role,
+    cpf: profile.cpf || undefined,
+    phone: profile.phone || undefined,
+    createdAt: profile.created_at || undefined,
+  };
+  const cases = (caseRows || []).map((row: any) => ({
+    id: row.app_ref || row.id,
+    title: row.title || '',
+    isPaid: Boolean(row.is_paid),
+    infraction: { aitNumber: row.ait_number || undefined, autuadorBody: row.autuador_body || undefined },
+    vehicle: { plate: row.vehicle_plate || undefined },
+    createdAt: row.created_at || undefined,
+  }));
+  const totalSpent = Number((paidRows || []).reduce((sum: number, row: any) => sum + (Number(row.amount) || 0), 0).toFixed(2));
+  const actor = c.get('user') as AuthenticatedUser | undefined;
+  await recordAuditLog(c.env, {
+    actor: actor?.email || actor?.id || 'unknown',
+    actorRole: actor?.role || 'admin',
+    action: 'admin.user_profile.viewed',
+    targetResource: 'user_profiles',
+    targetId: userId,
+    details: { casesReturned: cases.length, paymentRecordsCounted: (paidRows || []).length },
+    gdprCompliant: true,
+  });
+  return c.json({ user, cases, totalSpent });
+});
+
 adminRoutes.put('/admin/users', async (c) => {
   const body = await c.req.json<any>().catch(() => ({}));
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -101,6 +162,16 @@ adminRoutes.put('/admin/users', async (c) => {
   if (!target) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Usuário não encontrado' } }, 404);
   const { data, error } = await supabase.from('user_profiles').update({ role, updated_at: new Date().toISOString() }).eq('user_id', target.user_id).select('user_id,name,email,role,cpf,phone,cnh,city_state,avatar_url,created_at').single();
   if (error) throw new Error(error.message);
+  const actor = c.get('user') as AuthenticatedUser | undefined;
+  await recordAuditLog(c.env, {
+    actor: actor?.email || actor?.id || 'unknown',
+    actorRole: actor?.role || 'admin',
+    action: 'admin.user_role.updated',
+    targetResource: 'user_profiles',
+    targetId: data.user_id,
+    details: { previousRole: target.role, newRole: data.role },
+    gdprCompliant: true,
+  });
   return c.json({ success: true, user: { id: data.user_id, name: data.name, email: data.email || '', role: data.role, cpf: data.cpf || undefined, phone: data.phone || undefined, cnh: data.cnh || undefined, cityState: data.city_state || undefined, avatarUrl: data.avatar_url || undefined, createdAt: data.created_at } });
 });
 
