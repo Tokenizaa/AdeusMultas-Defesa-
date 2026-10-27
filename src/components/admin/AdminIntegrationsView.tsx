@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Boxes,
-  CheckCircle2,
-  AlertTriangle,
   RefreshCw,
   ExternalLink,
-  ShieldCheck,
   Zap,
-  Globe,
   CreditCard,
   Database,
   Camera,
-  MessageSquare,
   Key,
   HardDrive,
 } from 'lucide-react';
@@ -23,7 +18,7 @@ import { MetaIntegrationCards } from './MetaIntegrationCards';
 export const AdminIntegrationsView: React.FC = () => {
   const { navigate } = useRouter();
   const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [testStatus, setTestStatus] = useState<Record<string, { testing: boolean; result?: string }>>({});
   const [showDriveModal, setShowDriveModal] = useState(false);
 
