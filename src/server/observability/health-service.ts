@@ -111,8 +111,8 @@ class HealthService {
     services.push(this.checkSupabaseAuthHealth());
     // 6. Supabase Edge Functions
     services.push(await this.checkEdgeFunctionsHealth());
-    // 7. PagBank Gateway
-    services.push(await this.checkPagBankHealth());
+    // 7. VenoPag PIX gateway (configuration-only; no safe read-only connectivity probe exists)
+    services.push(await this.checkVenoPagHealth());
     // 8. Meta Graph API (Facebook & Instagram)
     services.push(await this.checkMetaHealth());
     // 9. OCR Engine
@@ -123,10 +123,11 @@ class HealthService {
     const healthyCount = services.filter((s) => s.status === 'HEALTHY').length;
     const degradedCount = services.filter((s) => s.status === 'DEGRADED').length;
     const downCount = services.filter((s) => s.status === 'DOWN').length;
+    const unknownCount = services.filter((s) => s.status === 'UNKNOWN').length;
     let overallStatus: HealthStatus = 'HEALTHY';
     if (downCount > 0) {
       overallStatus = 'DOWN';
-    } else if (degradedCount > 2) {
+    } else if (degradedCount > 0 || unknownCount > 0) {
       overallStatus = 'DEGRADED';
     }
     const report: PlatformHealthReport = {
@@ -577,87 +578,35 @@ class HealthService {
     }
   }
   /**
-   * Check PagBank Gateway health
+   * VenoPag is the only supported payment gateway. Credentials are not a health probe.
+   * Without a documented safe read-only endpoint, configured means UNKNOWN, not HEALTHY.
    */
-  private async checkPagBankHealth(): Promise<ServiceHealthCheck> {
-    const pagBankToken = configService.get('PAGBANK_TOKEN');
-    const isConfigured = Boolean(pagBankToken && String(pagBankToken).length > 10);
-    if (!isConfigured) {
-      return {
-        id: 'pagbank',
-        name: 'PagBank / PagSeguro Orders v2',
-        category: 'payments',
-        status: 'HEALTHY', // Sandbox mode is operational
-        latencyMs: null,
-        lastChecked: new Date().toISOString(),
-        isConfigured: false,
-        message: 'PagBank operando em modo sandbox',
-        details: {
-          environment: configService.get('PAGBANK_ENV'),
-        },
-      };
-    }
-    const startTime = Date.now();
-    try {
-      // Check PagBank API status - using a lightweight endpoint
-      // Note: Actual PagBank API endpoints would need to be consulted
-      // For now, we'll check if we can reach their domain
-      const response = await fetchWithTimeout('https://api.pagbank.com/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${pagBankToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      const latency = Date.now() - startTime;
-      if (response.ok) {
-        return {
-          id: 'pagbank',
-          name: 'PagBank / PagSeguro Orders v2',
-          category: 'payments',
-          status: 'HEALTHY',
-          latencyMs: latency,
-          lastChecked: new Date().toISOString(),
-          isConfigured: true,
-          message: 'PagBank conectado e operacional',
-          details: {
-            environment: configService.get('PAGBANK_ENV'),
-          },
-        };
-      } else {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        return {
-          id: 'pagbank',
-          name: 'PagBank / PagSeguro Orders v2',
-          category: 'payments',
-          status: 'DOWN',
-          latencyMs: Date.now() - startTime,
-          lastChecked: new Date().toISOString(),
-          isConfigured: true,
-          message: `PagBank retornou erro ${response.status}: ${errorText.substring(0, 100)}`,
-          details: {
-            environment: configService.get('PAGBANK_ENV'),
-            statusCode: response.status,
-          },
-        };
-      }
-    } catch (error: unknown) {
-      return {
-        id: 'pagbank',
-        name: 'PagBank / PagSeguro Orders v2',
-        category: 'payments',
-        status: 'DOWN',
-        latencyMs: Date.now() - startTime,
-        lastChecked: new Date().toISOString(),
-        isConfigured: true,
-        message: `Falha na conexão com PagBank: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          environment: configService.get('PAGBANK_ENV'),
-          error: error instanceof Error ? error.message : String(error),
-        },
-      };
-    }
+  private async checkVenoPagHealth(): Promise<ServiceHealthCheck> {
+    const required = ['VENO_CLIENT_ID', 'VENO_CLIENT_SECRET', 'VENO_WEBHOOK_SECRET'];
+    const missingCredentials = required.filter((key) => !process.env[key]?.trim());
+    const isEnabled = process.env.VENO_ENABLED === 'true';
+    if (!isEnabled) missingCredentials.push('VENO_ENABLED=true');
+    const isConfigured = missingCredentials.length === 0;
+
+    return {
+      id: 'venopag',
+      name: 'VenoPag PIX Gateway',
+      category: 'payments',
+      status: isConfigured ? 'UNKNOWN' : 'DEGRADED',
+      latencyMs: null,
+      lastChecked: new Date().toISOString(),
+      isConfigured,
+      message: isConfigured
+        ? 'Credenciais configuradas; conectividade externa não verificada por probe somente leitura.'
+        : `Gateway VenoPag não configurado. Variáveis ausentes: ${missingCredentials.join(', ') || 'VENO_ENABLED=false'}.`,
+      details: {
+        gateway: 'venopag',
+        externalConnectivityVerified: false,
+        missingCredentials,
+      },
+    };
   }
+
   /**
    * Check Meta Graph API health
    */
@@ -1051,84 +1000,27 @@ class HealthService {
           };
         }
       }
-      case 'pagbank': {
-        const token = configService.get('PAGBANK_TOKEN');
-        const isConfigured = Boolean(token && token.length > 10);
-        if (!isConfigured) {
-          return {
-            serviceId: 'pagbank',
-            serviceName: 'PagBank / PagSeguro',
-            status: 'warning',
-            latencyMs: null,
-            timestamp: new Date().toISOString(),
-            checks: [
-              { label: 'Ambiente de Processamento', passed: true, detail: configService.get('PAGBANK_ENV').toUpperCase() },
-              { label: 'Credenciais Orders v2', passed: false, detail: 'Token ausente' },
-              { label: 'Geração Instantânea de PIX', passed: true, detail: 'QR Code e Copia-e-Cola funcionais' },
-              { label: 'Webhook de Notificação', passed: true, detail: '/api/pagbank/webhook pronto' },
-            ],
-            message: 'PagBank operando em modo sandbox simulado.',
-          };
-        }
-        const testStart = Date.now();
-        try {
-          // Check PagBank API connectivity
-          const response = await fetchWithTimeout('https://api.pagbank.com/', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          const latency = Date.now() - testStart;
-          if (response.ok) {
-            return {
-              serviceId: 'pagbank',
-              serviceName: 'PagBank / PagSeguro',
-              status: 'passed',
-              latencyMs: latency,
-              timestamp: new Date().toISOString(),
-              checks: [
-                { label: 'Ambiente de Processamento', passed: true, detail: configService.get('PAGBANK_ENV').toUpperCase() },
-                { label: 'Credenciais Orders v2', passed: true, detail: 'Bearer Token ativo' },
-                { label: 'Geração Instantânea de PIX', passed: true, detail: 'QR Code e Copia-e-Cola funcionais' },
-                { label: 'Webhook de Notificação', passed: true, detail: '/api/pagbank/webhook pronto' },
-              ],
-              message: '✓ Integração PagBank validada com sucesso!',
-            };
-          } else {
-            const errorText = await response.text().catch(() => 'Unknown error');
-            return {
-              serviceId: 'pagbank',
-              serviceName: 'PagBank / PagSeguro',
-              status: 'failed',
-              latencyMs: Date.now() - testStart,
-              timestamp: new Date().toISOString(),
-              checks: [
-                { label: 'Ambiente de Processamento', passed: true, detail: configService.get('PAGBANK_ENV').toUpperCase() },
-                { label: 'Credenciais Orders v2', passed: false, detail: 'Credenciais inválidas ou expiradas' },
-                { label: 'Geração Instantânea de PIX', passed: true, detail: 'QR Code e Copia-e-Cola funcionais' },
-                { label: 'Webhook de Notificação', passed: true, detail: '/api/pagbank/webhook pronto' },
-              ],
-              message: `PagBank retornou erro ${response.status}: ${errorText.substring(0, 100)}`,
-            };
-          }
-        } catch (error: unknown) {
-          return {
-            serviceId: 'pagbank',
-            serviceName: 'PagBank / PagSeguro',
-            status: 'failed',
-            latencyMs: Date.now() - testStart,
-            timestamp: new Date().toISOString(),
-            checks: [
-              { label: 'Ambiente de Processamento', passed: true, detail: configService.get('PAGBANK_ENV').toUpperCase() },
-              { label: 'Credenciais Orders v2', passed: false, detail: 'Falha na conexão' },
-              { label: 'Geração Instantânea de PIX', passed: true, detail: 'QR Code e Copia-e-Cola funcionais' },
-              { label: 'Webhook de Notificação', passed: true, detail: '/api/pagbank/webhook pronto' },
-            ],
-            message: `Erro na conexão PagBank: ${error instanceof Error ? error.message : String(error)}`,
-          };
-        }
+      case 'venopag': {
+        const missing = ['VENO_CLIENT_ID', 'VENO_CLIENT_SECRET', 'VENO_WEBHOOK_SECRET']
+          .filter((key) => !process.env[key]?.trim());
+        if (process.env.VENO_ENABLED !== 'true') missing.push('VENO_ENABLED=true');
+        const configured = missing.length === 0;
+        return {
+          serviceId: 'venopag',
+          serviceName: 'VenoPag PIX',
+          status: 'warning',
+          latencyMs: null,
+          timestamp: new Date().toISOString(),
+          checks: [
+            { label: 'Gateway ativo', passed: process.env.VENO_ENABLED === 'true', detail: process.env.VENO_ENABLED === 'true' ? 'VenoPag habilitado' : 'VENO_ENABLED=true não configurado' },
+            { label: 'Credenciais de API', passed: Boolean(process.env.VENO_CLIENT_ID && process.env.VENO_CLIENT_SECRET), detail: process.env.VENO_CLIENT_ID && process.env.VENO_CLIENT_SECRET ? 'Credenciais presentes' : 'Credenciais ausentes' },
+            { label: 'Segredo de webhook', passed: Boolean(process.env.VENO_WEBHOOK_SECRET), detail: process.env.VENO_WEBHOOK_SECRET ? 'Segredo presente' : 'Segredo ausente' },
+            { label: 'Conectividade externa', passed: false, detail: 'Não testada: não há probe somente leitura implementado.' },
+          ],
+          message: configured
+            ? 'Configuração presente; conectividade VenoPag não verificada.'
+            : `VenoPag não configurado. Itens ausentes: ${missing.join(', ')}.`,
+        };
       }
       case 'meta': {
         const token = configService.get('META_ACCESS_TOKEN');

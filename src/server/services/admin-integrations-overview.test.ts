@@ -6,6 +6,7 @@ describe('buildAdminIntegrationsOverview', () => {
     const result = buildAdminIntegrationsOverview({
       healthServices: [
         { id: 'supabase_db', status: 'HEALTHY', latencyMs: 32, isConfigured: true, message: 'Probe OK' },
+        { id: 'venopag', status: 'UNKNOWN', latencyMs: null, isConfigured: true, message: 'Configured; connectivity unverified' },
         { id: 'supabase_auth', status: 'DEGRADED', latencyMs: null, isConfigured: true, message: 'Auth probe degraded' },
         { id: 'storage', status: 'UNKNOWN', latencyMs: null, isConfigured: true, message: 'No probe' },
         { id: 'edge_functions', status: 'DOWN', latencyMs: 5000, isConfigured: true, message: 'Probe failed' },
