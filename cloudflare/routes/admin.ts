@@ -125,8 +125,8 @@ adminRoutes.get('/admin/users/:userId', async (c) => {
     createdAt: profile.created_at || undefined,
   };
   const cases = (caseRows || []).map((row: any) => ({
-    id: row.app_ref || row.id,
-    title: row.title || '',
+    id: row.id,
+    title: row.title || row.app_ref || '',
     isPaid: Boolean(row.is_paid),
     infraction: { aitNumber: row.ait_number || undefined, autuadorBody: row.autuador_body || undefined },
     vehicle: { plate: row.vehicle_plate || undefined },
