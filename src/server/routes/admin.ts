@@ -13,6 +13,8 @@ import { getSupabaseAdminClient } from '../db/supabase-server';
 import { adminQueryService } from '../services/admin-query-service';
 import { buildAdminUserDetail } from '../services/admin-user-detail-service';
 import { buildAdminAiOverview } from '../services/admin-ai-overview';
+import { buildAdminIntegrationsOverview } from '../services/admin-integrations-overview';
+import { gatewayManager } from '../integrations/gateway/gateway-manager';
 import { vectorStore } from '../knowledge/vector-store';
 import { CaseDomain, DefenseDraft } from '../../types';
 import { metaIntegration } from '../integrations/meta';
@@ -218,44 +220,39 @@ router.get(['/ai/overview', '/admin/ai/overview'], (_req, res) => {
   return res.json(overview);
 });
 
-router.get(['/integrations/overview', '/admin/integrations/overview'], async (req, res) => {
-  const metaStatus = metaIntegration.getConnectionState();
-  const healthReport = await healthService.getHealth(false);
+router.get(['/integrations/overview', '/admin/integrations/overview'], async (_req, res) => {
+  try {
+    const metaStatus = metaIntegration.getConnectionState();
+    const healthReport = await healthService.getHealth(false);
+    const venopag = gatewayManager.getGatewayStatus().find((gateway) => gateway.id === 'venopag') || {
+      id: 'venopag',
+      displayName: 'VenoPag PIX',
+      status: 'not_configured' as const,
+      isActive: true,
+      supportsCreditCard: false,
+      notConfiguredReason: 'Gateway VenoPag não encontrado no runtime.',
+    };
 
-  res.json({
-    meta: {
-      name: 'Meta Graph API (Facebook & Instagram)',
-      isConnected: metaStatus.isConnected,
-      connectedUser: metaStatus.user?.name,
-      pagesCount: metaStatus.pages?.length || 0,
-      apiVersion: 'v20.0',
-      status: metaStatus.isConnected ? 'HEALTHY' : 'CONFIGURED_SANDBOX',
-    },
-    pagbank: {
-      name: 'PagBank (PagSeguro) Orders v2',
-      apiVersion: 'v2.0',
-      webhookUrl: 'https://app.www.defesai.shop/api/webhooks/pagbank',
-      idempotencyEnabled: true,
-      status: 'HEALTHY',
-    },
-    supabase: {
-      name: 'Supabase BaaS (Postgres & Auth)',
-      dbStatus: 'HEALTHY',
-      authStatus: 'HEALTHY',
-      storageStatus: 'HEALTHY',
-      edgeFunctionsCount: 4,
-    },
-    ocr: {
-      name: 'Vision OCR & Document Parser',
-      parserAccuracy: 98.2,
-      status: 'HEALTHY',
-    },
-    whatsapp: {
-      name: 'Evolution API (WhatsApp Gateway)',
-      instanceStatus: 'READY',
-      status: 'HEALTHY',
-    },
-  });
+    const overview = buildAdminIntegrationsOverview({
+      healthServices: healthReport.services,
+      meta: {
+        isConnected: metaStatus.isConnected,
+        user: metaStatus.user ? { name: metaStatus.user.name } : undefined,
+        pages: metaStatus.pages,
+      },
+      venopag,
+      whatsappConfigured: Boolean(
+        (process.env.EVOLUTION_API_URL || process.env.EVOLUTION_API_BASE_URL) &&
+        (process.env.EVOLUTION_API_KEY || process.env.EVOLUTION_API_TOKEN)
+      ),
+      googleDriveConfigured: Boolean(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID),
+    });
+
+    return res.json(overview);
+  } catch (error) {
+    logger.error('admin', 'integrations', 'overview', 'Falha ao consultar estado das integrações.', { error: String(error) });
+    return res.status(503).json({ error: 'Estado das integrações indisponível.' });
+  }
 });
 
 // ─────────────────────────────────────────────
