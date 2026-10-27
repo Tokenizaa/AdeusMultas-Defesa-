@@ -31,7 +31,7 @@ CREATE OR REPLACE FUNCTION public.redeem_free_coupon(
   p_coupon_discount numeric
 ) RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
