@@ -136,7 +136,7 @@ const recentCases = Array.isArray(overviewData?.recentCases) ? overviewData.rece
             onClick={() => navigate('/admin/cases')}
             className="text-sm font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 cursor-pointer font-mono"
           >
-            <span>Ver todos os {(overviewData?.metrics?.totalCases ?? 0)} casos</span>
+            <span>Ver todos os {(overviewData?.metrics?.totalCases ?? '—')} casos</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
