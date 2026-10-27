@@ -244,6 +244,7 @@ export function buildCoherentTestInfraction(
         realDriverCpf: generateRandomCPF().replace(/\D/g, ''),
         realDriverCnh: generateRandomCNH(),
         indicationWithinDeadline: true,
+        notes: 'Indicação de condutor: dados sintéticos para teste; conferir o prazo na notificação real.',
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
@@ -275,7 +276,7 @@ export function buildCoherentTestInfraction(
         ...neutral,
         ...catalogFields(existingCode),
         ...(category === 'conversao_advertencia' ? { hasPreviousInfractionsLast12Months: false } : {}),
-        notes: current.notes || 'Relato sintético gerado para validar o preenchimento automático.',
+        notes: 'Relato sintético gerado para validar o preenchimento automático.'
         speedLimit: undefined,
         measuredSpeed: undefined,
         consideredSpeed: undefined,
