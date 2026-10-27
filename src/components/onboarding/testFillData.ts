@@ -89,12 +89,18 @@ export function buildCoherentTestInfraction(
       // O código 745-50 representa excesso de até 20%. Gere uma medição
       // que continue dentro dessa faixa APÓS aplicar a margem do INMETRO.
       const speedLimit = pick([40, 50, 60, 70, 80, 100, 120]);
+      const minimumMeasuredSpeed = speedLimit <= 100
+        ? speedLimit + 8
+        : Math.ceil((speedLimit + 1) / 0.93);
       const maxMeasuredSpeed = Math.floor((speedLimit * 1.2) / 0.93);
-      const measuredSpeed = randInt(speedLimit + 1, Math.max(speedLimit + 1, maxMeasuredSpeed));
+      const measuredSpeed = randInt(
+        minimumMeasuredSpeed,
+        Math.max(minimumMeasuredSpeed, maxMeasuredSpeed),
+      );
       const consideredSpeed = calculateConsideredSpeed(measuredSpeed) ?? Math.round(measuredSpeed * 0.93);
-      extras = {
-        notes: Math.random() > 0.5 ? 'placa_ok' : 'sem_placa_visivel_art90',
-      };
+      // A prova de sinalização está marcada como presente; o relato sintético
+      // não pode contradizer esse booleano.
+      extras = { notes: 'placa_ok' };
       return {
         ...current,
         ...neutral,
@@ -123,7 +129,9 @@ export function buildCoherentTestInfraction(
         refusedTest: isRecusa,
         // Os campos binários refletem a mesma situação descrita nas notas
         // e ficam visíveis de forma coerente nos controles da etapa.
-        hasPsychomotorTerm: !isRecusa,
+        // undefined representa ausência de termo; false é reservado ao caso
+        // em que há termo, mas ele não descreve sinais psicomotores.
+        hasPsychomotorTerm: isRecusa ? undefined : true,
         offeredRetest: !isRecusa,
         // Coerência: Lei Seca não possui medição de velocidade.
         speedLimit: undefined,
@@ -159,7 +167,7 @@ export function buildCoherentTestInfraction(
     case 'vermelho': {
       // O select controlado representa diretamente apenas estes dois motivos.
       // Não gerar valores que ficam invisíveis no controle após o preenchimento.
-      const motivos = ['amarelo_rapido', 'emergencia'];
+      const motivos = ['amarelo_rapido', 'emergencia', 'noturno_seguranca', 'cruzamento_travado'];
       const chosen = pick(motivos);
       extras = { notes: `vermelho_${chosen}` };
       return {
