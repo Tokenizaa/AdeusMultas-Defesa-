@@ -21,6 +21,7 @@ export const AdminIntegrationsView: React.FC = () => {
   const [, setIsLoading] = useState(true);
   const [testStatus, setTestStatus] = useState<Record<string, { testing: boolean; result?: string }>>({});
   const [showDriveModal, setShowDriveModal] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const statusLabel = (status?: string) => ({
     HEALTHY: 'Saudável (probe real)',
@@ -43,10 +44,12 @@ export const AdminIntegrationsView: React.FC = () => {
   const fetchIntegrations = async () => {
     try {
       setIsLoading(true);
+      setLoadError(null);
       const res = await api.get<any>('/api/admin/integrations/overview');
       if (!res) throw new Error('Falha ao carregar integrações');
       setData(res);
     } catch (err: any) {
+      setLoadError('Não foi possível consultar o estado das integrações. Os status não devem ser presumidos saudáveis.');
       console.error('Error fetching integrations:', err);
     } finally {
       setIsLoading(false);
@@ -127,6 +130,8 @@ export const AdminIntegrationsView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {loadError && <div role="alert" className="rounded-xl border border-red-800 bg-red-950/30 px-4 py-3 text-sm text-red-200">{loadError}</div>}
 
       {/* Meta Graph API Integration Cards (Token, Webhooks, Permissões, Debug Probe) */}
       <MetaIntegrationCards />
