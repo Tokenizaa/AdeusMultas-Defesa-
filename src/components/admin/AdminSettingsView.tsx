@@ -4,11 +4,7 @@ import {
   Cpu,
   Database,
   CreditCard,
-  Share2,
-  Bot,
-  Scan,
   Server,
-  Bell,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
@@ -22,8 +18,6 @@ import {
   Lock,
   Search,
   ExternalLink,
-  TrendingUp,
-  BookOpen,
 } from 'lucide-react';
 import { SecretEditModal } from './SecretEditModal';
 import { api } from '../../lib/api/client';
@@ -41,6 +35,7 @@ export const AdminSettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [runtimeWarning, setRuntimeWarning] = useState<string | null>(null);
 
   // Secret Modal State
   const [selectedSecret, setSelectedSecret] = useState<SettingDefinitionFrontend | null>(null);
@@ -51,24 +46,19 @@ export const AdminSettingsView: React.FC = () => {
   const [testResults, setTestResults] = useState<Record<string, any>>({});
 
   const categories = [
-    { id: 'ai', label: 'IA / Providers', icon: Cpu, desc: 'NVIDIA NIM, 9Router, Gemini & Fallback' },
-    { id: 'supabase', label: 'Supabase', icon: Database, desc: 'PostgreSQL, Auth & Edge Functions' },
-    { id: 'payments', label: 'Pagamentos', icon: CreditCard, desc: 'PagBank, PIX, Sandbox & Webhooks' },
-    { id: 'meta', label: 'Meta (FB/Insta)', icon: Share2, desc: 'Graph API, OAuth & Publicação' },
-    { id: 'marketing', label: 'Marketing OS', icon: Bot, desc: '7 Agentes, Ciclos & Qualidade' },
-    { id: 'ocr', label: 'OCR & Percepção', icon: Scan, desc: 'Limiares de Confiança & Radars' },
-    { id: 'system', label: 'Sistema & Flags', icon: Server, desc: 'Ambiente, URLs & Feature Flags' },
-    { id: 'notifications', label: 'Notificações', icon: Bell, desc: 'Evolution API, WhatsApp & Prazos' },
-    { id: 'commercial', label: 'Comercial', icon: TrendingUp, desc: 'Configurações de vendas, comissão e bônus' },
-    { id: 'knowledge', label: 'Base de Conhecimento', icon: BookOpen, desc: 'Configurações de atualização e embeddings do knowledge base' },
+    { id: 'ai', label: 'IA & Vetores', icon: Cpu, desc: 'Cloudflare Workers AI e Vectorize' },
+    { id: 'supabase', label: 'Supabase', icon: Database, desc: 'Endpoint e credenciais de runtime' },
+    { id: 'payments', label: 'Pagamentos VenoPag', icon: CreditCard, desc: 'Gateway e estado das credenciais' },
+    { id: 'system', label: 'Runtime Cloudflare', icon: Server, desc: 'Origens CORS e modo de operação' },
   ];
 
 const loadSettings = async () => {
      try {
        setIsLoading(true);
-       const res = await api.get<SettingsResponse>('/api/settings');
+       const res = await api.get<SettingsResponse & { warning?: string; readOnly?: boolean }>('/api/settings');
        setSettings(res.settings);
-       setAuditHistory(res.auditHistory);
+       setAuditHistory(res.auditHistory || []);
+       setRuntimeWarning(res.warning || null);
      } catch (err) {
        console.error('Error loading settings:', err);
      } finally {
@@ -173,18 +163,11 @@ const handleTestIntegration = async (serviceId: string) => {
   const getIntegrationTestForCategory = (category: string) => {
     switch (category) {
       case 'ai':
-        return [
-          { id: 'nvidia', label: 'Testar Conexão NVIDIA NIM' },
-          { id: '9router', label: 'Testar Fallback 9Router' },
-        ];
+        return [{ id: 'cloudflare-ai', label: 'Executar inferência mínima no Cloudflare Workers AI' }];
       case 'supabase':
-        return [{ id: 'supabase', label: 'Testar Conexão Supabase Postgres & Auth' }];
+        return [{ id: 'supabase', label: 'Verificar conexão Supabase (sem ler dados)' }];
       case 'payments':
-        return [{ id: 'pagbank', label: 'Testar API PagBank Orders v2' }];
-      case 'meta':
-        return [{ id: 'meta', label: 'Testar Graph API Facebook/Instagram' }];
-      case 'ocr':
-        return [{ id: 'ocr', label: 'Testar Extrator OCR CTB' }];
+        return [{ id: 'venopag', label: 'Verificar credenciais VenoPag (sem transação)' }];
       default:
         return [];
     }
@@ -210,12 +193,12 @@ const handleTestIntegration = async (serviceId: string) => {
               <Sliders className="w-4 h-4" />
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight">Painel Central de Configurações</h1>
-            <span className="text-sm font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800">
-              Admin Safe Mode
+            <span className="text-sm font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700">
+              Somente leitura
             </span>
           </div>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Gerencie os parâmetros operacionais da plataforma com separação rigorosa de variáveis públicas e segredos criptográficos protegidos contra vazamentos.
+            Estado efetivo dos bindings do Cloudflare Worker. Variáveis e segredos são alterados no ambiente Cloudflare; este painel não grava valores que não mudariam o runtime.
           </p>
         </div>
 
@@ -231,6 +214,8 @@ const handleTestIntegration = async (serviceId: string) => {
           />
         </div>
       </div>
+
+      {runtimeWarning && <div role="alert" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{runtimeWarning}</div>}
 
       {/* Categories Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -372,7 +357,7 @@ const handleTestIntegration = async (serviceId: string) => {
             </span>
           </div>
           <span className="text-sm text-slate-500 font-mono">
-            Todas as alterações geram trilha imutável no Audit Log
+            Bindings são somente leitura; verificações executadas geram evento de auditoria
           </span>
         </div>
 
@@ -442,7 +427,9 @@ const handleTestIntegration = async (serviceId: string) => {
                             setSelectedSecret(setting);
                             setIsSecretModalOpen(true);
                           }}
-                          className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                          disabled={!setting.isEditable}
+                          title={setting.isEditable ? 'Alterar segredo' : 'Segredos do runtime são gerenciados nos bindings do Cloudflare'}
+                          className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <KeyRound className="w-3.5 h-3.5" />
                           <span>Alterar</span>
