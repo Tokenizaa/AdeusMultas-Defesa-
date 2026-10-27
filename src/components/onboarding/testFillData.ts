@@ -120,8 +120,11 @@ export function buildCoherentTestInfraction(
         ...current,
         ...neutral,
         ...catalogFields(code),
-        hasPsychomotorTerm: false, // Dispara ARG-025 se termo ausente/sem sinais
-        offeredRetest: false,
+        refusedTest: isRecusa,
+        // Os campos binários refletem a mesma situação descrita nas notas
+        // e ficam visíveis de forma coerente nos controles da etapa.
+        hasPsychomotorTerm: !isRecusa,
+        offeredRetest: !isRecusa,
         // Coerência: Lei Seca não possui medição de velocidade.
         speedLimit: undefined,
         measuredSpeed: undefined,
@@ -154,7 +157,9 @@ export function buildCoherentTestInfraction(
     }
 
     case 'vermelho': {
-      const motivos = ['amarelo_rapido', 'emergencia', 'noturno_seguranca', 'cruzamento_travado'];
+      // O select controlado representa diretamente apenas estes dois motivos.
+      // Não gerar valores que ficam invisíveis no controle após o preenchimento.
+      const motivos = ['amarelo_rapido', 'emergencia'];
       const chosen = pick(motivos);
       extras = { notes: `vermelho_${chosen}` };
       return {
