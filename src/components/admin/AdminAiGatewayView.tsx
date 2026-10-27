@@ -8,19 +8,16 @@ interface AiOverview {
     runtime: string;
     model: string;
     fallback: string | null;
-    status: 'configured' | 'local_fallback' | 'not_configured';
+    status: 'configured' | 'not_configured';
     statusMeaning: string;
-    requestsTotal: number;
-    successRate: number;
-    avgLatencyMs: number;
   };
   rag: {
     provider: string;
     index: string;
     embeddingModel: string;
     dimensions: number | null;
-    status: string;
-    inMemoryCounts: { sources: number; documents: number; chunks: number; embeddings: number };
+    status: 'configured' | 'not_configured';
+    statusMeaning: string;
   };
   capabilities: {
     infractionAnalysis: string;
@@ -30,15 +27,10 @@ interface AiOverview {
   observability: {
     historicalMetrics: boolean;
     totalAiRequests: number;
-    fallbackRatePercent: number;
     errorRatePercent: number;
+    avgLatencyMs: number;
     p95LatencyMs: number;
-    recentTraceCount: number;
     metricsScope: string;
-    providerMetrics: {
-      nvidia: { requestsTotal: number; successRate: number; avgLatencyMs: number };
-      nineRouter: { requestsTotal: number; successRate: number; avgLatencyMs: number };
-    };
   };
 }
 
@@ -55,9 +47,36 @@ export const AdminAiGatewayView: React.FC = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const res = await authFetch('/api/admin/ai/overview');
-      if (!res.ok) throw new Error(`HTTP ${res.status} ao carregar configuração de IA`);
-      setData(await res.json());
+      const [overviewRes, metricsRes] = await Promise.all([
+        authFetch('/api/admin/ai/overview'),
+        authFetch('/api/admin/ai/metrics'),
+      ]);
+      if (!overviewRes.ok) throw new Error(`HTTP ${overviewRes.status} ao carregar configuração de IA`);
+      const overview = await overviewRes.json();
+      const metrics = metricsRes.ok ? await metricsRes.json() : null;
+      setData({
+        ...overview,
+        provider: {
+          ...overview.provider,
+          status: overview.provider?.status === 'configured' ? 'configured' : 'not_configured',
+          statusMeaning: overview.provider?.statusMeaning || 'Saúde do provedor não foi verificada.',
+        },
+        rag: {
+          ...overview.rag,
+          status: overview.rag?.status === 'configured' ? 'configured' : 'not_configured',
+          statusMeaning: overview.rag?.statusMeaning || 'Saúde do índice vetorial não foi verificada.',
+        },
+        observability: {
+          historicalMetrics: metrics?.available === true,
+          totalAiRequests: Number(metrics?.totalCalls ?? 0),
+          errorRatePercent: Number(metrics?.errorRatePercent ?? 0),
+          avgLatencyMs: Number(metrics?.avgLatencyMs ?? 0),
+          p95LatencyMs: Number(metrics?.p95LatencyMs ?? 0),
+          metricsScope: metrics?.available
+            ? `Logs persistidos das últimas ${Number(metrics.windowHours) || 24} horas.`
+            : 'Métricas históricas indisponíveis; nenhum valor foi estimado.',
+        },
+      });
     } catch (err) {
       setLoadError('Não foi possível carregar o estado real do gateway de IA.');
       console.error('Error fetching AI overview:', err);
@@ -113,28 +132,23 @@ export const AdminAiGatewayView: React.FC = () => {
           <h2 className="text-sm font-bold text-slate-300 uppercase">Runtime de inferência</h2>
           <div className={`flex items-center gap-2 ${data?.provider.status === 'configured' ? 'text-emerald-400' : 'text-amber-400'}`}>
             {data?.provider.status === 'configured' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            {data?.provider.name || 'Runtime não identificado'} · {data?.provider.status === 'configured' ? 'Provedor remoto configurado' : data?.provider.status === 'local_fallback' ? 'Fallback local determinístico' : 'Não configurado'}
+            {data?.provider.name || 'Runtime não identificado'} · {data?.provider.status === 'configured' ? 'Binding configurado; saúde não verificada' : 'Binding não configurado'}
           </div>
           <p className="text-sm text-slate-400">Runtime: <span className="text-slate-200">{data?.provider.runtime || '—'}</span></p>
           <p className="text-sm text-slate-400">Modelo configurado: <span className="text-slate-200">{data?.provider.model || '—'}</span></p>
           <p className="text-sm text-slate-400">Fallback configurado: <span className="text-slate-200">{data?.provider.fallback ?? 'nenhum'}</span></p>
-          <p className="text-sm text-slate-400">Chamadas do provedor primário: <span className="text-slate-200">{data?.provider.requestsTotal ?? 0}</span> · Sucesso: <span className="text-slate-200">{data?.provider.successRate ?? 0}%</span> · Latência média: <span className="text-slate-200">{data?.provider.avgLatencyMs ?? 0} ms</span></p>
-          <p className="text-xs text-slate-500">{data?.provider.statusMeaning || 'Estado operacional não verificado.'}</p>
+          <p className="text-xs text-slate-500">{data?.provider.statusMeaning || 'Saúde operacional não verificada.'}</p>
         </section>
 
         <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 font-mono">
           <h2 className="text-sm font-bold text-slate-300 uppercase">RAG jurídico</h2>
-          <div className="flex items-center gap-2 text-amber-300">
-            <AlertTriangle className="w-4 h-4" />
-            {data?.rag.status === 'CLIENT_CONFIGURED_HEALTH_NOT_CHECKED'
-              ? 'Cliente configurado; saúde não verificada'
-              : data?.rag.status === 'SUPABASE_CLIENT_NOT_INITIALIZED_PERSISTENCE_NOT_VERIFIED'
-                ? 'Cliente Supabase não inicializado; persistência não verificada'
-                : 'Estado RAG não verificado'}
+          <div className={`flex items-center gap-2 ${data?.rag.status === 'configured' ? 'text-emerald-300' : 'text-amber-300'}`}>
+            {data?.rag.status === 'configured' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+            {data?.rag.status === 'configured' ? 'Binding Vectorize configurado; consulta não verificada' : 'Binding Vectorize não configurado'}
           </div>
           <p className="text-sm text-slate-400">Index/persistência: <span className="text-slate-200">{data?.rag.index || '—'}</span></p>
           <p className="text-sm text-slate-400">Modelo de embedding configurado: <span className="text-slate-200">{data?.rag.embeddingModel || '—'}</span> · Dimensões: <span className="text-slate-200">{data?.rag.dimensions ?? 'não informadas'}</span></p>
-          <p className="text-xs text-slate-500">Contagens em memória: fontes {data?.rag.inMemoryCounts.sources ?? 0}, documentos {data?.rag.inMemoryCounts.documents ?? 0}, chunks {data?.rag.inMemoryCounts.chunks ?? 0}, embeddings {data?.rag.inMemoryCounts.embeddings ?? 0}. Não são contagens persistidas.</p>
+          <p className="text-xs text-slate-500">{data?.rag.statusMeaning || 'O estado do índice não foi verificado por consulta.'} Nenhuma contagem de vetores é estimada neste painel.</p>
         </section>
       </div>
 
@@ -147,8 +161,8 @@ export const AdminAiGatewayView: React.FC = () => {
         </div>
         <p className="text-xs text-slate-500">
           {data?.observability.metricsScope || 'Métricas de execução não verificadas.'}
-          {' '}Chamadas observadas: {data?.observability.totalAiRequests ?? 0}; fallback: {data?.observability.fallbackRatePercent ?? 0}%; erros: {data?.observability.errorRatePercent ?? 0}%; p95: {data?.observability.p95LatencyMs ?? 0} ms; traces em memória: {data?.observability.recentTraceCount ?? 0}.
-          {' '}Histórico persistente: {data?.observability.historicalMetrics ? 'disponível' : 'não configurado'}.
+          {' '}Chamadas registradas: {data?.observability.totalAiRequests ?? 0}; latência média: {data?.observability.avgLatencyMs ?? 0} ms; erros: {data?.observability.errorRatePercent ?? 0}%; p95: {data?.observability.p95LatencyMs ?? 0} ms.
+          {' '}Histórico persistente: {data?.observability.historicalMetrics ? 'disponível' : 'indisponível'}.
         </p>
       </section>
 
