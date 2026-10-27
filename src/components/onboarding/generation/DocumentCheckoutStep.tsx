@@ -736,7 +736,8 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                             <button
                                 role="tab"
                                 aria-selected={paymentMethod === 'credit_card'}
-                                onClick={() => { setPaymentMethod('credit_card'); setCreditCardResult(null); setCreditCardError(null); }}
+                                onClick={() => { if (effectivePrice === 0) return; setPaymentMethod('credit_card'); setCreditCardResult(null); setCreditCardError(null); }}
+                                disabled={effectivePrice === 0}
                                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
                                     paymentMethod === 'credit_card'
                                         ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
@@ -890,7 +891,7 @@ export const DocumentCheckoutStep: React.FC<DocumentCheckoutStepProps> = ({
                         )}
 
                     {/* Credit Card Payment Component */}
-                    {paymentMethod === 'credit_card' && (
+                    {paymentMethod === 'credit_card' && effectivePrice !== 0 && (
                         <div className="bg-white border border-slate-300 rounded-2xl p-5 shadow-sm sticky top-20 animate-fade-in">
                             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                                 <div className="flex items-center gap-2">
