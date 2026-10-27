@@ -32,7 +32,8 @@ export function buildAdminIntegrationsOverview(input: AdminIntegrationsOverviewI
   const storage = service('storage');
   const edgeFunctions = service('edge_functions');
   const ocr = service('ocr');
-  const venopagConfigured = input.venopag.status === 'configured';
+  const venopagHealth = service('venopag');
+  const venopagConfigured = input.venopag.status === 'configured' && venopagHealth.isConfigured;
 
   return {
     meta: {
@@ -47,7 +48,7 @@ export function buildAdminIntegrationsOverview(input: AdminIntegrationsOverviewI
       isActive: input.venopag.isActive,
       configured: venopagConfigured,
       status: venopagConfigured ? 'CONFIGURED_NOT_PROBED' : 'NOT_CONFIGURED',
-      notConfiguredReason: input.venopag.notConfiguredReason || null,
+      notConfiguredReason: venopagConfigured ? null : (input.venopag.notConfiguredReason || venopagHealth.message),
       webhookPath: '/api/webhooks/venopag',
       externalConnectivityVerified: false,
       idempotencyLiveVerified: false,
