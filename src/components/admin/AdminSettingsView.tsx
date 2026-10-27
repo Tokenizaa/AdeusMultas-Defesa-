@@ -357,7 +357,7 @@ const handleTestIntegration = async (serviceId: string) => {
             </span>
           </div>
           <span className="text-sm text-slate-500 font-mono">
-            Todas as alterações geram trilha imutável no Audit Log
+            Bindings são somente leitura; verificações executadas geram evento de auditoria
           </span>
         </div>
 
