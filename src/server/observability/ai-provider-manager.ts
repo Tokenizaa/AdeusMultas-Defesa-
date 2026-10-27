@@ -86,7 +86,7 @@ class AiProviderManager {
     let resultData: any = null;
     let providerUsed: 'nvidia' | '9router' | 'gemini' | 'deterministic_rag' = 'deterministic_rag';
     let modelUsed = 'rag-deterministic-v1';
-    let fallbackOccurred = false;
+    let fallbackOccurred = !isNvidiaConfigured;
 
     // 2. Try Primary: NVIDIA
     if (isNvidiaConfigured) {
