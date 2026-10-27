@@ -40,7 +40,7 @@ const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
   lei_seca: ['757-90', '516-91', '758-70', '759-50'],
   celular: ['736-62'],
   vermelho: ['605-01', '606-80'],
-  estacionamento: ['545-21', '546-01', '547-80', '548-60', '549-40', '550-80', '551-60'],
+  estacionamento: ['545-21', '554-12'],
   indicacao_condutor: [],
   // Art. 267 CTB: o catálogo atual só contém estas infrações médias elegíveis.
   conversao_advertencia: ['745-50', '736-62', '735-80', '685-80'],
