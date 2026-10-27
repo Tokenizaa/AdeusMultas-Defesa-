@@ -95,6 +95,37 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
     }
   });
 
+
+  it('remove dados específicos herdados de outra categoria antes de preencher o cenário', () => {
+    const stale = {
+      ...emptyInfraction,
+      speedLimit: 60,
+      measuredSpeed: 90,
+      consideredSpeed: 83,
+      inmetroAferitionDate: '2020-01-01',
+      cellphoneCircumstance: 'sem_abordagem',
+      yellowPhaseCrossing: true,
+      emergencyPassage: true,
+      realDriverName: 'NOME ANTIGO',
+      realDriverCpf: '12345678901',
+      evidenceFlags: { foto: true },
+      ocrExtractedText: 'texto de documento anterior',
+    } as InfractionData;
+
+    const data = buildCoherentTestInfraction('lei_seca', stale);
+    expect(data.speedLimit).toBeUndefined();
+    expect(data.measuredSpeed).toBeUndefined();
+    expect(data.consideredSpeed).toBeUndefined();
+    expect(data.inmetroAferitionDate).toBeUndefined();
+    expect(data.cellphoneCircumstance).toBeUndefined();
+    expect(data.yellowPhaseCrossing).toBeUndefined();
+    expect(data.emergencyPassage).toBeUndefined();
+    expect(data.realDriverName).toBeUndefined();
+    expect(data.realDriverCpf).toBeUndefined();
+    expect(data.evidenceFlags).toBeUndefined();
+    expect(data.ocrExtractedText).toBeUndefined();
+  });
+
   it('gera velocidade considerada acima do limite para o código 745-50', () => {
     for (let i = 0; i < 100; i++) {
       const data = buildCoherentTestInfraction('excesso_velocidade', emptyInfraction);
