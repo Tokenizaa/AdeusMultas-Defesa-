@@ -33,6 +33,19 @@ import {
 } from '../../../utils/test-data-generator';
 import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
 
+/** Normaliza datas do formulário para o formato exigido por <input type="date">.
+ * Aceita YYYY-MM-DD e timestamps ISO (YYYY-MM-DDTHH:mm:ss.sssZ).
+ * Datas inválidas viram string vazia, nunca um valor que o navegador não exibe.
+ */
+function toDateInputValue(value?: string): string {
+    const datePart = value?.match(/^(\\d{4}-\\d{2}-\\d{2})/)?.[1];
+    if (!datePart) return '';
+    const parsed = new Date(`${datePart}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === datePart
+        ? datePart
+        : '';
+}
+
 // Mapa de categoria do wizard → códigos da infração (baseado no catálogo)
 // Usado para filtrar o <select> de código da infração pela categoria escolhida na etapa 3.
 const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
@@ -99,7 +112,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         (vehicleData.plate?.trim().length || 0) >= 7 &&
         (infractionData.infractionCode?.trim().length || 0) >= 3 &&
         (infractionData.location?.trim().length || 0) >= 5 &&
-        /^\d{4}-\d{2}-\d{2}$/.test(infractionData.dateTime || '') &&
+        /^\d{4}-\d{2}-\d{2}$/.test(toDateInputValue(infractionData.dateTime)) &&
         (infractionData.autuadorBody?.trim().length || 0) >= 3 &&
         (infractionData.aitNumber?.trim().length || 0) >= 3;
 
@@ -198,7 +211,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         const address = generateRandomAddress();
                         // Garante no próprio handler que os campos controlados de data
                         // recebam valores ISO YYYY-MM-DD, independentemente do gerador.
-                        const occurrenceDate = baseInfraction.dateTime?.split(' ')[0]
+                        const occurrenceDate = toDateInputValue(baseInfraction.dateTime)
                             || new Date().toISOString().slice(0, 10);
                         const addTestDays = (days: number) => {
                             const date = new Date(`${occurrenceDate}T12:00:00.000Z`);
@@ -465,7 +478,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         <input
                             id="input-datetime"
                             type="date"
-                            value={infractionData.dateTime?.split(' ')[0] || ''}
+                            value={toDateInputValue(infractionData.dateTime)}
                             onChange={(e) => onUpdateInfraction({ ...infractionData, dateTime: e.target.value })}
                             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
@@ -483,7 +496,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         <input
                             id="input-notification-expedition-date"
                             type="date"
-                            value={infractionData.notificationExpeditionDate?.split(' ')[0] || ''}
+                            value={toDateInputValue(infractionData.notificationExpeditionDate)}
                             onChange={(e) => onUpdateInfraction({ ...infractionData, notificationExpeditionDate: e.target.value })}
                             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
@@ -501,7 +514,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         <input
                             id="input-notification-delivery-date"
                             type="date"
-                            value={infractionData.notificationDeliveryDate?.split(' ')[0] || ''}
+                            value={toDateInputValue(infractionData.notificationDeliveryDate)}
                             onChange={(e) => onUpdateInfraction({ ...infractionData, notificationDeliveryDate: e.target.value })}
                             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
@@ -519,7 +532,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         <input
                             id="input-defense-deadline"
                             type="date"
-                            value={infractionData.defenseDeadline?.split(' ')[0] || ''}
+                            value={toDateInputValue(infractionData.defenseDeadline)}
                             onChange={(e) => onUpdateInfraction({ ...infractionData, defenseDeadline: e.target.value })}
                             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
