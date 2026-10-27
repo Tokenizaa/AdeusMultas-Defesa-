@@ -584,8 +584,9 @@ class HealthService {
   private async checkVenoPagHealth(): Promise<ServiceHealthCheck> {
     const required = ['VENO_CLIENT_ID', 'VENO_CLIENT_SECRET', 'VENO_WEBHOOK_SECRET'];
     const missingCredentials = required.filter((key) => !process.env[key]?.trim());
-    const isEnabled = (process.env.VENO_ENABLED || 'true').toLowerCase() !== 'false';
-    const isConfigured = missingCredentials.length === 0 && isEnabled;
+    const isEnabled = process.env.VENO_ENABLED === 'true';
+    if (!isEnabled) missingCredentials.push('VENO_ENABLED=true');
+    const isConfigured = missingCredentials.length === 0;
 
     return {
       id: 'venopag',
