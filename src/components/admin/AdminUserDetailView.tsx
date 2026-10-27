@@ -122,7 +122,7 @@ export const AdminUserDetailView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-base sm:text-lg font-bold text-white font-mono">
-                {user?.name}
+                {user.name || 'Nome não informado'}
               </h1>
               <span className="px-2 py-0.5 rounded text-sm font-bold uppercase font-mono bg-slate-800 text-slate-300 border border-slate-700">
                 {user?.role === 'admin' ? 'Administrador' : 'Cidadão / Condutor'}
@@ -146,19 +146,19 @@ export const AdminUserDetailView: React.FC = () => {
 
           <div>
             <span className="text-slate-500 text-sm uppercase">E-mail</span>
-            <p className="text-slate-200">{user?.email}</p>
+            <p className="text-slate-200">{user.email || 'Não informado'}</p>
           </div>
           <div>
             <span className="text-slate-500 text-sm uppercase">Telefone</span>
-            <p className="text-slate-200">{user?.phone}</p>
+            <p className="text-slate-200">{user.phone || 'Não informado'}</p>
           </div>
           <div>
             <span className="text-slate-500 text-sm uppercase">CPF</span>
-            <p className="text-slate-200">{user?.cpf}</p>
+            <p className="text-slate-200">{user.cpf || 'Não informado'}</p>
           </div>
           <div>
             <span className="text-slate-500 text-sm uppercase">Status da Conta</span>
-            <span className="px-2 py-0.5 rounded text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 w-fit block mt-1">
+            <span className="px-2 py-0.5 rounded text-sm font-medium bg-slate-800 text-slate-300 border border-slate-700 w-fit block mt-1">
               Não informado
             </span>
           </div>
