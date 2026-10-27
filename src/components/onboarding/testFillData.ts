@@ -39,6 +39,13 @@ function recentDate(): string {
     .split('T')[0];
 }
 
+/** Soma dias a uma data ISO sem depender do fuso horário local. */
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 function catalogItemByCode(code: string) {
   return INFRACTION_CATALOG.find((item) => item.code === code);
 }
@@ -62,9 +69,14 @@ export function buildCoherentTestInfraction(
   current: InfractionData,
 ): InfractionData {
   // Base neutra: identificadores e metadados sempre válidos, independentes da categoria.
+  const occurrenceDate = recentDate();
   const neutral = {
     aitNumber: generateRandomAIT(),
-    dateTime: recentDate(),
+    dateTime: occurrenceDate,
+    // Cronologia sintética coerente para testar os três campos visíveis na UI.
+    notificationExpeditionDate: addDays(occurrenceDate, 3),
+    notificationDeliveryDate: addDays(occurrenceDate, 5),
+    defenseDeadline: addDays(occurrenceDate, 25),
     autuadorBody: pick(AUTUADORES_TESTE),
   };
 
@@ -226,10 +238,14 @@ export function buildCoherentTestInfraction(
  * seleção humana de infração (código/artigo/descrição) nem velocidades.
  */
 export function buildNeutralTestIdentification(current: InfractionData): InfractionData {
+  const occurrenceDate = recentDate();
   return {
     ...current,
     aitNumber: generateRandomAIT(),
-    dateTime: recentDate(),
+    dateTime: occurrenceDate,
+    notificationExpeditionDate: addDays(occurrenceDate, 3),
+    notificationDeliveryDate: addDays(occurrenceDate, 5),
+    defenseDeadline: addDays(occurrenceDate, 25),
     autuadorBody: pick(AUTUADORES_TESTE),
   };
 }
