@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Activity, CheckCircle2, CreditCard, Cpu, Database, RefreshCw, Settings, ShieldCheck, XCircle, Zap } from 'lucide-react';
 import { useAuthFetch } from '../../hooks/useAuthFetch';
-import { useRouter } from '../../contexts/RouterContext';
+import { useRouter } from '../../core/router/RouterContext';
 
 type RuntimeStatus = 'configured' | 'not_configured' | 'connected' | 'degraded' | 'unknown';
 type IntegrationCheck = { label: string; passed: boolean; detail: string };
