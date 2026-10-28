@@ -28,7 +28,8 @@ import {
   InfractionCategory,
   USER_SITUATIONS,
   USER_PROCESS_STAGES,
-  RULES_MATRIX
+  RULES_MATRIX,
+  resolveOnboardingProcedure
 } from '../../core/onboarding/rules-matrix';
 
 // ============================================================================
@@ -51,6 +52,47 @@ const CATEGORY_DEFAULT_CODE: Partial<Record<InfractionCategory, string>> = {
   vermelho: '605-01',
   estacionamento: '545-21',
 };
+
+function reconcileInfractionDataForCategory(
+  data: InfractionData,
+  category: InfractionCategory,
+): InfractionData {
+  const allowedCodes = CATEGORY_CODE_MAP[category] ?? [];
+  const currentCode = data.infractionCode?.trim() ?? '';
+  const currentCodeIsCompatible = Boolean(
+    currentCode && (!allowedCodes.length || allowedCodes.includes(currentCode)),
+  );
+
+  if (currentCodeIsCompatible) return data;
+
+  const nextCode =
+    CATEGORY_DEFAULT_CODE[category] ?? allowedCodes[0] ?? '';
+  const item = nextCode
+    ? INFRACTION_CATALOG.find((candidate) => candidate.code === nextCode)
+    : undefined;
+
+  if (!item) {
+    return {
+      ...data,
+      infractionCode: '',
+      ctbArticle: '',
+      description: '',
+      severity: 'media',
+      points: 0,
+      fineAmount: 0,
+    };
+  }
+
+  return {
+    ...data,
+    infractionCode: item.code,
+    ctbArticle: item.article,
+    description: item.description,
+    severity: item.severity,
+    points: item.points,
+    fineAmount: item.fineAmount,
+  };
+}
 
 interface WizardPersistedState {
   step: number;
@@ -142,7 +184,7 @@ function clearWizardState() {
 import { ServiceStep } from './steps/ServiceStep';
 import { DefenseStageStep } from './steps/DefenseStageStep';
 import { InfractionCategoryStep } from './steps/InfractionCategoryStep';
-import { InfractionIdentificationStep } from './steps/InfractionIdentificationStep';
+import { InfractionIdentificationStep, CATEGORY_CODE_MAP } from './steps/InfractionIdentificationStep';
 import { SpecificInfractionDataStep } from './steps/SpecificInfractionDataStep';
 import { AnalysisProcessingStep } from './steps/AnalysisProcessingStep';
 import { FreeAnalysisResultStep } from './steps/FreeAnalysisResultStep';
@@ -339,21 +381,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   }, [isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deriva o tipo de procedimento canônico
-  const mappedProcedure: ProcedureType =
-    situation === 'conversao_advertencia'
-      ? 'conversao_advertencia'
-      : situation === 'indicacao_condutor'
-      ? 'indicacao_condutor'
-      : situation === 'suspensao_cnh'
-      ? 'suspensao_cnh'
-      : situation === 'cassacao_cnh'
-      ? 'cassacao_cnh'
-      : processStage === 'recurso_jari' || processStage === 'defesa_negada'
-      ? 'recurso_jari'
-      : processStage === 'recurso_cetran' || processStage === 'recurso_jari_negado'
-      ? 'recurso_cetran'
-      : 'defesa_previa';
+  // Um único resolvedor mantém o procedimento exibido e o persistido coerentes.
+  const mappedProcedure: ProcedureType = resolveOnboardingProcedure(situation, processStage);
 
   const isPhase1 = step <= 7;
   const isPhase2 = step >= 8;
@@ -381,64 +410,49 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const displayStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : step;
   const totalDisplaySteps = activeSteps.length;
 
+  // Formulários persistidos podem ter um código de outra categoria. Reconciliar
+  // ao entrar na etapa 4 evita mostrar/validar dados incompatíveis.
+  useEffect(() => {
+    if (step !== 4) return;
+    setInfractionData((prev) => reconcileInfractionDataForCategory(prev, infractionCategory));
+  }, [step, infractionCategory]);
+
   // Handlers
+  const applyCategorySelection = (selected: InfractionCategory) => {
+    setInfractionCategory(selected);
+    setInfractionData((prev) => reconcileInfractionDataForCategory(prev, selected));
+  };
+
   const handleSituationSelect = (selected: UserSituation) => {
     setSituation(selected);
     const sitDef = USER_SITUATIONS.find((s) => s.id === selected);
+    const nextStage = sitDef?.inferredStage ?? 'primeira_notificacao';
+    setProcessStage(nextStage);
+    mappedProcedureRef.current = resolveOnboardingProcedure(selected, nextStage);
 
-    if (sitDef?.mappedProcedure) {
-      mappedProcedureRef.current = sitDef.mappedProcedure;
-    }
-
+    // Ao entrar no serviço geral de multas, não reutilizar fase/categoria
+    // deixadas por outro serviço ou por uma sessão anterior.
     if (sitDef?.defaultInfractionCategory) {
-      setInfractionCategory(sitDef.defaultInfractionCategory);
+      applyCategorySelection(sitDef.defaultInfractionCategory);
+    } else if (selected === 'multa_transito') {
+      applyCategorySelection('excesso_velocidade');
     }
 
     if (sitDef?.inferredStage) {
-      setProcessStage(sitDef.inferredStage);
-      if (sitDef.defaultInfractionCategory) {
-        setStep(4); // Direto para identificação da autuação
-      } else {
-        setStep(3); // Seleciona o tipo de infração
-      }
+      setStep(sitDef.defaultInfractionCategory ? 4 : 3);
     } else {
-      setStep(2); // Pergunta a fase
+      setStep(2);
     }
   };
 
   const handleStageSelect = (selected: UserProcessStage) => {
     setProcessStage(selected);
-    // Suspension and cassation are already specialized procedures selected in
-    // step 1. Their generic phase question must not downgrade them to JARI.
-    if (situation !== 'suspensao_cnh' && situation !== 'cassacao_cnh') {
-      const stage = USER_PROCESS_STAGES.find((item) => item.id === selected);
-      if (stage?.mappedProcedure) {
-        mappedProcedureRef.current = stage.mappedProcedure;
-      }
-    }
+    mappedProcedureRef.current = resolveOnboardingProcedure(situation, selected);
     setStep(3); // Passo exclusivo de tipo/categoria da infração
   };
 
   const handleCategorySelect = (selected: InfractionCategory) => {
-    setInfractionCategory(selected);
-
-    // Pre-populate a partir do catálogo canônico: multa, pontos, artigo e
-    // severidade são os do código realmente selecionado. Defaults escritos à
-    // mão divergiam do catálogo (ex.: "lei_seca" com 0 pontos) e a tela os
-    // exibia como se fossem dados do usuário.
-    const defaultCode = CATEGORY_DEFAULT_CODE[selected];
-    const item = defaultCode ? INFRACTION_CATALOG.find((x) => x.code === defaultCode) : undefined;
-    if (!item) return;
-
-    setInfractionData((prev) => ({
-      ...prev,
-      ctbArticle: prev.ctbArticle || item.article,
-      infractionCode: prev.infractionCode || item.code,
-      description: prev.description || item.description,
-      severity: item.severity,
-      fineAmount: item.fineAmount,
-      points: item.points,
-    }));
+    applyCategorySelection(selected);
   };
 
   const handleLeadUpdate = (name: string, phone: string) => {
