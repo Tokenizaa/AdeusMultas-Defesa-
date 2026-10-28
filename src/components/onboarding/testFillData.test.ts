@@ -82,6 +82,17 @@ describe('buildCompleteTestIdentificationFixture — formulário de identificaç
     expect(vehicleData.plate.trim().length).toBeGreaterThanOrEqual(7);
     expect(infractionData.aitNumber.trim().length).toBeGreaterThanOrEqual(3);
     expect(infractionData.infractionCode.trim().length).toBeGreaterThanOrEqual(3);
+    const allowedCodes: Partial<Record<(typeof categories)[number], string[]>> = {
+      excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
+      lei_seca: ['757-90', '516-91'],
+      celular: ['736-62'],
+      vermelho: ['605-01', '605-02'],
+      estacionamento: ['545-21', '554-12'],
+      conversao_advertencia: ['745-50', '736-62', '735-80', '685-80'],
+    };
+    if (allowedCodes[category]?.length) {
+      expect(allowedCodes[category]).toContain(infractionData.infractionCode);
+    }
     expect(infractionData.location.trim().length).toBeGreaterThanOrEqual(5);
     expect(infractionData.autuadorBody.trim().length).toBeGreaterThanOrEqual(3);
     expect(infractionData.dateTime).toMatch(/^\d{4}-\d{2}-\d{2}$/);
