@@ -342,9 +342,12 @@ describe('Onboarding copy regression — SpecificInfractionDataStep', () => {
       />
     );
     expect(html).not.toContain('gera anulação imediata');
-    expect(html).toContain(
+    expect(html).not.toContain(
       'argumento forte para questionar a validade da medição do radar'
     );
+    expect(html).toContain('Data da aferição do INMETRO (opcional)');
+    expect(html).toContain('Número do equipamento ou laudo do INMETRO (opcional)');
+    expect(html).toContain('Se essa data constar na notificação ou em outro documento');
   });
 
   it('não usa "100% de Isenção" nos requisitos do Art. 267', () => {
