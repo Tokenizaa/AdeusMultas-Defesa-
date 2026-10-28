@@ -24,8 +24,6 @@ import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 
 import { TestFillButton } from '../../ui/TestFillButton';
 import { InfractionCategory } from '../../../core/onboarding/rules-matrix';
-import {
-} from '../../../utils/test-data-generator';
 import { buildCompleteTestIdentificationFixture } from '../testFillData';
 
 type BrazilianDateInputProps = {
