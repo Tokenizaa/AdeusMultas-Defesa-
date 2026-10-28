@@ -32,11 +32,12 @@ Levar o onboarding a um estado **funcional, juridicamente coerente e validado po
 
 Não é necessário criar todos esses documentos antecipadamente. Cada documento deve nascer quando a tarefa correspondente for definida, para evitar documentação especulativa.
 
-## Índice
+## Índice — comece por aqui
 
-1. [Auditoria 01 — linha de base do serviço de multas](./AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md)
-2. [Correção 01 — consistência das etapas 2 a 4](./CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md)
-3. [Correção 02 — preenchimento de teste do formulário](./CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md)
+1. **[HANDOFF CANÔNICO PARA AGENTES](./HANDOFF-CANONICO-AGENTES.md)** — leitura obrigatória ao assumir o trabalho; mapa do fluxo, protocolo, estado atual, workflows e próximas ações.
+2. [Auditoria 01 — linha de base do serviço de multas](./AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md)
+3. [Correção 01 — consistência das etapas 2 a 4](./CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md)
+4. [Correção 02 — preenchimento de teste do formulário](./CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md)
 
 ## Status inicial
 
@@ -44,9 +45,11 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Escopo inicial:** onboarding do serviço de multas; as etapas listadas na auditoria são pontos examinados, não um limite de escopo por número de etapa.
 - **Alterações funcionais registradas:** correção de consistência entre fase, categoria e formulário inicial documentada em CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md.
 - **CI da correção 01:** testes unitários, TypeScript e build aprovados no [workflow](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919).
-- **Correção 02 — botão administrativo de preenchimento:** considera serviço + fase + categoria e identifica dados sintéticos. Incidente subsequente registrado: os três campos de data não apareciam na interface; os inputs agora são remontados quando os valores programáticos mudam. CI e validação visual/E2E ainda pendentes. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
-- **Validação visual/E2E e consulta externa real:** ainda não declaradas como executadas.
-- **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
+- **Correção 02 — botão administrativo de preenchimento:** fixture contextualizada por serviço + fase + categoria. O usuário confirmou preenchimento completo da etapa 4 em ambiente local, incluindo datas; isso não equivale a validação em produção. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
+- **Correção 03 — perguntas específicas de radar/velocidade:** commit [396a7aae](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/396a7aae30a0987f5ccd7adf8aa39896bd36d481) torna os campos do INMETRO opcionais, remove uma afirmação jurídica categórica sobre aferição superior a 12 meses e corrige o formato ISO do input de data. A validação manual desta etapa está sendo feita pelo usuário; aguardar o resultado e registrá-lo.
+- **Workflows após a correção 03:** CI/CD run [40782524806](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524806) e Cloudflare Deploy run [40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758) precisam ser consultados para confirmar status final. Não presumir sucesso.
+- **Validação visual/E2E de ponta a ponta:** ainda não declarada como concluída. Consultar o HANDOFF CANÔNICO para a matriz e a sequência exata de continuidade.
+- **Próxima ação:** aguardar/registrar o teste manual da etapa de radar, conferir workflows e só então escolher a próxima correção com base em evidências.
 
 ## Modelo de registro por tarefa
 
