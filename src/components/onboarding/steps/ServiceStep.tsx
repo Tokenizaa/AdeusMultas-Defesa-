@@ -14,11 +14,13 @@ import { USER_SITUATIONS, UserSituation } from '../../../core/onboarding/rules-m
 
 interface ServiceStepProps {
   selectedSituation: UserSituation;
+  totalSteps?: number;
   onSelectSituation: (situation: UserSituation) => void;
 }
 
 export const ServiceStep: React.FC<ServiceStepProps> = ({
   selectedSituation,
+  totalSteps = 4,
   onSelectSituation,
 }) => {
   const getIcon = (id: UserSituation) => {
@@ -44,7 +46,7 @@ export const ServiceStep: React.FC<ServiceStepProps> = ({
       <div className="text-center max-w-xl mx-auto space-y-3">
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider bg-blue-50 text-[#155BCB] border border-blue-200 font-mono">
           <Sparkles className="w-4 h-4 text-[#155BCB]" />
-          Passo 1 de 4 • Situação
+          {`Passo 1 de ${totalSteps} • Situação`}
         </span>
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
           Qual situação você quer resolver?
