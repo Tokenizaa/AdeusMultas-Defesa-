@@ -10,6 +10,8 @@ type OcrFields = {
   aitNumber: string | null;
   plate: string | null;
   infractionDate: string | null;
+  location: string | null;
+  infractionCode: string | null;
   autuadorBody: string | null;
   description: string | null;
   ctbArticle: string | null;
@@ -26,6 +28,8 @@ function emptyFields(): OcrFields {
     aitNumber: null,
     plate: null,
     infractionDate: null,
+    location: null,
+    infractionCode: null,
     autuadorBody: null,
     description: null,
     ctbArticle: null,
@@ -105,7 +109,7 @@ ocrRoutes.post('/ocr/analyze', async (c) => {
     }
 
     const image = toDataUri(bytes, mimeType);
-    const prompt = `Você é um OCR de documentos de trânsito brasileiros. Extraia o texto visível com máxima fidelidade e, quando existirem, identifique os campos abaixo. Não invente valores. Responda SOMENTE JSON válido no formato {"rawText":"...","fields":{"aitNumber":null,"plate":null,"infractionDate":null,"autuadorBody":null,"description":null,"ctbArticle":null,"vehicleBrandModel":null,"driverName":null,"driverCpf":null,"driverCnh":null}}. Preserve pontuação, números e acentos. Se um campo não estiver legível ou não existir, use null.`;
+    const prompt = `Você é um OCR de documentos de trânsito brasileiros. Extraia o texto visível com máxima fidelidade e, quando existirem, identifique os campos abaixo. Não invente valores. Responda SOMENTE JSON válido no formato {"rawText":"...","fields":{"aitNumber":null,"plate":null,"infractionDate":null,"location":null,"infractionCode":null,"autuadorBody":null,"description":null,"ctbArticle":null,"vehicleBrandModel":null,"driverName":null,"driverCpf":null,"driverCnh":null}}. Preserve pontuação, números e acentos. Se um campo não estiver legível ou não existir, use null.`;
 
     const result = await c.env.AI.run(MODEL, {
       task: 'query',

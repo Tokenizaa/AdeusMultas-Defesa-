@@ -36,7 +36,7 @@ onboardingRoutes.get('/onboarding/rules', (c) => {
     phase1CoreFields: ['aitNumber', 'location', 'dateTime'],
     phase2QualificationFields: [
       'applicantName', 'applicantCpf', 'applicantCnh', 'cnhCategory', 'applicantEmail', 'applicantPhone',
-      'addressStreet', 'addressNumber', 'addressNeighborhood', 'addressZipCode', 'addressCityState',
+      'addressStreet', 'addressNumber', 'addressCityState',
     ],
     categoryRequirements: Object.fromEntries(
       Object.entries(RULES_MATRIX).map(([category, rules]) => [

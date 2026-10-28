@@ -342,7 +342,7 @@ describe('Onboarding copy regression — SpecificInfractionDataStep', () => {
     );
     expect(html).not.toContain('gera anulação imediata');
     expect(html).toContain(
-      'argumento forte para questionar a validade da medição do radar'
+      'Preencha somente se a data aparecer na notificação. Se não encontrar, deixe em branco; você não precisa pesquisar esse dado para iniciar a análise.'
     );
   });
 
@@ -400,7 +400,7 @@ describe('Onboarding copy regression — InfractionIdentificationStep', () => {
       />
     );
     expect(html).not.toContain('Art. 281-A CTB');
-    expect(html).toContain('Art. 281, §1º, II CTB');
+    expect(html).toContain('Art. 281, II CTB');
   });
 
   it('não afirma que dados devem ser preenchidos manualmente quando OCR preenche automaticamente', () => {
@@ -416,7 +416,7 @@ describe('Onboarding copy regression — InfractionIdentificationStep', () => {
     );
     expect(html).not.toContain('Os dados abaixo devem ser preenchidos manualmente.');
     expect(html).toContain(
-      'O upload faz OCR e preenche os campos automaticamente.'
+      'Anexe uma foto ou captura da notificação para preencher os dados automaticamente (Opcional)'
     );
   });
 });

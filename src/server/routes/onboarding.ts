@@ -29,7 +29,7 @@ router.get('/onboarding/rules', (_req, res) => {
     phase1CoreFields: ['aitNumber', 'plate', 'autuadorBody'],
     phase2QualificationFields: [
       'applicantName', 'applicantCpf', 'applicantCnh', 'applicantEmail', 'applicantPhone',
-      'addressStreet', 'addressNumber', 'addressNeighborhood', 'addressZipCode', 'addressCityState',
+      'addressStreet', 'addressNumber', 'addressCityState',
     ],
     categoryRequirements: Object.fromEntries(
       Object.entries(RULES_MATRIX).map(([category, entry]) => [

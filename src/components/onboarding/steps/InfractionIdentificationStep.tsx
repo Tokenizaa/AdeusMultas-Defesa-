@@ -87,7 +87,9 @@ function BrazilianDateInput({ id, value, onChange, required }: BrazilianDateInpu
                     return;
                 }
                 const iso = brazilianDateToIso(next);
-                if (iso) onChange(iso);
+                // Não manter uma data válida antiga enquanto o usuário está editando
+                // ou digitando uma data incompleta/inválida.
+                onChange(iso || '');
             }}
             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
         />
@@ -167,31 +169,70 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
         if (onUpdateLead) onUpdateLead(currentLeadName, val);
     };
 
-    const isFormValid =
-        (currentLeadName.trim().length >= 3) &&
-        (currentLeadPhone.trim().length >= 8) &&
-        (vehicleData.plate?.trim().length || 0) >= 7 &&
-        (infractionData.infractionCode?.trim().length || 0) >= 3 &&
-        (infractionData.location?.trim().length || 0) >= 5 &&
-        /^\d{4}-\d{2}-\d{2}$/.test(toDateInputValue(infractionData.dateTime)) &&
-        (infractionData.autuadorBody?.trim().length || 0) >= 3 &&
-        (infractionData.aitNumber?.trim().length || 0) >= 3;
+    // Só bloquear o diagnóstico por dados essenciais para classificar e avaliar a autuação.
+    // Contato, AIT e endereço detalhado podem ser complementados depois; não são pré-requisitos
+    // técnicos para iniciar o diagnóstico. O órgão autuador permanece necessário ao motor atual.
+    const missingRequiredFields = [
+        ...((vehicleData.plate?.trim().length || 0) < 7 ? ['Placa do veículo'] : []),
+        ...((infractionData.infractionCode?.trim().length || 0) < 3 ? ['Código/descrição da infração'] : []),
+        ...(!/^\d{4}-\d{2}-\d{2}$/.test(toDateInputValue(infractionData.dateTime)) ? ['Data da ocorrência'] : []),
+        ...((infractionData.autuadorBody?.trim().length || 0) < 3 ? ['Órgão autuador'] : []),
+    ];
+    const isFormValid = missingRequiredFields.length === 0;
 
     const handleFileUpload = async (file: File) => {
         setIsReadingFile(true);
-        setOcrStatusMessage(`Enviando "${file.name}" para análise interna...`);
+        setOcrStatusMessage(`Lendo o conteúdo de "${file.name}"...`);
 
         try {
+            // A API aceita base64 para executar OCR real. Enviar apenas o nome do arquivo
+            // não transmite a notificação e não permite extrair os dados.
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => typeof reader.result === 'string'
+                    ? resolve(reader.result)
+                    : reject(new Error('Não foi possível ler o arquivo.'));
+                reader.onerror = () => reject(reader.error || new Error('Falha ao ler o arquivo.'));
+                reader.readAsDataURL(file);
+            });
+            const base64 = dataUrl.split(',')[1];
+            if (!base64) throw new Error('Arquivo vazio ou formato não reconhecido.');
+
             const res = await authFetch('/api/ocr/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    rawText: `Arquivo de Notificação: ${file.name}`,
-                    serviceType: '',
-                }),
+                body: JSON.stringify({ image: dataUrl, base64, serviceType: '' }),
             });
             const data = await res.json();
-            if (data.success && data.extractedData) {
+            if (!res.ok) {
+                const errorMessage = data.message || data.error?.message || data.error || 'Não foi possível processar o documento.';
+                setOcrStatusMessage(`${errorMessage} Você pode preencher os campos manualmente.`);
+                return;
+            }
+
+            // Compatível com os dois contratos ativos: API Node (success/extractedData)
+            // e Worker Cloudflare (ok/data/fields).
+            const cloudflareFields = data.ok && data.data?.fields ? data.data.fields : null;
+            if (cloudflareFields) {
+                const fields = cloudflareFields;
+                onUpdateInfraction({
+                    ...infractionData,
+                    aitNumber: fields.aitNumber || infractionData.aitNumber,
+                    infractionCode: fields.infractionCode || infractionData.infractionCode,
+                    description: fields.description || infractionData.description,
+                    ctbArticle: fields.ctbArticle || infractionData.ctbArticle,
+                    autuadorBody: fields.autuadorBody || infractionData.autuadorBody,
+                    dateTime: fields.infractionDate || infractionData.dateTime,
+                    location: fields.location || infractionData.location,
+                });
+                if (fields.plate) {
+                    onUpdateVehicle({ ...vehicleData, plate: fields.plate });
+                }
+                const foundFields = Object.values(fields).some((value) => typeof value === 'string' && value.trim());
+                setOcrStatusMessage(foundFields
+                    ? 'Leitura concluída. Preenchemos os dados identificados; confira tudo com a notificação antes de continuar.'
+                    : 'A imagem foi processada, mas não conseguimos identificar os campos com segurança. Preencha manualmente.');
+            } else if (data.success && data.extractedData) {
                 // Merge OCR extracted data into form state (source of truth)
                 const extracted = data.extractedData;
                 const infraction = extracted.infraction;
@@ -213,6 +254,11 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         defenseDeadline: infraction.defenseDeadline || infractionData.defenseDeadline,
                         dateTime: infraction.dateTime || infractionData.dateTime,
                         location: infraction.location || infractionData.location,
+                        speedLimit: infraction.speedLimit ?? infractionData.speedLimit,
+                        measuredSpeed: infraction.measuredSpeed ?? infractionData.measuredSpeed,
+                        consideredSpeed: infraction.consideredSpeed ?? infractionData.consideredSpeed,
+                        inmetroAferitionDate: infraction.inmetroAferitionDate || infractionData.inmetroAferitionDate,
+                        radarEquipmentId: infraction.radarEquipmentId || infractionData.radarEquipmentId,
                     });
                 }
                 
@@ -226,7 +272,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 
                 setOcrStatusMessage('Documento processado! Dados preenchidos automaticamente. Revise antes de continuar.');
             } else {
-                setOcrStatusMessage('Documento enviado. Preencha os campos manualmente abaixo.');
+                setOcrStatusMessage(data.message || data.error?.message || 'Não foi possível identificar os dados. Preencha os campos manualmente.');
             }
         } catch (err) {
             setOcrStatusMessage('Não foi possível ler o documento. Preencha os campos manualmente.');
@@ -312,7 +358,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     <div>
                         <label htmlFor="input-lead-name" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
                             <User className="w-3 h-3 text-slate-400" />
-                            Seu Nome Completo *
+                            Seu Nome Completo (opcional)
                         </label>
                         <input
                             id="input-lead-name"
@@ -327,7 +373,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     <div>
                         <label htmlFor="input-lead-phone" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1 flex items-center gap-1">
                             <Phone className="w-3 h-3 text-emerald-600" />
-                            WhatsApp com DDD *
+                            WhatsApp com DDD (opcional)
                         </label>
                         <input
                             id="input-lead-phone"
@@ -346,7 +392,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <input
                     id="photo-ocr-upload"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".jpg,.jpeg,.png,.webp,.gif"
                     onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                             handleFileUpload(e.target.files[0]);
@@ -360,10 +406,10 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 </div>
                 <div className="text-left">
                     <p className="text-xs font-bold text-slate-800">
-                        Anexe uma foto ou PDF da notificação para melhorar a análise (Opcional)
+                        Anexe uma foto ou captura da notificação para preencher os dados automaticamente (Opcional)
                     </p>
                     <p className="text-[11px] text-slate-500">
-                        Formatos aceitos: PDF, JPG ou PNG. O upload faz OCR e preenche os campos automaticamente. Revise antes de continuar.
+                        Formatos aceitos: JPG, PNG, WEBP ou GIF. Os campos encontrados serão preenchidos; confira tudo com o documento. Se a leitura falhar, você pode digitar os dados.
                     </p>
                 </div>
                 <span className="text-[11px] font-bold text-[#155BCB] bg-white border border-blue-200 px-3 py-1 rounded-lg group-hover:bg-[#155BCB] group-hover:text-white transition-colors shrink-0">
@@ -404,7 +450,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             className="w-full text-sm font-mono font-bold uppercase bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
-                            Consta no topo ou centro da notificação recebida.
+                            Se estiver à mão, copie o número da notificação. Se não localizar agora, deixe em branco e complemente depois.
                         </span>
                     </div>
 
@@ -504,6 +550,9 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                               </option>
                             ))}
                     </select>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                        Confira o código e a descrição na notificação. Se a lista não corresponder ao documento, volte e reveja a categoria; não selecione apenas por semelhança.
+                    </span>
                     {/* Resumo auto-preenchido */}
                     {infractionData.infractionCode && infractionData.ctbArticle && (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -534,7 +583,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                     <div>
                         <label htmlFor="input-datetime" className="text-[11px] font-bold text-slate-700 uppercase font-mono mb-1.5 flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                            Data da Ocorrência
+                            Data da Ocorrência *
                         </label>
                         <BrazilianDateInput
                             id="input-datetime"
@@ -543,7 +592,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             required
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
-                            Prazo de decadência (Art. 281, §1º, II CTB)
+                            Copie a data que aparece na notificação. Não precisa pesquisar fora do documento.
                         </span>
                     </div>
 
@@ -614,10 +663,18 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         className="w-full text-sm font-medium bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
                     />
                     <span className="text-[10px] text-slate-400 mt-1 block">
-                        Endereço completo: via, número, bairro, cidade/UF
+                        Copie o local como aparece na notificação. Se não houver endereço completo, informe o que souber ou deixe para complementar depois.
                     </span>
                 </div>
             </div>
+
+            {!isFormValid && (
+                <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                    <p className="font-bold">Para iniciar o diagnóstico, confira apenas:</p>
+                    <p className="mt-1">{missingRequiredFields.join(' • ')}</p>
+                    <p className="mt-1 text-amber-800">Número do AIT, endereço detalhado e contato podem ser complementados depois. Não escolha um código por aproximação.</p>
+                </div>
+            )}
 
             {/* Navigation Controls */}
             <div className="pt-3 flex justify-between items-center border-t border-slate-100">
