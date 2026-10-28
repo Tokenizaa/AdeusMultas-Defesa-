@@ -25,13 +25,8 @@ import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 import { TestFillButton } from '../../ui/TestFillButton';
 import { InfractionCategory } from '../../../core/onboarding/rules-matrix';
 import {
-    generateRandomName,
-    generateRandomPhone,
-    generateRandomVehicleData,
-    generateRandomPlate,
-    generateRandomAddress,
 } from '../../../utils/test-data-generator';
-import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
+import { buildCompleteTestIdentificationFixture } from '../testFillData';
 
 type BrazilianDateInputProps = {
     id: string;
@@ -161,6 +156,14 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
     const [currentLeadName, setCurrentLeadName] = useState<string>(leadName || '');
     const [currentLeadPhone, setCurrentLeadPhone] = useState<string>(leadPhone || '');
 
+    React.useEffect(() => {
+        setCurrentLeadName(leadName || '');
+    }, [leadName]);
+
+    React.useEffect(() => {
+        setCurrentLeadPhone(leadPhone || '');
+    }, [leadPhone]);
+
     const handleNameChange = (val: string) => {
         setCurrentLeadName(val);
         if (onUpdateLead) onUpdateLead(val, currentLeadPhone);
@@ -260,41 +263,12 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <TestFillButton
                     isAdmin={isAdmin}
                     onClick={() => {
-                        const name = generateRandomName();
-                        const phone = generateRandomPhone();
-                        const vehicle = generateRandomVehicleData({
-                            plate: generateRandomPlate(),
-                        });
-                        // FIX 3: infração de teste coerente com a categoria selecionada.
-                        // Com categoria conhecida → conjunto completo coerente (artigo/código/
-                        // descrição da MESMA categoria, sem campos contraditórios).
-                        // Sem categoria conhecida → apenas campos neutros (AIT, data, órgão),
-                        // preservando qualquer seleção humana já feita.
-                        const baseInfraction = category
-                            ? buildCoherentTestInfraction(category, infractionData)
-                            : buildNeutralTestIdentification(infractionData);
-                        const address = generateRandomAddress();
-                        // Garante no próprio handler que os campos controlados de data
-                        // recebam valores ISO YYYY-MM-DD, independentemente do gerador.
-                        const occurrenceDate = toDateInputValue(baseInfraction.dateTime)
-                            || new Date().toISOString().slice(0, 10);
-                        const addTestDays = (days: number) => {
-                            const date = new Date(`${occurrenceDate}T12:00:00.000Z`);
-                            date.setUTCDate(date.getUTCDate() + days);
-                            return date.toISOString().slice(0, 10);
-                        };
-                        const infraction = {
-                            ...baseInfraction,
-                            notificationExpeditionDate: addTestDays(3),
-                            notificationDeliveryDate: addTestDays(5),
-                            defenseDeadline: addTestDays(25),
-                            location: `${address.street}, ${address.number} - ${address.cityState}`,
-                        };
-                        if (onUpdateLead) onUpdateLead(name, phone);
-                        setCurrentLeadName(name);
-                        setCurrentLeadPhone(phone);
-                        onUpdateInfraction({ ...infractionData, ...infraction });
-                        onUpdateVehicle({ ...vehicleData, ...vehicle });
+                        const fixture = buildCompleteTestIdentificationFixture(category, infractionData);
+                        if (onUpdateLead) onUpdateLead(fixture.leadName, fixture.leadPhone);
+                        setCurrentLeadName(fixture.leadName);
+                        setCurrentLeadPhone(fixture.leadPhone);
+                        onUpdateInfraction(fixture.infractionData);
+                        onUpdateVehicle(fixture.vehicleData);
                     }}
                 />
             </div>
