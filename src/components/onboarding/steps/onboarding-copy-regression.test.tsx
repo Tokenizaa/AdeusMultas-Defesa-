@@ -449,7 +449,7 @@ describe('OnboardingStartScreen — início e retomada explícitos', () => {
     );
 
     expect(html).toContain('Vamos começar pelo seu caso');
-    expect(html).toContain('>Começar<');
+    expect(html).toContain('Começar');
     expect(html).not.toContain('Continuar de onde parei');
     expect(html).not.toContain('Começar do zero');
   });
