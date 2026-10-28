@@ -318,7 +318,7 @@ export function buildCompleteTestIdentificationFixture(
   const address = generateRandomAddress();
   const infractionData: InfractionData = {
     ...baseInfraction,
-    aitNumber: `TESTE-${generateRandomAIT()}`,
+    aitNumber: generateRandomAIT(),
     infractionCode: selectedCode,
     autuadorBody: baseInfraction.autuadorBody?.trim() || 'DETRAN-SP',
     dateTime: occurrenceDate,
