@@ -89,7 +89,32 @@ Alterações registradas:
 - Corrigido o binding do input HTML `type="date"`: passa a receber e salvar diretamente `YYYY-MM-DD`, em vez de converter para `dd/mm/yy` e tentar interpretar ISO como formato brasileiro.
 - Os testes unitários da fixture de velocidade verificam limite, velocidade medida/considerada, data ISO e identificador sintético. Isso **não substitui** um teste real da interface.
 
-**Próximo passo imediato:** o usuário está prestes a testar manualmente a etapa de perguntas específicas. Aguardar o resultado dele antes de escolher a próxima correção. Registrar o que aconteceu com precisão: se os campos opcionais permitem continuar vazios; se o botão 🧪 preenche todos os campos; se a data aparece; se a data pode ser alterada e continua visível após interação/retorno; e se não há erros no console.
+**Estado atualizado:** a etapa de radar permanece com teste manual do usuário pendente. Em seguida foi investigado e corrigido o problema de retomada automática do wizard; ver seção abaixo. Não marcar o campo de radar nem o onboarding completo como aprovados sem evidência manual/E2E.
+
+### Correção 04 — navegação, início manual, retomada e reinício
+
+Registro: [CORRECAO-04-NAVEGACAO-INICIO-RETOMADA.md](./CORRECAO-04-NAVEGACAO-INICIO-RETOMADA.md).
+
+Diagnóstico confirmado: `OnboardingWizard.tsx` inicializava `step` com `savedState?.step ?? 1`, restaurando a última etapa sem pedir decisão ao usuário. Além disso, o formulário era salvo em sessionStorage e localStorage, mas a leitura só consultava sessionStorage e a função de limpeza só removia a cópia da sessão.
+
+Implementação commitada:
+- nova tela `src/components/onboarding/OnboardingStartScreen.tsx`;
+- entrada manual com **Começar**;
+- se houver rascunho, opções **Continuar de onde parei** e **Começar do zero**;
+- botão **Recomeçar do zero** dentro do wizard, com confirmação;
+- reset do estado do wizard e limpeza das duas chaves de rascunho, sem excluir conta nem casos remotos;
+- fallback de leitura do formulário para a chave local existente;
+- validação do número da etapa restaurada;
+- testes de renderização SSR da tela de início/retomada e atualização da regressão de copy do INMETRO.
+
+Commits:
+- [ee66b58c](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/ee66b58cc8a1048eedf8e03abf546363b0e68563)
+- [473d1576](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/473d1576e296691acf319b5cd7273087b1d5a740)
+- [ef0f97ab](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/ef0f97abc94b5e6962e1e47c83d2850908a2005b)
+- [b3555f7d](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/b3555f7decdc7722a2447948598ae8451e185ae9)
+- [e4b59ed7](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/e4b59ed7ebb7c50e2317d4adacb57453c5ba67ad)
+
+Ainda pendente: validar em navegador os cliques reais, avanço/retrocesso, recarga, retomada e reinício.
 
 ## 5. Workflows: verificar estado atual antes de agir
 
@@ -98,11 +123,11 @@ Após o commit 396a7aae, foram iniciados:
 - [Cloudflare Deploy — run 40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758)
 
 **Estado consultado em 2026-10-28:**
-- CI/CD run [40782524806](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524806): **FAIL**; job `test-unit` falhou no passo Vitest. Typecheck/build foram pulados. A listagem de jobs não mostrou a mensagem interna do teste; abrir logs do workflow para identificar o teste e a causa.
-- Cloudflare Deploy run [40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758): **FAIL**; `Discover canonical E2E matrix (read-only)` falhou e o build/deploy foi pulado. Abrir o log desse passo e confirmar a mensagem exata.
-- Após os commits de documentação, CI/CD runs [40782882801](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782882801) (commit `f479d3e1`) e [40782928525](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782928525) (commit `a6487630`) estavam `in_progress` na última consulta. Consultar o status final; não presumir sucesso.
+- [CI/CD Pipeline — run 40786343544](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786343544) falhou porque um teste ainda esperava a frase antiga `argumento forte para questionar a validade da medição do radar`, removida pela correção 03. A asserção foi atualizada no commit e4b59ed7; conferir o resultado do workflow desse commit.
+- [Cloudflare Deploy — run 40786343401](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786343401) falhou no passo `Discover canonical E2E matrix (read-only)`; listou apenas 3 testes e esperava 10 cenários por serviço (70 no total), então o build/deploy foi pulado.
+- [CI/CD Pipeline — run 40786481945](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786481945) e [Cloudflare Deploy — run 40786481969](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786481969), ambos do commit e4b59ed7, estavam `queued` na última consulta. Consultar o estado final.
 
-Há uma falha de descoberta de matriz E2E em execuções anteriores, com mensagem relatada semelhante a `Expected 10 canonical scenarios for DEFESA_PREVIA, found 0`. Não atribuir essa mensagem ao run atual sem ler o log atual. Não desativar a verificação nem inventar testes falsos.
+**Regra de deploy:** não tentar contornar a matriz E2E nem publicar enquanto o gate de deploy falhar. Investigar o contrato esperado dos cenários e criar testes verdadeiros se isso fizer parte da tarefa autorizada.
 
 ## 6. Matriz mínima para a etapa atual (radar/velocidade)
 
