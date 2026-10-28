@@ -390,7 +390,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)
   useEffect(() => {
-    if (hasStarted && savedState && (savedState.step === 6 || savedState.step === 7) && isAuthenticated && user) {
+    if (hasStarted && savedState?.step === 7 && isAuthenticated && user) {
       setDocumentData((prev) => ({
         ...prev,
         applicantName: user.name || prev.applicantName,
