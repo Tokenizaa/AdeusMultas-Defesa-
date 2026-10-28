@@ -13,12 +13,16 @@ import { USER_PROCESS_STAGES, UserProcessStage } from '../../../core/onboarding/
 
 interface DefenseStageStepProps {
   selectedStage: UserProcessStage;
+  totalSteps?: number;
+  stepNumber?: number;
   onSelectStage: (stage: UserProcessStage) => void;
   onBack: () => void;
 }
 
 export const DefenseStageStep: React.FC<DefenseStageStepProps> = ({
   selectedStage,
+  totalSteps = 4,
+  stepNumber = 2,
   onSelectStage,
   onBack,
 }) => {
@@ -47,7 +51,7 @@ export const DefenseStageStep: React.FC<DefenseStageStepProps> = ({
       <div className="text-center max-w-xl mx-auto space-y-3">
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider bg-blue-50 text-[#155BCB] border border-blue-200 font-mono">
           <Sparkles className="w-4 h-4 text-[#155BCB]" />
-          Passo 2 de 4 • Fase
+          {`Passo ${stepNumber} de ${totalSteps} • Fase`}
         </span>
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
           Em que situação está sua multa?
