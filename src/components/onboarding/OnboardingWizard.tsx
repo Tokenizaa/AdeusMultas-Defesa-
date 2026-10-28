@@ -27,7 +27,6 @@ import {
   UserProcessStage,
   InfractionCategory,
   USER_SITUATIONS,
-  USER_PROCESS_STAGES,
   RULES_MATRIX,
   resolveOnboardingProcedure
 } from '../../core/onboarding/rules-matrix';
@@ -415,7 +414,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   useEffect(() => {
     if (step !== 4) return;
     setInfractionData((prev) => reconcileInfractionDataForCategory(prev, infractionCategory));
-  }, [step, infractionCategory]);
+  }, [step, infractionCategory, infractionData.infractionCode]);
 
   // Handlers
   const applyCategorySelection = (selected: InfractionCategory) => {
