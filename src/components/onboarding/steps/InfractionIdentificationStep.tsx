@@ -521,7 +521,6 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         </label>
                         <BrazilianDateInput
                             id="input-datetime"
-                            key={`dateTime-${infractionData.dateTime || 'empty'}`}
                             value={infractionData.dateTime}
                             onChange={(value) => onUpdateInfraction({ ...infractionData, dateTime: value })}
                             required
@@ -539,7 +538,6 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         </label>
                         <BrazilianDateInput
                             id="input-notification-expedition-date"
-                            key={`notificationExpeditionDate-${infractionData.notificationExpeditionDate || 'empty'}`}
                             value={infractionData.notificationExpeditionDate}
                             onChange={(value) => onUpdateInfraction({ ...infractionData, notificationExpeditionDate: value })}
                             
@@ -557,7 +555,6 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         </label>
                         <BrazilianDateInput
                             id="input-notification-delivery-date"
-                            key={`notificationDeliveryDate-${infractionData.notificationDeliveryDate || 'empty'}`}
                             value={infractionData.notificationDeliveryDate}
                             onChange={(value) => onUpdateInfraction({ ...infractionData, notificationDeliveryDate: value })}
                             
@@ -575,7 +572,6 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                         </label>
                         <BrazilianDateInput
                             id="input-defense-deadline"
-                            key={`defenseDeadline-${infractionData.defenseDeadline || 'empty'}`}
                             value={infractionData.defenseDeadline}
                             onChange={(value) => onUpdateInfraction({ ...infractionData, defenseDeadline: value })}
                             
