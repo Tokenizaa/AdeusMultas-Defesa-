@@ -137,7 +137,7 @@ describe('coerência entre serviço, fase e categoria do fixture', () => {
   it('marca os dados como teste e mantém cronologia sintética dos eventos', () => {
     const fixture = buildCompleteTestIdentificationFixture('multa_transito', 'primeira_notificacao', 'excesso_velocidade', emptyInfraction);
     expect(fixture.leadName).toBe('Condutor de Teste');
-    expect(fixture.infractionData.aitNumber).toMatch(/^TESTE-/);
+    expect(fixture.infractionData.aitNumber).toMatch(/^\d{10}(\d{2})?$/);
     expect(fixture.infractionData.notificationExpeditionDate! > fixture.infractionData.dateTime!).toBe(true);
     expect(fixture.infractionData.notificationDeliveryDate! > fixture.infractionData.notificationExpeditionDate!).toBe(true);
     expect(fixture.infractionData.defenseDeadline! > fixture.infractionData.notificationDeliveryDate!).toBe(true);
