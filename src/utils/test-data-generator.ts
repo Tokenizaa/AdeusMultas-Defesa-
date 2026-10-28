@@ -1,5 +1,6 @@
 import type { InfractionData, VehicleData, CaseDocumentData } from '../types';
 import { INFRACTION_CATALOG } from '../data/knowledge-base';
+import { InfractionCategory } from '../core/onboarding/rules-matrix';
 
 // ==========================================
 // DEV-ONLY GUARD
@@ -186,18 +187,17 @@ export function generateRandomCardData(): {
 // ==========================================
 
 export function generateRandomInfractionData(
+    category?: InfractionCategory,
     overrides?: Partial<InfractionData>,
 ): InfractionData {
-    const speedLimit = randInt(40, 120);
-    const measuredSpeed = speedLimit + randInt(5, 35);
-    const consideredSpeed = measuredSpeed - 7;
     const daysAgo = randInt(1, 60);
     const dateTime = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
         .toISOString()
         .split('T')[0];
     const catalogItem = pick(INFRACTION_CATALOG);
 
-    return {
+    // Base fields from catalog item (same source for all derived fields)
+    const base: InfractionData = {
         aitNumber: generateRandomAIT(),
         infractionCode: catalogItem.code,
         description: catalogItem.description,
@@ -208,11 +208,58 @@ export function generateRandomInfractionData(
         autuadorBody: pick(AUTUADORES),
         dateTime,
         location: `Rua ${pick(RUAS)}, ${pick(BAIRROS)}, ${pick(CIDADES_UF)}`,
+        ...(category !== 'excesso_velocidade' ? { speedLimit: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { measuredSpeed: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { consideredSpeed: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { inmetroAferitionDate: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { radarEquipmentId: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { hasR19SignageProof: undefined } : {}),
+        ...(category !== 'excesso_velocidade' ? { hasPhotoProof: undefined } : {}),
+    };
+
+    // Category-specific speed fields only for excesso_velocidade
+    let result: InfractionData;
+    if (category === 'excesso_velocidade') {
+      const speedLimit = randInt(40, 120);
+      const measuredSpeed = speedLimit + randInt(5, 35);
+      const consideredSpeed = calculatedConsideredSpeed(measuredSpeed) ?? measuredSpeed - 7;
+      result = {
+        ...base,
         speedLimit,
         measuredSpeed,
         consideredSpeed,
-        ...overrides,
-    };
+        inmetroAferitionDate: recentDate(),
+        radarEquipmentId: 'TEST-RADAR-001',
+        hasR19SignageProof: true,
+        hasPhotoProof: true,
+      };
+    } else {
+      result = { ...base, speedLimit: undefined, measuredSpeed: undefined, consideredSpeed: undefined };
+    }
+
+    return { ...result, ...overrides };
+}
+
+/**
+ * Calcula a velocidade considerada segundo a Tabela I da Resolução CONTRAN nº 798/2020.
+ * Para medição até 100 km/h: desconta 7 km/h.
+ * Para medição acima de 100 km/h: desconta 7%.
+ */
+function calculatedConsideredSpeed(measuredSpeed: number): number {
+  if (!measuredSpeed || measuredSpeed <= 0) return 0;
+  if (measuredSpeed <= 107) {
+    return Math.max(0, measuredSpeed - 7);
+  }
+  return Math.round(measuredSpeed * 0.93);
+}
+
+/**
+ * Gera uma data recente no formato YYYY-MM-DD (ISO).
+ */
+function recentDate(): string {
+  return new Date(Date.now() - randInt(1, 60) * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
 }
 
 export function generateRandomVehicleData(

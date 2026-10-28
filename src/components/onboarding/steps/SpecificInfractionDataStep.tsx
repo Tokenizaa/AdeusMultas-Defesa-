@@ -17,6 +17,7 @@ import {
 import { InfractionData } from '../../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
+import { formatDateBR, parseDateBR } from '../../../lib/date-utils';
 import { TestFillButton } from '../../ui/TestFillButton';
 import { buildCoherentTestInfraction } from '../testFillData';
 
@@ -195,8 +196,11 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <input
                   id="input-inmetro-date"
                   type="date"
-                  value={infractionData.inmetroAferitionDate || ''}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, inmetroAferitionDate: e.target.value })}
+                  value={infractionData.inmetroAferitionDate ? formatDateBR(infractionData.inmetroAferitionDate) : ''}
+                            onChange={(e) => {
+                                    const isoDate = parseDateBR(e.target.value);
+                                    onUpdateInfraction({ ...infractionData, inmetroAferitionDate: isoDate });
+                                }}
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
@@ -291,19 +295,20 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   <select
                     id="select-termo-sinais"
                     value={
-                      infractionData.hasPsychomotorTerm === false
-                        ? 'sem_sinais'
-                        : infractionData.hasPsychomotorTerm === true
-                        ? 'entregue'
-                        : 'nao_entregue'
+                      infractionData.notes?.match(/(?:^|\|\s*)termo_(nao_entregue|sem_sinais|entregue)/)?.[1]
+                        || (infractionData.hasPsychomotorTerm === false
+                          ? 'sem_sinais'
+                          : infractionData.hasPsychomotorTerm === true
+                          ? 'entregue'
+                          : 'nao_entregue')
                     }
                     className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                     onChange={(e) => {
                       const val = e.target.value;
                       onUpdateInfraction({
                         ...infractionData,
-                        hasPsychomotorTerm: val === 'entregue' ? true : false,
-                        notes: `${(infractionData.notes || '').replace(/termo_[a-z_]+/g, '')} | termo_${val}`,
+                        hasPsychomotorTerm: val === 'entregue' ? true : val === 'sem_sinais' ? false : undefined,
+                        notes: `${(infractionData.notes || '').replace(/(?:^|\|\s*)termo_[a-z_]+/g, '').trim()} | termo_${val}`,
                       });
                     }}
                   >
@@ -393,7 +398,13 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </label>
               <select
                 id="select-vermelho-motivo"
-                value={infractionData.yellowPhaseCrossing === true ? 'amarelo_rapido' : infractionData.emergencyPassage === true ? 'emergencia' : ''}
+                value={
+                  infractionData.yellowPhaseCrossing === true
+                    ? 'amarelo_rapido'
+                    : infractionData.emergencyPassage === true
+                    ? 'emergencia'
+                    : infractionData.notes?.match(/^vermelho_(amarelo_rapido|emergencia|noturno_seguranca|cruzamento_travado)$/)?.[1] || ''
+                }
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 onChange={(e) => {
                   const val = e.target.value;
@@ -453,20 +464,27 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               </label>
               <select
                 id="select-estacionamento-tipo"
+                value={infractionData.notes?.match(/^estacionamento_(passeio_faixa|zona_azul_app)$/)?.[1] || 'passeio_faixa'}
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 onChange={(e) => {
+                  const code = e.target.value === 'zona_azul_app' ? '554-12' : '545-21';
+                  const item = INFRACTION_CATALOG.find((candidate) => candidate.code === code);
                   onUpdateInfraction({
                     ...infractionData,
-                    ctbArticle: 'Art. 181 do CTB',
-                    infractionCode: '545-21',
+                    ...(item ? {
+                      ctbArticle: item.article,
+                      infractionCode: item.code,
+                      description: item.description,
+                      severity: item.severity,
+                      points: item.points,
+                      fineAmount: item.fineAmount,
+                    } : {}),
                     notes: `estacionamento_${e.target.value}`,
                   });
                 }}
               >
-                <option value="embarque_rapido">Parada rápida de embarque/desembarque de passageiros (Art. 47 CTB)</option>
-                <option value="sinalizacao_apagada">Sem placa R-6a regulamentar visível no trecho</option>
-                <option value="pane_mecanica">Veículo apresentou pane mecânica / emergência com pisca-alerta</option>
-                <option value="zona_azul_app">Falha de aplicativo de estacionamento rotativo (Zona Azul)</option>
+                <option value="passeio_faixa">Estacionar no passeio ou sobre faixa destinada a pedestre (código 545-21)</option>
+                <option value="zona_azul_app">Estacionar em desacordo com as condições do estacionamento rotativo (código 554-12)</option>
               </select>
             </div>
           </div>
