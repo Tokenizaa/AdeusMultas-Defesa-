@@ -26,14 +26,14 @@
 - Novo componente `src/components/onboarding/OnboardingStartScreen.tsx`.
 - Ao abrir o onboarding, a pessoa vê uma tela de início, sem ser enviada automaticamente para a etapa anterior.
 - Sem progresso relevante, a ação disponível é **Começar**.
-- Com rascunho detectado, a tela oferece **Continuar de onde parei** e **Começar do zero**.
+- Com rascunho detectado, a tela oferece continuação ou reinício. Quando a etapa salva é conhecida e maior que 1, o botão diz **Continuar de onde parei**; se só os dados do formulário foram recuperados, diz **Continuar preenchimento**.
 - O wizard só grava a etapa e o formulário depois de a pessoa iniciar explicitamente.
 - Há um botão **Recomeçar do zero** dentro do wizard a partir da etapa 2, com confirmação para evitar perda acidental do rascunho.
 - Reiniciar limpa apenas as chaves locais do rascunho do onboarding e reinicializa o estado React do wizard; não apaga conta nem outros casos remotos.
 - A leitura do formulário usa `sessionStorage` e, como fallback, a chave local já existente em `localStorage`.
 - A limpeza remove o rascunho de ambos os armazenamentos.
 - A etapa restaurada é validada como inteiro entre 1 e 10; um valor inválido é descartado.
-- O autoavanço após autenticação só pode ocorrer depois de a pessoa optar por retomar o wizard, não enquanto está na tela inicial.
+- O autoavanço após autenticação só pode ocorrer depois de a pessoa optar por retomar o wizard, não enquanto está na tela inicial. A condição foi restringida à etapa 7, evitando pular a análise quando o rascunho estava na etapa 6.
 
 ## 3. Testes adicionados/ajustados
 
@@ -53,7 +53,7 @@ Esses testes usam renderização server-side para verificar o conteúdo renderiz
 - [x] Limpeza de rascunho cobre sessionStorage e localStorage.
 - [x] Testes de renderização adicionados ao arquivo incluído no gate Vitest.
 - [x] CI/CD do commit e57ddbf6 passou: Vitest, typecheck e build aprovados no [run 40786762859](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786762859).
-- [ ] CI do commit 25e33671, que ajusta apenas o rótulo de continuação, concluído; run [40786938357](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357) estava em andamento na última consulta.
+- [x] CI/CD do commit 25e33671 passou em Vitest, typecheck e build no [run 40786938357](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357).
 - [x] Deploy do commit 25e33671 bloqueado no gate de descoberta da matriz E2E: [run 40786938367](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938367). O workflow lista apenas três testes Playwright e exige 70 cenários canônicos reais; não contornar esse gate.
 - [ ] Teste manual/E2E confirmado para o SHA mais recente.
 - [ ] Teste manual/E2E de início, retomar, reiniciar, avançar, voltar e recarregar.
@@ -61,14 +61,15 @@ Esses testes usam renderização server-side para verificar o conteúdo renderiz
 
 ### Workflows relevantes
 
-- [CI/CD Pipeline — run 40786481945, commit e4b59ed7](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786481945): estava na fila na última consulta.
-- [Cloudflare Deploy — run 40786481969, commit e4b59ed7](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786481969): estava na fila na última consulta.
+- [CI/CD Pipeline — run 40786762859, commit e57ddbf6](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786762859): **success**.
+- [CI/CD Pipeline — run 40786938357, commit 25e33671](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357): **success**.
+- [Cloudflare Deploy — run 40786938367, commit 25e33671](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938367): **failure** no gate da matriz E2E.
 - Falha conhecida do deploy: [run 40786343401](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786343401) parou no passo `Discover canonical E2E matrix (read-only)`; o comando listou apenas 3 testes quando o workflow espera 70 cenários canônicos. Não desativar esse gate para forçar publicação.
 - Falha conhecida do CI no commit anterior: [run 40786343544](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786343544) tinha uma asserção antiga que ainda exigia o texto removido sobre aferição de radar. A asserção foi atualizada no commit e4b59ed7; aguardar o workflow desse commit para confirmar.
 
 ## 5. Próximas ações
 
-1. Consultar os workflows do commit e4b59ed7 e ler os logs se falharem.
+1. Consultar o workflow do commit de documentação mais recente, se necessário; o CI de código do commit 25e33671 já passou.
 2. Corrigir qualquer falha real de Vitest/typecheck/build antes de tentar publicar.
 3. Resolver a descoberta da matriz E2E conforme o contrato verdadeiro dos testes; não inventar cenários nem enfraquecer a verificação.
 4. Com CI aprovado, executar/acompanhar teste de navegador para:

@@ -116,7 +116,7 @@ Commits:
 - [e57ddbf6](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/e57ddbf606e4474291bf516b98f7c3210f491cc3)
 - [25e33671](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/25e33671c0d138b87263c7ef34fe9b64209a8e30)
 
-Ainda pendente: validar em navegador os cliques reais, avanço/retrocesso, recarga, retomada e reinício. CI do commit e57ddbf6 passou (Vitest, typecheck e build) no [run 40786762859](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786762859); CI do commit 25e33671 estava em andamento no [run 40786938357](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357). O deploy continua bloqueado no [run 40786938367](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938367), porque a descoberta lista apenas 3 testes Playwright e o gate exige 70 cenários canônicos reais. Não desativar esse gate.
+Ainda pendente: validar em navegador os cliques reais, avanço/retrocesso, recarga, retomada e reinício. CI do commit e57ddbf6 passou (Vitest, typecheck e build) no [run 40786762859](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786762859); CI do commit 25e33671 passou em Vitest, typecheck e build no [run 40786938357](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357). O deploy continua bloqueado no [run 40786938367](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938367), porque a descoberta lista apenas 3 testes Playwright e o gate exige 70 cenários canônicos reais. Não desativar esse gate.
 
 ## 5. Workflows: verificar estado atual antes de agir
 
