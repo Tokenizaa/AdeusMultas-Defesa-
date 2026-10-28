@@ -42,8 +42,8 @@ A fixture não submete o formulário nem dispara a análise. Ela apenas preenche
 
 ## Evidências e commits
 
-- **src/components/onboarding/testFillData.ts**: commit `3dcd5631f1909c166d1e23064a05b2e19fc2fe49`.
-- **src/components/onboarding/steps/InfractionIdentificationStep.tsx**: commit `2b42027a98785149b0fe0bc5d3f0d98a0f27c7ef`.
-- **src/components/onboarding/testFillData.test.ts**: commits `c81b7d6af7643c781bb899705cada95d0dec2744` e `87c33273c31a4d1331e5eca3cadb2e1b47c4f950`.
+- **src/components/onboarding/testFillData.ts**: commits `3dcd5631f1909c166d1e23064a05b2e19fc2fe49` e `56b65ca21f6a7174e90f9293862a71027e8c83aa` (compatibilidade código/categoria).
+- **src/components/onboarding/steps/InfractionIdentificationStep.tsx**: commits `2b42027a98785149b0fe0bc5d3f0d98a0f27c7ef` e `bedbb9107fd756691b6daaca74cd40b575e45352` (limpeza do import após refatoração).
+- **src/components/onboarding/testFillData.test.ts**: commits `c81b7d6af7643c781bb899705cada95d0dec2744`, `87c33273c31a4d1331e5eca3cadb2e1b47c4f950` e `7423e0e5dde33bb9152ccf3d21f486ff2154a2ce` (compatibilidade entre categoria e código).
 
-**Estado atual:** implementação registrada; validação automatizada pós-alteração e confirmação visual ainda pendentes. Não declarar PASS até obter essas evidências.
+**Estado atual:** implementação registrada. A consulta de status do commit e a consulta de execuções de workflow não retornaram checks/run associados a estes commits; portanto, CI ainda não está comprovado. Confirmação visual no navegador também está pendente. Não declarar PASS até obter essas evidências.
