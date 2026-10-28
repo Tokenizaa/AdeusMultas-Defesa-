@@ -9,6 +9,8 @@
 - [ef0f97ab — testes da tela de início](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/ef0f97abc94b5e6962e1e47c83d2850908a2005b)
 - [b3555f7d — ajuste de asserção do botão](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/b3555f7decdc7722a2447948598ae8451e185ae9)
 - [e4b59ed7 — atualização do teste de texto INMETRO](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/e4b59ed7ebb7c50e2317d4adacb57453c5ba67ad)
+- [e57ddbf6 — não pular a etapa de análise ao retomar na etapa 6](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/e57ddbf606e4474291bf516b98f7c3210f491cc3)
+- [25e33671 — rótulo correto quando só os dados do formulário foram recuperados](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/25e33671c0d138b87263c7ef34fe9b64209a8e30)
 
 ## 1. Diagnóstico confirmado por leitura do código
 
@@ -50,8 +52,10 @@ Esses testes usam renderização server-side para verificar o conteúdo renderiz
 - [x] Ação de reinício local implementada.
 - [x] Limpeza de rascunho cobre sessionStorage e localStorage.
 - [x] Testes de renderização adicionados ao arquivo incluído no gate Vitest.
-- [ ] CI do commit mais recente concluído com sucesso.
-- [ ] Typecheck e build concluídos com sucesso.
+- [x] CI/CD do commit e57ddbf6 passou: Vitest, typecheck e build aprovados no [run 40786762859](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786762859).
+- [ ] CI do commit 25e33671, que ajusta apenas o rótulo de continuação, concluído; run [40786938357](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938357) estava em andamento na última consulta.
+- [x] Deploy do commit 25e33671 bloqueado no gate de descoberta da matriz E2E: [run 40786938367](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40786938367). O workflow lista apenas três testes Playwright e exige 70 cenários canônicos reais; não contornar esse gate.
+- [ ] Teste manual/E2E confirmado para o SHA mais recente.
 - [ ] Teste manual/E2E de início, retomar, reiniciar, avançar, voltar e recarregar.
 - [ ] Deploy de produção confirmado.
 
@@ -78,4 +82,4 @@ Esses testes usam renderização server-side para verificar o conteúdo renderiz
    - perfil do usuário preservado e outros casos remotos não excluídos.
 5. Só depois de CI aprovado e gate E2E resolvido, confirmar autorização/condições de deploy e verificar o resultado real de produção.
 
-**Status:** alteração implementada na `main`; validação automatizada e deploy ainda não aprovados.
+**Status:** implementação na `main`; CI passou no commit e57ddbf6, o commit 25e33671 ainda aguardava CI na última consulta e o deploy está bloqueado pelo gate E2E de 70 cenários. Validação manual continua pendente.
