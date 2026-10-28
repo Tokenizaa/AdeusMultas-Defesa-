@@ -40,6 +40,7 @@ import {
 
 const WIZARD_STORAGE_KEY = 'defesai_wizard_state';
 const WIZARD_FORM_DATA_KEY = 'defesai_wizard_form_data';
+const WIZARD_FORM_DATA_LOCAL_KEY = 'defesai_wizard_form_data_local_v1';
 
 // Código canônico inicial de cada categoria (catálogo INFRACTION_CATALOG).
 // Só as categorias com código equivalente no catálogo têm default.
@@ -118,7 +119,7 @@ function loadWizardState(): WizardPersistedState | null {
       sessionStorage.removeItem(WIZARD_STORAGE_KEY);
       return null;
     }
-    if (typeof parsed.step !== 'number' || !Number.isFinite(parsed.step)) {
+    if (!Number.isInteger(parsed.step) || parsed.step < 1 || parsed.step > 10 || !Number.isFinite(parsed.savedAt)) {
       sessionStorage.removeItem(WIZARD_STORAGE_KEY);
       return null;
     }
@@ -131,7 +132,8 @@ function loadWizardState(): WizardPersistedState | null {
 
 function loadWizardFormData(): WizardFormDataState | null {
   try {
-    const raw = sessionStorage.getItem(WIZARD_FORM_DATA_KEY);
+    const raw = sessionStorage.getItem(WIZARD_FORM_DATA_KEY)
+      ?? localStorage.getItem(WIZARD_FORM_DATA_LOCAL_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WizardFormDataState;
     // TTL 24h
@@ -164,7 +166,7 @@ function saveWizardFormData(state: WizardFormDataState) {
   } catch { /* sessionStorage unavailable, ignore */ }
   try {
     localStorage.setItem(
-      'defesai_wizard_form_data_local_v1',
+      WIZARD_FORM_DATA_LOCAL_KEY,
       JSON.stringify({ ...state, savedAt: Date.now() })
     );
   } catch { /* localStorage unavailable, ignore */ }
@@ -172,6 +174,7 @@ function saveWizardFormData(state: WizardFormDataState) {
 
 function clearWizardFormData() {
   try { sessionStorage.removeItem(WIZARD_FORM_DATA_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(WIZARD_FORM_DATA_LOCAL_KEY); } catch { /* ignore */ }
 }
 
 function clearWizardState() {
@@ -190,6 +193,7 @@ import { RequiredDataStep } from './generation/RequiredDataStep';
 import { DocumentReviewStep } from './generation/DocumentReviewStep';
 import { DocumentCheckoutStep } from './generation/DocumentCheckoutStep';
 import { AccountVerificationGate } from './AccountVerificationGate';
+import { OnboardingStartScreen } from './OnboardingStartScreen';
 
 interface OnboardingWizardProps {
   onCaseReadyForCheckout?: (newCase: CaseDomain) => void;
@@ -214,8 +218,24 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     // Load persisted wizard state if available (e.g., after email confirmation)
     const savedState = loadWizardState();
     const savedFormData = loadWizardFormData();
+    const hasSavedProgress = Boolean(
+      (savedState && (
+        savedState.step > 1 ||
+        savedState.savedCaseId ||
+        savedState.savedClaimToken
+      )) ||
+      (savedFormData && (
+        savedFormData.leadName?.trim() ||
+        savedFormData.leadPhone?.trim() ||
+        savedFormData.vehicleData?.plate?.trim() ||
+        savedFormData.infractionData?.aitNumber?.trim() ||
+        savedFormData.infractionData?.location?.trim() ||
+        savedFormData.infractionData?.dateTime?.trim()
+      ))
+    );
 
     // Wizard Step (1 to 6: Phase 1 Free Analysis, 7 to 9: Phase 2 Paid Document Generation)
+    const [hasStarted, setHasStarted] = useState<boolean>(false);
     const [step, setStep] = useState<number>(savedState?.step ?? 1);
     const wizardTopRef = useRef<HTMLDivElement>(null);
     const stepContentRef = useRef<HTMLDivElement>(null);
@@ -325,12 +345,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   // Scroll to top of wizard on every step change and persist only non-sensitive metadata.
   useEffect(() => {
+    if (!hasStarted) return;
     wizardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     saveWizardState({ step, savedCaseId, savedClaimToken });
-  }, [step, savedCaseId, savedClaimToken]);
+  }, [hasStarted, step, savedCaseId, savedClaimToken]);
 
   // Persist form data (vehicle, infraction, lead) on every change — survives reload.
   useEffect(() => {
+    if (!hasStarted) return;
     saveWizardFormData({
       infractionData,
       vehicleData,
@@ -338,10 +360,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       leadPhone,
       savedAt: Date.now(),
     });
-  }, [infractionData, vehicleData, leadName, leadPhone]);
+  }, [hasStarted, infractionData, vehicleData, leadName, leadPhone]);
 
   // Persist only navigation metadata immediately before page unload.
   useEffect(() => {
+    if (!hasStarted) return;
     const handleBeforeUnload = () => {
       saveWizardState({ step, savedCaseId, savedClaimToken });
     };
@@ -350,7 +373,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [step, savedCaseId, savedClaimToken]);
+  }, [hasStarted, step, savedCaseId, savedClaimToken]);
 
   // Focus management and step announcement for accessibility
   useEffect(() => {
@@ -367,7 +390,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 // Auto-advance: if user was at step 7 (auth gate) and is now authenticated,
 // advance to step 8 automatically (e.g., after email confirmation)
   useEffect(() => {
-    if (savedState && (savedState.step === 6 || savedState.step === 7) && isAuthenticated && user) {
+    if (hasStarted && savedState && (savedState.step === 6 || savedState.step === 7) && isAuthenticated && user) {
       setDocumentData((prev) => ({
         ...prev,
         applicantName: user.name || prev.applicantName,
@@ -377,7 +400,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       }));
       setStep(8);
     }
-  }, [isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasStarted, isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Um único resolvedor mantém o procedimento exibido e o persistido coerentes.
   const mappedProcedure: ProcedureType = resolveOnboardingProcedure(situation, processStage);
@@ -453,6 +476,91 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleCategorySelect = (selected: InfractionCategory) => {
     applyCategorySelection(selected);
+  };
+
+  const handleStart = () => {
+    setStep(1);
+    setHasStarted(true);
+  };
+
+  const handleContinueSavedProgress = () => {
+    setStep(savedState?.step ?? 1);
+    setHasStarted(true);
+  };
+
+  const handleStartFresh = (confirmReset = false) => {
+    if (
+      confirmReset &&
+      !window.confirm(
+        'Recomeçar do zero? Isso apagará apenas o rascunho local deste onboarding. Sua conta e outros casos salvos não serão excluídos.'
+      )
+    ) {
+      return;
+    }
+
+    clearWizardState();
+    clearWizardFormData();
+    mappedProcedureRef.current = resolveOnboardingProcedure('multa_transito', 'primeira_notificacao');
+
+    setStep(1);
+    setHasStarted(true);
+    setSituation('multa_transito');
+    setProcessStage('primeira_notificacao');
+    setInfractionCategory('excesso_velocidade');
+    setInfractionData({
+      aitNumber: '',
+      infractionCode: '',
+      description: '',
+      ctbArticle: '',
+      severity: 'media',
+      points: 0,
+      fineAmount: 0,
+      autuadorBody: '',
+      dateTime: '',
+      location: '',
+      formalFlawsDetected: [],
+    });
+    setVehicleData({
+      plate: '',
+      brandModel: '',
+      renavam: '',
+      year: '',
+      color: '',
+    });
+    setLeadName(user?.name || '');
+    setLeadPhone(user?.phone || '');
+    setDocumentData({
+      applicantName: user?.name || '',
+      applicantCpf: user?.cpf || '',
+      applicantRg: user?.rg || '',
+      applicantCnh: user?.cnh || '',
+      cnhCategory: user?.cnhCategory || '',
+      applicantPhone: user?.phone || '',
+      applicantEmail: user?.email || '',
+      addressStreet: user?.addressStreet || '',
+      addressNumber: user?.addressNumber || '',
+      addressComplement: user?.addressComplement || '',
+      addressNeighborhood: user?.addressNeighborhood || '',
+      addressZipCode: user?.addressZipCode || '',
+      addressCityState: user?.cityState || '',
+      vehicleRenavam: '',
+    });
+    setCaseAnalysis({
+      id: `an_${Date.now()}`,
+      caseId: `temp_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      overallSuccessRate: 0,
+      detectedInconsistencies: [],
+      recommendedArguments: [],
+      recommendedProcedure: '',
+      competentBody: '',
+      summaryReasoning: '',
+    });
+    setSavedCaseId(undefined);
+    setSavedClaimToken(undefined);
+    setPersistError(null);
+    setIsAuthGateOpen(false);
+    setAuthGateRedirectAction('generation');
   };
 
   const handleLeadUpdate = (name: string, phone: string) => {
@@ -640,6 +748,20 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   };
 
+  if (!hasStarted) {
+    return (
+      <div className="mx-auto w-full px-4 py-6 sm:py-10">
+        <OnboardingStartScreen
+          hasSavedProgress={hasSavedProgress}
+          savedStep={savedState?.step}
+          onStart={handleStart}
+          onContinue={handleContinueSavedProgress}
+          onStartFresh={() => handleStartFresh(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div ref={wizardTopRef} className="max-w-4xl mx-auto space-y-6">
       {/* Top Breadcrumb & Phase Indicator */}
@@ -705,6 +827,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             );
           })}
         </div>
+        {step > 1 && (
+          <button
+            type="button"
+            onClick={() => handleStartFresh(true)}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Recomeçar do zero
+          </button>
+        )}
       </div>
 
       {/* Dynamic Step Router */}
