@@ -153,7 +153,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   id="input-speed-limit"
                   type="number"
                   value={infractionData.speedLimit || ''}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, speedLimit: Number(e.target.value) })}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, speedLimit: e.target.value === '' ? undefined : Number(e.target.value) })}
                   placeholder="Ex: 60 (se informado)"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
@@ -168,7 +168,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   id="input-measured-speed"
                   type="number"
                   value={infractionData.measuredSpeed || ''}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, measuredSpeed: Number(e.target.value) })}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, measuredSpeed: e.target.value === '' ? undefined : Number(e.target.value) })}
                   placeholder="Ex: 73 (se informado)"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
@@ -183,7 +183,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   id="input-considered-speed"
                   type="number"
                   value={infractionData.consideredSpeed || ''}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, consideredSpeed: Number(e.target.value) })}
+                  onChange={(e) => onUpdateInfraction({ ...infractionData, consideredSpeed: e.target.value === '' ? undefined : Number(e.target.value) })}
                   placeholder="Ex: 66"
                   className="w-full text-xs font-mono font-bold bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 outline-none text-slate-700"
                 />
@@ -305,7 +305,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                           ? 'sem_sinais'
                           : infractionData.hasPsychomotorTerm === true
                           ? 'entregue'
-                          : 'nao_entregue')
+                          : 'nao_informado')
                     }
                     className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                     onChange={(e) => {
@@ -317,6 +317,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                       });
                     }}
                   >
+                    <option value="nao_informado">Não sei / não lembro se recebi o termo</option>
                     <option value="nao_entregue">Não me entregaram nenhum termo anexo</option>
                     <option value="sem_sinais">Termo não descreve sinais psicomotores visíveis</option>
                     <option value="entregue">Sim, termo preenchido</option>
