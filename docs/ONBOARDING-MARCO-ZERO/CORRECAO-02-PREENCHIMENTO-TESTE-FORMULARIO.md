@@ -65,6 +65,8 @@ A versão anterior recebia principalmente a categoria. Isso era insuficiente: um
 - Testes de coerência: [`fbd397c`](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/fbd397c88e6a906e72208772160de5f7b63b1c80)
 - Integração do botão com contexto: [`7b421a5`](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/7b421a5658f142d6ca2c6aba5ca3514b944c4d2a)
 - Passagem de serviço/fase e sincronização no wizard: [`b194e11`](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/b194e114486880f1478a1d87b9b1dcc9a1eea5eb)
+- Preservação do formato numérico do AIT sintético: [`1876953`](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/187695333bb7e4369fb2538ebfdb2d9fd514035f)
+- Teste do formato numérico do AIT: [`679051a`](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/679051a95009b4cea81cc8cc6e733fc193393242)
 
 ## Riscos e limites residuais
 
