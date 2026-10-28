@@ -39,6 +39,7 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 3. [Correção 01 — consistência das etapas 2 a 4](./CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md)
 4. [Correção 02 — preenchimento de teste do formulário](./CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md)
 5. [Correção 03 — perguntas específicas de radar/INMETRO](./CORRECAO-03-PERGUNTAS-RADAR-INMETRO.md)
+6. [Correção 04 — navegação, início, retomada e reinício](./CORRECAO-04-NAVEGACAO-INICIO-RETOMADA.md)
 
 ## Status inicial
 
@@ -49,8 +50,10 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Correção 02 — botão administrativo de preenchimento:** fixture contextualizada por serviço + fase + categoria. O usuário confirmou preenchimento completo da etapa 4 em ambiente local, incluindo datas; isso não equivale a validação em produção. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
 - **Correção 03 — perguntas específicas de radar/velocidade:** commit [396a7aae](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/396a7aae30a0987f5ccd7adf8aa39896bd36d481) torna os campos do INMETRO opcionais, remove uma afirmação jurídica categórica sobre aferição superior a 12 meses e corrige o formato ISO do input de data. A validação manual desta etapa está sendo feita pelo usuário; aguardar o resultado e registrá-lo.
 - **Workflows da correção 03:** CI/CD run [40782524806](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524806) falhou no passo Vitest; typecheck/build foram pulados. Cloudflare Deploy run [40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758) falhou na descoberta da matriz E2E antes do build/deploy. Consultar logs e não contornar as verificações. Registro detalhado: [CORRECAO-03-PERGUNTAS-RADAR-INMETRO.md](./CORRECAO-03-PERGUNTAS-RADAR-INMETRO.md).
-- **Validação visual/E2E de ponta a ponta:** ainda não declarada como concluída. Consultar o HANDOFF CANÔNICO para a matriz e a sequência exata de continuidade.
-- **Próxima ação:** aguardar/registrar o teste manual da etapa de radar, conferir workflows e só então escolher a próxima correção com base em evidências.
+- **Correção 04 — início/retomada/reinício:** identificada restauração automática da etapa salva; adicionada tela explícita com Começar, Continuar de onde parei e Começar do zero, além de reinício confirmado dentro do wizard. Limpeza de rascunho cobre sessionStorage e localStorage. Registro: [CORRECAO-04-NAVEGACAO-INICIO-RETOMADA.md](./CORRECAO-04-NAVEGACAO-INICIO-RETOMADA.md).
+- **CI/deploy da correção 04:** os workflows do commit [e4b59ed7](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/e4b59ed7ebb7c50e2317d4adacb57453c5ba67ad) precisam ser consultados; os resultados não foram confirmados nesta documentação. A descoberta da matriz E2E continua falhando em runs anteriores e bloqueia deploy.
+- **Validação visual/E2E de ponta a ponta:** ainda não declarada como concluída. Testar começo, retomada, reinício, avanço, retrocesso e recarga antes de declarar PASS.
+- **Próxima ação:** consultar CI e deploy atuais; corrigir falhas comprovadas e resolver o gate da matriz E2E sem desativá-lo.
 
 ## Modelo de registro por tarefa
 
