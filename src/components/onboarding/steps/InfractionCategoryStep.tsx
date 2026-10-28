@@ -16,6 +16,8 @@ import { InfractionCategory } from '../../../core/onboarding/rules-matrix';
 
 interface InfractionCategoryStepProps {
   selectedCategory: InfractionCategory;
+  totalSteps?: number;
+  stepNumber?: number;
   onSelectCategory: (category: InfractionCategory) => void;
   onNext: () => void;
   onBack: () => void;
@@ -32,6 +34,8 @@ interface CategoryCardItem {
 
 export const InfractionCategoryStep: React.FC<InfractionCategoryStepProps> = ({
   selectedCategory,
+  totalSteps = 4,
+  stepNumber = 3,
   onSelectCategory,
   onNext,
   onBack,
@@ -99,7 +103,7 @@ export const InfractionCategoryStep: React.FC<InfractionCategoryStepProps> = ({
       <div className="text-center max-w-xl mx-auto space-y-2.5">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-50 text-[#155BCB] border border-blue-200 font-mono">
           <Sparkles className="w-3.5 h-3.5 text-[#155BCB]" />
-          Tipo da Infração
+          {`Passo ${stepNumber} de ${totalSteps} • Tipo da Infração`}
         </span>
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
           Sobre o tipo da infração
