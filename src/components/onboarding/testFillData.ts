@@ -267,10 +267,24 @@ export function buildCompleteTestIdentificationFixture(
     return date.toISOString().slice(0, 10);
   };
 
+  const categoryCodes: Partial<Record<InfractionCategory, string[]>> = {
+    excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
+    lei_seca: ['757-90', '516-91'],
+    celular: ['736-62'],
+    vermelho: ['605-01', '605-02'],
+    estacionamento: ['545-21', '554-12'],
+    conversao_advertencia: ['745-50', '736-62', '735-80', '685-80'],
+  };
+  const allowedCodes = category ? categoryCodes[category] : undefined;
+  const generatedCode = baseInfraction.infractionCode?.trim();
+  const selectedCode = allowedCodes?.length && !allowedCodes.includes(generatedCode ?? '')
+    ? allowedCodes[0]
+    : generatedCode || catalogFields('745-50').infractionCode || '745-50';
+
   const infractionData: InfractionData = {
     ...baseInfraction,
     aitNumber: baseInfraction.aitNumber?.trim() || generateRandomAIT(),
-    infractionCode: baseInfraction.infractionCode?.trim() || catalogFields('745-50').infractionCode || '745-50',
+    infractionCode: selectedCode,
     autuadorBody: baseInfraction.autuadorBody?.trim() || 'DETRAN-SP',
     dateTime: occurrenceDate,
     notificationExpeditionDate: addTestDays(3),
