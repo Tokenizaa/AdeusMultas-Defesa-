@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InfractionData } from '../../types';
-import { buildCoherentTestInfraction, buildCompleteTestIdentificationFixture } from './testFillData';
+import { buildCoherentTestInfraction, buildCompleteTestIdentificationFixture, resolveTestIdentificationCategory } from './testFillData';
+import type { UserProcessStage, UserSituation } from '../../core/onboarding/rules-matrix';
 
 const emptyInfraction = {
   aitNumber: '',
@@ -74,7 +75,7 @@ describe('buildCompleteTestIdentificationFixture — formulário de identificaç
   ] as const;
 
   it.each(categories)('preenche todos os campos necessários para a etapa 4 (%s)', (category) => {
-    const fixture = buildCompleteTestIdentificationFixture(category, emptyInfraction);
+    const fixture = buildCompleteTestIdentificationFixture('multa_transito', 'primeira_notificacao', category, emptyInfraction);
     const { infractionData, vehicleData } = fixture;
 
     expect(fixture.leadName.trim().length).toBeGreaterThanOrEqual(3);
@@ -111,9 +112,43 @@ describe('buildCompleteTestIdentificationFixture — formulário de identificaç
       ctbArticle: 'ARTIGO ANTIGO',
       description: 'Descrição antiga',
     } as InfractionData;
-    const { infractionData } = buildCompleteTestIdentificationFixture('lei_seca', stale);
+    const { infractionData } = buildCompleteTestIdentificationFixture('multa_transito', 'primeira_notificacao', 'lei_seca', stale);
     expect(['757-90', '516-91']).toContain(infractionData.infractionCode);
     expect(infractionData.ctbArticle).not.toBe('ARTIGO ANTIGO');
     expect(infractionData.description).not.toBe('Descrição antiga');
+  });
+});
+
+describe('coerência entre serviço, fase e categoria do fixture', () => {
+  it.each([
+    ['indicacao_condutor', 'primeira_notificacao', 'excesso_velocidade', 'indicacao_condutor'],
+    ['conversao_advertencia', 'conversao_advertencia', 'lei_seca', 'conversao_advertencia'],
+    ['multa_transito', 'conversao_advertencia', 'celular', 'conversao_advertencia'],
+    ['cassacao_cnh', 'recurso_jari_negado', 'excesso_velocidade', 'cnh_geral'],
+    ['suspensao_cnh', 'primeira_notificacao', 'outro', 'lei_seca'],
+    ['suspensao_cnh', 'primeira_notificacao', 'excesso_velocidade', 'excesso_velocidade'],
+  ] as Array<[UserSituation, UserProcessStage, 'excesso_velocidade' | 'lei_seca' | 'celular' | 'outro', 'indicacao_condutor' | 'conversao_advertencia' | 'cnh_geral' | 'lei_seca' | 'excesso_velocidade']>)(
+    'resolve %s + %s para categoria coerente',
+    (situation, stage, selectedCategory, expected) => {
+      expect(resolveTestIdentificationCategory(situation, stage, selectedCategory)).toBe(expected);
+    },
+  );
+
+  it('marca os dados como teste e mantém cronologia sintética dos eventos', () => {
+    const fixture = buildCompleteTestIdentificationFixture('multa_transito', 'primeira_notificacao', 'excesso_velocidade', emptyInfraction);
+    expect(fixture.leadName).toBe('Condutor de Teste');
+    expect(fixture.infractionData.aitNumber).toMatch(/^TESTE-/);
+    expect(fixture.infractionData.notificationExpeditionDate! > fixture.infractionData.dateTime!).toBe(true);
+    expect(fixture.infractionData.notificationDeliveryDate! > fixture.infractionData.notificationExpeditionDate!).toBe(true);
+    expect(fixture.infractionData.defenseDeadline! > fixture.infractionData.notificationDeliveryDate!).toBe(true);
+  });
+
+  it('gera cenário de excesso superior a 50% para suspensão quando essa categoria é escolhida', () => {
+    const fixture = buildCompleteTestIdentificationFixture('suspensao_cnh', 'primeira_notificacao', 'excesso_velocidade', emptyInfraction);
+    expect(fixture.category).toBe('excesso_velocidade');
+    expect(fixture.infractionData.infractionCode).toBe('747-10');
+    expect(fixture.infractionData.speedLimit).toBe(50);
+    expect(fixture.infractionData.measuredSpeed).toBe(85);
+    expect(fixture.infractionData.consideredSpeed).toBeGreaterThan(75);
   });
 });
