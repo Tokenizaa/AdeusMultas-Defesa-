@@ -17,7 +17,7 @@ import {
 import { InfractionData } from '../../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
-import { formatDateBR, parseDateBR } from '../../../lib/date-utils';
+
 import { TestFillButton } from '../../ui/TestFillButton';
 import { buildCoherentTestInfraction } from '../testFillData';
 
@@ -147,30 +147,32 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label htmlFor="input-speed-limit" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Limite da Via (km/h) *
+                  Limite da Via (km/h)
                 </label>
                 <input
                   id="input-speed-limit"
                   type="number"
                   value={infractionData.speedLimit || ''}
                   onChange={(e) => onUpdateInfraction({ ...infractionData, speedLimit: Number(e.target.value) })}
-                  placeholder="Ex: 60"
+                  placeholder="Ex: 60 (se informado)"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">Se não aparecer na notificação, deixe em branco.</span>
               </div>
 
               <div>
                 <label htmlFor="input-measured-speed" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Velocidade Medida (km/h) *
+                  Velocidade Medida (km/h)
                 </label>
                 <input
                   id="input-measured-speed"
                   type="number"
                   value={infractionData.measuredSpeed || ''}
                   onChange={(e) => onUpdateInfraction({ ...infractionData, measuredSpeed: Number(e.target.value) })}
-                  placeholder="Ex: 73"
+                  placeholder="Ex: 73 (se informado)"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">Copie o valor do documento; não calcule nem estime. Se não constar, deixe em branco.</span>
               </div>
 
               <div>
@@ -196,30 +198,33 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <input
                   id="input-inmetro-date"
                   type="date"
-                  value={infractionData.inmetroAferitionDate ? formatDateBR(infractionData.inmetroAferitionDate) : ''}
-                            onChange={(e) => {
-                                    const isoDate = parseDateBR(e.target.value);
-                                    onUpdateInfraction({ ...infractionData, inmetroAferitionDate: isoDate });
-                                }}
+                  value={infractionData.inmetroAferitionDate || ''}
+                  onChange={(e) => onUpdateInfraction({
+                    ...infractionData,
+                    inmetroAferitionDate: e.target.value || undefined,
+                  })}
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
-                  Aferição com mais de 12 meses na data da infração é um argumento forte para questionar a validade da medição do radar.
+                  Preencha somente se a data aparecer na notificação. Se não encontrar, deixe em branco; você não precisa pesquisar esse dado para iniciar a análise.
                 </span>
               </div>
 
               <div>
                 <label htmlFor="input-radar-equipment-id" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Número do Equipamento / Laudo INMETRO
+                  Identificação do radar (se constar no documento)
                 </label>
                 <input
                   id="input-radar-equipment-id"
                   type="text"
                   value={infractionData.radarEquipmentId || ''}
                   onChange={(e) => onUpdateInfraction({ ...infractionData, radarEquipmentId: e.target.value.toUpperCase() })}
-                  placeholder="Ex: 123456/2023"
+                  placeholder="Informe apenas se estiver na notificação"
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Não é necessário procurar o número do radar ou do certificado para continuar. Deixe em branco se não estiver no documento.
+                </span>
               </div>
             </div>
           </div>
