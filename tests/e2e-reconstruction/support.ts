@@ -53,6 +53,11 @@ export async function fillIdentification(page: Page, label: string, overrides: P
   await page.locator('#input-vehicle-plate').fill(data.plate);
   await page.locator('#input-autuador-body').fill(data.authority);
   await page.locator('#input-location').fill(data.location);
+  // O formulário exige data de ocorrência válida; preencher no formato exibido ao usuário (dd/mm/aaaa).
+  // Sem este campo, o helper bloqueia o avanço em todos os cenários que percorrem a análise.
+  const today = new Date();
+  const occurrenceDate = [String(today.getUTCDate()).padStart(2, '0'), String(today.getUTCMonth() + 1).padStart(2, '0'), String(today.getUTCFullYear())].join('/');
+  await page.locator('#input-datetime').fill(occurrenceDate);
   const code = page.locator('#input-infraction-code');
   const values = await code.locator('option').evaluateAll(items => items.map(item => (item as HTMLOptionElement).value).filter(value => value.length >= 3));
   if (!values.length) throw new Error('Catálogo de infrações sem opções selecionáveis.');
