@@ -73,11 +73,13 @@ O fluxo OCR também permanece fora desta correção. O envio efetivo do conteúd
 ## 5. Validação e evidências
 
 - **Leitura estática dos arquivos alterados:** realizada após as mudanças.
-- **Testes automatizados:** teste de resolução de procedimento adicionado; execução não confirmada nesta etapa.
-- **Build / TypeScript / lint:** não declarados como executados.
+- **Testes automatizados (Vitest): PASS** — execução no GitHub Actions, commit `4f8ab1dba8fd8c908b5fc94db473898e5bb1efb4`.
+- **Typecheck (`npm run lint`): PASS** — mesmo workflow/commit.
+- **Build (`npm run build`): PASS** — mesmo workflow/commit.
+- **Workflow CI/CD:** [execução concluída com sucesso](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919).
 - **Navegação real no navegador:** não declarada como executada.
-- **Validação ponta a ponta:** BLOCKED até obter resultados de execução verificáveis.
-- **Deploy em produção:** não realizado por esta tarefa.
+- **Validação ponta a ponta:** BLOCKED até confirmar visualmente a jornada até o formulário 4/4.
+- **Deploy em produção:** não realizado por esta tarefa; o workflow verificado executa testes, typecheck e build, sem etapa de deploy.
 
 ## 6. Critério de encerramento desta correção
 
