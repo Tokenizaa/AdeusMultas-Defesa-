@@ -522,6 +522,9 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                               </option>
                             ))}
                     </select>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                        Confira o código e a descrição na notificação. Se a lista não corresponder ao documento, volte e reveja a categoria; não selecione apenas por semelhança.
+                    </span>
                     {/* Resumo auto-preenchido */}
                     {infractionData.infractionCode && infractionData.ctbArticle && (
                         <div className="mt-2 flex flex-wrap gap-2">
