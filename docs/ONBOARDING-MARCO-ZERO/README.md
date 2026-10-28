@@ -1,0 +1,62 @@
+# MARCO ZERO — Onboarding do AdeusMultas
+
+> **Ponto de partida oficial para a nova fase de estabilização do onboarding.**
+>
+> A partir deste diretório, toda auditoria, decisão técnica, correção e validação do onboarding deve ser registrada em tarefas pequenas, delimitadas e verificáveis. Este marco não apaga nem substitui o histórico anterior do repositório: estabelece uma referência clara para o trabalho daqui em diante.
+
+## Objetivo
+
+Levar o onboarding a um estado **funcional, juridicamente coerente e validado por evidências**, até que possa receber o selo verde. O selo verde só poderá ser declarado depois de critérios de aceitação definidos e testes realmente executados; não significa apenas que o código compila ou que uma tela abre.
+
+## Regras de trabalho
+
+1. **Uma tarefa por vez.** Cada entrega deve ter escopo fechado, critérios de aceitação e verificação própria.
+2. **Investigar antes de alterar.** Identificar arquivos, contratos, dependências e riscos diretamente relacionados à tarefa.
+3. **Menor mudança suficiente.** Não aproveitar correções pontuais para refatorar áreas não relacionadas.
+4. **Evidência antes de PASS.** Registrar comandos/testes executados e resultados reais. Se não for possível verificar, marcar BLOCKED; se falhar, FAIL.
+5. **Preservar o que funciona.** Não remover testes, documentos, dados ou funcionalidades sem escopo explícito e verificação de dependências.
+6. **Separar fato, hipótese e decisão.** Marcar claramente o que foi confirmado no código, o que foi observado em execução e o que ainda precisa ser comprovado.
+7. **Não presumir integrações.** Catálogo local, campo de versão ou referência a uma fonte não provam sincronização nem consulta oficial em tempo real.
+8. **Não publicar em produção sem autorização explícita.** Trabalhar conforme as regras do repositório, diretamente em main; não criar branches nem PRs.
+9. **Fechar cada tarefa.** Registrar alterações, validações, riscos restantes e SHA do commit, quando houver.
+10. **Sem selo verde por declaração.** O selo depende de uma matriz de critérios de aceitação e evidências verificáveis de ponta a ponta.
+
+## Organização sugerida
+
+- README.md — este marco, princípios e índice.
+- AUDITORIA-01-BASELINE-ETAPAS-1-A-3.md — linha de base inicial e achados da análise das primeiras etapas.
+- TAREFA-001-OCR-E-LEITURA-DOCUMENTAL.md — especificação da primeira correção, quando formalizada.
+- TAREFA-002-MAPEAMENTO-DE-FASES.md — mapeamento e validação das fases, quando formalizados.
+
+Não é necessário criar todos esses documentos antecipadamente. Cada documento deve nascer quando a tarefa correspondente for definida, para evitar documentação especulativa.
+
+## Índice
+
+1. [Auditoria 01 — linha de base das etapas iniciais](./AUDITORIA-01-BASELINE-ETAPAS-1-A-3.md)
+
+## Status inicial
+
+- **Marco:** estabelecido.
+- **Escopo inicial:** etapas de seleção do serviço, escolha da fase administrativa, categoria da infração e transição para identificação do caso.
+- **Alterações funcionais de código neste marco:** nenhuma.
+- **Validação visual, execução E2E e consulta externa real:** não declaradas como executadas.
+- **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
+
+## Modelo de registro por tarefa
+
+Toda tarefa deve registrar:
+
+- **ID e objetivo**
+- **Escopo incluído e excluído**
+- **Estado anterior / SHA de referência**
+- **Arquivos e contratos afetados**
+- **Riscos e dependências**
+- **Critérios de aceitação**
+- **Implementação realizada**
+- **Verificações executadas e resultados** (PASS, FAIL, BLOCKED)
+- **Pendências e riscos residuais**
+- **Commit SHA**, quando aplicável
+- **Próxima ação autorizada**
+
+---
+*Este diretório é o marco de governança do trabalho de estabilização do onboarding. O conteúdo deve permanecer factual, versionado e incremental.*
