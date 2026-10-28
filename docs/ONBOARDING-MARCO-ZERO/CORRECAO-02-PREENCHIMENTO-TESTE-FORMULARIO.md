@@ -75,3 +75,16 @@ A versão anterior recebia principalmente a categoria. Isso era insuficiente: um
 - O serviço de suspensão possui múltiplas hipóteses de origem; o fixture cobre as duas categorias explicitamente modeladas aqui (Lei Seca e excesso de velocidade acima de 50%), não um processo real de suspensão por acúmulo de pontos.
 - CI e validação visual/E2E não estão confirmados nesta documentação. Não declarar PASS até obter evidências.
 - Nenhum deploy foi realizado.
+
+
+## Incidente reportado após teste em produção — campos de data não visíveis
+
+**Relato:** ao acionar o botão administrativo, os campos `Data Expedição Notificação`, `Data de Entrega da Notificação` e `Prazo Final p/ Defesa` continuaram vazios.
+
+**Investigação do código:** a fixture já gerava os três campos em ISO (`YYYY-MM-DD`) e o estado do wizard recebia o objeto completo. O componente `BrazilianDateInput` mantém estado de exibição próprio e sincroniza esse estado por efeito quando o valor controlado muda. Para tornar o preenchimento programático determinístico, os quatro controles de data da etapa agora recebem uma `key` derivada do valor canônico; quando a fixture troca o valor, o controle é remontado e inicializa a exibição a partir da data nova.
+
+**Arquivos afetados nesta revisão:**
+- `src/components/onboarding/steps/InfractionIdentificationStep.tsx`: remount controlado dos inputs de data quando o valor ISO muda.
+- `src/components/onboarding/testFillData.test.ts`: asserção explícita de que a data de expedição é produzida pela fixture.
+
+**Limite da evidência:** esta mudança foi gravada no repositório, mas ainda não foi executada em navegador nem confirmada em produção. Não é possível afirmar que o incidente está resolvido até validar localmente e confirmar que o ambiente de produção recebeu a versão com esta correção. Nenhum deploy foi realizado por esta tarefa.
