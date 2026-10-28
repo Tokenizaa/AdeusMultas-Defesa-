@@ -44,7 +44,7 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Escopo inicial:** onboarding do serviço de multas; as etapas listadas na auditoria são pontos examinados, não um limite de escopo por número de etapa.
 - **Alterações funcionais registradas:** correção de consistência entre fase, categoria e formulário inicial documentada em CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md.
 - **CI da correção 01:** testes unitários, TypeScript e build aprovados no [workflow](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919).
-- **Correção 02 — botão administrativo de preenchimento:** revisão registrada para considerar serviço + fase processual + categoria, sincronizar a categoria quando necessário e identificar dados sintéticos; CI pós-revisão e validação visual/E2E ainda pendentes. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
+- **Correção 02 — botão administrativo de preenchimento:** considera serviço + fase + categoria e identifica dados sintéticos. Incidente subsequente registrado: os três campos de data não apareciam na interface; os inputs agora são remontados quando os valores programáticos mudam. CI e validação visual/E2E ainda pendentes. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
 - **Validação visual/E2E e consulta externa real:** ainda não declaradas como executadas.
 - **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
 
