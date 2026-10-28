@@ -98,6 +98,7 @@ describe('buildCompleteTestIdentificationFixture — formulário de identificaç
     expect(infractionData.autuadorBody.trim().length).toBeGreaterThanOrEqual(3);
     expect(infractionData.dateTime).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(infractionData.notificationExpeditionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(infractionData.notificationExpeditionDate).not.toBe('');
     expect(infractionData.notificationDeliveryDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(infractionData.defenseDeadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(infractionData.ctbArticle).toBeTruthy();
