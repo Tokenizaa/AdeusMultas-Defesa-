@@ -26,6 +26,7 @@ Levar o onboarding a um estado **funcional, juridicamente coerente e validado po
 - README.md — este marco, princípios e índice.
 - AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md — linha de base do fluxo de onboarding específico do serviço de multas.
 - CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md — correções de consistência entre fase, categoria e primeiro formulário.
+- CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md — botão administrativo de preenchimento completo da etapa 4.
 - TAREFA-001-OCR-E-LEITURA-DOCUMENTAL.md — especificação da primeira correção, quando formalizada.
 - TAREFA-002-MAPEAMENTO-DE-FASES.md — mapeamento e validação das fases, quando formalizados.
 
@@ -35,6 +36,7 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 
 1. [Auditoria 01 — linha de base do serviço de multas](./AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md)
 2. [Correção 01 — consistência das etapas 2 a 4](./CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md)
+3. [Correção 02 — preenchimento de teste do formulário](./CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md)
 
 ## Status inicial
 
@@ -42,6 +44,7 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Escopo inicial:** onboarding do serviço de multas; as etapas listadas na auditoria são pontos examinados, não um limite de escopo por número de etapa.
 - **Alterações funcionais registradas:** correção de consistência entre fase, categoria e formulário inicial documentada em CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md.
 - **CI da correção 01:** testes unitários, TypeScript e build aprovados no [workflow](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919).
+- **Correção 02 — botão administrativo de preenchimento:** implementação e testes adicionados; CI pós-alteração e validação visual/E2E ainda pendentes. Registro: CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md.
 - **Validação visual/E2E e consulta externa real:** ainda não declaradas como executadas.
 - **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
 
