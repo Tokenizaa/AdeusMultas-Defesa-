@@ -160,9 +160,35 @@ export const USER_PROCESS_STAGES: StageDefinition[] = [
     title: 'Não tenho certeza da fase',
     subtitle: 'Vamos identificar a melhor estratégia jurídica pelo número do auto e pelo órgão autuador.',
     badge: 'Diagnóstico Automático',
-    mappedProcedure: 'recurso_jari',
+    // A fase ainda não foi confirmada: não encaminhar silenciosamente à JARI.
+    mappedProcedure: 'analise_tecnica',
   },
 ];
+
+/**
+ * Resolve o procedimento da combinação serviço + fase.
+ * Serviços especializados mantêm seu procedimento próprio; no serviço geral
+ * de multas, a fase selecionada determina o encaminhamento. Fase incerta não
+ * deve ser convertida silenciosamente em Defesa Prévia ou recurso à JARI.
+ */
+export function resolveOnboardingProcedure(
+  situation: UserSituation,
+  processStage: UserProcessStage,
+): ProcedureType {
+  const service = USER_SITUATIONS.find((item) => item.id === situation);
+  if (!service) return 'defesa_previa';
+
+  if (
+    situation === 'suspensao_cnh' ||
+    situation === 'cassacao_cnh' ||
+    service.inferredStage
+  ) {
+    return service.mappedProcedure;
+  }
+
+  const stage = USER_PROCESS_STAGES.find((item) => item.id === processStage);
+  return stage?.mappedProcedure ?? service.mappedProcedure;
+}
 
 /**
  * Matriz de Campos Requeridos por Etapa
