@@ -42,17 +42,20 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
   const processNumber = isSuspension
     ? documentData.processNumbers?.psddNumber
     : documentData.processNumbers?.pcddNumber;
-  const isFormValid =
-    (documentData.applicantName?.trim().length || 0) > 3 &&
-    /^\d{11}$/.test((documentData.applicantCpf || '').replace(/\D/g, '')) &&
-    (documentData.applicantCnh?.trim().length || 0) >= 5 &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(documentData.applicantEmail || '') &&
-    (documentData.applicantPhone?.replace(/\D/g, '').length || 0) >= 10 &&
-    (documentData.addressStreet?.trim().length || 0) >= 3 &&
-    (documentData.addressNumber?.trim().length || 0) > 0 &&
-    /^[^/]+\/\s*[A-Z]{2}$/i.test(documentData.addressCityState || '') &&
-    (infractionData.autuadorBody?.trim() || '').length > 0 &&
-    ((!isSuspension && !isCassation) || (Boolean(processNumber?.trim()) && Boolean(documentData.applicantRg?.trim())));
+  const missingRequiredFields = [
+    ...((documentData.applicantName?.trim().length || 0) <= 3 ? ['Nome completo'] : []),
+    ...(!/^\d{11}$/.test((documentData.applicantCpf || '').replace(/\D/g, '')) ? ['CPF (11 dígitos)'] : []),
+    ...((documentData.applicantCnh?.trim().length || 0) < 5 ? ['Registro da CNH'] : []),
+    ...(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(documentData.applicantEmail || '') ? ['E-mail válido'] : []),
+    ...((documentData.applicantPhone?.replace(/\D/g, '').length || 0) < 10 ? ['Celular com DDD'] : []),
+    ...((documentData.addressStreet?.trim().length || 0) < 3 ? ['Logradouro'] : []),
+    ...(!(documentData.addressNumber?.trim()) ? ['Número do endereço (ou s/n)'] : []),
+    ...(!/^[^/]+\/\s*[A-Z]{2}$/i.test(documentData.addressCityState || '') ? ['Cidade/UF (ex.: São Paulo/SP)'] : []),
+    ...(!(infractionData.autuadorBody?.trim()) ? ['Órgão autuador'] : []),
+    ...((isSuspension || isCassation) && !processNumber?.trim() ? ['Número do processo ' + (isSuspension ? 'PSDD' : 'PCDD')] : []),
+    ...((isSuspension || isCassation) && !documentData.applicantRg?.trim() ? ['RG / órgão emissor'] : []),
+  ];
+  const isFormValid = missingRequiredFields.length === 0;
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-2xs space-y-6">
@@ -292,6 +295,9 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
               Endereço Residencial do Requerente (Para Qualificação no Órgão)
             </h4>
           </div>
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            Use o endereço que consta nos seus documentos. Bairro e CEP são opcionais; se o imóvel não tiver número, informe “s/n”.
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="sm:col-span-3">
@@ -368,6 +374,14 @@ export const RequiredDataStep: React.FC<RequiredDataStepProps> = ({
           </div>
         </div>
       </div>
+
+      {!isFormValid && (
+        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <p className="font-bold">Para preparar a petição, ainda precisamos destes dados:</p>
+          <p className="mt-1">{missingRequiredFields.join(' • ')}</p>
+          <p className="mt-1 text-amber-800">Bairro e CEP são opcionais. Se algum dado não estiver disponível, você pode voltar ao diagnóstico e retomá-lo depois.</p>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="pt-2 flex justify-between items-center border-t border-slate-100">
