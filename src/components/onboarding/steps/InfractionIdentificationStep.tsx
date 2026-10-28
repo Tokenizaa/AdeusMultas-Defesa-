@@ -129,6 +129,8 @@ interface InfractionIdentificationStepProps {
     leadPhone?: string;
     /** Categoria selecionada na fase anterior (quando disponível) — torna os dados de teste 🧪 coerentes com ela. */
     category?: InfractionCategory;
+    totalSteps?: number;
+    stepNumber?: number;
     onUpdateInfraction: (data: InfractionData) => void;
     onUpdateVehicle: (data: VehicleData) => void;
     onUpdateLead?: (name: string, phone: string) => void;
@@ -143,6 +145,8 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
     leadName = '',
     leadPhone = '',
     category,
+    totalSteps = 4,
+    stepNumber = 4,
     onUpdateInfraction,
     onUpdateVehicle,
     onUpdateLead,
@@ -241,7 +245,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
             <div className="text-center max-w-xl mx-auto space-y-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-[#155BCB] border border-blue-200 font-mono">
                     <Sparkles className="w-3 h-3 text-[#155BCB]" />
-                    Passo 3 de 4 • Identificação da Autuação
+                    {`Passo ${stepNumber} de ${totalSteps} • Identificação da Autuação`}
                 </span>
                 <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                     Dados da autuação e do condutor
