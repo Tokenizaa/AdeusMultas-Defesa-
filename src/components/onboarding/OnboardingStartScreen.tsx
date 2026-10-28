@@ -14,7 +14,12 @@ export const OnboardingStartScreen: React.FC<OnboardingStartScreenProps> = ({
   onStart,
   onContinue,
   onStartFresh,
-}) => (
+}) => {
+  const continueLabel = savedStep && savedStep > 1
+    ? 'Continuar de onde parei'
+    : 'Continuar preenchimento';
+
+  return (
   <section
     aria-labelledby="onboarding-start-title"
     className="max-w-3xl mx-auto rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 shadow-sm"
@@ -47,7 +52,7 @@ export const OnboardingStartScreen: React.FC<OnboardingStartScreenProps> = ({
               onClick={onContinue}
               className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#155BCB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Continuar de onde parei
+              {continueLabel}
             </button>
             <button
               type="button"
@@ -74,4 +79,5 @@ export const OnboardingStartScreen: React.FC<OnboardingStartScreenProps> = ({
       </p>
     </div>
   </section>
-);
+  );
+};
