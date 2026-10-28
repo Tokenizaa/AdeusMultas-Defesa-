@@ -1,8 +1,11 @@
 import 'dotenv/config';
 import { defineConfig } from '@playwright/test';
-const baseURL = process.env.PLAYWRIGHT_BASE_URL;
-if (!baseURL) throw new Error('PLAYWRIGHT_BASE_URL é obrigatório; localhost não é fallback.');
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://adeusmulta.defesai.com.br';
 if (!/^https?:\/\//i.test(baseURL)) throw new Error('PLAYWRIGHT_BASE_URL inválido.');
+const target = new URL(baseURL);
+if (['localhost', '127.0.0.1', '::1'].includes(target.hostname) || target.hostname.endsWith('.localhost')) {
+  throw new Error('Execução E2E local bloqueada: use a URL publicada em PLAYWRIGHT_BASE_URL.');
+}
 export default defineConfig({
   testDir: './tests/e2e-reconstruction',
   testMatch: '**/*.spec.ts',
