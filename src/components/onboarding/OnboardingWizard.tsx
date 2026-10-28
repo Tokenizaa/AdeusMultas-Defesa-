@@ -27,7 +27,6 @@ import {
   UserProcessStage,
   InfractionCategory,
   USER_SITUATIONS,
-  RULES_MATRIX,
   resolveOnboardingProcedure
 } from '../../core/onboarding/rules-matrix';
 
@@ -390,6 +389,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const currentSitDef = USER_SITUATIONS.find((s) => s.id === situation);
   const skipsStageStep = Boolean(currentSitDef?.inferredStage);
   const skipsCategoryStep = Boolean(currentSitDef?.defaultInfractionCategory);
+  const initialFlowTotalSteps = 2 + (skipsStageStep ? 0 : 1) + (skipsCategoryStep ? 0 : 1);
+  const categoryStepNumber = 2 + (skipsStageStep ? 0 : 1);
   
   // Real active steps list in order
   const activeSteps = [
@@ -711,6 +712,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         {step === 1 && (
         <ServiceStep
           selectedSituation={situation}
+          totalSteps={initialFlowTotalSteps}
           onSelectSituation={handleSituationSelect}
         />
       )}
@@ -718,6 +720,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       {step === 2 && (
         <DefenseStageStep
           selectedStage={processStage}
+          stepNumber={2}
+          totalSteps={initialFlowTotalSteps}
           onSelectStage={handleStageSelect}
           onBack={() => setStep(1)}
         />
@@ -726,6 +730,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       {step === 3 && (
         <InfractionCategoryStep
           selectedCategory={infractionCategory}
+          stepNumber={categoryStepNumber}
+          totalSteps={initialFlowTotalSteps}
           onSelectCategory={handleCategorySelect}
           onNext={() => setStep(4)}
           onBack={() => {
@@ -746,6 +752,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           leadName={leadName}
           leadPhone={leadPhone}
           category={infractionCategory}
+          stepNumber={initialFlowTotalSteps}
+          totalSteps={initialFlowTotalSteps}
           onUpdateInfraction={setInfractionData}
           onUpdateVehicle={setVehicleData}
           onUpdateLead={handleLeadUpdate}
