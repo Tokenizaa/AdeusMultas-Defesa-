@@ -23,7 +23,7 @@ import { useAuthFetch } from '../../../hooks/useAuthFetch';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 
 import { TestFillButton } from '../../ui/TestFillButton';
-import { InfractionCategory } from '../../../core/onboarding/rules-matrix';
+import { InfractionCategory, UserProcessStage, UserSituation } from '../../../core/onboarding/rules-matrix';
 import { buildCompleteTestIdentificationFixture } from '../testFillData';
 
 type BrazilianDateInputProps = {
@@ -122,6 +122,9 @@ interface InfractionIdentificationStepProps {
     leadPhone?: string;
     /** Categoria selecionada na fase anterior (quando disponível) — torna os dados de teste 🧪 coerentes com ela. */
     category?: InfractionCategory;
+    situation: UserSituation;
+    processStage: UserProcessStage;
+    onUpdateCategory?: (category: InfractionCategory) => void;
     totalSteps?: number;
     stepNumber?: number;
     onUpdateInfraction: (data: InfractionData) => void;
@@ -138,6 +141,9 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
     leadName = '',
     leadPhone = '',
     category,
+    situation,
+    processStage,
+    onUpdateCategory,
     totalSteps = 4,
     stepNumber = 4,
     onUpdateInfraction,
@@ -261,7 +267,8 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <TestFillButton
                     isAdmin={isAdmin}
                     onClick={() => {
-                        const fixture = buildCompleteTestIdentificationFixture(category, infractionData);
+                        const fixture = buildCompleteTestIdentificationFixture(situation, processStage, category, infractionData);
+                        onUpdateCategory?.(fixture.category);
                         if (onUpdateLead) onUpdateLead(fixture.leadName, fixture.leadPhone);
                         setCurrentLeadName(fixture.leadName);
                         setCurrentLeadPhone(fixture.leadPhone);
