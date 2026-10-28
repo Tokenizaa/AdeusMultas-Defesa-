@@ -86,7 +86,7 @@ router.get('/onboarding-v2/cases/:id/analysis', async (req, res) => { const row 
 router.put('/onboarding-v2/cases/:id/qualification', async (req, res) => {
   const row = await getAuthorizedCase(req, res, req.params.id); if (!row) return;
   const applicant = req.body?.applicant as CaseApplicantData | undefined;
-  if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressNeighborhood || !applicant.addressZipCode || !applicant.addressCityState) return res.status(400).json({ error: 'Dados de qualificação incompletos.', code: 'QUALIFICATION_REQUIRED' });
+  if (!applicant?.applicantName || !applicant.applicantCpf || !applicant.applicantCnh || !applicant.applicantPhone || !applicant.applicantEmail || !applicant.addressStreet || !applicant.addressNumber || !applicant.addressCityState) return res.status(400).json({ error: 'Dados de qualificação incompletos.', code: 'QUALIFICATION_REQUIRED' });
   const cpf = applicant.applicantCpf.replace(/\D/g, '');
   if (!/^\d{11}$/.test(cpf)) return res.status(400).json({ error: 'CPF inválido.', code: 'QUALIFICATION_CPF_INVALID' });
   const current = CanonicalMapper.rowToDomain(row); const updated: CaseDomain = { ...current, applicant: { ...applicant, applicantCpf: cpf }, clientName: applicant.applicantName, clientCpf: cpf, clientEmail: applicant.applicantEmail, clientPhone: applicant.applicantPhone, status: 'aguardando_pagamento', currentStage: 3, updatedAt: new Date().toISOString() };
