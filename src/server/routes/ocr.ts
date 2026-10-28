@@ -63,11 +63,11 @@ router.post('/ocr/analyze', authenticateToken, async (req, res) => {
         points: matchedInfraction?.points || 0,
         fineAmount: matchedInfraction?.fineAmount || 0,
         autuadorBody: ocrResult.dadosExtraidos.orgaoAutuador,
-        notificationExpeditionDate: ocrResult.dadosExtraidos.dataInfracao,
-        defenseDeadline: ocrResult.dadosExtraidos.prazoDefesa || new Date(Date.now() + 28 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        // Não confundir a data da infração com a data de expedição da notificação.
+        defenseDeadline: ocrResult.dadosExtraidos.prazoDefesa || undefined,
         formalFlawsDetected: matchedInfraction?.typicalFlaws || [],
-        dateTime: ocrResult.dadosExtraidos.dataInfracao || new Date().toISOString(),
-        location: ocrResult.dadosExtraidos.localInfracao || 'Não informado',
+        dateTime: ocrResult.dadosExtraidos.dataInfracao || '',
+        location: ocrResult.dadosExtraidos.localInfracao || '',
       };
 
       // Run Gemini AI analysis if available
