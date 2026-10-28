@@ -12,7 +12,7 @@ Incluído:
 - Resolução da categoria compatível com serviços especializados e com o pedido de conversão em advertência.
 - Cenário de suspensão coerente: Lei Seca ou excesso de velocidade acima de 50%, conforme categoria selecionada.
 - Sincronização da categoria do wizard quando o fixture precisa corrigir uma categoria incompatível.
-- Identificação explícita de dados fictícios no nome, local e AIT (`TESTE-`).
+- Identificação explícita de dados fictícios no nome e local, mantendo o AIT sintético em formato numérico para não quebrar validações posteriores.
 - Datas em sequência cronológica sintética, sem afirmar que representam prazos legais reais.
 - Testes para completude, substituição de campos derivados obsoletos e coerência serviço/fase/categoria.
 
@@ -33,7 +33,7 @@ A versão anterior recebia principalmente a categoria. Isso era insuficiente: um
   - Conversão em advertência, inclusive quando selecionada como fase dentro do serviço geral, usa `conversao_advertencia`.
   - Cassação usa a categoria geral de CNH.
   - Suspensão usa Lei Seca ou, quando escolhida a categoria de velocidade, um cenário sintético de velocidade acima de 50% com código `747-10`.
-  - O nome `Condutor de Teste`, o local fictício e o prefixo `TESTE-` no AIT tornam o conjunto reconhecível como fictício.
+  - O nome `Condutor de Teste` e o local fictício identificam o conjunto como sintético. O AIT continua numérico (gerado para teste) para preservar compatibilidade com validações posteriores.
   - A sequência ocorrência → expedição → entrega → prazo é cronológica e gerada para testes de interface; não é cálculo de prazo jurídico.
 
 - **`src/components/onboarding/steps/InfractionIdentificationStep.tsx`**
@@ -68,7 +68,7 @@ A versão anterior recebia principalmente a categoria. Isso era insuficiente: um
 
 ## Riscos e limites residuais
 
-- O AIT recebe o prefixo `TESTE-`; a validação atual da etapa verifica presença/comprimento, mas o comportamento visual e qualquer validação posterior ainda precisam ser verificados no navegador.
+- O AIT de teste permanece numérico para manter compatibilidade potencial com validações posteriores; a distinção de dados fictícios fica no nome e no local. O comportamento visual e qualquer validação posterior ainda precisam ser verificados no navegador.
 - As datas são dados sintéticos de interface. Não devem ser reutilizadas como regra de cálculo de prazo ou como afirmação sobre cabimento jurídico.
 - O serviço de suspensão possui múltiplas hipóteses de origem; o fixture cobre as duas categorias explicitamente modeladas aqui (Lei Seca e excesso de velocidade acima de 50%), não um processo real de suspensão por acúmulo de pontos.
 - CI e validação visual/E2E não estão confirmados nesta documentação. Não declarar PASS até obter evidências.
