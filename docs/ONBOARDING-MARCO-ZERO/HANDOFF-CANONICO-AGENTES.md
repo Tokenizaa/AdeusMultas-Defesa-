@@ -76,6 +76,8 @@ Registro: [CORRECAO-02-PREENCHIMENTO-TESTE-FORMULARIO.md](./CORRECAO-02-PREENCHI
 
 ### Correção 03 — perguntas específicas de radar/velocidade (alteração mais recente)
 
+Registro detalhado e estado de validação: [CORRECAO-03-PERGUNTAS-RADAR-INMETRO.md](./CORRECAO-03-PERGUNTAS-RADAR-INMETRO.md).
+
 Commit: [396a7aae30a0987f5ccd7adf8aa39896bd36d481](https://github.com/Tokenizaa/AdeusMultas-Defesa-/commit/396a7aae30a0987f5ccd7adf8aa39896bd36d481).
 
 Arquivo: `src/components/onboarding/steps/SpecificInfractionDataStep.tsx`.
@@ -95,9 +97,12 @@ Após o commit 396a7aae, foram iniciados:
 - [CI/CD Pipeline — run 40782524806](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524806)
 - [Cloudflare Deploy — run 40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758)
 
-Na última observação registrada no chat, ambos ainda estavam `in_progress`. **Esse estado está desatualizado até nova consulta:** o próximo agente deve consultar o GitHub agora e registrar o status final, os jobs e os logs relevantes.
+**Estado consultado em 2026-10-28:**
+- CI/CD run [40782524806](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524806): **FAIL**; job `test-unit` falhou no passo Vitest. Typecheck/build foram pulados. A listagem de jobs não mostrou a mensagem interna do teste; abrir logs do workflow para identificar o teste e a causa.
+- Cloudflare Deploy run [40782524758](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782524758): **FAIL**; `Discover canonical E2E matrix (read-only)` falhou e o build/deploy foi pulado. Abrir o log desse passo e confirmar a mensagem exata.
+- Após os commits de documentação, CI/CD runs [40782882801](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782882801) (commit `f479d3e1`) e [40782928525](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40782928525) (commit `a6487630`) estavam `in_progress` na última consulta. Consultar o status final; não presumir sucesso.
 
-Falha anterior relevante: workflow de deploy no run [40771746919?](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919) (confirmar o run exato antes de citar como falha de deploy) acusou que `bun run test:e2e:list` encontrou apenas 3 testes quando o workflow esperava 10 cenários canônicos por serviço (70 no total), com erro semelhante a `Expected 10 canonical scenarios for DEFESA_PREVIA, found 0`. Não presumir que é a mesma causa no run atual. Se reaparecer, investigar a matriz E2E e o contrato do workflow; não desativar a verificação nem inventar testes falsos.
+Há uma falha de descoberta de matriz E2E em execuções anteriores, com mensagem relatada semelhante a `Expected 10 canonical scenarios for DEFESA_PREVIA, found 0`. Não atribuir essa mensagem ao run atual sem ler o log atual. Não desativar a verificação nem inventar testes falsos.
 
 ## 6. Matriz mínima para a etapa atual (radar/velocidade)
 
