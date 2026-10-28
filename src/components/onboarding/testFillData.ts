@@ -1,5 +1,5 @@
 import { InfractionData, VehicleData } from '../../types';
-import { InfractionCategory, calculateConsideredSpeed } from '../../core/onboarding/rules-matrix';
+import { InfractionCategory, UserProcessStage, UserSituation, calculateConsideredSpeed } from '../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
 import { generateRandomAIT, generateRandomCPF, generateRandomCNH, generateRandomName, generateRandomPhone, generateRandomVehicleData, generateRandomAddress } from '../../utils/test-data-generator';
 
@@ -245,28 +245,59 @@ export interface CompleteTestIdentificationFixture {
   leadPhone: string;
   vehicleData: VehicleData;
   infractionData: InfractionData;
+  category: InfractionCategory;
 }
 
+export function resolveTestIdentificationCategory(
+  situation: UserSituation,
+  processStage: UserProcessStage,
+  selectedCategory?: InfractionCategory,
+): InfractionCategory {
+  if (situation === 'indicacao_condutor') return 'indicacao_condutor';
+  if (situation === 'conversao_advertencia' || processStage === 'conversao_advertencia') return 'conversao_advertencia';
+  if (situation === 'cassacao_cnh') return 'cnh_geral';
+  if (situation === 'suspensao_cnh') {
+    return selectedCategory === 'excesso_velocidade' ? 'excesso_velocidade' : 'lei_seca';
+  }
+  return selectedCategory ?? 'outro';
+}
+
+function dateDaysAgo(daysAgo: number): string {
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Fixture fictícia para a etapa de identificação. Serviço + fase + categoria
+ * determinam o cenário. As datas são cronológicas, mas não calculam prazos legais.
+ */
 export function buildCompleteTestIdentificationFixture(
-  category: InfractionCategory | undefined,
+  situation: UserSituation,
+  processStage: UserProcessStage,
+  selectedCategory: InfractionCategory | undefined,
   currentInfraction: InfractionData,
 ): CompleteTestIdentificationFixture {
-  const leadName = generateRandomName();
+  const category = resolveTestIdentificationCategory(situation, processStage, selectedCategory);
+  const leadName = 'Condutor de Teste';
   const leadPhone = generateRandomPhone();
   const vehicleData = generateRandomVehicleData();
-
-  // Sem categoria, usa o catálogo genérico para nunca deixar o código vazio.
-  const baseInfraction = buildCoherentTestInfraction(category ?? 'outro', currentInfraction);
-  const address = generateRandomAddress();
-  const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(baseInfraction.dateTime ?? '')
-    ? baseInfraction.dateTime!
-    : new Date().toISOString().slice(0, 10);
+  const baseInfraction = buildCoherentTestInfraction(category, currentInfraction);
+  const occurrenceDaysAgo: Record<UserProcessStage, number> = {
+    primeira_notificacao: 12,
+    notificacao_penalidade: 40,
+    defesa_negada: 60,
+    recurso_jari_negado: 90,
+    conversao_advertencia: 12,
+    nao_tenho_certeza: 30,
+  };
+  const occurrenceDate = dateDaysAgo(occurrenceDaysAgo[processStage]);
   const addTestDays = (days: number) => {
     const date = new Date(`${occurrenceDate}T12:00:00.000Z`);
     date.setUTCDate(date.getUTCDate() + days);
     return date.toISOString().slice(0, 10);
   };
-
   const categoryCodes: Partial<Record<InfractionCategory, string[]>> = {
     excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
     lei_seca: ['757-90', '516-91'],
@@ -275,28 +306,27 @@ export function buildCompleteTestIdentificationFixture(
     estacionamento: ['545-21', '554-12'],
     conversao_advertencia: ['745-50', '736-62', '735-80', '685-80'],
   };
-  const allowedCodes = category ? categoryCodes[category] : undefined;
-  const generatedCode = baseInfraction.infractionCode?.trim();
-  const selectedCode = allowedCodes?.length && !allowedCodes.includes(generatedCode ?? '')
-    ? allowedCodes[0]
-    : generatedCode || catalogFields('745-50').infractionCode || '745-50';
-
+  const allowedCodes = categoryCodes[category];
+  let selectedCode = baseInfraction.infractionCode?.trim() || '745-50';
+  if (allowedCodes?.length && !allowedCodes.includes(selectedCode)) selectedCode = allowedCodes[0];
+  if (situation === 'suspensao_cnh' && category === 'excesso_velocidade') {
+    selectedCode = '747-10';
+    baseInfraction.speedLimit = 50;
+    baseInfraction.measuredSpeed = 85;
+    baseInfraction.consideredSpeed = calculateConsideredSpeed(85);
+  }
+  const address = generateRandomAddress();
   const infractionData: InfractionData = {
     ...baseInfraction,
-    aitNumber: baseInfraction.aitNumber?.trim() || generateRandomAIT(),
+    aitNumber: `TESTE-${generateRandomAIT()}`,
     infractionCode: selectedCode,
     autuadorBody: baseInfraction.autuadorBody?.trim() || 'DETRAN-SP',
     dateTime: occurrenceDate,
     notificationExpeditionDate: addTestDays(3),
     notificationDeliveryDate: addTestDays(5),
     defenseDeadline: addTestDays(25),
-    location: `${address.street}, ${address.number} - ${address.neighborhood}, ${address.cityState}`,
+    location: `LOCAL FICTÍCIO DE TESTE — ${address.street}, ${address.number} - Centro, Cidade Teste/SP`,
   };
-
-  // Keep article, description, severity, points and amount aligned with the
-  // selected code, even if the incoming state held stale data from another category.
-  const canonicalFields = catalogFields(infractionData.infractionCode);
-  Object.assign(infractionData, canonicalFields);
-
-  return { leadName, leadPhone, vehicleData, infractionData };
+  Object.assign(infractionData, catalogFields(infractionData.infractionCode));
+  return { leadName, leadPhone, vehicleData, infractionData, category };
 }
