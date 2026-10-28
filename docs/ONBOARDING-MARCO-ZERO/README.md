@@ -41,7 +41,8 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Marco:** estabelecido.
 - **Escopo inicial:** onboarding do serviço de multas; as etapas listadas na auditoria são pontos examinados, não um limite de escopo por número de etapa.
 - **Alterações funcionais registradas:** correção de consistência entre fase, categoria e formulário inicial documentada em CORRECAO-01-CONSISTENCIA-ETAPAS-2-A-4.md.
-- **Validação visual, execução E2E e consulta externa real:** ainda não declaradas como executadas.
+- **CI da correção 01:** testes unitários, TypeScript e build aprovados no [workflow](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40771746919).
+- **Validação visual/E2E e consulta externa real:** ainda não declaradas como executadas.
 - **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
 
 ## Modelo de registro por tarefa
