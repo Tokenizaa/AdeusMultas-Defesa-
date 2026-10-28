@@ -109,7 +109,7 @@ function toDateInputValue(value?: string): string {
 
 // Mapa de categoria do wizard → códigos da infração (baseado no catálogo)
 // Usado para filtrar o <select> de código da infração pela categoria escolhida na etapa 3.
-const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
+export const CATEGORY_CODE_MAP: Record<InfractionCategory, string[]> = {
   excesso_velocidade: ['745-50', '746-30', '745-70', '747-10'],
   lei_seca: ['757-90', '516-91'],
   celular: ['736-62'],
