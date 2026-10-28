@@ -1,7 +1,7 @@
-import { InfractionData } from '../../types';
+import { InfractionData, VehicleData } from '../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
-import { generateRandomAIT, generateRandomCPF, generateRandomCNH, generateRandomName } from '../../utils/test-data-generator';
+import { generateRandomAIT, generateRandomCPF, generateRandomCNH, generateRandomName, generateRandomPhone, generateRandomVehicleData, generateRandomAddress } from '../../utils/test-data-generator';
 
 /**
  * testFillData — dados de teste 🧪 COERENTES com a categoria de infração selecionada.
@@ -232,4 +232,57 @@ export function buildNeutralTestIdentification(current: InfractionData): Infract
     dateTime: recentDate(),
     autuadorBody: pick(AUTUADORES_TESTE),
   };
+}
+
+
+/**
+ * Fixture completo para o formulário de identificação do onboarding.
+ * Centraliza o preenchimento de todos os campos visíveis/obrigatórios para
+ * que o botão administrativo e os testes usem exatamente o mesmo contrato.
+ */
+export interface CompleteTestIdentificationFixture {
+  leadName: string;
+  leadPhone: string;
+  vehicleData: VehicleData;
+  infractionData: InfractionData;
+}
+
+export function buildCompleteTestIdentificationFixture(
+  category: InfractionCategory | undefined,
+  currentInfraction: InfractionData,
+): CompleteTestIdentificationFixture {
+  const leadName = generateRandomName();
+  const leadPhone = generateRandomPhone();
+  const vehicleData = generateRandomVehicleData();
+
+  // Sem categoria, usa o catálogo genérico para nunca deixar o código vazio.
+  const baseInfraction = buildCoherentTestInfraction(category ?? 'outro', currentInfraction);
+  const address = generateRandomAddress();
+  const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(baseInfraction.dateTime ?? '')
+    ? baseInfraction.dateTime!
+    : new Date().toISOString().slice(0, 10);
+  const addTestDays = (days: number) => {
+    const date = new Date(`${occurrenceDate}T12:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const infractionData: InfractionData = {
+    ...baseInfraction,
+    aitNumber: baseInfraction.aitNumber?.trim() || generateRandomAIT(),
+    infractionCode: baseInfraction.infractionCode?.trim() || catalogFields('745-50').infractionCode || '745-50',
+    autuadorBody: baseInfraction.autuadorBody?.trim() || 'DETRAN-SP',
+    dateTime: occurrenceDate,
+    notificationExpeditionDate: addTestDays(3),
+    notificationDeliveryDate: addTestDays(5),
+    defenseDeadline: addTestDays(25),
+    location: `${address.street}, ${address.number} - ${address.neighborhood}, ${address.cityState}`,
+  };
+
+  // Keep article, description, severity, points and amount aligned with the
+  // selected code, even if the incoming state held stale data from another category.
+  const canonicalFields = catalogFields(infractionData.infractionCode);
+  Object.assign(infractionData, canonicalFields);
+
+  return { leadName, leadPhone, vehicleData, infractionData };
 }
