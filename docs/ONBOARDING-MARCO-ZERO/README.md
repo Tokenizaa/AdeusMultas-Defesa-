@@ -24,7 +24,7 @@ Levar o onboarding a um estado **funcional, juridicamente coerente e validado po
 ## Organização sugerida
 
 - README.md — este marco, princípios e índice.
-- AUDITORIA-01-BASELINE-ETAPAS-1-A-3.md — linha de base inicial e achados da análise das primeiras etapas.
+- AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md — linha de base do fluxo de onboarding específico do serviço de multas.
 - TAREFA-001-OCR-E-LEITURA-DOCUMENTAL.md — especificação da primeira correção, quando formalizada.
 - TAREFA-002-MAPEAMENTO-DE-FASES.md — mapeamento e validação das fases, quando formalizados.
 
@@ -32,12 +32,12 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 
 ## Índice
 
-1. [Auditoria 01 — linha de base das etapas iniciais](./AUDITORIA-01-BASELINE-ETAPAS-1-A-3.md)
+1. [Auditoria 01 — linha de base do serviço de multas](./AUDITORIA-01-BASELINE-SERVICO-DE-MULTAS.md)
 
 ## Status inicial
 
 - **Marco:** estabelecido.
-- **Escopo inicial:** etapas de seleção do serviço, escolha da fase administrativa, categoria da infração e transição para identificação do caso.
+- **Escopo inicial:** onboarding do serviço de multas; as etapas listadas na auditoria são pontos examinados, não um limite de escopo por número de etapa.
 - **Alterações funcionais de código neste marco:** nenhuma.
 - **Validação visual, execução E2E e consulta externa real:** não declaradas como executadas.
 - **Próxima tarefa recomendada:** verificar e corrigir o contrato de envio/processamento do documento na funcionalidade de OCR, com teste isolado e critérios de aceitação explícitos.
