@@ -201,10 +201,38 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
             const res = await authFetch('/api/ocr/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base64, serviceType: '' }),
+                body: JSON.stringify({ image: dataUrl, base64, serviceType: '' }),
             });
             const data = await res.json();
-            if (data.success && data.extractedData) {
+            if (!res.ok) {
+                const errorMessage = data.message || data.error?.message || data.error || 'Não foi possível processar o documento.';
+                setOcrStatusMessage(`${errorMessage} Você pode preencher os campos manualmente.`);
+                return;
+            }
+
+            // Compatível com os dois contratos ativos: API Node (success/extractedData)
+            // e Worker Cloudflare (ok/data/fields).
+            const cloudflareFields = data.ok && data.data?.fields ? data.data.fields : null;
+            if (cloudflareFields) {
+                const fields = cloudflareFields;
+                onUpdateInfraction({
+                    ...infractionData,
+                    aitNumber: fields.aitNumber || infractionData.aitNumber,
+                    infractionCode: fields.infractionCode || infractionData.infractionCode,
+                    description: fields.description || infractionData.description,
+                    ctbArticle: fields.ctbArticle || infractionData.ctbArticle,
+                    autuadorBody: fields.autuadorBody || infractionData.autuadorBody,
+                    dateTime: fields.infractionDate || infractionData.dateTime,
+                    location: fields.location || infractionData.location,
+                });
+                if (fields.plate) {
+                    onUpdateVehicle({ ...vehicleData, plate: fields.plate });
+                }
+                const foundFields = Object.values(fields).some((value) => typeof value === 'string' && value.trim());
+                setOcrStatusMessage(foundFields
+                    ? 'Leitura concluída. Preenchemos os dados identificados; confira tudo com a notificação antes de continuar.'
+                    : 'A imagem foi processada, mas não conseguimos identificar os campos com segurança. Preencha manualmente.');
+            } else if (data.success && data.extractedData) {
                 // Merge OCR extracted data into form state (source of truth)
                 const extracted = data.extractedData;
                 const infraction = extracted.infraction;
@@ -244,7 +272,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 
                 setOcrStatusMessage('Documento processado! Dados preenchidos automaticamente. Revise antes de continuar.');
             } else {
-                setOcrStatusMessage('Documento enviado. Preencha os campos manualmente abaixo.');
+                setOcrStatusMessage(data.message || data.error?.message || 'Não foi possível identificar os dados. Preencha os campos manualmente.');
             }
         } catch (err) {
             setOcrStatusMessage('Não foi possível ler o documento. Preencha os campos manualmente.');
@@ -364,7 +392,7 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 <input
                     id="photo-ocr-upload"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".jpg,.jpeg,.png,.webp,.gif"
                     onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                             handleFileUpload(e.target.files[0]);
@@ -378,10 +406,10 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                 </div>
                 <div className="text-left">
                     <p className="text-xs font-bold text-slate-800">
-                        Anexe uma foto ou PDF da notificação para melhorar a análise (Opcional)
+                        Anexe uma foto ou captura da notificação para preencher os dados automaticamente (Opcional)
                     </p>
                     <p className="text-[11px] text-slate-500">
-                        Formatos aceitos: PDF, JPG ou PNG. O upload faz OCR e preenche os campos automaticamente. Revise antes de continuar.
+                        Formatos aceitos: JPG, PNG, WEBP ou GIF. Os campos encontrados serão preenchidos; confira tudo com o documento. Se a leitura falhar, você pode digitar os dados.
                     </p>
                 </div>
                 <span className="text-[11px] font-bold text-[#155BCB] bg-white border border-blue-200 px-3 py-1 rounded-lg group-hover:bg-[#155BCB] group-hover:text-white transition-colors shrink-0">
