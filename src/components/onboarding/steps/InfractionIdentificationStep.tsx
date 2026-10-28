@@ -87,7 +87,9 @@ function BrazilianDateInput({ id, value, onChange, required }: BrazilianDateInpu
                     return;
                 }
                 const iso = brazilianDateToIso(next);
-                if (iso) onChange(iso);
+                // Não manter uma data válida antiga enquanto o usuário está editando
+                // ou digitando uma data incompleta/inválida.
+                onChange(iso || '');
             }}
             className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
         />
