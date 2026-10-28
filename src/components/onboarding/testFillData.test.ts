@@ -78,16 +78,16 @@ describe('buildCompleteTestIdentificationFixture — formulário de identificaç
     const { infractionData, vehicleData } = fixture;
 
     expect(fixture.leadName.trim().length).toBeGreaterThanOrEqual(3);
-    expect(fixture.leadPhone.replace(/\\D/g, '').length).toBeGreaterThanOrEqual(10);
+    expect(fixture.leadPhone.replace(/\D/g, '').length).toBeGreaterThanOrEqual(10);
     expect(vehicleData.plate.trim().length).toBeGreaterThanOrEqual(7);
     expect(infractionData.aitNumber.trim().length).toBeGreaterThanOrEqual(3);
     expect(infractionData.infractionCode.trim().length).toBeGreaterThanOrEqual(3);
     expect(infractionData.location.trim().length).toBeGreaterThanOrEqual(5);
     expect(infractionData.autuadorBody.trim().length).toBeGreaterThanOrEqual(3);
-    expect(infractionData.dateTime).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-    expect(infractionData.notificationExpeditionDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-    expect(infractionData.notificationDeliveryDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
-    expect(infractionData.defenseDeadline).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(infractionData.dateTime).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(infractionData.notificationExpeditionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(infractionData.notificationDeliveryDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(infractionData.defenseDeadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(infractionData.ctbArticle).toBeTruthy();
     expect(infractionData.description).toBeTruthy();
     expect(infractionData.fineAmount).toBeGreaterThan(0);
