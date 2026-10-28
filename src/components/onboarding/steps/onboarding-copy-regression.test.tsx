@@ -21,6 +21,7 @@ import { SpecificInfractionDataStep } from './SpecificInfractionDataStep';
 import { InfractionCategoryStep } from './InfractionCategoryStep';
 import { InfractionIdentificationStep } from './InfractionIdentificationStep';
 import { ServiceStep } from './ServiceStep';
+import { OnboardingStartScreen } from '../OnboardingStartScreen';
 
 // Shim mínimo de window para componentes que leem window.location em inicializadores lazy.
 const originalWindow = (globalThis as any).window;
@@ -432,5 +433,41 @@ describe('Onboarding copy regression — ServiceStep', () => {
     expect(html).not.toContain('aplicarmos as defesas adequadas');
     expect(html).toContain('Escolha a situação que descreve o seu caso');
     expect(html).toContain('Lei 14.071/2020');
+  });
+});
+
+
+describe('OnboardingStartScreen — início e retomada explícitos', () => {
+  it('oferece início manual quando não existe rascunho', () => {
+    const html = renderToString(
+      <OnboardingStartScreen
+        hasSavedProgress={false}
+        onStart={() => {}}
+        onContinue={() => {}}
+        onStartFresh={() => {}}
+      />
+    );
+
+    expect(html).toContain('Vamos começar pelo seu caso');
+    expect(html).toContain('>Começar<');
+    expect(html).not.toContain('Continuar de onde parei');
+    expect(html).not.toContain('Começar do zero');
+  });
+
+  it('oferece continuar ou começar do zero quando existe progresso salvo', () => {
+    const html = renderToString(
+      <OnboardingStartScreen
+        hasSavedProgress={true}
+        savedStep={5}
+        onStart={() => {}}
+        onContinue={() => {}}
+        onStartFresh={() => {}}
+      />
+    );
+
+    expect(html).toContain('Você parou na etapa 5');
+    expect(html).toContain('Continuar de onde parei');
+    expect(html).toContain('Começar do zero');
+    expect(html).toContain('Não exclui sua conta nem outros casos salvos');
   });
 });
