@@ -17,7 +17,6 @@ import {
 import { InfractionData } from '../../../types';
 import { InfractionCategory, calculateConsideredSpeed } from '../../../core/onboarding/rules-matrix';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
-import { formatDateBR, parseDateBR } from '../../../lib/date-utils';
 import { TestFillButton } from '../../ui/TestFillButton';
 import { buildCoherentTestInfraction } from '../testFillData';
 
@@ -191,26 +190,28 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label htmlFor="input-inmetro-date" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Data da Aferição INMETRO (se constar no auto)
+                  Data da aferição do INMETRO (opcional)
                 </label>
                 <input
                   id="input-inmetro-date"
                   type="date"
-                  value={infractionData.inmetroAferitionDate ? formatDateBR(infractionData.inmetroAferitionDate) : ''}
-                            onChange={(e) => {
-                                    const isoDate = parseDateBR(e.target.value);
-                                    onUpdateInfraction({ ...infractionData, inmetroAferitionDate: isoDate });
-                                }}
+                  value={infractionData.inmetroAferitionDate || ''}
+                  onChange={(e) => {
+                    onUpdateInfraction({
+                      ...infractionData,
+                      inmetroAferitionDate: e.target.value,
+                    });
+                  }}
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
                 <span className="text-[11px] text-slate-500 mt-1 block">
-                  Aferição com mais de 12 meses na data da infração é um argumento forte para questionar a validade da medição do radar.
+                  Se essa data constar na notificação ou em outro documento, informe-a. Se não encontrar, deixe em branco e continue. A análise verificará a informação disponível antes de avaliar sua relevância.
                 </span>
               </div>
 
               <div>
                 <label htmlFor="input-radar-equipment-id" className="text-[11px] font-bold text-slate-700 uppercase font-mono block mb-1">
-                  Número do Equipamento / Laudo INMETRO
+                  Número do equipamento ou laudo do INMETRO (opcional)
                 </label>
                 <input
                   id="input-radar-equipment-id"
@@ -220,6 +221,9 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   placeholder="Ex: 123456/2023"
                   className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Informe apenas se estiver disponível. Esse dado pode ajudar na conferência técnica, mas não é necessário para continuar.
+                </span>
               </div>
             </div>
           </div>
