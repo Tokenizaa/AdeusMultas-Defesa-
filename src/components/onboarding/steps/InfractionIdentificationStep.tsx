@@ -33,6 +33,67 @@ import {
 } from '../../../utils/test-data-generator';
 import { buildCoherentTestInfraction, buildNeutralTestIdentification } from '../testFillData';
 
+type BrazilianDateInputProps = {
+    id: string;
+    value?: string;
+    onChange: (isoDate: string) => void;
+    required?: boolean;
+};
+
+function isoToBrazilianDate(value?: string): string {
+    const iso = toDateInputValue(value);
+    if (!iso) return '';
+    const [year, month, day] = iso.split('-');
+    return `${day}/${month}/${year}`;
+}
+
+function brazilianDateToIso(value: string): string | undefined {
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return undefined;
+    const [, day, month, year] = match;
+    const iso = `${year}-${month}-${day}`;
+    return toDateInputValue(iso) === iso ? iso : undefined;
+}
+
+function formatBrazilianDateTyping(raw: string): string {
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function BrazilianDateInput({ id, value, onChange, required }: BrazilianDateInputProps) {
+    const [displayValue, setDisplayValue] = useState(() => isoToBrazilianDate(value));
+
+    React.useEffect(() => {
+        setDisplayValue(isoToBrazilianDate(value));
+    }, [value]);
+
+    return (
+        <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="dd/mm/aaaa"
+            maxLength={10}
+            required={required}
+            value={displayValue}
+            onChange={(event) => {
+                const next = formatBrazilianDateTyping(event.target.value);
+                setDisplayValue(next);
+                if (!next) {
+                    onChange('');
+                    return;
+                }
+                const iso = brazilianDateToIso(next);
+                if (iso) onChange(iso);
+            }}
+            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+        />
+    );
+}
+
 /** Normaliza datas do formulário para o formato exigido por <input type="date">.
  * Aceita YYYY-MM-DD e timestamps ISO (YYYY-MM-DDTHH:mm:ss.sssZ).
  * Datas inválidas viram string vazia, nunca um valor que o navegador não exibe.
@@ -475,12 +536,11 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             <Calendar className="w-3.5 h-3.5 text-slate-500" />
                             Data da Ocorrência
                         </label>
-                        <input
+                        <BrazilianDateInput
                             id="input-datetime"
-                            type="date"
-                            value={toDateInputValue(infractionData.dateTime)}
-                            onChange={(e) => onUpdateInfraction({ ...infractionData, dateTime: e.target.value })}
-                            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                            value={infractionData.dateTime}
+                            onChange={(value) => onUpdateInfraction({ ...infractionData, dateTime: value })}
+                            required
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
                             Prazo de decadência (Art. 281, §1º, II CTB)
@@ -493,12 +553,11 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             <Calendar className="w-3.5 h-3.5 text-amber-600" />
                             Data Expedição Notificação
                         </label>
-                        <input
+                        <BrazilianDateInput
                             id="input-notification-expedition-date"
-                            type="date"
-                            value={toDateInputValue(infractionData.notificationExpeditionDate)}
-                            onChange={(e) => onUpdateInfraction({ ...infractionData, notificationExpeditionDate: e.target.value })}
-                            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                            value={infractionData.notificationExpeditionDate}
+                            onChange={(value) => onUpdateInfraction({ ...infractionData, notificationExpeditionDate: value })}
+                            
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
                             Para verificação de decadência (Art. 281, II CTB)
@@ -511,12 +570,11 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             <Calendar className="w-3.5 h-3.5 text-emerald-600" />
                             Data de Entrega da Notificação
                         </label>
-                        <input
+                        <BrazilianDateInput
                             id="input-notification-delivery-date"
-                            type="date"
-                            value={toDateInputValue(infractionData.notificationDeliveryDate)}
-                            onChange={(e) => onUpdateInfraction({ ...infractionData, notificationDeliveryDate: e.target.value })}
-                            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                            value={infractionData.notificationDeliveryDate}
+                            onChange={(value) => onUpdateInfraction({ ...infractionData, notificationDeliveryDate: value })}
+                            
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
                             Consta no aviso de recebimento. Sem essa data, a violação da dupla notificação não pode ser avaliada.
@@ -529,12 +587,11 @@ export const InfractionIdentificationStep: React.FC<InfractionIdentificationStep
                             <Calendar className="w-3.5 h-3.5 text-rose-600" />
                             Prazo Final p/ Defesa
                         </label>
-                        <input
+                        <BrazilianDateInput
                             id="input-defense-deadline"
-                            type="date"
-                            value={toDateInputValue(infractionData.defenseDeadline)}
-                            onChange={(e) => onUpdateInfraction({ ...infractionData, defenseDeadline: e.target.value })}
-                            className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:bg-white outline-none transition-all"
+                            value={infractionData.defenseDeadline}
+                            onChange={(value) => onUpdateInfraction({ ...infractionData, defenseDeadline: value })}
+                            
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
                             Consta na notificação recebida
