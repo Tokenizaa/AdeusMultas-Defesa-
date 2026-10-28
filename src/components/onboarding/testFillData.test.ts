@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { InfractionData } from '../../types';
-import { buildCoherentTestInfraction } from './testFillData';
+import { buildCoherentTestInfraction, buildCompleteTestIdentificationFixture } from './testFillData';
 
 const emptyInfraction = {
   aitNumber: '',
@@ -63,5 +63,46 @@ describe('buildCoherentTestInfraction — preenchimento de campos por categoria'
   it('marca a resposta do requisito de advertência por escrito', () => {
     const data = buildCoherentTestInfraction('conversao_advertencia', emptyInfraction);
     expect(data.hasPreviousInfractionsLast12Months).toBe(false);
+  });
+});
+
+
+describe('buildCompleteTestIdentificationFixture — formulário de identificação completo', () => {
+  const categories = [
+    'excesso_velocidade', 'lei_seca', 'celular', 'vermelho', 'estacionamento',
+    'indicacao_condutor', 'conversao_advertencia', 'cnh_geral', 'outro',
+  ] as const;
+
+  it.each(categories)('preenche todos os campos necessários para a etapa 4 (%s)', (category) => {
+    const fixture = buildCompleteTestIdentificationFixture(category, emptyInfraction);
+    const { infractionData, vehicleData } = fixture;
+
+    expect(fixture.leadName.trim().length).toBeGreaterThanOrEqual(3);
+    expect(fixture.leadPhone.replace(/\\D/g, '').length).toBeGreaterThanOrEqual(10);
+    expect(vehicleData.plate.trim().length).toBeGreaterThanOrEqual(7);
+    expect(infractionData.aitNumber.trim().length).toBeGreaterThanOrEqual(3);
+    expect(infractionData.infractionCode.trim().length).toBeGreaterThanOrEqual(3);
+    expect(infractionData.location.trim().length).toBeGreaterThanOrEqual(5);
+    expect(infractionData.autuadorBody.trim().length).toBeGreaterThanOrEqual(3);
+    expect(infractionData.dateTime).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(infractionData.notificationExpeditionDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(infractionData.notificationDeliveryDate).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(infractionData.defenseDeadline).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+    expect(infractionData.ctbArticle).toBeTruthy();
+    expect(infractionData.description).toBeTruthy();
+    expect(infractionData.fineAmount).toBeGreaterThan(0);
+  });
+
+  it('substitui dados derivados antigos quando o código vem de outra categoria', () => {
+    const stale = {
+      ...emptyInfraction,
+      infractionCode: '745-50',
+      ctbArticle: 'ARTIGO ANTIGO',
+      description: 'Descrição antiga',
+    } as InfractionData;
+    const { infractionData } = buildCompleteTestIdentificationFixture('lei_seca', stale);
+    expect(['757-90', '516-91']).toContain(infractionData.infractionCode);
+    expect(infractionData.ctbArticle).not.toBe('ARTIGO ANTIGO');
+    expect(infractionData.description).not.toBe('Descrição antiga');
   });
 });
