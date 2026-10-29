@@ -65,6 +65,33 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
         'Se o radar estava com a vistoria vencida, esse é um dos argumentos mais fortes do seu caso e pode levar ao cancelamento da multa. Dá para confirmar com a certidão do INMETRO, que é gratuita.',
       confidenceBase: 'Resolução CONTRAN nº 798/2020, art. 4º, III'
     },
+    'ARG-048': {
+      title: 'A notificação de autuação foi expedida dentro do prazo de 30 dias?',
+      whatWeChecked:
+        'Comparamos a data da infração com a data registrada para expedição da Notificação de Autuação. A confirmação depende do documento oficial e do histórico do órgão.',
+      lawExplanation:
+        'O art. 281, § 1º, II, do CTB prevê o arquivamento do auto quando a Notificação de Autuação não é expedida no prazo máximo de 30 dias. A data de expedição deve ser conferida na notificação e no histórico oficial; a data de recebimento, isoladamente, não substitui essa verificação.',
+      evidenceCheck: (data) => {
+        const infractionDate = data.infraction.dateTime;
+        const expeditionDate = data.infraction.notificationExpeditionDate;
+        if (!infractionDate || !expeditionDate) {
+          return 'SEM_DADOS: Faltam a data da infração ou a data oficial de expedição da Notificação de Autuação para calcular o prazo.';
+        }
+        const infractionDay = new Date(`${String(infractionDate).slice(0, 10)}T00:00:00Z`);
+        const expeditionDay = new Date(`${String(expeditionDate).slice(0, 10)}T00:00:00Z`);
+        if (Number.isNaN(infractionDay.getTime()) || Number.isNaN(expeditionDay.getTime())) {
+          return 'SEM_DADOS: Não foi possível interpretar as datas informadas. Confira os documentos oficiais.';
+        }
+        const diffDays = Math.round((expeditionDay.getTime() - infractionDay.getTime()) / 86400000);
+        if (diffDays < 0) {
+          return 'SEM_DADOS: A data de expedição aparece anterior à infração; confira se os dados foram preenchidos corretamente.';
+        }
+        return `As datas informadas indicam ${diffDays} dias entre a infração e a expedição registrada. ${diffDays > 30 ? 'É um indício preliminar de extrapolação do prazo: confirme a data oficial de expedição na Notificação de Autuação e no histórico do órgão antes de concluir pela decadência.' : 'Pelo cálculo das datas informadas, o intervalo não ultrapassa 30 dias; confira a data oficial de expedição no documento.'}`;
+      },
+      userImpact:
+        'Se os documentos oficiais confirmarem que a Notificação de Autuação não foi expedida no prazo legal aplicável, esse fato poderá fundamentar pedido de arquivamento do auto. A conclusão depende da conferência documental.',
+      confidenceBase: 'Art. 281, § 1º, II, do CTB'
+    },
     'ARG-051': {
       title: 'Dá para trocar esta multa por advertência (sem pagar e sem pontos)?',
       whatWeChecked:
@@ -74,14 +101,15 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
       evidenceCheck: (data) => {
         const infractionCode = data.infraction.infractionCode;
         const isLightOrMedium = MEDIA_OR_LIGHT_CODES.has(infractionCode);
-        const hasRecentInfractions = data.infraction.hasPreviousInfractionsLast12Months === true;
+        const history = data.infraction.hasPreviousInfractionsLast12Months;
 
         if (!isLightOrMedium) return 'NAO_APLICA: Esta infração é grave ou gravíssima, então a conversão em advertência não se aplica ao seu caso.';
-        if (hasRecentInfractions) return 'NAO_APLICA: Constam infrações nos últimos 12 meses, então a conversão em advertência não se aplica ao seu caso.';
-        return 'ATENDIDO: A infração é leve ou média e não há infrações nos últimos 12 meses: os requisitos do art. 267 estão atendidos.';
+        if (history === undefined || history === null) return 'SEM_DADOS: Não foi informado se houve infrações nos 12 meses anteriores. Consulte o prontuário antes de concluir se os requisitos do art. 267 estão atendidos.';
+        if (history === true) return 'NAO_APLICA: Foram informadas infrações nos últimos 12 meses, então é necessário conferir o requisito legal no prontuário antes de avaliar a conversão.';
+        return 'ATENDIDO: Você informou não ter cometido outras infrações nos últimos 12 meses. Confirme essa informação no prontuário oficial para verificar o requisito do art. 267.';
       },
       userImpact:
-        'Nesses casos a lei não deixa o órgão escolher: a multa vira advertência. Na prática, sem multa e sem pontuação — se o órgão confirmar a conversão e o prontuário estiver em dia. Se o órgão negar, é um pedido simples de fazer.',
+        'Quando os requisitos legais forem confirmados no prontuário oficial, o art. 267 prevê a imposição de advertência por escrito em lugar da multa. Isso evita a cobrança da multa e a pontuação correspondente; a aplicação ao caso concreto depende da confirmação dos dados e do procedimento administrativo.',
       confidenceBase: 'Art. 267 do CTB (redação da Lei 14.071/2020)'
     },
     'ARG-002': {
