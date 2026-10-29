@@ -192,7 +192,7 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     const html = renderResult({ ...analysisWithArg051, status: 'failed' });
     expect(html).toContain('Análise não concluída');
     expect(html).toContain('Isso não significa que sua multa esteja correta.');
-    expect(html).toContain('Voltar e tentar novamente');
+    expect(html).toContain('Voltar e revisar os dados');
     expect(html).not.toContain('Continuar para preparar minha defesa');
   });
 
