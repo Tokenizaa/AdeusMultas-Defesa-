@@ -184,6 +184,28 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     expect(normalizedHtml).toContain('1 não aplicável');
   });
 
+  it('counts a data gap as pending even if the matching rule row says PASS', () => {
+    const html = renderResult({
+      ...analysisWithNoArguments,
+      evaluatedRules: [{
+        ruleId: 'RULE_SPEED_DATA',
+        name: 'Verificação da velocidade',
+        status: 'PASS',
+        evaluatedAt: '2026-10-29T00:00:00Z',
+        reason: 'Nenhuma inconformidade detectada para os dados fornecidos.',
+      }],
+      dataGaps: [{
+        ruleId: 'RULE_SPEED_DATA',
+        missingData: ['speedLimit'],
+        reason: 'Faltam dados de velocidade para concluir a verificação.',
+      }],
+    });
+    const normalizedHtml = html.replace(/<!-- -->/g, '');
+    expect(normalizedHtml).toContain('1 pendente por falta de dados');
+    expect(normalizedHtml).toContain('Faltam dados de velocidade para concluir a verificação.');
+    expect(normalizedHtml).not.toContain('Nenhuma inconformidade detectada para os dados fornecidos.');
+  });
+
   it('apresenta dados ausentes como pendências, não como irregularidades confirmadas', () => {
     const html = renderResult({
       ...analysisWithNoArguments,
