@@ -201,8 +201,8 @@ Registro: [CORRECAO-08-CONSISTENCIA-RESULTADO-INCONCLUSIVO.md](./CORRECAO-08-CON
 - Confirmado por leitura estática: o resumo técnico dizia que o motor não identificou inconsistências sempre que não havia achados, mesmo com lacunas que impediam avaliar uma ou mais hipóteses.
 - Confirmado por leitura estática: a tela contava pendências apenas por `evaluatedRules` e usava `rule.reason` mesmo quando `dataGaps` indicava insuficiência para a mesma regra.
 - Correção em `main`: resumo inconclusivo explícito quando há lacunas; contagem de pendências pela união dos IDs de lacunas e regras DATA_GAP; mensagem de lacuna prevalece sobre texto de PASS para a mesma regra.
-- Testes de regressão adicionados no motor e na renderização real da tela. CI pendente até consulta ao workflow do commit final.
-- Produção: não revalidada nesta tarefa. Não afirmar que o comportamento corrigido está publicado até autorização, deploy bem-sucedido e teste de confirmação.
+- Testes de regressão adicionados no motor e na renderização real da tela. CI PASS: runs [40939043422](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939043422) e [40939108423](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939108423) concluíram Vitest, typecheck e build com sucesso.
+- O workflow Cloudflare [40939043366](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939043366) concluiu com sucesso no commit de código `eeab356709d64e0e873a9e682dd9ba8ae2c162bf`; ainda não houve confirmação visual do comportamento do caso específico em produção.
 
 
 ## Registro de validação — Correção 07
