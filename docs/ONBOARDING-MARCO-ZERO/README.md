@@ -48,6 +48,7 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 12. [Correção 10 — card de prazo e ARG-049](./CORRECAO-10-ARG049-CARD-PRAZO.md)
 13. [Correção 11 — rótulos humanos de regras não aplicáveis](./CORRECAO-11-ROTULOS-FAMILIAS-NAO-APLICAVEIS.md)
 14. [Auditoria 02 — prevenção de divergências no fluxo de análise](./AUDITORIA-02-PREVENCAO-FLUXO-ANALISE.md)
+15. [Plano de investigação controlada — ordem, escopo e critérios de encerramento](./PLANO-DE-INVESTIGACAO-CONTROLADA.md)
 
 ## Status inicial
 
@@ -71,6 +72,13 @@ Não é necessário criar todos esses documentos antecipadamente. Cada documento
 - **Auditoria 02 — prevenção integrada:** a leitura do código atual separa defeitos corrigidos historicamente de riscos ainda ativos. Próximas frentes: caminho de coleta de `notificationDeliveryDate`, paridade cliente/Worker e inventário de todos os consumidores de `overallSuccessRate`. Registro: [AUDITORIA-02-PREVENCAO-FLUXO-ANALISE.md](./AUDITORIA-02-PREVENCAO-FLUXO-ANALISE.md).
 - **Validação visual/E2E de ponta a ponta:** ainda não declarada como concluída. Testar começo, retomada, reinício, avanço, retrocesso e recarga antes de declarar PASS.
 - **Próxima ação:** consultar CI e deploy atuais; corrigir falhas comprovadas e resolver o gate da matriz E2E sem desativá-lo.
+
+## Plano de trabalho vigente — 2026-10-29
+
+- **Documento de controle:** [Plano de investigação controlada](./PLANO-DE-INVESTIGACAO-CONTROLADA.md). Ele define a sequência geral, as regras para impedir expansão de escopo e o backlog separado.
+- **Tarefa ativa única:** `INV-001 — Catálogo jurídico da regra de dupla notificação`, em modo somente leitura. Não alterar motor, formulário, payload, banco ou textos jurídicos nessa tarefa.
+- **Próxima ação:** localizar e comparar as referências do catálogo/camada de validação jurídica; registrar arquivos, trechos e classificação dos achados. Só após fechar INV-001 poderá ser selecionada a próxima tarefa.
+- **Regra de prioridade documental:** se notas históricas listarem uma próxima ação mais ampla ou diferente, seguir a tarefa ativa do plano controlado e corrigir a documentação no fechamento da tarefa.
 
 ## Modelo de registro por tarefa
 
