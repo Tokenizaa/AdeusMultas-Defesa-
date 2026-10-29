@@ -152,7 +152,7 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
         return `VALIDADO: O cálculo da velocidade considerada é compatível: ${measured} km/h medidos, desconto aproximado de ${deduction} km/h e ${considered} km/h considerados, acima do limite informado de ${limit} km/h. Ainda é necessário conferir os dados na notificação original.`;
       },
       userImpact:
-        'Se a velocidade considerada registrada não superar o limite aplicável, ou se houver divergência entre cálculo, limite e código, peça a conferência dos dados oficiais. Não conclua que a multa é inválida apenas com a conta isolada.';
+        'Se a velocidade considerada registrada não superar o limite aplicável, ou se houver divergência entre cálculo, limite e código, peça a conferência dos dados oficiais. Não conclua que a multa é inválida apenas com a conta isolada.',
       confidenceBase: 'Resolução CONTRAN nº 798/2020, Anexo II'
     }
   };
