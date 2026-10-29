@@ -63,6 +63,9 @@ jobs:
             fi
           fi
 
+      - name: Build frontend assets (dist/) — validation only
+        run: bun run build
+
       - name: Test Brazilian date normalization
         run: bunx vitest run src/core/date-utils.test.ts
 
@@ -122,10 +125,6 @@ jobs:
 
       - name: Test anonymous onboarding and recovery API contracts
         run: bunx vitest run cloudflare/routes/cases.test.ts
-
-      - name: Build frontend assets (dist/)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[DEPLOY-PRODUCTION]')
-        run: bun run build
 
       - name: Build and deploy to Cloudflare
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[DEPLOY-PRODUCTION]')
