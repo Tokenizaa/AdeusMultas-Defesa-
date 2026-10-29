@@ -129,159 +129,65 @@ const analysisWithNoArguments = {
 // ---------------------------------------------------------------------------
 
 describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
-  it('não renderiza "Probabilidade de Êxito" (score heurístico apresentado como estatística)', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
+  const renderResult = (analysis: any) => renderToString(
+    <FreeAnalysisResultStep
+      analysis={analysis}
+      infractionData={baseInfraction}
+      vehicleData={baseVehicle}
+      serviceType='defesa_previa'
+      onProceedToDocumentGeneration={() => {}}
+      onSaveToDashboard={() => {}}
+      onBack={() => {}}
+    />
+  );
+
+  it('prioriza uma conclusão simples e não mostra percentual de êxito', () => {
+    const html = renderResult(analysisWithArg051);
+    expect(html).toContain('Veja o que merece atenção na sua multa');
+    expect(html).toContain('Principais pontos identificados');
+    expect(html).toContain('Continuar para preparar minha defesa');
     expect(html).not.toContain('Probabilidade de Êxito');
-    expect(html).toContain('Força da sua defesa');
-    expect(html).toContain(
-      'Não é previsão de resultado — a decisão final é do órgão.'
-    );
+    expect(html).not.toContain('Força da sua defesa');
+    expect(html).not.toContain('94%');
+    expect(html).not.toContain('WhatsApp:');
   });
 
-  it('não renderiza "Alto potencial de anulação" (promessa de resultado)', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('Alto potencial de anulação');
-    expect(html).toContain('Vários pontos fortes no seu caso');
+  it('mantém os detalhes jurídicos acessíveis sem obrigar a leitura inicial', () => {
+    const html = renderResult(analysisWithArg051);
+    expect(html).toContain('Ver detalhes da autuação e da análise');
+    expect(html).toContain('Base legal indicada');
+    expect(html).toContain('Por que isso importa');
   });
 
-  it('não renderiza "DIREITO SUBJETIVO" nem promessa absoluta de "0 pontos" sem condição', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('DIREITO SUBJETIVO');
-    expect(html).not.toContain('não pagará valor e não perderá pontos');
-    expect(html).not.toContain('0 pontos na CNH');
-    expect(html).toContain('se o órgão confirmar');
+  it('quando não há achados, explica a incerteza e mantém a continuidade comercial', () => {
+    const html = renderResult(analysisWithNoArguments);
+    expect(html).toContain('Ainda não confirmamos um problema na autuação');
+    expect(html).toContain('A ausência de um achado não comprova que a autuação esteja correta.');
+    expect(html).toContain('Continuar para preparar minha defesa');
   });
 
-  it('não renderiza "Nenhuma tese autorizada com os dados informados" (jargão interno)', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithNoArguments}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='defesa_previa'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('Nenhuma tese autorizada com os dados informados');
-    expect(html).toContain(
-      'Com os dados de hoje, não encontramos ponto forte'
-    );
+  it('não promete efeito suspensivo nem encaminha universalmente para o DETRAN', () => {
+    const html = renderResult(analysisWithNoArguments);
+    expect(html).not.toContain('Protocolar antes garante o efeito suspensivo');
+    expect(html).not.toContain('recurso por escrito ao DETRAN');
+    expect(html).not.toContain('A defesa é protocolada por escrito no DETRAN');
   });
 
-  it('não renderiza "Diagnóstico Jurídico Gratuito Concluído" (rótulo antigo)', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('Diagnóstico Jurídico Gratuito Concluído');
-    expect(html).toContain('Diagnóstico concluído — grátis');
+  it('distingue falha técnica e não oferece continuação como se a análise estivesse concluída', () => {
+    const html = renderResult({ ...analysisWithArg051, status: 'failed' });
+    expect(html).toContain('Análise não concluída');
+    expect(html).toContain('Isso não significa que sua multa esteja correta.');
+    expect(html).toContain('Voltar e tentar novamente');
+    expect(html).not.toContain('Continuar para preparar minha defesa');
   });
 
-  it('não renderiza "Enquadramento" (jargão) no resumo informativo', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('Enquadramento');
-    expect(html).toContain('Tipo da Infração');
-  });
-
-  it('não renderiza "Instância: Defesa Administrativa" sem explicação', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).not.toContain('Instância: Defesa Administrativa');
-    expect(html).toContain('Onde o caso é analisado: defesa administrativa');
-  });
-
-  it('adiciona contexto de que valor e pontos dependem da decisão do órgão', () => {
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithArg051}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='conversao_advertencia'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).toContain(
-      'Quanto vale a multa e os pontos dependem da decisão do órgão.'
-    );
-  });
-
-  it('quando não há teses e taxa indisponível, mostra modo degradado e mensagem de dados faltantes', () => {
-    const analysisWithoutRate = { ...analysisWithNoArguments, overallSuccessRate: null };
-    const html = renderToString(
-      <FreeAnalysisResultStep
-        analysis={analysisWithoutRate}
-        infractionData={baseInfraction}
-        vehicleData={baseVehicle}
-        serviceType='defesa_previa'
-        onProceedToDocumentGeneration={() => {}}
-        onSaveToDashboard={() => {}}
-        onBack={() => {}}
-      />
-    );
-    expect(html).toContain('Indicador Indisponível');
-    expect(html).toContain('—');
-    expect(html).toContain('Análise em modo degradado — base jurídica indisponível');
-    expect(html).toContain('Com os dados que você enviou, não encontramos problema na autuação.');
+  it('mostra prazo apenas como data informada, sem garantia jurídica genérica', () => {
+    const html = renderResult({
+      ...analysisWithNoArguments,
+      procedureDeadline: '2026-11-11',
+    });
+    expect(html).toContain('11/11/2026');
+    expect(html).toContain('Confirme a data na notificação original');
   });
 });
 
