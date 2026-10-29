@@ -194,6 +194,17 @@ Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSI
 - Produção: nenhum deploy iniciado; o commit não usa o marcador [DEPLOY-PRODUCTION].
 
 
+## 11. Correção 08 — coerência do resultado inconclusivo
+
+Registro: [CORRECAO-08-CONSISTENCIA-RESULTADO-INCONCLUSIVO.md](./CORRECAO-08-CONSISTENCIA-RESULTADO-INCONCLUSIVO.md).
+
+- Confirmado por leitura estática: o resumo técnico dizia que o motor não identificou inconsistências sempre que não havia achados, mesmo com lacunas que impediam avaliar uma ou mais hipóteses.
+- Confirmado por leitura estática: a tela contava pendências apenas por `evaluatedRules` e usava `rule.reason` mesmo quando `dataGaps` indicava insuficiência para a mesma regra.
+- Correção em `main`: resumo inconclusivo explícito quando há lacunas; contagem de pendências pela união dos IDs de lacunas e regras DATA_GAP; mensagem de lacuna prevalece sobre texto de PASS para a mesma regra.
+- Testes de regressão adicionados no motor e na renderização real da tela. CI pendente até consulta ao workflow do commit final.
+- Produção: não revalidada nesta tarefa. Não afirmar que o comportamento corrigido está publicado até autorização, deploy bem-sucedido e teste de confirmação.
+
+
 ## Registro de validação — Correção 07
 
 - Primeiro CI do commit 9911f2a9: [run 40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) falhou no arquivo de regressão: 54 arquivos passaram e 1 falhou; 424 testes passaram e 2 falharam.
