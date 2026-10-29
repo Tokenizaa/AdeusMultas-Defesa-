@@ -43,12 +43,34 @@
 
 ## Implementação e validação
 
-**Status inicial:** em execução. A documentação descreve o contrato antes da mudança; completar esta seção depois das alterações e verificações.
+**Status:** implementação parcial registrada; validação automatizada e ponta a ponta pendentes. Não declarar PASS.
 
-- Arquivos alterados:
-- Testes executados:
-- Typecheck/build:
-- Resultado CI:
-- Pendências:
-- Commit SHA:
-- Próxima ação autorizada: validar a tela em ambiente de desenvolvimento e revisar o fluxo completo da análise; produção continua bloqueada até autorização explícita.
+### Implementação realizada
+
+- `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`
+  - Simplificada a hierarquia: conclusão → principais pontos → prazo/próximo passo → detalhes recolhidos → ações.
+  - Removidos score/percentual de êxito, animação numérica, indicador de completude e telefone do cabeçalho.
+  - Separados visualmente resultado com achados, resultado sem achados e falha explicitamente marcada como `analysis.status === 'failed'`.
+  - Até três pontos são mostrados inicialmente; a explicação jurídica fica recolhida por ponto.
+  - Detalhes da autuação, resumo técnico, verificações registradas e lacunas de dados ficam em seção secundária.
+  - Preservados os IDs `btn-back-to-edit-diagnosis` e `btn-proceed-to-document-generation` e os handlers de voltar, salvar e continuar.
+  - Removida a promessa geral de efeito suspensivo e a orientação universal de protocolar no DETRAN/online.
+- `src/components/onboarding/steps/onboarding-copy-regression.test.tsx`
+  - Substituídas as expectativas antigas do resultado por seis verificações de regressão: hierarquia simples, ausência de score, detalhes recolhidos, estado sem achados, ausência de promessa jurídica, falha técnica explícita e prazo apresentado como data informada.
+
+### Evidência e validação
+
+- **Inspeção estática do código:** concluída nesta execução; as mudanças ficaram restritas à tela de resultado e ao teste de regressão correspondente.
+- **Testes Vitest:** BLOCKED — o teste foi atualizado, mas não foi executado nesta sessão.
+- **Typecheck:** BLOCKED — não executado nesta sessão.
+- **Build:** BLOCKED — não executado nesta sessão.
+- **CI:** sem evidência de status/run acessível para estes commits pelo conector consultado; não declarar aprovação.
+- **Teste visual mobile/desktop:** BLOCKED — não executado.
+- **Deploy de produção:** não iniciado.
+
+### Pendência importante
+
+A tela só consegue exibir o estado técnico quando recebe `analysis.status === 'failed'`. A leitura de `AnalysisProcessingStep.tsx` mostrou que o `catch` atual registra a falha no console e o fluxo pode avançar sem encaminhar um estado de falha explícito. Para não ampliar esta tarefa, esse contrato upstream não foi alterado. Portanto, a distinção visual de falha está implementada, mas ainda não está comprovada ponta a ponta.
+
+- **Commits de implementação:** `fbac44578f1780cf45fbba5f681073fac75f9271` (tela); `e81ac08e584f8db913b2ecc62e85ea6ab49452c0` (testes); `11c3618d781f996b9d2bced0a75da6446c460cb3` (ajuste do estado de falha).
+- **Próxima ação autorizada:** executar Vitest, typecheck e build; corrigir falhas relacionadas à tarefa; validar os estados em mobile/desktop. Depois, avaliar separadamente a passagem explícita de falha de `AnalysisProcessingStep` para o resultado. Produção continua bloqueada até autorização explícita.
