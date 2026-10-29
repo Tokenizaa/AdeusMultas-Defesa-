@@ -325,3 +325,27 @@ Registro da correção: [CORRECAO-11-ROTULOS-FAMILIAS-NAO-APLICAVEIS.md](./CORRE
 2. Revisar a regra de dupla notificação com fontes jurídicas oficiais e corrigir o contrato de dados para não concluir PASS com base apenas na entrega da Notificação de Autuação.
 3. Criar testes sintéticos de paridade navegador/Worker e inventariar consumidores do score.
 4. Manter a validação E2E/visual como pendente até existir evidência real. Não executar escrita persistente contra produção sem autorização explícita.
+
+
+## 15. Plano de investigação controlada — vigente em 2026-10-29
+
+**Documento de controle obrigatório:** [Plano de investigação controlada](./PLANO-DE-INVESTIGACAO-CONTROLADA.md).
+
+O plano separa a investigação em camadas (estado/documentação, motor, coleta, transporte/persistência, API/execução, resultado/interface, integração e validação), mas essas camadas **não devem ser executadas em paralelo**. É obrigatório trabalhar com uma única tarefa ativa, pergunta específica, escopo incluído/excluído, critérios de aceite e evidências.
+
+### Tarefa ativa única
+
+**INV-001 — Catálogo jurídico da regra de dupla notificação.**  
+**Status:** investigação somente leitura.
+
+- Localizar definições, metadados, descrições e textos da regra no catálogo/base de conhecimento e na camada de validação jurídica.
+- Comparar as declarações encontradas com a semântica do motor e com a distinção entre Notificação de Autuação (NA) e Notificação de Imposição de Penalidade (NIP).
+- Registrar arquivo, símbolo/trecho, evidência e classificação: defeito confirmado, suspeita ou não encontrado.
+- Não alterar nesta tarefa motor, formulário, payload, banco, migrações ou textos jurídicos.
+- Não iniciar ainda a implementação de coleta/persistência da NIP, testes de paridade navegador/Worker ou auditoria de consumidores de `overallSuccessRate`.
+
+### Regra de continuidade e precedência
+
+A seção antiga de “próximas ações” deste handoff é histórica e não deve ser interpretada como autorização para executar várias frentes em sequência automática. A ordem vigente é a tarefa ativa registrada em `PLANO-DE-INVESTIGACAO-CONTROLADA.md`. Ao fechar INV-001, atualizar este handoff e o README com o resultado real e a próxima ação autorizada antes de começar outra tarefa.
+
+Nenhuma descoberta lateral autoriza ampliar o escopo atual. Registre-a no backlog do plano e siga a tarefa ativa, exceto se houver risco concreto imediato à segurança, integridade de dados ou conclusão jurídica enganosa; nesse caso, documente a razão e limite a intervenção necessária.
