@@ -1,24 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   ShieldCheck,
   AlertTriangle,
   FileCheck2,
-  CheckCircle2,
   Clock,
-  Sparkles,
   ArrowRight,
-  ChevronRight,
-  BookOpen,
   Calendar,
-  Scale,
-  Download,
-  Check,
-  Database,
-  RefreshCw,
-  ExternalLink,
-  Phone,
-  User,
-  BarChart2
+  ChevronRight
 } from 'lucide-react';
 import { CaseAnalysis, InfractionData, VehicleData, ProcedureType } from '../../../types';
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
@@ -197,366 +185,136 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   analysis,
   infractionData,
   vehicleData,
-  serviceType,
-  leadName = '',
-  leadPhone = '',
   onProceedToDocumentGeneration,
   onSaveToDashboard,
   onBack,
 }) => {
-  const successRate = analysis?.overallSuccessRate;
-  const hasRecommendedArguments = analysis?.recommendedArguments && analysis.recommendedArguments.length > 0;
-  const isRateUnavailable = successRate === null || !hasRecommendedArguments;
-  const rateValue = isRateUnavailable ? 0 : successRate;
-  const isHighProbability = !isRateUnavailable && rateValue >= 80 && hasRecommendedArguments;
-  const dataCompleteness = analysis?.dataCompleteness;
-  
-  // Animated counter state
-  const [displayedRate, setDisplayedRate] = useState(0);
-  const [animationComplete, setAnimationComplete] = useState(false);
-  
-  // Animate from 0 to successRate on mount (only if rate is available)
-  useEffect(() => {
-    if (isRateUnavailable) {
-      setAnimationComplete(true);
-      return;
-    }
-    let startTime: number;
-    const duration = 1200;
-    
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayedRate(Math.round(eased * rateValue));
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        setDisplayedRate(rateValue);
-        setAnimationComplete(true);
-      }
-    };
-    
-    requestAnimationFrame(animate);
-  }, [rateValue, isRateUnavailable]);
-  
-  const showImprovementMessage = !animationComplete || (!isRateUnavailable && rateValue < 75 && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0);
-  const isLowProbability = !isRateUnavailable && rateValue < 60 && hasRecommendedArguments;
-  const isMediumProbability = !isRateUnavailable && rateValue >= 60 && rateValue < 80 && hasRecommendedArguments;
-  
-  // Calcula pontos de defesa personalizados (top 3 por relevância)
-  const defensePoints = analysis?.recommendedArguments
-    ?.map(arg => formatLegalPointGovBr(arg, { infraction: infractionData, vehicle: vehicleData }))
-    ?.sort((a, b) => {
-      const confidenceOrder: Record<string, number> = {
-        'Muito Alto': 4,
-        'Alto': 3,
-        'Médio': 2,
-        'Baixo': 1
-      };
-      return (confidenceOrder[b.confidenceLevel] || 0) - (confidenceOrder[a.confidenceLevel] || 0);
-    })
-    .slice(0, 3) ?? [];
-
+  const recommendedArguments = analysis?.recommendedArguments ?? [];
+  const detectedInconsistencies = analysis?.detectedInconsistencies ?? [];
+  const dataGaps = analysis?.dataGaps ?? [];
+  const isTechnicalFailure = analysis?.status === 'failed';
+  const hasFindings = recommendedArguments.length > 0 || detectedInconsistencies.length > 0;
+  const isInconclusive = !isTechnicalFailure && !hasFindings;
+  const defensePoints = recommendedArguments
+    .map((arg) => formatLegalPointGovBr(arg, { infraction: infractionData, vehicle: vehicleData }))
+    .slice(0, 3);
+  const deadline = analysis?.procedureDeadline || infractionData.defenseDeadline;
+  const formattedDeadline = deadline
+    ? (() => {
+        const dateOnly = deadline.slice(0, 10);
+        const parsed = new Date(`${dateOnly}T12:00:00`);
+        return Number.isNaN(parsed.getTime())
+          ? dateOnly
+          : new Intl.DateTimeFormat('pt-BR').format(parsed);
+      })()
+    : null;
+  const cleanEvidenceText = (value: string) =>
+    value.replace(/^(SEM_DADOS|NAO_APLICA|DIVERGENCIA|VALIDADO|ATENDIDO|VENCIDO|EM_DIA|PRESENTE|AUSENCIA):\s*/, '');
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho com informações básicas */}
-      <div className="space-y-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          Diagnóstico concluído — grátis
+    <div className="mx-auto max-w-3xl space-y-5">
+      <header className="space-y-3">
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${isTechnicalFailure ? 'border-rose-200 bg-rose-50 text-rose-700' : isInconclusive ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+          {isTechnicalFailure ? <AlertTriangle className="h-4 w-4" /> : isInconclusive ? <Clock className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+          {isTechnicalFailure ? 'Análise não concluída' : isInconclusive ? 'Resultado inconclusivo' : 'Diagnóstico inicial concluído'}
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          Resultado do seu diagnóstico
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          {isTechnicalFailure ? 'Não conseguimos concluir sua análise' : isInconclusive ? 'Ainda não confirmamos um problema na autuação' : 'Veja o que merece atenção na sua multa'}
         </h1>
-        <p className="text-base text-slate-500">
-          Auto nº <span className="font-mono font-bold text-slate-800">{infractionData.aitNumber || 'N/A'}</span> • 
-          Placa <span className="font-mono font-bold text-slate-800">{vehicleData.plate || 'N/A'}</span>
-          {leadPhone && <span className="ml-2 text-slate-400 font-mono">• WhatsApp: {leadPhone}</span>}
+        <p className="max-w-2xl text-base leading-relaxed text-slate-600">
+          {isTechnicalFailure
+            ? 'Ocorreu um problema durante a análise. Isso não significa que sua multa esteja correta. Seus dados continuam disponíveis para você voltar e tentar novamente.'
+            : isInconclusive
+              ? 'Com as informações disponíveis, ainda não conseguimos confirmar um ponto específico. Isso não significa que a multa esteja correta; documentos adicionais podem ajudar.'
+              : 'Identificamos pontos que podem merecer uma análise mais detalhada. Eles não garantem o cancelamento da multa; a decisão cabe ao órgão responsável.'}
         </p>
-      </div>
+        <p className="text-sm text-slate-500">
+          Auto nº <span className="font-medium text-slate-700">{infractionData.aitNumber || 'não informado'}</span>
+          {' · '}Placa <span className="font-medium text-slate-700">{vehicleData.plate || 'não informada'}</span>
+        </p>
+      </header>
 
-      {/* Indicador de Força do Diagnóstico */}
-      <div className="p-6 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
-        <div className="space-y-3">
-          <span className="text-base font-bold text-emerald-800 uppercase font-mono block">
-            {hasRecommendedArguments ? 'Força da sua defesa' : 'Sem teses detectadas'}
-          </span>
-          {hasRecommendedArguments ? (
-            <>
-              <div className="text-4xl sm:text-5xl font-extrabold font-mono">
-                <span className="text-emerald-700">{displayedRate}%</span>
-              </div>
-              <p className="text-xs text-slate-600 max-w-md mx-auto">Não é previsão de resultado — a decisão final é do órgão.</p>
-            </>
+      {!isTechnicalFailure && (
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="result-findings-title">
+          <div className="flex items-center gap-2">
+            <FileCheck2 className="h-5 w-5 text-orange-600" />
+            <h2 id="result-findings-title" className="text-lg font-bold text-slate-900">
+              {hasFindings ? 'Principais pontos identificados' : 'O que ainda falta confirmar'}
+            </h2>
+          </div>
+          {defensePoints.length > 0 ? (
+            <div className="space-y-3">
+              {defensePoints.map((point, index) => (
+                <details key={point.title || index} className="rounded-xl border border-slate-200 p-3">
+                  <summary className="cursor-pointer list-none font-semibold text-slate-800">
+                    <span className="inline-flex items-start gap-2"><ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" /><span>{point.title}</span></span>
+                  </summary>
+                  <div className="space-y-3 pt-3 text-sm leading-relaxed text-slate-600">
+                    <p>{cleanEvidenceText(point.evidenceResult)}</p>
+                    <div><p className="mb-1 font-semibold text-slate-800">Por que isso importa</p><p>{point.userImpact}</p></div>
+                    <div><p className="mb-1 font-semibold text-slate-800">Base legal indicada</p><p>{point.confidenceBase}</p></div>
+                  </div>
+                </details>
+              ))}
+              {recommendedArguments.length > defensePoints.length && <p className="text-sm text-slate-500">Há outros pontos registrados. Os detalhes poderão ser consultados na próxima etapa.</p>}
+            </div>
+          ) : detectedInconsistencies.length > 0 ? (
+            <ul className="space-y-3">
+              {detectedInconsistencies.slice(0, 3).map((item, index) => (
+                <li key={item.legalArgumentId || item.title || index} className="rounded-xl border border-slate-200 p-3">
+                  <p className="font-semibold text-slate-800">{item.title}</p><p className="mt-1 text-sm leading-relaxed text-slate-600">{item.description}</p>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <span className="text-emerald-700">—</span>
-          )}
-          {!hasRecommendedArguments && (
-            <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">
-              {isRateUnavailable ? 'Indicador Indisponível — Análise em modo degradado — base jurídica indisponível. Com os dados de hoje, não encontramos ponto forte confirmado.' : 'Nenhuma tese foi identificada com os dados informados.'}
-            </p>
-          )}
-          {hasRecommendedArguments && (
-            <span className="text-lg font-medium">
-              {defensePoints.length > 0 ? (
-                isHighProbability
-                  ? 'Vários pontos fortes no seu caso'
-                  : isMediumProbability
-                  ? 'Há pontos que valem a pena usar na defesa'
-                  : 'Ainda falta comprovar alguns pontos'
-              ) : (
-                'Com os dados de hoje, não encontramos ponto forte'
-              )}
-            </span>
-          )}
-          
-          {/* Data completeness indicator */}
-          {dataCompleteness && (
-            <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
-              <div className="flex items-center justify-center gap-4 text-sm text-emerald-700">
-                <span className="font-mono">Você preencheu {dataCompleteness.filledFields} de {dataCompleteness.totalFields} dados</span>
-                <span className="px-2 py-1 bg-emerald-100 rounded-full font-mono">{dataCompleteness.ratio}%</span>
-              </div>
-              <div className="w-full max-w-xs mx-auto h-2 bg-emerald-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
-                  style={{ width: `${dataCompleteness.ratio}%` }}
-                />
-              </div>
+            <div className="space-y-2 text-sm leading-relaxed text-slate-600">
+              <p>Não identificamos um ponto confirmado com os dados disponíveis. A ausência de um achado não comprova que a autuação esteja correta.</p>
+              {dataGaps.length > 0 && <ul className="list-disc space-y-1 pl-5">{dataGaps.slice(0, 3).map((gap, index) => <li key={gap.ruleId || index}>{gap.missingData?.length ? gap.missingData.join(', ') : gap.reason}</li>)}</ul>}
             </div>
           )}
-          
-          {/* Improvement message when probability is low */}
-          {showImprovementMessage && isLowProbability && dataCompleteness && dataCompleteness.missingCriticalFields.length > 0 && (
-            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2 animate-pulse">
-              <div className="flex items-center gap-2 text-amber-800">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium">Seu caso fica mais forte com mais {dataCompleteness.missingCriticalFields.length} dados</span>
-              </div>
-              <p className="text-sm text-amber-700 pl-7">
-                Preencha o que falta para a análise ficar mais completa:
-              </p>
-              <ul className="text-sm text-amber-700 pl-7 space-y-1">
-                {dataCompleteness.missingCriticalFields.slice(0, 4).map((field, idx) => (
-                  <li key={idx} className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-1.5" />
-                    {field}
-                  </li>
-                ))}
-                {dataCompleteness.missingCriticalFields.length > 4 && (
-                  <li className="text-amber-600">+{dataCompleteness.missingCriticalFields.length - 4} outros dados relevantes</li>
-                )}
-              </ul>
-              <p className="text-xs text-amber-600 pl-7 italic">
-                Você pode voltar ao formulário e completar esses dados quando quiser — o diagnóstico é refeito na hora.
-              </p>
-            </div>
-          )}
-          
-          {/* Success message when high probability */}
-          {animationComplete && isHighProbability && (
-            <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <div className="flex items-center justify-center gap-2 text-emerald-800">
-                <Sparkles className="w-4 h-4" />
-                <span className="font-medium">Os dados que você enviou já permitem montar a defesa.</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+        </section>
+      )}
 
-      {/* Resumo informativo (3 colunas) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Tipo da Infração</span>
-          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.ctbArticle || 'não informado'}</p>
-          <p className="text-base text-slate-500 font-mono">Cód. {infractionData.infractionCode || 'não informado'}</p>
-        </div>
-        <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Órgão que Aplicou a Multa</span>
-          <p className="text-lg font-bold text-slate-900 truncate">{infractionData.autuadorBody || '— não informado —'}</p>
-          <p className="text-base text-slate-500">Onde o caso é analisado: defesa administrativa (recurso por escrito ao DETRAN)</p>
-        </div>
-        <div className="space-y-3">
-          <span className="text-base font-bold uppercase font-mono text-slate-400">Valor da Multa</span>
-          <p className="text-lg font-bold text-slate-900">
-            {infractionData.fineAmount
-              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(infractionData.fineAmount)
-              : 'não informado'}
-          </p>
-          <p className="text-base text-amber-700 font-semibold">
-            {infractionData.points === undefined
-              ? 'pontos não informados'
-              : `${infractionData.points} ${infractionData.points === 1 ? 'ponto' : 'pontos'} na CNH, se a multa for mantida`}
-          </p>
-          <p className="text-xs text-slate-500 font-mono">
-            Quanto vale a multa e os pontos dependem da decisão do órgão.
-          </p>
-        </div>
-      </div>
-
-      {/* SEÇÃO PRINCIPAL: Análise jurídica personalizada */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <FileCheck2 className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-bold text-slate-900 font-mono uppercase">
-            O que conferimos no seu caso ({defensePoints?.length || 0})
-            {analysis?.recommendedArguments?.length > 3 && (
-              <span className="text-base text-slate-500 ml-2">
-                (+{analysis.recommendedArguments.length - 3} outros pontos — você vê todos ao salvar no painel)
-              </span>
-            )}
-          </h3>
-        </div>
-
-        {defensePoints?.length > 0 ? (
-          <div className="space-y-6">
-            {defensePoints.map((point, idx) => (
-              <div
-                key={point.title || idx}
-                className="p-6 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-5"
-              >
-                {/* Ícone e título */}
-                <div className="flex items-start gap-4">
-                  <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                    <Check className="w-4 h-4" />
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-xl font-bold text-slate-900">{point.title}</h4>
-                    <p className="text-base text-slate-500 font-mono">{point.confidenceBase}</p>
-                  </div>
-                </div>
-
-                {/* Explicação no estilo GOV.BR */}
-                <div className="space-y-5">
-                  {/* O que verificamos */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                        <Clock className="w-3 h-3" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que verificamos</span>
-                    </div>
-                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.whatWeChecked}</p>
-                  </div>
-
-                  {/* O que a lei diz */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                        <BookOpen className="w-3 h-3" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que a lei diz</span>
-                    </div>
-                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.lawExplanation}</p>
-                  </div>
-
-                  {/* O que encontramos */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                        <ExternalLink className="w-3 h-3" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que encontramos nos seus dados</span>
-                    </div>
-                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.evidenceResult}</p>
-                  </div>
-
-                  {/* O que isso significa */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">O que isso significa para você</span>
-                    </div>
-                    <p className="text-base text-slate-700 leading-relaxed pl-6">{point.userImpact}</p>
-                  </div>
-
-                  {/* Nível de confiança */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                        <BarChart2 className="w-3 h-3" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Nível de confiança</span>
-                    </div>
-                    <div className="flex items-center gap-2 pl-6 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-bold ${
-                        point.confidenceLevel === 'Muito Alto' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        point.confidenceLevel === 'Alto' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                        point.confidenceLevel === 'Médio' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                        'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}>
-                        {point.confidenceLevel}
-                      </span>
-                      <span className="text-sm text-slate-500">{point.confidenceReason}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <Calendar className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+          <div className="space-y-1">
+            <h2 className="font-bold text-slate-900">Prazo e próximo passo</h2>
+            {formattedDeadline ? <p className="text-sm leading-relaxed text-slate-600">O prazo informado para o caso é <strong>{formattedDeadline}</strong>. Confirme a data na notificação original e, se possível, protocole dentro do prazo aplicável.</p> : <p className="text-sm leading-relaxed text-slate-600">Não temos um prazo confirmado nesta tela. Consulte a data indicada na notificação original antes de protocolar.</p>}
           </div>
-        ) : (
-          <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center">
-            <p className="text-lg text-slate-600 leading-relaxed">
-              Com os dados que você enviou, não encontramos problema na autuação. Isso não quer dizer que a multa está certa: se você tiver a notificação original, fotos do local ou prints, vale reenviar — a análise fica mais forte. Você pode protocolar a petição diretamente no órgão autuador.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Próximos passos — a tela precisa dizer o que fazer */}
-      <div className="p-5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3">
-        <h3 className="text-base font-bold text-slate-900">O que fazer agora</h3>
-        <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-          <li>Salve este diagnóstico no painel — ele fica guardado e você pode voltar a ele quando quiser.</li>
-          <li>
-            {infractionData.defenseDeadline
-              ? `Seu prazo para apresentar a defesa termina em ${infractionData.defenseDeadline.split('T')[0]}. Protocolar antes garante o efeito suspensivo.`
-              : 'Confira na notificação a data limite para apresentar a defesa — protocolo depois dessa data costuma esvaziar a defesa.'}
-          </li>
-          <li>
-            {analysis?.recommendedArguments?.[0]
-              ? `Para o ponto mais forte do seu caso ("${analysis.recommendedArguments[0].title}"), o documento que faz falta é: ${analysis.recommendedArguments[0].requiredDocuments?.[0] ?? 'a cópia da sua notificação de autuação'}.`
-              : 'Separe a cópia da sua notificação de autuação — é o documento que o órgão vai pedir.'}
-          </li>
-        </ol>
-        <p className="text-xs text-slate-500">
-          A defesa é protocolada por escrito no DETRAN ou no órgão autuador indicado acima. Você não precisa ir a lugar nenhum: dá para fazer online.
-        </p>
-      </div>
-
-      {/* Botões de ação */}
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <button
-            type="button"
-            id="btn-back-to-edit-diagnosis"
-            onClick={onBack}
-            className="w-full sm:w-auto px-5 py-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
-          >
-            <ArrowRight className="w-4 h-4 rotate-180" />
-            Voltar e corrigir dados
-          </button>
-          <button
-            onClick={onSaveToDashboard}
-            className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-lg font-bold transition-colors cursor-pointer border border-slate-700"
-          >
-            Salvar no painel
-          </button>
-
-          <button
-            id="btn-proceed-to-document-generation"
-            onClick={onProceedToDocumentGeneration}
-            className="w-full sm:w-auto px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-lg font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-3 cursor-pointer uppercase tracking-tight"
-          >
-            <span>Montar minha defesa</span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
         </div>
+      </section>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer font-semibold text-slate-800">Ver detalhes da autuação e da análise</summary>
+        <div className="mt-4 space-y-4 text-sm text-slate-600">
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><dt className="font-semibold text-slate-800">Infração</dt><dd>{infractionData.ctbArticle || 'Não informado'} · Código {infractionData.infractionCode || 'não informado'}</dd></div>
+            <div><dt className="font-semibold text-slate-800">Órgão autuador informado</dt><dd>{infractionData.autuadorBody || 'Não informado'}</dd></div>
+            <div><dt className="font-semibold text-slate-800">Valor informado</dt><dd>{infractionData.fineAmount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(infractionData.fineAmount) : 'Não informado'}</dd></div>
+            <div><dt className="font-semibold text-slate-800">Pontuação indicada</dt><dd>{infractionData.points === undefined ? 'Não informada' : `${infractionData.points} ${infractionData.points === 1 ? 'ponto' : 'pontos'} se a penalidade for mantida`}</dd></div>
+          </dl>
+          {analysis?.summaryReasoning && <div><h3 className="font-semibold text-slate-800">Resumo técnico</h3><p className="mt-1 whitespace-pre-line">{analysis.summaryReasoning}</p></div>}
+          {analysis?.evaluatedRules && analysis.evaluatedRules.length > 0 && (
+            <div><h3 className="font-semibold text-slate-800">Verificações registradas ({analysis.evaluatedRules.length})</h3><ul className="mt-2 space-y-2">
+              {analysis.evaluatedRules.map((rule, index) => (
+                <li key={rule.ruleId || index} className="border-l-2 border-slate-200 pl-3">
+                  <p className="font-medium text-slate-800">{rule.name || rule.ruleId}</p>
+                  <p>{rule.reason || ({ PASS: 'Verificação concluída sem falha identificada.', FAIL: 'A regra identificou um resultado que exige atenção.', DATA_GAP: 'Faltam dados para concluir esta verificação.', NOT_APPLICABLE: 'Esta regra não se aplica ao caso informado.' } as Record<string, string>)[rule.status]}</p>
+                </li>
+              ))}
+            </ul></div>
+          )}
+          {dataGaps.length > 0 && <div><h3 className="font-semibold text-slate-800">Informações que podem fazer falta</h3><ul className="mt-1 list-disc space-y-1 pl-5">{dataGaps.map((gap, index) => <li key={gap.ruleId || index}>{gap.reason || gap.missingData.join(', ')}</li>)}</ul></div>}
+          {detectedInconsistencies.length > 0 && <div><h3 className="font-semibold text-slate-800">Outros registros da análise</h3><ul className="mt-1 list-disc space-y-1 pl-5">{detectedInconsistencies.map((item, index) => <li key={item.legalArgumentId || item.title || index}>{item.title}: {item.description}</li>)}</ul></div>}
+        </div>
+      </details>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <button type="button" id="btn-back-to-edit-diagnosis" onClick={onBack} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto">
+          <ArrowRight className="h-4 w-4 rotate-180" />{isTechnicalFailure ? 'Voltar e tentar novamente' : 'Voltar e corrigir dados'}
+        </button>
+        <button type="button" onClick={onSaveToDashboard} className="w-full rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto">Salvar no painel</button>
+        {!isTechnicalFailure && <button type="button" id="btn-proceed-to-document-generation" onClick={onProceedToDocumentGeneration} className="inline-flex w-full flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-base font-bold text-white transition-colors hover:bg-orange-600"><span>Continuar para preparar minha defesa</span><ArrowRight className="h-5 w-5" /></button>}
       </div>
     </div>
   );
