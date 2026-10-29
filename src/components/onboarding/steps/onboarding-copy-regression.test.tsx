@@ -348,6 +348,19 @@ describe('Onboarding copy regression — SpecificInfractionDataStep', () => {
     expect(html).toContain('Data da aferição do INMETRO (opcional)');
     expect(html).toContain('Número do equipamento ou laudo do INMETRO (opcional)');
     expect(html).toContain('Se essa data constar na notificação ou em outro documento');
+    expect(html).toContain('Informe o limite máximo indicado na notificação de autuação');
+    expect(html).toContain('Valor registrado pelo equipamento antes do desconto da margem de tolerância');
+    expect(html).toContain('Valor considerado para o enquadramento após a tolerância');
+    expect(html).toContain('Deixe esses campos em branco e continue');
+    expect(html).toContain('A ausência dessas informações, por si só, não significa que a multa seja inválida');
+    expect(html).toContain('id="input-speed-limit"');
+    expect(html).toContain('id="input-measured-speed"');
+    expect(html).toContain('id="input-considered-speed"');
+    expect(html).toContain('id="input-inmetro-date"');
+    expect(html).toContain('id="input-radar-equipment-id"');
+    expect(html).toContain('id="btn-run-analysis"');
+    expect(html).not.toMatch(/id="input-inmetro-date"[^>]*required/);
+    expect(html).not.toMatch(/id="input-radar-equipment-id"[^>]*required/);
   });
 
   it('não usa "100% de Isenção" nos requisitos do Art. 267', () => {

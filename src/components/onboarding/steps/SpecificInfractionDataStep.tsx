@@ -141,7 +141,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
               <Gauge className="w-4 h-4 text-[#155BCB]" />
-              <span>Dados Técnicos do Medidor de Velocidade (Resolução CONTRAN 798/20)</span>
+              <span>Dados técnicos do medidor de velocidade (Resolução CONTRAN 798/20)</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -157,6 +157,9 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   placeholder="Ex: 60"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Informe o limite máximo indicado na notificação de autuação para o trecho da via.
+                </span>
               </div>
 
               <div>
@@ -171,6 +174,9 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   placeholder="Ex: 73"
                   className="w-full text-xs font-mono font-bold bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#155BCB] focus:border-[#155BCB] outline-none shadow-2xs"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Valor registrado pelo equipamento antes do desconto da margem de tolerância. Confira a notificação.
+                </span>
               </div>
 
               <div>
@@ -185,6 +191,9 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                   placeholder="Ex: 66"
                   className="w-full text-xs font-mono font-bold bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 outline-none text-slate-700"
                 />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Valor considerado para o enquadramento após a tolerância, conforme a notificação. É recalculado ao informar a velocidade medida.
+                </span>
               </div>
             </div>
 
@@ -227,6 +236,9 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 </span>
               </div>
             </div>
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-[11px] leading-relaxed text-blue-900">
+              Não encontrou a data ou a identificação do INMETRO? Deixe esses campos em branco e continue. A ausência dessas informações, por si só, não significa que a multa seja inválida.
+            </p>
           </div>
         )}
 

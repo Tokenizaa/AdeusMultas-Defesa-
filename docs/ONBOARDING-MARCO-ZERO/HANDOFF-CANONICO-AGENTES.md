@@ -131,6 +131,12 @@ Após o commit 396a7aae, foram iniciados:
 
 **Regra de deploy:** não tentar contornar a matriz E2E nem publicar enquanto o gate de deploy falhar. Investigar o contrato esperado dos cenários e criar testes verdadeiros se isso fizer parte da tarefa autorizada.
 
+### Correção 05 — comunicação da etapa 5
+
+Na etapa 5, o componente `src/components/onboarding/steps/SpecificInfractionDataStep.tsx` recebeu instruções mais claras para limite da via, velocidade medida e velocidade considerada, além de um aviso conjunto para deixar data/identificação do INMETRO em branco quando indisponíveis. IDs dos cinco inputs e do botão de análise foram preservados; não foram alteradas regras de cálculo nem o fluxo de navegação.
+
+A regressão de copy foi ampliada para verificar os textos e os IDs no HTML renderizado. Isso **não comprova o clique/avanço real em navegador**. Executar os dois cenários E2E/manual — opcionais vazios e todos preenchidos — antes de marcar PASS. Registro: [CORRECAO-05-COMUNICACAO-ETAPA-5.md](./CORRECAO-05-COMUNICACAO-ETAPA-5.md).
+
 ## 6. Matriz mínima para a etapa atual (radar/velocidade)
 
 Executar e registrar, quando aplicável:
