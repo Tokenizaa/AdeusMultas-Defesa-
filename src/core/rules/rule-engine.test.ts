@@ -63,8 +63,16 @@ describe('ExpertRuleEngine validation', () => {
     expect(hasRadarRule).toBe(true);
   });
 
-  it('should surface ARG-005 when measured and considered speeds cross a lower bracket', () => {
-    const result = ExpertRuleEngine.evaluate('case_speed_considered', validInfraction);
+  it('does not flag a correctly calculated considered speed when the code matches its bracket', () => {
+    const result = ExpertRuleEngine.evaluate('case_speed_considered_valid', validInfraction);
+    const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
+    expect(speedRule?.status).toBe('PASS');
+    expect(result.detectedInconsistencies.some((item) => item.legalArgumentId === 'ARG-005')).toBe(false);
+  });
+
+  it('surfaces ARG-005 when the infraction code is more severe than the canonical considered-speed bracket', () => {
+    const inconsistentInfraction = { ...validInfraction, infractionCode: '746-30', severity: 'grave' as const, points: 5, fineAmount: 195.23, consideredSpeed: 73 };
+    const result = ExpertRuleEngine.evaluate('case_speed_considered_inconsistent', inconsistentInfraction);
     const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
     expect(speedRule?.status).toBe('FAIL');
     expect(result.detectedInconsistencies.some((item) => item.legalArgumentId === 'ARG-005')).toBe(true);

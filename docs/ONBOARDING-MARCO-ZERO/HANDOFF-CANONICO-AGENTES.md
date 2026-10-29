@@ -208,3 +208,11 @@ Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSI
 - Correção neste commit: incluir ARG-005 em 745-50, 746-30, 745-70 e 747-10 e adicionar regressão com dados sintéticos (78 km/h medida, 71 km/h considerada, limite de 60 km/h), verificando status FAIL e presença da tese na análise.
 - Validação anterior: CI [40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build antes desta correção adicional. O novo CI permanece pendente.
 - Produção segue bloqueada; nenhum commit usa [DEPLOY-PRODUCTION].
+
+
+## Correção de precisão — regra ARG-005
+
+- Revisão técnica identificou que o teste inicial de elegibilidade usava um caso que, na verdade, tinha cálculo e código compatíveis; habilitar ARG-005 sem corrigir a lógica poderia introduzir falso positivo.
+- A regra agora reutiliza calculateConsideredSpeed, compara a faixa do código com a faixa calculada e a faixa informada, e só retorna ARG-005 quando o código é mais gravoso que a faixa sustentada pelos dados.
+- Foram adicionados dois cenários: caso válido não deve gerar ARG-005; caso com código 746-30 e velocidade considerada calculada em faixa inferior deve gerar ARG-005.
+- CI anterior [40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build antes desta precisão adicional. Novo CI pendente; produção permanece bloqueada.

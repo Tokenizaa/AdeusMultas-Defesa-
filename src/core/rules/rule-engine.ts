@@ -14,6 +14,7 @@ import { ARGUMENTS_CATALOG } from '../arguments/arguments-catalog';
 import { classifyInfraction, CANONICAL_PROCEDURE_BY_FAMILY, type InfractionClassification } from './infraction-classifier';
 import { PROCEDURES_CATALOG } from '../procedures/procedures-catalog';
 import { INFRACTION_CATALOG } from '../../data/knowledge-base';
+import { calculateConsideredSpeed } from '../onboarding/rules-matrix';
 import { CaseAnalysis, EvaluatedRule, InfractionData, LegalArgumentDomain, ProcedureType } from '../../types';
 
 /** Parse datas do payload sem depender da implementação local de Date.parse. */
@@ -289,46 +290,34 @@ export const EXPERT_RULES: RuleModel[] = [
     priority: 85,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
-      const isSpeed = code.startsWith('74') || code === '745-50' || code === '746-30' || code === '747-10';
-      if (isSpeed) {
-        // We need measuredSpeed and consideredSpeed to make this determination
-        if (ctx.measuredSpeed !== undefined && ctx.consideredSpeed !== undefined && ctx.speedLimit !== undefined) {
-          const measuredSpeed = ctx.measuredSpeed;
-          const consideredSpeed = ctx.consideredSpeed;
-          const speedLimit = ctx.speedLimit;
+      const ticketBracketByCode: Record<string, number> = { '745-50': 1, '746-30': 2, '745-70': 2, '747-10': 3 };
+      const ticketBracket = ticketBracketByCode[code];
+      if (ticketBracket === undefined || ctx.measuredSpeed === undefined || ctx.consideredSpeed === undefined || ctx.speedLimit === undefined) return null;
 
-          // Check if an infraction was triggered based on measured speed
-          const measuredExceedsLimit = measuredSpeed > speedLimit;
+      const measuredSpeed = ctx.measuredSpeed;
+      const consideredSpeed = ctx.consideredSpeed;
+      const speedLimit = ctx.speedLimit;
+      if (measuredSpeed <= speedLimit) return null;
 
-          // Check if the considered speed is actually compliant or in a lower bracket
-          const consideredExceedsLimit = consideredSpeed > speedLimit;
+      // Use the same canonical calculation shown to the user in the speed form and result card.
+      const expectedConsideredSpeed = calculateConsideredSpeed(measuredSpeed);
+      const bracketForSpeed = (speed: number): number =>
+        speed > speedLimit * 1.5 ? 3 : speed > speedLimit * 1.2 ? 2 : speed > speedLimit ? 1 : 0;
+      const expectedBracket = bracketForSpeed(expectedConsideredSpeed);
+      const reportedBracket = bracketForSpeed(consideredSpeed);
 
-          // Also check bracket transitions (20% and 50% thresholds)
-          const measuredExceeds20pct = measuredSpeed > speedLimit * 1.2;
-          const consideredExceeds20pct = consideredSpeed > speedLimit * 1.2;
-          const measuredExceeds50pct = measuredSpeed > speedLimit * 1.5;
-          const consideredExceeds50pct = consideredSpeed > speedLimit * 1.5;
-
-          // Violation occurs if:
-          // 1. Measured speed triggers an infraction (exceeds limit)
-          // 2. BUT considered speed does NOT trigger an infraction OR triggers a lower bracket infraction
-          if (measuredExceedsLimit &&
-              (!consideredExceedsLimit ||
-               (measuredExceeds20pct && !consideredExceeds20pct) ||
-               (measuredExceeds50pct && !consideredExceeds50pct))) {
-            return {
-              ruleId: 'RULE_INMETRO_CONSIDERED_SPEED_ERROR',
-              title: 'Erro na Medida Considerada pelo INMETRO',
-              description: `A velocidade medida (${measuredSpeed} km/h) foi utilizada para autuação, mas a velocidade considerada (${consideredSpeed} km/h) após aplicação da margem de erro do INMETRO não comprova a infração ou enquadra-a em menor gravidade.`,
-              severity: 'alta',
-              legalArgumentId: 'ARG-005',
-              impact: 'Desconstituição do enquadramento da infração; possível redução de pontos e multa ou anulação do auto.',
-              statutoryBasis: 'Art. 280, §2º do CTB c/c Resolução CONTRAN nº 798/2020, Tabela I',
-            };
-          }
-        }
-        // If data is insufficient (missing speed data), return null
-        return null;
+      // A raw measured speed crossing a threshold alone is not an inconsistency.
+      // Only flag when the ticket code is more severe than the calculated or reported bracket.
+      if (ticketBracket > expectedBracket || ticketBracket > reportedBracket) {
+        return {
+          ruleId: 'RULE_INMETRO_CONSIDERED_SPEED_ERROR',
+          title: 'Possível erro no enquadramento pela velocidade considerada',
+          description: 'O código da infração (' + code + ') indica uma faixa mais gravosa que a calculada a partir da velocidade medida (' + measuredSpeed + ' km/h), da velocidade considerada informada (' + consideredSpeed + ' km/h) e da margem metrológica aplicável (' + expectedConsideredSpeed + ' km/h calculados). Confira os valores na notificação original.',
+          severity: 'alta',
+          legalArgumentId: 'ARG-005',
+          impact: 'Pode sustentar pedido de correção do enquadramento e revisão da penalidade; depende da conferência da notificação original.',
+          statutoryBasis: 'Art. 280, §2º do CTB c/c Resolução CONTRAN nº 798/2020, Tabela I',
+        };
       }
       return null;
     },
