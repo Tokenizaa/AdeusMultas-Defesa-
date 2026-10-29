@@ -98,6 +98,30 @@ describe('ARG-005 eligibility regression for speed infractions', () => {
     expect(result.recommendedArguments.some((argument) => argument.id === 'ARG-005')).toBe(false);
   });
 
+  it('does not describe a preliminary finding as sufficient legal and technical grounds to file', () => {
+    const infraction = {
+      ...validInfraction,
+      dateTime: '2026-01-15T10:30:00',
+      notificationExpeditionDate: '2026-03-04',
+    };
+    const result = ExpertRuleEngine.evaluate('case_summary_preliminary_finding', infraction);
+
+    expect(result.summaryReasoning).toContain('hipóteses preliminares');
+    expect(result.summaryReasoning).toContain('não comprovam, por si só');
+    expect(result.summaryReasoning).toContain('Confira os documentos oficiais');
+    expect(result.summaryReasoning).not.toContain('Há fundamentação legal e técnica para protocolo');
+  });
+
+  it('records required speed data as a gap instead of a clean PASS', () => {
+    const infraction = { ...validInfraction, consideredSpeed: undefined };
+    const result = ExpertRuleEngine.evaluate('case_speed_required_data_gap', infraction);
+    const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
+
+    expect(speedRule?.status).toBe('DATA_GAP');
+    expect(speedRule?.status).not.toBe('PASS');
+    expect(result.dataGaps?.some((gap) => gap.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR')).toBe(true);
+  });
+
   it('does not emit the exact ineligibility message for ARG-005 in the current catalog', () => {
     const result = ExpertRuleEngine.evaluate('case_arg005_message_guard', validInfraction);
     const messages = result.evaluatedRules.filter((rule) =>
