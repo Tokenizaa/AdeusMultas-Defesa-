@@ -192,3 +192,11 @@ Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSI
 - Validação automatizada: pendente do CI acionado pelo commit; não declarar PASS antes dos resultados.
 - Teste manual/E2E: pendente; repetir excesso de velocidade com histórico “Sim”, “Não” e “Não sei”, e validar estado de erro sem avançar para o resultado.
 - Produção: nenhum deploy iniciado; o commit não usa o marcador [DEPLOY-PRODUCTION].
+
+
+## Registro de validação — Correção 07
+
+- Primeiro CI do commit 9911f2a9: [run 40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) falhou no arquivo de regressão: 54 arquivos passaram e 1 falhou; 424 testes passaram e 2 falharam.
+- Causas observadas nos logs: a renderização SSR do React separou texto estático e valores dinâmicos com comentários HTML, e um teste antigo ainda esperava a frase do checkbox anterior. Não houve evidência nesse run de falha do motor jurídico; o conjunto de testes não concluiu.
+- Ajustes feitos neste follow-up: normalizar os comentários de SSR nas asserções, atualizar a expectativa para o texto da seleção tri-state e corrigir singular/plural na contagem exibida.
+- Novo CI: pendente de conclusão. Vitest, typecheck e build não podem ser declarados aprovados até o workflow terminar.

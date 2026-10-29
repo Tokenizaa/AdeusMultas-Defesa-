@@ -177,10 +177,11 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
         { ruleId: 'RULE_C', status: 'NOT_APPLICABLE', evaluatedAt: '2026-10-29T00:00:00Z', reason: 'Não se aplica.' },
       ],
     });
-    expect(html).toContain('A análise registrou 3 verificações.');
-    expect(html).toContain('1 concluídas sem falha');
-    expect(html).toContain('1 pendentes por falta de dados');
-    expect(html).toContain('1 não aplicáveis');
+    const normalizedHtml = html.replace(/<!-- -->/g, '');
+    expect(normalizedHtml).toContain('A análise registrou 3 verificações.');
+    expect(normalizedHtml).toContain('1 concluída sem falha');
+    expect(normalizedHtml).toContain('1 pendente por falta de dados');
+    expect(normalizedHtml).toContain('1 não aplicável');
   });
 
   it('apresenta dados ausentes como pendências, não como irregularidades confirmadas', () => {
@@ -333,9 +334,7 @@ describe('Onboarding copy regression — SpecificInfractionDataStep', () => {
     expect(html).toContain(
       'depende da análise do órgão autuador e da comprovação do prontuário'
     );
-    expect(html).toContain(
-      'o extrato de prontuário será solicitado para comprovação'
-    );
+    expect(html).toContain('não presumiremos que o prontuário esteja limpo');
   });
 });
 

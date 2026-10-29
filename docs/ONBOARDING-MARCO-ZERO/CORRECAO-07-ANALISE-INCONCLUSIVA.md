@@ -40,7 +40,7 @@
 
 - **Inspeção estática:** concluída para os arquivos alterados.
 - **Testes de regressão adicionados:** coleta do histórico no fluxo de excesso de velocidade, fixture de teste, resumo de verificações e rótulos legíveis para lacunas.
-- **Vitest / TypeScript / build / CI:** pendentes neste momento; aguardar o resultado do workflow após o commit. Não declarar PASS antecipadamente.
+- **Primeiro CI:** run [40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) — FAIL nos testes de regressão: 54 arquivos passaram, 1 falhou; 424 testes passaram e 2 falharam. As duas causas foram uma asserção de texto sem normalizar os comentários de SSR do React e uma expectativa que ainda usava a frase do checkbox removido. Asserções ajustadas no follow-up; nova execução pendente. Não declarar PASS antecipadamente.
 - **Teste manual/E2E:** pendente.
 - **Produção:** não publicado. O commit não contém o marcador `[DEPLOY-PRODUCTION]`.
 

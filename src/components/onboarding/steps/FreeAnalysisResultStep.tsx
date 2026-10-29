@@ -265,7 +265,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           <div role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
             <p className="text-sm font-semibold text-slate-800">A análise registrou {evaluatedRules.length} verificações.</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-600">
-              {evaluationCounts.passed} concluídas sem falha · {evaluationCounts.findings} com ponto de atenção · {evaluationCounts.pending} pendentes por falta de dados · {evaluationCounts.notApplicable} não aplicáveis.
+              {evaluationCounts.passed} {evaluationCounts.passed === 1 ? 'concluída' : 'concluídas'} sem falha · {evaluationCounts.findings} {evaluationCounts.findings === 1 ? 'ponto de atenção' : 'pontos de atenção'} · {evaluationCounts.pending} {evaluationCounts.pending === 1 ? 'pendente' : 'pendentes'} por falta de dados · {evaluationCounts.notApplicable} {evaluationCounts.notApplicable === 1 ? 'não aplicável' : 'não aplicáveis'}.
             </p>
           </div>
         )}
