@@ -63,6 +63,9 @@ jobs:
             fi
           fi
 
+      - name: Test Brazilian date normalization
+        run: bunx vitest run src/lib/date-utils.test.ts
+
       - name: Discover canonical E2E matrix (read-only)
         env:
           PLAYWRIGHT_BASE_URL: https://adeusmulta.defesai.com.br
