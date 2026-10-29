@@ -2035,6 +2035,11 @@ export const Constants = {
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AuthUser } from '../types/auth';
 
+// NOTE: import.meta.env must be accessed directly (no '(import.meta as any).env?.'
+// cast / optional chaining) so Vite's build-time env inlining replaces
+// VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY with their values. The cast
+// pattern produces an empty object in the production bundle, leaving
+// isSupabaseConfigured=false and supabase=null, which breaks login.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
