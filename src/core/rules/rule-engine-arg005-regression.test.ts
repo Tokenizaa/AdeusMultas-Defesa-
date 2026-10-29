@@ -56,6 +56,25 @@ describe('ARG-005 eligibility regression for speed infractions', () => {
     )).toBe(false);
   });
 
+  it('handles the exact production code 745-50 without an eligibility rejection', () => {
+    const infraction = {
+      ...validInfraction,
+      infractionCode: '745-50',
+      ctbArticle: 'Art. 218, I do CTB',
+      consideredSpeed: 60,
+    };
+    const result = ExpertRuleEngine.evaluate('case_arg005_production_74550', infraction);
+    const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
+
+    expect(classifyInfraction(infraction).eligibleArgumentIds).toContain('ARG-005');
+    expect(speedRule?.status).toBe('FAIL');
+    expect(result.recommendedArguments.some((argument) => argument.id === 'ARG-005')).toBe(true);
+    expect(result.evaluatedRules.some((rule) =>
+      rule.status === 'NOT_APPLICABLE' &&
+      rule.reason?.includes('Tese ARG-005 inelegível para família "excesso_velocidade"')
+    )).toBe(false);
+  });
+
   it('does not recommend ARG-005 when considered speed and ticket bracket are consistent', () => {
     const result = ExpertRuleEngine.evaluate('case_arg005_consistent', validInfraction);
     const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
