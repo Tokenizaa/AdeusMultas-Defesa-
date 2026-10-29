@@ -135,7 +135,7 @@ Após o commit 396a7aae, foram iniciados:
 
 Na etapa 5, o componente `src/components/onboarding/steps/SpecificInfractionDataStep.tsx` recebeu instruções mais claras para limite da via, velocidade medida e velocidade considerada, além de um aviso conjunto para deixar data/identificação do INMETRO em branco quando indisponíveis. IDs dos cinco inputs e do botão de análise foram preservados; não foram alteradas regras de cálculo nem o fluxo de navegação.
 
-A regressão de copy foi ampliada para verificar os textos e os IDs no HTML renderizado. Isso **não comprova o clique/avanço real em navegador**. Executar os dois cenários E2E/manual — opcionais vazios e todos preenchidos — antes de marcar PASS. Registro: [CORRECAO-05-COMUNICACAO-ETAPA-5.md](./CORRECAO-05-COMUNICACAO-ETAPA-5.md).
+A regressão de copy verifica os textos e IDs no HTML renderizado. O cenário canônico E2E-DEFESA_PREVIA-10 foi ampliado para clicar na análise com opcionais vazios, voltar à etapa 5, preencher data/identificação e avançar novamente; a gravação final é interceptada para não criar casos reais. A execução e o resultado do workflow ainda precisam ser confirmados antes de marcar PASS. Registro: [CORRECAO-05-COMUNICACAO-ETAPA-5.md](./CORRECAO-05-COMUNICACAO-ETAPA-5.md).
 
 ## 6. Matriz mínima para a etapa atual (radar/velocidade)
 

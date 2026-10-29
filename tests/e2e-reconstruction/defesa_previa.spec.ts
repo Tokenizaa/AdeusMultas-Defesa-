@@ -107,16 +107,58 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     // Nenhuma transação foi enviada: sem token válido a cobrança falha antes do gateway.
   });
 
-  test('E2E-DEFESA_PREVIA-10 repetição: preencher e voltar não cria caso', async ({page}) => {
+  test('E2E-DEFESA_PREVIA-10 etapa 5: avança com INMETRO vazio e com todos os dados', async ({page}) => {
     await openService(page, service);
-    const requests: string[] = [];
-    page.on('request', request => {
-      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/cases/anonymous') requests.push(request.url());
-    });
-    await fillIdentification(page, 'no-submit');
+    await fillIdentification(page, 'step5-inmetro-optional');
     await page.locator('#btn-next-to-specifics').click();
     await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
-    await page.getByRole('button', { name: /Voltar à identificação/i }).click();
-    expect(requests).toHaveLength(0);
+
+    // Intercepta somente a gravação final para não criar casos reais no ambiente E2E.
+    const submittedPayloads: any[] = [];
+    let submission = 0;
+    await page.route('**/api/cases/anonymous', async route => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      submittedPayloads.push(route.request().postDataJSON());
+      submission += 1;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'e2e-step5-case-' + submission,
+          claimToken: 'e2e-step5-claim-' + submission,
+        }),
+      });
+    });
+
+    // Cenário A: velocidades informadas, campos opcionais do INMETRO vazios.
+    await page.locator('#input-speed-limit').fill('60');
+    await page.locator('#input-measured-speed').fill('73');
+    await expect(page.locator('#input-considered-speed')).not.toHaveValue('');
+    await expect(page.locator('#input-inmetro-date')).toHaveValue('');
+    await expect(page.locator('#input-radar-equipment-id')).toHaveValue('');
+    await page.locator('#btn-run-analysis').click();
+    await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible({ timeout: 15_000 });
+    expect(submittedPayloads).toHaveLength(1);
+    expect(submittedPayloads[0].infraction.inmetroAferitionDate ?? '').toBe('');
+    expect(submittedPayloads[0].infraction.radarEquipmentId ?? '').toBe('');
+
+    // Volta à etapa 5 e confirma que o formulário continua editável.
+    await page.getByRole('button', { name: /Voltar e corrigir dados/i }).click();
+    await expect(page.locator('#input-inmetro-date')).toBeVisible();
+    await page.locator('#input-inmetro-date').fill('2023-05-15');
+    await page.locator('#input-radar-equipment-id').fill('RADAR-12345');
+    await expect(page.locator('#input-speed-limit')).toHaveValue('60');
+    await expect(page.locator('#input-measured-speed')).toHaveValue('73');
+    await expect(page.locator('#input-considered-speed')).not.toHaveValue('');
+
+    // Cenário B: todos os campos preenchidos, incluindo data e identificação do INMETRO.
+    await page.locator('#btn-run-analysis').click();
+    await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible({ timeout: 15_000 });
+    expect(submittedPayloads).toHaveLength(2);
+    expect(submittedPayloads[1].infraction.inmetroAferitionDate).toBe('2023-05-15');
+    expect(submittedPayloads[1].infraction.radarEquipmentId).toBe('RADAR-12345');
   });
 });

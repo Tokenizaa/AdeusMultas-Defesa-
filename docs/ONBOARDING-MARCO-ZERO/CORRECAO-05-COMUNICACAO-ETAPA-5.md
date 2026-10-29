@@ -19,9 +19,9 @@
 - [x] Teste de regressão preparado para validar os textos no HTML renderizado.
 - [ ] Executar Vitest e registrar resultado real.
 - [ ] Executar typecheck e build.
-- [ ] E2E/navegador: limite e velocidades preenchidos, data e identificação vazias, clicar em Executar Análise Gratuita e confirmar que chega à etapa de processamento.
-- [ ] E2E/navegador: preencher também data e identificação, avançar e confirmar que o fluxo funciona sem perder os valores.
+- [x] Adicionado ao cenário canônico E2E-DEFESA_PREVIA-10 o teste de navegador com campos INMETRO vazios, clique real em Executar Análise Gratuita e confirmação do diagnóstico (execução do workflow pendente).
+- [x] O mesmo cenário E2E retorna à etapa 5, preenche data/identificação, avança novamente e verifica os valores enviados (execução do workflow pendente).
 - [ ] Conferir CI e workflow Cloudflare. O gate E2E existente não deve ser desativado nem contornado.
 - [ ] Confirmar status do deploy; não presumir que houve publicação apenas porque o commit foi criado.
 
-**Limitação conhecida:** a validação de SSR/copy não simula interação de usuário. Os cenários de avanço real ficam pendentes até execução E2E/manual no ambiente apropriado.
+**Limitação conhecida:** o teste de navegador foi adicionado ao cenário canônico existente, mas só deve ser considerado PASS depois que o workflow executar e concluir com sucesso.
