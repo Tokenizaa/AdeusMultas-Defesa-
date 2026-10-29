@@ -18,6 +18,7 @@ import { renderToString } from 'react-dom/server';
 import { FreeAnalysisResultStep } from './FreeAnalysisResultStep';
 import { AnalysisProcessingStep } from './AnalysisProcessingStep';
 import { SpecificInfractionDataStep } from './SpecificInfractionDataStep';
+import { buildCoherentTestInfraction } from '../testFillData';
 import { InfractionCategoryStep } from './InfractionCategoryStep';
 import { InfractionIdentificationStep } from './InfractionIdentificationStep';
 import { ServiceStep } from './ServiceStep';
@@ -167,6 +168,21 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     expect(html).toContain('Continuar para preparar minha defesa');
   });
 
+  it('mostra quantas verificações foram realmente registradas pela análise', () => {
+    const html = renderResult({
+      ...analysisWithNoArguments,
+      evaluatedRules: [
+        { ruleId: 'RULE_A', status: 'PASS', evaluatedAt: '2026-10-29T00:00:00Z', reason: 'Concluída.' },
+        { ruleId: 'RULE_B', status: 'DATA_GAP', evaluatedAt: '2026-10-29T00:00:00Z', reason: 'Faltam dados.' },
+        { ruleId: 'RULE_C', status: 'NOT_APPLICABLE', evaluatedAt: '2026-10-29T00:00:00Z', reason: 'Não se aplica.' },
+      ],
+    });
+    expect(html).toContain('A análise registrou 3 verificações.');
+    expect(html).toContain('1 concluídas sem falha');
+    expect(html).toContain('1 pendentes por falta de dados');
+    expect(html).toContain('1 não aplicáveis');
+  });
+
   it('apresenta dados ausentes como pendências, não como irregularidades confirmadas', () => {
     const html = renderResult({
       ...analysisWithNoArguments,
@@ -177,7 +193,9 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
       }],
     });
     expect(html).toContain('O que ainda falta confirmar');
-    expect(html).toContain('speedLimit, measuredSpeed');
+    expect(html).toContain('limite de velocidade da via');
+    expect(html).toContain('velocidade medida pelo equipamento');
+    expect(html).not.toContain('speedLimit, measuredSpeed');
     expect(html).not.toContain('Identificamos pontos que podem merecer uma análise mais detalhada.');
   });
 
@@ -252,6 +270,20 @@ describe('Onboarding copy regression — AnalysisProcessingStep', () => {
 });
 
 describe('Onboarding copy regression — SpecificInfractionDataStep', () => {
+  it('coleta o histórico de infrações de 12 meses no fluxo comum de excesso de velocidade', () => {
+    const html = renderToString(
+      <SpecificInfractionDataStep category='excesso_velocidade' infractionData={baseInfraction as any} onUpdateInfraction={() => {}} onNext={() => {}} onBack={() => {}} />
+    );
+    expect(html).toContain('select-previous-infractions-12-months');
+    expect(html).toContain('Há infrações registradas nos 12 meses anteriores à data desta multa?');
+    expect(html).toContain('Não sei / Não informado');
+  });
+
+  it('o preenchimento administrativo de teste define o histórico como dado sintético explícito', () => {
+    const infraction = buildCoherentTestInfraction('excesso_velocidade', baseInfraction as any);
+    expect(infraction.hasPreviousInfractionsLast12Months).toBe(false);
+  });
+
   it('não promete "anulação imediata" por aferição vencida', () => {
     const html = renderToString(
       <SpecificInfractionDataStep

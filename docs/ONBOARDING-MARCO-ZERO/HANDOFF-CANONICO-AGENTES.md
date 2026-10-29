@@ -180,3 +180,15 @@ Ao concluir cada tarefa, acrescentar ao documento de tarefa e/ou a um registro s
 ## 9. Regra de continuidade
 
 Se o histórico do chat não estiver disponível, não peça ao usuário para reexplicar o projeto antes de ler este documento e os registros citados. Primeiro reconstrua o estado usando `main`, commits, workflows e documentação. Pergunte apenas sobre decisões ou observações que não estejam documentadas — por exemplo, o resultado de um teste manual recém-executado. Nunca invente resultados ausentes.
+
+
+## 10. Correção 07 — coleta de dados e integridade da execução da análise
+
+Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSIVA.md).
+
+- Confirmado por leitura do código: hasPreviousInfractionsLast12Months era solicitado apenas na categoria conversao_advertencia; no fluxo normal de excesso de velocidade, o motor exigia o campo para avaliar a regra de conversão, mas o formulário não o perguntava.
+- Confirmado por leitura do código: se ExpertRuleEngine.evaluate() lançasse exceção, AnalysisProcessingStep apenas escrevia no console e ainda chamava onComplete(), avançando para o resultado inicial sem uma análise nova.
+- Alteração registrada no commit atual: coletar o histórico com opção “Não sei / Não informado” (sem presumir ficha limpa), exibir a contagem real de regras avaliadas e lacunas legíveis, e bloquear o avanço após falha do motor.
+- Validação automatizada: pendente do CI acionado pelo commit; não declarar PASS antes dos resultados.
+- Teste manual/E2E: pendente; repetir excesso de velocidade com histórico “Sim”, “Não” e “Não sei”, e validar estado de erro sem avançar para o resultado.
+- Produção: nenhum deploy iniciado; o commit não usa o marcador [DEPLOY-PRODUCTION].

@@ -91,6 +91,8 @@ export function buildCoherentTestInfraction(
         radarEquipmentId: 'TEST-RADAR-001',
         hasR19SignageProof: true,
         hasPhotoProof: true,
+        // Valor sintético de teste para exercitar a regra de conversão em advertência.
+        hasPreviousInfractionsLast12Months: false,
         ...extras,
       };
     }

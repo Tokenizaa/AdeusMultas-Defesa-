@@ -17,6 +17,21 @@ const MEDIA_OR_LIGHT_CODES = new Set(
   INFRACTION_CATALOG.filter((i) => i.severity === 'media' || i.severity === 'leve').map((i) => i.code)
 );
 
+const ANALYSIS_FIELD_LABELS: Record<string, string> = {
+  hasPreviousInfractionsLast12Months: 'histórico de infrações nos 12 meses anteriores',
+  notificationExpeditionDate: 'data de expedição da notificação de autuação',
+  notificationDeliveryDate: 'data de entrega da notificação',
+  defenseDeadline: 'prazo informado para defesa',
+  inmetroAferitionDate: 'data da última aferição do radar',
+  radarCalibrationDate: 'data da última aferição do radar',
+  speedLimit: 'limite de velocidade da via',
+  measuredSpeed: 'velocidade medida pelo equipamento',
+  consideredSpeed: 'velocidade considerada na notificação',
+  infractionDate: 'data da infração',
+  infractionCode: 'código da infração',
+  autuadorBody: 'órgão autuador',
+};
+
 // FUNÇÃO AUXILIAR: Formata explicações jurídicas no estilo GOV.BR
 const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData; vehicle: VehicleData }) => {
   // Mapeia argumentos para explicações no estilo GOV.BR (focadas no usuário)
@@ -192,6 +207,25 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   const recommendedArguments = analysis?.recommendedArguments ?? [];
   const detectedInconsistencies = analysis?.detectedInconsistencies ?? [];
   const dataGaps = analysis?.dataGaps ?? [];
+  const evaluatedRules = analysis?.evaluatedRules ?? [];
+  const evaluationCounts = {
+    passed: evaluatedRules.filter((rule) => rule.status === 'PASS').length,
+    findings: evaluatedRules.filter((rule) => rule.status === 'FAIL').length,
+    pending: evaluatedRules.filter((rule) => rule.status === 'DATA_GAP').length,
+    notApplicable: evaluatedRules.filter((rule) => rule.status === 'NOT_APPLICABLE').length,
+  };
+  const formatDataGap = (gap: NonNullable<CaseAnalysis['dataGaps']>[number]) => {
+    const labels = (gap.missingData ?? []).map((field) => ANALYSIS_FIELD_LABELS[field] ?? field);
+    let reason = gap.reason ?? '';
+    for (const [field, label] of Object.entries(ANALYSIS_FIELD_LABELS)) {
+      reason = reason.split(field).join(label);
+    }
+    if (!reason) return labels.join(', ') || 'Informação necessária para concluir a verificação.';
+    if (labels.length > 0 && !labels.every((label) => reason.includes(label))) {
+      return labels.join(', ') + '. ' + reason;
+    }
+    return reason;
+  };
   const isTechnicalFailure = analysis?.status === 'failed';
   const hasFindings = recommendedArguments.length > 0 || detectedInconsistencies.length > 0;
   const isInconclusive = !isTechnicalFailure && !hasFindings;
@@ -227,6 +261,14 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               ? 'Com as informações disponíveis, ainda não conseguimos confirmar um ponto específico. Isso não significa que a multa esteja correta; documentos adicionais podem ajudar.'
               : 'Identificamos pontos que podem merecer uma análise mais detalhada. Eles não garantem o cancelamento da multa; a decisão cabe ao órgão responsável.'}
         </p>
+        {!isTechnicalFailure && evaluatedRules.length > 0 && (
+          <div role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+            <p className="text-sm font-semibold text-slate-800">A análise registrou {evaluatedRules.length} verificações.</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              {evaluationCounts.passed} concluídas sem falha · {evaluationCounts.findings} com ponto de atenção · {evaluationCounts.pending} pendentes por falta de dados · {evaluationCounts.notApplicable} não aplicáveis.
+            </p>
+          </div>
+        )}
         <p className="text-sm text-slate-500">
           Auto nº <span className="font-medium text-slate-700">{infractionData.aitNumber || 'não informado'}</span>
           {' · '}Placa <span className="font-medium text-slate-700">{vehicleData.plate || 'não informada'}</span>
@@ -269,7 +311,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           ) : (
             <div className="space-y-2 text-sm leading-relaxed text-slate-600">
               <p>Não identificamos um ponto confirmado com os dados disponíveis. A ausência de um achado não comprova que a autuação esteja correta.</p>
-              {dataGaps.length > 0 && <ul className="list-disc space-y-1 pl-5">{dataGaps.slice(0, 3).map((gap, index) => <li key={gap.ruleId || index}>{gap.missingData?.length ? gap.missingData.join(', ') : gap.reason}</li>)}</ul>}
+              {dataGaps.length > 0 && <ul className="list-disc space-y-1 pl-5">{dataGaps.slice(0, 3).map((gap, index) => <li key={gap.ruleId || index}>{formatDataGap(gap)}</li>)}</ul>}
             </div>
           )}
         </section>
@@ -305,7 +347,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               ))}
             </ul></div>
           )}
-          {dataGaps.length > 0 && <div><h3 className="font-semibold text-slate-800">Informações que podem fazer falta</h3><ul className="mt-1 list-disc space-y-1 pl-5">{dataGaps.map((gap, index) => <li key={gap.ruleId || index}>{gap.reason || gap.missingData.join(', ')}</li>)}</ul></div>}
+          {dataGaps.length > 0 && <div><h3 className="font-semibold text-slate-800">Informações que podem fazer falta</h3><ul className="mt-1 list-disc space-y-1 pl-5">{dataGaps.map((gap, index) => <li key={gap.ruleId || index}>{formatDataGap(gap)}</li>)}</ul></div>}
           {detectedInconsistencies.length > 0 && <div><h3 className="font-semibold text-slate-800">Outros registros da análise</h3><ul className="mt-1 list-disc space-y-1 pl-5">{detectedInconsistencies.map((item, index) => <li key={item.legalArgumentId || item.title || index}>{item.title}: {item.description}</li>)}</ul></div>}
         </div>
       </details>}

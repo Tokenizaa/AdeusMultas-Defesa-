@@ -520,17 +520,26 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
               <p className="font-medium leading-relaxed">
                 Pela Lei 14.071/2020, o art. 267 do CTB prevê a conversão em advertência por escrito quando a infração for leve ou média e não houver reincidência em 12 meses. A conversão depende da análise do órgão autuador e da comprovação do prontuário.
               </p>
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pt-1">
-                <input
-                  type="checkbox"
-                  id="chk-no-reoffense"
-                  checked={infractionData.hasPreviousInfractionsLast12Months === false}
-                  onChange={(e) => onUpdateInfraction({ ...infractionData, hasPreviousInfractionsLast12Months: e.target.checked ? false : true })}
-                  className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
-                />
-                <label htmlFor="chk-no-reoffense" className="cursor-pointer">
-                  Confirmo que não cometi nenhuma outra infração nos últimos 12 meses (o extrato de prontuário será solicitado para comprovação).
+              <div className="space-y-1 pt-1">
+                <label htmlFor="select-previous-infractions-12-months" className="block text-xs font-bold text-slate-800">
+                  Há infrações registradas nos 12 meses anteriores à data desta multa?
                 </label>
+                <select
+                  id="select-previous-infractions-12-months"
+                  value={infractionData.hasPreviousInfractionsLast12Months === true ? 'sim' : infractionData.hasPreviousInfractionsLast12Months === false ? 'nao' : 'nao_informado'}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    onUpdateInfraction({ ...infractionData, hasPreviousInfractionsLast12Months: value === 'sim' ? true : value === 'nao' ? false : undefined });
+                  }}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  <option value="nao_informado">Não sei / Não informado</option>
+                  <option value="sim">Sim, há infrações registradas</option>
+                  <option value="nao">Não há infrações registradas</option>
+                </select>
+                <p className="text-[11px] leading-relaxed text-slate-600">
+                  Essa informação ajuda a avaliar a possibilidade de conversão em advertência quando a infração for leve ou média. Se não souber, escolha “Não sei”; não presumiremos que o prontuário esteja limpo.
+                </p>
               </div>
             </div>
           </div>
@@ -670,6 +679,31 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 className="w-full text-xs bg-white border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-[#155BCB] shadow-2xs"
               />
             </div>
+          </div>
+        )}
+        {category !== 'conversao_advertencia' &&
+          category !== 'indicacao_condutor' &&
+          (infractionData.severity === 'leve' || infractionData.severity === 'media') && (
+          <div className="mt-4 space-y-1 rounded-xl border border-slate-200 bg-white p-3.5">
+            <label htmlFor="select-previous-infractions-12-months" className="block text-xs font-bold text-slate-800">
+              Há infrações registradas nos 12 meses anteriores à data desta multa?
+            </label>
+            <select
+              id="select-previous-infractions-12-months"
+              value={infractionData.hasPreviousInfractionsLast12Months === true ? 'sim' : infractionData.hasPreviousInfractionsLast12Months === false ? 'nao' : 'nao_informado'}
+              onChange={(e) => {
+                const value = e.target.value;
+                onUpdateInfraction({ ...infractionData, hasPreviousInfractionsLast12Months: value === 'sim' ? true : value === 'nao' ? false : undefined });
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs focus:border-[#155BCB] focus:outline-none focus:ring-2 focus:ring-[#155BCB]"
+            >
+              <option value="nao_informado">Não sei / Não informado</option>
+              <option value="sim">Sim, há infrações registradas</option>
+              <option value="nao">Não há infrações registradas</option>
+            </select>
+            <p className="text-[11px] leading-relaxed text-slate-600">
+              Essa informação é usada para avaliar a possibilidade de conversão em advertência, quando juridicamente aplicável. Se não souber, escolha “Não sei”; o sistema não presume que o prontuário esteja limpo.
+            </p>
           </div>
         )}
       </div>
