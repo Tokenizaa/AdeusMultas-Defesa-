@@ -53,7 +53,7 @@ export const CreditCardForm: React.FC<CreditCardFormProps> = ({
 
   // Initialize PagBank SDK
   useEffect(() => {
-    const publicKey = (import.meta as any).env?.VITE_PAGBANK_PUBLIC_KEY;
+    const publicKey = import.meta.env.VITE_PAGBANK_PUBLIC_KEY;
     if (publicKey && window.PagSeguroDirectPayment) {
       window.PagSeguroDirectPayment.setSessionId(publicKey);
     }

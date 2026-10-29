@@ -2035,8 +2035,8 @@ export const Constants = {
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AuthUser } from '../types/auth';
 
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Validação de variáveis de ambiente no frontend
 if (typeof window !== 'undefined') {
