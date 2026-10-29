@@ -181,6 +181,33 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     expect(html).not.toContain('A conta fecha: 108 km/h medidos');
   });
 
+  it('apresenta o cálculo do prazo no card principal quando a tese vem como ARG-049', () => {
+    const analysisWithArg049 = {
+      ...analysisWithArg051,
+      recommendedArguments: [{
+        id: 'ARG-049',
+        title: 'Decadência do Direito de Punir: Notificação Expedida após 30 Dias (Art. 281, II CTB)',
+        legalBase: 'Art. 281, § 1º, II, do CTB',
+      }],
+    };
+    const html = renderResult(analysisWithArg049, {
+      dateTime: '2026-09-01T14:30:00',
+      notificationExpeditionDate: '2026-10-06',
+    });
+    expect(html).toContain('A notificação de autuação foi expedida dentro do prazo de 30 dias?');
+    expect(html).toContain('As datas informadas indicam 35 dias entre a infração e a expedição registrada');
+    expect(html).not.toContain('Não deu para confirmar este ponto com os dados que você enviou');
+  });
+
+  it('apresenta o histórico do art. 267 como declaração pendente de confirmação oficial', () => {
+    const html = renderResult(analysisWithArg051, {
+      hasPreviousInfractionsLast12Months: false,
+    });
+    expect(html).toContain('Você informou não ter cometido outras infrações nos últimos 12 meses');
+    expect(html).toContain('ainda precisa ser confirmada no prontuário oficial');
+    expect(html).not.toContain('os requisitos do art. 267 estão atendidos');
+  });
+
   it('não trata declaração do condutor como confirmação oficial do histórico para o art. 267', () => {
     const html = renderResult(analysisWithArg051, {
       hasPreviousInfractionsLast12Months: undefined,
