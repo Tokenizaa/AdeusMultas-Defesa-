@@ -132,23 +132,27 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
       whatWeChecked:
         'Refizemos a conta da velocidade. O radar mede um valor "bruto", mas a multa tem que ser calculada sobre o valor já com a margem de erro do aparelho descontada (7 km/h, para medições até 100 km/h).',
       lawExplanation:
-        'A Resolução CONTRAN nº 798/2020 (Anexo II) define a margem de erro admitida em cada faixa de velocidade. A multa só pode ser cobrada sobre a velocidade "considerada" — a velocidade medida já com essa margem descontada. Se o órgão fez a conta com o valor errado, a infração pode mudar de faixa ou nem existir.',
+        'A Resolução CONTRAN nº 798/2020 estabelece como calcular a velocidade considerada a partir da medida do equipamento. A comparação com o limite da via e o enquadramento do código também precisam ser coerentes: uma conta aritmética correta, isoladamente, não confirma que a infração ocorreu.',
       evidenceCheck: (data) => {
         const measured = Number(data.infraction.measuredSpeed ?? data.infraction.speedMeasured);
         const considered = Number(data.infraction.consideredSpeed ?? data.infraction.speedConsidered);
         const limit = Number(data.infraction.speedLimit);
         if (![measured, considered, limit].every(Number.isFinite)) {
-          return 'SEM_DADOS: Faltam os números de velocidade para refazer a conta.';
+          return 'SEM_DADOS: Faltam os números de velocidade e o limite da via para conferir o cálculo e o enquadramento.';
         }
         const expected = calculateConsideredSpeed(measured);
         const deduction = Math.round((measured - expected) * 10) / 10;
         const delta = Math.abs(expected - considered);
-        return delta <= 1
-          ? `VALIDADO: A conta fecha: ${measured} km/h medidos − ${deduction} km/h de margem de erro = ${considered} km/h considerados (limite de ${limit} km/h).`
-          : `DIVERGENCIA: A conta não fecha: com ${measured} km/h medidos e margem de ${deduction} km/h, o esperado seria ${expected} km/h, mas o auto registra ${considered} km/h.`;
+        if (delta > 1) {
+          return `DIVERGENCIA: Com ${measured} km/h medidos, a velocidade considerada calculada seria aproximadamente ${expected} km/h (desconto de ${deduction} km/h), mas o auto informa ${considered} km/h. Confira a notificação original.`;
+        }
+        if (considered <= limit) {
+          return `DIVERGENCIA: O cálculo informado é compatível com ${considered} km/h considerados, mas esse valor não supera o limite de ${limit} km/h. Os dados apresentados não explicam o enquadramento por excesso de velocidade; confira o limite sinalizado, o código e os valores na notificação original. Isso é um alerta para conferência, não uma conclusão de nulidade.`;
+        }
+        return `VALIDADO: O cálculo da velocidade considerada é compatível: ${measured} km/h medidos, desconto aproximado de ${deduction} km/h e ${considered} km/h considerados, acima do limite informado de ${limit} km/h. Ainda é necessário conferir os dados na notificação original.`;
       },
       userImpact:
-        'Se o número não fecha, existe chance de a multa cair numa faixa mais barata — ou de não existir. Como é só aritmética, dá para conferir e mostrar o resultado na peça sem depender de nenhum documento.',
+        'Se a velocidade considerada registrada não superar o limite aplicável, ou se houver divergência entre cálculo, limite e código, peça a conferência dos dados oficiais. Não conclua que a multa é inválida apenas com a conta isolada.';
       confidenceBase: 'Resolução CONTRAN nº 798/2020, Anexo II'
     }
   };
