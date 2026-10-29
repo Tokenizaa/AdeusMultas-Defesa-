@@ -186,7 +186,7 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
       hasPreviousInfractionsLast12Months: undefined,
     });
     expect(html).toContain('Não foi informado se houve infrações nos 12 meses anteriores');
-    expect(html).not.toContain('requisitos do art. 267 estão atendidos');
+    expect(html).not.toContain('Você informou não ter cometido outras infrações nos últimos 12 meses');
   });
 
   it('identifica a ausência de infrações como declaração, não como dado oficial confirmado', () => {
