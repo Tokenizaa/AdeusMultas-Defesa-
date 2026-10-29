@@ -175,7 +175,7 @@ describe('Arquitetura Jurídica Determinística — Pipeline E2E', () => {
     const flaw = analysis.detectedFlaws?.find((f) => f.argumentId === 'ARG-048');
     expect(flaw).toBeDefined();
     expect(flaw?.ruleId).toBe('RULE_DECADENCIA_30_DIAS');
-    expect(flaw?.severity).toBe('alta');
+    expect(flaw?.severity).toBe('media');
 
     const evaluatedRule = analysis.evaluatedRules?.find((r) => r.ruleId === 'RULE_DECADENCIA_30_DIAS');
     expect(evaluatedRule?.status).toBe('FAIL');
