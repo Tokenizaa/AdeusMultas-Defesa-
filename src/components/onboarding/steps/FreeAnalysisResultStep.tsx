@@ -284,7 +284,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
         </div>
       </section>
 
-      <details className="rounded-xl border border-slate-200 bg-white p-4">
+      {!isTechnicalFailure && <details className="rounded-xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer font-semibold text-slate-800">Ver detalhes da autuação e da análise</summary>
         <div className="mt-4 space-y-4 text-sm text-slate-600">
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -307,11 +307,11 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
           {dataGaps.length > 0 && <div><h3 className="font-semibold text-slate-800">Informações que podem fazer falta</h3><ul className="mt-1 list-disc space-y-1 pl-5">{dataGaps.map((gap, index) => <li key={gap.ruleId || index}>{gap.reason || gap.missingData.join(', ')}</li>)}</ul></div>}
           {detectedInconsistencies.length > 0 && <div><h3 className="font-semibold text-slate-800">Outros registros da análise</h3><ul className="mt-1 list-disc space-y-1 pl-5">{detectedInconsistencies.map((item, index) => <li key={item.legalArgumentId || item.title || index}>{item.title}: {item.description}</li>)}</ul></div>}
         </div>
-      </details>
+      </details>}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button type="button" id="btn-back-to-edit-diagnosis" onClick={onBack} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto">
-          <ArrowRight className="h-4 w-4 rotate-180" />{isTechnicalFailure ? 'Voltar e tentar novamente' : 'Voltar e corrigir dados'}
+          <ArrowRight className="h-4 w-4 rotate-180" />{isTechnicalFailure ? 'Voltar e revisar os dados' : 'Voltar e corrigir dados'}
         </button>
         <button type="button" onClick={onSaveToDashboard} className="w-full rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto">Salvar no painel</button>
         {!isTechnicalFailure && <button type="button" id="btn-proceed-to-document-generation" onClick={onProceedToDocumentGeneration} className="inline-flex w-full flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-base font-bold text-white transition-colors hover:bg-orange-600"><span>Continuar para preparar minha defesa</span><ArrowRight className="h-5 w-5" /></button>}
