@@ -156,6 +156,7 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     const html = renderResult(analysisWithArg051);
     expect(html).toContain('Ver detalhes da autuação e da análise');
     expect(html).toContain('Base legal indicada');
+    expect(html).toContain('O que diz a regra');
     expect(html).toContain('Por que isso importa');
   });
 
