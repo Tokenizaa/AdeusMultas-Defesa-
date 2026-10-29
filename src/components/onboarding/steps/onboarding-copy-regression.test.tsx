@@ -161,6 +161,42 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     expect(html).toContain('Por que isso importa');
   });
 
+  it('não trata a velocidade considerada igual ao limite como validação do excesso', () => {
+    const analysisWithArg005 = {
+      ...analysisWithArg051,
+      recommendedArguments: [{
+        id: 'ARG-005',
+        title: 'Erro na Medida Considerada pelo INMETRO',
+        legalBase: 'Resolução CONTRAN nº 798/2020, Anexo II',
+      }],
+    };
+    const html = renderResult(analysisWithArg005, {
+      measuredSpeed: 108,
+      consideredSpeed: 100,
+      speedLimit: 100,
+      infractionCode: '745-50',
+    });
+    expect(html).toContain('esse valor não supera o limite de 100 km/h');
+    expect(html).toContain('não explicam o enquadramento por excesso de velocidade');
+    expect(html).not.toContain('A conta fecha: 108 km/h medidos');
+  });
+
+  it('não trata declaração do condutor como confirmação oficial do histórico para o art. 267', () => {
+    const html = renderResult(analysisWithArg051, {
+      hasPreviousInfractionsLast12Months: undefined,
+    });
+    expect(html).toContain('Não foi informado se houve infrações nos 12 meses anteriores');
+    expect(html).not.toContain('requisitos do art. 267 estão atendidos');
+  });
+
+  it('identifica a ausência de infrações como declaração, não como dado oficial confirmado', () => {
+    const html = renderResult(analysisWithArg051);
+    expect(html).toContain('Você informou não ter cometido outras infrações nos últimos 12 meses');
+    expect(html).toContain('ainda precisa ser confirmada no prontuário oficial');
+    expect(html).not.toContain('Baseado em lei: requisitos do art. 267 CTB atendidos');
+  });
+
+
   it('quando não há achados, explica a incerteza e mantém a continuidade comercial', () => {
     const html = renderResult(analysisWithNoArguments);
     expect(html).toContain('Ainda não confirmamos um problema na autuação');
