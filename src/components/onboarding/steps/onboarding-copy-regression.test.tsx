@@ -130,10 +130,10 @@ const analysisWithNoArguments = {
 // ---------------------------------------------------------------------------
 
 describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
-  const renderResult = (analysis: any) => renderToString(
+  const renderResult = (analysis: any, infractionOverrides: Record<string, unknown> = {}) => renderToString(
     <FreeAnalysisResultStep
       analysis={analysis}
-      infractionData={baseInfraction}
+      infractionData={{ ...baseInfraction, ...infractionOverrides } as any}
       vehicleData={baseVehicle}
       serviceType='defesa_previa'
       onProceedToDocumentGeneration={() => {}}
