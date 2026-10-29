@@ -15,6 +15,7 @@
 2. `AnalysisProcessingStep` capturava exceções somente com `console.error`. Ao fim da animação, `onComplete()` era chamado mesmo com `analysisResult === null`, permitindo que o wizard exibisse o estado inicial vazio.
 3. A tela de resultado listava nomes de propriedades como `hasPreviousInfractionsLast12Months` e `speedLimit` em vez de explicar quais informações faltavam.
 4. A tela já recebia `evaluatedRules` do domínio, mas não os resumia na primeira leitura; por isso, um resultado sem achados confirmados podia parecer que nenhuma análise havia sido executada.
+5. A regra `RULE_INMETRO_CONSIDERED_SPEED_ERROR` produz `ARG-005`, mas a tese não estava em `recommendedArgumentCodes` dos códigos de velocidade; o filtro de elegibilidade podia descartar a divergência detectada antes de ela chegar ao resultado.
 
 ## Alterações realizadas
 
@@ -24,6 +25,7 @@
 - A etapa de processamento agora mantém o usuário na etapa de análise se o motor falhar; não chama `onComplete()` sem resultado. O erro é apresentado na interface e há ação para voltar e revisar os dados.
 - O resultado mostra quantas verificações foram registradas e quantas estão concluídas, com ponto de atenção, pendentes ou não aplicáveis.
 - As lacunas são apresentadas com nomes legíveis, sem alterar o valor factual nem converter ausência em irregularidade.
+- `ARG-005` foi habilitada no catálogo para os quatro códigos de velocidade explicitamente avaliados pela regra; foi adicionado teste que comprova a passagem da divergência pelo filtro de elegibilidade.
 
 ## Critérios de aceitação
 
@@ -31,6 +33,7 @@
 - [ ] “Sim”, “Não” e “Não sei” são preservados como `true`, `false` e `undefined`.
 - [ ] A análise sem achados exibe a contagem das verificações reais, se o motor as retornar.
 - [ ] Lacunas são apresentadas em linguagem legível.
+- [ ] Uma divergência de velocidade que cruza a faixa de enquadramento chega à análise como `ARG-005`.
 - [ ] Exceção do motor não avança para a etapa de resultado.
 - [ ] Vitest, typecheck e build passam.
 - [ ] Teste manual/E2E local confirma o caminho completo.
@@ -40,7 +43,8 @@
 
 - **Inspeção estática:** concluída para os arquivos alterados.
 - **Testes de regressão adicionados:** coleta do histórico no fluxo de excesso de velocidade, fixture de teste, resumo de verificações e rótulos legíveis para lacunas.
-- **Primeiro CI:** run [40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) — FAIL nos testes de regressão: 54 arquivos passaram, 1 falhou; 424 testes passaram e 2 falharam. As duas causas foram uma asserção de texto sem normalizar os comentários de SSR do React e uma expectativa que ainda usava a frase do checkbox removido. Asserções ajustadas no follow-up; nova execução pendente. Não declarar PASS antecipadamente.
+- **Primeiro CI:** run [40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) — FAIL nos testes de regressão: 54 arquivos passaram, 1 falhou; 424 testes passaram e 2 falharam. As causas foram uma asserção de texto sem normalizar os comentários de SSR do React e uma expectativa que ainda usava a frase do checkbox removido.
+- **CI do follow-up:** [run 40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build. A correção adicional de elegibilidade `ARG-005` deste commit ainda precisa de novo CI.
 - **Teste manual/E2E:** pendente.
 - **Produção:** não publicado. O commit não contém o marcador `[DEPLOY-PRODUCTION]`.
 

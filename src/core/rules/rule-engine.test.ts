@@ -63,6 +63,14 @@ describe('ExpertRuleEngine validation', () => {
     expect(hasRadarRule).toBe(true);
   });
 
+  it('should surface ARG-005 when measured and considered speeds cross a lower bracket', () => {
+    const result = ExpertRuleEngine.evaluate('case_speed_considered', validInfraction);
+    const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
+    expect(speedRule?.status).toBe('FAIL');
+    expect(result.detectedInconsistencies.some((item) => item.legalArgumentId === 'ARG-005')).toBe(true);
+    expect(result.recommendedArguments.some((argument) => argument.id === 'ARG-005')).toBe(true);
+  });
+
   it('should detect conversion to warning for eligible infractions', () => {
     const lightInfraction = {
       ...validInfraction,

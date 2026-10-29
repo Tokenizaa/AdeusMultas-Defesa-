@@ -200,3 +200,11 @@ Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSI
 - Causas observadas nos logs: a renderização SSR do React separou texto estático e valores dinâmicos com comentários HTML, e um teste antigo ainda esperava a frase do checkbox anterior. Não houve evidência nesse run de falha do motor jurídico; o conjunto de testes não concluiu.
 - Ajustes feitos neste follow-up: normalizar os comentários de SSR nas asserções, atualizar a expectativa para o texto da seleção tri-state e corrigir singular/plural na contagem exibida.
 - Novo CI: pendente de conclusão. Vitest, typecheck e build não podem ser declarados aprovados até o workflow terminar.
+
+
+## Achado adicional — elegibilidade da regra de velocidade
+
+- Inspeção confirmou que RULE_INMETRO_CONSIDERED_SPEED_ERROR podia produzir ARG-005, mas o filtro de elegibilidade dependia de recommendedArgumentCodes no catálogo; ARG-005 estava ausente dos quatro códigos de velocidade que a regra avalia.
+- Correção neste commit: incluir ARG-005 em 745-50, 746-30, 745-70 e 747-10 e adicionar regressão com dados sintéticos (78 km/h medida, 71 km/h considerada, limite de 60 km/h), verificando status FAIL e presença da tese na análise.
+- Validação anterior: CI [40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build antes desta correção adicional. O novo CI permanece pendente.
+- Produção segue bloqueada; nenhum commit usa [DEPLOY-PRODUCTION].
