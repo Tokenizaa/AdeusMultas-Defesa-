@@ -144,12 +144,12 @@ export function normalizeDateInputValue(value: string | null | undefined): strin
   const input = value.trim();
   if (!input) return '';
 
-  const isoMatch = input.match(/^(\\d{4}-\\d{2}-\\d{2})(?:T.*)?$/);
+  const isoMatch = input.match(/^(\d{4}-\d{2}-\d{2})(?:T.*)?$/);
   if (isoMatch) {
     return parseIsoDate(isoMatch[1]) ?? '';
   }
 
-  const brMatch = input.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{2}|\\d{4})$/);
+  const brMatch = input.match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/);
   if (!brMatch) return '';
 
   const [, dayText, monthText, yearText] = brMatch;
