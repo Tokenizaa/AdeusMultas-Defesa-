@@ -34,10 +34,12 @@
 
 ## Estado da validação
 
-- **Leitura estática:** achados e alterações identificados no código de `main`.
-- **Testes automatizados:** adicionados; execução do CI deste commit pendente.
-- **Teste manual/E2E de produção:** não executado nesta tarefa.
-- **Deploy:** não solicitado por esta correção; não declarar que a versão publicada contém estas mudanças até haver autorização, workflow de deploy bem-sucedido e confirmação do comportamento no site.
+- **Leitura estática:** PASS — inconsistência do resumo e divergência possível entre `evaluatedRules` e `dataGaps` confirmadas no código.
+- **CI com as alterações de código:** PASS — [run 40939043422](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939043422) concluiu Vitest, typecheck e build com sucesso no commit `eeab356709d64e0e873a9e682dd9ba8ae2c162bf`, que já contém as alterações de código e testes de regressão desta correção.
+- **CI adicional:** [run 40939108423](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939108423) também concluiu Vitest, typecheck e build com sucesso no estado de código atual.
+- **Deploy automático:** o workflow [Cloudflare Deploy run 40939043366](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40939043366) concluiu com sucesso para o commit `eeab356709d64e0e873a9e682dd9ba8ae2c162bf`. Isso comprova conclusão do workflow, não validação visual nem confirmação do caso específico em produção.
+- **Teste manual/E2E de produção:** não executado nesta tarefa; o resultado informado pelo usuário ainda precisa ser refeito/inspecionado em sessão real após a publicação.
+- **Limitação:** não declarar o comportamento final confirmado no site apenas com base no deploy; é necessário conferir a tela e o resumo técnico do cenário inconclusivo.
 
 ## Próxima ação
 
