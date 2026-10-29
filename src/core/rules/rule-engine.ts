@@ -987,7 +987,9 @@ export class ExpertRuleEngine {
       summaryReasoning:
         detectedInconsistencies.length > 0
           ? `O Motor de Regras identificou ${detectedInconsistencies.length} ponto${detectedInconsistencies.length > 1 ? 's' : ''} para revisão no AIT nº ${infraction.aitNumber || 'SN'}. Os achados são hipóteses preliminares da análise automatizada: não comprovam, por si só, uma irregularidade nem garantem o resultado da defesa. Confira os documentos oficiais e as evidências de cada ponto antes de decidir pelo protocolo.${gapSummary}`
-          : `O Motor de Regras não identificou inconsistências jurídicas nos dados avaliados do AIT nº ${infraction.aitNumber || 'SN'}.${gapSummary}`,
+          : dataGaps.length > 0
+            ? `A análise do AIT nº ${infraction.aitNumber || 'SN'} ficou inconclusiva: não foi possível avaliar ${dataGaps.length} hipótese(s) por insuficiência de dados (${dataGaps.map((g) => g.missingData.join('+')).join('; ')}). A ausência de achados confirmados não significa que a autuação esteja correta. Complete as informações pendentes e confira os documentos oficiais antes de decidir pelo protocolo.`
+            : `O Motor de Regras não identificou inconsistências jurídicas nos dados avaliados do AIT nº ${infraction.aitNumber || 'SN'}. Isso não comprova, por si só, que a autuação esteja correta; a conclusão se limita aos dados avaliados.`,
       infractionClassification: {
         family: classification.family,
         basis: classification.basis,
