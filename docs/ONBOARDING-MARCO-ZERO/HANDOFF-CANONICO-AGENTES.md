@@ -234,3 +234,45 @@ Registro: [CORRECAO-08-CONSISTENCIA-RESULTADO-INCONCLUSIVO.md](./CORRECAO-08-CON
 - CI [40823383320](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823383320) falhou em um teste: o motor passa códigos normalizados sem hífen ao contexto da regra, enquanto o mapa inicial da regra usava chaves com hífen.
 - Correção neste follow-up: normalizar o código antes de consultar a faixa; atualizar versão do motor para 2.7.1 e versão da regra para 3.
 - Novo CI ainda pendente. Não declarar PASS antes do resultado. Nenhum deploy de produção foi autorizado.
+
+
+## 12. Correção 09 — coerência do resultado, velocidade e advertência
+
+Registro detalhado: [CORRECAO-09-COERENCIA-RESULTADO-VELOCIDADE-ADVERTENCIA.md](./CORRECAO-09-COERENCIA-RESULTADO-VELOCIDADE-ADVERTENCIA.md).
+
+### Contexto observado
+
+O usuário apresentou a saída do caso AIT **5955616144**, placa **NAM9X73**, infração Art. 218, I do CTB, código 745-50. O resultado afirmava que os requisitos do art. 267 estavam atendidos, embora o histórico do condutor precisasse ser tratado como dado declarado/confirmado; também mostrava 108 km/h medidos, 100 km/h considerados e limite de 100 km/h, enquanto uma verificação apontava possível incompatibilidade entre esses valores e o código. A lista de regras não aplicáveis mostrava categorias internas como `[alcoolemia]` e `excesso_velocidade`.
+
+Essa saída foi relatada pelo usuário; não foi capturada por E2E visual independente pelo agente.
+
+### Mudanças em `main`
+
+Arquivo: `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`.
+
+- ARG-005 compara o valor considerado com o limite informado. Se o valor considerado não supera o limite, a mensagem identifica que os dados não explicam o enquadramento por excesso de velocidade e orienta conferir limite, código e notificação original. Uma conta de margem compatível não é tratada como confirmação automática da infração.
+- ARG-051 diferencia falta de informação de declaração do condutor. A ausência do histórico não vira “sem infrações”; a declaração exige confirmação no prontuário oficial e recebe nível de confiança médio.
+- As mensagens de regras não aplicáveis conhecidas são traduzidas para linguagem simples na camada de apresentação, sem alterar a lógica/status do motor.
+- Foram adicionados testes de regressão para velocidade/limite e para a informação do histórico. Uma tentativa de acrescentar um teste específico para a tradução de regras não aplicáveis foi bloqueada pela ferramenta; não afirmar que esse teste existe.
+
+### Commits e evidências
+
+- Commit intermediário `798951c26c594cb187008bfb43d4d80dad00fa8f`: falhou por erro de sintaxe introduzido na edição; não é estado funcional de referência.
+- `fc0bcf04231ce4cac944b6526f8d35253472515a`: corrigiu a sintaxe; CI e deploy concluíram com sucesso.
+- `a25af2bf008ef4e6ecb62a252f339862081ad82b`: tri-state/declaração de histórico; CI e deploy concluíram com sucesso.
+- `1b5c4c9975d77943d71544efd8cfbcfaa5e3c3d3`: testes adicionados; CI falhou em uma asserção excessivamente abrangente.
+- `82d3b2738ebd6286b5475ed950aa59df4f7c8d44`: ajustou a apresentação do prefixo DECLARADO; CI ainda falhou na asserção anterior.
+- `f7f1a062557d48d18fcea4dc13768a85e67c4065`: corrigiu a asserção; CI e deploy concluíram com sucesso.
+- **Estado mais recente verificado:** `1919b7847383e729f8d8e04de892967cf69f3eef`. CI [40941464997](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40941464997) e Cloudflare Deploy [40941465159](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40941465159) concluíram com sucesso.
+
+### Pendências — não marcar PASS
+
+- [ ] Validar visualmente em produção o AIT 5955616144 e confirmar o conteúdo dos cards principais, a contagem e a lista detalhada.
+- [ ] Criar/executar teste dedicado para mensagens de regras não aplicáveis.
+- [ ] Corrigir o texto estático `whatWeChecked` de ARG-005, que ainda pode sugerir desconto fixo de 7 km/h mesmo para faixas acima de 107 km/h; uma tentativa de edição foi bloqueada e não foi aplicada.
+- [ ] Não afirmar que a análise prova nulidade ou garante conversão em advertência. Confirmar os dados oficiais e o prontuário.
+- [ ] Não declarar onboarding certificado: a validação visual/E2E geral e a matriz canônica permanecem pendentes.
+
+### Próxima ação
+
+Retomar pelo teste visual/E2E do resultado publicado para o caso informado; registrar ambiente, dados observados e evidência. Se houver divergência, corrigir somente o problema reproduzido, adicionar regressão, rodar CI e conferir o deploy. Não pular para refatoração ampla.
