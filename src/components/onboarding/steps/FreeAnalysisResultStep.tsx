@@ -255,6 +255,29 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
     pending: pendingRuleIds.size,
     notApplicable: evaluatedRules.filter((rule) => rule.status === 'NOT_APPLICABLE').length,
   };
+  const formatRuleReason = (reason: string) => {
+    const restricted = reason.match(/Regra restrita às famílias \[([^\]]+)\]; a infração foi classificada como ["']?([^"'\.]+)["']?\.?/i);
+    if (!restricted) return reason;
+    const familyLabels: Record<string, string> = {
+      alcoolemia: 'álcool e direção',
+      celular: 'uso de celular ao volante',
+      documentos: 'documentação do veículo ou do condutor',
+      semaforo: 'avanço de sinal',
+      estacionamento: 'regras de estacionamento',
+      cinto: 'uso do cinto de segurança',
+    };
+    const categoryLabels: Record<string, string> = {
+      excesso_velocidade: 'excesso de velocidade',
+      lei_seca: 'álcool e direção',
+      celular: 'uso de celular ao volante',
+      vermelho: 'avanço de sinal',
+      estacionamento: 'estacionamento',
+      documentos: 'documentação',
+    };
+    const families = restricted[1].split(',').map((item) => familyLabels[item.trim()] ?? item.trim()).join(' e ');
+    const category = categoryLabels[restricted[2].trim()] ?? restricted[2].trim().replace(/_/g, ' ');
+    return `Esta verificação trata de ${families} e não se aplica à infração por ${category} informada neste caso.`;
+  };
   const formatDataGap = (gap: NonNullable<CaseAnalysis['dataGaps']>[number]) => {
     const labels = (gap.missingData ?? []).map((field) => ANALYSIS_FIELD_LABELS[field] ?? field);
     let reason = gap.reason ?? '';
@@ -385,7 +408,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                   <p className="font-medium text-slate-800">{rule.name || rule.ruleId}</p>
                   <p>{dataGaps.find((gap) => gap.ruleId === rule.ruleId)
                     ? formatDataGap(dataGaps.find((gap) => gap.ruleId === rule.ruleId)!)
-                    : rule.reason || ({ PASS: 'Verificação concluída sem falha identificada.', FAIL: 'A regra identificou um resultado que exige atenção.', DATA_GAP: 'Faltam dados para concluir esta verificação.', NOT_APPLICABLE: 'Esta regra não se aplica ao caso informado.' } as Record<string, string>)[rule.status]}</p>
+                    : rule.reason ? formatRuleReason(rule.reason) : ({ PASS: 'Verificação concluída sem falha identificada.', FAIL: 'A regra identificou um resultado que exige atenção.', DATA_GAP: 'Faltam dados para concluir esta verificação.', NOT_APPLICABLE: 'Esta regra não se aplica ao caso informado.' } as Record<string, string>)[rule.status]}</p>
                 </li>
               ))}
             </ul></div>
