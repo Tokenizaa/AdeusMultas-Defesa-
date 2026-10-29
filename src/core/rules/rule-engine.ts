@@ -843,38 +843,27 @@ export class ExpertRuleEngine {
     }
 
     // 2. Garantia constitucional do devido processo legal (Súmula 312 STJ).
-    //    FAIL CLOSED: a violação da dupla notificação SÓ é afirmada com prova
-    //    de não entrega da Notificação de Autuação. A ausência da data de
-    //    entrega NÃO é prova de não entrega: significa apenas que a hipótese
-    //    não pôde ser avaliada (DATA_GAP) — nunca um vício.
-    if (context.notificationExpeditionDate) {
-      if (context.notificationDeliveryDate) {
-        evaluatedRules.push({
-          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-          name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-          status: 'PASS',
-          evaluatedAt: nowIso,
-          reason: 'Notificação de Autuação expedida e com data de entrega informada: não há violação da dupla notificação nos dados fornecidos.',
-          inputs: {
-            notificationExpeditionDate: context.notificationExpeditionDate,
-            notificationDeliveryDate: context.notificationDeliveryDate,
-          },
-        });
-      } else {
-        dataGaps.push({
-          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-          missingData: ['notificationDeliveryDate'],
-          reason: 'A data de entrega da Notificação de Autuação não foi informada. Sem ela não é possível afirmar violação da dupla notificação (Súmula 312 STJ).',
-        });
-        evaluatedRules.push({
-          ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
-          name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
-          status: 'DATA_GAP',
-          evaluatedAt: nowIso,
-          reason: 'Faltam dados obrigatórios: notificationDeliveryDate',
-          inputs: { notificationExpeditionDate: context.notificationExpeditionDate },
-        });
-      }
+    //    FAIL CLOSED: a data de entrega da Notificação de Autuação não comprova
+    //    que a Notificação de Imposição de Penalidade foi expedida. Como o
+    //    formulário atual não coleta um dado separado da segunda notificação,
+    //    não é seguro marcar PASS apenas porque as duas datas da NA existem.
+    if (context.notificationExpeditionDate || context.notificationDeliveryDate) {
+      dataGaps.push({
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        missingData: ['penaltyNotificationExpeditionDate'],
+        reason: 'As datas da Notificação de Autuação não comprovam, por si só, a expedição da Notificação de Imposição de Penalidade. A Súmula 312 do STJ exige verificar separadamente as notificações da autuação e da aplicação da penalidade. Confira o documento oficial da penalidade; esta verificação permanece pendente e a falta de dados não prova violação.',
+      });
+      evaluatedRules.push({
+        ruleId: 'RULE_CONSTITUTIONAL_DUE_PROCESS',
+        name: 'Garantia Constitucional do Devido Processo Legal (Súmula 312 STJ)',
+        status: 'DATA_GAP',
+        evaluatedAt: nowIso,
+        reason: 'Falta conferir separadamente a Notificação de Imposição de Penalidade; datas da Notificação de Autuação não bastam para concluir sobre a dupla notificação.',
+        inputs: {
+          notificationExpeditionDate: context.notificationExpeditionDate,
+          notificationDeliveryDate: context.notificationDeliveryDate,
+        },
+      });
     }
 
     // 3. Procedimento recomendado — derivado da família e dos fatos, nunca
