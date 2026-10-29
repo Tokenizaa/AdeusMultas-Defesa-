@@ -74,3 +74,13 @@ A tela só consegue exibir o estado técnico quando recebe `analysis.status === 
 
 - **Commits de implementação:** `fbac44578f1780cf45fbba5f681073fac75f9271` (tela); `e81ac08e584f8db913b2ecc62e85ea6ab49452c0` (testes iniciais); `11c3618d781f996b9d2bced0a75da6446c460cb3` (ajuste do estado de falha); `e5501391adaacffc7a7ca53f0405a999d99e5b17` (teste de lacunas de dados); `aa6e77b7762da774542565bf0ce1283f0d27458d` (detalhe jurídico recolhido); `dca35398721d60f231774bb54f7e66f903d21f07` (regressão do detalhe jurídico).
 - **Próxima ação autorizada:** executar Vitest, typecheck e build; corrigir falhas relacionadas à tarefa; validar os estados em mobile/desktop. Depois, avaliar separadamente a passagem explícita de falha de `AnalysisProcessingStep` para o resultado. Produção continua bloqueada até autorização explícita.
+
+## Correção de regressão CI — 2026-10-29
+
+- Workflow inspecionado: [run 40813139009](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40813139009).
+- Resultado observado: 54 arquivos de teste passaram e 1 falhou; 422 testes passaram e 1 falhou.
+- Causa exata: a regressão de estado técnico esperava o texto `Voltar e tentar novamente`, mas o componente renderiza `Voltar e revisar os dados`. O botão chama `onBack`, portanto o texto real descreve a ação efetivamente disponível; a falha era uma expectativa desatualizada do teste, não um erro de runtime identificado.
+- Correção aplicada em `src/components/onboarding/steps/onboarding-copy-regression.test.tsx`: alinhada a asserção ao texto renderizado `Voltar e revisar os dados`.
+- Commit da correção: `5f8f9f6b404b809e848347041e9100009969f84d`.
+- **Validação após a correção:** pendente de novo run do CI. Não afirmar que Vitest, typecheck ou build passaram até obter os resultados.
+- **Produção:** nenhum deploy iniciado. A correção não deve receber o marcador `[DEPLOY-PRODUCTION]` enquanto o CI estiver pendente/falhando.
