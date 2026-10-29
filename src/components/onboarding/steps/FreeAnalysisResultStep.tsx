@@ -208,10 +208,16 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
   const detectedInconsistencies = analysis?.detectedInconsistencies ?? [];
   const dataGaps = analysis?.dataGaps ?? [];
   const evaluatedRules = analysis?.evaluatedRules ?? [];
+  // Count a missing-data rule once even if the engine's two result collections
+  // temporarily disagree; a data gap must never be displayed as fully evaluated.
+  const pendingRuleIds = new Set([
+    ...evaluatedRules.filter((rule) => rule.status === 'DATA_GAP').map((rule) => rule.ruleId),
+    ...dataGaps.map((gap) => gap.ruleId),
+  ]);
   const evaluationCounts = {
-    passed: evaluatedRules.filter((rule) => rule.status === 'PASS').length,
+    passed: evaluatedRules.filter((rule) => rule.status === 'PASS' && !dataGaps.some((gap) => gap.ruleId === rule.ruleId)).length,
     findings: evaluatedRules.filter((rule) => rule.status === 'FAIL').length,
-    pending: evaluatedRules.filter((rule) => rule.status === 'DATA_GAP').length,
+    pending: pendingRuleIds.size,
     notApplicable: evaluatedRules.filter((rule) => rule.status === 'NOT_APPLICABLE').length,
   };
   const formatDataGap = (gap: NonNullable<CaseAnalysis['dataGaps']>[number]) => {
@@ -342,7 +348,9 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
               {analysis.evaluatedRules.map((rule, index) => (
                 <li key={rule.ruleId || index} className="border-l-2 border-slate-200 pl-3">
                   <p className="font-medium text-slate-800">{rule.name || rule.ruleId}</p>
-                  <p>{rule.reason || ({ PASS: 'Verificação concluída sem falha identificada.', FAIL: 'A regra identificou um resultado que exige atenção.', DATA_GAP: 'Faltam dados para concluir esta verificação.', NOT_APPLICABLE: 'Esta regra não se aplica ao caso informado.' } as Record<string, string>)[rule.status]}</p>
+                  <p>{dataGaps.find((gap) => gap.ruleId === rule.ruleId)
+                    ? formatDataGap(dataGaps.find((gap) => gap.ruleId === rule.ruleId)!)
+                    : rule.reason || ({ PASS: 'Verificação concluída sem falha identificada.', FAIL: 'A regra identificou um resultado que exige atenção.', DATA_GAP: 'Faltam dados para concluir esta verificação.', NOT_APPLICABLE: 'Esta regra não se aplica ao caso informado.' } as Record<string, string>)[rule.status]}</p>
                 </li>
               ))}
             </ul></div>
