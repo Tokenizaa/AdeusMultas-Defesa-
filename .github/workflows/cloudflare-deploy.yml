@@ -14,6 +14,7 @@ on:
       - 'src/**'
       - 'scripts/**'
       - '.github/workflows/cloudflare-deploy.yml'
+      - 'tests/e2e-reconstruction/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -25,6 +26,7 @@ on:
       - 'src/**'
       - 'scripts/**'
       - '.github/workflows/cloudflare-deploy.yml'
+      - 'tests/e2e-reconstruction/**'
 
 jobs:
   build-and-deploy:
