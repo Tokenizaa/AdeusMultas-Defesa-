@@ -21,16 +21,18 @@ O classificador define as famílias `excesso_velocidade`, `alcoolemia`, `semafor
 
 ### A02-02 — A data de entrega da Notificação de Autuação não comprova, sozinha, a dupla notificação
 
-**Estado:** risco de interpretação jurídica confirmado por leitura estática; exige revisão da regra antes de qualquer conclusão.  
-**Arquivos:** `src/core/rules/rule-engine.ts`, `src/components/onboarding/steps/InfractionIdentificationStep.tsx`, `src/types/index.ts`, mapeadores canônicos e rota anônima do Worker.
+**Estado:** falso `PASS` corrigido de forma conservadora; CI pendente; catálogo de validação jurídica e coleta da NIP ainda precisam de ajuste.  
+**Arquivos:** `src/core/rules/rule-engine.ts`, `src/core/rules/rule-engine.test.ts`, `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`, `src/core/onboarding/legal-validation.ts`.
 
-A inspeção da versão atual encontrou um controle visível `input-notification-delivery-date` em `InfractionIdentificationStep.tsx`. Portanto, o achado antigo de que o wizard não oferecia campo para a data de entrega está desatualizado e não deve ser tratado como defeito atual.
+A inspeção da versão atual encontrou um controle visível `input-notification-delivery-date` em `InfractionIdentificationStep.tsx`. Portanto, o achado antigo de que o wizard não oferecia campo para a data de entrega está desatualizado.
 
-O risco real é semântico: a regra `RULE_CONSTITUTIONAL_DUE_PROCESS` marca `PASS` quando `notificationExpeditionDate` e `notificationDeliveryDate` estão preenchidas, afirmando que “não há violação da dupla notificação”. Porém, o rótulo e a ajuda do formulário descrevem `notificationDeliveryDate` como a data de entrega/recebimento da Notificação de Autuação; esse dado, sozinho, não demonstra que a Notificação de Imposição de Penalidade também foi expedida. A regra pode, portanto, converter a existência de uma data de entrega da primeira notificação em uma conclusão mais ampla do que os dados sustentam.
+O risco real era semântico: a regra `RULE_CONSTITUTIONAL_DUE_PROCESS` marcava `PASS` quando `notificationExpeditionDate` e `notificationDeliveryDate` estavam preenchidas. O rótulo e a ajuda do formulário descrevem essas datas como expedição e entrega/recebimento da Notificação de Autuação (NA); isso não demonstra que a Notificação de Imposição de Penalidade (NIP) foi expedida.
 
-**Regra de segurança jurídica:** data preenchida não equivale automaticamente a prova oficial, e a entrega da Notificação de Autuação não comprova, por si só, a segunda notificação. A ausência de data também não é prova de não entrega. Até haver dados distintos e regra juridicamente revisada para as duas notificações, o resultado não deve afirmar que a dupla notificação está comprovada nem que sua violação está afastada.
+A Súmula 312 do STJ exige verificar as notificações da autuação e da aplicação da penalidade; o CTB trata da expedição da NA no art. 281, § 1º, II, e da notificação da penalidade no art. 282. Fontes oficiais: [Súmula 312 do STJ](https://scon.stj.jus.br/SCON/sumstj/doc.jsp?b=SUMU&i=365&l=100&operador=AND&ordenacao=-%40NUM&p=false&tipo=SUMULA) e [CTB compilado no Planalto](https://www.planalto.gov.br/ccivil_03/leis/l9503compilado.htm).
 
-**Próxima ação:** revisar a semântica e o contrato de dados com base na Súmula 312 do STJ e na legislação aplicável; separar explicitamente as duas notificações se a análise exigir ambas; criar testes para (a) apenas expedição da NA, (b) expedição + entrega da NA, (c) dados da NIP ausentes e (d) evidência oficial das duas notificações. Não alterar a regra jurídica sem revisar a fonte aplicável.
+**Correção imediata implementada:** quando existem dados da NA, o motor agora mantém a verificação em `DATA_GAP`, identifica `penaltyNotificationExpeditionDate` como dado ausente e não afirma nem que houve violação nem que a dupla notificação foi cumprida. O rótulo dessa lacuna foi adicionado à interface e o teste anterior que esperava `PASS` com duas datas da NA foi substituído por uma regressão de `DATA_GAP`.
+
+**Pendências:** `src/core/onboarding/legal-validation.ts` ainda contém um claim antigo que associa a dupla notificação à “não entrega da NA”; esse catálogo precisa ser atualizado antes de certificar a tarefa. Também falta um campo/persistência separados para dados da NIP. Até essa coleta existir, a regra permanece conservadoramente pendente.
 
 ### A02-03 — Há duas avaliações no fluxo; a paridade precisa ser demonstrada por contrato
 
