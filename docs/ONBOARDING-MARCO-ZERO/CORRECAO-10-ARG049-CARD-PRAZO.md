@@ -1,6 +1,6 @@
 # Correção 10 — divergência entre tese de prazo e card principal
 
-**Estado:** correção de código aplicada na `main`; CI e deploy acionados e pendentes no momento deste registro. Validação visual após o deploy ainda pendente.
+**Estado atualizado:** correção de código e testes aplicados na `main`; CI e deploy concluídos com sucesso para o commit de testes `c4a388e40c3e43d9749071eff4da28d7f63bef63`. Validação visual após o deploy ainda pendente.
 
 ## Evidência de produção relatada
 
@@ -29,16 +29,16 @@ A saída fornecida ainda mostra texto que não corresponde ao comportamento espe
 
 ## Commits e workflows
 
-- Código: `1f898edf1ffe5a603ce929dceaea0e000269b923` — mapeamento de `ARG-049` para a evidência de prazo. CI [40942697210](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697210) e Cloudflare Deploy [40942697430](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697430) estavam em andamento no momento do registro.
-- Testes: `c4a388e40c3e43d9749071eff4da28d7f63bef63` — regressões de `ARG-049` e art. 267; validar o resultado do CI associado antes de declarar PASS.
+- Código: `1f898edf1ffe5a603ce929dceaea0e000269b923` — mapeamento de `ARG-049` para a evidência de prazo. CI [40942697210](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697210) e Cloudflare Deploy [40942697430](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697430) concluíram com sucesso.
+- Testes: `c4a388e40c3e43d9749071eff4da28d7f63bef63` — regressões de `ARG-049` e art. 267. CI [40942733942](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942733942) e Cloudflare Deploy [40942733911](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942733911) concluíram com sucesso.
 
 ## Critérios de aceitação
 
 - [x] Identificada a causa estática do fallback genérico de `ARG-049`.
 - [x] Adicionado alias de apresentação para reutilizar a evidência específica de prazo.
 - [x] Adicionados testes para `ARG-049` e para a declaração do histórico no art. 267.
-- [ ] CI da alteração de código e dos testes concluído com sucesso.
-- [ ] Deploy Cloudflare concluído com sucesso para o código que contém os testes/alterações aplicáveis.
+- [x] CI da alteração de código e dos testes concluído com sucesso no commit `c4a388e40c3e43d9749071eff4da28d7f63bef63`.
+- [x] Deploy Cloudflare concluído com sucesso no commit `c4a388e40c3e43d9749071eff4da28d7f63bef63`.
 - [ ] Validação visual independente com nova análise concluída.
 - [ ] Confirmado que a saída não apresenta mais texto antigo do art. 267 nem nomes internos de regras não aplicáveis.
 
