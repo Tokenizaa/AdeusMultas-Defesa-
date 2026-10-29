@@ -106,7 +106,7 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
         if (!isLightOrMedium) return 'NAO_APLICA: Esta infração é grave ou gravíssima, então a conversão em advertência não se aplica ao seu caso.';
         if (history === undefined || history === null) return 'SEM_DADOS: Não foi informado se houve infrações nos 12 meses anteriores. Consulte o prontuário antes de concluir se os requisitos do art. 267 estão atendidos.';
         if (history === true) return 'NAO_APLICA: Foram informadas infrações nos últimos 12 meses, então é necessário conferir o requisito legal no prontuário antes de avaliar a conversão.';
-        return 'ATENDIDO: Você informou não ter cometido outras infrações nos últimos 12 meses. Confirme essa informação no prontuário oficial para verificar o requisito do art. 267.';
+        return 'DECLARADO: Você informou não ter cometido outras infrações nos últimos 12 meses. Essa informação ainda precisa ser confirmada no prontuário oficial para verificar o requisito do art. 267.';
       },
       userImpact:
         'Quando os requisitos legais forem confirmados no prontuário oficial, o art. 267 prevê a imposição de advertência por escrito em lugar da multa. Isso evita a cobrança da multa e a pontuação correspondente; a aplicação ao caso concreto depende da confirmação dos dados e do procedimento administrativo.',
@@ -181,11 +181,14 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
    
   // Lógica de confiança baseada em prefixos estruturados do evidenceCheck
   // (não mais casar substring em português frágil)
-  if (evidenceResult.startsWith('VENCIDO:') || evidenceResult.startsWith('ATENDIDO:')) {
+  if (evidenceResult.startsWith('VENCIDO:')) {
     confidenceLevel = 'Muito Alto';
     confidenceReason = evidenceResult.startsWith('VENCIDO:')
       ? 'Baseado em resolução técnica: radar com vistoria vencida na data da infração'
       : 'Baseado em lei: requisitos do art. 267 CTB atendidos';
+  } else if (evidenceResult.startsWith('DECLARADO:')) {
+    confidenceLevel = 'Médio';
+    confidenceReason = 'Baseado em declaração do condutor, ainda pendente de confirmação no prontuário oficial';
   } else if (evidenceResult.startsWith('EM_DIA:') || evidenceResult.startsWith('PRESENTE:') || evidenceResult.startsWith('VALIDADO:')) {
     confidenceLevel = 'Alto';
     confidenceReason = evidenceResult.startsWith('EM_DIA:')
