@@ -64,7 +64,7 @@ jobs:
           fi
 
       - name: Test Brazilian date normalization
-        run: bunx vitest run src/lib/date-utils.test.ts
+        run: bunx vitest run src/core/date-utils.test.ts
 
       - name: Discover canonical E2E matrix (read-only)
         env:
