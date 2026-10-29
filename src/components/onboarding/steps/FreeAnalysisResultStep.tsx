@@ -21,6 +21,7 @@ const ANALYSIS_FIELD_LABELS: Record<string, string> = {
   hasPreviousInfractionsLast12Months: 'histórico de infrações nos 12 meses anteriores',
   notificationExpeditionDate: 'data de expedição da notificação de autuação',
   notificationDeliveryDate: 'data de entrega da notificação',
+  penaltyNotificationExpeditionDate: 'registro da Notificação de Imposição de Penalidade',
   defenseDeadline: 'prazo informado para defesa',
   inmetroAferitionDate: 'data da última aferição do radar',
   radarCalibrationDate: 'data da última aferição do radar',
