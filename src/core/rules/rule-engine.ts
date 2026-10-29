@@ -986,8 +986,8 @@ export class ExpertRuleEngine {
       dataGaps: dataGaps.length > 0 ? dataGaps : undefined,
       summaryReasoning:
         detectedInconsistencies.length > 0
-          ? `O Motor de Regras identificou ${detectedInconsistencies.length} inconsistência${detectedInconsistencies.length > 1 ? 's' : ''} jurídica${detectedInconsistencies.length > 1 ? 's' : ''} no AIT nº ${infraction.aitNumber || 'SN'}. Há fundamentação legal e técnica para protocolo perante a autoridade competente.${gapSummary}`
-          : `O Motor de Regras não identificou inconsistências jurídicas no AIT nº ${infraction.aitNumber || 'SN'} com os dados fornecidos.${gapSummary}`,
+          ? `O Motor de Regras identificou ${detectedInconsistencies.length} ponto${detectedInconsistencies.length > 1 ? 's' : ''} para revisão no AIT nº ${infraction.aitNumber || 'SN'}. Os achados são hipóteses preliminares da análise automatizada: não comprovam, por si só, uma irregularidade nem garantem o resultado da defesa. Confira os documentos oficiais e as evidências de cada ponto antes de decidir pelo protocolo.${gapSummary}`
+          : `O Motor de Regras não identificou inconsistências jurídicas nos dados avaliados do AIT nº ${infraction.aitNumber || 'SN'}.${gapSummary}`,
       infractionClassification: {
         family: classification.family,
         basis: classification.basis,
