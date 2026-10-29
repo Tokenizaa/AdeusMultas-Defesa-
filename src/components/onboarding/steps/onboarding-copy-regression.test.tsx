@@ -166,6 +166,20 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
     expect(html).toContain('Continuar para preparar minha defesa');
   });
 
+  it('apresenta dados ausentes como pendências, não como irregularidades confirmadas', () => {
+    const html = renderResult({
+      ...analysisWithNoArguments,
+      dataGaps: [{
+        ruleId: 'RULE_SPEED_DATA',
+        missingData: ['speedLimit', 'measuredSpeed'],
+        reason: 'Faltam dados de velocidade para concluir a verificação.',
+      }],
+    });
+    expect(html).toContain('O que ainda falta confirmar');
+    expect(html).toContain('speedLimit, measuredSpeed');
+    expect(html).not.toContain('Identificamos pontos que podem merecer uma análise mais detalhada.');
+  });
+
   it('não promete efeito suspensivo nem encaminha universalmente para o DETRAN', () => {
     const html = renderResult(analysisWithNoArguments);
     expect(html).not.toContain('Protocolar antes garante o efeito suspensivo');
