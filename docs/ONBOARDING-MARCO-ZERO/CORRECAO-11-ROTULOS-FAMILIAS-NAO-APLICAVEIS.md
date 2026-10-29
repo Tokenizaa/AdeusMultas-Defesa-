@@ -43,4 +43,4 @@ Esta correção resolve a tradução de nomes de famílias conhecidas. Não cert
 
 ## 5. Próxima investigação preventiva
 
-A próxima tarefa deve mapear a coleta de `notificationDeliveryDate`: o motor registra uma lacuna quando há data de expedição mas não há data de entrega, porém a jornada de onboarding precisa ser verificada para confirmar se oferece ao usuário um campo real para informar esse dado. A ausência do campo não deve ser convertida em prova de não entrega nem em vício confirmado.
+A próxima tarefa deve revisar a semântica jurídica de `RULE_CONSTITUTIONAL_DUE_PROCESS`. O formulário já tem o campo `input-notification-delivery-date`, mas a regra atual marca PASS com base na data de expedição e entrega da Notificação de Autuação, o que não comprova, por si só, a expedição da Notificação de Imposição de Penalidade. Não inferir prova de entrega nem declarar dupla notificação cumprida/violada sem os dados e a regra jurídica apropriados.
