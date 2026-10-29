@@ -250,6 +250,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
                   </summary>
                   <div className="space-y-3 pt-3 text-sm leading-relaxed text-slate-600">
                     <p>{cleanEvidenceText(point.evidenceResult)}</p>
+                    <div><p className="mb-1 font-semibold text-slate-800">O que diz a regra</p><p>{point.lawExplanation}</p></div>
                     <div><p className="mb-1 font-semibold text-slate-800">Por que isso importa</p><p>{point.userImpact}</p></div>
                     <div><p className="mb-1 font-semibold text-slate-800">Base legal indicada</p><p>{point.confidenceBase}</p></div>
                   </div>
