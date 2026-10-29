@@ -134,6 +134,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
         />
       </div>
 
+      {/* Step 5: guidance only; required flow and speed calculation remain unchanged. */}
       {/* Category-Specific Form Section */}
       <div className="p-4 sm:p-5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-4">
         {/* Category: Radar / Excesso de Velocidade */}
