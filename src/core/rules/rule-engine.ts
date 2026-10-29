@@ -43,7 +43,7 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'prazos_decadencia',
     validFrom: '1998-01-22',
     validUntil: null,
-    version: 1,
+    version: 2,
     jurisdiction: 'federal',
     requiredData: ['infractionDate', 'notificationExpeditionDate'],
     relatedArguments: ['ARG-048', 'ARG-049'],
@@ -61,11 +61,11 @@ export const EXPERT_RULES: RuleModel[] = [
         if (diffDays > 30) {
           return {
             ruleId: 'RULE_DECADENCIA_30_DIAS',
-            title: `Decadência da Notificação de Autuação (${diffDays} dias)`,
-            description: `A notificação foi postada ${diffDays} dias após a data da infração, violando o prazo limite decadencial improrrogável de 30 dias.`,
-            severity: 'alta',
+            title: `Possível extrapolação do prazo de expedição da Notificação (${diffDays} dias)`,
+            description: `As datas informadas indicam ${diffDays} dias entre a infração e a expedição registrada. Este é um indício preliminar: confirme a data oficial de expedição na Notificação de Autuação e no histórico do órgão antes de concluir pela decadência.`,
+            severity: 'media',
             legalArgumentId: 'ARG-048',
-            impact: 'Extinção definitiva da pretensão punitiva e arquivamento obrigatório do AIT.',
+            impact: 'Se os documentos oficiais confirmarem expedição após o prazo legal aplicável, o fato poderá fundamentar pedido de arquivamento do auto; a conclusão depende da conferência documental.',
             statutoryBasis: 'Artigo 281, Parágrafo Único, Inciso II do CTB c/c Súmula 312 do STJ',
           };
         }
