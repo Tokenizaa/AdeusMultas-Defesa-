@@ -268,7 +268,7 @@ Arquivo: `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`.
 ### Pendências — não marcar PASS
 
 - [ ] Validar visualmente em produção o AIT 5955616144 e confirmar o conteúdo dos cards principais, a contagem e a lista detalhada.
-- [ ] Criar/executar teste dedicado para mensagens de regras não aplicáveis.
+- [ ] Confirmar CI do teste dedicado da correção 11 e validar visualmente as mensagens de regras não aplicáveis.
 - [ ] Corrigir o texto estático `whatWeChecked` de ARG-005, que ainda pode sugerir desconto fixo de 7 km/h mesmo para faixas acima de 107 km/h; uma tentativa de edição foi bloqueada e não foi aplicada.
 - [ ] Não afirmar que a análise prova nulidade ou garante conversão em advertência. Confirmar os dados oficiais e o prontuário.
 - [ ] Não declarar onboarding certificado: a validação visual/E2E geral e a matriz canônica permanecem pendentes.
@@ -296,3 +296,32 @@ Registro: [CORRECAO-10-ARG049-CARD-PRAZO.md](./CORRECAO-10-ARG049-CARD-PRAZO.md)
 2. Confirmar que o deploy contém o mapeamento de `ARG-049`.
 3. Abrir a aplicação publicada e rodar uma nova análise de teste: o card principal de prazo deve apresentar o mesmo cálculo que o detalhe; o art. 267 deve dizer “declarado, pendente de confirmação” quando essa for a origem dos dados; regras não aplicáveis devem usar linguagem simples.
 4. Se os textos persistirem, rastrear o payload real e o bundle servido antes de outra alteração. Não declarar E2E PASS sem evidência de navegador.
+
+
+## 14. Correção 11 e auditoria preventiva integrada — 2026-10-29
+
+Registro da correção: [CORRECAO-11-ROTULOS-FAMILIAS-NAO-APLICAVEIS.md](./CORRECAO-11-ROTULOS-FAMILIAS-NAO-APLICAVEIS.md). Auditoria integrada: [AUDITORIA-02-PREVENCAO-FLUXO-ANALISE.md](./AUDITORIA-02-PREVENCAO-FLUXO-ANALISE.md).
+
+### Correção preventiva implementada
+
+- O classificador declara onze famílias; o formatador de verificações não aplicáveis traduzia apenas parte delas. A interface podia exibir nomes internos como `circulacao`, `capacidade` e `lotacao`.
+- O mapa de famílias e categorias foi completado e a lista passou a usar pontuação natural.
+- Teste de renderização adicionado em `onboarding-copy-regression.test.tsx`, exigindo texto humanizado e proibindo os identificadores internos da fixture.
+- Commit de código: `9402991fe5125e8ebc49899675acd794db2fa09d`; commit de teste: `d584900903593a54dc1c1c4afbaff22edc59768c`.
+- **CI do SHA atual não confirmado.** Não declarar PASS e não publicar em produção.
+
+### Conclusões da leitura integrada atual
+
+- O Worker anônimo atualmente preserva datas de notificação, histórico e flags de evidência; não reutilizar como atuais os achados antigos que afirmavam descarte geral desses campos.
+- `AnalysisProcessingStep.tsx` atualmente impede avanço quando o motor falha; o achado histórico de avanço automático após exceção precisa ser marcado como superado.
+- `FreeAnalysisResultStep.tsx` atualmente não inventa artigo/código/valor/pontos nos campos de detalhe quando os dados estão ausentes.
+- Risco pendente: o fluxo executa análise no navegador e também no Worker; a resposta do servidor pode substituir a análise local. Falta teste de contrato/paridade para demonstrar equivalência para entradas idênticas.
+- Risco pendente: o motor registra `notificationDeliveryDate` como lacuna quando existe data de expedição, mas a inspeção não encontrou um campo visível de entrada manual na jornada. A ausência não pode ser convertida em prova de não entrega.
+- Risco pendente: inventariar todos os consumidores de `overallSuccessRate`; o valor do motor é uma heurística determinística e não uma probabilidade estatística calibrada.
+
+### Próxima ação autorizada
+
+1. Consultar o resultado do CI para `d584900903593a54dc1c1c4afbaff22edc59768c`.
+2. Mapear a coleta de `notificationDeliveryDate` em todos os passos e fontes de dados antes de decidir se é necessário campo opcional ou orientação para consultar o documento oficial.
+3. Criar testes sintéticos de paridade navegador/Worker e inventariar consumidores do score.
+4. Manter a validação E2E/visual como pendente até existir evidência real. Não executar escrita persistente contra produção sem autorização explícita.
