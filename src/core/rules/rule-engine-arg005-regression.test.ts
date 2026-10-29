@@ -75,6 +75,20 @@ describe('ARG-005 eligibility regression for speed infractions', () => {
     )).toBe(false);
   });
 
+  it('labels a notification deadline finding as preliminary until official documents are checked', () => {
+    const infraction = {
+      ...validInfraction,
+      infractionCode: '745-50',
+      dateTime: '2026-01-15T10:30:00',
+      notificationExpeditionDate: '2026-03-04',
+    };
+    const result = ExpertRuleEngine.evaluate('case_deadline_preliminary_wording', infraction);
+    const deadlineRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_DECADENCIA_30_DIAS');
+
+    expect(deadlineRule?.reason).toContain('indício preliminar');
+    expect(deadlineRule?.reason).toContain('confirme a data oficial de expedição');
+  });
+
   it('does not recommend ARG-005 when considered speed and ticket bracket are consistent', () => {
     const result = ExpertRuleEngine.evaluate('case_arg005_consistent', validInfraction);
     const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
