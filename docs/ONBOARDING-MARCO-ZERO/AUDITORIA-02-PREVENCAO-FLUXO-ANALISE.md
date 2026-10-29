@@ -19,16 +19,18 @@ Sair do ciclo de corrigir apenas o último sintoma relatado. A auditoria rastrei
 
 O classificador define as famílias `excesso_velocidade`, `alcoolemia`, `semaforo`, `celular`, `estacionamento`, `cinto`, `documentos`, `circulacao`, `capacidade`, `lotacao` e `desconhecida`. A função de apresentação traduzia apenas parte desses valores. A correção 11 completa os rótulos, inclui uma lista em linguagem natural e adiciona uma asserção sobre HTML renderizado. A validação automatizada ainda precisa concluir.
 
-### A02-02 — A regra de dupla notificação pode produzir uma lacuna que o formulário não permite resolver
+### A02-02 — A data de entrega da Notificação de Autuação não comprova, sozinha, a dupla notificação
 
-**Estado:** lacuna de coleta confirmada por inspeção estática; mudança de produto ainda não implementada.  
-**Arquivos:** `src/core/rules/rule-engine.ts`, `src/types/index.ts`, `src/components/onboarding/steps/InfractionIdentificationStep.tsx`, `cloudflare/onboarding-domain.ts`, `cloudflare/canonical-mapper.ts`.
+**Estado:** risco de interpretação jurídica confirmado por leitura estática; exige revisão da regra antes de qualquer conclusão.  
+**Arquivos:** `src/core/rules/rule-engine.ts`, `src/components/onboarding/steps/InfractionIdentificationStep.tsx`, `src/types/index.ts`, mapeadores canônicos e rota anônima do Worker.
 
-O motor registra `RULE_CONSTITUTIONAL_DUE_PROCESS` como `DATA_GAP` quando existe data de expedição, mas não existe `notificationDeliveryDate`. O campo existe nos tipos e mapeadores e pode vir de payload/OCR; a inspeção da tela de identificação não encontrou um controle visível para o usuário informar manualmente a data de entrega. Assim, uma lacuna pode persistir sem um caminho claro para o usuário completá-la.
+A inspeção da versão atual encontrou um controle visível `input-notification-delivery-date` em `InfractionIdentificationStep.tsx`. Portanto, o achado antigo de que o wizard não oferecia campo para a data de entrega está desatualizado e não deve ser tratado como defeito atual.
 
-**Regra de segurança jurídica:** ausência da data de entrega não é prova de não entrega e não pode, por si só, produzir uma tese de violação da dupla notificação. O motor atual registra uma lacuna, o que é conservador; o problema restante é a possibilidade de a interface pedir informação que não oferece como preencher.
+O risco real é semântico: a regra `RULE_CONSTITUTIONAL_DUE_PROCESS` marca `PASS` quando `notificationExpeditionDate` e `notificationDeliveryDate` estão preenchidas, afirmando que “não há violação da dupla notificação”. Porém, o rótulo e a ajuda do formulário descrevem `notificationDeliveryDate` como a data de entrega/recebimento da Notificação de Autuação; esse dado, sozinho, não demonstra que a Notificação de Imposição de Penalidade também foi expedida. A regra pode, portanto, converter a existência de uma data de entrega da primeira notificação em uma conclusão mais ampla do que os dados sustentam.
 
-**Próxima ação:** decidir e implementar um campo opcional, contextualizado e com origem explícita, ou explicar que essa verificação depende do documento/histórico oficial. Não inferir a data nem preencher por padrão.
+**Regra de segurança jurídica:** data preenchida não equivale automaticamente a prova oficial, e a entrega da Notificação de Autuação não comprova, por si só, a segunda notificação. A ausência de data também não é prova de não entrega. Até haver dados distintos e regra juridicamente revisada para as duas notificações, o resultado não deve afirmar que a dupla notificação está comprovada nem que sua violação está afastada.
+
+**Próxima ação:** revisar a semântica e o contrato de dados com base na Súmula 312 do STJ e na legislação aplicável; separar explicitamente as duas notificações se a análise exigir ambas; criar testes para (a) apenas expedição da NA, (b) expedição + entrega da NA, (c) dados da NIP ausentes e (d) evidência oficial das duas notificações. Não alterar a regra jurídica sem revisar a fonte aplicável.
 
 ### A02-03 — Há duas avaliações no fluxo; a paridade precisa ser demonstrada por contrato
 
