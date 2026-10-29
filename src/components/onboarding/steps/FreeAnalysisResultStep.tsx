@@ -260,12 +260,17 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
     const restricted = reason.match(/Regra restrita às famílias \[([^\]]+)\]; a infração foi classificada como ["']?([^"'\.]+)["']?\.?/i);
     if (!restricted) return reason;
     const familyLabels: Record<string, string> = {
+      excesso_velocidade: 'excesso de velocidade',
       alcoolemia: 'álcool e direção',
-      celular: 'uso de celular ao volante',
-      documentos: 'documentação do veículo ou do condutor',
       semaforo: 'avanço de sinal',
+      celular: 'uso de celular ao volante',
       estacionamento: 'regras de estacionamento',
       cinto: 'uso do cinto de segurança',
+      documentos: 'documentação do veículo ou do condutor',
+      circulacao: 'circulação ou restrições de tráfego',
+      capacidade: 'capacete e transporte em motocicleta',
+      lotacao: 'lotação ou condições do veículo',
+      desconhecida: 'infração não classificada',
     };
     const categoryLabels: Record<string, string> = {
       excesso_velocidade: 'excesso de velocidade',
@@ -273,9 +278,18 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       celular: 'uso de celular ao volante',
       vermelho: 'avanço de sinal',
       estacionamento: 'estacionamento',
+      indicacao_condutor: 'indicação do real condutor',
+      conversao_advertencia: 'conversão em advertência por escrito',
+      cnh_geral: 'questões gerais da CNH',
       documentos: 'documentação',
+      outro: 'outra categoria de infração',
     };
-    const families = restricted[1].split(',').map((item) => familyLabels[item.trim()] ?? item.trim()).join(' e ');
+    const humanList = (items: string[]) => {
+      if (items.length < 2) return items[0] ?? '';
+      if (items.length === 2) return `${items[0]} e ${items[1]}`;
+      return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
+    };
+    const families = humanList(restricted[1].split(',').map((item) => familyLabels[item.trim()] ?? item.trim().replace(/_/g, ' ')));
     const category = categoryLabels[restricted[2].trim()] ?? restricted[2].trim().replace(/_/g, ' ');
     return `Esta verificação trata de ${families} e não se aplica à infração por ${category} informada neste caso.`;
   };
