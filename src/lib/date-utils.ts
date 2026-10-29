@@ -132,3 +132,44 @@ export function parseInfractionDataDatesBR(infractionData: any): any {
   
   return result;
 }
+
+/**
+ * Normaliza valores recebidos para o formato exigido por <input type="date">.
+ * Aceita ISO (YYYY-MM-DD ou timestamp ISO) e datas brasileiras dd/mm/yy ou dd/mm/yyyy.
+ * Retorna string vazia para valores inválidos, evitando warnings e datas silenciosamente incorretas.
+ */
+export function normalizeDateInputValue(value: string | null | undefined): string {
+  if (!value) return '';
+
+  const input = value.trim();
+  if (!input) return '';
+
+  const isoMatch = input.match(/^(\\d{4}-\\d{2}-\\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    return parseIsoDate(isoMatch[1]) ?? '';
+  }
+
+  const brMatch = input.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{2}|\\d{4})$/);
+  if (!brMatch) return '';
+
+  const [, dayText, monthText, yearText] = brMatch;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  let year = Number(yearText);
+
+  if (yearText.length === 2) {
+    year += year <= 39 ? 2000 : 1900;
+  }
+
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return '';
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
