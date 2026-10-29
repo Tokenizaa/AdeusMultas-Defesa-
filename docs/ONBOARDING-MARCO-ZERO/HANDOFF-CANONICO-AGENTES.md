@@ -276,3 +276,23 @@ Arquivo: `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`.
 ### Próxima ação
 
 Retomar pelo teste visual/E2E do resultado publicado para o caso informado; registrar ambiente, dados observados e evidência. Se houver divergência, corrigir somente o problema reproduzido, adicionar regressão, rodar CI e conferir o deploy. Não pular para refatoração ampla.
+
+
+## 13. Correção 10 — card de prazo não refletia a evidência de ARG-049
+
+Registro: [CORRECAO-10-ARG049-CARD-PRAZO.md](./CORRECAO-10-ARG049-CARD-PRAZO.md).
+
+- Nova evidência relatada pelo usuário: AIT 5566147171, placa FAH3X90. O detalhe de verificações calculava 35 dias entre infração e expedição, mas o card principal de prazo dizia que não havia dados suficientes. A mesma saída ainda exibia a frase de que os requisitos do art. 267 estavam atendidos e nomes internos de famílias em regras não aplicáveis.
+- Causa estática identificada: a regra de decadência declara `relatedArguments: ['ARG-048', 'ARG-049']`, mas a camada de apresentação tinha explicação específica apenas para `ARG-048`. Quando o argumento recomendado era `ARG-049`, o card principal usava o fallback genérico, embora o detalhamento exibisse o cálculo de prazo.
+- Correção implementada em `src/components/onboarding/steps/FreeAnalysisResultStep.tsx`: `ARG-049` reutiliza a explicação e a evidência de `ARG-048`.
+- Testes adicionados em `src/components/onboarding/steps/onboarding-copy-regression.test.tsx`: card principal para `ARG-049` e declaração de histórico do art. 267 pendente de confirmação.
+- Commit de código: `1f898edf1ffe5a603ce929dceaea0e000269b923`. CI [40942697210](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697210) e deploy [40942697430](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40942697430) estavam pendentes no momento em que o registro foi escrito. Testes commitados depois em `c4a388e40c3e43d9749071eff4da28d7f63bef63`; consultar workflows do SHA atual antes de declarar PASS.
+- **Não presumir que a causa do texto antigo de ARG-051 e das famílias técnicas é a mesma do ARG-049.** Validar a versão realmente servida e executar uma nova análise depois do deploy.
+- Pendências: CI do SHA mais recente; deploy do código mais recente; E2E visual; confirmar texto de ARG-051; confirmar mensagens amigáveis de NOT_APPLICABLE; confirmar coerência da contagem de verificações.
+
+### Próxima ação obrigatória
+
+1. Consultar os workflows do SHA atual (incluindo os commits de testes e documentação).
+2. Confirmar que o deploy contém o mapeamento de `ARG-049`.
+3. Abrir a aplicação publicada e rodar uma nova análise de teste: o card principal de prazo deve apresentar o mesmo cálculo que o detalhe; o art. 267 deve dizer “declarado, pendente de confirmação” quando essa for a origem dos dados; regras não aplicáveis devem usar linguagem simples.
+4. Se os textos persistirem, rastrear o payload real e o bundle servido antes de outra alteração. Não declarar E2E PASS sem evidência de navegador.
