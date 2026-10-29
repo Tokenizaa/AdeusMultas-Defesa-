@@ -176,6 +176,13 @@ const eligibleFor = (family: InfractionFamily): string[] => {
     const entry = catalogEntry(normalizeCode(code));
     for (const argId of entry?.recommendedArgumentCodes ?? []) ids.add(argId);
   }
+
+  // Invariante explícita do motor: ARG-005 é a tese específica para conferir
+  // a velocidade considerada e o reenquadramento nas infrações de velocidade.
+  // Mantê-la elegível por família evita que uma divergência acidental no
+  // catálogo de códigos bloqueie RULE_INMETRO_CONSIDERED_SPEED_ERROR.
+  if (family === 'excesso_velocidade') ids.add('ARG-005');
+
   return Array.from(ids).sort();
 };
 
