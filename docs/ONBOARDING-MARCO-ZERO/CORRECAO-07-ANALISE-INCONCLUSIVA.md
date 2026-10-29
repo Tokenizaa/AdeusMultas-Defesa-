@@ -48,7 +48,7 @@
 - **Inspeção estática:** concluída para os arquivos alterados.
 - **Testes de regressão adicionados:** coleta do histórico no fluxo de excesso de velocidade, fixture de teste, resumo de verificações e rótulos legíveis para lacunas.
 - **Primeiro CI:** run [40822977925](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40822977925) — FAIL nos testes de regressão: 54 arquivos passaram, 1 falhou; 424 testes passaram e 2 falharam. As causas foram uma asserção de texto sem normalizar os comentários de SSR do React e uma expectativa que ainda usava a frase do checkbox removido.
-- **CI do follow-up:** [run 40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build. Depois disso, a correção adicional de elegibilidade revelou a necessidade de alinhar a regra ao cálculo canônico para evitar falso positivo; a nova alteração precisa de novo CI.
+- **CI do follow-up:** [run 40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build. A correção posterior da regra falhou em [run 40823383320](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823383320): o motor normaliza códigos para dígitos, enquanto o novo mapa ainda usava códigos com hífen. O mapa foi corrigido para usar códigos normalizados; o motor foi versionado como 2.7.1 e a regra como versão 3. Novo CI pendente.
 - **Teste manual/E2E:** pendente.
 - **Produção:** não publicado. O commit não contém o marcador `[DEPLOY-PRODUCTION]`.
 

@@ -280,7 +280,7 @@ export const EXPERT_RULES: RuleModel[] = [
     category: 'metrologia_engenharia',
     validFrom: '2020-11-01', // Same as radar calibration rule
     validUntil: null,
-    version: 2,
+    version: 3,
     jurisdiction: 'federal',
     requiredData: ['measuredSpeed', 'consideredSpeed', 'speedLimit'],
     relatedArguments: ['ARG-005'],
@@ -290,8 +290,9 @@ export const EXPERT_RULES: RuleModel[] = [
     priority: 85,
     evaluate: (ctx) => {
       const code = ctx.infractionCode || '';
-      const ticketBracketByCode: Record<string, number> = { '745-50': 1, '746-30': 2, '745-70': 2, '747-10': 3 };
-      const ticketBracket = ticketBracketByCode[code];
+      const normalizedCode = code.replace(/[^0-9]/g, '');
+      const ticketBracketByCode: Record<string, number> = { '74550': 1, '74630': 2, '74570': 2, '74710': 3 };
+      const ticketBracket = ticketBracketByCode[normalizedCode];
       if (ticketBracket === undefined || ctx.measuredSpeed === undefined || ctx.consideredSpeed === undefined || ctx.speedLimit === undefined) return null;
 
       const measuredSpeed = ctx.measuredSpeed;
@@ -969,7 +970,7 @@ export class ExpertRuleEngine {
     return {
       id: `anl_${Date.now()}`,
       caseId,
-      engineVersion: '2.7.0',
+      engineVersion: '2.7.1',
       engineStartedAt,
       engineFinishedAt,
       overallSuccessRate,

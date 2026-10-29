@@ -67,6 +67,7 @@ describe('ExpertRuleEngine validation', () => {
     const result = ExpertRuleEngine.evaluate('case_speed_considered_valid', validInfraction);
     const speedRule = result.evaluatedRules.find((rule) => rule.ruleId === 'RULE_INMETRO_CONSIDERED_SPEED_ERROR');
     expect(speedRule?.status).toBe('PASS');
+    expect(result.engineVersion).toBe('2.7.1');
     expect(result.detectedInconsistencies.some((item) => item.legalArgumentId === 'ARG-005')).toBe(false);
   });
 

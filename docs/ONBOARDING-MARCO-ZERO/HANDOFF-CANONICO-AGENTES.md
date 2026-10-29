@@ -216,3 +216,10 @@ Registro: [CORRECAO-07-ANALISE-INCONCLUSIVA.md](./CORRECAO-07-ANALISE-INCONCLUSI
 - A regra agora reutiliza calculateConsideredSpeed, compara a faixa do código com a faixa calculada e a faixa informada, e só retorna ARG-005 quando o código é mais gravoso que a faixa sustentada pelos dados.
 - Foram adicionados dois cenários: caso válido não deve gerar ARG-005; caso com código 746-30 e velocidade considerada calculada em faixa inferior deve gerar ARG-005.
 - CI anterior [40823075337](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823075337) passou em Vitest, TypeScript e build antes desta precisão adicional. Novo CI pendente; produção permanece bloqueada.
+
+
+## Registro de validação — normalização do código de velocidade
+
+- CI [40823383320](https://github.com/Tokenizaa/AdeusMultas-Defesa-/actions/runs/40823383320) falhou em um teste: o motor passa códigos normalizados sem hífen ao contexto da regra, enquanto o mapa inicial da regra usava chaves com hífen.
+- Correção neste follow-up: normalizar o código antes de consultar a faixa; atualizar versão do motor para 2.7.1 e versão da regra para 3.
+- Novo CI ainda pendente. Não declarar PASS antes do resultado. Nenhum deploy de produção foi autorizado.
