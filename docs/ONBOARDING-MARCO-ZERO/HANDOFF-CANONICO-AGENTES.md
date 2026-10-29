@@ -316,12 +316,12 @@ Registro da correção: [CORRECAO-11-ROTULOS-FAMILIAS-NAO-APLICAVEIS.md](./CORRE
 - `AnalysisProcessingStep.tsx` atualmente impede avanço quando o motor falha; o achado histórico de avanço automático após exceção precisa ser marcado como superado.
 - `FreeAnalysisResultStep.tsx` atualmente não inventa artigo/código/valor/pontos nos campos de detalhe quando os dados estão ausentes.
 - Risco pendente: o fluxo executa análise no navegador e também no Worker; a resposta do servidor pode substituir a análise local. Falta teste de contrato/paridade para demonstrar equivalência para entradas idênticas.
-- Risco pendente: o motor registra `notificationDeliveryDate` como lacuna quando existe data de expedição, mas a inspeção não encontrou um campo visível de entrada manual na jornada. A ausência não pode ser convertida em prova de não entrega.
+- Risco pendente de maior prioridade: `notificationDeliveryDate` tem campo visível na identificação, mas a regra `RULE_CONSTITUTIONAL_DUE_PROCESS` marca PASS com base na data de expedição e entrega da Notificação de Autuação. Isso não demonstra, por si só, a expedição da Notificação de Imposição de Penalidade; revisar a semântica legal e separar os dados das duas notificações. Não reutilizar o achado histórico de “campo inexistente”.
 - Risco pendente: inventariar todos os consumidores de `overallSuccessRate`; o valor do motor é uma heurística determinística e não uma probabilidade estatística calibrada.
 
 ### Próxima ação autorizada
 
 1. Consultar o resultado do CI para `d584900903593a54dc1c1c4afbaff22edc59768c`.
-2. Mapear a coleta de `notificationDeliveryDate` em todos os passos e fontes de dados antes de decidir se é necessário campo opcional ou orientação para consultar o documento oficial.
+2. Revisar a regra de dupla notificação com fontes jurídicas oficiais e corrigir o contrato de dados para não concluir PASS com base apenas na entrega da Notificação de Autuação.
 3. Criar testes sintéticos de paridade navegador/Worker e inventariar consumidores do score.
 4. Manter a validação E2E/visual como pendente até existir evidência real. Não executar escrita persistente contra produção sem autorização explícita.
