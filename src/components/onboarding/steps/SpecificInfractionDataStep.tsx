@@ -19,6 +19,7 @@ import { InfractionCategory, calculateConsideredSpeed } from '../../../core/onbo
 import { INFRACTION_CATALOG } from '../../../data/knowledge-base';
 import { TestFillButton } from '../../ui/TestFillButton';
 import { buildCoherentTestInfraction } from '../testFillData';
+import { normalizeDateInputValue } from '../../../lib/date-utils';
 
 interface SpecificInfractionDataStepProps {
   category: InfractionCategory;
@@ -195,7 +196,7 @@ export const SpecificInfractionDataStep: React.FC<SpecificInfractionDataStepProp
                 <input
                   id="input-inmetro-date"
                   type="date"
-                  value={infractionData.inmetroAferitionDate || ''}
+                  value={normalizeDateInputValue(infractionData.inmetroAferitionDate)}
                   onChange={(e) => {
                     onUpdateInfraction({
                       ...infractionData,
