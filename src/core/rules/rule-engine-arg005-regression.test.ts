@@ -112,6 +112,23 @@ describe('ARG-005 eligibility regression for speed infractions', () => {
     expect(result.summaryReasoning).not.toContain('Há fundamentação legal e técnica para protocolo');
   });
 
+  it('marks a no-findings result as inconclusive when required data is missing', () => {
+    const infraction = {
+      ...validInfraction,
+      hasPreviousInfractionsLast12Months: undefined,
+      radarCalibrationDate: undefined,
+      inmetroAferitionDate: undefined,
+    };
+    const result = ExpertRuleEngine.evaluate('case_summary_no_findings_with_gaps', infraction);
+
+    expect(result.detectedInconsistencies).toHaveLength(0);
+    expect((result.dataGaps ?? []).length).toBeGreaterThan(0);
+    expect(result.summaryReasoning).toContain('ficou inconclusiva');
+    expect(result.summaryReasoning).toContain('não foi possível avaliar');
+    expect(result.summaryReasoning).toContain('A ausência de achados confirmados não significa que a autuação esteja correta');
+    expect(result.summaryReasoning).not.toContain('não identificou inconsistências jurídicas');
+  });
+
   it('records required speed data as a gap instead of a clean PASS', () => {
     const infraction = { ...validInfraction, consideredSpeed: undefined };
     const result = ExpertRuleEngine.evaluate('case_speed_required_data_gap', infraction);
