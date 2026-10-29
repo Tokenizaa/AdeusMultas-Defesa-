@@ -224,6 +224,27 @@ describe('Onboarding copy regression — FreeAnalysisResultStep', () => {
   });
 
 
+  it('traduz todas as famílias internas nas verificações não aplicáveis', () => {
+    const html = renderResult({
+      ...analysisWithNoArguments,
+      evaluatedRules: [{
+        ruleId: 'RULE_FAMILY_LABELS',
+        name: 'Verificação de compatibilidade',
+        status: 'NOT_APPLICABLE',
+        evaluatedAt: '2026-10-29T00:00:00Z',
+        reason: 'Regra restrita às famílias [alcoolemia, semaforo, lotacao, capacidade, circulacao, desconhecida]; a infração foi classificada como "excesso_velocidade".',
+      }],
+    });
+    expect(html).toContain('Esta verificação trata de álcool e direção, avanço de sinal, lotação ou condições do veículo, capacete e transporte em motocicleta, circulação ou restrições de tráfego e infração não classificada e não se aplica à infração por excesso de velocidade informada neste caso.');
+    expect(html).not.toContain('alcoolemia');
+    expect(html).not.toContain('semaforo');
+    expect(html).not.toContain('lotacao');
+    expect(html).not.toContain('capacidade');
+    expect(html).not.toContain('circulacao');
+    expect(html).not.toContain('desconhecida');
+    expect(html).not.toContain('excesso_velocidade');
+  });
+
   it('quando não há achados, explica a incerteza e mantém a continuidade comercial', () => {
     const html = renderResult(analysisWithNoArguments);
     expect(html).toContain('Ainda não confirmamos um problema na autuação');
