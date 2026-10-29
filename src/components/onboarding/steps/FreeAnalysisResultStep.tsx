@@ -157,7 +157,8 @@ const formatLegalPointGovBr = (arg: any, caseData: { infraction: InfractionData;
     }
   };
 
-  const explanation = govBrExplanations[arg.id] || {
+  // A regra de prazo pode recomendar ARG-049 (dupla notificação) junto de ARG-048 (expedição em 30 dias). Ambos precisam usar a evidência de expedição no card principal, sem cair no texto genérico.
+  const explanation = govBrExplanations[arg.id] || (arg.id === 'ARG-049' ? govBrExplanations['ARG-048'] : undefined) || {
     title: arg.title,
     whatWeChecked:
       'Conferimos este ponto nos dados que você enviou.',
