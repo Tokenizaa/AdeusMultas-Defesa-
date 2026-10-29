@@ -210,7 +210,7 @@ export interface RulesMatrixEntry {
 export const RULES_MATRIX: Record<InfractionCategory, Partial<RulesMatrixEntry>> = {
   excesso_velocidade: {
     requiredFreeFields: ['aitNumber', 'location', 'dateTime'],
-    optionalFreeFields: ['autuadorBody', 'plate', 'speedLimit', 'measuredSpeed', 'notificationExpeditionDate', 'defenseDeadline', 'inmetroAferitionDate', 'radarEquipmentId', 'hasR19SignageProof'],
+    optionalFreeFields: ['autuadorBody', 'plate', 'speedLimit', 'measuredSpeed', 'notificationExpeditionDate', 'defenseDeadline', 'inmetroAferitionDate', 'radarEquipmentId', 'hasR19SignageProof', 'hasPreviousInfractionsLast12Months'],
     inferableFields: ['consideredSpeed', 'ctbArticle', 'infractionCode', 'severity', 'points', 'fineAmount'],
     requiredDocumentFields: ['applicantName', 'applicantCpf', 'applicantCnh', 'cnhCategory', 'applicantEmail', 'applicantPhone', 'addressStreet', 'addressNumber', 'addressNeighborhood', 'addressZipCode', 'addressCityState'],
   },
