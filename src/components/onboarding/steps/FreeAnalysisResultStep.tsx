@@ -284,7 +284,7 @@ export const FreeAnalysisResultStep: React.FC<FreeAnalysisResultStepProps> = ({
       })()
     : null;
   const cleanEvidenceText = (value: string) =>
-    value.replace(/^(SEM_DADOS|NAO_APLICA|DIVERGENCIA|VALIDADO|ATENDIDO|VENCIDO|EM_DIA|PRESENTE|AUSENCIA):\s*/, '');
+    value.replace(/^(SEM_DADOS|NAO_APLICA|DIVERGENCIA|VALIDADO|ATENDIDO|DECLARADO|VENCIDO|EM_DIA|PRESENTE|AUSENCIA):\s*/, '');
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <header className="space-y-3">
