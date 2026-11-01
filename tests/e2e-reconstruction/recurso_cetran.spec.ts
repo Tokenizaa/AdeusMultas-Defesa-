@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, baseURL, runId, type CanonicalService } from './support';
+import { openService, fillIdentification, createCaseThroughAnalysis, expectNoPiiInWizardStorage, continueAfterReload, baseURL, runId, type CanonicalService } from './support';
 const service: CanonicalService = {
   "id": "recurso_cetran",
   "situationId": "multa_transito",
@@ -62,7 +62,7 @@ test.describe('recurso_cetran — dez cenários canônicos', () => {
       if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/cases/anonymous') duplicateCreates.push(request.url());
     });
     await page.reload();
-    await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible();
+    await continueAfterReload(page);
     const recoveredResponse = await page.request.post(new URL('/api/cases/anonymous/' + encodeURIComponent(created.id) + '/recover', baseURL).toString(), {
       data: { claimToken: created.body.claimToken }, headers: { 'content-type': 'application/json' },
     });

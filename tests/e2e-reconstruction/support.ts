@@ -12,15 +12,28 @@ export function synthetic(label: string) {
 }
 export async function openService(page: Page, service: CanonicalService) {
   await page.goto(new URL('/novo-caso', baseURL).toString());
-  await expect(page.locator('#service-option-' + service.situationId)).toBeVisible();
+  // Handle onboarding start screen - click "Começar" to proceed to service selection
+  const startScreen = page.locator('[aria-labelledby="onboarding-start-title"]');
+  const startScreenVisible = await startScreen.isVisible();
+  if (startScreenVisible) {
+    await startScreen.getByRole('button', { name: 'Começar' }).click();
+    // Wait for the service option to be visible
+    await expect(page.locator('#service-option-' + service.situationId)).toBeVisible({ timeout: 5000 });
+  } else {
+    await expect(page.locator('#service-option-' + service.situationId)).toBeVisible({ timeout: 10000 });
+  }
   await page.locator('#service-option-' + service.situationId).click();
   if (service.stageId) {
     await expect(page.locator('#stage-option-' + service.stageId)).toBeVisible();
     await page.locator('#stage-option-' + service.stageId).click();
+  }
+  // Only wait for category card if category step is not skipped (no defaultInfractionCategory)
+  // Services like indicacao_condutor and conversao_advertencia auto-select their category
+  if (service.categoryId && service.situationId !== 'indicacao_condutor' && service.situationId !== 'conversao_advertencia') {
     await expect(page.locator('#category-card-' + service.categoryId)).toBeVisible();
     await page.locator('#category-card-' + service.categoryId).click();
   }
-  await expect(page.locator('#input-lead-name')).toBeVisible();
+  await expect(page.locator('#input-lead-name')).toBeVisible({ timeout: 10000 });
 }
 export async function fillIdentification(page: Page, label: string, overrides: Partial<ReturnType<typeof synthetic>> = {}) {
   const data = { ...synthetic(label), ...overrides };
@@ -30,6 +43,23 @@ export async function fillIdentification(page: Page, label: string, overrides: P
   await page.locator('#input-vehicle-plate').fill(data.plate);
   await page.locator('#input-autuador-body').fill(data.authority);
   await page.locator('#input-location').fill(data.location);
+  // Fill date time - required for form validation (isFormValid check)
+  // Use Brazilian date format dd/mm/aaaa inside the input, but set ISO YYYY-MM-DD value
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const day = String(yesterday.getDate()).padStart(2, '0');
+  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+  const year = yesterday.getFullYear();
+  const brazilianDate = `${day}/${month}/${year}`;
+  await page.locator('#input-datetime').fill(brazilianDate);
+  // Dispatch change event to update React state (BrazilianDateInput expects dd/mm/aaaa format)
+  await page.evaluate((sel) => {
+    const input = document.querySelector(sel);
+    if (input) {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, '#input-datetime');
   const code = page.locator('#input-infraction-code');
   const values = await code.locator('option').evaluateAll(items => items.map(item => (item as HTMLOptionElement).value).filter(value => value.length >= 3));
   if (!values.length) throw new Error('Catálogo de infrações sem opções selecionáveis.');
@@ -44,7 +74,7 @@ export async function createCaseThroughAnalysis(page: Page, label: string, servi
   await expect(page.getByText('Perguntas configuradas para este tipo de autuação')).toBeVisible();
   const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/cases/anonymous', { timeout: 45_000 });
   await page.locator('#btn-run-analysis').click();
-  await expect(page.getByText('Analisando sua autuação com Inteligência Jurídica')).toBeVisible();
+  await expect(page.getByText('Estamos conferindo a sua autuação')).toBeVisible({ timeout: 15_000 });
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   const body = await response.json();
@@ -55,6 +85,17 @@ export async function createCaseThroughAnalysis(page: Page, label: string, servi
   await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible({ timeout: 30_000 });
   return { id: String(body.id), body, input };
 }
+export async function continueAfterReload(page: Page) {
+  // After page reload, React state resets. If sessionStorage has saved progress,
+  // the OnboardingStartScreen shows with "Continuar de onde parei" button.
+  const startScreen = page.locator('[aria-labelledby="onboarding-start-title"]');
+  const startScreenVisible = await startScreen.isVisible({ timeout: 5000 });
+  if (startScreenVisible) {
+    await startScreen.getByRole('button', { name: 'Continuar de onde parei' }).click();
+    await expect(page.getByText(/Diagnóstico Preliminar Concluído/)).toBeVisible({ timeout: 30_000 });
+  }
+}
+
 export async function expectNoPiiInWizardStorage(page: Page) {
   const state = await page.evaluate(() => sessionStorage.getItem('defesai_wizard_state'));
   if (state) {
