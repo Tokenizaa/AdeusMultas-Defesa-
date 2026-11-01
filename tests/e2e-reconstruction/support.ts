@@ -104,3 +104,155 @@ export async function expectNoPiiInWizardStorage(page: Page) {
     expect(state).not.toContain('E2E ');
   }
 }
+
+// ============================================================
+// Persistence to Supabase local for E2E audit
+// ============================================================
+
+// Database connection string - uses the local Supabase PostgreSQL
+// The connection uses the host port from the Docker container
+const DATABASE_URL = 'postgres://postgres:postgres@localhost:54322/postgres';
+
+/**
+ * Creates a new test run record in the Supabase local audit database.
+ * Each E2E execution gets a unique run_id for traceability.
+ */
+export async function createTestRun(runId: string, totalScenarios: number): Promise<string> {
+  const { Pool } = await import('pg');
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+  });
+
+  const result = await pool.query(
+    `INSERT INTO public.e2e_test_runs (id, run_id, status, triggered_by, total_scenarios, commit_sha, branch, environment, metadata)
+     VALUES (gen_random_uuid(), $1, 'QUEUED', 'Playwright', $2, '${
+       process.env.GIT_COMMIT_SHA || 'unknown'
+     }', '${
+       process.env.GIT_BRANCH || 'main'
+     }', '${
+       process.env.E2E_TEST_RUN_ID || 'local-defesai'
+     }', '{\"E2E_TEST_RUN_ID': '${runId}'}') RETURNING id`
+  );
+
+  await pool.end();
+  return result.rows[0].id;
+}
+
+/**
+ * Persists the result of a single E2E scenario to the audit database.
+ * Records the status, duration, case_id, analysis_id, and input snapshot.
+ */
+export async function persistTestResult({
+  runId,
+  canonicalScenarioId,
+  serviceType,
+  scenarioNumber,
+  status,
+  caseId,
+  analysisId,
+  inputSnapshot,
+  errorMessage,
+  executionDurationMs,
+}: {
+  runId: string;
+  canonicalScenarioId: string;
+  serviceType: string;
+  scenarioNumber: number;
+  status: 'PASSED' | 'FAILED' | 'SKIPPED';
+  caseId?: string;
+  analysisId?: string;
+  inputSnapshot: any;
+  errorMessage?: string;
+  executionDurationMs: number;
+}) {
+  const { Pool } = await import('pg');
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+  });
+
+  const evidence = {
+    scenarioId: canonicalScenarioId,
+    serviceType,
+    scenarioNumber,
+    timestamp: new Date().toISOString(),
+  };
+
+  await pool.query(
+    `INSERT INTO public.e2e_test_results (id, run_id, canonical_scenario_id, service_type, scenario_number, status, case_id, analysis_id, started_at, finished_at, execution_duration_ms, input_snapshot, evidence, error_message)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now(), now() - interval '${executionDurationMs} second', $8, $9, $10)`,
+    [runId, canonicalScenarioId, serviceType, scenarioNumber, status, caseId, analysisId, new Date(), JSON.stringify(evidence), errorMessage]
+  );
+
+  await pool.end();
+}
+
+/**
+ * Persists the analysis audit record to the Supabase local database.
+ * Captures the real output from the ExpertRuleEngine, including procedure,
+ * reasoning, evaluated rules, inconsistencies, and data gaps.
+ */
+export async function persistAnalysisAudit({
+  runId,
+  scenarioId,
+  caseId,
+  serviceType,
+  infractionFamily,
+  infractionCode,
+  requestedService,
+  analysisStatus,
+  recommendedProcedure,
+  summaryReasoning,
+  evaluatedRules,
+  detectedInconsistencies,
+  dataGaps,
+  analysisJson,
+  inputSnapshot,
+  outputHash,
+}: {
+  runId: string;
+  scenarioId: string;
+  caseId: string;
+  serviceType: string;
+  infractionFamily?: string;
+  infractionCode?: string;
+  requestedService: string;
+  analysisStatus: 'GENERATED' | 'INCONCLUSIVE' | 'INSUFFICIENT_DATA' | 'TECHNICAL_FAILURE' | 'NOT_EXECUTED';
+  recommendedProcedure?: string;
+  summaryReasoning?: string;
+  evaluatedRules?: any;
+  detectedInconsistencies?: any;
+  dataGaps?: any;
+  analysisJson?: any;
+  inputSnapshot: any;
+  outputHash: string;
+}) {
+  const { Pool } = await import('pg');
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+  });
+
+  await pool.query(
+    `INSERT INTO public.e2e_analysis_audits (id, run_id, scenario_id, case_id, service_type, infraction_family, infraction_code, requested_service, engine_name, engine_version, analysis_status, recommended_procedure, summary_reasoning, evaluated_rules, detected_inconsistencies, data_gaps, analysis_json, input_snapshot, output_hash)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'ExpertRuleEngine', current_setting('app.current_version', true), $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+    [
+      runId,
+      scenarioId,
+      caseId,
+      serviceType,
+      infractionFamily,
+      infractionCode,
+      requestedService,
+      analysisStatus,
+      recommendedProcedure,
+      summaryReasoning,
+      evaluatedRules ? JSON.stringify(evaluatedRules) : null,
+      detectedInconsistencies ? JSON.stringify(detectedInconsistencies) : null,
+      dataGaps ? JSON.stringify(dataGaps) : null,
+      analysisJson ? JSON.stringify(analysisJson) : null,
+      JSON.stringify(inputSnapshot),
+      outputHash,
+    ]
+  );
+
+  await pool.end();
+}
