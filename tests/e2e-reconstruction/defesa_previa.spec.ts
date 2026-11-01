@@ -74,11 +74,55 @@ test.describe('defesa_previa — dez cenários canônicos', () => {
     expect(duplicateCreates).toHaveLength(0);
   });
 
-  test('E2E-DEFESA_PREVIA-07 análise: resultado contém procedimento esperado', async ({page}) => {
+  test("E2E-DEFESA_PREVIA-07 análise substantiva: motor considera dados fornecidos e produz output estruturado", async ({page}) => {
     await openService(page, service);
-    const created = await createCaseThroughAnalysis(page, 'analysis-oracle', service);
+    const created = await createCaseThroughAnalysis(page, "full-analysis", service);
+
+    // 1. Verificar se a análise foi gerada
     expect(created.body.analysis).toBeTruthy();
-    expect(created.body.analysis.recommendedProcedure ?? created.body.serviceType).toBe(service.procedure);
+
+    // 2. Validar se o procedimento recomendado corresponde ao serviço
+    const procedure = created.body.analysis.recommendedProcedure ?? created.body.serviceType;
+    expect(procedure).toBe(service.procedure);
+
+    // 3. Verificar se a justificativa existe e tem conteúdo
+    expect(created.body.analysis.summaryReasoning).toBeTruthy();
+    expect(created.body.analysis.summaryReasoning.length).toBeGreaterThan(50);
+
+    // 4. Verificar se regras foram avaliadas
+    expect(created.body.analysis.evaluatedRules).toBeTruthy();
+    expect(created.body.analysis.evaluatedRules.length).toBeGreaterThan(0);
+
+    // 5. Verificar inconsistências detectadas (podem ser vazias, mas devem ser array)
+    expect(Array.isArray(created.body.analysis.detectedInconsistencies)).toBeTruthy();
+
+    // 6. Verificar lacunas de dados identificadas
+    expect(Array.isArray(created.body.analysis.dataGaps)).toBeTruthy();
+
+    // 7. Verificar argumentos recomendados
+    expect(Array.isArray(created.body.analysis.recommendedArguments)).toBeTruthy();
+
+    // 8. Verificar que o procedimento está coerente com os dados de entrada
+    const procedureMatchesData = 
+      created.body.analysis.recommendedProcedure === service.procedure;
+    expect(procedureMatchesData).toBeTruthy();
+
+    // 9. Verificar que inconsistências apontam para dados concretos (se existirem)
+    if (created.body.analysis.detectedInconsistencies.length > 0) {
+      created.body.analysis.detectedInconsistencies.forEach(inconsistency => {
+        expect(inconsistency.description).toBeTruthy();
+        expect(inconsistency.rule).toBeTruthy();
+      });
+    }
+
+    // 10. Verificar que lacunas de dados, se existirem, explicam o que está faltando
+    if (created.body.analysis.dataGaps.length > 0) {
+      created.body.analysis.dataGaps.forEach(gap => {
+        expect(gap.field).toBeTruthy();
+        expect(gap.description || gap.reason).toBeTruthy();
+      });
+    }
+  );
   });
 
   test('E2E-DEFESA_PREVIA-08 documento e integridade: exige identidade antes da qualificação documental', async ({page}) => {
