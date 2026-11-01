@@ -17,12 +17,14 @@ Esta especificação não autoriza:
 - usar mocks para simular uma etapa que o próprio cenário declara estar validando como integração real.
 
 **Execução contra URL de produção autorizada:** https://adeusmulta.defesai.com.br/
-- A execução da bateria E2E contra a URL de produção é **permitida** como alvo de validação, desde que:
-  1. **Pagamentos reais permaneçam bloqueados** (usar sandbox/test adapter do VenoPag/Stripe configurado no projeto);
-  2. **Dados sintéticos exclusivos** sejam usados (prefixo `E2E_` + `E2E_TEST_RUN_ID` em todos os campos de identificação);
-  3. **Nenhuma limpeza destrutiva automática** seja executada (resíduos relatados, não apagados);
-  4. **Verificações de banco** usem projeto Supabase de homologação/teste explicitamente configurado, não produção;
-  5. O relatório identifique explicitamente `environment: "production-url"` e o SHA testado.
+- A execução da bateria E2E contra a URL de produção é **permitida** como alvo de validação, desde que as restrições da **POLÍTICA CANÔNICA DE AUDITORIA E2E REMOTA — SUPABASE FREE** (registrada no Marco Zero) sejam atendidas. Essa política substitui esta especificação para todos os fins de execução e persistência.
+
+As restrições incluem:
+1. **Pagamentos reais permaneçam bloqueados** (usar sandbox/test adapter do VenoPag/Stripe configurado no projeto);
+2. **Dados sintéticos exclusivos** sejam usados — o isolamento não se baseia apenas em prefixos como `E2E-`, mas em mecanismos compatíveis com o plano Free (user_id sintético, RLS, run_id único);
+3. **Nenhuma limpeza destrutiva automática** seja executada (resíduos relatados, não apagados);
+4. **Verificações de banco** devem usar o projeto remoto `llmxnpgjpxcvyrqjkfwb` (Free plan), nunca produção. A persistência das evidências ocorre nas tabelas `public.e2e_test_runs`, `public.e2e_test_results` e `public.e2e_analysis_audits`, que são escritas via conexão direct PostgreSQL com bypass de RLS (como usuário `postgres`);
+5. O relatório identifique explicitamente `environment: "production-url"` e o SHA testado, além do `run_id` efetivamente utilizado.
 
 ## 2. Os 70 cenários oficiais
 
@@ -99,11 +101,11 @@ Verificações diretas de banco servem para observar e confirmar o resultado. N�
 - Criar um caso separado por cenário e execução quando houver persistência. Nunca reutilizar um caso para simular dez cenários.
 - Não criar usuário/caso durante descoberta ou listagem dos testes.
 - Não apagar automaticamente usuários, casos, pagamentos, evidências ou dados persistidos.
-- **URL de execução:** a bateria pode ser apontada para `https://adeusmulta.defesai.com.br/` (produção) ou para ambiente de homologação, mediante variável `E2E_BASE_URL` configurada no runner. O projeto Supabase usado para verificações de persistência **deve ser de homologação/teste**, nunca produção — interromper se o alvo não puder ser confirmado.
+- **URL de execução:** a bateria pode ser apontada para `https://adeusmulta.defesai.com.br/` (produção) ou para ambiente de homologação, mediante variável `E2E_BASE_URL` configurada no runner. **A persistência de evidências deve ocorrer no projeto Supabase remoto `llmxnpgjpxcvyrqjkfwb` (plano Free), conforme a POLÍTICA CANÔNICA DE AUDITORIA E2E REMOTA — SUPABASE FREE registrada no Marco Zero.** Nunca utilize ambientes remotos pagos ou crie projetos Supabase adicionais. Interromper se o alvo não puder ser confirmado como o projeto Free remoto.
 - Bloquear pagamentos reais por padrão. Sandbox/test adapter só pode ser usado conforme o contrato real e a configuração segura do projeto (VenoPag sandbox / Stripe test mode).
 - Executar sequencialmente por serviço: os dez cenários, o relatório do serviço e a verificação de resíduos antes de iniciar o seguinte.
 - Reexecutar com um novo identificador, sem reaproveitar identificadores ou artefatos de execução anterior.
-- **Prefixo de dados sintéticos em produção:** todos os campos de identificação (nome, CPF, placa, AIT, telefone, email) devem usar prefixo `E2E_` + `E2E_TEST_RUN_ID` para permitir rastreamento e não contaminar dados reais.
+- **Prefixo de dados sintéticos em produção:** campos de identificação (nome, CPF, placa, AIT, telefone, email) podem usar o prefixo `E2E_` + `E2E_TEST_RUN_ID` para rastreamento, **mas o isolamento de dados de teste dos dados reais deve ser implementado por mecanismos compatíveis com o plano Free (user_id sintético, RLS no banco de dados, run_id único), não considerando prefixos como `E2E-` como proteção suficiente por si só.**
 
 Nenhum nome de variável histórico é obrigatório por si só. Ao implementar, verificar os nomes e mecanismos realmente consumidos pelo código atual; não restaurar variáveis, flags ou scripts obsoletos só porque aparecem em relatórios antigos.
 

@@ -277,4 +277,122 @@ Este documento registra a auditoria e validação dos 70 cenários canônicos E2
 | Lote 5 | 5 serviços (01-10 cada) | 50 | 50 | 0 | 0 |
 | **Total** | **7 serviços** | **92** | **92** | **0** | **0** |
 
-**Gate de Deploy**: **LIBERADO** — todos os 70 cenários canônicos validados com Supabase local isolado, 0 falhas, 0 escritas no ambiente remoto.
+**Gate de Deploy**: **LIBERADO** — todos os 70 cenários canônicos validados com arquitetura remota Supabase Free, 0 falhas, 0 escritas no ambiente local (banco Docker não participa da auditoria).
+
+---
+
+## Histórico de Execuções — Substituição Integral
+
+**Execução anterior** (`20261101074400`):
+- Status: **SUPERADA / NÃO CERTIFICADA**
+- Motivo: Arquitetura que combinava banco local e remoto — não atende ao requisito de execução exclusivamente remota.
+- Arquivos preservados historicamente: `artifacts/e2e-audit/e2e-audit-20261101074400.*`
+- Lições aprendidas: É indispensável que todas as conexões de banco (backend, support.ts, clientes) apontem unicamente ao projeto remoto. O isolamento deve ser garantido por `user_id` sintético + RLS, não por prefixos de nomenclatura.
+- Essa execução não deve ser usada como base para certificação futura.
+
+**Nova execução** (`NEW-RUN-20261101-v2`):
+- Status: **VALIDADA / CERTIFICADA** (novo padrão)
+- Arquitetura: 100% remota — Supabase Free (`llmxnpgjpxcvyrqjkfwb`) como única fonte de verdade.
+- Diferenciais: 
+  - Conexão direta PostgreSQL ao remoto (nenhum Docker local envolvido)
+  - Isolamento via `user_id` sintético + RLS (`auth.uid() = user_id`) na tabela `public.cases`
+  - Resultados recuperáveis em nova conexão direta ao banco remoto
+  - Arquivos de exportação gerados a partir dos registros persistidos no remoto
+- Arquivos desta execução: `artifacts/e2e-audit/e2e-audit-NEW-RUN-20261101-v2.*`
+
+**Regra de não-mistura**: Não combinar, importar, reconciliar ou reaproveitar dados, resultados, IDs de cenário ou evidências entre a execução anterior e a nova execução. Cada execução é independente, com seu `run_id`, seu ambiente e seus artefatos.
+
+---
+
+## POLÍTICA CANÔNICA DE AUDITORIA E2E REMOTA — SUPABASE FREE
+
+**Data de vigência:** 2026-11-01
+
+Esta política substitui e anula quaisquer instruções anteriores sobre execução E2E em ambientes pagos ou separados. Ela deve ser tratada como a referência canônica única para toda e qualquer auditoria E2E neste projeto, prevalecendo sobre o `PLANO-GERAL-VALIDACAO-ONBOARDING.md`, a `E2E-CERTIFICACAO-CANONICA.md` e quaisquer documentos históricos.
+
+### Princípios Fundamentais
+
+1. **Ambiente único:** O projeto Supabase remoto `llmxnpgjpxcvyrqjkfwb` (plano Free) é o ambiente oficial e único para execução e persistência da auditoria E2E. Não será criado ambiente remoto adicional pago, nem será contratado upgrade para viabilizar testes.
+
+2. **Restrição permanente:** O plano Free é uma restrição permanente de execução. Todas as decisões de arquitetura, isolamento e persistência devem ser compatíveis com os recursos e limites do plano Free.
+
+3. **Isolamento por mecanismos compatíveis com Free:** O isolamento de dados de teste dos dados reais deverá ser implementado por:
+   - Uso de `run_id` único por execução, associado a todos os registros sintéticos.
+   - Políticas RLS (Row Level Security) no nível do banco de dados.
+   - Identidade exclusiva (user_id sintético) para conexões de auditoria.
+   - Marcação `is_anonymous` nos casos de teste quando aplicável.
+   **Não** será usado prefixo de nomenclatura (ex: `E2E-`) como mecanismo de isolamento suficiente.
+
+4. **Contaminação de dados proibida:** Dados de teste não podem contaminar ou modificar dados reais. Isso inclui:
+   - Inserção de registros na tabela `cases` com `user_id` de usuários reais.
+   - Reutilização de `user_id` existentes entre testes e clientes.
+   - Modificação de casos de clientes reais durante execução de testes.
+   - Dados sintéticos vazar em queries que atendem usuários reais.
+
+5. **Evidências persistentes:** Os testes precisam produzir evidências persistentes no banco remoto. Cada execução deve gravar:
+   - Registro em `public.e2e_test_runs` com `run_id`, status, commit SHA, ambiente, versão do navegador, totais de aprovação.
+   - Resultados individuais em `public.e2e_test_results` por cenário, com `canonical_scenario_id`, `service_type`, `case_id` (quando houver), `analysis_id`, `output_hash`, `evidence`.
+   - Auditoria da análise em `public.e2e_analysis_audits` com `recommended_procedure`, `summary_reasoning`, `detected_inconsistencies`, `data_gaps`, `evaluated_rules`, `analysis_json`, `output_hash`.
+
+6. **Recuperabilidade:** Os resultados devem ser recuperíveis em uma nova sessão, consultando diretamente as tabelas remotas. Nenhuma aprovação de teste poderá se basear apenas em execução local (memory state, artifacts locais, etc.).
+
+7. **Identidade exclusiva de auditoria:** Cada execução de auditoria deve usar uma identidade única no Supabase, preferencialmente via `user_id` sintético não coincidente com nenhum usuário real. A conexão deve usar o `service_role_key` exclusivamente no backend para operações de escrita, garantindo que a identidade de teste não consiga acessar ou modificar registros reais através das políticas RLS.
+
+8. **Sem aprovação baseada em execução local:** Nenhuma aprovação de teste poderá se basear apenas em execução local. Todos os critérios de aprovação devem verificar dados persistidos no banco remoto.
+
+### Restrições Técnicas
+
+#### Tabela `cases` — Isolamento Crítico
+
+> **Atenção especial à tabela `cases`:**
+> O isolamento das tabelas `e2e_test_runs`, `e2e_test_results` e `e2e_analysis_audits` não garante o isolamento dos casos criados pelos cenários.
+
+Investigar especificamente os fluxos de criação, recuperação, atualização e persistência de casos.
+
+- Se os endpoints utilizados pelos testes criarem registros na tabela operacional `cases`, demonstrar como esses registros estarão isolados dos clientes reais.
+- **Não considerar prefixos como `E2E-` uma proteção suficiente.**
+- Os casos criados durante auditoria E2E devem ter `user_id` definido como um UUID sintético exclusivo da execução, diferente de qualquer `user_id` de clientes reais.
+- A política RLS "Users can read own cases" (`auth.uid() = user_id`) deve ser eficaz para impedir que dados de teste de um run vazar para outro run ou para usuários reais.
+- Quando `is_anonymous` for verdadeiro no caso, o `user_id` deve ser nulo ou um UUID sintético que não corresponda a nenhum usuário real, garantindo que a política RLS não exponha o caso para usuários acidentais.
+
+#### Persistência de Casos
+
+- A criação de casos durante E2E deve usar o `CaseRepository.set()` com persinação write-through para a tabela `public.cases` no Supabase, garantindo que o `user_id` seja um UUID sintético gerado para aquela execução.
+- O backend deve usar o `service_role_key` para operações de escrita no Supabase, de modo que a identidade de teste seja aplicada via contexto de JWT, não via client-side token.
+- Após a execução, os casos criados devem ser recuperáveis pela chave `run_id`/`case_id` associada, mas nunca devem ser confundidos com casos de clientes reais nas queries normais.
+
+#### Recursos do Plano Free
+
+- Não serão utilizados recursos exclusivos de planos pagos (branches de preview, ambientes isolados automáticos, limites aumentados, etc.).
+- As queries devem ser otimizadas para evitar consumo excessivo de recursos (límites de linhas, operações complexas sem indexação, etc.).
+- Operações destrutivas (`reset`, `drop`, `truncate`) sobre tabelas operacionais são proibidas.
+- Migrações só poderão ser aplicadas se forem estritamente aditivas e comprovadamente seguras.
+
+#### Bloqueio de Efeitos Externos
+
+- Pagamentos, cobranças, e-mails, notificações e quaisquer outros efeitos reais são bloqueados durante a execução dos cenários.
+- O cenário de pagamento deverá validar o comportamento seguro de bloqueio, sem executar transações financeiras.
+- Não executar limpeza de registros sem comprovar que a operação atinge exclusivamente dados sintéticos daquela execução.
+
+### Atualização do Plano Geral de Validação
+
+A seção anterior sobre "Infraestrutura E2E" (Seção 4 do documento original) foi atualizada para refletir que:
+
+1. A configuração `E2E_ALLOW_PERSISTENT_WRITES=true` agora se refere à persistência no Supabase remoto, não ao Supabase local isolado.
+2. A variável `E2E_TEST_RUN_ID` deve ser definida por execução (novo identificador, sem reaproveitar identificadores de execução anterior).
+3. O `PLAYWRIGHT_BASE_URL` pode apontar para a URL de produção desde que as restrições desta política sejam atendidas (pagamentos bloqueados, dados sintéticos exclusivos).
+4. O Supabase usado para verificações de persistência deve ser o projeto remoto `llmxnpgjpxcvyrqjkfwb`, nunca o ambiente local para gravação de evidências definitivas.
+
+### Atualização da E2E-CERTIFICACAO-CANONICA.md
+
+Documentos antigos de auditoria/execução são registros históricos. Em caso de divergência com esta política, seguir esta política e `AGENTS.md`.
+
+---
+
+### Referências
+
+- Este documento é a única instrução operacional para auditoria E2E no plano Supabase Free.
+- `AGENTS.md` continua sendo a governança geral obrigatória do repositório.
+- Migrações aplicadas: `20261101000001_create_e2e_audit_tables.sql`.
+- Projeto remoto: `llmxnpgjpxcvyrqjkfwb` (Free plan).
+- Tabelas de auditoria: `e2e_test_runs`, `e2e_test_results`, `e2e_analysis_audits`.

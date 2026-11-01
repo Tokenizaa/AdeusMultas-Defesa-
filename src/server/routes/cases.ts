@@ -193,6 +193,85 @@ router.post('/cases', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/cases/anonymous', async (req, res) => {
+  try {
+    const domainData: CaseDomain = req.body;
+
+    // Gera user_id sintético para casos anônimos/E2E — esse UUID não coincidirá
+    // com auth.uid() de nenhum usuário real, garantindo isolamento via RLS.
+    const syntheticUserId = randomUUID();
+
+    domainData.id = domainData.id || `case_${randomUUID()}`;
+    delete (domainData as any).userId;
+    delete (domainData as any).analysis;
+
+    // Claim: caso anônimo ganha token server-side não-previsível (nunca o próprio ID,
+    // como ocorria antes). O token é retornado na resposta e exigido no POST claim.
+    if (domainData.isAnonymous && !domainData.claimToken) {
+      domainData.claimToken = randomUUID();
+    }
+
+    domainData.userId = syntheticUserId;
+
+    if (!domainData.createdAt) {
+      domainData.createdAt = new Date().toISOString();
+    }
+    domainData.updatedAt = new Date().toISOString();
+
+    if (domainData.infraction) {
+      domainData.analysis = RagPipeline.analyzeInfraction(domainData.id, domainData.infraction);
+    }
+
+    if ((domainData.isPaid || domainData.status === 'defesa_pronta') && !domainData.defenseDraft && domainData.applicant) {
+      const a = domainData.applicant;
+      if (a.applicantName && a.applicantCpf && a.applicantCnh && a.addressStreet && a.addressCityState) {
+        domainData.defenseDraft = RagPipeline.generateDefenseDraft(
+          domainData.id,
+          domainData.infraction,
+          domainData.vehicle?.plate || 'SEM PLACA',
+          domainData.vehicle?.brandModel || 'Veículo',
+          {
+            name: a.applicantName,
+            cpf: a.applicantCpf,
+            rg: a.applicantRg,
+            cnh: a.applicantCnh,
+            category: a.cnhCategory,
+            address: `${a.addressStreet}, ${a.addressNumber || ''}`.trim(),
+            cityState: a.addressCityState,
+          },
+          domainData.analysis?.recommendedArguments || [],
+          domainData.serviceType || 'recurso_jari'
+        );
+        (domainData.defenseDraft as any).integrityHash = computeDefenseIntegrityHash(
+          domainData.defenseDraft as any,
+          domainData.analysis as any
+        );
+      }
+    }
+
+    const row = CanonicalMapper.domainToRow(domainData);
+    await databaseRows.set(row.id, row);
+
+    eventBus.publish(EventTopics.CASE_CREATED, { caseId: domainData.id, isAnonymous: domainData.isAnonymous }, 'case_engine');
+
+    auditLogs.unshift({
+      id: `audit_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: domainData.clientName || 'Anônimo',
+      role: 'citizen',
+      action: 'CASE_CREATED',
+      targetResource: domainData.id,
+      ipHash: '9f83c68a765b1c41',
+      details: `Caso ${domainData.title} criado no estágio ${domainData.currentStage}.`,
+      gdprCompliant: true,
+    });
+
+    res.status(201).json(CanonicalMapper.rowToDomain(row));
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.put('/cases/:id', authenticateToken, async (req, res) => {
   const existingRow = databaseRows.get(req.params.id);
   if (!existingRow) {

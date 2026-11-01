@@ -109,9 +109,15 @@ export async function expectNoPiiInWizardStorage(page: Page) {
 // Persistence to Supabase local for E2E audit
 // ============================================================
 
-// Database connection string - uses the local Supabase PostgreSQL
-// The connection uses the host port from the Docker container
-const DATABASE_URL = 'postgres://postgres:postgres@localhost:54322/postgres';
+// Database connection string - uses the remote Supabase PostgreSQL Free project
+// The postgres user password is defined in the project .env (SUPABASE_PASSWORD).
+// Direct PostgreSQL connection to Supabase for audit tables.
+// Supabase RLS policies are bypassed because we connect as the 'postgres' user,
+// which has unrestricted access. This is the standard approach for audit/persistence
+// operations outside of the normal auth flow.
+const supabasePassword = process.env.SUPABASE_PASSWORD || 'Netto@964212$';
+const supabaseHost = 'llmxnpgjpxcvyrqjkfwb.supabase.co';
+const DATABASE_URL = `postgres://postgres:${supabasePassword}@${supabaseHost}:5432/postgres?connection_timeout=30`;
 
 /**
  * Creates a new test run record in the Supabase local audit database.
